@@ -158,14 +158,14 @@
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">JUDGE</span></td>
-          <td data-l="Method"><strong>LLM-judged + agentic UI exercising.</strong> A driver (Playwright driving the Electron app via Chromium, headless under <code>xvfb-run</code>) walks the GUI and captures screenshots + the accessibility tree; an LLM scores them against a written rubric. Deterministic GUI facts still get plain Playwright assertions.</td>
-          <td data-l="Best for">Subjective and emergent GUI qualities, empty-state copy, "flag visible on the affected entry," look-and-feel, tray count-up — judged, not asserted.</td>
+          <td data-l="Method"><strong>LLM-judged + agentic UI exercising.</strong> A driver (Playwright driving the Electron app via Chromium) walks the renderer windows and captures screenshots + the accessibility tree; an LLM scores them against a written rubric. Deterministic GUI facts get plain Playwright assertions, and main-process state that lives outside the DOM — <code>globalShortcut</code> registration, tray-triggered actions — is exercised via <code>electronApp.evaluate()</code>. The renderer runs headless under <code>xvfb-run</code>; the tray icon itself has no host in headless CI, so its on-screen rendering goes to MANUAL.</td>
+          <td data-l="Best for">Subjective and emergent GUI qualities of the main window and popover, empty-state copy, "flag visible on the affected entry," look-and-feel — judged, not asserted.</td>
           <td data-l="Weak for">Anything requiring exactness or a hard pass/fail boundary; non-deterministic, so gated by a rubric + human spot-check, never the sole gate on money-affecting logic.</td>
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">MANUAL</span></td>
           <td data-l="Method"><strong>Scripted manual / supervised checks.</strong> A numbered runbook on real hardware, using the OS's sleep controls (<code>systemctl suspend</code> / <code>rtcwake</code>, or the platform equivalent), simulated sleep, and a network monitor; an operator (human or agent) confirms each step and records evidence.</td>
-          <td data-l="Best for">Physical/OS reality: real sleep/wake + wall-clock-gap reconcile, notification wall-clock cadence across relaunch, and the no-network guarantee.</td>
+          <td data-l="Best for">Physical/OS reality: real sleep/wake + wall-clock-gap reconcile, notification wall-clock cadence across relaunch, the no-network guarantee, and the tray's on-screen count-up and global-hotkey toggle (no system-tray host under headless CI).</td>
           <td data-l="Weak for">Regression speed and scale (slow, can't run on every commit); reserved for what genuinely can't be faked in CI.</td>
         </tr>
       </tbody>
@@ -181,7 +181,7 @@
       <li>Does it touch <strong>money-affecting maths or a stored invariant</strong> (durations, rounding, exclusion, one-open-entry, immutability)? → <span class="mc">PROP</span> for the law, <span class="mc">GOLD</span>/example table for specific values. Never let <span class="mc">JUDGE</span> be the only gate here.</li>
       <li>Is the deliverable <strong>exact text or a data shape</strong> (<code>tt</code> output, exit code, <code>--json</code>, CSV columns)? → <span class="mc">GOLD</span> + schema.</li>
       <li>Is it a <strong>user-observable flow or decided edge case</strong> a stakeholder should be able to read? → <span class="mc">BDD</span>, stepped on <code>@stint/core</code> or <code>tt</code>.</li>
-      <li>Is it <strong>visual, subjective, or emergent</strong> in the GUI? → <span class="mc">JUDGE</span> over agentic exercising, with plain Playwright for any deterministic sub-fact (e.g. the hotkey toggles).</li>
+      <li>Is it <strong>visual, subjective, or emergent</strong> in the GUI? → <span class="mc">JUDGE</span> over agentic exercising, with plain Playwright for any deterministic sub-fact in the renderer, and <code>electronApp.evaluate()</code> for main-process facts (e.g. the global shortcut is registered and its handler toggles the open entry).</li>
       <li>Does it depend on <strong>real OS/hardware behaviour over wall-clock time</strong>? → <span class="mc">MANUAL</span> runbook, with as much scripted setup as possible.</li>
     </ol>
     <p>Two requirements often split across methods: §17 R5 (sleep produces a flagged entry with second-accurate spans and a working subtract) becomes <span class="mc">PROP</span> for the <code>excluded_seconds</code> arithmetic, <span class="mc">BDD</span> for the subtract flow, <span class="mc">JUDGE</span> for the flag being visible in context, and <span class="mc">MANUAL</span> for the spans being real after an actual sleep. That decomposition is the point of having a set.</p>
@@ -204,7 +204,7 @@
         <tr><td class="m" data-l="§">10a</td><td data-l="Subject">Sleep-span flagging, wall-clock-gap reconcile on launch, subtract</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="§">10b</td><td data-l="Subject">Check-in cadence: first at 60m, then 30m, autonomous, survives relaunch, realigns from wake</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">PROP</span></td></tr>
         <tr><td class="m" data-l="§">11</td><td data-l="Subject"><code>tt</code> command surface: output tables, <code>--json</code>, exit codes, time-arg parsing</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="§">12</td><td data-l="Subject">Menu bar count-up, hotkey toggle, main window, flags in context, empty states</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="§">12</td><td data-l="Subject">Tray count-up, hotkey toggle, main window, flags in context, empty states</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">MANUAL</span></td></tr>
         <tr><td class="m" data-l="§">13</td><td data-l="Subject">Schema, WAL, <code>TT_DB</code> path resolution, default location</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="§">14</td><td data-l="Subject">Settings &amp; their defaults (rounding off, week start Mon, cadence, hotkey…)</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="§">16</td><td data-l="Subject">Decided edge cases (start-while-running, crash, DST, merge conflicts…)</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">MANUAL</span></td></tr>
@@ -273,7 +273,7 @@
     <span class="k">When</span>  I resume
     <span class="k">Then</span>  a new open entry exists with description "auth refactor", "Client A", "API", billable
     <span class="k">And</span>   it has a different id from the original</pre>
-    <p>The same Background + Scenario text, tagged <code>@cli</code>, is run a second time through the <code>tt</code> binary — directly exercising the §17 R8 parity claim without a second copy of the spec.</p>
+    <p>The same Background + Scenario text, tagged <code>@cli</code>, is run a second time through the <code>tt</code> executable — directly exercising the §17 R8 parity claim without a second copy of the spec.</p>
   </section>
 
   <section id="s7">
@@ -364,12 +364,12 @@ Client A,API,"meeting;deep",auth refactor,2026-06-24T09:00:00Z,2026-06-24T10:30:
   <section id="s9">
     <div class="eyebrow"><span class="n">09</span> Sample — LLM-judged + agentic</div>
     <h2><span class="mc">JUDGE</span> the GUI qualities that resist assertion</h2>
-    <p>An agent drives the GUI through a scripted route (Playwright over the Electron app via Chromium, headless under <code>xvfb-run</code>), captures screenshots and the accessibility tree at each step, and an LLM scores the evidence against an explicit rubric. Deterministic facts in the same flow (the hotkey toggled state; a Stop button exists and is hittable) are plain Playwright assertions — the judge handles only what can't be asserted.</p>
+    <p>An agent drives the GUI through a scripted route (Playwright over the Electron app via Chromium), captures screenshots and the accessibility tree at each step, and an LLM scores the evidence against an explicit rubric. Deterministic facts in the renderer (a Stop button exists and is hittable) are plain Playwright assertions; facts that live in the main process rather than the DOM (the global shortcut is registered, its toggle handler ran) are exercised via <code>electronApp.evaluate()</code>. The renderer windows run headless under <code>xvfb-run</code>; the tray icon's own title text has no host there, so its live count-up is confirmed under <span class="mc">MANUAL</span> on a real desktop session.</p>
     <h3>Agentic route <span class="tag">driver script</span></h3>
     <ol class="req">
       <li>Launch with an empty database. Capture the main window. <span class="c">→ empty state</span></li>
-      <li>Press the global hotkey <code>Ctrl+Alt+T</code>. Capture the tray. <span class="c">→ running state, count-up</span></li>
-      <li>Wait 3s; re-capture the tray. <span class="c">→ count-up advanced</span></li>
+      <li>Assert the global shortcut is registered, then invoke the timer-toggle it is bound to via <code>electronApp.evaluate()</code>. Open the tray popover window and capture it. <span class="c">→ running state, count-up</span></li>
+      <li>Wait 3s; re-capture the popover. <span class="c">→ count-up advanced</span></li>
       <li>Backfill an overlapping entry via <code>tt</code>; refocus the window. Capture. <span class="c">→ overlap flag in context</span></li>
       <li>Simulate a sleep span on the open entry; capture the affected entry row. <span class="c">→ slept-through flag + subtract affordance</span></li>
     </ol>
@@ -380,8 +380,9 @@ Client A,API,"meeting;deep",auth refactor,2026-06-24T09:00:00Z,2026-06-24T10:30:
 EMPTY_STATE     The empty main window instructs rather than decorates — it names a
                 concrete next action ("press Ctrl+Alt+T" or "run tt start"). (PRD §12 R5)
 
-TRAY_COUNTUP    The tray shows a single running timer counting up; between the
-                two captures the displayed elapsed increased by ~3s, not reset. (§12 R1)
+TRAY_COUNTUP    The tray popover shows a single running timer counting up; between
+                the two captures the displayed elapsed increased by ~3s, not reset.
+                (The tray icon's own title count-up is checked under MANUAL.) (§12 R1)
 
 ACCENT_DISCIPLINE  The system accent colour appears on the running state / primary
                 action ONLY; the rest of the chrome is monochrome system grays. (§07, §15)
@@ -415,7 +416,7 @@ DESKTOP_FEEL    The window reads as a quiet, minimal desktop app that respects t
   1. With a timer open, fully quit the app, sleep the machine ~120s, wake, relaunch.
   ✓ On launch a SleepSpan (source=gap) is created from the wall-clock gap and the
     entry is flagged slept-through for review; the gap bounds the dead time.
-  ✓ With no kernel timestamp to distinguish sleep from app-closed time, the span is
+  ✓ Because the gap can't tell true sleep from app-closed time, the span is
     a flagged suspicion only — never auto-subtracted (the operator decides).
 
 <span class="k">CHECK CHECK-IN CADENCE + RELAUNCH</span>                            <span class="c">(§10b, §17 R6)</span>
@@ -463,7 +464,8 @@ DESKTOP_FEEL    The window reads as a quiet, minimal desktop app that respects t
 
     <h3>Residual risk we accept</h3>
     <ul class="d">
-      <li><strong>Sleep reconciliation is wall-clock-approximate.</strong> With no cross-platform kernel sleep timestamp, a sleep missed while the app was closed is reconstructed from the wall-clock gap (<code>source=gap</code>): it can't distinguish true sleep from app-closed time, and a maintenance wake can't be filtered, so spans are flagged for review and never auto-applied. Verified on real hardware before release, not per commit.</li>
+      <li><strong>Sleep reconciliation is wall-clock-approximate.</strong> A sleep missed while the app was closed is reconstructed from the wall-clock gap (<code>source=gap</code>), which bounds the dead time but can't tell true sleep from app-closed time — so gap-sourced spans are flagged for review and never auto-applied. Verified on real hardware before release, not per commit.</li>
+      <li><strong>Tray and global hotkey aren't exercised end-to-end in CI.</strong> Headless <code>xvfb-run</code> has no system-tray host and can't deliver an OS-global hotkey, so JUDGE covers the renderer windows and main-process state (<code>electronApp.evaluate()</code>) while the tray icon's live count-up and a real hotkey press are confirmed under MANUAL on a real desktop session.</li>
       <li><strong>Long-form cadence is sampled, not exhaustive.</strong> The real 60-then-30 schedule is verified in a long-running pass; day-to-day regression uses a compressed test cadence, so a defect that only appears at the true intervals could slip between full runs.</li>
       <li><strong>"Near-instantly" is a soft bound.</strong> File-watch propagation (§17 R1) is checked against a generous latency budget on the test machine; it is observed, not guaranteed under arbitrary system load.</li>
       <li><strong>JUDGE is advisory on look-and-feel.</strong> "Feels like a quiet desktop app" is scored by rubric and spot-checked by a human; it gates presentation but never a billable number.</li>
