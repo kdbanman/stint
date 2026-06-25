@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The shared Core + the `tt` CLI build and test on Linux. This is the gate for
+  # the money-affecting logic (invariants, derived elapsed) and the CLI contract.
+  linux:
+    name: Core + CLI (Linux)
+    runs-on: ubuntu-latest
+    container: swift:5.10
+    steps:
+      - name: Install SQLite headers
+        run: apt-get update && apt-get install -y libsqlite3-dev
+      - uses: actions/checkout@v4
+      - name: Build
+        run: swift build
+      - name: Test (PROP invariants · BDD flows · GOLD CLI contract)
+        run: swift test
+      - name: Capture CLI transcript (evidence)
+        run: |
+          ./scripts/demo.sh | tee tt-transcript.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tt-transcript
+          path: tt-transcript.txt
+
+  # The SwiftUI menu-bar app is macOS-only; this job proves it builds against
+  # the very same Core, and re-runs the full test suite on macOS.
+  macos:
+    name: GUI + Core + CLI (macOS)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (StintKit + tt + StintApp)
+        run: swift build
+      - name: Test
+        run: swift test
