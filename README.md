@@ -36,7 +36,8 @@ terminal surfaces in the menu bar within a second, and vice versa.
 
 | Path | Role |
 |------|------|
-| `Sources/StintKit` | **The shared core.** Schema, `Entry`, and the `Store` that owns every state transition and the single-open-entry invariant (enforced both transactionally and by a unique index). Pure Swift + GRDB; runs on Linux and macOS. |
+| `Sources/StintKit` | **The shared core.** Schema, `Entry`, and the `Store` that owns every state transition and the single-open-entry invariant (enforced both transactionally and by a unique index). Talks to the system SQLite (WAL, busy timeout, `BEGIN IMMEDIATE`) through a tiny first-party `CSQLite` shim; runs on Linux and macOS. |
+| `Sources/CSQLite` | A thin module exposing the system SQLite C API to Swift. |
 | `Sources/tt` | **The CLI.** `tt start/stop/status`, human tables by default and `--json` for scripting. |
 | `Sources/StintApp` | **The menu-bar app.** SwiftUI `MenuBarExtra` (macOS-only) over the same core. |
 | `Tests/StintKitTests` | `PROP` invariant properties + `BDD` behavioural flows. |

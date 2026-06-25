@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import StintKit
 
@@ -5,23 +6,26 @@ import StintKit
 /// timer state of its own: every tick it simply re-reads the open entry and
 /// re-derives elapsed (`now − start`), which is also why a `tt start` from the
 /// terminal surfaces here within a second — both surfaces read one file.
-@MainActor
+///
+/// Updates are published on the main run loop (the timer fires there), so the
+/// `@Published` properties mutate where SwiftUI expects them to.
 final class TimerModel: ObservableObject {
     @Published private(set) var openEntry: Entry?
     @Published private(set) var now: Date = Date()
 
     private let store: Store?
-    private var ticker: Timer?
+    private var ticker: AnyCancellable?
 
     init() {
         self.store = try? Environment.openStore()
         refresh()
-        // A 1-second display tick. This is pure presentation — closing the lid
-        // for an hour and reopening still shows the correct elapsed, because the
-        // number was never being kept anywhere to drift.
-        ticker = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
+        // A 1-second display tick on the main run loop. This is pure
+        // presentation — closing the lid for an hour and reopening still shows
+        // the correct elapsed, because the number was never being kept anywhere
+        // to drift; it is re-derived from `now − start` each tick.
+        ticker = Timer.publish(every: 1, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in self?.refresh() }
     }
 
     /// `true` while an entry is open.
