@@ -171,7 +171,7 @@
       <li><strong>Shared core.</strong> A TypeScript package (<code>@stint/core</code>) owns the schema, every state transition, and all invariants. The tray app and the <code>tt</code> CLI both import it; there is no duplicated logic and no privileged surface.</li>
       <li><strong>Single source of truth.</strong> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>@stint/core</code>.</li>
       <li><strong>Derived elapsed.</strong> No process holds or increments a timer. Elapsed is computed <code>now − start</code> on demand; the tray's per-second update is display only.</li>
-      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which client triggers it. The CLI uses a busy timeout so it cooperates with the running app.</li>
+      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which surface triggers it. The CLI uses a busy timeout so it cooperates with the running app.</li>
       <li><strong>Change propagation by file-watch.</strong> Each surface watches the SQLite file (and its <code>-wal</code>) via <code>fs.watch</code> and refreshes on change, so a write from one surfaces in the other near-instantly. (The tray's 1-second display tick is independent of this.)</li>
       <li><strong>UTC storage, local display.</strong> All timestamps stored UTC; rendered in the system locale and time zone. Durations are timezone-independent and DST-safe.</li>
     </ol>
@@ -244,7 +244,7 @@
       <li>On launch, the app <strong>reconciles</strong> by comparing the wall-clock gap since its last recorded timestamp against the open entry: a gap large enough to imply the machine slept is recorded as a SleepSpan (<code>source = gap</code>), recovering a cycle missed while the app was not running. The wall-clock comparison captures that a sleep occurred and its approximate bounds.</li>
       <li>The timer keeps running through sleep (<code>now − start</code> stays honest as wall-clock); the flag and spans let the user decide about the dead time.</li>
       <li><strong>Slept time handling:</strong> flagged, not auto-subtracted. A one-tap action (GUI) / flag (<code>tt</code>) adds the span(s) to <code>excluded_seconds</code>, trimming billable duration precisely and reversibly.</li>
-      <li><strong>Translation note:</strong> <code>powerMonitor</code> reports user-visible suspend/resume only, so one sleep is recorded as one span. The macOS-specific nuances of the original spec — kernel-timestamp reconciliation and Power Nap / dark-wake filtering — have no cross-platform analog and are deliberately dropped; v1 commits to wall-clock-gap reconciliation instead (see Appendix A).</li>
+      <li><code>powerMonitor</code> reports user-visible suspend/resume, so each sleep is recorded as one span. A sleep that occurs while the app is closed is recovered by the wall-clock-gap reconciliation in item 3 (see Appendix A).</li>
     </ol>
     <h3>Check-ins <span class="tag">notification</span></h3>
     <ol class="req">
@@ -287,9 +287,9 @@
 
   <section id="s12">
     <div class="eyebrow"><span class="n">12</span> GUI specification</div>
-    <h2>Menu bar + main window</h2>
+    <h2>Tray + main window</h2>
     <ol class="req">
-      <li><strong>Tray (Electron <code>Tray</code> + popover <code>BrowserWindow</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window. This is the cross-platform analog of a native menu-bar item — the system tray on Windows/Linux, the menu bar on macOS — not pixel-identical OS chrome.</li>
+      <li><strong>Tray (Electron <code>Tray</code> + popover <code>BrowserWindow</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window. It lives in the system tray on Windows and Linux and in the menu bar on macOS.</li>
       <li><strong>Global hotkey</strong> (default <code>Ctrl+Alt+T</code>, registered via Electron <code>globalShortcut</code> as <code>CommandOrControl+Alt+T</code>) toggles the timer from anywhere — stops if running, resumes the last entry if idle.</li>
       <li><strong>Main window:</strong> entries grouped by day with inline edit, split, merge, and delete; client/project/tag management; the report builder with on-screen summary and CSV/JSON export.</li>
       <li><strong>Flags visible in context:</strong> overlap warnings and sleep-through flags appear on the affected entries with the one-tap subtract action.</li>
@@ -375,7 +375,7 @@
     <h2>v1 is done when…</h2>
     <ol class="req">
       <li>A timer started in <code>tt</code> appears in the tray near-instantly, and vice versa; <code>tt status</code> and the tray never disagree.</li>
-      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either client.</li>
+      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either surface.</li>
       <li>Closing the app, sleeping the machine, or crashing mid-timer never corrupts elapsed time.</li>
       <li>Stored entry times are never altered by rounding or sleep subtraction; both are reversible and applied only to derived/billable duration.</li>
       <li>A sleep through a running timer produces a flagged entry with second-accurate span(s) and a working one-tap subtract.</li>
@@ -389,15 +389,14 @@
   <section id="a1">
     <div class="eyebrow"><span class="n">A</span> Appendix — Power/idle APIs</div>
     <h2>What the process can actually observe</h2>
-    <p>Research summary grounding §10, expressed against Electron's <code>powerMonitor</code>. Sleep/wake are event-backed (live <code>suspend</code>/<code>resume</code>), with a wall-clock-gap fallback on launch; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter. Note the honest loss versus the original macOS spec: there is no cross-platform kernel sleep/wake timestamp and no Power Nap / dark-wake distinction, so reconciliation is by wall-clock gap and a single sleep is one span.</p>
+    <p>Reference for §10, expressed against Electron's <code>powerMonitor</code>. Sleep/wake are event-backed (live <code>suspend</code>/<code>resume</code>), with a wall-clock-gap fallback on launch; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter. <code>powerMonitor</code> surfaces user-visible suspend/resume, so each sleep is one span and a missed sleep is reconstructed from the wall-clock gap.</p>
     <table>
       <thead><tr><th>Signal</th><th>Available?</th><th>How</th></tr></thead>
       <tbody>
         <tr><td data-l="Signal">Went to sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'suspend'</code> (stamp on receipt, <code>source = event</code>). If missed (app not running), inferred after the fact from a wall-clock gap, <code>source = gap</code>.</td></tr>
-        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'resume'</code>. No cross-platform kernel wake timestamp; a wake missed while closed is recovered on launch by comparing the wall-clock gap against the open entry.</td></tr>
+        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'resume'</code>. A wake missed while the app was closed is recovered on launch by comparing the wall-clock gap against the open entry.</td></tr>
         <tr><td data-l="Signal">Became idle</td><td class="m" data-l="Available?">Poll only, fuzzy</td><td data-l="How">No event. Poll <code>powerMonitor.getSystemIdleTime()</code> (seconds since last input); infer start as <code>now − idle</code>. The OS "idle" definition is OS-provided and version-variable. Excluded from v1 per §10.</td></tr>
         <tr><td data-l="Signal">Stopped being idle</td><td class="m" data-l="Available?">Inferred</td><td data-l="How">Idle time resets to 0 on input; <code>powerMonitor</code> <code>'unlock-screen'</code> as a coarse proxy.</td></tr>
-        <tr><td data-l="Signal">Power Nap / dark wake</td><td class="m" data-l="Available?">Not distinguishable</td><td data-l="How">No cross-platform analog. <code>powerMonitor</code> surfaces user-visible <code>suspend</code>/<code>resume</code> only, so a maintenance wake is not separately observable and one sleep is recorded as one span. Accepted limitation versus the macOS-only original.</td></tr>
       </tbody>
     </table>
   </section>
