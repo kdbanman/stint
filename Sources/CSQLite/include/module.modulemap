@@ -1,0 +1,4 @@
+module CSQLite {
+    umbrella header "CSQLite.h"
+    export *
+}

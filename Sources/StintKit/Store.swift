@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 
 /// The shared core's single entry point to persistent state. Both `tt` and the
 /// menu-bar app talk to one SQLite file through a `Store`; neither holds a
@@ -7,10 +6,14 @@ import GRDB
 ///
 /// This slice implements the running-timer keystone — `start`, `stop`,
 /// `status` — and enforces the cardinal invariant **at most one open entry**
-/// both transactionally (close-then-open in one write) and structurally (a
-/// unique index, below), so it holds no matter which surface writes.
+/// both transactionally (close-then-open in one immediate transaction) and
+/// structurally (a unique index, below), so it holds no matter which surface
+/// writes.
 public final class Store {
-    private let writer: any DatabaseWriter
+    private let connection: Connection
+
+    /// Columns selected by `entrySelect`, in order, mapped by `readEntry`.
+    private static let entrySelect = "SELECT id, description, start_utc, end_utc, billable FROM entry"
 
     /// Opens the on-disk database in WAL mode (concurrent readers, single
     /// writer) at `path`, creating the parent directory and schema if needed.
@@ -20,56 +23,43 @@ public final class Store {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        // DatabasePool puts the file in WAL mode, which is what lets the running
-        // app and a `tt` invocation read/write the same file cooperatively.
-        let pool = try DatabasePool(path: path, configuration: Self.configuration)
-        try self.init(writer: pool)
+        try self.init(connection: Connection(path: path), wal: true)
     }
 
     /// An ephemeral in-memory database — used by the test suite.
     public static func inMemory() throws -> Store {
-        let queue = try DatabaseQueue(configuration: Self.configuration)
-        return try Store(writer: queue)
+        try Store(connection: Connection(path: ":memory:"), wal: false)
     }
 
-    private init(writer: any DatabaseWriter) throws {
-        self.writer = writer
+    private init(connection: Connection, wal: Bool) throws {
+        self.connection = connection
+        if wal {
+            // WAL is what lets the running app and a `tt` invocation read/write
+            // the same file cooperatively.
+            try connection.execute("PRAGMA journal_mode = WAL;")
+        }
         try migrate()
-    }
-
-    private static var configuration: Configuration {
-        var config = Configuration()
-        // Cooperate with a concurrent writer (the other surface) instead of
-        // failing fast with SQLITE_BUSY, and take the write lock up front so a
-        // close-then-open transition can't deadlock on a lock upgrade.
-        config.busyMode = .timeout(5)
-        config.defaultTransactionKind = .immediate
-        return config
     }
 
     // MARK: - Schema
 
     private func migrate() throws {
-        try writer.write { db in
-            // `open_marker` is a stored generated column that is 1 exactly while
-            // the entry is open and NULL once closed. A UNIQUE index over it lets
-            // SQLite itself guarantee at most one open entry: NULLs are distinct
-            // (any number of closed entries), but only one row may carry the 1.
-            try db.execute(sql: """
-                CREATE TABLE IF NOT EXISTS entry (
-                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                    description TEXT,
-                    start_utc   TEXT NOT NULL,
-                    end_utc     TEXT,
-                    billable    INTEGER NOT NULL DEFAULT 1,
-                    open_marker INTEGER GENERATED ALWAYS AS
-                                (CASE WHEN end_utc IS NULL THEN 1 ELSE NULL END) STORED
-                );
-                """)
-            try db.execute(sql: """
-                CREATE UNIQUE INDEX IF NOT EXISTS one_open_entry ON entry(open_marker);
-                """)
-        }
+        // `open_marker` is a stored generated column that is 1 exactly while the
+        // entry is open and NULL once closed. A UNIQUE index over it lets SQLite
+        // itself guarantee at most one open entry: NULLs are distinct (any
+        // number of closed entries), but only one row may carry the 1.
+        try connection.execute("""
+            CREATE TABLE IF NOT EXISTS entry (
+                id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT,
+                start_utc   TEXT NOT NULL,
+                end_utc     TEXT,
+                billable    INTEGER NOT NULL DEFAULT 1,
+                open_marker INTEGER GENERATED ALWAYS AS
+                            (CASE WHEN end_utc IS NULL THEN 1 ELSE NULL END) STORED
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS one_open_entry ON entry(open_marker);
+            """)
     }
 
     // MARK: - Timer transitions
@@ -87,24 +77,21 @@ public final class Store {
         at instant: Date = Date()
     ) throws -> Entry {
         let startString = ISO8601.string(from: instant)
-        return try writer.write { db in
+        return try connection.transaction {
             // Close the open entry, if any, at this instant.
-            try db.execute(
-                sql: "UPDATE entry SET end_utc = ? WHERE end_utc IS NULL",
-                arguments: [startString]
-            )
-            try db.execute(
-                sql: """
-                    INSERT INTO entry (description, start_utc, end_utc, billable)
-                    VALUES (?, ?, NULL, ?)
-                    """,
-                arguments: [description, startString, billable]
-            )
-            let id = db.lastInsertedRowID
-            // Round-trip the start through storage so the returned value matches
-            // exactly what a subsequent read will see (whole-second precision).
+            try connection.prepare("UPDATE entry SET end_utc = ?1 WHERE end_utc IS NULL")
+                .bind(1, startString)
+                .run()
+            try connection.prepare("""
+                INSERT INTO entry (description, start_utc, end_utc, billable)
+                VALUES (?1, ?2, NULL, ?3)
+                """)
+                .bind(1, description)
+                .bind(2, startString)
+                .bind(3, billable ? 1 : 0)
+                .run()
             return Entry(
-                id: id,
+                id: connection.lastInsertRowID,
                 description: description,
                 start: ISO8601.date(from: startString)!,
                 end: nil,
@@ -119,14 +106,12 @@ public final class Store {
     @discardableResult
     public func stop(at instant: Date = Date()) throws -> Entry? {
         let endString = ISO8601.string(from: instant)
-        return try writer.write { db -> Entry? in
-            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM entry WHERE end_utc IS NULL")
-            else { return nil }
-            var entry = Entry(row: row)
-            try db.execute(
-                sql: "UPDATE entry SET end_utc = ? WHERE id = ?",
-                arguments: [endString, entry.id]
-            )
+        return try connection.transaction {
+            guard var entry = try readEntry(where: "end_utc IS NULL") else { return nil }
+            try connection.prepare("UPDATE entry SET end_utc = ?1 WHERE id = ?2")
+                .bind(1, endString)
+                .bind(2, entry.id)
+                .run()
             entry.end = ISO8601.date(from: endString)
             return entry
         }
@@ -136,26 +121,43 @@ public final class Store {
 
     /// The currently open entry, or `nil` if nothing is running.
     public func openEntry() throws -> Entry? {
-        try writer.read { db in
-            try Row.fetchOne(db, sql: "SELECT * FROM entry WHERE end_utc IS NULL")
-                .map(Entry.init(row:))
-        }
+        try readEntry(where: "end_utc IS NULL")
     }
 
     /// Count of open entries — should never exceed 1. Used by the invariant
     /// tests to assert the keystone holds.
     public func openEntryCount() throws -> Int {
-        try writer.read { db in
-            try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM entry WHERE end_utc IS NULL") ?? 0
-        }
+        let statement = try connection.prepare("SELECT COUNT(*) FROM entry WHERE end_utc IS NULL")
+        guard try statement.step() else { return 0 }
+        return Int(statement.int64(0))
     }
 
     /// All entries, most recent start first. Small helper for tests/inspection.
     public func allEntries() throws -> [Entry] {
-        try writer.read { db in
-            try Row.fetchAll(db, sql: "SELECT * FROM entry ORDER BY start_utc DESC, id DESC")
-                .map(Entry.init(row:))
+        let statement = try connection.prepare(Self.entrySelect + " ORDER BY start_utc DESC, id DESC")
+        var entries: [Entry] = []
+        while try statement.step() {
+            entries.append(Self.map(statement))
         }
+        return entries
+    }
+
+    // MARK: - Row mapping
+
+    private func readEntry(where clause: String) throws -> Entry? {
+        let statement = try connection.prepare(Self.entrySelect + " WHERE \(clause) LIMIT 1")
+        guard try statement.step() else { return nil }
+        return Self.map(statement)
+    }
+
+    private static func map(_ statement: Statement) -> Entry {
+        Entry(
+            id: statement.int64(0),
+            description: statement.text(1),
+            start: ISO8601.date(from: statement.text(2)!)!,
+            end: statement.isNull(3) ? nil : ISO8601.date(from: statement.text(3)!),
+            billable: statement.int64(4) != 0
+        )
     }
 
     // MARK: - Test support
@@ -164,14 +166,11 @@ public final class Store {
     /// close-then-open transition. The structural invariant (the `one_open_entry`
     /// unique index) must reject it. Internal — reached only via `@testable`.
     func attemptRawOpenInsert(at instant: Date) throws {
-        try writer.write { db in
-            try db.execute(
-                sql: """
-                    INSERT INTO entry (description, start_utc, end_utc, billable)
-                    VALUES ('raw', ?, NULL, 1)
-                    """,
-                arguments: [ISO8601.string(from: instant)]
-            )
-        }
+        try connection.prepare("""
+            INSERT INTO entry (description, start_utc, end_utc, billable)
+            VALUES ('raw', ?1, NULL, 1)
+            """)
+            .bind(1, ISO8601.string(from: instant))
+            .run()
     }
 }

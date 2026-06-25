@@ -1,5 +1,4 @@
 import Foundation
-import GRDB
 
 /// A *time entry* — one bounded spell of tracked work (the product's "stint").
 ///
@@ -32,22 +31,5 @@ public struct Entry: Equatable, Sendable {
     /// to be non-negative so a backdated edit can never produce negative time.
     public func elapsed(asOf now: Date) -> TimeInterval {
         max(0, (end ?? now).timeIntervalSince(start))
-    }
-}
-
-extension Entry {
-    /// Maps a database row (`SELECT * FROM entry`) onto an `Entry`. Stored
-    /// timestamps are always well-formed ISO-8601, so parsing them is safe.
-    init(row: Row) {
-        self.id = row["id"]
-        self.description = row["description"]
-        let startString: String = row["start_utc"]
-        self.start = ISO8601.date(from: startString)!
-        if let endString: String = row["end_utc"] {
-            self.end = ISO8601.date(from: endString)
-        } else {
-            self.end = nil
-        }
-        self.billable = row["billable"]
     }
 }

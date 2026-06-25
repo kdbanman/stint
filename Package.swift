@@ -8,6 +8,12 @@ import PackageDescription
 // This package currently implements one thin vertical slice — the running-timer
 // keystone: `start`, `stop`, `status` over a single SQLite file, enforcing the
 // "at most one open entry" invariant in the core.
+//
+// Persistence is the system SQLite (WAL mode, busy timeout, BEGIN IMMEDIATE
+// transitions), reached through a tiny first-party `CSQLite` shim. The PRD
+// names GRDB; GRDB 6 links `sqlite3_snapshot_*`, which the stock Linux SQLite
+// isn't built with, so for a portable slice we keep a thin, well-contained
+// SQLite layer behind the `Store` seam and can adopt a richer toolkit later.
 let package = Package(
     name: "Stint",
     platforms: [.macOS(.v13)],
@@ -16,16 +22,18 @@ let package = Package(
         .executable(name: "tt", targets: ["tt"]),
     ],
     dependencies: [
-        // Trustworthy, widely-used SQLite toolkit (the PRD's prescribed
-        // persistence layer): WAL mode, busy timeout, typed access.
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.0.0"),
         // Apple's argument parser for the CLI surface.
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
     ],
     targets: [
+        // Thin module exposing the system SQLite C API to Swift.
+        .target(
+            name: "CSQLite",
+            linkerSettings: [.linkedLibrary("sqlite3")]
+        ),
         .target(
             name: "StintKit",
-            dependencies: [.product(name: "GRDB", package: "GRDB.swift")]
+            dependencies: ["CSQLite"]
         ),
         .executableTarget(
             name: "tt",
