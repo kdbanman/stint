@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Product Requirements</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  h3 .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:middle}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  ol.req{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:r}
+  ol.req li{position:relative;padding-left:34px;margin-bottom:11px;counter-increment:r;color:var(--ink-soft)}
+  ol.req li::before{content:"R" counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  pre{background:#fbfbfa;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-soft);padding:16px 18px;margin:16px 0;overflow-x:auto;white-space:pre}
+  pre .k{color:var(--ink);font-weight:600}
+  pre .c{color:var(--faint)}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">00:00:00&nbsp; <b>■ idle</b> &nbsp;·&nbsp; tt v1</div>
+    </div>
+    <div class="mast-meta">Product Requirements · v1 · macOS · single user · offline</div>
+  </header>
+
+  <p class="lede">A native macOS time tracker for one freelancer who bills by time. A menu-bar app and a CLI (<code>tt</code>) are equal clients of one local SQLite database. The unit is time; no money lives in the app.</p>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>Overview &amp; goals</a></li>
+      <li><a href="#s2"><span class="tn">02</span>Non-goals</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Concepts &amp; domain model</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Architecture</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Timer &amp; entries</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Editing: split, merge, overlap</a></li>
+      <li><a href="#s7"><span class="tn">07</span>Clients, projects, tags</a></li>
+      <li><a href="#s8"><span class="tn">08</span>Billable &amp; non-billable</a></li>
+      <li><a href="#s9"><span class="tn">09</span>Reports &amp; export</a></li>
+      <li><a href="#s10"><span class="tn">10</span>Running-timer hygiene</a></li>
+      <li><a href="#s11"><span class="tn">11</span>CLI specification</a></li>
+      <li><a href="#s12"><span class="tn">12</span>GUI specification</a></li>
+      <li><a href="#s13"><span class="tn">13</span>Storage &amp; schema</a></li>
+      <li><a href="#s14"><span class="tn">14</span>Settings</a></li>
+      <li><a href="#s15"><span class="tn">15</span>Platform &amp; tech</a></li>
+      <li><a href="#s16"><span class="tn">16</span>Edge cases &amp; rules</a></li>
+      <li><a href="#s17"><span class="tn">17</span>v1 acceptance criteria</a></li>
+      <li><a href="#a1"><span class="tn">A</span>macOS power/idle APIs</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> Overview &amp; goals</div>
+    <h2>What Stint is</h2>
+    <p>Stint is a single-user macOS desktop application for tracking billable time, in the spirit of early Toggl: a live start/stop timer, with manual backfill, organized by client. It runs locally, stores all data in one SQLite file, and is fully offline. Its output is trustworthy time totals per client and date range, exported as CSV or JSON, which the user turns into invoices in a separate tool.</p>
+    <h3>Primary goals</h3>
+    <ul class="d">
+      <li><strong>Accurate billable hours.</strong> The stored total is always the exact truth; nothing is silently rounded, added, or removed.</li>
+      <li><strong>Equal CLI and GUI.</strong> Anything the menu-bar app can do, <code>tt</code> can do, over the same database, with no privileged client.</li>
+      <li><strong>Low-friction tracking.</strong> Starting a timer takes one keystroke or one click; forgetting to start one is always recoverable by hand.</li>
+      <li><strong>Quiet, native, minimal.</strong> A monochrome SwiftUI app that feels like part of macOS.</li>
+    </ul>
+    <h3>Primary user</h3>
+    <p>A freelancer, consultant, or contractor working solo on a Mac, tracking a handful of clients, comfortable in a terminal, who invoices from the exported numbers using other software.</p>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> Non-goals</div>
+    <h2>Explicitly out of scope for v1</h2>
+    <table>
+      <thead><tr><th>Excluded</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Excluded">Money</td><td data-l="Rationale">No rates, currency, tax, or invoice generation. The unit is time; billing happens downstream.</td></tr>
+        <tr><td class="m" data-l="Excluded">Sync / cloud</td><td data-l="Rationale">No accounts, network, sync, or telemetry. The file is portable; pointing <code>TT_DB</code> at a synced folder is the user's own risk, not an app feature.</td></tr>
+        <tr><td class="m" data-l="Excluded">Multi-user / team</td><td data-l="Rationale">Single user, single machine. No sharing, roles, or dashboards.</td></tr>
+        <tr><td class="m" data-l="Excluded">OS user-idle</td><td data-l="Rationale">Keyboard/mouse idle detection is fuzzy, OS-version-dependent, and a cross-application concern. Sleep/wake (clean, timestamped) is used instead.</td></tr>
+        <tr><td class="m" data-l="Excluded">Mobile</td><td data-l="Rationale">Desktop instrument only.</td></tr>
+        <tr><td class="m" data-l="Excluded">PDF / Markdown export</td><td data-l="Rationale">CSV and JSON cover the bridge to invoicing and scripting; a renderer is weight for little gain.</td></tr>
+        <tr><td class="m" data-l="Excluded">Tracking reminders</td><td data-l="Rationale">"You're working but nothing is tracking" nudges are deferred to v2; v1 ships only the left-running-timer check-in.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Concepts &amp; domain model</div>
+    <h2>Entities and the core invariant</h2>
+    <p>The conceptual keystone: <strong>a running timer is the single time entry whose <code>end</code> is null.</strong> "Running" is a row state, not a separate object. Elapsed time is always derived (<code>now − start</code>), never stored or incremented.</p>
+    <table>
+      <thead><tr><th>Entity</th><th>Key fields</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Entity">Client</td><td data-l="Fields"><code>id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Top of the hierarchy. No rate. Archivable, not deleted, once referenced.</td></tr>
+        <tr><td class="m" data-l="Entity">Project</td><td data-l="Fields"><code>id</code>, <code>client_id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Optional refinement. A project belongs to exactly one client; selecting a project implies its client.</td></tr>
+        <tr><td class="m" data-l="Entity">Entry</td><td data-l="Fields"><code>id</code>, <code>client_id?</code>, <code>project_id?</code>, <code>description?</code>, <code>start</code>, <code>end?</code>, <code>billable</code>, <code>excluded_seconds</code></td><td data-l="Notes">The core record. <code>end</code> null ⇒ running. Times stored UTC. <code>client_id</code> nullable (clientless = internal time).</td></tr>
+        <tr><td class="m" data-l="Entity">Tag</td><td data-l="Fields"><code>id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Flat, reusable, cross-cutting. Many-to-many with entries via a join.</td></tr>
+        <tr><td class="m" data-l="Entity">SleepSpan</td><td data-l="Fields"><code>id</code>, <code>entry_id</code>, <code>sleep_at</code>, <code>wake_at</code>, <code>source</code></td><td data-l="Notes">A sleep→wake cycle that occurred during a running entry. Multiple per entry. <code>source</code> = event | kernel | unknown.</td></tr>
+        <tr><td class="m" data-l="Entity">Setting</td><td data-l="Fields"><code>key</code>, <code>value</code></td><td data-l="Notes">Key-value app config (rounding, week start, check-in cadence, etc.).</td></tr>
+      </tbody>
+    </table>
+    <h3>Invariants</h3>
+    <ul class="d">
+      <li><strong>At most one open entry</strong> (<code>end IS NULL</code>) exists at any time. Enforced transactionally in the shared core.</li>
+      <li><strong>Billable duration</strong> of an entry = <code>(end ?? now) − start − excluded_seconds</code>. Stored truth (<code>start</code>, <code>end</code>) is never mutated by rounding or sleep subtraction.</li>
+      <li><strong>A project's client</strong> is authoritative: an entry with a project takes that project's client.</li>
+    </ul>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Architecture</div>
+    <h2>One core, one file, two thin shells</h2>
+    <ol class="req">
+      <li><strong>Shared core.</strong> A Swift package (<code>Core</code>) owns the schema, every state transition, and all invariants. The menu-bar app and the <code>tt</code> binary both import it; there is no duplicated logic and no privileged client.</li>
+      <li><strong>Single source of truth.</strong> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>Core</code>.</li>
+      <li><strong>Derived elapsed.</strong> No process holds or increments a timer. Elapsed is computed <code>now − start</code> on demand; the menu bar's per-second update is display only.</li>
+      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which client triggers it. The CLI uses a busy timeout so it cooperates with the running app.</li>
+      <li><strong>Change propagation by file-watch.</strong> Each client watches the SQLite file (and its <code>-wal</code>) via FSEvents and refreshes on change, so a write from one surfaces in the other near-instantly. (The menu bar's 1-second display tick is independent of this.)</li>
+      <li><strong>UTC storage, local display.</strong> All timestamps stored UTC; rendered in the system locale and time zone. Durations are timezone-independent and DST-safe.</li>
+    </ol>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Timer &amp; entries</div>
+    <h2>Tracking and backfill</h2>
+    <ol class="req">
+      <li><strong>Start</strong> opens a new entry; any currently open entry is stopped first. Description, client, project, tags, and billable are all optional at start and editable later. Nothing is required to start a bare timer.</li>
+      <li><strong>Stop</strong> sets <code>end = now</code> on the open entry.</li>
+      <li><strong>Status</strong> reports the open entry and its derived elapsed, or that nothing is running.</li>
+      <li><strong>Resume</strong> starts a fresh entry copying the most recent entry's description, client, project, and billable flag.</li>
+      <li><strong>Manual add</strong> creates a completed entry from explicit <code>from</code>/<code>to</code> times (backfill). Backfilled entries are first-class and indistinguishable from tracked ones except by their timestamps.</li>
+      <li><strong>The running entry is editable</strong> like any other (description, client, project, tags, even <code>start</code>); its <code>end</code> is set only by stopping it.</li>
+      <li>Default <code>billable</code> is <strong>true</strong> when a client is set, <strong>false</strong> when clientless; always overridable.</li>
+    </ol>
+  </section>
+
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Editing</div>
+    <h2>Split, merge, delete, overlap</h2>
+    <ol class="req">
+      <li><strong>Edit</strong> any field of any entry. <strong>Delete</strong> any entry (CLI requires confirmation or <code>--force</code>).</li>
+      <li><strong>Split</strong> cuts one entry into two at a chosen instant within its span; both inherit the original's client/project/tags/billable; the user adjusts from there.</li>
+      <li><strong>Merge</strong> combines a contiguous selection into one entry spanning the earliest start to the latest end. <strong>Conflict rule:</strong> when merged entries disagree on client/project/billable, the GUI prompts which to keep; descriptions are concatenated and tags unioned. <code>tt merge</code> uses the first entry's attributes unless <code>--client</code>/<code>--project</code> override.</li>
+      <li><strong>Overlap is warned, not blocked.</strong> Any add/edit that overlaps an existing entry surfaces a clear warning (GUI banner; <code>tt</code> note on stderr) but is allowed. Overlapped spans are flagged in reports so the same time cannot silently bill twice.</li>
+    </ol>
+  </section>
+
+  <section id="s7">
+    <div class="eyebrow"><span class="n">07</span> Clients, projects, tags</div>
+    <h2>Reference data</h2>
+    <ol class="req">
+      <li><strong>Clients</strong> and <strong>projects</strong> can be created, renamed, archived, and listed from both GUI and CLI. A project must name a client. Referenced records are archived rather than hard-deleted to preserve history.</li>
+      <li><strong>Tags</strong> are flat, reusable labels, applied many-per-entry, used for filtering and grouping (e.g. all "meetings" across clients). Created on the fly when first applied.</li>
+    </ol>
+  </section>
+
+  <section id="s8">
+    <div class="eyebrow"><span class="n">08</span> Billable &amp; non-billable</div>
+    <h2>Tracking overhead without billing it</h2>
+    <ol class="req">
+      <li>An entry may have <strong>no client</strong>; clientless time defaults to non-billable internal time (admin, email, own tooling).</li>
+      <li>The <strong><code>billable</code> flag</strong> overrides either way: a client entry can be marked non-billable (goodwill), and internal time can rarely be flagged billable.</li>
+      <li>Reports default to <strong>billable-only</strong>, with a toggle to show all or non-billable, so the user can see total worked vs. invoiceable.</li>
+    </ol>
+  </section>
+
+  <section id="s9">
+    <div class="eyebrow"><span class="n">09</span> Reports &amp; export</div>
+    <h2>The deliverable</h2>
+    <ol class="req">
+      <li><strong>Date range:</strong> presets (today, this week, last week, this month, last month) plus arbitrary custom ranges.</li>
+      <li><strong>Grouping:</strong> default client → project → entries; also by day or by tag.</li>
+      <li><strong>Filters:</strong> client, project, tag, billable.</li>
+      <li><strong>Rounding:</strong> stored time is exact; rounding applies only at display/export, <strong>off by default</strong>. When on, grouped totals (the billable line, not each entry) round to a configurable increment — default <strong>nearest 15 min</strong>; 6 / 10 / 30 also available; nearest, not always-up.</li>
+      <li><strong>Flags surfaced:</strong> overlapped time and unreviewed sleep-flagged entries are marked in every report so they can't quietly reach an invoice.</li>
+      <li><strong>Export:</strong> <strong>CSV</strong> (one row per entry: client, project, tags, description, start, end, raw duration, excluded sleep, billable, overlapped) and <strong>JSON</strong>. The GUI also shows an on-screen summary. No PDF, no Markdown.</li>
+    </ol>
+  </section>
+
+  <section id="s10">
+    <div class="eyebrow"><span class="n">10</span> Running-timer hygiene</div>
+    <h2>Two independent mechanisms</h2>
+    <h3>Sleep-span flagging <span class="tag">event + kernel</span></h3>
+    <ol class="req">
+      <li>While an entry is open, the app listens for macOS <strong>sleep</strong> and <strong>wake</strong> events and timestamps each on receipt.</li>
+      <li>Each sleep→wake cycle during the open entry is recorded as a <strong>SleepSpan</strong> and attached to the entry, which is flagged "slept through." Multiple cycles per timer are all captured.</li>
+      <li>On launch, the app <strong>reconciles</strong> against the kernel's last sleep/wake timestamps to recover a cycle missed while it was not running, recording what is available (at minimum, that a sleep occurred).</li>
+      <li>The timer keeps running through sleep (<code>now − start</code> stays honest as wall-clock); the flag and spans let the user decide about the dead time.</li>
+      <li><strong>Slept time handling:</strong> flagged, not auto-subtracted. A one-tap action (GUI) / flag (<code>tt</code>) adds the span(s) to <code>excluded_seconds</code>, trimming billable duration precisely and reversibly.</li>
+      <li>Power Nap "dark wakes" must be filtered so a maintenance wake does not fragment one sleep into several spans (verify empirically; distinguish via the power-management log if needed).</li>
+    </ol>
+    <h3>Check-ins <span class="tag">notification</span></h3>
+    <ol class="req">
+      <li>The first check-in notification fires at <strong>start + 60 min</strong>, then every <strong>30 min</strong> by default.</li>
+      <li>The schedule is <strong>autonomous</strong>: if the user ignores a notification, the next still fires on time.</li>
+      <li>The notification shows <strong>light context</strong> — the description if present (and client if set), otherwise "your timer."</li>
+      <li>It offers an inline <strong>Stop</strong> and a <strong>keep going</strong> action, plus a <strong>dropdown</strong> setting minutes until the next check-in (default 30). A custom pick applies to the <strong>next gap only</strong>, then reverts to the default.</li>
+      <li>Cadence applies to <strong>every</strong> running timer, billable or not.</li>
+      <li>The schedule is persisted/derivable so it <strong>survives relaunch</strong>: a check-in that came due while the app was closed fires <strong>once</strong> on relaunch, then resumes cadence. After a long sleep, cadence <strong>realigns from wake</strong> — no backlog of missed notifications.</li>
+    </ol>
+    <div class="note"><span class="lbl">Out of scope</span>OS-level user-idle detection (keyboard/mouse inactivity). It is fuzzy, OS-version-dependent, and a cross-application concern. Stint builds only on sleep/wake, which are clean and authoritative. See Appendix A.</div>
+  </section>
+
+  <section id="s11">
+    <div class="eyebrow"><span class="n">11</span> CLI specification</div>
+    <h2><code>tt</code> — full parity</h2>
+    <p>Human-readable tables by default; <code>--json</code> on every read command for scripting. Clean exit codes (0 success, non-zero on error). All writes go through <code>Core</code> with <code>BEGIN IMMEDIATE</code> + busy timeout so they cooperate with the running app.</p>
+    <table>
+      <thead><tr><th>Command</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Command">tt start [desc]</td><td data-l="Does">Stop any open entry, open a new one. Flags: <code>--client</code> <code>--project</code> <code>--tag</code> (repeatable) <code>--no-bill</code> <code>--at &lt;time&gt;</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt stop</td><td data-l="Does">Close the open entry. <code>--at &lt;time&gt;</code> to backdate the stop.</td></tr>
+        <tr><td class="m" data-l="Command">tt status</td><td data-l="Does">Show the open entry + derived elapsed, or "nothing running." <code>--json</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt resume</td><td data-l="Does">Start a new entry from the last entry's description/client/project/billable.</td></tr>
+        <tr><td class="m" data-l="Command">tt add &lt;desc&gt;</td><td data-l="Does">Backfill a completed entry. Requires <code>--from</code> <code>--to</code>; same attribute flags as start.</td></tr>
+        <tr><td class="m" data-l="Command">tt edit &lt;id&gt;</td><td data-l="Does">Amend any field: <code>--desc --from --to --client --project --tag/--untag --bill/--no-bill</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt split &lt;id&gt; --at &lt;time&gt;</td><td data-l="Does">Cut an entry into two at an instant within its span.</td></tr>
+        <tr><td class="m" data-l="Command">tt merge &lt;id…&gt;</td><td data-l="Does">Merge a contiguous selection. <code>--client</code>/<code>--project</code> resolve conflicts.</td></tr>
+        <tr><td class="m" data-l="Command">tt rm &lt;id&gt;</td><td data-l="Does">Delete an entry. Confirms unless <code>--force</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt list</td><td data-l="Does">List entries. <code>--today --week --range a b</code> + filters + <code>--json</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt report</td><td data-l="Does">Totals. <code>--week --month --range a b</code>, <code>--by client|project|day|tag</code>, <code>--round 15</code>, <code>--all|--non-billable</code>, <code>--csv|--json</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt export</td><td data-l="Does">Raw entries for a range. <code>--csv|--json</code>, <code>-o &lt;file&gt;</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt client …</td><td data-l="Does"><code>add | rename | archive | ls</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt project …</td><td data-l="Does"><code>add --client | rename | archive | ls</code>.</td></tr>
+        <tr><td class="m" data-l="Command">tt sleep …</td><td data-l="Does">Review sleep-flagged entries; <code>tt sleep subtract &lt;id&gt;</code> excludes slept time.</td></tr>
+      </tbody>
+    </table>
+    <p>Time arguments accept absolute (<code>14:30</code>, <code>2026-06-24T14:30</code>) and relative (<code>-90m</code>, <code>-1h30m</code>) forms. The database path resolves to <code>TT_DB</code> if set, else the default location (§13).</p>
+  </section>
+
+  <section id="s12">
+    <div class="eyebrow"><span class="n">12</span> GUI specification</div>
+    <h2>Menu bar + main window</h2>
+    <ol class="req">
+      <li><strong>Menu bar (<code>MenuBarExtra</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window.</li>
+      <li><strong>Global hotkey</strong> (default <code>⌃⌥T</code>) toggles the timer from anywhere — stops if running, resumes the last entry if idle.</li>
+      <li><strong>Main window:</strong> entries grouped by day with inline edit, split, merge, and delete; client/project/tag management; the report builder with on-screen summary and CSV/JSON export.</li>
+      <li><strong>Flags visible in context:</strong> overlap warnings and sleep-through flags appear on the affected entries with the one-tap subtract action.</li>
+      <li><strong>Empty states</strong> instruct rather than decorate (e.g. "No entries yet — press ⌃⌥T or run <code>tt start</code> to begin").</li>
+    </ol>
+  </section>
+
+  <section id="s13">
+    <div class="eyebrow"><span class="n">13</span> Storage &amp; schema</div>
+    <h2>One file, overridable path</h2>
+    <p>Default location: <code>~/Library/Application Support/Stint/timetracker.sqlite</code> (WAL mode). Both the app and <code>tt</code> resolve the same path, overridable by the <code>TT_DB</code> environment variable. Backup = copy the file; export = <code>tt export</code>. No network, ever.</p>
+    <pre><span class="c">-- schema sketch (illustrative)</span>
+<span class="k">CREATE TABLE</span> client  (id INTEGER PK, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> project (id INTEGER PK, client_id INT REFERENCES client, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> entry (
+  id INTEGER PK,
+  client_id  INT REFERENCES client,        <span class="c">-- nullable</span>
+  project_id INT REFERENCES project,        <span class="c">-- nullable; implies client</span>
+  description TEXT,
+  start_utc  TEXT NOT NULL,                 <span class="c">-- ISO-8601 UTC</span>
+  end_utc    TEXT,                          <span class="c">-- NULL = running</span>
+  billable   INT NOT NULL DEFAULT 1,
+  excluded_seconds INT NOT NULL DEFAULT 0   <span class="c">-- subtracted sleep</span>
+);
+<span class="k">CREATE TABLE</span> tag (id INTEGER PK, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> entry_tag (entry_id INT, tag_id INT, PRIMARY KEY(entry_id, tag_id));
+<span class="k">CREATE TABLE</span> sleep_span (id INTEGER PK, entry_id INT REFERENCES entry,
+  sleep_utc TEXT, wake_utc TEXT, source TEXT);
+<span class="k">CREATE TABLE</span> setting (key TEXT PRIMARY KEY, value TEXT);
+<span class="c">-- invariant: at most one row with end_utc IS NULL, enforced in Core transactions</span></pre>
+  </section>
+
+  <section id="s14">
+    <div class="eyebrow"><span class="n">14</span> Settings</div>
+    <h2>Configurable defaults</h2>
+    <table>
+      <thead><tr><th>Setting</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Setting">Rounding</td><td class="m" data-l="Default">off</td></tr>
+        <tr><td data-l="Setting">Rounding increment</td><td class="m" data-l="Default">15 min</td></tr>
+        <tr><td data-l="Setting">Week start</td><td class="m" data-l="Default">Monday</td></tr>
+        <tr><td data-l="Setting">First check-in</td><td class="m" data-l="Default">60 min</td></tr>
+        <tr><td data-l="Setting">Check-in interval</td><td class="m" data-l="Default">30 min</td></tr>
+        <tr><td data-l="Setting">Global hotkey</td><td class="m" data-l="Default">⌃⌥T</td></tr>
+        <tr><td data-l="Setting">Accent usage</td><td class="m" data-l="Default">system accent, primary action only</td></tr>
+        <tr><td data-l="Setting">Date/number format</td><td class="m" data-l="Default">system locale</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s15">
+    <div class="eyebrow"><span class="n">15</span> Platform &amp; tech</div>
+    <h2>Native, shared-core</h2>
+    <ul class="d">
+      <li><strong>GUI:</strong> SwiftUI — <code>MenuBarExtra</code> for the bar, a standard window for lists and reports. Follows system light/dark; uses vibrancy and SF typography; system accent applied only to the primary action and running state.</li>
+      <li><strong>CLI:</strong> a Swift executable, <code>tt</code>, importing the same <code>Core</code> package.</li>
+      <li><strong>Core:</strong> a Swift package owning schema, transitions, invariants, reporting, and rounding.</li>
+      <li><strong>Persistence:</strong> SQLite via GRDB, WAL mode, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation.</li>
+      <li><strong>System integration:</strong> FSEvents for file-watch; <code>NSWorkspace</code> sleep/wake notifications + kernel timestamp reconciliation; <code>UNUserNotificationCenter</code> for check-ins.</li>
+    </ul>
+  </section>
+
+  <section id="s16">
+    <div class="eyebrow"><span class="n">16</span> Edge cases &amp; rules</div>
+    <h2>Decided behavior</h2>
+    <table>
+      <thead><tr><th>Situation</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Situation">Start while a timer runs</td><td data-l="Behavior">Atomically stop the open entry, then open the new one.</td></tr>
+        <tr><td data-l="Situation">App closed for an hour, timer open</td><td data-l="Behavior">On reopen, elapsed is correct (derived <code>now − start</code>); nothing to recover.</td></tr>
+        <tr><td data-l="Situation">Crash with a timer open</td><td data-l="Behavior">Entry remains correctly open; it is simply still running on relaunch.</td></tr>
+        <tr><td data-l="Situation">Manual edit overlaps another entry</td><td data-l="Behavior">Warn, allow, flag in reports.</td></tr>
+        <tr><td data-l="Situation">Merge entries with differing attributes</td><td data-l="Behavior">GUI prompts which client/project/billable to keep; descriptions concatenated, tags unioned. CLI uses first entry unless overridden.</td></tr>
+        <tr><td data-l="Situation">Check-in due while app closed</td><td data-l="Behavior">Fire once on relaunch, then resume cadence.</td></tr>
+        <tr><td data-l="Situation">Long sleep mid-timer</td><td data-l="Behavior">Record sleep span(s), flag entry, realign check-in cadence from wake (no backlog).</td></tr>
+        <tr><td data-l="Situation">Entry spans a DST change</td><td data-l="Behavior">Duration correct (UTC math); displayed in local time.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s17">
+    <div class="eyebrow"><span class="n">17</span> Acceptance criteria</div>
+    <h2>v1 is done when…</h2>
+    <ol class="req">
+      <li>A timer started in <code>tt</code> appears in the menu bar near-instantly, and vice versa; <code>tt status</code> and the menu bar never disagree.</li>
+      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either client.</li>
+      <li>Closing the app, sleeping the Mac, or crashing mid-timer never corrupts elapsed time.</li>
+      <li>Stored entry times are never altered by rounding or sleep subtraction; both are reversible and applied only to derived/billable duration.</li>
+      <li>A sleep through a running timer produces a flagged entry with second-accurate span(s) and a working one-tap subtract.</li>
+      <li>The first check-in fires at 60 min and the cadence continues autonomously, surviving relaunch and realigning after sleep.</li>
+      <li>Reports group, filter, and round per spec, flag overlaps and unreviewed sleep, and export valid CSV and JSON.</li>
+      <li>Every GUI capability is reachable from <code>tt</code>.</li>
+      <li>The app makes no network connections.</li>
+    </ol>
+  </section>
+
+  <section id="a1">
+    <div class="eyebrow"><span class="n">A</span> Appendix — macOS power/idle APIs</div>
+    <h2>What the process can actually observe</h2>
+    <p>Research summary grounding §10. Sleep/wake are event-backed with authoritative kernel timestamps; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter.</p>
+    <table>
+      <thead><tr><th>Signal</th><th>Available?</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Signal">Went to sleep</td><td class="m" data-l="Available?">Yes, precise</td><td data-l="How"><code>NSWorkspace.willSleepNotification</code> (stamp on receipt); kernel <code>kern.sleeptime</code> after the fact.</td></tr>
+        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, precise</td><td data-l="How"><code>NSWorkspace.didWakeNotification</code>; <code>kern.waketime</code> readable even if the app missed the live event; <code>pmset -g log</code> for history.</td></tr>
+        <tr><td data-l="Signal">Became idle</td><td class="m" data-l="Available?">Poll only, fuzzy</td><td data-l="How">No event. Sample <code>CGEventSourceSecondsSinceLastEventType</code> / <code>HIDIdleTime</code>; infer start as <code>now − idle</code>. OS "idle" definition is unpublished and version-variable.</td></tr>
+        <tr><td data-l="Signal">Stopped being idle</td><td class="m" data-l="Available?">Inferred</td><td data-l="How">Counter resets on input; <code>com.apple.screenIsUnlocked</code> as a coarse proxy.</td></tr>
+        <tr><td data-l="Signal">Power Nap / dark wake</td><td class="m" data-l="Available?">Distinguishable</td><td data-l="How">Full user wakes post <code>didWakeNotification</code>; dark wakes generally do not. <code>pmset -g log</code> marks <code>Wake</code> vs <code>DarkWake</code> — filter so maintenance wakes don't fragment a span.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="foot">
+    <span>stint — product requirements</span>
+    <span>v1 · macOS · SwiftUI + tt · shared Core · SQLite/WAL</span>
+  </div>
+
+</main>
+</body>
+</html>
