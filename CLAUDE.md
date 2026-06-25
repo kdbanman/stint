@@ -2,7 +2,12 @@
 
 Stint is a native macOS time tracker for one freelancer who bills by time: a
 menu-bar app and a CLI (`tt`) as equal surfaces over one local SQLite database.
-This repo currently holds the **design documents** only — no code yet.
+
+The repo holds the **design documents** plus a growing Swift implementation,
+built one thin vertical slice at a time. The first slice — the running-timer
+keystone (`start`/`stop`/`status`) — lives in `Sources/` (`StintKit` core, `tt`
+CLI, `StintApp` menu-bar app) with executable acceptance criteria in `Tests/`.
+See `README.md` for build/test instructions and the AC mapping.
 
 ## Sharing rendered HTML
 
