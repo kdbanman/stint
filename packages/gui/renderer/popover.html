@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self';"
+    />
+    <title>Stint</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="popover">
+    <div class="pop idle" id="pop">
+      <div class="state" id="state">idle</div>
+      <div class="count" id="count">00:00:00</div>
+      <div class="ctx" id="ctx">nothing running</div>
+      <div class="row">
+        <button class="primary" id="toggle">Start</button>
+        <button id="open">Open Stint</button>
+      </div>
+    </div>
+    <script src="util.js"></script>
+    <script src="popover.js"></script>
+  </body>
+</html>

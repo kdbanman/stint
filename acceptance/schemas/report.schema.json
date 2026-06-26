@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/report.json",
+  "title": "tt report --json",
+  "description": "Grouped totals with flags (PRD §09).",
+  "type": "object",
+  "required": [
+    "lines",
+    "grand_total_seconds",
+    "grand_rounded_seconds",
+    "overlapped_entry_ids",
+    "unreviewed_sleep_entry_ids",
+    "options",
+    "range"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "lines": { "type": "array", "items": { "$ref": "#/definitions/line" } },
+    "grand_total_seconds": { "type": "integer", "minimum": 0 },
+    "grand_rounded_seconds": { "type": "integer", "minimum": 0 },
+    "overlapped_entry_ids": { "type": "array", "items": { "type": "integer" } },
+    "unreviewed_sleep_entry_ids": { "type": "array", "items": { "type": "integer" } },
+    "options": {
+      "type": "object",
+      "required": ["by", "billable_filter", "rounding", "rounding_increment_min"],
+      "additionalProperties": false,
+      "properties": {
+        "by": { "enum": ["client", "project", "day", "tag"] },
+        "billable_filter": { "enum": ["billable", "all", "non-billable"] },
+        "rounding": { "type": "boolean" },
+        "rounding_increment_min": { "type": "integer" }
+      }
+    },
+    "range": {
+      "type": "object",
+      "required": ["from_utc", "to_utc"],
+      "additionalProperties": false,
+      "properties": {
+        "from_utc": { "type": "string", "format": "date-time" },
+        "to_utc": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "definitions": {
+    "line": {
+      "type": "object",
+      "required": ["key", "children", "entry_ids", "total_seconds", "rounded_seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "children": { "type": "array", "items": { "$ref": "#/definitions/line" } },
+        "entry_ids": { "type": "array", "items": { "type": "integer" } },
+        "total_seconds": { "type": "integer", "minimum": 0 },
+        "rounded_seconds": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
