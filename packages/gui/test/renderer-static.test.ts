@@ -34,4 +34,15 @@ describe('renderer static contract', () => {
       expect(src).not.toMatch(/@stint\/core/);
     }
   });
+
+  it('the renderer opens no outbound connection (§17 R9)', () => {
+    // The renderer is shipped UI code that could reach the network straight from the
+    // page; assert it uses none of the browser request APIs. (The no-network backstop
+    // now also walks this directory; this keeps the guard close to the renderer.)
+    const forbidden = [/\bfetch\s*\(/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /sendBeacon/];
+    for (const f of ['app.js', 'popover.js', 'util.js']) {
+      const src = read(f);
+      for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
+    }
+  });
 });

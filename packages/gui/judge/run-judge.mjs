@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, initScript } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, initScript, JUDGE_NOW } from './fixtures.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
@@ -39,15 +39,21 @@ const fileUrl = (name) => 'file://' + join(RENDERER, name);
 
 async function withPage(browser, state, name, fn) {
   const page = await browser.newPage({ viewport: { width: 760, height: 620 }, colorScheme: 'light' });
+  // Pin the page clock so derived count-ups and the captured evidence are
+  // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(state)));
   await page.goto(fileUrl(name));
-  await page.waitForTimeout(200);
   const result = await fn(page);
   await page.close();
   return result;
 }
 
 const results = [];
+// `pass` is true/false for the deterministic, gating facts; null marks an item that
+// is captured-but-not-machine-scored (the subjective rubric line), so it never
+// silently counts as a pass.
 function record(item, pass, justification, screenshot) {
   results.push({ item, pass, justification, screenshot });
 }
@@ -73,7 +79,9 @@ async function main() {
   await withPage(browser, runningState(), 'popover.html', async (page) => {
     const t1 = await page.textContent('#count');
     await page.screenshot({ path: join(EVIDENCE, 'popover-running-1.png') });
-    await page.waitForTimeout(3000);
+    // Advance exactly 3s and stay frozen there (pauseAt, not fastForward, so the
+    // clock does not resume and the second capture is reproducible).
+    await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
     const t2 = await page.textContent('#count');
     await page.screenshot({ path: join(EVIDENCE, 'popover-running-2.png') });
     const toSec = (s) => {
@@ -81,31 +89,48 @@ async function main() {
       return h * 3600 + m * 60 + sec;
     };
     const delta = toSec(t2) - toSec(t1);
-    const ok = delta >= 2 && delta <= 5;
+    // Deterministic: starts at exactly 01:24:07, advances exactly +3s on fast-forward.
+    const ok = t1 === '01:24:07' && delta === 3;
     record('TRAY_COUNTUP', ok, `popover count advanced ${t1} → ${t2} (+${delta}s)`, 'popover-running-2.png');
   });
 
-  // ACCENT_DISCIPLINE — accent on the primary action only; chrome stays monochrome (§07, §15).
+  // ACCENT_DISCIPLINE — accent confined to the primary action and the running-state
+  // indicator (styles.css header / §07, §15); the rest of the chrome stays monochrome.
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-running.png') });
     const probe = await page.evaluate(() => {
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const primary = getComputedStyle(document.querySelector('button.primary')).backgroundColor;
-      const dayHead = document.querySelector('.day-head')
-        ? getComputedStyle(document.querySelector('.day-head')).color
-        : 'rgb(0,0,0)';
       const toRgb = (hex) => {
         const n = parseInt(hex.replace('#', ''), 16);
         return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
       };
-      return { accentRgb: toRgb(accent), primary, dayHead };
+      const accentRgb = toRgb(accent);
+      const primary = getComputedStyle(document.querySelector('button.primary')).backgroundColor;
+      // Scan the *entire* chrome: any element painting the accent as a fill or text
+      // colour is a discipline break unless it is the primary action or part of the
+      // running-state indicator (the two uses styles.css sanctions).
+      const sanctioned = (el) =>
+        el.matches('button.primary') ||
+        el.closest('button.primary') ||
+        el.closest('.entry.running') ||
+        el.closest('.pop.running') ||
+        el.closest('.pop:not(.idle)');
+      const offenders = [];
+      for (const el of document.querySelectorAll('*')) {
+        if (sanctioned(el)) continue;
+        const cs = getComputedStyle(el);
+        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      return { accentRgb, primary, offenders };
     });
     const primaryUsesAccent = probe.primary === probe.accentRgb;
-    const chromeMonochrome = probe.dayHead !== probe.accentRgb;
+    const chromeMonochrome = probe.offenders.length === 0;
     record(
       'ACCENT_DISCIPLINE',
       primaryUsesAccent && chromeMonochrome,
-      `primary=${probe.primary} accent=${probe.accentRgb} dayHead=${probe.dayHead}`,
+      `primary=${probe.primary} accent=${probe.accentRgb}; stray accent on [${probe.offenders.join(', ') || 'none'}]`,
       'main-running.png',
     );
   });
@@ -126,28 +151,45 @@ async function main() {
     record('FLAG_IN_CONTEXT', ok, `overlap flag on row, slept flag + subtract on slept row: ${JSON.stringify(probe)}`, 'main-flags.png');
   });
 
-  // DESKTOP_FEEL — subjective; evidence captured, scored by the rubric/LLM + human.
-  record('DESKTOP_FEEL', true, 'screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)', 'main-running.png');
+  // DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
+  // counted as an automated pass; the screenshots are the evidence a human/LLM
+  // scores against acceptance/judge-rubric.md.
+  record(
+    'DESKTOP_FEEL',
+    null,
+    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)',
+    'main-running.png',
+  );
 
   await browser.close();
 
   const report = {
     suite: 'JUDGE — GUI presentation & discoverability',
-    generatedAt: new Date().toISOString(),
+    // Pinned to the fixture clock so the committed report verifies byte-for-byte.
+    fixtureClock: JUDGE_NOW,
+    note:
+      'pass:true/false are machine-checked deterministic facts; pass:null items are ' +
+      'captured-not-scored and are routed to human/LLM rubric review, never auto-passed.',
     results,
   };
   mkdirSync(dirname(join(EVIDENCE, '..', 'judge-report.json')), { recursive: true });
   writeFileSync(join(EVIDENCE, '..', 'judge-report.json'), JSON.stringify(report, null, 2) + '\n');
 
+  const label = (p) => (p === null ? 'UNSCORED' : p ? 'PASS' : 'FAIL');
   for (const r of results) {
-    console.log(`${r.pass ? 'PASS' : 'FAIL'}  ${r.item.padEnd(18)} ${r.justification}`);
+    console.log(`${label(r.pass).padEnd(8)} ${r.item.padEnd(18)} ${r.justification}`);
   }
-  const failed = results.filter((r) => !r.pass);
+  const failed = results.filter((r) => r.pass === false);
   if (failed.length) {
     console.error(`\n${failed.length} JUDGE item(s) failed.`);
     process.exit(1);
   }
-  console.log('\nAll JUDGE deterministic items passed; screenshots in acceptance/evidence/screenshots/.');
+  const unscored = results.filter((r) => r.pass === null).length;
+  console.log(
+    `\nAll ${results.length - unscored} machine-scored JUDGE items passed; ` +
+      `${unscored} subjective item(s) left for rubric/human review. ` +
+      'Screenshots in acceptance/evidence/screenshots/.',
+  );
 }
 
 main().catch((err) => {

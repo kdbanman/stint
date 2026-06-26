@@ -12,6 +12,13 @@ const DEFAULT_SETTINGS = {
 };
 const ACCENT = '#2f6fed';
 
+// A pinned wall clock so the captured evidence is byte-for-byte reproducible: the
+// harness installs this as the page clock, the running fixture starts a fixed
+// 01:24:07 before it, and the count-up advances only by an explicit fast-forward.
+export const JUDGE_NOW = '2026-06-24T23:00:00Z';
+const RUNNING_ELAPSED_S = 5047; // 01:24:07
+const RUNNING_START = new Date(Date.parse(JUDGE_NOW) - RUNNING_ELAPSED_S * 1000).toISOString();
+
 export function emptyState() {
   return {
     status: { running: false, entry: null },
@@ -23,14 +30,15 @@ export function emptyState() {
 }
 
 export function runningState() {
-  // Start ~01:24:07 ago so the count-up reads a real, advancing value.
-  const startUtc = new Date(Date.now() - 5047 * 1000).toISOString();
+  // Fixed 01:24:07 before the pinned clock, so the count-up reads a deterministic,
+  // advancing value once the harness fast-forwards its installed clock.
+  const startUtc = RUNNING_START;
   const entry = {
     id: 1,
     description: 'auth refactor',
     clientLabel: 'Client A / API',
     startUtc,
-    billableSeconds: 5047,
+    billableSeconds: RUNNING_ELAPSED_S,
     billable: true,
     sleptThrough: false,
   };
@@ -46,7 +54,7 @@ export function runningState() {
             clientLabel: 'Client A / API',
             startUtc,
             endUtc: null,
-            billableSeconds: 5047,
+            billableSeconds: RUNNING_ELAPSED_S,
             billable: true,
             overlapped: false,
             sleptThrough: false,

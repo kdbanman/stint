@@ -56,21 +56,39 @@ function walk(dir, out = []) {
   return out;
 }
 
+const isDir = (d) => {
+  try {
+    return statSync(d).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Every directory of shipped code the backstop scans: each package's `src`, plus the
+ * Electron renderer (`packages/gui/renderer`, `.js`), which ships outside `src` and is
+ * just as capable of opening a connection (fetch / WebSocket / EventSource) from the
+ * page. All must stay network-silent (PRD §17 R9).
+ */
+export function shippedSourceDirs() {
+  const srcDirs = readdirSync(join(ROOT, 'packages'))
+    .map((p) => join(ROOT, 'packages', p, 'src'))
+    .filter(isDir);
+  const rendererDir = join(ROOT, 'packages', 'gui', 'renderer');
+  if (isDir(rendererDir)) srcDirs.push(rendererDir);
+  return srcDirs;
+}
+
+/** The concrete list of files the scan reads — exported so coverage is verifiable. */
+export function shippedSourceFiles() {
+  return shippedSourceDirs().flatMap((d) => walk(d));
+}
+
 export function scanNoNetwork() {
   const violations = [];
 
-  // 1. Source scan (packages/*/src only — the shipped code).
-  const srcDirs = readdirSync(join(ROOT, 'packages'))
-    .map((p) => join(ROOT, 'packages', p, 'src'))
-    .filter((d) => {
-      try {
-        return statSync(d).isDirectory();
-      } catch {
-        return false;
-      }
-    });
-
-  for (const dir of srcDirs) {
+  // 1. Source scan of all shipped code.
+  for (const dir of shippedSourceDirs()) {
     for (const file of walk(dir)) {
       const text = readFileSync(file, 'utf8');
       for (const mod of FORBIDDEN_MODULES) {
