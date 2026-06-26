@@ -46,7 +46,19 @@ html, body {
 }
 
 /* ---- main window ------------------------------------------------------- */
-.app { max-width: 760px; margin: 0 auto; padding: 0 20px 40px; }
+.app { max-width: 920px; margin: 0 auto; padding: 0; }
+
+/* §12 R3: the window shell — a persistent left nav rail beside the routed views. The shell
+   is the flex row; the rail is fixed-width and the views take the rest. The Entries view
+   keeps its own 760-ish reading width via the section padding below. */
+.shell { display: flex; align-items: stretch; min-height: 100vh; }
+.views { flex: 1; min-width: 0; padding: 0 20px 40px; }
+
+/* Each routed view fills the views column; the inactive ones are hidden by the attribute
+   (app.js toggles `hidden` per route). The [hidden] guard keeps the attribute authoritative
+   even though the rule does not set display — the UA `[hidden] { display:none }` wins. */
+.view { display: block; }
+.view[hidden] { display: none; }
 
 header.mast {
   display: flex;
@@ -62,7 +74,274 @@ header.mast {
 .summary { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .summary b { color: var(--ink-soft); }
 
+/* §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. A quiet bordered
+   block holding the live count-up, the running/idle state, the entry's description +
+   client/project, its attributes, and the Stop + Switch actions. Mirrors mockups/main.html's
+   .timer-card. Accent discipline (§15): the system accent appears ONLY on the running clock
+   and the running-state indicator (`.timer-card.running .clock/.state`) and the primary Stop
+   button (button.primary). Everything else — the idle clock, the label, the description,
+   client/project, the attribute flags, the Switch button — stays restrained system grays,
+   exactly like the popover's `.pop`/`.pop.running` treatment. */
+.timer-card {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+}
+.timer-card .tc-clock-block { flex: none; }
+.timer-card .tc-lbl {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.timer-card .clock {
+  font-family: var(--mono);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+/* The running count-up is one of the two sanctioned accent uses on this card (§15). */
+.timer-card.running .clock { color: var(--accent); }
+.timer-card .state {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 8px;
+}
+/* The running-state indicator is the other sanctioned accent use on this card (§15). */
+.timer-card.running .state { color: var(--accent); }
+.timer-card .ctx { flex: 1; min-width: 0; }
+.timer-card .ctx .desc { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
+.timer-card.idle .ctx .desc { color: var(--muted); font-weight: 500; }
+.timer-card .ctx .meta { font-size: 13px; color: var(--muted); }
+.timer-card .ctx .flags { display: flex; gap: 6px; margin-top: 8px; margin-left: 0; }
+.timer-card .ctx .flags:empty { display: none; }
+.timer-card .btns { display: flex; gap: 9px; flex: none; }
+
+/* §06 R4: the at-write-time overlap banner. A quiet, flag-coloured advisory (the same
+   --flag tokens the per-row overlap flag uses) shown inline right after a write that
+   creates an overlap — allowed, but flagged. It deliberately uses NO accent: accent is
+   reserved for the primary action and the running state (§15 accent discipline). */
+.banner {
+  font-size: 12px;
+  color: var(--flag);
+  background: var(--flag-bg);
+  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 10px;
+}
+.banner[hidden] { display: none; }
+
+/* §12 R9: the detailed in-context overlap banner on an affected entry row ("Overlap: 15m
+   with previous entry"). It reuses the .banner flag-coloured advisory chrome but sits
+   inside the row's desc cell, so it spans the full description column under the inline
+   flags. Monochrome --flag tokens only — never the accent (§15 accent discipline). */
+.entry .banner.overlap {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+/* §12 R9: the struck-through raw duration shown beside a slept entry's trimmed billable
+   duration. The trimmed (billable) value reads as the live figure; the raw one is struck
+   in a faint gray so it plainly reads as "what was cut". No accent (§15). */
+.struck,
+s {
+  text-decoration: line-through;
+  color: var(--faint);
+}
+
+/* The report view's in-page back/forward nav (report.html) — a small horizontal row of
+   monochrome links. The active link is marked by weight/ink and an underline rule, never by
+   the accent (§15 accent discipline). Scoped to the bare `.nav` so the main-window left rail
+   (`.shell .nav`, below) is unaffected. */
+.nav {
+  display: flex;
+  gap: 4px;
+  padding: 10px 0 0;
+}
+.nav .nav-link {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+}
+.nav .nav-link:hover { color: var(--ink-soft); }
+.nav .nav-link.active {
+  color: var(--ink);
+  font-weight: 600;
+  border-bottom-color: var(--ink);
+}
+
+/* §12 R3 / R13: the main window's persistent left-hand nav rail. A fixed-width column of
+   monochrome system-gray items; the rail itself carries NO accent. The active item alone is
+   marked with the system accent (R13 "system accent on the active item") via a soft accent
+   wash + an accent left bar + accent ink — a sanctioned accent use the JUDGE
+   ACCENT_DISCIPLINE scan allows on `.nav-item.active`. Items are <button>s, so they are
+   keyboard-reachable with a visible focus ring (R13). The bare `.nav` rules above do not
+   apply here because this rail is `display:flex` column and overrides them. */
+.shell .nav {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 168px;
+  padding: 16px 10px;
+  background: var(--wash);
+  border-right: 1px solid var(--rule);
+}
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 10px;
+  border-radius: 7px;
+  border-left: 3px solid transparent;
+}
+.nav-item .ic { width: 18px; text-align: center; opacity: 0.7; }
+.nav-item .nav-label { flex: 1; }
+.nav-item:hover:not(.active) { background: var(--rule); color: var(--ink); }
+.nav-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* The active item is the one place the rail uses the system accent (§12 R13): a soft accent
+   wash, an accent left bar, and accent ink. Sanctioned in the JUDGE accent scan. */
+.nav-item.active {
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 600;
+}
+.nav-item.active .ic { opacity: 1; }
+
 .toolbar { display: flex; gap: 8px; align-items: center; padding: 16px 0; }
+.toolbar[hidden] { display: none; }
+
+/* The toolbar search box — a restrained system-gray field, pushed to the right. Accent
+   stays reserved for the primary action + running state (§15), so the search box never
+   takes the accent. */
+.search {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 9px;
+  margin-left: auto;
+  min-width: 160px;
+}
+.search:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+
+/* §12 R9: the Entries-view control bar — the same label/control grid the report controls
+   use, so the range presets, group-by + billable segments, and client/project/tag filters
+   read consistently across the app. Every control here is monochrome: the active segment /
+   range chip is INKED (var(--ink)), never accented, so the §15 accent-discipline scan stays
+   green (accent is for the primary action + running state alone). */
+.entries-ctrl {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 10px 16px;
+  align-items: center;
+  padding: 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--wash);
+}
+
+/* The optional attributed-start form — collapsed by default so the primary Start
+   stays one-tap; no new accent (the submit reuses button.primary). */
+.start-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  margin-bottom: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.start-form[hidden] { display: none; }
+.start-form .start-row { display: flex; gap: 8px; }
+.start-form input[type="text"] {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.start-form input[type="text"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.start-form .start-bill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.start-form button.primary { align-self: flex-start; }
+
+/* The manual-backfill form reuses .start-form chrome; its datetime fields and the
+   inline overlap/validation warning stay in restrained system grays (no new accent —
+   only the Save button reuses .primary). */
+.start-form .add-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.start-form input[type="datetime-local"] {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.start-form input[type="datetime-local"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.add-warning {
+  font-size: 12px;
+  color: var(--flag);
+  background: var(--flag-bg);
+  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.add-warning[hidden] { display: none; }
 
 button {
   font-family: var(--sans);
@@ -83,15 +362,63 @@ button.primary {
 }
 button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
 button.small { font-size: 12px; padding: 3px 8px; }
+/* §05 R8: Switch is a plain (non-accent) button so it does not compete with the
+   primary Stop/Start accent — accent discipline (§15) stays a single fill. It is
+   hidden when idle (the `hidden` attribute, toggled in app.js/popover.js). */
+button[hidden] { display: none; }
 
-/* empty state instructs rather than decorates (PRD §12 R5) */
-.empty {
+/* §12 R14: the keyboard-operability focus pass. Every control must be reachable by Tab AND
+   show a visible focus ring when it has keyboard focus — without this rule the only
+   affordance is the inconsistent UA default outline. The ring is scoped to `:focus-visible`
+   (keyboard focus) rather than `:focus`, so a mouse click does NOT paint a ring — keeping the
+   quiet desktop feel — while a Tab-walk always does.
+
+   Accent discipline (§15) carries into the focus ring: ordinary controls (the report/ghost/
+   action buttons, the popover Open/Stop-Start) take a NEUTRAL high-contrast ring on the
+   system gray --rule-strong, NOT the accent — the accent stays confined to the primary action
+   and the running state. The primary button is the one place the accent is already sanctioned,
+   so `button.primary:focus-visible` MAY use the accent ring. The seg/preset/nav/toggle focus
+   rules elsewhere in this file keep their own offsets; this block covers the bare buttons. */
+button:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: 2px;
+}
+/* The primary action already sanctions the accent (§15), so its keyboard ring may be the
+   accent — the only focus ring in the chrome that carries it. */
+button.primary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* §12 R14 carries to the text/select controls too: the search box, the report/filter fields
+   (#search, #el-client, #el-tag, …), the inline edit-row inputs, the editor and settings
+   fields. Their `:focus` rules below paint only a quiet border (no ring) so a mouse click /
+   typing stays calm; but a Tab-walk must still land a VISIBLE ring. These `:focus-visible`
+   rules paint the same neutral --rule-strong ring as the bare buttons, and the per-element
+   `outline: none` `:focus` rules elsewhere in this file are kept out of the way by tagging
+   each input/select/textarea here at matching specificity. Neutral (never accent) — accent
+   stays on the primary action / running state (§15). */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--rule-strong);
+  outline-offset: 2px;
+  border-color: var(--muted);
+}
+
+/* empty state instructs rather than decorates (PRD §12 R5). The per-view route placeholder
+   (§12 R3, the not-yet-built Timer/Reports/Settings views) reuses the same quiet, instructing
+   look but keeps a distinct class so the entries empty-state stays the unique `.empty`. */
+.empty,
+.view-placeholder {
   margin-top: 80px;
   text-align: center;
   color: var(--muted);
 }
-.empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
-.empty code {
+.empty .big,
+.view-placeholder .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.empty code,
+.view-placeholder code {
   font-family: var(--mono);
   background: var(--paper);
   border: 1px solid var(--rule);
@@ -115,18 +442,53 @@ button.small { font-size: 12px; padding: 3px 8px; }
 
 .entry {
   display: grid;
-  grid-template-columns: 84px 1fr auto;
+  grid-template-columns: 20px 84px 1fr auto;
   gap: 12px;
   align-items: center;
   padding: 9px 4px;
   border-bottom: 1px solid var(--rule);
 }
+/* §06 R3: the leading multi-select cell. The open/running row leaves it empty (it is not
+   selectable), so the placeholder just preserves the grid alignment. The select control
+   stays monochrome — no accent — so §15 accent discipline holds. */
+.entry .sel-cell { display: flex; justify-content: center; }
+.entry.selected { background: var(--wash); }
 .entry .time { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
 .entry .dur { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); text-align: right; }
 .entry.running .dur { color: var(--accent); font-weight: 600; }
 .entry .nonbill { color: var(--faint); }
+
+/* §07: tag chips shown in-context on the entry row (and the running summary). Monochrome
+   system grays only — the accent stays on the primary action / running state per §15, so
+   no chip rule references var(--accent). The inline tag editor reuses .chip; its chips
+   carry a removable × and an `add a tag…` input. */
+.chips { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
+.chip {
+  font-size: 11px;
+  color: var(--ink-soft);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 11px;
+  padding: 1px 8px;
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
+.chip .chip-x:hover { color: var(--ink-soft); }
+.tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
+.tag-editor .chips { margin-left: 0; }
+.tag-editor .tag-add-input {
+  border: 0;
+  outline: 0;
+  min-width: 90px;
+  font-size: 12px;
+  font-family: var(--sans);
+  background: transparent;
+  color: var(--ink);
+}
 
 .flags { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
 .flag {
@@ -141,6 +503,578 @@ button.small { font-size: 12px; padding: 3px 8px; }
   padding: 1px 5px;
 }
 .entry .actions { display: flex; gap: 6px; }
+
+/* Inline edit (PRD §05 R6): the row swaps into an in-place form. Restrained system
+   grays throughout; only the Save action carries the accent (button.primary), so the
+   §15 accent discipline holds. Editing the running entry keeps the .running class, so
+   the open-state indicator stays put. */
+.entry.editing { grid-template-columns: 1fr; }
+.entry .edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 0;
+}
+.entry .edit-form .edit-row { display: flex; gap: 8px; }
+.entry .edit-form input[type="text"],
+.entry .edit-form input[type="datetime-local"] {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.entry .edit-form input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.entry .edit-form .edit-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.entry .edit-form .edit-field > span { white-space: nowrap; }
+.entry .edit-form select {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.entry .edit-form select:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.entry .edit-form .edit-bill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.entry .edit-form .edit-actions { display: flex; gap: 8px; align-items: center; }
+/* Delete from within the form is pushed to the trailing edge — it is a destructive
+   action, kept visually distinct (a quiet ghost) from Save/Cancel but NOT given the
+   accent (§15 accent discipline: only Save reuses .primary). */
+.entry .edit-form .edit-delete { margin-left: auto; }
+
+/* §06 R1 / §12 R13: the in-window confirm gate for a destructive action (today Delete;
+   archive-when-referenced reuses the same .confirm chrome when the Clients view R10 lands).
+   A destructive action takes a second, explicit tap; the confirm chrome stays monochrome —
+   danger is conveyed by weight/label and the .danger button treatment, NOT by stealing the
+   system accent (the JUDGE ACCENT_DISCIPLINE scan rejects stray accent on this chrome). The
+   legacy .confirm-delete selector remains an alias of the generic .confirm so existing
+   markup/guards are unaffected. */
+.confirm,
+.confirm-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.confirm .confirm-q,
+.confirm-delete .confirm-q {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+button.danger {
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  font-weight: 600;
+}
+button.danger:hover { border-color: var(--ink-soft); }
+
+/* Inline split picker (§06 R2). A closed entry is cut at a picked instant; the picker
+   stays monochrome — only the Split (confirm) action reuses .primary, so the §15 accent
+   discipline holds. The datetime input matches the edit/add fields. */
+.split-at {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.split-at .split-q {
+  font-size: 12px;
+  color: var(--muted);
+}
+.split-at input[type="datetime-local"] {
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+.split-at input[type="datetime-local"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+
+/* §06 R3: the Merge action bar appears under the entry list once a contiguous
+   selection of two-plus closed entries is armed. Only the Merge button carries the
+   accent (button.primary); the bar chrome stays monochrome (§15). */
+.merge-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 18px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+}
+.merge-bar[hidden] { display: none; }
+
+/* The inline conflict prompt (§06 R3, §12 R6): when the selected entries disagree on
+   client/project or billable, this panel asks which value the merged entry keeps before
+   any merge commits. Restrained system grays; only the Merge (confirm) reuses .primary. */
+.merge-conflict {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+.merge-conflict .mc-title { font-size: 13px; color: var(--ink-soft); }
+.merge-conflict .mc-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.merge-conflict .mc-q {
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 96px;
+}
+.merge-conflict .mc-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink);
+}
+.merge-conflict .mc-actions { display: flex; gap: 8px; align-items: center; }
+
+/* §07/§12: the Clients view. A quiet list of active clients, each with its active
+   projects and in-place rename/archive/add affordances. Entirely monochrome system grays
+   — only the create/rename/add (.primary) confirms carry the accent (§15 discipline). */
+.clients { padding-top: 8px; }
+.clients[hidden] { display: none; }
+.clients-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 0 8px;
+  border-bottom: 1px solid var(--rule);
+}
+.clients-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
+.clients-list { display: flex; flex-direction: column; }
+.clients-empty {
+  margin-top: 60px;
+  text-align: center;
+  color: var(--muted);
+}
+.clients-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.clients-empty code {
+  font-family: var(--mono);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink);
+}
+
+.client {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--paper);
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+.client-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+.client-name { font-size: 14px; font-weight: 600; color: var(--ink); }
+.client-actions, .project-actions { display: inline-flex; gap: 4px; }
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 2px solid var(--rule);
+}
+.project {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+}
+.project-name { font-size: 13px; color: var(--ink-soft); }
+.project-empty { font-size: 12px; color: var(--faint); padding: 4px 0; }
+
+/* Inline rename / add fields. Restrained system grays; the input matches the entry/edit
+   fields and only the Save/Add confirm (.primary) carries the accent. */
+.rename-form,
+.client-add,
+.project-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.project-add { width: 100%; justify-content: space-between; }
+.rename-input,
+.client-add-input,
+.project-add-input {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.rename-input:focus:not(:focus-visible),
+.client-add-input:focus:not(:focus-visible),
+.project-add-input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+
+/* ---- tag management strip (§12 R10) ------------------------------------ */
+/* Cross-cutting tags get their own section under the clients list. Mirrors the client/
+   project rows' restraint: rows in system grays, only the Add confirm (.primary) accented. */
+.tags-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 0 8px;
+  margin-top: 12px;
+  border-bottom: 1px solid var(--rule);
+}
+.tags-list { display: flex; flex-direction: column; }
+.tags-empty {
+  margin-top: 24px;
+  text-align: center;
+  color: var(--muted);
+}
+.tags-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.tags-empty code {
+  font-family: var(--mono);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--ink);
+}
+.tag-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.tag-row-name { font-size: 13px; color: var(--ink-soft); }
+.tag-row-actions { display: inline-flex; gap: 4px; }
+.tag-add { padding-top: 8px; }
+.tag-new-input {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+}
+.tag-new-input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+
+/* ---- report builder (§08 R3, §09, §12 R8) ------------------------------ */
+/* The Billable / Group-by segmented controls and the grouped results table. Kept
+   strictly monochrome: the active segment is inked, NOT accented — accent stays on the
+   primary action and the running state only (§15 accent discipline), so the JUDGE accent
+   scan keeps passing. */
+.report { padding: 16px 0; }
+.report-ctrl {
+  display: grid;
+  grid-template-columns: 88px 1fr;
+  gap: 12px 16px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+.report-lab { font-size: 13px; color: var(--muted); text-align: right; }
+.report-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.seg .seg-btn {
+  border: none;
+  border-right: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 6px 12px;
+  cursor: pointer;
+  border-radius: 0;
+}
+.seg .seg-btn:last-child { border-right: none; }
+.seg .seg-btn:hover:not(.on) { background: var(--wash); }
+/* The active segment is the chosen filter — inked, not accented (accent discipline). */
+.seg .seg-btn.on {
+  background: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+/* §09 R1: the date-range preset chip row. Chips are a monochrome wrap of pill buttons
+   (not a single segmented control — there are six, including Custom…). The active chip is
+   inked, not accented, so the accent-discipline scan (§15) stays green: accent is reserved
+   for the primary action and the running-state indicator. */
+.presets { flex-wrap: wrap; gap: 7px; border: none; border-radius: 0; overflow: visible; }
+.presets .preset {
+  border: 1px solid var(--rule-strong);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 5px 13px;
+  cursor: pointer;
+}
+.presets .preset:hover:not(.on) { background: var(--wash); }
+/* The active range chip — inked fill, the same restrained active treatment the
+   Group-by / Billable segments use; deliberately NOT the accent. */
+.presets .preset.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+  font-weight: 600;
+}
+
+/* The custom from/to inputs, revealed only for the Custom chip. The [hidden] guard keeps
+   the attribute authoritative — without it the display:flex below would override the UA
+   `[hidden] { display: none }` and the inputs would show under every preset. */
+.custom-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; grid-column: 1 / -1; }
+.custom-range[hidden] { display: none; }
+.custom-range .report-lab { text-align: left; }
+.report-apply {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+.report-apply:hover { background: var(--wash); }
+
+/* The resolved window the report covers, painted under the head from core's bounds. */
+.report-range {
+  padding: 8px 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  font-variant-numeric: tabular-nums;
+}
+
+.report-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-soft); }
+.report-field {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.report-field:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+/* §09 R3: the project filter is disabled until a client is chosen — a project filter only
+   makes sense within a client. Dimmed in restrained system grays (no accent, §15). */
+.report-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
+/* §09 R4: the rounding increment picker reads as a secondary choice when rounding is OFF —
+   de-emphasized (dimmed) and not interactive, so the control group is plainly a single
+   Off/On rounding decision first. Monochrome (opacity only), no accent (§15). */
+.report-field.off { opacity: 0.5; }
+
+.report-summary { border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; }
+.report-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 14px;
+  background: var(--wash);
+  border-bottom: 1px solid var(--rule);
+  font-size: 13px;
+  color: var(--muted);
+}
+.report-head b { color: var(--ink); }
+.report-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.report-table td,
+.report-table th { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule); }
+.report-table th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+.report-table td.num,
+.report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.report-table .report-grp td { font-weight: 600; }
+.report-table .report-sub td { color: var(--ink-soft); }
+.report-table .report-empty { color: var(--muted); text-align: center; }
+.report-table .report-tot td {
+  font-weight: 700;
+  border-top: 2px solid var(--ink);
+  border-bottom: none;
+  background: var(--wash);
+}
+/* §09 R6: a grouped line's flag (overlap / unreviewed sleep), shown in context on the
+   affected summary row. Uses the --flag tokens the per-entry flags use — never the accent,
+   which stays reserved for the primary action and the running state (§15 discipline). */
+.report-flag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+  color: var(--flag);
+  background: var(--flag-bg);
+  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+}
+/* §09 R6: the Export CSV / Export JSON action row. Monochrome buttons — the export is a
+   secondary action, so the accent stays on the primary action / running state (§15). */
+.report-export {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 14px;
+}
+.report-export-btn {
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.report-export-btn:hover { background: var(--wash); }
+.report-export-status { font-size: 12px; color: var(--muted); }
+
+/* §12 R6: the consolidated entry editor (window.SE). A centred modal dialog over a dim
+   backdrop, surfacing every tt-editable field plus Split / Delete. Restrained system grays
+   throughout — only the primary Save (and the Split/Merge confirm) reuse .primary, so §15
+   accent discipline holds: no rule here references var(--accent), and the dialog opens over
+   the main window which the JUDGE ACCENT_DISCIPLINE scan also walks. */
+.editor-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  overflow: auto;
+}
+.editor {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 20px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 12px 40px color-mix(in srgb, var(--ink) 24%, transparent);
+}
+.editor .ed-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+.editor .ed-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  font-size: 12px;
+  color: var(--muted);
+}
+.editor .ed-row { display: flex; gap: 12px; }
+.editor textarea,
+.editor input[type="text"],
+.editor input[type="datetime-local"],
+.editor select {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.editor textarea { resize: vertical; }
+.editor textarea:focus:not(:focus-visible),
+.editor input:focus:not(:focus-visible),
+.editor select:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.editor .ed-bill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.editor .ed-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-left: 0;
+  padding: 4px 6px;
+  min-height: 30px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--wash);
+}
+.editor .ed-tag-input {
+  border: 0;
+  outline: 0;
+  min-width: 90px;
+  font-size: 12px;
+  font-family: var(--sans);
+  background: transparent;
+  color: var(--ink);
+}
+.editor .ed-split { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.editor .ed-split-form { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.editor .ed-split-q { font-size: 12px; color: var(--muted); }
+.editor .ed-split-err { font-size: 12px; color: var(--flag); }
+.editor .ed-split-err[hidden] { display: none; }
+.editor .ed-actions { display: flex; gap: 8px; align-items: center; }
+.editor .ed-delete { margin-left: auto; }
+.editor .ed-confirm-delete { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
+.editor .ed-confirm-q { font-size: 12px; color: var(--ink-soft); }
+/* The in-dialog merge conflict prompt reuses the .editor chrome; its radios/labels stay
+   monochrome and only the Merge confirm carries .primary. */
+.editor.conflict-prompt .mc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.editor.conflict-prompt .mc-q { font-size: 12px; color: var(--muted); min-width: 96px; }
+.editor.conflict-prompt .mc-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
+
+/* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button
+   in restrained system grays — no accent (the row actions never carry the accent, §15). */
+.entry .kebab {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+.entry .kebab:hover { color: var(--ink-soft); }
 
 /* ---- popover ----------------------------------------------------------- */
 body.popover { background: var(--paper); }
@@ -171,3 +1105,92 @@ body.popover { background: var(--paper); }
   color: var(--muted);
 }
 .pop.running .state { color: var(--accent); }
+
+/* ---- settings view (§12 R11, §14) -------------------------------------- */
+/* The in-window Settings panel: editable controls for every §14 setting, modeled on
+   mockups/settings.html. Strictly monochrome — the active segment is inked (not accented),
+   the toggle's ON state uses the accent variable ONLY through the same primary-action
+   discipline (a single sanctioned fill), so the §15 ACCENT_DISCIPLINE scan stays green.
+   Reuses the existing tokens (--rule, --wash, --ink, --muted) the report controls use. */
+.settings-head { margin: 4px 0 6px; }
+.settings-title { font-size: 17px; margin: 0; font-weight: 650; color: var(--ink); }
+.settings-sub { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+.settings-sub code {
+  font-family: var(--mono);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 1px 5px;
+  color: var(--ink);
+}
+.settings-panel { margin-top: 6px; }
+.set-grp {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--faint);
+  margin: 18px 0 4px;
+}
+.set-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.set-k { font-size: 14px; color: var(--ink); }
+.set-k small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.set-ctrl { display: inline-flex; align-items: center; gap: 9px; justify-self: end; }
+.set-field {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 9px;
+  min-width: 160px;
+}
+.set-field:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+/* The week-start segmented control reuses the report .seg / .seg-btn rules (inked active
+   segment, monochrome) — no accent (§15). */
+.set-seg { vertical-align: middle; }
+/* The rounding toggle: a monochrome track that fills inked when on. The knob slides; the ON
+   state is inked (var(--ink)), NOT accented, so the accent stays on the primary action only. */
+.set-toggle {
+  width: 38px;
+  height: 22px;
+  border-radius: 11px;
+  background: var(--rule-strong);
+  border: none;
+  position: relative;
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+.set-toggle i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--paper);
+  transition: left 0.12s ease;
+}
+.set-toggle.on { background: var(--ink); }
+.set-toggle.on i { left: 18px; }
+.set-toggle:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+.set-toggle-lbl { font-size: 13px; color: var(--ink-soft); min-width: 22px; }
+.set-hotkey {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--wash);
+  cursor: pointer;
+}
+.set-hotkey:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }

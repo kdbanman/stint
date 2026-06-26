@@ -59,30 +59,78 @@ export function spansOverlap(aStart: number, aEnd: number, bStart: number, bEnd:
   return aStart < bEnd && bStart < aEnd;
 }
 
+/** How an entry's worst-overlapping neighbour sits relative to it. */
+export type OverlapRelation = 'previous' | 'next';
+
+/** Per-entry detail of its single worst overlap, surfaced in context (PRD §12 R9). */
+export interface OverlapDetail {
+  /** Seconds the entry's span shares with its worst-overlapping neighbour. */
+  overlapSeconds: number;
+  /** The neighbour the entry overlaps most. */
+  neighborId: number;
+  /** Whether that neighbour starts before (previous) or at/after (next) this entry. */
+  relation: OverlapRelation;
+}
+
 /**
- * Detect overlaps among entries. Two entries overlap when their [start, end)
- * intervals intersect; an open entry's end is taken as `now`.
- * Returns the set of entry ids that overlap at least one other entry.
+ * For each overlapping entry, the detail of its single worst overlap: how many seconds
+ * it shares with its worst-overlapping neighbour and whether that neighbour starts before
+ * (`previous`) or at/after (`next`) it. Built on the one `spansOverlap` rule the report
+ * scan uses, so the in-context banner amount can never drift from the report flag. An
+ * entry that overlaps nothing is absent from the map. Overlap seconds are
+ * `max(0, min(aEnd,bEnd) - max(aStart,bStart))`; an open entry's end is taken as `now`.
  */
-export function detectOverlaps(entries: EntryView[], now: Date = new Date()): Set<number> {
+export function describeOverlaps(
+  entries: EntryView[],
+  now: Date = new Date(),
+): Map<number, OverlapDetail> {
   const nowMs = now.getTime();
   const spans = entries.map((e) => ({
     id: e.id,
     s: Date.parse(e.startUtc),
     e: e.endUtc ? Date.parse(e.endUtc) : nowMs,
   }));
-  const overlapped = new Set<number>();
+  const details = new Map<number, OverlapDetail>();
+  // Keep, for each entry, the largest overlap span seen so far so the banner reports the
+  // worst (most billing-significant) neighbour.
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
       const a = spans[i]!;
       const b = spans[j]!;
-      if (spansOverlap(a.s, a.e, b.s, b.e)) {
-        overlapped.add(a.id);
-        overlapped.add(b.id);
-      }
+      if (!spansOverlap(a.s, a.e, b.s, b.e)) continue;
+      const overlapSeconds = Math.max(0, (Math.min(a.e, b.e) - Math.max(a.s, b.s)) / 1000);
+      // a's neighbour b: `previous` when b starts strictly before a, else `next`.
+      consider(details, a.id, overlapSeconds, b.id, b.s < a.s ? 'previous' : 'next');
+      // b's neighbour a: symmetric relation from b's vantage point.
+      consider(details, b.id, overlapSeconds, a.id, a.s < b.s ? 'previous' : 'next');
     }
   }
-  return overlapped;
+  return details;
+}
+
+/** Keep the worst (largest) overlap detail for an entry, tie-broken by first seen. */
+function consider(
+  details: Map<number, OverlapDetail>,
+  id: number,
+  overlapSeconds: number,
+  neighborId: number,
+  relation: OverlapRelation,
+): void {
+  const prior = details.get(id);
+  if (!prior || overlapSeconds > prior.overlapSeconds) {
+    details.set(id, { overlapSeconds, neighborId, relation });
+  }
+}
+
+/**
+ * Detect overlaps among entries. Two entries overlap when their [start, end)
+ * intervals intersect; an open entry's end is taken as `now`.
+ * Returns the set of entry ids that overlap at least one other entry. Derived from the
+ * one `describeOverlaps` scan so the Set and the per-entry detail never disagree on which
+ * entries overlap (report.ts/export.ts depend on this signature).
+ */
+export function detectOverlaps(entries: EntryView[], now: Date = new Date()): Set<number> {
+  return new Set(describeOverlaps(entries, now).keys());
 }
 
 /** Local calendar day (YYYY-MM-DD) of an instant, in the given zone. */
@@ -199,9 +247,18 @@ export function groupInto<T>(items: T[], keysOf: (t: T) => string[]): Map<string
   return map;
 }
 
+/**
+ * A grouped map's entries, ordered by key (stable, locale-aware). Exported so the
+ * Entries-view grouping (entrylist.ts) shares the one locale-aware key ordering the
+ * report groupers use, rather than duplicating the localeCompare sort.
+ */
+export function sortedGroups<T>(map: Map<string, T[]>): [string, T[]][] {
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
 /** A grouped map's entries, ordered by key (stable, locale-aware). */
 function sortedEntries<T>(map: Map<string, T[]>): [string, T[]][] {
-  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  return sortedGroups(map);
 }
 
 function groupBy(

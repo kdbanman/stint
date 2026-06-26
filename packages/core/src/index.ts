@@ -10,6 +10,7 @@ export * from './time.js';
 export * from './paths.js';
 export * from './settings.js';
 export * from './report.js';
+export * from './entrylist.js';
 export * from './label.js';
 export * from './export.js';
 export * from './checkin.js';
