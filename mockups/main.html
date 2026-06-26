@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Entries (mockup)</title>
+<!--
+  Slightly-noisy UI prototype for the Stint main window — Entries view.
+  Standalone, dependency-free; design intent for PRD §12 (R3–R9, R13).
+  This shows MORE than ships today and uses illustrative sample data.
+  Where this and the PRD disagree, the PRD wins. Keep this in sync with §12.
+-->
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f4f4f6;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d8d8d4;
+    --nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
+    --ok:#2c9b5a;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;--warn-ink:#7a5a00;
+    --sleep-bg:#eef0f4;--sleep-bd:#d8dbe3;--flag:#2f6df0;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
+  /* title bar */
+  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:14px}
+  .lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600;pointer-events:none}
+  /* shell */
+  .shell{display:flex;min-height:560px}
+  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;font-size:14px;margin-bottom:2px}
+  .nav a .ic{width:18px;text-align:center;opacity:.7}
+  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .nav a.active .ic{opacity:1}
+  .nav a:hover:not(.active){background:#eeeef1}
+  .main{flex:1;padding:18px 22px 0;overflow:hidden;position:relative}
+  /* active timer card */
+  .timer-card{border:1px solid var(--rule);border-radius:10px;padding:16px 18px;display:flex;gap:26px;align-items:center;margin-bottom:18px;background:#fff}
+  .timer-card .lbl{font-size:12px;color:var(--muted);margin-bottom:4px}
+  .clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-size:40px;font-weight:680;letter-spacing:-.01em;line-height:1}
+  .runrow{display:flex;align-items:center;gap:9px;margin-top:8px}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .dot.run{background:var(--ok)}
+  .runrow .state{font-size:13px;color:var(--ink-soft)}
+  .ctx{flex:1}
+  .ctx .desc{font-size:15px;font-weight:600;margin-bottom:5px}
+  .ctx .meta{font-size:13px;color:var(--muted)}
+  .ctx .meta b{color:var(--ink-soft);font-weight:600}
+  .chips{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:11px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:1px 9px}
+  .btns{display:flex;gap:9px;flex:none}
+  button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 14px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  /* toolbar */
+  .toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--rule);margin-bottom:4px}
+  .seg-lbl{font-size:13px;color:var(--muted);margin-right:2px}
+  .seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden}
+  .seg span{padding:5px 11px;font-size:13px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
+  .seg span:last-child{border-right:0}
+  .seg span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .search{margin-left:auto;display:flex;align-items:center;gap:7px;border:1px solid var(--rule-strong);border-radius:7px;padding:5px 10px;color:var(--faint);min-width:190px}
+  .search input{border:0;outline:0;font-family:inherit;font-size:13px;flex:1;color:var(--ink)}
+  /* entries */
+  .scroll{overflow:auto;max-height:300px;margin:0 -22px;padding:6px 22px 70px}
+  .day-h{font-size:15px;font-weight:680;margin:16px 0 6px}
+  .day-h .loc{font-weight:400;color:var(--faint);font-size:12px}
+  .entry{display:grid;grid-template-columns:18px 132px 64px 1fr auto;align-items:center;gap:12px;padding:9px 6px;border-bottom:1px solid var(--rule)}
+  .entry .sdot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+  .entry .sdot.idle{background:var(--faint)}
+  .entry .sdot.sleep{background:transparent;font-size:13px;line-height:1}
+  .entry .span{font-variant-numeric:tabular-nums;color:var(--ink-soft);font-size:13.5px}
+  .entry .len{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
+  .entry .what{color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .entry .where{color:var(--muted)}
+  .tag{font-size:11px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:4px;padding:0 6px}
+  .right{display:flex;align-items:center;gap:10px;justify-self:end}
+  .bill{font-variant-numeric:tabular-nums;font-size:13px;display:flex;gap:6px;align-items:center}
+  .strike{color:var(--faint);text-decoration:line-through}
+  .flagpin{color:var(--flag)}
+  .kebab{color:var(--faint);cursor:pointer;padding:0 4px;font-size:16px}
+  .banner{margin:2px 0 2px 30px;border-radius:6px;padding:4px 12px;font-size:12.5px}
+  .banner.overlap{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink)}
+  .banner.sleep{background:var(--sleep-bg);border:1px solid var(--sleep-bd);color:var(--ink-soft)}
+  .sublink{display:block;margin:2px 0 4px 168px;font-size:12.5px;color:var(--accent);cursor:pointer}
+  /* FAB */
+  .fab{position:absolute;right:22px;bottom:18px;background:#fff;border:1px solid var(--rule-strong);border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.12);padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
+  .fab .plus{color:var(--accent);font-size:16px}
+  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+      <div class="title">Stint — Entries</div>
+    </div>
+    <div class="shell">
+      <nav class="nav">
+        <a href="#"><span class="ic">◷</span> Timer</a>
+        <a href="#" class="active"><span class="ic">▤</span> Entries</a>
+        <a href="#"><span class="ic">◎</span> Clients</a>
+        <a href="reports.html"><span class="ic">▥</span> Reports</a>
+        <a href="settings.html"><span class="ic">⚙</span> Settings</a>
+      </nav>
+      <div class="main">
+
+        <!-- Active timer card -->
+        <div class="timer-card">
+          <div>
+            <div class="lbl">Active Timer</div>
+            <div class="clock">01:23:45</div>
+            <div class="runrow"><span class="dot run"></span><span class="state"><b>running</b></span></div>
+          </div>
+          <div class="ctx">
+            <div class="desc">Drafting proposals</div>
+            <div class="meta">Client: <b>Globex Corp</b> &nbsp;&nbsp; Project: <b>Q3 Strategy</b></div>
+            <div class="chips"><span class="chip">admin</span><span class="chip">proposal</span></div>
+          </div>
+          <div class="btns">
+            <button class="primary">Stop Timer</button>
+            <button>Switch</button>
+          </div>
+        </div>
+
+        <!-- Toolbar: group-by, range presets, search -->
+        <div class="toolbar">
+          <span class="seg-lbl">Group by</span>
+          <span class="seg"><span class="on">Day</span><span>Client</span><span>Project</span><span>Tag</span></span>
+          <span class="seg-lbl">Preset</span>
+          <span class="seg"><span class="on">Today</span><span>Week</span><span>Last Week</span><span>Custom range</span></span>
+          <span class="search"><span>⌕</span><input placeholder="Search descriptions, clients, tags…"></span>
+        </div>
+
+        <!-- Entry list -->
+        <div class="scroll">
+
+          <div class="day-h">Tuesday, June 23, 2026 <span class="loc">(formatted by system locale)</span></div>
+
+          <div class="entry">
+            <span class="sdot"></span>
+            <span class="span">09:00 — 12:15</span>
+            <span class="len">3h 15m</span>
+            <span class="what">Client call: Project Alpha <span class="where">(Globex Corp)</span> <span class="tag">meeting</span><span class="tag">client</span></span>
+            <span class="right"><span class="kebab">⋮</span></span>
+          </div>
+          <div class="banner overlap">Overlap: 15m with previous entry</div>
+          <div class="entry">
+            <span class="sdot idle"></span>
+            <span class="span">13:00 — 15:45</span>
+            <span class="len">2h 45m</span>
+            <span class="what">Researching market trends <span class="tag">research</span></span>
+            <span class="right"><span class="kebab">⋮</span></span>
+          </div>
+
+          <div class="day-h">Monday, June 22, 2026</div>
+
+          <div class="banner sleep">Flag: Slept through. 1 SleepSpan recorded</div>
+          <div class="entry">
+            <span class="sdot sleep">🌙</span>
+            <span class="span">10:30 — 16:15</span>
+            <span class="len">5h 45m</span>
+            <span class="what">Deep work on core algorithm <span class="tag">coding</span><span class="tag">product</span></span>
+            <span class="right"><span class="bill"><span class="strike">5h 45m</span> 5h 00m billable <span class="flagpin">⚑</span></span><span class="kebab">⋮</span></span>
+          </div>
+          <span class="sublink">[Subtract Slept Time: 45m]</span>
+
+          <div class="entry">
+            <span class="sdot"></span>
+            <span class="span">12:00 — 13:15</span>
+            <span class="len">3h 25m</span>
+            <span class="what">Deep work: Project Alpha <span class="where">(Globex Corp)</span></span>
+            <span class="right"><span class="kebab">⋮</span></span>
+          </div>
+          <div class="entry">
+            <span class="sdot idle"></span>
+            <span class="span">13:00 — 15:45</span>
+            <span class="len">2h 45m</span>
+            <span class="what">Researching market trends <span class="tag">research</span></span>
+            <span class="right"><span class="kebab">⋮</span></span>
+          </div>
+          <div class="entry">
+            <span class="sdot"></span>
+            <span class="span">09:00 — 12:15</span>
+            <span class="len">3h 15m</span>
+            <span class="what">Client call: Project Alpha <span class="where">(Globex Corp)</span></span>
+            <span class="right"><span class="kebab">⋮</span></span>
+          </div>
+
+        </div>
+
+        <div class="fab"><span class="plus">+</span> Add Entry Manually</div>
+      </div>
+    </div>
+    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §12 · not a screenshot of the current build</div>
+  </div>
+</body>
+</html>

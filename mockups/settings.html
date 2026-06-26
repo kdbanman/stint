@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Settings (mockup)</title>
+<!--
+  Slightly-noisy UI prototype for the Stint settings view.
+  Design intent for PRD §14 and §12 R11. Keep in sync with the PRD.
+-->
+<style>
+  :root{
+    --paper:#fff;--ink:#15151a;--ink-soft:#3c3c43;--muted:#737380;--faint:#a6a6b0;
+    --rule:#e6e6e3;--rule-strong:#d8d8d4;--nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
+  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:14px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600}
+  .shell{display:flex;min-height:560px}
+  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;margin-bottom:2px}
+  .nav a .ic{width:18px;text-align:center;opacity:.7}
+  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}.nav a.active .ic{opacity:1}
+  .nav a:hover:not(.active){background:#eeeef1}
+  .main{flex:1;padding:22px 26px}
+  h2{font-size:18px;margin:0 0 4px;font-weight:680}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
+  .grp{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:20px 0 6px}
+  .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--rule)}
+  .row .k{font-size:14px;color:var(--ink)}
+  .row .k small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+  .field{border:1px solid var(--rule-strong);border-radius:7px;padding:6px 10px;font-size:13px;color:var(--ink);background:#fff;min-width:150px}
+  .seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden}
+  .seg span{padding:5px 11px;font-size:13px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
+  .seg span:last-child{border-right:0}.seg span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft)}
+  .switch{width:36px;height:21px;border-radius:11px;background:#cfcfd6;position:relative}
+  .switch i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff}
+  .switch.on{background:var(--accent)}.switch.on i{left:17px}
+  .hk{font-family:var(--mono);font-size:12.5px;border:1px solid var(--rule-strong);border-radius:6px;padding:5px 10px;background:#fafafb}
+  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="title">Stint — Settings</div></div>
+    <div class="shell">
+      <nav class="nav">
+        <a href="#"><span class="ic">◷</span> Timer</a>
+        <a href="main.html"><span class="ic">▤</span> Entries</a>
+        <a href="#"><span class="ic">◎</span> Clients</a>
+        <a href="reports.html"><span class="ic">▥</span> Reports</a>
+        <a href="#" class="active"><span class="ic">⚙</span> Settings</a>
+      </nav>
+      <div class="main">
+        <h2>Settings</h2>
+        <p class="sub">Stored locally; identical to what <code>tt config set</code> writes. Changes save immediately.</p>
+
+        <div class="grp">Reporting</div>
+        <div class="row"><div class="k">Rounding <small>Applies at display/export only; stored time stays exact.</small></div><span class="toggle"><span class="switch"><i></i></span> Off</span></div>
+        <div class="row"><div class="k">Rounding increment</div><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
+        <div class="row"><div class="k">Week start</div><span class="seg"><span class="on">Monday</span><span>Sunday</span></span></div>
+
+        <div class="grp">Check-ins</div>
+        <div class="row"><div class="k">First check-in <small>After a timer starts.</small></div><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div>
+        <div class="row"><div class="k">Check-in interval</div><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div>
+
+        <div class="grp">System</div>
+        <div class="row"><div class="k">Global hotkey <small>Toggles the timer from anywhere.</small></div><span class="hk">Ctrl + Alt + T</span></div>
+        <div class="row"><div class="k">Accent usage</div><select class="field"><option selected>System accent (primary action only)</option><option>Monochrome</option></select></div>
+        <div class="row"><div class="k">Date / number format</div><select class="field"><option selected>System locale</option></select></div>
+      </div>
+    </div>
+    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §14 + §12 R11 · not a screenshot of the current build</div>
+  </div>
+</body>
+</html>
