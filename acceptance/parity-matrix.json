@@ -1,20 +1,33 @@
 {
   "$comment": "PRD §17 R8 — every GUI capability is reachable from tt. This is a GOLD fixture asserted complete by packages/gui/test/parity.test.ts: each GUI IPC channel (a capability) maps to a tt command that actually exists in the CLI program. Parity is a coverage claim, not a behaviour (acceptance.html §05 'On parity').",
   "capabilities": [
-    { "gui": "getState", "description": "see the running timer and entries", "tt": ["status", "list"] },
+    { "gui": "getState", "description": "see the running timer, entries, and current settings — the single snapshot the renderer paints (status + list + config ls, folded into one read)", "tt": ["status", "list", "config ls"] },
+    { "gui": "search", "description": "§09 R7 — free-text search over the day-grouped history (description / client / project / tag, case-insensitive); narrows the visible list, parity with tt list/report --search", "tt": ["list", "report"] },
+    { "gui": "listEntries", "description": "§12 R9 — the Entries view's control bar: group the entry list by day/client/project/tag, narrow by a range preset (or custom range) + client/project/tag/billable, and free-text search — all over core's buildEntryList; read-only, parity with tt list --range/--client/--project/--tag/--search --by", "tt": ["list"] },
     { "gui": "toggle", "description": "global-hotkey / tray toggle of the timer", "tt": ["start", "stop"] },
-    { "gui": "start", "description": "start a new entry", "tt": ["start"] },
+    { "gui": "start", "description": "start a new entry / Switch (atomic stop+start)", "tt": ["start", "switch"] },
     { "gui": "stop", "description": "stop the open entry", "tt": ["stop"] },
     { "gui": "resume", "description": "resume the last entry", "tt": ["resume"] },
+    { "gui": "add", "description": "backfill a completed entry from explicit from/to", "tt": ["add"] },
     { "gui": "edit", "description": "amend any field of an entry", "tt": ["edit"] },
     { "gui": "split", "description": "split an entry at an instant", "tt": ["split"] },
     { "gui": "merge", "description": "merge a contiguous selection", "tt": ["merge"] },
     { "gui": "remove", "description": "delete an entry", "tt": ["rm"] },
     { "gui": "subtractSleep", "description": "exclude slept time (reversible)", "tt": ["sleep subtract"] },
-    { "gui": "report", "description": "grouped totals, filters, rounding, export", "tt": ["report", "export"] },
+    { "gui": "report", "description": "grouped totals, filters, rounding, on-screen summary with flags; date-range presets (today/week/last-week/month/last-month) + custom from/to — the preset travels inside the report payload and is resolved through core's resolveRange, no new channel", "tt": ["report"] },
+    { "gui": "exportEntries", "description": "§09 R6 — write the raw entries for a range to a CSV / JSON file via the OS save dialog; renders the bytes through core's toCsv/toJsonEntries (byte-identical to tt export) since the renderer cannot touch fs", "tt": ["export"] },
     { "gui": "addClient", "description": "create a client", "tt": ["client add"] },
     { "gui": "addProject", "description": "create a project", "tt": ["project add"] },
     { "gui": "listClients", "description": "list clients", "tt": ["client ls"] },
-    { "gui": "setSetting", "description": "change a setting", "tt": ["config set"] }
+    { "gui": "renameClient", "description": "rename a client", "tt": ["client rename"] },
+    { "gui": "archiveClient", "description": "archive a client (reversible hide)", "tt": ["client archive"] },
+    { "gui": "renameProject", "description": "rename a project", "tt": ["project rename"] },
+    { "gui": "archiveProject", "description": "archive a project (reversible hide)", "tt": ["project archive"] },
+    { "gui": "listProjects", "description": "list a client's projects", "tt": ["project ls"] },
+    { "gui": "listTags", "description": "§12 R10 — list the active tags (the Clients view's tag strip)", "tt": ["tag ls"] },
+    { "gui": "addTag", "description": "§12 R10 — create a tag (create-or-return; the explicit manage-it-first path)", "tt": ["tag add"] },
+    { "gui": "renameTag", "description": "§12 R10 — rename a tag", "tt": ["tag rename"] },
+    { "gui": "archiveTag", "description": "§12 R10 — archive a tag (reversible hide from pickers, keeps history)", "tt": ["tag archive"] },
+    { "gui": "setSetting", "description": "§12 R11 / §14 — change any §14 setting from the GUI Settings view (rounding, rounding increment, week start, first check-in, check-in interval, global hotkey, accent usage, date format); the report view's rounding controls ride the same channel — parity with tt config set", "tt": ["config set"] }
   ]
 }

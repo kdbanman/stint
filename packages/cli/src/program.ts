@@ -16,9 +16,11 @@ import {
   toCsv,
   toJsonEntries,
   detectOverlaps,
+  buildEntryList,
   SETTING_DESCRIPTORS,
   settingDescriptor,
   type EntryView,
+  type EntryGroupBy,
   type BillableFilter,
   type GroupBy,
   type Settings,
@@ -179,6 +181,7 @@ export function buildProgram(deps: Deps): Command {
   // ----------------------------------------------------------------- start
   program
     .command('start')
+    .alias('switch') // §05 R8: Switch is the same atomic stop-then-start, under its named verb.
     .description('Stop any open entry and open a new one')
     .argument('[description]', 'what you are working on')
     .option('--client <name>', 'client name')
@@ -389,6 +392,8 @@ export function buildProgram(deps: Deps): Command {
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
     .option('--tag <tag>', 'filter by tag')
+    .option('--search <text>', 'free-text query on description/client/project/tag')
+    .option('--by <grouping>', 'group the table: client | project | day | tag')
     .option('--all', 'include non-billable')
     .option('--non-billable', 'only non-billable')
     .option('--json', 'machine-readable output')
@@ -415,24 +420,49 @@ export function buildProgram(deps: Deps): Command {
           filter.projectId = p.id;
         }
         if (opts.tag) filter.tag = opts.tag;
+        if (opts.search) filter.search = opts.search;
         const entries = store.listEntries(filter);
+        // The --json scripting contract stays the flat row array (search/filters only
+        // narrow rows; the row shape is unchanged), so grouping never affects it.
+        if (opts.json) {
+          io.out(JSON.stringify(toJsonEntries(entries, now())));
+          return;
+        }
+        if (entries.length === 0) {
+          io.out('no entries');
+          return;
+        }
         const overlaps = detectOverlaps(entries, now());
-        emitList(io, opts.json, {
-          items: entries,
-          toJson: (es) => toJsonEntries(es, now()),
-          empty: 'no entries',
-          headers: ['ID', 'START', 'END', 'DUR', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'FLAGS'],
-          toRow: (e) => [
-            String(e.id),
-            shortUtc(e.startUtc),
-            shortUtc(e.endUtc),
-            formatDuration(e.billableSeconds),
-            clientProjectLabel(e),
-            e.description ?? '',
-            e.billable ? 'yes' : 'no',
-            entryFlags(e, overlaps.has(e.id)),
-          ],
-        });
+        const headers = ['ID', 'START', 'END', 'DUR', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'FLAGS'];
+        const toRow = (e: EntryView): string[] => [
+          String(e.id),
+          shortUtc(e.startUtc),
+          shortUtc(e.endUtc),
+          formatDuration(e.billableSeconds),
+          clientProjectLabel(e),
+          e.description ?? '',
+          e.billable ? 'yes' : 'no',
+          entryFlags(e, overlaps.has(e.id)),
+        ];
+        // --by groups the human table exactly as the Entries view does (one core helper,
+        // buildEntryList), with a per-group header carrying the key + summed billable
+        // hours. Without --by the table is the flat list it has always been.
+        if (opts.by) {
+          const by = opts.by as EntryGroupBy;
+          if (!['client', 'project', 'day', 'tag'].includes(by)) {
+            throw new CliError(`unknown --by grouping "${by}"`);
+          }
+          const { groups } = buildEntryList(entries, { by });
+          const blocks = groups.map((g) => {
+            const total = g.entries.reduce((s, e) => s + e.billableSeconds, 0);
+            return (
+              `${g.key}  (${formatHours(total)}h)\n` + table(headers, g.entries.map(toRow))
+            );
+          });
+          io.out(blocks.join('\n\n'));
+          return;
+        }
+        io.out(table(headers, entries.map(toRow)));
       });
     });
 
@@ -451,6 +481,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
     .option('--tag <tag>', 'filter by tag')
+    .option('--search <text>', 'free-text query on description/client/project/tag')
     .option('--all', 'include non-billable')
     .option('--non-billable', 'only non-billable')
     .option('--csv', 'CSV output')
@@ -486,16 +517,24 @@ export function buildProgram(deps: Deps): Command {
           req.projectId = store.findProjectByName(opts.project, req.clientId)?.id ?? -1;
         }
         if (opts.tag) req.tag = opts.tag;
+        if (opts.search) req.search = opts.search;
         const report = store.report(req);
         if (opts.json) {
           io.out(JSON.stringify(reportJson(report)));
           return;
         }
         if (opts.csv) {
+          // Mirror the JSON/table narrowing: the CSV export covers the same set the
+          // report reports on, so client/project/tag/search filters must travel here too
+          // (otherwise `report --search … --csv` would export the whole range).
           const entries = store.listEntries({
             fromUtc: range.fromUtc,
             toUtc: range.toUtc,
             billable: req.billableFilter,
+            ...(req.clientId !== undefined ? { clientId: req.clientId } : {}),
+            ...(req.projectId !== undefined ? { projectId: req.projectId } : {}),
+            ...(req.tag !== undefined ? { tag: req.tag } : {}),
+            ...(req.search !== undefined ? { search: req.search } : {}),
           });
           io.out(toCsv(entries, now()).replace(/\n$/, ''));
           return;
@@ -627,6 +666,50 @@ export function buildProgram(deps: Deps): Command {
           toRow: (p) => [String(p.id), p.name, String(p.clientId), p.archived ? 'yes' : ''],
         });
       }),
+    );
+
+  // ------------------------------------------------------------------- tag
+  // §12 R10 — manage tags at parity with `tt client`/`tt project`. Tags are otherwise
+  // born on the fly when first applied (§03); these are the explicit manage-them-first
+  // verbs the Clients view's tag controls mirror. `ls` shares the one emitList contract.
+  const tag = program.command('tag').description('Manage tags');
+  tag
+    .command('add')
+    .argument('<name>')
+    .action((name: string) => withStore((s) => io.out(`tag ${s.addTag(name).id} "${name}"`)));
+  tag
+    .command('rename')
+    .argument('<ref>')
+    .argument('<name>')
+    .action((ref: string, name: string) =>
+      withStore((s) => {
+        s.renameTag(resolveEntityRef(ref, (n) => s.findTagByName(n)), name);
+        io.out(`renamed tag to "${name}"`);
+      }),
+    );
+  tag
+    .command('archive')
+    .argument('<ref>')
+    .action((ref: string) =>
+      withStore((s) => {
+        s.archiveTag(resolveEntityRef(ref, (n) => s.findTagByName(n)));
+        io.out('archived');
+      }),
+    );
+  tag
+    .command('ls')
+    .option('--archived', 'include archived')
+    .option('--json', 'machine-readable output')
+    .action((opts) =>
+      withStore((s) =>
+        emitList(io, opts.json, {
+          items: s.listTags(!!opts.archived),
+          toJson: (ts) => ts.map((t) => ({ id: t.id, name: t.name, archived: t.archived })),
+          empty: 'no tags',
+          headers: ['ID', 'NAME', 'ARCHIVED'],
+          toRow: (t) => [String(t.id), t.name, t.archived ? 'yes' : ''],
+        }),
+      ),
     );
 
   // ----------------------------------------------------------------- sleep

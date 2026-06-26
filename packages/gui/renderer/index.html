@@ -11,18 +11,246 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <!-- §12 R3: the persistent window shell — a fixed left-hand nav rail beside the routed
+         views. The nav routes (client-side, no IPC: R3 is presentation only) between Timer,
+         Entries, Clients, Reports, and Settings; the active item is marked with the system
+         accent (R13). The per-view data work (Timer/Reports/Settings) lands in R5–R11; until
+         then those routes show an instructive placeholder. Wired in app.js (no inline
+         handlers, CSP unchanged). -->
     <div class="app">
-      <header class="mast">
-        <div class="wordmark">stint</div>
-        <div class="summary" id="summary">— idle</div>
-      </header>
-      <div class="toolbar">
-        <button class="primary" id="toggle">Start</button>
-        <button id="report-btn" class="ghost">This week: <span id="week-total">0.00h</span></button>
+      <div class="shell">
+        <nav class="nav" aria-label="Views">
+          <!-- Buttons (not anchors) so the rail is keyboard-reachable and focus-visible
+               (R13) with Enter/Space for free. data-view drives app.js's route(). -->
+          <button type="button" class="nav-item" data-view="timer">
+            <span class="ic" aria-hidden="true">◷</span><span class="nav-label">Timer</span>
+          </button>
+          <button type="button" class="nav-item active" data-view="entries" aria-current="page">
+            <span class="ic" aria-hidden="true">▤</span><span class="nav-label">Entries</span>
+          </button>
+          <button type="button" class="nav-item" data-view="clients">
+            <span class="ic" aria-hidden="true">◎</span><span class="nav-label">Clients</span>
+          </button>
+          <button type="button" class="nav-item" data-view="reports">
+            <span class="ic" aria-hidden="true">▥</span><span class="nav-label">Reports</span>
+          </button>
+          <button type="button" class="nav-item" data-view="settings">
+            <span class="ic" aria-hidden="true">⚙</span><span class="nav-label">Settings</span>
+          </button>
+        </nav>
+        <div class="views">
+          <!-- §12 R3: the Timer view placeholder. The live count-up / Active Timer card is
+               R5's work; until then the route lands on an instructive empty placeholder so
+               the nav has somewhere to go. -->
+          <section class="view" data-view="timer" hidden>
+            <div class="view-placeholder">
+              <div class="big">Timer</div>
+              <div>The live timer view lands here. Start one from <code>Entries</code> or run <code>tt start</code>.</div>
+            </div>
+          </section>
+
+          <!-- §12 R3: the Entries view — the default active view. Everything that was the
+               main window (mast, overlap banner, toolbar/forms, the day-grouped list, and the
+               merge bar) lives here. -->
+          <section class="view" data-view="entries">
+            <header class="mast">
+              <div class="wordmark">stint</div>
+              <div class="summary" id="summary">— idle</div>
+            </header>
+            <!-- §12 R4: the Active-Timer card — the in-window mirror of `tt status`. It shows a
+                 live per-second count-up (id timer-clock), a running/idle state indicator
+                 (id timer-state), the running entry's description (id timer-desc) and its
+                 client/project label (id timer-meta), its billable/slept attributes (id
+                 timer-flags), and the primary actions Stop + Switch. Painted by app.js's
+                 render()/tick(); the count-up advances independent of data changes. Accent is
+                 confined (§15) to the running clock/state and the primary Stop button — the
+                 card's running container is `.timer-card.running`, the one sanctioned accent use
+                 the JUDGE ACCENT_DISCIPLINE scan allows here. The Switch button reuses the
+                 existing `start` IPC (store.start = atomic stop-then-start, §05 R8); Stop reuses
+                 `toggle`. No new IPC channel, so no new parity row. -->
+            <section class="timer-card idle" id="timer-card">
+              <div class="tc-clock-block">
+                <div class="tc-lbl">Active Timer</div>
+                <div class="clock" id="timer-clock">00:00:00</div>
+                <div class="state" id="timer-state">idle</div>
+              </div>
+              <div class="ctx">
+                <div class="desc" id="timer-desc">nothing running</div>
+                <div class="meta" id="timer-meta"></div>
+                <div class="flags" id="timer-flags"></div>
+              </div>
+              <div class="btns">
+                <button class="primary" id="timer-stop" hidden>Stop</button>
+                <button id="timer-switch" hidden>Switch</button>
+              </div>
+            </section>
+            <!-- §06 R4: the at-write-time overlap banner. A write (edit/start/stop/resume/merge)
+                 that lands on an overlapping span surfaces this non-blocking advisory inline at
+                 the moment of the edit — the durable signal stays the per-row overlap flag. It is
+                 role=status + aria-live so it is announced and visible in the accessibility tree. -->
+            <div id="overlap-banner" class="banner" hidden role="status" aria-live="polite"></div>
+            <div class="toolbar">
+              <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
+              <button id="switch" hidden>Switch</button>
+              <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">+ with details</button>
+              <button id="add-toggle" class="ghost" aria-expanded="false" aria-controls="add-form">Add entry</button>
+              <button id="report-btn" class="ghost" aria-label="Open this week's report">This week: <span id="week-total">0.00h</span></button>
+              <!-- §06 R3 / §12 R6: a toolbar Merge action over the row multi-select, routed
+                   through window.SE.mergeSelected (the same merge IPC + conflict prompt the
+                   merge bar uses). Hidden until at least two entries are selected. -->
+              <button id="merge-selected" class="ghost" hidden>Merge selected</button>
+              <!-- §09 R7: free-text search over the day-grouped history (description / client /
+                   project / tag). Wired in app.js: each input re-queries the `search` IPC (parity
+                   with `tt list --search`); clearing it restores the full list via load(). -->
+              <input type="search" id="search" class="search" placeholder="Search…" autocomplete="off" aria-label="Search entries" />
+            </div>
+            <form id="start-form" class="start-form" hidden>
+              <input id="start-desc" type="text" placeholder="Description" autocomplete="off" />
+              <div class="start-row">
+                <input id="start-client" type="text" placeholder="Client" autocomplete="off" />
+                <input id="start-project" type="text" placeholder="Project" autocomplete="off" />
+              </div>
+              <input id="start-tags" type="text" placeholder="Tags (comma-separated)" autocomplete="off" />
+              <label class="start-bill"><input id="start-bill" type="checkbox" checked /> Billable</label>
+              <button id="start-go" type="submit" class="primary">Start with details</button>
+            </form>
+            <form id="add-form" class="start-form" hidden>
+              <input id="add-desc" type="text" placeholder="Description" autocomplete="off" />
+              <div class="start-row">
+                <input id="add-client" type="text" placeholder="Client" autocomplete="off" list="add-client-list" />
+                <datalist id="add-client-list"></datalist>
+                <input id="add-project" type="text" placeholder="Project" autocomplete="off" />
+              </div>
+              <div class="start-row">
+                <label class="add-field">From <input id="add-from" type="datetime-local" /></label>
+                <label class="add-field">To <input id="add-to" type="datetime-local" /></label>
+              </div>
+              <input id="add-tags" type="text" placeholder="Tags (comma-separated)" autocomplete="off" />
+              <label class="start-bill"><input id="add-bill" type="checkbox" checked /> Billable</label>
+              <div id="add-warning" class="add-warning" hidden></div>
+              <div class="start-row">
+                <button id="add-go" type="submit" class="primary">Save entry</button>
+                <button id="add-cancel" type="button" class="ghost">Cancel</button>
+              </div>
+            </form>
+            <!-- §12 R9: the Entries-view control bar. A read-only query over the entry list,
+                 wired in app.js to window.stint.listEntries (parity with `tt list
+                 --range/--client/--project/--tag/--search --by`): a range preset row (default
+                 This week) with a Custom from/to, a Group-by segmented control (default Day,
+                 matching the renderer's day-grouped default), client / project / tag filters,
+                 a billable toggle, and the free-text search box. Every control sits in the
+                 restrained system grays the report controls use — accent stays reserved for
+                 the primary action + running state (§15). The default state (Day, This-week-or-
+                 wider window, no filters/search) renders exactly as the getState load does. -->
+            <div class="entries-ctrl" id="entries-ctrl">
+              <span class="report-lab">Range</span>
+              <div class="seg presets" id="el-preset-seg" role="group" aria-label="Date range">
+                <button type="button" class="preset" data-preset="today">Today</button>
+                <button type="button" class="preset on" data-preset="week" aria-pressed="true">This week</button>
+                <button type="button" class="preset" data-preset="last-week">Last week</button>
+                <button type="button" class="preset" data-preset="month">This month</button>
+                <button type="button" class="preset" data-preset="last-month">Last month</button>
+                <button type="button" class="preset" data-preset="custom">Custom…</button>
+              </div>
+              <div class="custom-range" id="el-custom-range" hidden>
+                <label class="report-lab" for="el-range-from">From</label>
+                <input id="el-range-from" class="report-field" type="datetime-local" aria-label="Range from" />
+                <label class="report-lab" for="el-range-to">To</label>
+                <input id="el-range-to" class="report-field" type="datetime-local" aria-label="Range to" />
+                <button type="button" class="report-apply" id="el-range-apply">Apply</button>
+              </div>
+
+              <span class="report-lab">Group by</span>
+              <div class="seg" id="el-by-seg" role="group" aria-label="Group entries by">
+                <button type="button" class="seg-btn on" data-by="day">Day</button>
+                <button type="button" class="seg-btn" data-by="client">Client</button>
+                <button type="button" class="seg-btn" data-by="project">Project</button>
+                <button type="button" class="seg-btn" data-by="tag">Tag</button>
+              </div>
+
+              <span class="report-lab">Billable</span>
+              <div class="seg" id="el-billable-seg" role="group" aria-label="Billable filter">
+                <button type="button" class="seg-btn on" data-billable="all" aria-pressed="true">All</button>
+                <button type="button" class="seg-btn" data-billable="billable" aria-pressed="false">Billable</button>
+                <button type="button" class="seg-btn" data-billable="non-billable" aria-pressed="false">Non-billable</button>
+              </div>
+
+              <span class="report-lab">Client</span>
+              <div class="report-row">
+                <select id="el-client" class="report-field" aria-label="Filter by client">
+                  <option value="">All clients</option>
+                </select>
+                <select id="el-project" class="report-field" aria-label="Filter by project" disabled>
+                  <option value="">All projects</option>
+                </select>
+              </div>
+
+              <span class="report-lab">Tag</span>
+              <div class="report-row">
+                <input id="el-tag" class="report-field" type="text" placeholder="Filter by tag" autocomplete="off" aria-label="Filter by tag" />
+              </div>
+            </div>
+            <main id="entries"></main>
+            <!-- §06 R3: the Merge action bar. Hidden until two-plus contiguous closed entries
+                 are selected; the conflict prompt (when they disagree on client/billable) is
+                 rendered inline here by app.js before any merge commits. -->
+            <div id="merge-bar" class="merge-bar" hidden>
+              <button id="merge-go" type="button" class="primary">Merge entries</button>
+            </div>
+          </section>
+
+          <!-- §07/§12: the Clients view. A list of active clients, each with its active
+               projects, offering rename + archive in place and an add-client / add-project
+               control. Archived items drop out of the active lists (history is kept). Hidden
+               until the Clients nav is chosen; app.js renders it from listClients/listProjects. -->
+          <section id="clients" class="view clients" data-view="clients" hidden>
+            <div class="clients-head">
+              <h2 class="clients-title">Clients</h2>
+              <button id="add-client" type="button" class="small primary">Add client</button>
+            </div>
+            <div id="clients-list" class="clients-list"></div>
+
+            <!-- §12 R10: the tag-management strip. Tags are cross-cutting labels (not under a
+                 client), so they get their own section: a list of the active tags, each with
+                 rename + archive in place, and an Add tag control. Archived tags drop out of
+                 the active list (history is kept) — parity with `tt tag add/rename/archive/ls`.
+                 Rendered by app.js from listTags; mutations go over the tag IPC tt uses. -->
+            <div class="tags-head">
+              <h2 class="clients-title">Tags</h2>
+              <button id="add-tag" type="button" class="small primary">Add tag</button>
+            </div>
+            <div id="tags-list" class="tags-list"></div>
+          </section>
+
+          <!-- §12 R3: the Reports view placeholder. The in-window report builder is the
+               §09 work (report.html today); this route lands on an instructive placeholder.
+               The toolbar's "This week" button still opens the report view. -->
+          <section class="view" data-view="reports" hidden>
+            <div class="view-placeholder">
+              <div class="big">Reports</div>
+              <div>Open the report builder from <code>This week</code> on the Entries view, or run <code>tt report</code>.</div>
+            </div>
+          </section>
+
+          <!-- §12 R11: the in-window Settings view. Editable controls for every §14 setting,
+               modeled on mockups/settings.html. Each control's change handler persists the new
+               value over the SAME setSetting IPC tt config set uses (parity-covered — no new
+               channel) then reloads state, so an edit is immediately the new truth on both
+               surfaces. Rendered by settings.js (loaded after app.js); the controls are inked
+               (monochrome) — accent stays on the primary action / running state only (§15). -->
+          <section class="view settings-view" data-view="settings" hidden>
+            <div class="settings-head">
+              <h2 class="settings-title">Settings</h2>
+              <p class="settings-sub">Stored locally; identical to what <code>tt config set</code> writes. Changes save immediately.</p>
+            </div>
+            <div id="settings-panel" class="settings-panel"></div>
+          </section>
+        </div>
       </div>
-      <main id="entries"></main>
     </div>
     <script src="util.js"></script>
+    <script src="editor.js"></script>
     <script src="app.js"></script>
+    <script src="settings.js"></script>
   </body>
 </html>
