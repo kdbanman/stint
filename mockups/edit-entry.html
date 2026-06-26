@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Edit / Add entry (mockup)</title>
+<!--
+  Slightly-noisy UI prototype for the inline entry editor / manual-add form.
+  Design intent for PRD §05 R5/R6, §06, §12 R5–R7. Keep in sync with the PRD.
+-->
+<style>
+  :root{
+    --paper:#fff;--ink:#15151a;--ink-soft:#3c3c43;--muted:#737380;--faint:#a6a6b0;
+    --rule:#e6e6e3;--rule-strong:#d8d8d4;--accent:#2f6df0;--accent-soft:#eaf0fe;
+    --warn:#7a5a00;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#cfcfd6;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px}
+  /* shown as a modal dialog floating over a dimmed window */
+  .dialog{width:520px;background:var(--paper);border-radius:11px;box-shadow:0 24px 70px rgba(0,0,0,.34);overflow:hidden;border:1px solid #c4c4cb}
+  .head{padding:16px 22px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between}
+  .head h2{font-size:16px;margin:0;font-weight:680}
+  .head .tabs{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden;font-size:12.5px}
+  .head .tabs span{padding:4px 11px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
+  .head .tabs span:last-child{border-right:0}.head .tabs span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .body{padding:18px 22px}
+  .f{margin-bottom:14px}
+  .f label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .f input,.f select,.f textarea{width:100%;font-family:inherit;font-size:14px;border:1px solid var(--rule-strong);border-radius:7px;padding:8px 10px;color:var(--ink);background:#fff}
+  .f textarea{resize:vertical;min-height:38px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--rule-strong);border-radius:7px;padding:6px 8px;min-height:38px}
+  .chip{font-size:12px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:2px 9px;display:flex;gap:6px;align-items:center}
+  .chip b{color:var(--faint);cursor:pointer;font-weight:400}
+  .chips input{border:0;outline:0;flex:1;min-width:80px;font-size:13px}
+  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:14px;color:var(--ink-soft)}
+  .switch{width:36px;height:21px;border-radius:11px;background:var(--accent);position:relative}
+  .switch i{position:absolute;top:2px;left:17px;width:17px;height:17px;border-radius:50%;background:#fff}
+  .warn{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn);font-size:12.5px;border-radius:7px;padding:8px 11px;margin:4px 0 14px}
+  .actions-extra{display:flex;gap:8px;font-size:12.5px;color:var(--accent);margin-top:4px}
+  .actions-extra span{cursor:pointer}
+  .foot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:#fafafb}
+  .foot .danger{color:#a8362a;font-size:13px;cursor:pointer}
+  .foot .right{display:flex;gap:10px}
+  button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 16px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .note-strip{font-size:11px;color:#8a8a93;text-align:center;margin-top:14px}
+</style>
+</head>
+<body>
+  <div>
+    <div class="dialog">
+      <div class="head">
+        <h2>Edit entry</h2>
+        <span class="tabs"><span class="on">Edit</span><span>Add manually</span></span>
+      </div>
+      <div class="body">
+        <div class="f">
+          <label>Description</label>
+          <textarea>Deep work on core algorithm</textarea>
+        </div>
+        <div class="two">
+          <div class="f"><label>Client</label><select><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option><option>+ New client…</option></select></div>
+          <div class="f"><label>Project</label><select><option>Q3 Strategy</option><option>Project Alpha</option><option>+ New project…</option></select></div>
+        </div>
+        <div class="two">
+          <div class="f"><label>Start</label><input value="2026-06-22 10:30"></div>
+          <div class="f"><label>End</label><input value="2026-06-22 16:15"></div>
+        </div>
+        <div class="warn">⚠ Overlaps “Researching market trends” (13:00–15:45) by 2h 45m. Allowed — will be flagged in reports.</div>
+        <div class="f">
+          <label>Tags</label>
+          <div class="chips"><span class="chip">coding <b>×</b></span><span class="chip">product <b>×</b></span><input placeholder="add a tag…"></div>
+        </div>
+        <div class="f">
+          <span class="toggle"><span class="switch"><i></i></span> Billable</span>
+          <div class="actions-extra"><span>Split at instant…</span><span>·</span><span>Merge with adjacent…</span></div>
+        </div>
+      </div>
+      <div class="foot">
+        <span class="danger">Delete entry</span>
+        <span class="right"><button>Cancel</button><button class="primary">Save</button></span>
+      </div>
+    </div>
+    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §05/§06 + §12 R5–R7 · not a screenshot of the current build</div>
+  </div>
+</body>
+</html>
