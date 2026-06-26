@@ -18,6 +18,8 @@ import {
   toCsv,
   toJsonEntries,
   CSV_COLUMNS,
+  openDb,
+  readSettings,
 } from '@stint/core';
 
 const ajv = addFormats(new Ajv({ allErrors: true }));
@@ -65,6 +67,17 @@ describe('GOLD: settings defaults (§14)', () => {
 
   it('schema version is pinned', () => {
     expect(SCHEMA_VERSION).toBe(2);
+  });
+
+  it('a corrupt stored value falls back to the default on read (reads as strict as writes)', () => {
+    const db = openDb(':memory:');
+    // Inject values the write path would have rejected, straight into the table.
+    db.prepare("INSERT INTO setting(key, value) VALUES('rounding_increment_min', '999')").run();
+    db.prepare("INSERT INTO setting(key, value) VALUES('checkin_interval_min', 'NaN')").run();
+    const s = readSettings(db);
+    expect(s.roundingIncrementMin).toBe(DEFAULT_SETTINGS.roundingIncrementMin);
+    expect(s.checkinIntervalMin).toBe(DEFAULT_SETTINGS.checkinIntervalMin);
+    db.close();
   });
 });
 

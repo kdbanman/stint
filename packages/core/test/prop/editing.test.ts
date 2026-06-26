@@ -87,25 +87,35 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
     store.close();
   });
 
-  test.prop([fc.integer({ min: 0, max: 86_400 })])(
-    'edit never mutates fields it was not asked to change',
-    (shiftS) => {
+  test.prop([fc.constantFrom('description', 'startUtc', 'billable'), fc.integer({ min: 0, max: 7200 })])(
+    'editing one field changes only that field; the others are intact',
+    (field, shiftS) => {
       const store = mem();
       try {
+        const ca = store.addClient('Client A');
         const { value: e } = store.add({
           description: 'orig',
           fromUtc: '2026-05-10T09:00:00Z',
           toUtc: '2026-05-10T10:00:00Z',
+          clientId: ca.id,
           billable: true,
         });
         const before = store.getEntry(e.id)!;
-        // Edit only the description; the (generated) shift is intentionally unused.
-        void shiftS;
-        store.edit(e.id, { description: 'changed' });
+        // The generated field/value decides which single field this iteration edits.
+        const patch =
+          field === 'description'
+            ? { description: 'changed' }
+            : field === 'startUtc'
+              ? { startUtc: new Date(Date.parse(before.startUtc) - shiftS * 1000).toISOString() }
+              : { billable: !before.billable };
+        store.edit(e.id, patch);
         const after = store.getEntry(e.id)!;
-        expect(after.startUtc).toBe(before.startUtc);
+
+        // Every field other than the targeted one is byte-for-byte unchanged.
+        if (field !== 'description') expect(after.description).toBe(before.description);
+        if (field !== 'startUtc') expect(after.startUtc).toBe(before.startUtc);
+        if (field !== 'billable') expect(after.billable).toBe(before.billable);
         expect(after.endUtc).toBe(before.endUtc);
-        expect(after.billable).toBe(before.billable);
         expect(after.clientId).toBe(before.clientId);
       } finally {
         store.close();

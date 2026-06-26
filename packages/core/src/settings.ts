@@ -106,9 +106,18 @@ export function readSettings(db: Db): Settings {
     const raw = rawGet(db, d.snake);
     if (raw === undefined) continue;
     const parsed = d.parse(raw);
+    if (parsed === undefined) continue;
+    // Reads are as strict as writes: a hand-corrupted stored value (e.g. a NaN
+    // rounding increment) fails validation and falls back to the default rather than
+    // leaking through.
+    try {
+      d.validate?.(parsed as never);
+    } catch {
+      continue;
+    }
     // Each descriptor's key/parse are correlated, but the union loses that across the
     // loop; the assignment is sound by construction.
-    if (parsed !== undefined) (out as Record<string, unknown>)[d.key] = parsed;
+    (out as Record<string, unknown>)[d.key] = parsed;
   }
   return out;
 }
