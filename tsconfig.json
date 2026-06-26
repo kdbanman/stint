@@ -1,0 +1,12 @@
+{
+  "$comment": "Root config for editors, ESLint, and the Vitest/oxc transform. The build is driven by tsconfig.build.json (project references).",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "types": ["node"]
+  },
+  "include": ["packages/*/src/**/*.ts", "packages/*/test/**/*.ts", "scripts/**/*.ts"]
+}

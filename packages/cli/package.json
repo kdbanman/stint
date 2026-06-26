@@ -1,0 +1,18 @@
+{
+  "name": "@stint/cli",
+  "version": "1.0.0",
+  "description": "tt — the Stint command-line surface. Full parity with the GUI over the same @stint/core database.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "tt": "./dist/bin.js"
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc --build"
+  },
+  "dependencies": {
+    "@stint/core": "1.0.0",
+    "commander": "^12.1.0"
+  }
+}

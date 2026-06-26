@@ -1,0 +1,20 @@
+{
+  "$comment": "PRD §17 R8 — every GUI capability is reachable from tt. This is a GOLD fixture asserted complete by packages/gui/test/parity.test.ts: each GUI IPC channel (a capability) maps to a tt command that actually exists in the CLI program. Parity is a coverage claim, not a behaviour (acceptance.html §05 'On parity').",
+  "capabilities": [
+    { "gui": "getState", "description": "see the running timer and entries", "tt": ["status", "list"] },
+    { "gui": "toggle", "description": "global-hotkey / tray toggle of the timer", "tt": ["start", "stop"] },
+    { "gui": "start", "description": "start a new entry", "tt": ["start"] },
+    { "gui": "stop", "description": "stop the open entry", "tt": ["stop"] },
+    { "gui": "resume", "description": "resume the last entry", "tt": ["resume"] },
+    { "gui": "edit", "description": "amend any field of an entry", "tt": ["edit"] },
+    { "gui": "split", "description": "split an entry at an instant", "tt": ["split"] },
+    { "gui": "merge", "description": "merge a contiguous selection", "tt": ["merge"] },
+    { "gui": "remove", "description": "delete an entry", "tt": ["rm"] },
+    { "gui": "subtractSleep", "description": "exclude slept time (reversible)", "tt": ["sleep subtract"] },
+    { "gui": "report", "description": "grouped totals, filters, rounding, export", "tt": ["report", "export"] },
+    { "gui": "addClient", "description": "create a client", "tt": ["client add"] },
+    { "gui": "addProject", "description": "create a project", "tt": ["project add"] },
+    { "gui": "listClients", "description": "list clients", "tt": ["client ls"] },
+    { "gui": "setSetting", "description": "change a setting", "tt": ["config set"] }
+  ]
+}

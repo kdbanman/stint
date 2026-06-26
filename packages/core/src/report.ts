@@ -1,0 +1,269 @@
+/**
+ * Reporting, rounding, and overlap detection (PRD §06, §09).
+ *
+ * Stored time is exact. Rounding applies only at display/export and only to the
+ * grouped total (the billable line), never to each entry or to stored timestamps.
+ * Overlapped spans and unreviewed sleep are flagged so the same time cannot
+ * silently bill twice or quietly reach an invoice.
+ */
+import type { EntryView } from './types.js';
+import type { WeekStart } from './settings.js';
+
+export type GroupBy = 'client' | 'project' | 'day' | 'tag';
+export type BillableFilter = 'billable' | 'all' | 'non-billable';
+
+export interface ReportOptions {
+  by: GroupBy;
+  billableFilter: BillableFilter;
+  rounding: boolean;
+  roundingIncrementMin: number;
+}
+
+export interface ReportLine {
+  key: string;
+  /** Nested lines (client → project); empty for flat groupings. */
+  children: ReportLine[];
+  entryIds: number[];
+  /** Exact billable seconds summed over this line's entries. */
+  totalSeconds: number;
+  /** Rounded seconds: rounding applied to this line's total (PRD §09 R4). */
+  roundedSeconds: number;
+}
+
+export interface Report {
+  lines: ReportLine[];
+  grandTotalSeconds: number;
+  grandRoundedSeconds: number;
+  /** Entries whose span overlaps another entry in the report. */
+  overlappedEntryIds: number[];
+  /** Slept-through entries that have not been (fully) reviewed/subtracted. */
+  unreviewedSleepEntryIds: number[];
+  options: ReportOptions;
+  rangeFromUtc: string;
+  rangeToUtc: string;
+}
+
+/** Round seconds to the nearest `incrementMin` minutes (nearest, not always-up). */
+export function roundSeconds(seconds: number, incrementMin: number): number {
+  if (incrementMin <= 0) return seconds;
+  const step = incrementMin * 60;
+  return Math.round(seconds / step) * step;
+}
+
+/**
+ * Detect overlaps among entries. Two entries overlap when their [start, end)
+ * intervals intersect; an open entry's end is taken as `now`.
+ * Returns the set of entry ids that overlap at least one other entry.
+ */
+export function detectOverlaps(entries: EntryView[], now: Date = new Date()): Set<number> {
+  const nowMs = now.getTime();
+  const spans = entries.map((e) => ({
+    id: e.id,
+    s: Date.parse(e.startUtc),
+    e: e.endUtc ? Date.parse(e.endUtc) : nowMs,
+  }));
+  const overlapped = new Set<number>();
+  for (let i = 0; i < spans.length; i++) {
+    for (let j = i + 1; j < spans.length; j++) {
+      const a = spans[i]!;
+      const b = spans[j]!;
+      if (a.s < b.e && b.s < a.e) {
+        overlapped.add(a.id);
+        overlapped.add(b.id);
+      }
+    }
+  }
+  return overlapped;
+}
+
+/** Local calendar day (YYYY-MM-DD) of an instant, in the given zone. */
+export function localDay(iso: string, timeZone?: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone,
+  }).format(new Date(iso));
+}
+
+function filterByBillable(entries: EntryView[], filter: BillableFilter): EntryView[] {
+  switch (filter) {
+    case 'billable':
+      return entries.filter((e) => e.billable);
+    case 'non-billable':
+      return entries.filter((e) => !e.billable);
+    case 'all':
+      return entries;
+  }
+}
+
+function makeLine(key: string, entries: EntryView[], opts: ReportOptions): ReportLine {
+  const totalSeconds = entries.reduce((s, e) => s + e.billableSeconds, 0);
+  return {
+    key,
+    children: [],
+    entryIds: entries.map((e) => e.id),
+    totalSeconds,
+    roundedSeconds: opts.rounding
+      ? roundSeconds(totalSeconds, opts.roundingIncrementMin)
+      : totalSeconds,
+  };
+}
+
+/**
+ * Build a report from a pre-fetched, already range-filtered set of entries.
+ * Overlap detection runs over the full input set (before the billable filter) so a
+ * billable entry overlapping a non-billable one is still flagged.
+ */
+export function buildReport(
+  allInRange: EntryView[],
+  opts: ReportOptions,
+  range: { fromUtc: string; toUtc: string },
+  now: Date = new Date(),
+): Report {
+  const overlapped = detectOverlaps(allInRange, now);
+  const entries = filterByBillable(allInRange, opts.billableFilter);
+
+  let lines: ReportLine[];
+  switch (opts.by) {
+    case 'client':
+      lines = groupByClientProject(entries, opts);
+      break;
+    case 'project':
+      lines = groupBy(entries, opts, (e) => e.projectName ?? '(no project)');
+      break;
+    case 'day':
+      lines = groupBy(entries, opts, (e) => localDay(e.startUtc));
+      break;
+    case 'tag':
+      lines = groupByTag(entries, opts);
+      break;
+  }
+
+  const grandTotalSeconds = entries.reduce((s, e) => s + e.billableSeconds, 0);
+  const grandRoundedSeconds = lines.reduce((s, l) => s + l.roundedSeconds, 0);
+
+  const unreviewedSleepEntryIds = entries
+    .filter((e) => e.sleptThrough && e.excludedSeconds < sleptSeconds(e))
+    .map((e) => e.id);
+
+  return {
+    lines,
+    grandTotalSeconds,
+    grandRoundedSeconds,
+    overlappedEntryIds: [...overlapped].filter((id) => entries.some((e) => e.id === id)),
+    unreviewedSleepEntryIds,
+    options: opts,
+    rangeFromUtc: range.fromUtc,
+    rangeToUtc: range.toUtc,
+  };
+}
+
+function sleptSeconds(e: EntryView): number {
+  return e.sleepSpans.reduce(
+    (s, span) => s + Math.max(0, (Date.parse(span.wakeUtc) - Date.parse(span.sleepUtc)) / 1000),
+    0,
+  );
+}
+
+function groupBy(
+  entries: EntryView[],
+  opts: ReportOptions,
+  keyOf: (e: EntryView) => string,
+): ReportLine[] {
+  const map = new Map<string, EntryView[]>();
+  for (const e of entries) {
+    const k = keyOf(e);
+    (map.get(k) ?? map.set(k, []).get(k)!).push(e);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, es]) => makeLine(k, es, opts));
+}
+
+function groupByClientProject(entries: EntryView[], opts: ReportOptions): ReportLine[] {
+  const byClient = new Map<string, EntryView[]>();
+  for (const e of entries) {
+    const k = e.clientName ?? '(no client)';
+    (byClient.get(k) ?? byClient.set(k, []).get(k)!).push(e);
+  }
+  return [...byClient.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([clientName, clientEntries]) => {
+      const children = groupBy(clientEntries, opts, (e) => e.projectName ?? '(no project)');
+      // The client line's rounded total is the sum of its rounded project lines, so
+      // rounding is applied to the billable line consistently at the leaf level.
+      const roundedSeconds = children.reduce((s, c) => s + c.roundedSeconds, 0);
+      const totalSeconds = clientEntries.reduce((s, e) => s + e.billableSeconds, 0);
+      return {
+        key: clientName,
+        children,
+        entryIds: clientEntries.map((e) => e.id),
+        totalSeconds,
+        roundedSeconds,
+      };
+    });
+}
+
+function groupByTag(entries: EntryView[], opts: ReportOptions): ReportLine[] {
+  const map = new Map<string, EntryView[]>();
+  for (const e of entries) {
+    const tags = e.tags.length > 0 ? e.tags : ['(untagged)'];
+    for (const t of tags) {
+      (map.get(t) ?? map.set(t, []).get(t)!).push(e);
+    }
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([k, es]) => makeLine(k, es, opts));
+}
+
+/** Resolve a named preset or explicit range to UTC bounds. */
+export function resolveRange(
+  preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month',
+  weekStart: WeekStart,
+  now: Date = new Date(),
+): { fromUtc: string; toUtc: string } {
+  const startOfDay = (d: Date) => {
+    const x = new Date(d);
+    x.setHours(0, 0, 0, 0);
+    return x;
+  };
+  const addDays = (d: Date, n: number) => {
+    const x = new Date(d);
+    x.setDate(x.getDate() + n);
+    return x;
+  };
+  const weekStartOf = (d: Date) => {
+    const sd = startOfDay(d);
+    const dow = sd.getDay(); // 0=Sun
+    const offset = weekStart === 'monday' ? (dow + 6) % 7 : dow;
+    return addDays(sd, -offset);
+  };
+
+  let from: Date;
+  let to: Date;
+  switch (preset) {
+    case 'today':
+      from = startOfDay(now);
+      to = addDays(from, 1);
+      break;
+    case 'week':
+      from = weekStartOf(now);
+      to = addDays(from, 7);
+      break;
+    case 'last-week':
+      to = weekStartOf(now);
+      from = addDays(to, -7);
+      break;
+    case 'month':
+      from = new Date(now.getFullYear(), now.getMonth(), 1);
+      to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      break;
+    case 'last-month':
+      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      to = new Date(now.getFullYear(), now.getMonth(), 1);
+      break;
+  }
+  return { fromUtc: from.toISOString(), toUtc: to.toISOString() };
+}
