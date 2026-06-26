@@ -82,8 +82,38 @@ show(['start', 'code review', '--client', 'Client A', '--at', '2026-06-24T16:00:
 show(['list', '--today', '--all'], { note: 'Exactly one entry is open (R2); the first was closed at 16:00.' });
 
 // ───────────────────────────── R3 ───────────────────────────────────────────
-section('R3 — close / sleep / crash never corrupts elapsed', 'Reopening with a later clock simply shows more derived elapsed; nothing is recovered or lost.');
-show(['status'], { now: '2026-06-24T17:30:00Z', note: 'Same open entry, elapsed grows purely from the wall clock.' });
+section(
+  'R3 — close / sleep / crash never corrupts elapsed',
+  'Why it *cannot* corrupt: elapsed is never stored, only `start_utc` is, and that is ' +
+    'written once under an atomic `BEGIN IMMEDIATE`. Each `tt` invocation below is a ' +
+    'separate OS process that opens the database cold — so reading the running timer ' +
+    'from a fresh process *is* the close-and-reopen (and stands in for a crash with no ' +
+    'clean shutdown: no `end` was ever written, nothing is replayed on open). The ' +
+    'stored `start_utc` is identical across reopens; only the derived elapsed grows. ' +
+    'Adversarial kill-mid-write fault injection is the job of PROP + the MANUAL runbook; ' +
+    'this transcript shows the structural reason there is nothing to recover.',
+);
+{
+  const clockA = '2026-06-24T16:30:00Z';
+  const clockB = '2026-06-24T17:30:00Z';
+  const before = tt(['status', '--json'], clockA);
+  const after = tt(['status', '--json'], clockB);
+  const startOf = (j) => JSON.parse(j.out).entry.start_utc;
+  const elapsedOf = (j) => JSON.parse(j.out).entry.elapsed_seconds;
+  const wall = (Date.parse(clockB) - Date.parse(clockA)) / 1000;
+  md.push(
+    '```text',
+    '# Two independent `tt` processes open the same file at different clocks:',
+    `process A (now ${clockA}): start_utc=${startOf(before)}  elapsed_seconds=${elapsedOf(before)}`,
+    `process B (now ${clockB}): start_utc=${startOf(after)}  elapsed_seconds=${elapsedOf(after)}`,
+    `stored start_utc unchanged across reopen: ${startOf(before) === startOf(after)}`,
+    `elapsed is purely derived (now − start), not stored: ` +
+      `${elapsedOf(after) - elapsedOf(before)}s of growth == ${wall}s of wall clock between the two reopens`,
+    '```',
+    '',
+  );
+}
+show(['status'], { now: '2026-06-24T17:30:00Z', note: 'Human-readable view of that same reopened entry — elapsed grows purely from the wall clock.' });
 
 // ───────────────────────────── R4 + R7 ──────────────────────────────────────
 section('R4 / R7 — rounding never mutates stored time; reports group, filter, round, export');

@@ -38,6 +38,7 @@ import {
 } from '@stint/core';
 import { CHANNELS } from './ipc.js';
 import { buildUiState } from './uistate.js';
+import { nextTimerAction } from './toggle.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(__dirname, '..', 'renderer');
@@ -96,15 +97,17 @@ function accentColor(): string {
 
 /** Toggle the timer — stop if running, else resume the last entry (PRD §12 R2). */
 function toggleTimer(): void {
-  const open = store.openEntry();
-  if (open) {
-    store.stop({});
-  } else {
-    try {
+  const hasResumable = store.listEntries().length > 0;
+  switch (nextTimerAction(!!store.openEntry(), hasResumable)) {
+    case 'stop':
+      store.stop({});
+      break;
+    case 'resume':
       store.resume();
-    } catch {
+      break;
+    case 'start':
       store.start({});
-    }
+      break;
   }
   refreshAll();
 }

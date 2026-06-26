@@ -41,7 +41,15 @@ Exactly one entry is open (R2); the first was closed at 16:00.
 
 ## R3 — close / sleep / crash never corrupts elapsed
 
-Reopening with a later clock simply shows more derived elapsed; nothing is recovered or lost.
+Why it *cannot* corrupt: elapsed is never stored, only `start_utc` is, and that is written once under an atomic `BEGIN IMMEDIATE`. Each `tt` invocation below is a separate OS process that opens the database cold — so reading the running timer from a fresh process *is* the close-and-reopen (and stands in for a crash with no clean shutdown: no `end` was ever written, nothing is replayed on open). The stored `start_utc` is identical across reopens; only the derived elapsed grows. Adversarial kill-mid-write fault injection is the job of PROP + the MANUAL runbook; this transcript shows the structural reason there is nothing to recover.
+
+```text
+# Two independent `tt` processes open the same file at different clocks:
+process A (now 2026-06-24T16:30:00Z): start_utc=2026-06-24T16:00:00Z  elapsed_seconds=1800
+process B (now 2026-06-24T17:30:00Z): start_utc=2026-06-24T16:00:00Z  elapsed_seconds=5400
+stored start_utc unchanged across reopen: true
+elapsed is purely derived (now − start), not stored: 3600s of growth == 3600s of wall clock between the two reopens
+```
 
 ```console
 $ tt status
@@ -49,7 +57,7 @@ $ tt status
 # exit 0
 ```
 
-Same open entry, elapsed grows purely from the wall clock.
+Human-readable view of that same reopened entry — elapsed grows purely from the wall clock.
 
 ## R4 / R7 — rounding never mutates stored time; reports group, filter, round, export
 

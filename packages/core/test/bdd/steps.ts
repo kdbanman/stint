@@ -61,6 +61,14 @@ export const steps: StepDef[] = [
       ctx.entryIds.push(r.id);
     },
   },
+  {
+    pattern: /^a closed entry "([^"]*)" for "([^"]*)" from (\d{1,2}:\d{2}) to (\d{1,2}:\d{2})$/,
+    run: (w, ctx, desc, client, from, to) => {
+      const r = w.backfill({ desc, client, from: iso(from), to: iso(to) });
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
 
   // ---- start / stop / resume / backfill ----------------------------------
   {
@@ -107,6 +115,38 @@ export const steps: StepDef[] = [
       ctx.mergedId = w.merge(thoseTwo(ctx)).id;
     },
   },
+  {
+    pattern: /^I merge those two entries resolving to client "([^"]*)"$/,
+    run: (w, ctx, client) => {
+      ctx.mergedId = w.merge(thoseTwo(ctx), { client }).id;
+    },
+  },
+
+  // ---- edit / billable override / reference data -------------------------
+  {
+    pattern: /^I mark the open entry billable$/,
+    run: (w) => w.edit(open(w)!.id, { billable: true }),
+  },
+  {
+    pattern: /^I mark the open entry non-billable$/,
+    run: (w) => w.edit(open(w)!.id, { billable: false }),
+  },
+  {
+    pattern: /^I edit the entry "([^"]*)" description to "([^"]*)"$/,
+    run: (w, _c, desc, to) => w.edit(byDesc(w, desc).id, { desc: to }),
+  },
+  {
+    pattern: /^I edit the open entry start to (\d{1,2}:\d{2})$/,
+    run: (w, _c, at) => w.edit(open(w)!.id, { startUtc: iso(at) }),
+  },
+  {
+    pattern: /^I rename client "([^"]*)" to "([^"]*)"$/,
+    run: (w, _c, name, to) => w.renameClient(name, to),
+  },
+  {
+    pattern: /^I archive client "([^"]*)"$/,
+    run: (w, _c, name) => w.archiveClient(name),
+  },
 
   // ---- assertions --------------------------------------------------------
   {
@@ -131,6 +171,18 @@ export const steps: StepDef[] = [
   {
     pattern: /^the open entry is for "([^"]*)"$/,
     run: (w, _c, lbl) => expect(open(w)?.clientLabel).toBe(lbl),
+  },
+  {
+    pattern: /^the open entry starts at (\d{1,2}:\d{2})$/,
+    run: (w, _c, at) => expect(open(w)?.startUtc).toBe(iso(at)),
+  },
+  {
+    pattern: /^the entry "([^"]*)" is for "([^"]*)"$/,
+    run: (w, _c, desc, lbl) => expect(byDesc(w, desc).clientLabel).toBe(lbl),
+  },
+  {
+    pattern: /^client "([^"]*)" is not in the active client list$/,
+    run: (w, _c, name) => expect(w.activeClientNames()).not.toContain(name),
   },
   { pattern: /^the open entry is billable$/, run: (w) => expect(open(w)?.billable).toBe(true) },
   {

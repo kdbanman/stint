@@ -1,6 +1,7 @@
 {
   "suite": "JUDGE — GUI presentation & discoverability",
-  "generatedAt": "2026-06-26T01:13:26.542Z",
+  "fixtureClock": "2026-06-24T23:00:00Z",
+  "note": "pass:true/false are machine-checked deterministic facts; pass:null items are captured-not-scored and are routed to human/LLM rubric review, never auto-passed.",
   "results": [
     {
       "item": "EMPTY_STATE",
@@ -17,7 +18,7 @@
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": true,
-      "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237) dayHead=rgb(118, 118, 127)",
+      "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237); stray accent on [none]",
       "screenshot": "main-running.png"
     },
     {
@@ -28,8 +29,8 @@
     },
     {
       "item": "DESKTOP_FEEL",
-      "pass": true,
-      "justification": "screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)",
+      "pass": null,
+      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)",
       "screenshot": "main-running.png"
     }
   ]

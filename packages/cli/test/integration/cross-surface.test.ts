@@ -67,7 +67,7 @@ describe('§17 R1: a timer started in tt is visible to a core reader, no disagre
 });
 
 describe('§17 R2: at most one entry open under concurrent start/stop from many processes', () => {
-  it('20 concurrent tt starts leave exactly one open entry, no corruption', async () => {
+  it('20 concurrent tt starts all succeed, cooperating via busy-timeout (no SQLITE_BUSY)', async () => {
     // Establish the database first so all racers share a ready WAL file.
     tt(['client', 'add', 'Client A']);
 
@@ -75,20 +75,29 @@ describe('§17 R2: at most one entry open under concurrent start/stop from many 
       execFileP('node', [BIN, 'start', `race ${i}`, '--client', 'Client A'], {
         env: { ...process.env, TT_DB: db, NODE_NO_WARNINGS: '1' },
       }).then(
-        () => 'ok',
-        () => 'err',
+        () => ({ ok: true as const, err: '' }),
+        (e: { stderr?: string; message?: string }) => ({
+          ok: false as const,
+          err: e.stderr || e.message || 'unknown',
+        }),
       ),
     );
     const results = await Promise.all(launches);
-    const ok = results.filter((r) => r === 'ok').length;
-    expect(ok).toBeGreaterThan(0);
+    const failures = results.filter((r) => !r.ok);
 
-    // The invariant: never more than one open entry, and the DB is readable.
+    // The real proof of cooperation: under BEGIN IMMEDIATE + busy_timeout, a contended
+    // writer waits its turn rather than erroring — so every one of the 20 succeeds and
+    // none bounces with SQLITE_BUSY.
+    expect(failures.map((f) => f.err)).toEqual([]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(results.filter((r) => r.err.includes('SQLITE_BUSY'))).toEqual([]);
+
+    // And the invariant holds: exactly one open entry, DB readable, all 20 recorded
+    // (each start closes the prior open one before opening its own).
     const store = Store.open({ path: db });
     const openCount = store.listEntries().filter((e) => e.endUtc === null).length;
     expect(openCount).toBe(1);
-    // Every successful start added exactly one entry (each closes the prior open one).
-    expect(store.listEntries().length).toBe(ok);
+    expect(store.listEntries().length).toBe(20);
     store.close();
   });
 

@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/list.json",
+  "title": "tt list --json output",
+  "description": "The array printed by `tt list --json` (PRD §11). It is the same per-entry shape as `tt export --json` (acceptance/schemas/export-entry.schema.json), published separately so the read-side scripting contract is pinned in its own right.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "client",
+      "project",
+      "tags",
+      "description",
+      "start_utc",
+      "end_utc",
+      "raw_duration_s",
+      "excluded_s",
+      "billable",
+      "overlapped"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "client": { "type": ["string", "null"] },
+      "project": { "type": ["string", "null"] },
+      "tags": { "type": "array", "items": { "type": "string" } },
+      "description": { "type": ["string", "null"] },
+      "start_utc": { "type": "string", "format": "date-time" },
+      "end_utc": { "type": ["string", "null"], "format": "date-time" },
+      "raw_duration_s": { "type": "integer", "minimum": 0 },
+      "excluded_s": { "type": "integer", "minimum": 0 },
+      "billable": { "type": "boolean" },
+      "overlapped": { "type": "boolean" }
+    }
+  }
+}
