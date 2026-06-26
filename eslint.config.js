@@ -1,5 +1,7 @@
 // Flat ESLint config. Lints the TypeScript sources and the .mjs tooling; the
-// renderer JS (browser globals) and generated output are excluded.
+// renderer JS (browser globals), generated output, and Claude Code workflow
+// scripts under .claude/ (which run in the Workflow runtime with injected
+// globals like agent()/phase()/parallel()) are excluded.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
@@ -11,6 +13,7 @@ export default tseslint.config(
       'coverage/**',
       'packages/gui/renderer/**',
       'packages/gui/judge/**',
+      '.claude/**',
     ],
   },
   js.configs.recommended,
