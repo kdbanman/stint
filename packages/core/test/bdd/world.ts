@@ -9,7 +9,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { Store, type Clock } from '@stint/core';
+import { Store, joinClientProject, type Clock } from '@stint/core';
 
 export interface EntryRec {
   id: number;
@@ -56,10 +56,7 @@ export interface World {
   reportOverlaps(fromIso: string, toIso: string): number[];
 }
 
-function label(client: string | null, project: string | null): string | null {
-  if (client && project) return `${client} / ${project}`;
-  return client ?? project ?? null;
-}
+const label = joinClientProject;
 
 /** A fixed clock so derived elapsed is deterministic. */
 const FIXED_NOW = '2026-06-24T23:59:00Z';
@@ -86,16 +83,8 @@ export class CoreWorld implements World {
     clientId: number | null;
     projectId: number | null;
   } {
-    let clientId: number | null = null;
-    let projectId: number | null = null;
-    if (o.client) clientId = this.store.ensureClient(o.client).id;
-    if (o.project) {
-      if (clientId === null) clientId = this.store.ensureClient('Internal').id;
-      const p = this.store.findProjectByName(o.project, clientId) ?? this.store.addProject(o.project, clientId);
-      projectId = p.id;
-      clientId = p.clientId;
-    }
-    return { clientId, projectId };
+    // Use core's single name-resolution rule (no surface-specific re-derivation).
+    return this.store.resolveClientProjectByName(o);
   }
   start(o: {
     desc: string | null;

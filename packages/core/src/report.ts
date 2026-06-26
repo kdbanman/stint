@@ -51,6 +51,15 @@ export function roundSeconds(seconds: number, incrementMin: number): number {
 }
 
 /**
+ * The one overlap rule, shared by everything that needs it: two half-open intervals
+ * [aStart, aEnd) and [bStart, bEnd) intersect. Defined once so the report-wide scan
+ * and the per-entry write-time check can never drift apart.
+ */
+export function spansOverlap(aStart: number, aEnd: number, bStart: number, bEnd: number): boolean {
+  return aStart < bEnd && bStart < aEnd;
+}
+
+/**
  * Detect overlaps among entries. Two entries overlap when their [start, end)
  * intervals intersect; an open entry's end is taken as `now`.
  * Returns the set of entry ids that overlap at least one other entry.
@@ -67,7 +76,7 @@ export function detectOverlaps(entries: EntryView[], now: Date = new Date()): Se
     for (let j = i + 1; j < spans.length; j++) {
       const a = spans[i]!;
       const b = spans[j]!;
-      if (a.s < b.e && b.s < a.e) {
+      if (spansOverlap(a.s, a.e, b.s, b.e)) {
         overlapped.add(a.id);
         overlapped.add(b.id);
       }
@@ -147,11 +156,14 @@ export function buildReport(
     .filter((e) => e.sleptThrough && e.excludedSeconds < sleptSeconds(e))
     .map((e) => e.id);
 
+  // Keep only overlaps among entries that survived the billable filter (O(n) via Set).
+  const keptIds = new Set(entries.map((e) => e.id));
+
   return {
     lines,
     grandTotalSeconds,
     grandRoundedSeconds,
-    overlappedEntryIds: [...overlapped].filter((id) => entries.some((e) => e.id === id)),
+    overlappedEntryIds: [...overlapped].filter((id) => keptIds.has(id)),
     unreviewedSleepEntryIds,
     options: opts,
     rangeFromUtc: range.fromUtc,
@@ -166,29 +178,44 @@ function sleptSeconds(e: EntryView): number {
   );
 }
 
+/**
+ * Group items into buckets by one or more keys each (multi-key handles tags, where an
+ * entry belongs to every one of its tags). One implementation of the accumulator the
+ * report groupers and the GUI day-grouping all need, instead of the `(m.get(k) ??
+ * m.set(k, []).get(k)!).push(x)` idiom copy-pasted at four call sites.
+ */
+export function groupInto<T>(items: T[], keysOf: (t: T) => string[]): Map<string, T[]> {
+  const map = new Map<string, T[]>();
+  for (const item of items) {
+    for (const key of keysOf(item)) {
+      let bucket = map.get(key);
+      if (!bucket) {
+        bucket = [];
+        map.set(key, bucket);
+      }
+      bucket.push(item);
+    }
+  }
+  return map;
+}
+
+/** A grouped map's entries, ordered by key (stable, locale-aware). */
+function sortedEntries<T>(map: Map<string, T[]>): [string, T[]][] {
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+}
+
 function groupBy(
   entries: EntryView[],
   opts: ReportOptions,
   keyOf: (e: EntryView) => string,
 ): ReportLine[] {
-  const map = new Map<string, EntryView[]>();
-  for (const e of entries) {
-    const k = keyOf(e);
-    (map.get(k) ?? map.set(k, []).get(k)!).push(e);
-  }
-  return [...map.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([k, es]) => makeLine(k, es, opts));
+  return sortedEntries(groupInto(entries, (e) => [keyOf(e)])).map(([k, es]) =>
+    makeLine(k, es, opts),
+  );
 }
 
 function groupByClientProject(entries: EntryView[], opts: ReportOptions): ReportLine[] {
-  const byClient = new Map<string, EntryView[]>();
-  for (const e of entries) {
-    const k = e.clientName ?? '(no client)';
-    (byClient.get(k) ?? byClient.set(k, []).get(k)!).push(e);
-  }
-  return [...byClient.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
+  return sortedEntries(groupInto(entries, (e) => [e.clientName ?? '(no client)']))
     .map(([clientName, clientEntries]) => {
       const children = groupBy(clientEntries, opts, (e) => e.projectName ?? '(no project)');
       // The client line's rounded total is the sum of its rounded project lines, so
@@ -206,16 +233,10 @@ function groupByClientProject(entries: EntryView[], opts: ReportOptions): Report
 }
 
 function groupByTag(entries: EntryView[], opts: ReportOptions): ReportLine[] {
-  const map = new Map<string, EntryView[]>();
-  for (const e of entries) {
-    const tags = e.tags.length > 0 ? e.tags : ['(untagged)'];
-    for (const t of tags) {
-      (map.get(t) ?? map.set(t, []).get(t)!).push(e);
-    }
-  }
-  return [...map.entries()]
-    .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([k, es]) => makeLine(k, es, opts));
+  // An entry with multiple tags lands in each of its tag groups (and untagged once).
+  return sortedEntries(groupInto(entries, (e) => (e.tags.length > 0 ? e.tags : ['(untagged)']))).map(
+    ([k, es]) => makeLine(k, es, opts),
+  );
 }
 
 /** Resolve a named preset or explicit range to UTC bounds. */

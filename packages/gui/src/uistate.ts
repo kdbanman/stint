@@ -2,39 +2,40 @@
  * Build the renderer's UiState snapshot from the shared core. Pure read; the
  * renderer paints exactly what tt would show, just visually (PRD §12).
  */
-import { Store, detectOverlaps, localDay } from '@stint/core';
+import { Store, detectOverlaps, groupInto, joinClientProject, localDay } from '@stint/core';
 import type { UiState } from './ipc.js';
 
-function clientLabel(clientName: string | null, projectName: string | null): string | null {
-  if (clientName && projectName) return `${clientName} / ${projectName}`;
-  return clientName ?? projectName ?? null;
-}
+/**
+ * How far back the main window shows day-grouped history. A long-lived tracker would
+ * otherwise re-scan and re-join its entire history on every ~second refresh; this
+ * bounds that to a useful window (older time is still reachable via `tt`/reports).
+ */
+const WINDOW_DAYS = 60;
 
 export function buildUiState(store: Store, accent: string): UiState {
-  const all = store.listEntries();
   const now = new Date();
+  const fromUtc = new Date(now.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const all = store.listEntries({ fromUtc });
   const overlapped = detectOverlaps(all, now);
 
-  const byDay = new Map<string, UiState['days'][number]['entries']>();
-  for (const e of all) {
-    const day = localDay(e.startUtc);
-    const row = {
-      id: e.id,
-      description: e.description,
-      clientLabel: clientLabel(e.clientName, e.projectName),
-      startUtc: e.startUtc,
-      endUtc: e.endUtc,
-      billableSeconds: e.billableSeconds,
-      billable: e.billable,
-      overlapped: overlapped.has(e.id),
-      sleptThrough: e.sleptThrough,
-      excludedSeconds: e.excludedSeconds,
-    };
-    (byDay.get(day) ?? byDay.set(day, []).get(day)!).push(row);
-  }
+  const byDay = groupInto(all, (e) => [localDay(e.startUtc)]);
   const days = [...byDay.entries()]
     .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(([day, entries]) => ({ day, entries }));
+    .map(([day, entries]) => ({
+      day,
+      entries: entries.map((e) => ({
+        id: e.id,
+        description: e.description,
+        clientLabel: joinClientProject(e.clientName, e.projectName),
+        startUtc: e.startUtc,
+        endUtc: e.endUtc,
+        billableSeconds: e.billableSeconds,
+        billable: e.billable,
+        overlapped: overlapped.has(e.id),
+        sleptThrough: e.sleptThrough,
+        excludedSeconds: e.excludedSeconds,
+      })),
+    }));
 
   const status = store.status();
   const settings = store.settings();
@@ -46,7 +47,7 @@ export function buildUiState(store: Store, accent: string): UiState {
         ? {
             id: status.entry.id,
             description: status.entry.description,
-            clientLabel: clientLabel(status.entry.clientName, status.entry.projectName),
+            clientLabel: joinClientProject(status.entry.clientName, status.entry.projectName),
             startUtc: status.entry.startUtc,
             billableSeconds: status.entry.billableSeconds,
             billable: status.entry.billable,

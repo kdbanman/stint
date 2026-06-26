@@ -64,7 +64,7 @@ describe('GOLD: settings defaults (§14)', () => {
   });
 
   it('schema version is pinned', () => {
-    expect(SCHEMA_VERSION).toBe(1);
+    expect(SCHEMA_VERSION).toBe(2);
   });
 });
 

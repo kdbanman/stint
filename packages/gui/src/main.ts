@@ -50,6 +50,7 @@ let mainWindow: BrowserWindow | null = null;
 let watcher: FSWatcher | null = null;
 let suspendedAt: string | null = null;
 let lastTick = 0;
+let lastSeenWrite = 0;
 
 const LAST_SEEN_KEY = 'last_seen_utc';
 const CHECKIN_KEY = 'checkin_state';
@@ -126,30 +127,22 @@ function refreshAll(): void {
 // ------------------------------------------------------------------- check-in
 
 function loadCheckinState(): CheckinState | null {
-  const raw = (store.db.prepare('SELECT value FROM setting WHERE key = ?').get(CHECKIN_KEY) as
-    | { value: string }
-    | undefined)?.value;
+  const raw = store.getAppState(CHECKIN_KEY);
   return raw ? (JSON.parse(raw) as CheckinState) : null;
 }
 
 function saveCheckinState(state: CheckinState | null): void {
-  if (state === null) {
-    store.db.prepare('DELETE FROM setting WHERE key = ?').run(CHECKIN_KEY);
-  } else {
-    store.db
-      .prepare(
-        'INSERT INTO setting(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-      )
-      .run(CHECKIN_KEY, JSON.stringify(state));
-  }
+  if (state === null) store.deleteAppState(CHECKIN_KEY);
+  else store.setAppState(CHECKIN_KEY, JSON.stringify(state));
 }
 
 function tick(): void {
   const open = store.openEntry();
   updateTray(open);
 
-  // Maintain a heartbeat for launch-time gap reconciliation.
-  setLastSeen();
+  // Maintain a heartbeat for launch-time gap reconciliation — coarse on purpose, so
+  // it neither churns the database nor trips the file-watcher every second.
+  maybeWriteLastSeen();
 
   if (!open) {
     saveCheckinState(null);
@@ -191,9 +184,13 @@ function fireCheckin(open: EntryView): void {
 }
 
 function setLastSeen(): void {
-  store.db
-    .prepare('INSERT INTO setting(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-    .run(LAST_SEEN_KEY, toUtc(new Date()));
+  store.setAppState(LAST_SEEN_KEY, toUtc(new Date()));
+  lastSeenWrite = Date.now();
+}
+
+/** Heartbeat the last-seen marker at most every 30 s (PRD §10a gap reconciliation). */
+function maybeWriteLastSeen(): void {
+  if (Date.now() - lastSeenWrite >= 30_000) setLastSeen();
 }
 
 // ----------------------------------------------------------------------- tray
@@ -331,9 +328,7 @@ function init(): void {
   store = Store.open({ path: dbPath });
 
   // Launch-time reconciliation: a sleep missed while the app was closed (PRD §10a).
-  const lastSeen = (store.db.prepare('SELECT value FROM setting WHERE key = ?').get(LAST_SEEN_KEY) as
-    | { value: string }
-    | undefined)?.value;
+  const lastSeen = store.getAppState(LAST_SEEN_KEY);
   if (lastSeen) store.reconcileGap(lastSeen, toUtc(new Date()));
   setLastSeen();
 

@@ -10,6 +10,7 @@ export * from './time.js';
 export * from './paths.js';
 export * from './settings.js';
 export * from './report.js';
+export * from './label.js';
 export * from './export.js';
 export * from './checkin.js';
 export { Store, StoreError } from './store.js';

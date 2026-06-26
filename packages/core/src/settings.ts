@@ -29,16 +29,69 @@ export const DEFAULT_SETTINGS: Settings = {
   globalHotkey: 'CommandOrControl+Alt+T',
 };
 
-const KEYS: Record<keyof Settings, string> = {
-  rounding: 'rounding',
-  roundingIncrementMin: 'rounding_increment_min',
-  weekStart: 'week_start',
-  firstCheckinMin: 'first_checkin_min',
-  checkinIntervalMin: 'checkin_interval_min',
-  globalHotkey: 'global_hotkey',
-};
-
 const ALLOWED_INCREMENTS = [6, 10, 15, 30];
+
+function requirePositiveMinutes(name: string, v: number): void {
+  if (!Number.isInteger(v) || v <= 0) {
+    throw new Error(`${name} must be a positive whole number of minutes`);
+  }
+}
+
+/**
+ * One descriptor per setting — the single source of the snake_case key, how a stored
+ * string parses to a typed value, and how a new value is validated. `readSettings`,
+ * the `config ls` table, and `config set` all derive from this, so adding a setting is
+ * one row here instead of edits scattered across the CLI, GUI, and this module.
+ */
+type SettingDescriptor = {
+  [K in keyof Settings]: {
+    key: K;
+    snake: string;
+    /** Parse a stored/typed-in string; return undefined to reject (keep default). */
+    parse: (raw: string) => Settings[K] | undefined;
+    validate?: (value: Settings[K]) => void;
+  };
+}[keyof Settings];
+
+export const SETTING_DESCRIPTORS: SettingDescriptor[] = [
+  { key: 'rounding', snake: 'rounding', parse: (r) => r === 'true' || r === 'on' || r === '1' },
+  {
+    key: 'roundingIncrementMin',
+    snake: 'rounding_increment_min',
+    parse: (r) => Number(r),
+    validate: (v) => {
+      if (!ALLOWED_INCREMENTS.includes(v)) {
+        throw new Error(`rounding increment must be one of ${ALLOWED_INCREMENTS.join(', ')} minutes`);
+      }
+    },
+  },
+  {
+    key: 'weekStart',
+    snake: 'week_start',
+    parse: (r) => (r === 'monday' || r === 'sunday' ? r : undefined),
+    validate: (v) => {
+      if (v !== 'monday' && v !== 'sunday') throw new Error('week_start must be monday or sunday');
+    },
+  },
+  {
+    key: 'firstCheckinMin',
+    snake: 'first_checkin_min',
+    parse: (r) => Number(r),
+    validate: (v) => requirePositiveMinutes('first_checkin_min', v),
+  },
+  {
+    key: 'checkinIntervalMin',
+    snake: 'checkin_interval_min',
+    parse: (r) => Number(r),
+    validate: (v) => requirePositiveMinutes('checkin_interval_min', v),
+  },
+  { key: 'globalHotkey', snake: 'global_hotkey', parse: (r) => r },
+];
+
+/** Look a descriptor up by its snake_case key (for `config set`). */
+export function settingDescriptor(snake: string): SettingDescriptor | undefined {
+  return SETTING_DESCRIPTORS.find((d) => d.snake === snake);
+}
 
 function rawGet(db: Db, key: string): string | undefined {
   const row = db.prepare('SELECT value FROM setting WHERE key = ?').get(key) as
@@ -49,33 +102,22 @@ function rawGet(db: Db, key: string): string | undefined {
 
 export function readSettings(db: Db): Settings {
   const out = { ...DEFAULT_SETTINGS };
-  const rounding = rawGet(db, KEYS.rounding);
-  if (rounding !== undefined) out.rounding = rounding === 'true';
-  const inc = rawGet(db, KEYS.roundingIncrementMin);
-  if (inc !== undefined) out.roundingIncrementMin = Number(inc);
-  const ws = rawGet(db, KEYS.weekStart);
-  if (ws === 'monday' || ws === 'sunday') out.weekStart = ws;
-  const fc = rawGet(db, KEYS.firstCheckinMin);
-  if (fc !== undefined) out.firstCheckinMin = Number(fc);
-  const ci = rawGet(db, KEYS.checkinIntervalMin);
-  if (ci !== undefined) out.checkinIntervalMin = Number(ci);
-  const hk = rawGet(db, KEYS.globalHotkey);
-  if (hk !== undefined) out.globalHotkey = hk;
+  for (const d of SETTING_DESCRIPTORS) {
+    const raw = rawGet(db, d.snake);
+    if (raw === undefined) continue;
+    const parsed = d.parse(raw);
+    // Each descriptor's key/parse are correlated, but the union loses that across the
+    // loop; the assignment is sound by construction.
+    if (parsed !== undefined) (out as Record<string, unknown>)[d.key] = parsed;
+  }
   return out;
 }
 
-export function writeSetting<K extends keyof Settings>(
-  db: Db,
-  key: K,
-  value: Settings[K],
-): void {
-  if (key === 'roundingIncrementMin' && !ALLOWED_INCREMENTS.includes(value as number)) {
-    throw new Error(
-      `rounding increment must be one of ${ALLOWED_INCREMENTS.join(', ')} minutes`,
-    );
-  }
-  const str = typeof value === 'boolean' ? String(value) : String(value);
+export function writeSetting<K extends keyof Settings>(db: Db, key: K, value: Settings[K]): void {
+  const d = SETTING_DESCRIPTORS.find((x) => x.key === key);
+  if (!d) throw new Error(`unknown setting "${key}"`);
+  d.validate?.(value as never);
   db.prepare(
     'INSERT INTO setting(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-  ).run(KEYS[key], str);
+  ).run(d.snake, String(value));
 }

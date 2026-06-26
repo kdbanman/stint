@@ -25,9 +25,18 @@ function clock(): Date {
   return new Date();
 }
 
+/** Optional busy-timeout override (ms) for the SQLite write lock; default is 5000. */
+function busyTimeoutMs(): number | undefined {
+  const raw = process.env.TT_BUSY_TIMEOUT_MS;
+  if (!raw) return undefined;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
+}
+
 export async function run(argv: string[], io: Io): Promise<number> {
+  const timeout = busyTimeoutMs();
   const program = buildProgram({
-    openStore: () => Store.open({ clock }),
+    openStore: () => Store.open(timeout !== undefined ? { clock, busyTimeoutMs: timeout } : { clock }),
     now: clock,
     io,
   });

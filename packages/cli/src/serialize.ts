@@ -2,12 +2,7 @@
  * snake_case JSON serializers for `--json` output — the scripting contract
  * (PRD §11, validated against acceptance/schemas/*.json).
  */
-import {
-  toJsonEntries,
-  type EntryView,
-  type Report,
-  type Status,
-} from '@stint/core';
+import { type Report, type Status } from '@stint/core';
 
 export function statusJson(status: Status): unknown {
   if (!status.running || !status.entry) return { running: false, entry: null };
@@ -26,10 +21,6 @@ export function statusJson(status: Status): unknown {
       slept_through: e.sleptThrough,
     },
   };
-}
-
-export function entriesJson(entries: EntryView[], now: Date): unknown {
-  return toJsonEntries(entries, now);
 }
 
 export function reportJson(report: Report): unknown {
