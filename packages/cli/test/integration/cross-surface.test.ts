@@ -71,10 +71,14 @@ describe('§17 R2: at most one entry open under concurrent start/stop from many 
     // Establish the database first so all racers share a ready WAL file.
     tt(['client', 'add', 'Client A']);
 
+    // The cooperation mechanism is the SQLite busy timeout: under BEGIN IMMEDIATE a
+    // contended writer *waits its turn* (up to the timeout) instead of erroring. Give
+    // the racers a generous timeout so the queue of 20 always drains before it — this
+    // is what makes "everyone succeeds" a guarantee rather than a timing accident
+    // (the default 5 s can be exhausted on a heavily oversubscribed CI runner).
+    const raceEnv = { ...process.env, TT_DB: db, NODE_NO_WARNINGS: '1', TT_BUSY_TIMEOUT_MS: '30000' };
     const launches = Array.from({ length: 20 }, (_, i) =>
-      execFileP('node', [BIN, 'start', `race ${i}`, '--client', 'Client A'], {
-        env: { ...process.env, TT_DB: db, NODE_NO_WARNINGS: '1' },
-      }).then(
+      execFileP('node', [BIN, 'start', `race ${i}`, '--client', 'Client A'], { env: raceEnv }).then(
         () => ({ ok: true as const, err: '' }),
         (e: { stderr?: string; message?: string }) => ({
           ok: false as const,
@@ -85,12 +89,11 @@ describe('§17 R2: at most one entry open under concurrent start/stop from many 
     const results = await Promise.all(launches);
     const failures = results.filter((r) => !r.ok);
 
-    // The real proof of cooperation: under BEGIN IMMEDIATE + busy_timeout, a contended
-    // writer waits its turn rather than erroring — so every one of the 20 succeeds and
-    // none bounces with SQLITE_BUSY.
+    // Given an adequate busy timeout, every one of the 20 succeeds and none bounces
+    // with SQLITE_BUSY / "database is locked".
     expect(failures.map((f) => f.err)).toEqual([]);
     expect(results.every((r) => r.ok)).toBe(true);
-    expect(results.filter((r) => r.err.includes('SQLITE_BUSY'))).toEqual([]);
+    expect(results.filter((r) => /SQLITE_BUSY|database is locked/.test(r.err))).toEqual([]);
 
     // And the invariant holds: exactly one open entry, DB readable, all 20 recorded
     // (each start closes the prior open one before opening its own).

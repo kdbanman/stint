@@ -150,6 +150,53 @@ describe('GOLD: tt list --json (§11)', () => {
   });
 });
 
+describe('GOLD: --project actually filters list and report (§09, §11)', () => {
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+  function seedTwoProjects(): void {
+    tt(['client', 'add', 'Client A']);
+    tt(['project', 'add', 'API', '--client', 'Client A']);
+    tt(['project', 'add', 'Web', '--client', 'Client A']);
+    tt(['add', 'api work', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:00:00Z', '--client', 'Client A', '--project', 'API']);
+    tt(['add', 'web work', '--from', '2026-06-24T10:00:00Z', '--to', '2026-06-24T11:30:00Z', '--client', 'Client A', '--project', 'Web']);
+  }
+
+  it('list --project returns only that project', () => {
+    seedTwoProjects();
+    const rows = JSON.parse(tt(['list', ...RANGE, '--project', 'API', '--json']).out);
+    expect(rows.map((e: { description: string }) => e.description)).toEqual(['api work']);
+  });
+
+  it('report --project totals only that project', () => {
+    seedTwoProjects();
+    const api = JSON.parse(tt(['report', ...RANGE, '--project', 'API', '--json']).out);
+    const web = JSON.parse(tt(['report', ...RANGE, '--project', 'Web', '--json']).out);
+    expect(api.grand_total_seconds).toBe(3600);
+    expect(web.grand_total_seconds).toBe(5400);
+  });
+
+  it('an unknown --project yields no entries, not everything (consistent list/report)', () => {
+    seedTwoProjects();
+    expect(JSON.parse(tt(['list', ...RANGE, '--project', 'Nope', '--json']).out)).toEqual([]);
+    expect(JSON.parse(tt(['report', ...RANGE, '--project', 'Nope', '--json']).out).grand_total_seconds).toBe(0);
+  });
+});
+
+describe('GOLD: config set validates (§14)', () => {
+  it('rejects a non-positive check-in interval (would otherwise hang the GUI tick)', () => {
+    const r = tt(['config', 'set', 'checkin_interval_min', '0']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/positive/);
+    // …and the stored setting is unchanged at its default.
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).checkinIntervalMin).toBe(30);
+  });
+
+  it('rejects a disallowed rounding increment', () => {
+    const r = tt(['config', 'set', 'rounding_increment_min', '7']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/one of/);
+  });
+});
+
 describe('GOLD: tt report (§09)', () => {
   it('--json validates against the report schema', () => {
     seed();

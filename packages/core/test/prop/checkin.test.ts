@@ -48,6 +48,16 @@ describe('PROP: cadence laws', () => {
   );
 });
 
+describe('evaluateCheckin is total — no infinite loop on a bad interval', () => {
+  it('a non-positive interval terminates and fires at most once', () => {
+    const s = initCheckinState(START, 60);
+    // Past the first slot with intervalMin = 0: must return (not hang) and not flood.
+    const res = evaluateCheckin(s, 0, at(600));
+    expect(res.fire).toBe(true);
+    expect(res.collapsedBacklog).toBe(0);
+  });
+});
+
 describe('cadence scenarios (§10b defaults 60 then 30)', () => {
   it('first check-in fires at start + 60 min, not before', () => {
     const s = initCheckinState(START, 60);

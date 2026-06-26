@@ -141,10 +141,13 @@ describe('PROP: billable duration arithmetic (§03)', () => {
         const fromUtc = new Date(fixedNow - durationS * 1000).toISOString();
         const toUtc = new Date(fixedNow).toISOString();
         const { value: entry } = store.add({ fromUtc, toUtc });
-        store.db
-          .prepare('UPDATE entry SET excluded_seconds = ? WHERE id = ?')
-          .run(excludedS, entry.id);
+        // Drive excluded_seconds through the real API: a recorded sleep span of
+        // exactly excludedS seconds, then subtractSleep moves it to excluded.
+        const spanEnd = new Date(Date.parse(fromUtc) + excludedS * 1000).toISOString();
+        store.recordSleepSpan(entry.id, fromUtc, spanEnd, 'event');
+        store.subtractSleep(entry.id);
         const v = store.getEntry(entry.id)!;
+        expect(v.excludedSeconds).toBe(excludedS);
         expect(v.billableSeconds).toBe(Math.max(0, v.rawSeconds - excludedS));
         expect(v.billableSeconds).toBeGreaterThanOrEqual(0);
       } finally {

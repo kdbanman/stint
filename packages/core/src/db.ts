@@ -12,7 +12,7 @@ import { dirname } from 'node:path';
 export type Db = DatabaseSync;
 
 /** The current schema version; bumped when migrations are added. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS client (
@@ -64,6 +64,14 @@ CREATE TABLE IF NOT EXISTS setting (
   value TEXT NOT NULL
 );
 
+-- Internal application state owned by the running app (check-in cadence, last-seen
+-- heartbeat) — kept in its own table so the user-facing \`setting\` table that
+-- \`config ls\` enumerates is not polluted with private keys (PRD §04, §10).
+CREATE TABLE IF NOT EXISTS app_state (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- The one-open-entry invariant (PRD §03) is given teeth at the storage layer by
 -- triggers: an INSERT or UPDATE that would leave two rows with end_utc IS NULL is
 -- aborted. @stint/core also performs every transition transactionally under
@@ -97,18 +105,22 @@ export function openDb(path: string, opts: { busyTimeoutMs?: number } = {}): Db 
     mkdirSync(dirname(path), { recursive: true });
   }
   const db = new DatabaseSync(path);
+  // Set the busy timeout FIRST, so every subsequent lock wait — the WAL switch, the
+  // one-time schema setup, and all writes — cooperates by waiting its turn instead of
+  // erroring "database is locked" under contention (PRD §04).
+  db.exec(`PRAGMA busy_timeout = ${opts.busyTimeoutMs ?? 5000}`);
   // WAL: concurrent readers, single writer (PRD §04). In-memory has no WAL.
   if (path !== ':memory:') db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
-  db.exec(`PRAGMA busy_timeout = ${opts.busyTimeoutMs ?? 5000}`);
   migrate(db);
   return db;
 }
 
 function migrate(db: Db): void {
-  db.exec(SCHEMA_SQL);
+  // Only touch the schema when it is actually behind: an up-to-date database skips all
+  // DDL, so concurrent opens don't each take a write lock just to re-assert the schema.
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  if (row.user_version < SCHEMA_VERSION) {
-    db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-  }
+  if (row.user_version >= SCHEMA_VERSION) return;
+  db.exec(SCHEMA_SQL);
+  db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

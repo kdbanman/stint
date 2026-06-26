@@ -14,7 +14,10 @@ import {
   formatHours,
   resolveRange,
   toCsv,
+  toJsonEntries,
   detectOverlaps,
+  SETTING_DESCRIPTORS,
+  settingDescriptor,
   type EntryView,
   type BillableFilter,
   type GroupBy,
@@ -27,7 +30,7 @@ import {
   entryFlags,
   shortUtc,
 } from './format.js';
-import { statusJson, entriesJson, reportJson } from './serialize.js';
+import { statusJson, reportJson } from './serialize.js';
 
 export interface Io {
   out: (s: string) => void;
@@ -95,29 +98,16 @@ function resolveAttributes(
   store: Store,
   opts: { client?: string; project?: string; tag?: string[]; bill?: boolean; noBill?: boolean },
 ): { clientId: number | null; projectId: number | null; tags: string[]; billable?: boolean } {
-  let clientId: number | null = null;
-  let projectId: number | null = null;
-  if (opts.client) clientId = store.ensureClient(opts.client).id;
-  if (opts.project) {
-    if (clientId === null) {
-      const found = store.findProjectByName(opts.project);
-      if (!found) {
-        throw new CliError(
-          `project "${opts.project}" not found; pass --client to create it under a client`,
-        );
-      }
-      projectId = found.id;
-      clientId = found.clientId;
-    } else {
-      const existing = store.findProjectByName(opts.project, clientId);
-      projectId = existing ? existing.id : store.addProject(opts.project, clientId).id;
-    }
-  }
-  const tags = opts.tag ?? [];
+  // Name resolution (create-on-demand, project⇒client) lives in core — one rule for
+  // every surface (PRD §03, §07).
+  const { clientId, projectId } = store.resolveClientProjectByName({
+    client: opts.client,
+    project: opts.project,
+  });
   const out: { clientId: number | null; projectId: number | null; tags: string[]; billable?: boolean } = {
     clientId,
     projectId,
-    tags,
+    tags: opts.tag ?? [],
   };
   // Tri-state: --bill ⇒ true, --no-bill ⇒ false, neither ⇒ undefined (use the default).
   if (opts.bill !== undefined) out.billable = opts.bill;
@@ -126,6 +116,33 @@ function resolveAttributes(
 
 function printWarnings(io: Io, warnings: { message: string }[]): void {
   for (const w of warnings) io.err(`warning: ${w.message}`);
+}
+
+/**
+ * The shared `--json | empty | table` output contract for every list command, so the
+ * scripting shape and the empty-state message are defined once rather than re-hand-rolled
+ * in `list`, `client ls`, `project ls`, and `sleep ls`.
+ */
+function emitList<T>(
+  io: Io,
+  json: boolean | undefined,
+  spec: {
+    items: T[];
+    toJson: (items: T[]) => unknown;
+    empty: string;
+    headers: string[];
+    toRow: (item: T) => string[];
+  },
+): void {
+  if (json) {
+    io.out(JSON.stringify(spec.toJson(spec.items)));
+    return;
+  }
+  if (spec.items.length === 0) {
+    io.out(spec.empty);
+    return;
+  }
+  io.out(table(spec.headers, spec.items.map(spec.toRow)));
 }
 
 function resolveEntityRef(
@@ -281,12 +298,18 @@ export function buildProgram(deps: Deps): Command {
         if (opts.desc !== undefined) patch.description = opts.desc;
         if (opts.from) patch.startUtc = parseTime(opts.from, now());
         if (opts.to) patch.endUtc = parseTime(opts.to, now());
-        if (opts.client) patch.clientId = store.ensureClient(opts.client).id;
         if (opts.project) {
-          const clientId = patch.clientId ?? store.getEntry(Number(id))?.clientId ?? null;
-          if (clientId === null) throw new CliError('--project needs a client context (--client)');
-          const existing = store.findProjectByName(opts.project, clientId);
-          patch.projectId = existing ? existing.id : store.addProject(opts.project, clientId).id;
+          // Resolving a project also fixes the client (project⇒client); the entry's
+          // current client is the fallback when --client is not given.
+          const resolved = store.resolveClientProjectByName({
+            client: opts.client,
+            project: opts.project,
+            fallbackClientId: store.getEntry(Number(id))?.clientId ?? null,
+          });
+          patch.clientId = resolved.clientId;
+          patch.projectId = resolved.projectId;
+        } else if (opts.client) {
+          patch.clientId = store.ensureClient(opts.client).id;
         }
         if (opts.bill !== undefined) patch.billable = opts.bill;
         if (opts.tag?.length) patch.addTags = opts.tag;
@@ -320,12 +343,13 @@ export function buildProgram(deps: Deps): Command {
     .action((ids: string[], opts) => {
       withStore((store) => {
         const mergeOpts: Parameters<Store['merge']>[1] = {};
-        if (opts.client) mergeOpts.clientId = store.ensureClient(opts.client).id;
-        if (opts.project) {
-          const clientId = mergeOpts.clientId ?? null;
-          if (clientId === null) throw new CliError('--project needs --client to resolve');
-          const existing = store.findProjectByName(opts.project, clientId);
-          mergeOpts.projectId = existing ? existing.id : store.addProject(opts.project, clientId).id;
+        if (opts.client || opts.project) {
+          const resolved = store.resolveClientProjectByName({
+            client: opts.client,
+            project: opts.project,
+          });
+          mergeOpts.clientId = resolved.clientId;
+          if (opts.project) mergeOpts.projectId = resolved.projectId;
         }
         const res = store.merge(ids.map(Number), mergeOpts);
         printWarnings(io, res.warnings);
@@ -379,41 +403,36 @@ export function buildProgram(deps: Deps): Command {
           filter.fromUtc = range.fromUtc;
           filter.toUtc = range.toUtc;
         }
+        const emptyList = (): void => io.out(opts.json ? '[]' : 'no entries');
         if (opts.client) {
           const c = store.findClientByName(opts.client);
-          if (c) filter.clientId = c.id;
-          else {
-            if (opts.json) io.out('[]');
-            else io.out('no entries');
-            return;
-          }
+          if (!c) return emptyList();
+          filter.clientId = c.id;
+        }
+        if (opts.project) {
+          const p = store.findProjectByName(opts.project, filter.clientId);
+          if (!p) return emptyList();
+          filter.projectId = p.id;
         }
         if (opts.tag) filter.tag = opts.tag;
         const entries = store.listEntries(filter);
-        if (opts.json) {
-          io.out(JSON.stringify(entriesJson(entries, now())));
-          return;
-        }
-        if (entries.length === 0) {
-          io.out('no entries');
-          return;
-        }
         const overlaps = detectOverlaps(entries, now());
-        io.out(
-          table(
-            ['ID', 'START', 'END', 'DUR', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'FLAGS'],
-            entries.map((e) => [
-              String(e.id),
-              shortUtc(e.startUtc),
-              shortUtc(e.endUtc),
-              formatDuration(e.billableSeconds),
-              clientProjectLabel(e),
-              e.description ?? '',
-              e.billable ? 'yes' : 'no',
-              entryFlags(e, overlaps.has(e.id)),
-            ]),
-          ),
-        );
+        emitList(io, opts.json, {
+          items: entries,
+          toJson: (es) => toJsonEntries(es, now()),
+          empty: 'no entries',
+          headers: ['ID', 'START', 'END', 'DUR', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'FLAGS'],
+          toRow: (e) => [
+            String(e.id),
+            shortUtc(e.startUtc),
+            shortUtc(e.endUtc),
+            formatDuration(e.billableSeconds),
+            clientProjectLabel(e),
+            e.description ?? '',
+            e.billable ? 'yes' : 'no',
+            entryFlags(e, overlaps.has(e.id)),
+          ],
+        });
       });
     });
 
@@ -458,9 +477,13 @@ export function buildProgram(deps: Deps): Command {
           rounding,
           roundingIncrementMin,
         };
+        // Unknown --client/--project means "no matching entries" — consistent with
+        // `list`, not "report everything" (a -1 id matches nothing).
         if (opts.client) {
-          const c = store.findClientByName(opts.client);
-          if (c) req.clientId = c.id;
+          req.clientId = store.findClientByName(opts.client)?.id ?? -1;
+        }
+        if (opts.project) {
+          req.projectId = store.findProjectByName(opts.project, req.clientId)?.id ?? -1;
         }
         if (opts.tag) req.tag = opts.tag;
         const report = store.report(req);
@@ -487,7 +510,9 @@ export function buildProgram(deps: Deps): Command {
     .description('Raw entries for a range')
     .option('--today', 'today')
     .option('--week', 'this week')
+    .option('--last-week', 'last week')
     .option('--month', 'this month')
+    .option('--last-month', 'last month')
     .option('--range <from...>', 'custom range: FROM TO')
     .option('--csv', 'CSV output (default)')
     .option('--json', 'JSON output')
@@ -502,7 +527,7 @@ export function buildProgram(deps: Deps): Command {
           billable: 'all',
         });
         const payload = opts.json
-          ? JSON.stringify(entriesJson(entries, now()), null, 2)
+          ? JSON.stringify(toJsonEntries(entries, now()), null, 2)
           : toCsv(entries, now());
         if (opts.output) {
           writeFileSync(opts.output, payload.endsWith('\n') ? payload : payload + '\n');
@@ -543,23 +568,15 @@ export function buildProgram(deps: Deps): Command {
     .option('--archived', 'include archived')
     .option('--json', 'machine-readable output')
     .action((opts) =>
-      withStore((s) => {
-        const clients = s.listClients(!!opts.archived);
-        if (opts.json) {
-          io.out(JSON.stringify(clients.map((c) => ({ id: c.id, name: c.name, archived: c.archived }))));
-          return;
-        }
-        if (clients.length === 0) {
-          io.out('no clients');
-          return;
-        }
-        io.out(
-          table(
-            ['ID', 'NAME', 'ARCHIVED'],
-            clients.map((c) => [String(c.id), c.name, c.archived ? 'yes' : '']),
-          ),
-        );
-      }),
+      withStore((s) =>
+        emitList(io, opts.json, {
+          items: s.listClients(!!opts.archived),
+          toJson: (cs) => cs.map((c) => ({ id: c.id, name: c.name, archived: c.archived })),
+          empty: 'no clients',
+          headers: ['ID', 'NAME', 'ARCHIVED'],
+          toRow: (c) => [String(c.id), c.name, c.archived ? 'yes' : ''],
+        }),
+      ),
     );
 
   // --------------------------------------------------------------- project
@@ -601,25 +618,14 @@ export function buildProgram(deps: Deps): Command {
     .action((opts) =>
       withStore((s) => {
         const clientId = opts.client ? s.findClientByName(opts.client)?.id : undefined;
-        const projects = s.listProjects(clientId, !!opts.archived);
-        if (opts.json) {
-          io.out(
-            JSON.stringify(
-              projects.map((p) => ({ id: p.id, client_id: p.clientId, name: p.name, archived: p.archived })),
-            ),
-          );
-          return;
-        }
-        if (projects.length === 0) {
-          io.out('no projects');
-          return;
-        }
-        io.out(
-          table(
-            ['ID', 'NAME', 'CLIENT_ID', 'ARCHIVED'],
-            projects.map((p) => [String(p.id), p.name, String(p.clientId), p.archived ? 'yes' : '']),
-          ),
-        );
+        emitList(io, opts.json, {
+          items: s.listProjects(clientId, !!opts.archived),
+          toJson: (ps) =>
+            ps.map((p) => ({ id: p.id, client_id: p.clientId, name: p.name, archived: p.archived })),
+          empty: 'no projects',
+          headers: ['ID', 'NAME', 'CLIENT_ID', 'ARCHIVED'],
+          toRow: (p) => [String(p.id), p.name, String(p.clientId), p.archived ? 'yes' : ''],
+        });
       }),
     );
 
@@ -629,42 +635,31 @@ export function buildProgram(deps: Deps): Command {
     .command('ls', { isDefault: true })
     .option('--json', 'machine-readable output')
     .action((opts) =>
-      withStore((s) => {
-        const flagged = s.listSleepFlagged();
-        if (opts.json) {
-          io.out(
-            JSON.stringify(
-              flagged.map((e) => ({
-                id: e.id,
-                description: e.description,
-                excluded_s: e.excludedSeconds,
-                spans: e.sleepSpans.map((sp) => ({
-                  sleep_utc: sp.sleepUtc,
-                  wake_utc: sp.wakeUtc,
-                  source: sp.source,
-                })),
+      withStore((s) =>
+        emitList(io, opts.json, {
+          items: s.listSleepFlagged(),
+          toJson: (es) =>
+            es.map((e) => ({
+              id: e.id,
+              description: e.description,
+              excluded_s: e.excludedSeconds,
+              spans: e.sleepSpans.map((sp) => ({
+                sleep_utc: sp.sleepUtc,
+                wake_utc: sp.wakeUtc,
+                source: sp.source,
               })),
-            ),
-          );
-          return;
-        }
-        if (flagged.length === 0) {
-          io.out('no sleep-flagged entries');
-          return;
-        }
-        io.out(
-          table(
-            ['ID', 'DESCRIPTION', 'SPANS', 'EXCLUDED', 'SOURCES'],
-            flagged.map((e) => [
-              String(e.id),
-              e.description ?? '',
-              String(e.sleepSpans.length),
-              formatDuration(e.excludedSeconds),
-              [...new Set(e.sleepSpans.map((sp) => sp.source))].join(','),
-            ]),
-          ),
-        );
-      }),
+            })),
+          empty: 'no sleep-flagged entries',
+          headers: ['ID', 'DESCRIPTION', 'SPANS', 'EXCLUDED', 'SOURCES'],
+          toRow: (e) => [
+            String(e.id),
+            e.description ?? '',
+            String(e.sleepSpans.length),
+            formatDuration(e.excludedSeconds),
+            [...new Set(e.sleepSpans.map((sp) => sp.source))].join(','),
+          ],
+        }),
+      ),
     );
   sleep
     .command('subtract')
@@ -696,14 +691,7 @@ export function buildProgram(deps: Deps): Command {
         io.out(
           table(
             ['SETTING', 'VALUE'],
-            [
-              ['rounding', String(st.rounding)],
-              ['rounding_increment_min', String(st.roundingIncrementMin)],
-              ['week_start', st.weekStart],
-              ['first_checkin_min', String(st.firstCheckinMin)],
-              ['checkin_interval_min', String(st.checkinIntervalMin)],
-              ['global_hotkey', st.globalHotkey],
-            ],
+            SETTING_DESCRIPTORS.map((d) => [d.snake, String(st[d.key])]),
           ),
         );
       }),
@@ -737,28 +725,16 @@ function normalizeRange(opts: Record<string, unknown>): RangeOpts {
 }
 
 function applySetting(store: Store, key: string, value: string): void {
-  switch (key) {
-    case 'rounding':
-      store.setSetting('rounding', value === 'true' || value === 'on');
-      break;
-    case 'rounding_increment_min':
-      store.setSetting('roundingIncrementMin', Number(value));
-      break;
-    case 'week_start':
-      if (value !== 'monday' && value !== 'sunday') throw new CliError('week_start must be monday or sunday');
-      store.setSetting('weekStart', value);
-      break;
-    case 'first_checkin_min':
-      store.setSetting('firstCheckinMin', Number(value));
-      break;
-    case 'checkin_interval_min':
-      store.setSetting('checkinIntervalMin', Number(value));
-      break;
-    case 'global_hotkey':
-      store.setSetting('globalHotkey', value);
-      break;
-    default:
-      throw new CliError(`unknown setting "${key}"`);
+  const d = settingDescriptor(key);
+  if (!d) throw new CliError(`unknown setting "${key}"`);
+  const parsed = d.parse(value);
+  if (parsed === undefined) throw new CliError(`invalid value for ${key}: "${value}"`);
+  try {
+    // setSetting → writeSetting runs the descriptor's validation (allowed increments,
+    // positive minutes, week-start domain).
+    store.setSetting(d.key, parsed as never);
+  } catch (err) {
+    throw new CliError((err as Error).message);
   }
 }
 

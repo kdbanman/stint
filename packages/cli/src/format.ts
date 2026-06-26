@@ -2,7 +2,7 @@
  * Human-readable output helpers for tt. Monochrome, table-based, no color codes so
  * output is stable for golden comparison and pipe-friendly.
  */
-import { formatDuration, type EntryView } from '@stint/core';
+import { formatDuration, joinClientProject, type EntryView } from '@stint/core';
 
 /** Render a left-aligned table with a 2-space gutter. */
 export function table(headers: string[], rows: string[][]): string {
@@ -18,10 +18,7 @@ export function table(headers: string[], rows: string[][]): string {
 
 /** A short label for an entry's client/project, e.g. "Client A / API" or "—". */
 export function clientProjectLabel(e: EntryView): string {
-  if (e.clientName && e.projectName) return `${e.clientName} / ${e.projectName}`;
-  if (e.clientName) return e.clientName;
-  if (e.projectName) return e.projectName;
-  return '—';
+  return joinClientProject(e.clientName, e.projectName) ?? '—';
 }
 
 /** Flags shown against an entry in lists/reports (PRD §06, §10). */

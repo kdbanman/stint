@@ -21,6 +21,7 @@ import {
 } from './settings.js';
 import {
   buildReport,
+  spansOverlap,
   type Report,
   type ReportOptions,
   type BillableFilter,
@@ -78,15 +79,36 @@ export class StoreError extends Error {
 }
 
 export class Store {
+  /**
+   * Prepared-statement cache. `toView`/`listEntries` run the same handful of lookups
+   * per row, so re-`prepare()`-ing them each time is pure waste; cache by SQL text.
+   */
+  private readonly stmtCache = new Map<string, ReturnType<Db['prepare']>>();
+
   private constructor(
-    readonly db: Db,
+    private readonly db: Db,
     private readonly clock: Clock,
   ) {}
 
+  /** A cached prepared statement for a fixed SQL string (hot read paths). */
+  private stmt(sql: string): ReturnType<Db['prepare']> {
+    let s = this.stmtCache.get(sql);
+    if (!s) {
+      s = this.db.prepare(sql);
+      this.stmtCache.set(sql, s);
+    }
+    return s;
+  }
+
   /** Open the store at the resolved path (TT_DB or per-OS default). */
-  static open(opts: { path?: string; clock?: Clock; userDataDir?: string } = {}): Store {
+  static open(
+    opts: { path?: string; clock?: Clock; userDataDir?: string; busyTimeoutMs?: number } = {},
+  ): Store {
     const path = opts.path ?? resolveDbPath(process.env, opts.userDataDir);
-    return new Store(openDb(path), opts.clock ?? systemClock);
+    return new Store(
+      openDb(path, opts.busyTimeoutMs !== undefined ? { busyTimeoutMs: opts.busyTimeoutMs } : {}),
+      opts.clock ?? systemClock,
+    );
   }
 
   /** Open an in-memory store (tests). */
@@ -122,9 +144,7 @@ export class Store {
 
   /** The currently open entry (end IS NULL), or null. */
   openEntry(): EntryView | null {
-    const row = this.db
-      .prepare('SELECT * FROM entry WHERE end_utc IS NULL')
-      .get() as EntryRow | undefined;
+    const row = this.stmt('SELECT * FROM entry WHERE end_utc IS NULL').get() as EntryRow | undefined;
     return row ? this.toView(row) : null;
   }
 
@@ -442,13 +462,47 @@ export class Store {
     return this.findClientByName(name) ?? this.addClient(name);
   }
 
+  /**
+   * Resolve free-text client/project names to ids — the single rule every surface
+   * needs (PRD §03, §07), so the CLI, the GUI, and the test harness don't each
+   * re-derive it. A named client is created on demand; a named project is found under
+   * the resolved client (or created there); a project named *without* a client must
+   * already exist, and its client then becomes authoritative. `fallbackClientId`
+   * supplies an existing client context when no client name is given (e.g. editing an
+   * entry that already has a client).
+   */
+  resolveClientProjectByName(opts: {
+    client?: string;
+    project?: string;
+    fallbackClientId?: number | null;
+  }): { clientId: number | null; projectId: number | null } {
+    const clientId: number | null = opts.client
+      ? this.ensureClient(opts.client).id
+      : (opts.fallbackClientId ?? null);
+    if (!opts.project) return { clientId, projectId: null };
+    if (clientId === null) {
+      const found = this.findProjectByName(opts.project);
+      if (!found) {
+        throw new StoreError(
+          `project "${opts.project}" not found; name a client to create it under one`,
+        );
+      }
+      return { clientId: found.clientId, projectId: found.id };
+    }
+    const existing = this.findProjectByName(opts.project, clientId);
+    return { clientId, projectId: existing ? existing.id : this.addProject(opts.project, clientId).id };
+  }
+
   addProject(name: string, clientId: number): Project {
-    this.requireClient(clientId);
-    const id = Number(
-      this.db.prepare('INSERT INTO project(client_id, name) VALUES(?, ?)').run(clientId, name)
-        .lastInsertRowid,
-    );
-    return { id, clientId, name, archived: false };
+    // Atomic: the client-exists check and the insert must not straddle another write.
+    return this.tx(() => {
+      this.requireClient(clientId);
+      const id = Number(
+        this.db.prepare('INSERT INTO project(client_id, name) VALUES(?, ?)').run(clientId, name)
+          .lastInsertRowid,
+      );
+      return { id, clientId, name, archived: false };
+    });
   }
 
   renameProject(id: number, name: string): void {
@@ -513,22 +567,23 @@ export class Store {
     wakeUtc: string,
     source: SleepSource,
   ): SleepSpan {
-    this.requireEntry(entryId);
-    const id = Number(
-      this.db
-        .prepare('INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) VALUES(?,?,?,?)')
-        .run(entryId, sleepUtc, wakeUtc, source).lastInsertRowid,
-    );
-    return { id, entryId, sleepUtc, wakeUtc, source };
+    // Atomic: the entry-exists check and the span insert are one unit.
+    return this.tx(() => {
+      this.requireEntry(entryId);
+      const id = Number(
+        this.db
+          .prepare('INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) VALUES(?,?,?,?)')
+          .run(entryId, sleepUtc, wakeUtc, source).lastInsertRowid,
+      );
+      return { id, entryId, sleepUtc, wakeUtc, source };
+    });
   }
 
   sleepSpansFor(entryId: number): SleepSpan[] {
     return (
-      this.db
-        .prepare(
-          'SELECT id, entry_id, sleep_utc, wake_utc, source FROM sleep_span WHERE entry_id = ? ORDER BY sleep_utc',
-        )
-        .all(entryId) as {
+      this.stmt(
+        'SELECT id, entry_id, sleep_utc, wake_utc, source FROM sleep_span WHERE entry_id = ? ORDER BY sleep_utc',
+      ).all(entryId) as {
         id: number;
         entry_id: number;
         sleep_utc: string;
@@ -602,12 +657,34 @@ export class Store {
     writeSetting(this.db, key, value);
   }
 
+  // -------------------------------------------------------------- app state
+
+  /**
+   * Private application state owned by the running app (check-in cadence, last-seen
+   * heartbeat) — kept in its own `app_state` table, behind the store, so the GUI need
+   * not reach into the database and the user-facing `setting` table stays clean.
+   */
+  getAppState(key: string): string | null {
+    const row = this.stmt('SELECT value FROM app_state WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
+    return row?.value ?? null;
+  }
+
+  setAppState(key: string, value: string): void {
+    this.stmt(
+      'INSERT INTO app_state(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    ).run(key, value);
+  }
+
+  deleteAppState(key: string): void {
+    this.stmt('DELETE FROM app_state WHERE key = ?').run(key);
+  }
+
   // ---------------------------------------------------------------- internals
 
   private requireEntry(id: number): EntryRow {
-    const row = this.db.prepare('SELECT * FROM entry WHERE id = ?').get(id) as
-      | EntryRow
-      | undefined;
+    const row = this.stmt('SELECT * FROM entry WHERE id = ?').get(id) as EntryRow | undefined;
     if (!row) throw new StoreError(`no entry with id ${id}`);
     return row;
   }
@@ -687,11 +764,9 @@ export class Store {
 
   private tagsFor(entryId: number): string[] {
     return (
-      this.db
-        .prepare(
-          'SELECT t.name FROM tag t JOIN entry_tag et ON et.tag_id = t.id WHERE et.entry_id = ? ORDER BY t.name',
-        )
-        .all(entryId) as { name: string }[]
+      this.stmt(
+        'SELECT t.name FROM tag t JOIN entry_tag et ON et.tag_id = t.id WHERE et.entry_id = ? ORDER BY t.name',
+      ).all(entryId) as { name: string }[]
     ).map((r) => r.name);
   }
 
@@ -702,12 +777,12 @@ export class Store {
   private toView(row: EntryRow): EntryView {
     const now = this.now();
     const clientName = row.client_id
-      ? ((this.db.prepare('SELECT name FROM client WHERE id = ?').get(row.client_id) as
+      ? ((this.stmt('SELECT name FROM client WHERE id = ?').get(row.client_id) as
           | { name: string }
           | undefined)?.name ?? null)
       : null;
     const projectName = row.project_id
-      ? ((this.db.prepare('SELECT name FROM project WHERE id = ?').get(row.project_id) as
+      ? ((this.stmt('SELECT name FROM project WHERE id = ?').get(row.project_id) as
           | { name: string }
           | undefined)?.name ?? null)
       : null;
@@ -740,7 +815,7 @@ export class Store {
     const nowIso = toUtc(this.now());
     const start = row.start_utc;
     const end = row.end_utc ?? nowIso;
-    const others = this.db.prepare('SELECT id, start_utc, end_utc FROM entry WHERE id <> ?').all(id) as {
+    const others = this.stmt('SELECT id, start_utc, end_utc FROM entry WHERE id <> ?').all(id) as {
       id: number;
       start_utc: string;
       end_utc: string | null;
@@ -748,11 +823,9 @@ export class Store {
     const s = Date.parse(start);
     const e = Date.parse(end);
     return others
-      .filter((o) => {
-        const os = Date.parse(o.start_utc);
-        const oe = o.end_utc ? Date.parse(o.end_utc) : Date.parse(nowIso);
-        return s < oe && os < e;
-      })
+      .filter((o) =>
+        spansOverlap(s, e, Date.parse(o.start_utc), o.end_utc ? Date.parse(o.end_utc) : Date.parse(nowIso)),
+      )
       .map((o) => o.id);
   }
 

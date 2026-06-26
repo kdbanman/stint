@@ -61,8 +61,12 @@ export function evaluateCheckin(
   const stepMs = intervalMin * MIN;
   // Smallest nominal slot strictly greater than now: advances past every slot that
   // came due (whether ignored, or missed while closed/asleep) but fires only once.
+  // Guard against a non-positive interval (which would never advance) — the loop must
+  // make progress. Settings validation rejects this, but defend the pure function too.
   let k = 1;
-  while (nextDueMs + k * stepMs <= nowMs) k++;
+  if (stepMs > 0) {
+    while (nextDueMs + k * stepMs <= nowMs) k++;
+  }
   const collapsedBacklog = k - 1;
 
   const nextDueUtc =
