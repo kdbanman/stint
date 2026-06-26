@@ -1,0 +1,36 @@
+{
+  "suite": "JUDGE — GUI presentation & discoverability",
+  "generatedAt": "2026-06-26T01:13:26.542Z",
+  "results": [
+    {
+      "item": "EMPTY_STATE",
+      "pass": true,
+      "justification": "empty state reads: \"No entries yetPress Ctrl+Alt+T or run tt start to begin.\"",
+      "screenshot": "main-empty.png"
+    },
+    {
+      "item": "TRAY_COUNTUP",
+      "pass": true,
+      "justification": "popover count advanced 01:24:07 → 01:24:10 (+3s)",
+      "screenshot": "popover-running-2.png"
+    },
+    {
+      "item": "ACCENT_DISCIPLINE",
+      "pass": true,
+      "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237) dayHead=rgb(118, 118, 127)",
+      "screenshot": "main-running.png"
+    },
+    {
+      "item": "FLAG_IN_CONTEXT",
+      "pass": true,
+      "justification": "overlap flag on row, slept flag + subtract on slept row: {\"overlapFlag\":true,\"sleptFlag\":true,\"subtractBtn\":true}",
+      "screenshot": "main-flags.png"
+    },
+    {
+      "item": "DESKTOP_FEEL",
+      "pass": true,
+      "justification": "screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)",
+      "screenshot": "main-running.png"
+    }
+  ]
+}

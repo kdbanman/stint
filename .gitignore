@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.tsbuildinfo
+coverage/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
+acceptance/evidence/tmp/
+packages/gui/screenshots/tmp/

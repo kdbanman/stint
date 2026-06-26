@@ -1,0 +1,211 @@
+/**
+ * GOLD — the tt machine contract (acceptance.html §08). The artefact is the
+ * criterion: exact stdout, exit codes, and the --json shapes validated against the
+ * published JSON Schemas (PRD §11, §13, §14).
+ *
+ * Requires the CLI to be built (packages/cli/dist).
+ */
+import { describe, it, expect, beforeEach } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Ajv } from 'ajv';
+import addFormatsImport from 'ajv-formats';
+// ajv-formats ships a CJS default export; cast to its callable shape for NodeNext.
+const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
+
+const BIN = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
+const schema = (name: string) =>
+  JSON.parse(
+    readFileSync(fileURLToPath(new URL(`../../../../acceptance/schemas/${name}`, import.meta.url)), 'utf8'),
+  );
+/** A fresh validator each call (Ajv refuses to register a $id twice). */
+const validator = (name: string) =>
+  addFormats(new Ajv({ allErrors: true })).compile(schema(name));
+
+let dir: string;
+let db: string;
+
+beforeEach(() => {
+  dir = mkdtempSync(join(tmpdir(), 'stint-gold-'));
+  db = join(dir, 'tt.sqlite');
+  return () => rmSync(dir, { recursive: true, force: true });
+});
+
+function tt(args: string[], now = '2026-06-24T10:24:07Z'): { out: string; err: string; code: number } {
+  const res = spawnSync('node', [BIN, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, TT_DB: db, TT_NOW: now, NODE_NO_WARNINGS: '1' },
+  });
+  return { out: (res.stdout ?? '').trimEnd(), err: (res.stderr ?? '').trimEnd(), code: res.status ?? 0 };
+}
+
+function seed(): void {
+  tt(['client', 'add', 'Client A']);
+  tt(['project', 'add', 'API', '--client', 'Client A']);
+  tt([
+    'add',
+    'auth refactor',
+    '--from',
+    '2026-06-24T09:00:00Z',
+    '--to',
+    '2026-06-24T10:30:00Z',
+    '--client',
+    'Client A',
+    '--project',
+    'API',
+    '--tag',
+    'deep',
+  ]);
+}
+
+describe('GOLD: tt status (§11)', () => {
+  it('reports nothing running, exit 0', () => {
+    const r = tt(['status']);
+    expect(r.out).toBe('nothing running');
+    expect(r.code).toBe(0);
+  });
+
+  it('reports a running entry with derived elapsed, exit 0', () => {
+    tt(['start', 'auth refactor', '--client', 'Client A', '--project', 'API', '--at', '2026-06-24T09:00:00Z']);
+    const r = tt(['status'], '2026-06-24T10:24:07Z');
+    expect(r.out).toBe('▸ running 01:24:07 · "auth refactor" · Client A / API');
+    expect(r.code).toBe(0);
+  });
+
+  it('--json validates against the status schema', () => {
+    tt(['start', 'auth refactor', '--client', 'Client A', '--at', '2026-06-24T09:00:00Z']);
+    const r = tt(['status', '--json'], '2026-06-24T10:24:07Z');
+    const json = JSON.parse(r.out);
+    const validate = validator('status.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toMatchObject({ running: true, entry: { elapsed_seconds: 5047, billable: true } });
+  });
+
+  it('--json reports nothing running as a valid empty status', () => {
+    const r = tt(['status', '--json']);
+    const validate = validator('status.schema.json');
+    const json = JSON.parse(r.out);
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toEqual({ running: false, entry: null });
+  });
+});
+
+describe('GOLD: tt rm refusal (§06)', () => {
+  it('refuses without --force and exits non-zero on stderr', () => {
+    seed();
+    const r = tt(['rm', '1']);
+    expect(r.err).toBe('refusing to delete entry 1 without confirmation; pass --force');
+    expect(r.out).toBe('');
+    expect(r.code).toBe(2);
+  });
+
+  it('deletes with --force, exit 0', () => {
+    seed();
+    const r = tt(['rm', '1', '--force']);
+    expect(r.out).toBe('deleted entry 1');
+    expect(r.code).toBe(0);
+  });
+});
+
+describe('GOLD: tt export (§09 R6)', () => {
+  it('CSV header and row match the column contract', () => {
+    seed();
+    const r = tt(['export', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--csv']);
+    expect(r.out).toMatchInlineSnapshot(`
+      "client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped
+      Client A,API,deep,auth refactor,2026-06-24T09:00:00Z,2026-06-24T10:30:00Z,5400,0,true,false"
+    `);
+    expect(r.code).toBe(0);
+  });
+
+  it('--json validates against the export-entry schema', () => {
+    seed();
+    const r = tt(['export', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--json']);
+    const json = JSON.parse(r.out);
+    const validate = validator('export-entry.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+  });
+});
+
+describe('GOLD: tt report (§09)', () => {
+  it('--json validates against the report schema', () => {
+    seed();
+    const r = tt(['report', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--json']);
+    const json = JSON.parse(r.out);
+    const validate = validator('report.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json.grand_total_seconds).toBe(5400);
+  });
+
+  it('human report groups client → project with totals', () => {
+    seed();
+    const r = tt(['report', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z']);
+    expect(r.out).toMatchInlineSnapshot(`
+      "Report  2026-06-24T00:00:00Z → 2026-06-25T00:00:00Z  (billable, by client)
+
+      Client A                    01:30:00  (1.50h)
+        API                       01:30:00  (1.50h)
+
+      Total                       01:30:00  (1.50h)"
+    `);
+  });
+
+  it('rounding rounds the grouped line, nearest increment', () => {
+    tt(['client', 'add', 'Client A']);
+    // 1h05m → nearest 15m = 1h00m (3600s).
+    tt(['add', 'work', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:05:00Z', '--client', 'Client A']);
+    const r = tt(['report', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--round', '15', '--json']);
+    const json = JSON.parse(r.out);
+    expect(json.grand_total_seconds).toBe(3900);
+    expect(json.grand_rounded_seconds).toBe(3600);
+  });
+});
+
+describe('GOLD: settings defaults (§14)', () => {
+  it('a fresh database reads back the documented defaults', () => {
+    const r = tt(['config', 'ls']);
+    expect(r.out).toMatchInlineSnapshot(`
+      "SETTING                 VALUE
+      rounding                false
+      rounding_increment_min  15
+      week_start              monday
+      first_checkin_min       60
+      checkin_interval_min    30
+      global_hotkey           CommandOrControl+Alt+T"
+    `);
+  });
+
+  it('--json reads back the defaults object', () => {
+    const r = tt(['config', 'ls', '--json']);
+    expect(JSON.parse(r.out)).toEqual({
+      rounding: false,
+      roundingIncrementMin: 15,
+      weekStart: 'monday',
+      firstCheckinMin: 60,
+      checkinIntervalMin: 30,
+      globalHotkey: 'CommandOrControl+Alt+T',
+    });
+  });
+});
+
+describe('GOLD: overlap warning on stderr (§06 R4)', () => {
+  it('warns but allows an overlapping backfill, exit 0', () => {
+    tt(['add', 'morning', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T11:00:00Z']);
+    const r = tt(['add', 'call', '--from', '2026-06-24T10:00:00Z', '--to', '2026-06-24T10:30:00Z']);
+    expect(r.code).toBe(0);
+    expect(r.err).toContain('overlaps');
+    expect(r.out).toContain('added entry');
+  });
+});
+
+describe('GOLD: time-argument parsing (§11)', () => {
+  it('accepts a relative stop time', () => {
+    tt(['start', 'work', '--at', '2026-06-24T09:00:00Z']);
+    // now is 10:24:07; -1h ⇒ 09:24:07.
+    const r = tt(['stop', '--at', '-1h'], '2026-06-24T10:24:07Z');
+    expect(r.out).toBe('stopped 00:24:07 · —');
+  });
+});

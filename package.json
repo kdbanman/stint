@@ -1,0 +1,47 @@
+{
+  "name": "stint",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cross-platform desktop time tracker — Electron tray app + tt CLI over one local SQLite database.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/cli",
+    "packages/gui"
+  ],
+  "scripts": {
+    "build": "tsc --build tsconfig.build.json",
+    "clean": "tsc --build tsconfig.build.json --clean",
+    "tt": "node packages/cli/dist/bin.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:prop": "vitest run packages/core/test/prop",
+    "test:gold": "vitest run packages/core/test/gold packages/cli/test/gold",
+    "test:bdd": "vitest run packages/core/test/bdd",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "eslint .",
+    "evidence": "node scripts/generate-evidence.mjs",
+    "verify:no-network": "node scripts/check-no-network.mjs",
+    "judge": "node packages/gui/judge/run-judge.mjs",
+    "gui": "electron packages/gui"
+  },
+  "devDependencies": {
+    "@cucumber/gherkin": "^41.0.0",
+    "@cucumber/messages": "^33.0.3",
+    "@eslint/js": "^9.39.4",
+    "@fast-check/vitest": "^0.2.4",
+    "@types/node": "^22.10.2",
+    "@vitest/coverage-v8": "^4.0.18",
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "eslint": "^9.17.0",
+    "fast-check": "^3.23.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "^4.0.18"
+  }
+}
