@@ -120,6 +120,52 @@ capability to its `tt` command.
 - [`acceptance/evidence/judge-report.json`](acceptance/evidence/judge-report.json) —
   per-rubric PASS/FAIL with justifications.
 
+## Driving PRD coverage (Claude Code workflow)
+
+Every requirement in [`prd.html`](prd.html) carries a status badge — `implemented`,
+`partial`, or `todo` (see §17). To close the open ones systematically there is a
+[Claude Code](https://code.claude.com/docs/en/workflows) **workflow** at
+[`.claude/workflows/stint-prd-coverage.js`](.claude/workflows/stint-prd-coverage.js).
+It orchestrates a fleet of subagents through seven phases:
+
+1. **Inventory** — parse `prd.html`'s status fields + `COVERAGE.md` into a work-list of every `todo`/`partial` requirement.
+2. **Plan** — one agent per requirement returns its exact file set + implementation/AC/evidence plan.
+3. **Implement** — schedule packages into dependency-ordered, **file-disjoint waves** (so parallel agents never edit the same file); each wave is build/test-verified with a bounded repair loop.
+4. **Cover** — extend the five AC methods plus `parity-matrix.json` and the `COVERAGE.md` index.
+5. **Evidence** — regenerate everything (`build`, `test`, `verify:no-network`, `judge`, `evidence`).
+6. **Verify** — adversarial completeness critics, one per requirement, defaulting to *incomplete* unless implemented **and** covered by a passing AC **and** reflected in evidence; loop-until-dry repair.
+7. **Finalize** — flip the proven requirements' badges to `implemented`, refresh `COVERAGE.md`, and do a final green check.
+
+### Invoking it in Claude Code
+
+The workflow is opt-in (it spawns many agents and edits the repo), so you ask Claude to run it:
+
+```text
+use a workflow to run stint-prd-coverage
+```
+
+Once Claude has run it once you can save it as a slash command and invoke it as
+`/stint-prd-coverage`. Watch live progress — phases, agents, token spend — with `/workflows`;
+pause/resume and stop individual agents from there. A paused run resumes within the same
+session with completed agents cached.
+
+### Scoping a run with `scopeTo`
+
+A full sweep is large. Pass **`args`** to scope a run to a subset of requirements — for a
+cheap calibration pass, or to stage coverage as a sequence of small, reviewable runs (there is
+no mid-run input, so each scoped run completes and you review the diff before the next):
+
+```text
+use a workflow to run stint-prd-coverage scoped to ["§09 search", "§12 R8"]
+```
+
+`args` may be a string, an array of strings, or `{ scopeTo: [...] }`. Each token is matched
+case-insensitively as a substring against `"<reqId> <section> <title>"`, so `"§12 R8"`,
+`"search"`, and `"settings"` all select requirements. Omit `args` for the full sweep — which is
+also the right final step, letting the completeness critics re-check the whole PRD and flip any
+remaining badges. A staged, dependency-ordered sequence to reach full coverage is in the PR that
+introduced this workflow.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE).
