@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/status.json",
+  "title": "tt status --json",
+  "description": "The scripting contract for `tt status --json` (PRD §11, acceptance.html §08).",
+  "type": "object",
+  "required": ["running"],
+  "additionalProperties": false,
+  "properties": {
+    "running": { "type": "boolean" },
+    "entry": {
+      "type": ["object", "null"],
+      "required": ["id", "start_utc", "billable", "elapsed_seconds"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "integer" },
+        "description": { "type": ["string", "null"] },
+        "client": { "type": ["string", "null"] },
+        "project": { "type": ["string", "null"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "start_utc": { "type": "string", "format": "date-time" },
+        "elapsed_seconds": { "type": "integer", "minimum": 0 },
+        "billable": { "type": "boolean" },
+        "slept_through": { "type": "boolean" }
+      }
+    }
+  }
+}

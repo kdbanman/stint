@@ -1,0 +1,37 @@
+{
+  "suite": "JUDGE — GUI presentation & discoverability",
+  "fixtureClock": "2026-06-24T23:00:00Z",
+  "note": "pass:true/false are machine-checked deterministic facts; pass:null items are captured-not-scored and are routed to human/LLM rubric review, never auto-passed.",
+  "results": [
+    {
+      "item": "EMPTY_STATE",
+      "pass": true,
+      "justification": "empty state reads: \"No entries yetPress Ctrl+Alt+T or run tt start to begin.\"",
+      "screenshot": "main-empty.png"
+    },
+    {
+      "item": "TRAY_COUNTUP",
+      "pass": true,
+      "justification": "popover count advanced 01:24:07 → 01:24:10 (+3s)",
+      "screenshot": "popover-running-2.png"
+    },
+    {
+      "item": "ACCENT_DISCIPLINE",
+      "pass": true,
+      "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237); stray accent on [none]",
+      "screenshot": "main-running.png"
+    },
+    {
+      "item": "FLAG_IN_CONTEXT",
+      "pass": true,
+      "justification": "overlap flag on row, slept flag + subtract on slept row: {\"overlapFlag\":true,\"sleptFlag\":true,\"subtractBtn\":true}",
+      "screenshot": "main-flags.png"
+    },
+    {
+      "item": "DESKTOP_FEEL",
+      "pass": null,
+      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)",
+      "screenshot": "main-running.png"
+    }
+  ]
+}
