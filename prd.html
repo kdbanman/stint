@@ -80,10 +80,10 @@
       <div class="wordmark">stint</div>
       <div class="clock">00:00:00&nbsp; <b>■ idle</b> &nbsp;·&nbsp; tt v1</div>
     </div>
-    <div class="mast-meta">Product Requirements · v1 · macOS · single user · offline</div>
+    <div class="mast-meta">Product Requirements · v1 · cross-platform · single user · offline</div>
   </header>
 
-  <p class="lede">A native macOS time tracker for one freelancer who bills by time. A menu-bar app and a CLI (<code>tt</code>) are equal clients of one local SQLite database. The unit is time; no money lives in the app.</p>
+  <p class="lede">A cross-platform desktop time tracker for one freelancer who bills by time. A tray app and a CLI (<code>tt</code>) are equal surfaces over one local SQLite database. The unit is time; no money lives in the app.</p>
 
   <nav class="toc">
     <h4>Contents</h4>
@@ -105,23 +105,23 @@
       <li><a href="#s15"><span class="tn">15</span>Platform &amp; tech</a></li>
       <li><a href="#s16"><span class="tn">16</span>Edge cases &amp; rules</a></li>
       <li><a href="#s17"><span class="tn">17</span>v1 acceptance criteria</a></li>
-      <li><a href="#a1"><span class="tn">A</span>macOS power/idle APIs</a></li>
+      <li><a href="#a1"><span class="tn">A</span>Power/idle APIs</a></li>
     </ol>
   </nav>
 
   <section id="s1">
     <div class="eyebrow"><span class="n">01</span> Overview &amp; goals</div>
     <h2>What Stint is</h2>
-    <p>Stint is a single-user macOS desktop application for tracking billable time, in the spirit of early Toggl: a live start/stop timer, with manual backfill, organized by client. It runs locally, stores all data in one SQLite file, and is fully offline. Its output is trustworthy time totals per client and date range, exported as CSV or JSON, which the user turns into invoices in a separate tool.</p>
+    <p>Stint is a single-user cross-platform desktop application for tracking billable time, in the spirit of early Toggl: a live start/stop timer, with manual backfill, organized by client. It runs locally, stores all data in one SQLite file, and is fully offline. Its output is trustworthy time totals per client and date range, exported as CSV or JSON, which the user turns into invoices in a separate tool.</p>
     <h3>Primary goals</h3>
     <ul class="d">
       <li><strong>Accurate billable hours.</strong> The stored total is always the exact truth; nothing is silently rounded, added, or removed.</li>
-      <li><strong>Equal CLI and GUI.</strong> Anything the menu-bar app can do, <code>tt</code> can do, over the same database, with no privileged client.</li>
+      <li><strong>Equal CLI and GUI.</strong> Anything the tray app can do, <code>tt</code> can do, over the same database, with no privileged surface.</li>
       <li><strong>Low-friction tracking.</strong> Starting a timer takes one keystroke or one click; forgetting to start one is always recoverable by hand.</li>
-      <li><strong>Quiet, native, minimal.</strong> A monochrome SwiftUI app that feels like part of macOS.</li>
+      <li><strong>Quiet, minimal, cross-platform.</strong> A monochrome desktop app that respects system light/dark and stays out of the way.</li>
     </ul>
     <h3>Primary user</h3>
-    <p>A freelancer, consultant, or contractor working solo on a Mac, tracking a handful of clients, comfortable in a terminal, who invoices from the exported numbers using other software.</p>
+    <p>A freelancer, consultant, or contractor working solo at their own computer, tracking a handful of clients, comfortable in a terminal, who invoices from the exported numbers using other software.</p>
   </section>
 
   <section id="s2">
@@ -152,7 +152,7 @@
         <tr><td class="m" data-l="Entity">Project</td><td data-l="Fields"><code>id</code>, <code>client_id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Optional refinement. A project belongs to exactly one client; selecting a project implies its client.</td></tr>
         <tr><td class="m" data-l="Entity">Entry</td><td data-l="Fields"><code>id</code>, <code>client_id?</code>, <code>project_id?</code>, <code>description?</code>, <code>start</code>, <code>end?</code>, <code>billable</code>, <code>excluded_seconds</code></td><td data-l="Notes">The core record. <code>end</code> null ⇒ running. Times stored UTC. <code>client_id</code> nullable (clientless = internal time).</td></tr>
         <tr><td class="m" data-l="Entity">Tag</td><td data-l="Fields"><code>id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Flat, reusable, cross-cutting. Many-to-many with entries via a join.</td></tr>
-        <tr><td class="m" data-l="Entity">SleepSpan</td><td data-l="Fields"><code>id</code>, <code>entry_id</code>, <code>sleep_at</code>, <code>wake_at</code>, <code>source</code></td><td data-l="Notes">A sleep→wake cycle that occurred during a running entry. Multiple per entry. <code>source</code> = event | kernel | unknown.</td></tr>
+        <tr><td class="m" data-l="Entity">SleepSpan</td><td data-l="Fields"><code>id</code>, <code>entry_id</code>, <code>sleep_at</code>, <code>wake_at</code>, <code>source</code></td><td data-l="Notes">A sleep→wake cycle that occurred during a running entry. Multiple per entry. <code>source</code> = event | gap | unknown.</td></tr>
         <tr><td class="m" data-l="Entity">Setting</td><td data-l="Fields"><code>key</code>, <code>value</code></td><td data-l="Notes">Key-value app config (rounding, week start, check-in cadence, etc.).</td></tr>
       </tbody>
     </table>
@@ -168,11 +168,11 @@
     <div class="eyebrow"><span class="n">04</span> Architecture</div>
     <h2>One core, one file, two thin shells</h2>
     <ol class="req">
-      <li><strong>Shared core.</strong> A Swift package (<code>Core</code>) owns the schema, every state transition, and all invariants. The menu-bar app and the <code>tt</code> binary both import it; there is no duplicated logic and no privileged client.</li>
-      <li><strong>Single source of truth.</strong> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>Core</code>.</li>
-      <li><strong>Derived elapsed.</strong> No process holds or increments a timer. Elapsed is computed <code>now − start</code> on demand; the menu bar's per-second update is display only.</li>
-      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which client triggers it. The CLI uses a busy timeout so it cooperates with the running app.</li>
-      <li><strong>Change propagation by file-watch.</strong> Each client watches the SQLite file (and its <code>-wal</code>) via FSEvents and refreshes on change, so a write from one surfaces in the other near-instantly. (The menu bar's 1-second display tick is independent of this.)</li>
+      <li><strong>Shared core.</strong> A TypeScript package (<code>@stint/core</code>) owns the schema, every state transition, and all invariants. The tray app and the <code>tt</code> CLI both import it; there is no duplicated logic and no privileged surface.</li>
+      <li><strong>Single source of truth.</strong> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>@stint/core</code>.</li>
+      <li><strong>Derived elapsed.</strong> No process holds or increments a timer. Elapsed is computed <code>now − start</code> on demand; the tray's per-second update is display only.</li>
+      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which surface triggers it. The CLI uses a busy timeout so it cooperates with the running app.</li>
+      <li><strong>Change propagation by file-watch.</strong> Each surface watches the SQLite file (and its <code>-wal</code>) via <code>fs.watch</code> and refreshes on change, so a write from one surfaces in the other near-instantly. (The tray's 1-second display tick is independent of this.)</li>
       <li><strong>UTC storage, local display.</strong> All timestamps stored UTC; rendered in the system locale and time zone. Durations are timezone-independent and DST-safe.</li>
     </ol>
   </section>
@@ -237,14 +237,14 @@
   <section id="s10">
     <div class="eyebrow"><span class="n">10</span> Running-timer hygiene</div>
     <h2>Two independent mechanisms</h2>
-    <h3>Sleep-span flagging <span class="tag">event + kernel</span></h3>
+    <h3>Sleep-span flagging <span class="tag">suspend + resume</span></h3>
     <ol class="req">
-      <li>While an entry is open, the app listens for macOS <strong>sleep</strong> and <strong>wake</strong> events and timestamps each on receipt.</li>
-      <li>Each sleep→wake cycle during the open entry is recorded as a <strong>SleepSpan</strong> and attached to the entry, which is flagged "slept through." Multiple cycles per timer are all captured.</li>
-      <li>On launch, the app <strong>reconciles</strong> against the kernel's last sleep/wake timestamps to recover a cycle missed while it was not running, recording what is available (at minimum, that a sleep occurred).</li>
+      <li>While an entry is open, the app listens for the OS <strong>suspend</strong> and <strong>resume</strong> events (Electron <code>powerMonitor</code>) and timestamps each on receipt (<code>source = event</code>).</li>
+      <li>Each suspend→resume cycle during the open entry is recorded as a <strong>SleepSpan</strong> and attached to the entry, which is flagged "slept through." Multiple cycles per timer are all captured.</li>
+      <li>On launch, the app <strong>reconciles</strong> by comparing the wall-clock gap since its last recorded timestamp against the open entry: a gap large enough to imply the machine slept is recorded as a SleepSpan (<code>source = gap</code>), recovering a cycle missed while the app was not running. The wall-clock comparison captures that a sleep occurred and its approximate bounds.</li>
       <li>The timer keeps running through sleep (<code>now − start</code> stays honest as wall-clock); the flag and spans let the user decide about the dead time.</li>
       <li><strong>Slept time handling:</strong> flagged, not auto-subtracted. A one-tap action (GUI) / flag (<code>tt</code>) adds the span(s) to <code>excluded_seconds</code>, trimming billable duration precisely and reversibly.</li>
-      <li>Power Nap "dark wakes" must be filtered so a maintenance wake does not fragment one sleep into several spans (verify empirically; distinguish via the power-management log if needed).</li>
+      <li><code>powerMonitor</code> reports user-visible suspend/resume, so each sleep is recorded as one span. A sleep that occurs while the app is closed is recovered by the wall-clock-gap reconciliation in item 3 (see Appendix A).</li>
     </ol>
     <h3>Check-ins <span class="tag">notification</span></h3>
     <ol class="req">
@@ -261,7 +261,7 @@
   <section id="s11">
     <div class="eyebrow"><span class="n">11</span> CLI specification</div>
     <h2><code>tt</code> — full parity</h2>
-    <p>Human-readable tables by default; <code>--json</code> on every read command for scripting. Clean exit codes (0 success, non-zero on error). All writes go through <code>Core</code> with <code>BEGIN IMMEDIATE</code> + busy timeout so they cooperate with the running app.</p>
+    <p>Human-readable tables by default; <code>--json</code> on every read command for scripting. Clean exit codes (0 success, non-zero on error). All writes go through <code>@stint/core</code> with <code>BEGIN IMMEDIATE</code> + busy timeout so they cooperate with the running app.</p>
     <table>
       <thead><tr><th>Command</th><th>Does</th></tr></thead>
       <tbody>
@@ -287,20 +287,20 @@
 
   <section id="s12">
     <div class="eyebrow"><span class="n">12</span> GUI specification</div>
-    <h2>Menu bar + main window</h2>
+    <h2>Tray + main window</h2>
     <ol class="req">
-      <li><strong>Menu bar (<code>MenuBarExtra</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window.</li>
-      <li><strong>Global hotkey</strong> (default <code>⌃⌥T</code>) toggles the timer from anywhere — stops if running, resumes the last entry if idle.</li>
+      <li><strong>Tray (Electron <code>Tray</code> + popover <code>BrowserWindow</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window. It lives in the system tray on Windows and Linux and in the menu bar on macOS.</li>
+      <li><strong>Global hotkey</strong> (default <code>Ctrl+Alt+T</code>, registered via Electron <code>globalShortcut</code> as <code>CommandOrControl+Alt+T</code>) toggles the timer from anywhere — stops if running, resumes the last entry if idle.</li>
       <li><strong>Main window:</strong> entries grouped by day with inline edit, split, merge, and delete; client/project/tag management; the report builder with on-screen summary and CSV/JSON export.</li>
       <li><strong>Flags visible in context:</strong> overlap warnings and sleep-through flags appear on the affected entries with the one-tap subtract action.</li>
-      <li><strong>Empty states</strong> instruct rather than decorate (e.g. "No entries yet — press ⌃⌥T or run <code>tt start</code> to begin").</li>
+      <li><strong>Empty states</strong> instruct rather than decorate (e.g. "No entries yet — press Ctrl+Alt+T or run <code>tt start</code> to begin").</li>
     </ol>
   </section>
 
   <section id="s13">
     <div class="eyebrow"><span class="n">13</span> Storage &amp; schema</div>
     <h2>One file, overridable path</h2>
-    <p>Default location: <code>~/Library/Application Support/Stint/timetracker.sqlite</code> (WAL mode). Both the app and <code>tt</code> resolve the same path, overridable by the <code>TT_DB</code> environment variable. Backup = copy the file; export = <code>tt export</code>. No network, ever.</p>
+    <p>Default location: the OS's standard per-user app-data directory — the GUI resolves it via Electron's <code>app.getPath('userData')</code>, and <code>tt</code> resolves the documented per-OS equivalent (e.g. <code>$XDG_DATA_HOME</code>/<code>~/.local/share</code> on Linux, <code>~/Library/Application Support</code> on macOS, <code>%APPDATA%</code> on Windows) — holding <code>timetracker.sqlite</code> (WAL mode). Both the app and <code>tt</code> resolve the same path, overridable by the <code>TT_DB</code> environment variable. Backup = copy the file; export = <code>tt export</code>. No network, ever.</p>
     <pre><span class="c">-- schema sketch (illustrative)</span>
 <span class="k">CREATE TABLE</span> client  (id INTEGER PK, name TEXT, archived INT DEFAULT 0);
 <span class="k">CREATE TABLE</span> project (id INTEGER PK, client_id INT REFERENCES client, name TEXT, archived INT DEFAULT 0);
@@ -319,7 +319,7 @@
 <span class="k">CREATE TABLE</span> sleep_span (id INTEGER PK, entry_id INT REFERENCES entry,
   sleep_utc TEXT, wake_utc TEXT, source TEXT);
 <span class="k">CREATE TABLE</span> setting (key TEXT PRIMARY KEY, value TEXT);
-<span class="c">-- invariant: at most one row with end_utc IS NULL, enforced in Core transactions</span></pre>
+<span class="c">-- invariant: at most one row with end_utc IS NULL, enforced in @stint/core transactions</span></pre>
   </section>
 
   <section id="s14">
@@ -333,7 +333,7 @@
         <tr><td data-l="Setting">Week start</td><td class="m" data-l="Default">Monday</td></tr>
         <tr><td data-l="Setting">First check-in</td><td class="m" data-l="Default">60 min</td></tr>
         <tr><td data-l="Setting">Check-in interval</td><td class="m" data-l="Default">30 min</td></tr>
-        <tr><td data-l="Setting">Global hotkey</td><td class="m" data-l="Default">⌃⌥T</td></tr>
+        <tr><td data-l="Setting">Global hotkey</td><td class="m" data-l="Default">Ctrl+Alt+T</td></tr>
         <tr><td data-l="Setting">Accent usage</td><td class="m" data-l="Default">system accent, primary action only</td></tr>
         <tr><td data-l="Setting">Date/number format</td><td class="m" data-l="Default">system locale</td></tr>
       </tbody>
@@ -342,13 +342,13 @@
 
   <section id="s15">
     <div class="eyebrow"><span class="n">15</span> Platform &amp; tech</div>
-    <h2>Native, shared-core</h2>
+    <h2>Cross-platform, shared-core</h2>
     <ul class="d">
-      <li><strong>GUI:</strong> SwiftUI — <code>MenuBarExtra</code> for the bar, a standard window for lists and reports. Follows system light/dark; uses vibrancy and SF typography; system accent applied only to the primary action and running state.</li>
-      <li><strong>CLI:</strong> a Swift executable, <code>tt</code>, importing the same <code>Core</code> package.</li>
-      <li><strong>Core:</strong> a Swift package owning schema, transitions, invariants, reporting, and rounding.</li>
-      <li><strong>Persistence:</strong> SQLite via GRDB, WAL mode, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation.</li>
-      <li><strong>System integration:</strong> FSEvents for file-watch; <code>NSWorkspace</code> sleep/wake notifications + kernel timestamp reconciliation; <code>UNUserNotificationCenter</code> for check-ins.</li>
+      <li><strong>GUI:</strong> Electron — a <code>Tray</code> with a popover <code>BrowserWindow</code> for the running timer, and a standard <code>BrowserWindow</code> for lists and reports. The renderer is web tech (HTML/CSS, framework optional). Follows system light/dark; uses system typography; system accent applied only to the primary action and running state.</li>
+      <li><strong>CLI:</strong> a Node executable, <code>tt</code>, built on <code>commander</code> with <code>--json</code> everywhere, importing the same <code>@stint/core</code> package.</li>
+      <li><strong>Core:</strong> a TypeScript package, <code>@stint/core</code>, owning schema, transitions, invariants, reporting, and rounding. Both surfaces import it; no duplicated logic.</li>
+      <li><strong>Persistence:</strong> SQLite via Node's built-in <code>node:sqlite</code> (Node 22.5+), WAL mode set by pragma, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation. No native build step. <code>node:sqlite</code> only exists on Node 22.5+ and runs in two distinct runtimes — the system Node behind <code>tt</code> and Electron's own bundled Node — so v1 requires system Node ≥ 22.5 <em>and</em> an Electron whose bundled Node is ≥ 22.5 with <code>node:sqlite</code> loadable in the packaged main process (it is a stability-experimental module; confirm against the pinned versions).</li>
+      <li><strong>System integration:</strong> <code>fs.watch</code> for file-watch; Electron <code>powerMonitor</code> <code>suspend</code>/<code>resume</code> events (with wall-clock-gap reconciliation on launch) for sleep flagging, and <code>powerMonitor.getSystemIdleTime()</code> available for idle; Electron <code>globalShortcut</code> for the hotkey; Electron <code>Notification</code> for check-ins.</li>
     </ul>
   </section>
 
@@ -374,9 +374,9 @@
     <div class="eyebrow"><span class="n">17</span> Acceptance criteria</div>
     <h2>v1 is done when…</h2>
     <ol class="req">
-      <li>A timer started in <code>tt</code> appears in the menu bar near-instantly, and vice versa; <code>tt status</code> and the menu bar never disagree.</li>
-      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either client.</li>
-      <li>Closing the app, sleeping the Mac, or crashing mid-timer never corrupts elapsed time.</li>
+      <li>A timer started in <code>tt</code> appears in the tray near-instantly, and vice versa; <code>tt status</code> and the tray never disagree.</li>
+      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either surface.</li>
+      <li>Closing the app, sleeping the machine, or crashing mid-timer never corrupts elapsed time.</li>
       <li>Stored entry times are never altered by rounding or sleep subtraction; both are reversible and applied only to derived/billable duration.</li>
       <li>A sleep through a running timer produces a flagged entry with second-accurate span(s) and a working one-tap subtract.</li>
       <li>The first check-in fires at 60 min and the cadence continues autonomously, surviving relaunch and realigning after sleep.</li>
@@ -387,24 +387,23 @@
   </section>
 
   <section id="a1">
-    <div class="eyebrow"><span class="n">A</span> Appendix — macOS power/idle APIs</div>
+    <div class="eyebrow"><span class="n">A</span> Appendix — Power/idle APIs</div>
     <h2>What the process can actually observe</h2>
-    <p>Research summary grounding §10. Sleep/wake are event-backed with authoritative kernel timestamps; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter.</p>
+    <p>Reference for §10, expressed against Electron's <code>powerMonitor</code>. Sleep/wake are event-backed (live <code>suspend</code>/<code>resume</code>), with a wall-clock-gap fallback on launch; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter. <code>powerMonitor</code> surfaces user-visible suspend/resume, so each sleep is one span and a missed sleep is reconstructed from the wall-clock gap.</p>
     <table>
       <thead><tr><th>Signal</th><th>Available?</th><th>How</th></tr></thead>
       <tbody>
-        <tr><td data-l="Signal">Went to sleep</td><td class="m" data-l="Available?">Yes, precise</td><td data-l="How"><code>NSWorkspace.willSleepNotification</code> (stamp on receipt); kernel <code>kern.sleeptime</code> after the fact.</td></tr>
-        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, precise</td><td data-l="How"><code>NSWorkspace.didWakeNotification</code>; <code>kern.waketime</code> readable even if the app missed the live event; <code>pmset -g log</code> for history.</td></tr>
-        <tr><td data-l="Signal">Became idle</td><td class="m" data-l="Available?">Poll only, fuzzy</td><td data-l="How">No event. Sample <code>CGEventSourceSecondsSinceLastEventType</code> / <code>HIDIdleTime</code>; infer start as <code>now − idle</code>. OS "idle" definition is unpublished and version-variable.</td></tr>
-        <tr><td data-l="Signal">Stopped being idle</td><td class="m" data-l="Available?">Inferred</td><td data-l="How">Counter resets on input; <code>com.apple.screenIsUnlocked</code> as a coarse proxy.</td></tr>
-        <tr><td data-l="Signal">Power Nap / dark wake</td><td class="m" data-l="Available?">Distinguishable</td><td data-l="How">Full user wakes post <code>didWakeNotification</code>; dark wakes generally do not. <code>pmset -g log</code> marks <code>Wake</code> vs <code>DarkWake</code> — filter so maintenance wakes don't fragment a span.</td></tr>
+        <tr><td data-l="Signal">Went to sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'suspend'</code> (stamp on receipt, <code>source = event</code>). If missed (app not running), inferred after the fact from a wall-clock gap, <code>source = gap</code>.</td></tr>
+        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'resume'</code>. A wake missed while the app was closed is recovered on launch by comparing the wall-clock gap against the open entry.</td></tr>
+        <tr><td data-l="Signal">Became idle</td><td class="m" data-l="Available?">Poll only, fuzzy</td><td data-l="How">No event. Poll <code>powerMonitor.getSystemIdleTime()</code> (seconds since last input); infer start as <code>now − idle</code>. The OS "idle" definition is OS-provided and version-variable. Excluded from v1 per §10.</td></tr>
+        <tr><td data-l="Signal">Stopped being idle</td><td class="m" data-l="Available?">Inferred</td><td data-l="How">Idle time resets to 0 on input; <code>powerMonitor</code> <code>'unlock-screen'</code> as a coarse proxy.</td></tr>
       </tbody>
     </table>
   </section>
 
   <div class="foot">
     <span>stint — product requirements</span>
-    <span>v1 · macOS · SwiftUI + tt · shared Core · SQLite/WAL</span>
+    <span>v1 · cross-platform · Electron + tt · @stint/core · SQLite/WAL</span>
   </div>
 
 </main>
