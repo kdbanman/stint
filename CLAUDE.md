@@ -40,6 +40,7 @@ place of `<branch>`.
 | `prd.html` | **The what.** Full product requirements: domain model, architecture, timer/editing/reporting behavior, CLI & GUI specs, schema, settings, edge cases, and the §17 v1 acceptance criteria. |
 | `glossary.html` | **The words.** Ubiquitous-language glossary — one canonical term per concept, rejected synonyms, key relationships, and resolved terminology ambiguities. |
 | `acceptance.html` | **The how-we'll-know.** Acceptance-criteria strategy: five complementary AC methods (BDD, property-based, golden/schema, LLM-judged, manual), a PRD-to-method coverage map, and one worked sample per method. |
+| `mockups/` | **The look.** Standalone, dependency-free HTML mockups of the GUI views (`main`, `reports`, `edit-entry`, `settings`) — design intent for `prd.html` §12/§18. "Slightly noisy": they show more than ships today. Keep in sync with the PRD when GUI requirements change (PRD §18). |
 | `README.md` | Implementation front door: layout, quick start, `tt` tour, GUI, and how to run the five AC method suites. |
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
 | `acceptance/` | Coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbooks, parity matrix, and generated evidence. |

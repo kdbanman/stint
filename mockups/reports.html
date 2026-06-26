@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Reports (mockup)</title>
+<!--
+  Slightly-noisy UI prototype for the Stint report builder.
+  Design intent for PRD §09 and §12 R8. Keep in sync with the PRD.
+-->
+<style>
+  :root{
+    --paper:#fff;--ink:#15151a;--ink-soft:#3c3c43;--muted:#737380;--faint:#a6a6b0;
+    --rule:#e6e6e3;--rule-strong:#d8d8d4;--nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
+    --warn:#7a5a00;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
+  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:14px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600}
+  .shell{display:flex;min-height:560px}
+  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;margin-bottom:2px}
+  .nav a .ic{width:18px;text-align:center;opacity:.7}
+  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}.nav a.active .ic{opacity:1}
+  .nav a:hover:not(.active){background:#eeeef1}
+  .main{flex:1;padding:20px 24px}
+  h2{font-size:18px;margin:0 0 16px;font-weight:680}
+  .ctrl{display:grid;grid-template-columns:120px 1fr;gap:10px 16px;align-items:center;margin-bottom:8px}
+  .ctrl .lab{font-size:13px;color:var(--muted);text-align:right}
+  .seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden;flex-wrap:wrap}
+  .seg span{padding:5px 11px;font-size:13px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
+  .seg span:last-child{border-right:0}.seg span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .field{border:1px solid var(--rule-strong);border-radius:7px;padding:5px 10px;font-size:13px;color:var(--ink);background:#fff;min-width:150px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .search{display:flex;align-items:center;gap:7px;border:1px solid var(--rule-strong);border-radius:7px;padding:5px 10px;color:var(--faint);min-width:220px}
+  .search input{border:0;outline:0;font-family:inherit;font-size:13px;flex:1;color:var(--ink)}
+  button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 14px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .summary{margin-top:18px;border:1px solid var(--rule);border-radius:9px;overflow:hidden}
+  .summary .head{display:flex;justify-content:space-between;padding:11px 14px;background:#fafafb;border-bottom:1px solid var(--rule);font-size:13px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  td,th{text-align:left;padding:9px 14px;border-bottom:1px solid var(--rule)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+  .grp{font-weight:680}
+  .sub td{color:var(--ink-soft);padding-left:30px}
+  .tot td{font-weight:700;border-top:2px solid var(--ink);border-bottom:0;background:#fafafb}
+  .flag{font-size:11px;color:var(--warn);background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:4px;padding:0 6px;margin-left:8px}
+  .toggle{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft)}
+  .switch{width:34px;height:20px;border-radius:11px;background:var(--accent);position:relative}
+  .switch i{position:absolute;top:2px;left:16px;width:16px;height:16px;border-radius:50%;background:#fff}
+  .switch.off{background:#cfcfd6}.switch.off i{left:2px}
+  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+  .export{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="title">Stint — Reports</div></div>
+    <div class="shell">
+      <nav class="nav">
+        <a href="#"><span class="ic">◷</span> Timer</a>
+        <a href="main.html"><span class="ic">▤</span> Entries</a>
+        <a href="#"><span class="ic">◎</span> Clients</a>
+        <a href="#" class="active"><span class="ic">▥</span> Reports</a>
+        <a href="settings.html"><span class="ic">⚙</span> Settings</a>
+      </nav>
+      <div class="main">
+        <h2>Report builder</h2>
+
+        <div class="ctrl">
+          <span class="lab">Range</span>
+          <div class="row">
+            <span class="seg"><span>Today</span><span class="on">This week</span><span>Last week</span><span>This month</span><span>Last month</span><span>Custom</span></span>
+            <span style="color:var(--muted);font-size:12px">Jun 22 – Jun 28, 2026</span>
+          </div>
+          <span class="lab">Group by</span>
+          <div class="row"><span class="seg"><span class="on">Client</span><span>Project</span><span>Day</span><span>Tag</span></span></div>
+          <span class="lab">Filters</span>
+          <div class="row">
+            <select class="field"><option>All clients</option><option>Globex Corp</option></select>
+            <select class="field"><option>All projects</option></select>
+            <select class="field"><option>All tags</option></select>
+          </div>
+          <span class="lab">Billable</span>
+          <div class="row"><span class="seg"><span class="on">Billable only</span><span>All</span><span>Non-billable</span></span></div>
+          <span class="lab">Rounding</span>
+          <div class="row">
+            <span class="toggle"><span class="switch off"><i></i></span> Off</span>
+            <select class="field"><option>nearest 15 min</option><option>6</option><option>10</option><option>30</option></select>
+          </div>
+          <span class="lab">Search</span>
+          <div class="row"><span class="search"><span>⌕</span><input placeholder="Filter by description, client, tag…"></span></div>
+        </div>
+
+        <div class="summary">
+          <div class="head"><span>This week · grouped by client · billable only · rounding off</span><span>Total <b style="color:var(--ink)">21h 35m</b></span></div>
+          <table>
+            <thead><tr><th>Client / Project</th><th class="num">Billable</th></tr></thead>
+            <tbody>
+              <tr class="grp"><td>Globex Corp</td><td class="num">16h 50m</td></tr>
+              <tr class="sub"><td>Q3 Strategy</td><td class="num">9h 20m</td></tr>
+              <tr class="sub"><td>Project Alpha <span class="flag">overlap 15m</span></td><td class="num">7h 30m</td></tr>
+              <tr class="grp"><td>Initech</td><td class="num">4h 45m</td></tr>
+              <tr class="sub"><td>Market research <span class="flag">unreviewed sleep</span></td><td class="num">4h 45m</td></tr>
+              <tr class="tot"><td>Total billable</td><td class="num">21h 35m</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="export">
+          <button>Export CSV</button>
+          <button>Export JSON</button>
+        </div>
+      </div>
+    </div>
+    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §09 + §12 R8 · not a screenshot of the current build</div>
+  </div>
+</body>
+</html>
