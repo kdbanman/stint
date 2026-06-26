@@ -1,8 +1,9 @@
 # Stint — repository guide
 
-Stint is a native macOS time tracker for one freelancer who bills by time: a
-menu-bar app and a CLI (`tt`) as equal surfaces over one local SQLite database.
-This repo currently holds the **design documents** only — no code yet.
+Stint is a cross-platform desktop time tracker for one freelancer who bills by
+time: an Electron tray app and a CLI (`tt`) as equal surfaces over one local
+SQLite database, built as a TypeScript monorepo around a shared `@stint/core`
+package. This repo currently holds the **design documents** only — no code yet.
 
 ## Sharing rendered HTML
 

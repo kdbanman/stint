@@ -77,7 +77,7 @@
       <div class="wordmark">stint</div>
       <div class="clock">a&nbsp;shared&nbsp;vocabulary &nbsp;·&nbsp; tt v1</div>
     </div>
-    <div class="mast-meta">Domain Language · Ubiquitous Glossary · v1 · macOS · single user</div>
+    <div class="mast-meta">Domain Language · Ubiquitous Glossary · v1 · cross-platform · single user</div>
   </header>
 
   <p class="lede">The words the codebase, the CLI, the UI copy, and these documents must all use the same way. One term per concept; the rejected synonyms are listed so they can be caught in review. Pair this with <a href="concept.html">concept.html</a> (the why) and <a href="prd.html">prd.html</a> (the what).</p>
@@ -113,7 +113,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Stint</td>
-          <td data-l="Definition">The <strong>product name</strong> only — the macOS app and the idea behind it. Never an entity. A tracked block of time is an <em>Entry</em>, not "a stint." The CLI's two-letter shorthand is <code>tt</code>.</td>
+          <td data-l="Definition">The <strong>product name</strong> only — the cross-platform desktop app and the idea behind it. Never an entity. A tracked block of time is an <em>Entry</em>, not "a stint." The CLI's two-letter shorthand is <code>tt</code>.</td>
           <td class="avoid" data-l="Avoid"><s>stint</s> = a tracked Entry</td>
         </tr>
         <tr>
@@ -133,7 +133,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">SleepSpan</td>
-          <td data-l="Definition">One sleep→wake cycle that occurred while an entry was open. Attached to that entry; multiple per entry are possible. <code>source</code> = <code>event</code> | <code>kernel</code> | <code>unknown</code>. Evidence of dead time — never auto-applied.</td>
+          <td data-l="Definition">One sleep→wake cycle that occurred while an entry was open. Attached to that entry; multiple per entry are possible. <code>source</code> = <code>event</code> (live <code>powerMonitor</code> suspend/resume) | <code>gap</code> (inferred on launch from a wall-clock gap) | <code>unknown</code>. Evidence of dead time — never auto-applied.</td>
           <td class="avoid" data-l="Avoid"><s>idle span</s>, <s>gap</s>, <s>pause</s></td>
         </tr>
         <tr>
@@ -154,7 +154,7 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Open</td>
-          <td data-l="Definition">The state of the single entry whose <code>end IS NULL</code> — the live timer. The core invariant is stated in these terms: <strong>at most one open entry exists at any time.</strong> The menu bar may <em>display</em> this as a "running timer," but in the model, code, and these docs the state is <strong>open</strong>.</td>
+          <td data-l="Definition">The state of the single entry whose <code>end IS NULL</code> — the live timer. The core invariant is stated in these terms: <strong>at most one open entry exists at any time.</strong> The tray may <em>display</em> this as a "running timer," but in the model, code, and these docs the state is <strong>open</strong>.</td>
           <td class="avoid" data-l="Avoid"><s>running</s>, <s>live</s>, <s>active</s>, <s>ticking</s> (as the data state)</td>
         </tr>
         <tr>
@@ -215,7 +215,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Elapsed</td>
-          <td data-l="Definition"><code>now − start</code> for an <strong>open</strong> entry. The count-up shown live in the menu bar — pure display, never persisted, always correct on read because it is never kept anywhere to drift.</td>
+          <td data-l="Definition"><code>now − start</code> for an <strong>open</strong> entry. The count-up shown live in the tray — pure display, never persisted, always correct on read because it is never kept anywhere to drift.</td>
           <td class="avoid" data-l="Avoid"><s>running total</s>, <s>current duration</s></td>
         </tr>
         <tr>
@@ -276,7 +276,7 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Slept-through</td>
-          <td data-l="Definition">The flag on an entry that was open while the Mac slept. Set whenever one or more <strong>SleepSpans</strong> attach to the entry. The timer keeps running through sleep (wall-clock stays honest); the flag prompts a decision about the dead time.</td>
+          <td data-l="Definition">The flag on an entry that was open while the computer slept. Set whenever one or more <strong>SleepSpans</strong> attach to the entry. The timer keeps running through sleep (wall-clock stays honest); the flag prompts a decision about the dead time.</td>
           <td class="avoid" data-l="Avoid"><s>asleep</s>, <s>paused</s>, <s>away</s></td>
         </tr>
         <tr>
@@ -286,7 +286,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Reconcile</td>
-          <td data-l="Definition">On launch, compare against the kernel's last sleep/wake timestamps (<code>kern.sleeptime</code>/<code>kern.waketime</code>, <code>pmset</code>) to recover a sleep cycle missed while the app wasn't running, recording what's available.</td>
+          <td data-l="Definition">On launch, compare the wall-clock gap since the app's last recorded timestamp against the open entry to recover a sleep cycle missed while the app wasn't running, recording it as a SleepSpan with <code>source = gap</code>.</td>
           <td class="avoid" data-l="Avoid"><s>sync</s>, <s>catch up</s>, <s>recover</s></td>
         </tr>
         <tr>
@@ -317,22 +317,22 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Surface</td>
-          <td data-l="Definition">One of the two equal ways in — the <strong>menu-bar app</strong> or the <strong><code>tt</code> CLI</strong>. Both import the same <code>Core</code> and speak to the same database; neither is privileged. Use "surface" (or "front door") — <em>never</em> "client" — for these, to keep "Client" meaning the customer.</td>
+          <td data-l="Definition">One of the two equal ways in — the <strong>tray app</strong> or the <strong><code>tt</code> CLI</strong>. Both import the same <code>Core</code> (<code>@stint/core</code>) and speak to the same database; neither is privileged. Use "surface" (or "front door") — <em>never</em> "client" — for these, to keep "Client" meaning the customer.</td>
           <td class="avoid" data-l="Avoid"><s>client</s> (the app), <s>frontend</s>, <s>UI</s> (as a synonym)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Core</td>
-          <td data-l="Definition">The shared Swift package that owns the schema, every state transition, all invariants, reporting, and rounding. The single home of logic — no duplicated rules across surfaces.</td>
+          <td data-l="Definition">The shared TypeScript package (<code>@stint/core</code>) that owns the schema, every state transition, all invariants, reporting, and rounding. The single home of logic — no duplicated rules across surfaces.</td>
           <td class="avoid" data-l="Avoid"><s>engine</s>, <s>backend</s>, <s>shared lib</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term"><code>tt</code></td>
-          <td data-l="Definition">The CLI binary — Stint's terminal surface, at full parity with the GUI. Human-readable tables by default, <code>--json</code> for scripting.</td>
+          <td data-l="Definition">The CLI executable — Stint's terminal surface, at full parity with the GUI. Human-readable tables by default, <code>--json</code> for scripting.</td>
           <td class="avoid" data-l="Avoid"><s>the CLI tool</s> (just "<code>tt</code>" or "the CLI"), <s>stint-cli</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">The database</td>
-          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Default at <code>~/Library/Application Support/Stint/timetracker.sqlite</code>, overridable via <code>TT_DB</code>. Offline, always.</td>
+          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Default in the OS's standard app-data directory (resolved via Electron's <code>app.getPath('userData')</code>, and the per-OS equivalent for <code>tt</code>), overridable via <code>TT_DB</code>. Offline, always.</td>
           <td class="avoid" data-l="Avoid"><s>the store</s>, <s>the DB file</s>, <s>local cache</s></td>
         </tr>
         <tr>
@@ -370,10 +370,10 @@
     </div>
     <div class="dlg">
       <p><span class="who">Dev</span>"The report total looks high for a day she was away at lunch."</p>
-      <p><span class="who">Owner</span>"Lunch isn't <strong>excluded time</strong> unless the Mac slept and she <strong>subtracted</strong> the <strong>SleepSpan</strong>. Raw duration includes it. In v1 the only thing that touches <code>excluded_seconds</code> is subtracted sleep."</p>
+      <p><span class="who">Owner</span>"Lunch isn't <strong>excluded time</strong> unless the computer slept and she <strong>subtracted</strong> the <strong>SleepSpan</strong>. Raw duration includes it. In v1 the only thing that touches <code>excluded_seconds</code> is subtracted sleep."</p>
     </div>
     <div class="dlg">
-      <p><span class="who">Dev</span>"Should the menu bar and the CLI both be called clients of the Core?"</p>
+      <p><span class="who">Dev</span>"Should the tray and the CLI both be called clients of the Core?"</p>
       <p><span class="who">Owner</span>"Call them <strong>surfaces</strong>. <strong>Client</strong> is the customer you bill — if we overload it we'll confuse every report query."</p>
     </div>
     <div class="dlg">
@@ -395,7 +395,7 @@
         </tr>
         <tr>
           <td data-l="Ambiguity"><strong>"Running" vs "open" vs "live"</strong> for the timer state.</td>
-          <td data-l="Resolution"><strong>Open</strong> is canonical for the state (<code>end IS NULL</code>), matching the invariant and the "running is just an open row" insight. "Running timer" is allowed only as user-facing menu-bar <em>display copy</em>, never as the model/code term.</td>
+          <td data-l="Resolution"><strong>Open</strong> is canonical for the state (<code>end IS NULL</code>), matching the invariant and the "running is just an open row" insight. "Running timer" is allowed only as user-facing tray <em>display copy</em>, never as the model/code term.</td>
         </tr>
         <tr>
           <td data-l="Ambiguity"><strong>"Entry" vs "stint/session/span"</strong> for a tracked block.</td>
