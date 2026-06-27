@@ -181,6 +181,196 @@ describe('GOLD: --project actually filters list and report (§09, §11)', () => 
   });
 });
 
+describe('GOLD: tt --search filters list and report (§09 R7)', () => {
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+  function seedSearch(): void {
+    tt(['client', 'add', 'Acme']);
+    tt(['project', 'add', 'Billing', '--client', 'Acme']);
+    tt(['client', 'add', 'Globex']);
+    tt(['project', 'add', 'Ops', '--client', 'Globex']);
+    tt(['add', 'auth refactor', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T11:00:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'deep']);
+    tt(['add', 'deploy pipeline', '--from', '2026-06-24T11:00:00Z', '--to', '2026-06-24T12:00:00Z', '--client', 'Globex', '--project', 'Ops', '--tag', 'ci']);
+  }
+
+  it('list --search returns only matching ids and validates against list.schema.json', () => {
+    seedSearch();
+    const rows = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--search', 'refactor']).out);
+    const validate = validator('list.schema.json');
+    expect(validate(rows) || validate.errors).toBe(true);
+    expect(rows.map((e: { description: string }) => e.description)).toEqual(['auth refactor']);
+  });
+
+  it('list --search is case-insensitive', () => {
+    seedSearch();
+    const rows = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--search', 'REFACTOR']).out);
+    expect(rows.map((e: { description: string }) => e.description)).toEqual(['auth refactor']);
+  });
+
+  it('list --search matches a client name and a tag, not just description', () => {
+    seedSearch();
+    const byClient = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--search', 'globex']).out);
+    expect(byClient.map((e: { description: string }) => e.description)).toEqual(['deploy pipeline']);
+    const byTag = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--search', 'deep']).out);
+    expect(byTag.map((e: { description: string }) => e.description)).toEqual(['auth refactor']);
+  });
+
+  it('list --search with no match is a valid empty list', () => {
+    seedSearch();
+    const r = tt(['list', ...RANGE, '--all', '--json', '--search', 'nonexistent']);
+    const validate = validator('list.schema.json');
+    expect(validate(JSON.parse(r.out)) || validate.errors).toBe(true);
+    expect(JSON.parse(r.out)).toEqual([]);
+  });
+
+  it('report --search totals only matching entries and validates against report.schema.json', () => {
+    seedSearch();
+    const r = tt(['report', ...RANGE, '--all', '--json', '--search', 'refactor']);
+    const json = JSON.parse(r.out);
+    const validate = validator('report.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    // Only "auth refactor" (2h) matches; "deploy pipeline" (1h) is excluded.
+    expect(json.grand_total_seconds).toBe(7200);
+  });
+
+  it('report --search with no match totals zero', () => {
+    seedSearch();
+    const json = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'nonexistent']).out);
+    expect(json.grand_total_seconds).toBe(0);
+  });
+});
+
+describe('GOLD: tt list --by / --search grouping (§12 R9, §11)', () => {
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+  function seedGroups(): void {
+    tt(['client', 'add', 'Acme']);
+    tt(['project', 'add', 'Billing', '--client', 'Acme']);
+    tt(['client', 'add', 'Globex']);
+    tt(['project', 'add', 'Ops', '--client', 'Globex']);
+    tt(['add', 'auth refactor', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T11:00:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'deep']);
+    tt(['add', 'deploy pipeline', '--from', '2026-06-24T11:00:00Z', '--to', '2026-06-24T12:00:00Z', '--client', 'Globex', '--project', 'Ops', '--tag', 'ci']);
+    tt(['add', 'standup', '--from', '2026-06-24T08:00:00Z', '--to', '2026-06-24T08:30:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'meeting']);
+  }
+
+  it('--by client groups the human table with a per-group header carrying summed hours', () => {
+    seedGroups();
+    const r = tt(['list', ...RANGE, '--all', '--by', 'client']);
+    expect(r.code).toBe(0);
+    // Group headers in ASC order, each with the summed billable hours; the matching rows
+    // sit under their client header.
+    const acme = r.out.indexOf('Acme  (2.50h)');
+    const globex = r.out.indexOf('Globex  (1.00h)');
+    expect(acme).toBeGreaterThanOrEqual(0);
+    expect(globex).toBeGreaterThan(acme); // Acme before Globex (ASC)
+    expect(r.out).toContain('auth refactor');
+    expect(r.out).toContain('standup');
+    expect(r.out).toContain('deploy pipeline');
+  });
+
+  it('--by tag fans a multi-axis list into tag groups (ASC)', () => {
+    seedGroups();
+    const r = tt(['list', ...RANGE, '--all', '--by', 'tag']);
+    expect(r.out.indexOf('ci  (')).toBeGreaterThanOrEqual(0);
+    expect(r.out.indexOf('deep  (')).toBeGreaterThan(r.out.indexOf('ci  ('));
+    expect(r.out.indexOf('meeting  (')).toBeGreaterThan(r.out.indexOf('deep  ('));
+  });
+
+  it('--by rejects an unknown grouping', () => {
+    seedGroups();
+    const r = tt(['list', ...RANGE, '--all', '--by', 'nope']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/unknown --by grouping/);
+  });
+
+  it('--json stays the flat row contract regardless of --by (search only filters rows)', () => {
+    seedGroups();
+    // --by does not change the --json shape: it is still the flat array, schema-valid.
+    const rows = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--by', 'client']).out);
+    const validate = validator('list.schema.json');
+    expect(validate(rows) || validate.errors).toBe(true);
+    expect(rows.map((e: { description: string }) => e.description).sort()).toEqual([
+      'auth refactor',
+      'deploy pipeline',
+      'standup',
+    ]);
+  });
+
+  it('--by composes with --search: only matching rows are grouped', () => {
+    seedGroups();
+    const r = tt(['list', ...RANGE, '--all', '--by', 'client', '--search', 'refactor']);
+    expect(r.out).toContain('Acme');
+    expect(r.out).toContain('auth refactor');
+    expect(r.out).not.toContain('Globex');
+    expect(r.out).not.toContain('deploy pipeline');
+  });
+});
+
+describe('GOLD: tt report --search (§09, §11)', () => {
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+  // Distinguishable descriptions, clients, projects, and tags so each search axis is
+  // isolatable: a query can match a description OR a client/project/tag name only.
+  function seedReportSearch(): void {
+    tt(['client', 'add', 'Acme']);
+    tt(['project', 'add', 'Billing', '--client', 'Acme']);
+    tt(['client', 'add', 'Globex']);
+    tt(['project', 'add', 'Ops', '--client', 'Globex']);
+    // "auth refactor" — 2h — Acme/Billing/deep
+    tt(['add', 'auth refactor', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T11:00:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'deep']);
+    // "shipping work" — 1h — Globex/Ops/ci. Its description shares no token with its
+    // project name "Ops", so a project-name query must reach it via the resolved field.
+    tt(['add', 'shipping work', '--from', '2026-06-24T11:00:00Z', '--to', '2026-06-24T12:00:00Z', '--client', 'Globex', '--project', 'Ops', '--tag', 'ci']);
+  }
+
+  it('--search --json totals only the matching entries', () => {
+    seedReportSearch();
+    const json = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'refactor']).out);
+    // Only "auth refactor" (2h) matches; "shipping work" (1h) is excluded.
+    expect(json.grand_total_seconds).toBe(7200);
+  });
+
+  it('--search is case-insensitive (upper/lower match the same set)', () => {
+    seedReportSearch();
+    const lower = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'refactor']).out);
+    const upper = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'REFACTOR']).out);
+    expect(upper.grand_total_seconds).toBe(lower.grand_total_seconds);
+    expect(upper.grand_total_seconds).toBe(7200);
+  });
+
+  it('--search matches a project name even when the description does not (§09 secondary match)', () => {
+    seedReportSearch();
+    // "Ops" is the project name only — no description contains it — yet it pulls the
+    // Globex/Ops entry (1h).
+    const json = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'ops']).out);
+    expect(json.grand_total_seconds).toBe(3600);
+    // …and a client-name query likewise reaches its entries.
+    const byClient = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'globex']).out);
+    expect(byClient.grand_total_seconds).toBe(3600);
+  });
+
+  it('--search with no match totals zero, not everything (consistent with unknown --project)', () => {
+    seedReportSearch();
+    const json = JSON.parse(tt(['report', ...RANGE, '--all', '--json', '--search', 'nonexistent']).out);
+    expect(json.grand_total_seconds).toBe(0);
+  });
+
+  it('--search --json still validates against report.schema.json (search adds no output fields)', () => {
+    seedReportSearch();
+    const r = tt(['report', ...RANGE, '--all', '--json', '--search', 'refactor']);
+    const validate = validator('report.schema.json');
+    expect(validate(JSON.parse(r.out)) || validate.errors).toBe(true);
+  });
+
+  it('--search --csv emits only the matching rows (CSV path honours the filter)', () => {
+    seedReportSearch();
+    const csv = tt(['report', ...RANGE, '--all', '--csv', '--search', 'refactor']).out;
+    const lines = csv.split('\n');
+    // header + exactly the one matching entry
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toBe('client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped');
+    expect(lines[1]).toContain('auth refactor');
+    expect(csv).not.toContain('shipping work');
+  });
+});
+
 describe('GOLD: config set validates (§14)', () => {
   it('rejects a non-positive check-in interval (would otherwise hang the GUI tick)', () => {
     const r = tt(['config', 'set', 'checkin_interval_min', '0']);
@@ -241,7 +431,9 @@ describe('GOLD: settings defaults (§14)', () => {
       week_start              monday
       first_checkin_min       60
       checkin_interval_min    30
-      global_hotkey           CommandOrControl+Alt+T"
+      global_hotkey           CommandOrControl+Alt+T
+      accent                  system
+      date_format             system"
     `);
   });
 
@@ -254,6 +446,8 @@ describe('GOLD: settings defaults (§14)', () => {
       firstCheckinMin: 60,
       checkinIntervalMin: 30,
       globalHotkey: 'CommandOrControl+Alt+T',
+      accent: 'system',
+      dateFormat: 'system',
     });
   });
 });

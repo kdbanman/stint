@@ -7,5 +7,5 @@
     "types": ["node"]
   },
   "references": [{ "path": "../core" }],
-  "include": ["src/main.ts", "src/preload.ts", "src/ipc.ts", "src/uistate.ts", "src/toggle.ts"]
+  "include": ["src/main.ts", "src/preload.ts", "src/ipc.ts", "src/uistate.ts", "src/toggle.ts", "src/confirm.ts", "src/liveview.ts", "src/start.ts", "src/reportview.ts", "src/checkin-actions.ts"]
 }

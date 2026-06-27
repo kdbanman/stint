@@ -26,6 +26,7 @@ import {
   type ReportOptions,
   type BillableFilter,
 } from './report.js';
+import { matchesQuery } from './entrylist.js';
 import type {
   Entry,
   EntryView,
@@ -60,6 +61,13 @@ export interface ListFilter {
   clientId?: number;
   projectId?: number;
   tag?: string;
+  /**
+   * §09 R7 — a free-text query matched (case-insensitive substring) against an entry's
+   * description, client name, project name, and any tag. Applied post-`toView` (those
+   * fields are resolved there, not columns), exactly like the `tag` post-filter; it
+   * narrows within the other filters rather than replacing them.
+   */
+  search?: string;
   billable?: BillableFilter;
 }
 
@@ -69,6 +77,8 @@ export interface ReportRequest extends ReportOptions {
   clientId?: number;
   projectId?: number;
   tag?: string;
+  /** §09 R7 — the same free-text query as ListFilter, threaded into the listed set. */
+  search?: string;
 }
 
 export class StoreError extends Error {
@@ -398,6 +408,13 @@ export class Store {
       this.toView(r),
     );
     if (filter.tag) rows = rows.filter((e) => e.tags.includes(filter.tag!));
+    // §09 R7: free-text search over the resolved fields (description / client / project /
+    // tags), case-insensitive substring. Done in JS so clientName/projectName/tags — which
+    // toView resolves, not entry columns — are matchable, mirroring the tag post-filter.
+    // The match rule itself lives in entrylist.matchesQuery (the same rule the Entries
+    // view and `tt list` group on), so search semantics cannot drift between the SQL
+    // list path and the in-memory grouping path.
+    if (filter.search?.trim()) rows = rows.filter((e) => matchesQuery(e, filter.search!));
     return rows;
   }
 
@@ -408,6 +425,7 @@ export class Store {
       ...(req.clientId !== undefined ? { clientId: req.clientId } : {}),
       ...(req.projectId !== undefined ? { projectId: req.projectId } : {}),
       ...(req.tag !== undefined ? { tag: req.tag } : {}),
+      ...(req.search !== undefined ? { search: req.search } : {}),
       billable: 'all',
     });
     return buildReport(
@@ -556,6 +574,37 @@ export class Store {
     return (this.db.prepare(sql).all() as { id: number; name: string; archived: number }[]).map(
       (r) => ({ id: r.id, name: r.name, archived: r.archived === 1 }),
     );
+  }
+
+  /**
+   * Create a tag (or return the existing one of that name) and hand back the row (§07,
+   * §12 R10). Tags are otherwise born on the fly when first applied to an entry; this is
+   * the explicit, manage-it-first path the Clients view and `tt tag add` drive. Wraps the
+   * same `ensureTag` the entry-tagging path uses, so a name never yields two tag rows.
+   */
+  addTag(name: string): Tag {
+    const id = this.ensureTag(name.trim());
+    const r = this.db.prepare('SELECT id, name, archived FROM tag WHERE id = ?').get(id) as {
+      id: number;
+      name: string;
+      archived: number;
+    };
+    return { id: r.id, name: r.name, archived: r.archived === 1 };
+  }
+
+  renameTag(id: number, name: string): void {
+    this.db.prepare('UPDATE tag SET name = ? WHERE id = ?').run(name, id);
+  }
+
+  archiveTag(id: number): void {
+    this.db.prepare('UPDATE tag SET archived = 1 WHERE id = ?').run(id);
+  }
+
+  findTagByName(name: string): Tag | null {
+    const r = this.db
+      .prepare('SELECT id, name, archived FROM tag WHERE name = ? COLLATE NOCASE')
+      .get(name) as { id: number; name: string; archived: number } | undefined;
+    return r ? { id: r.id, name: r.name, archived: r.archived === 1 } : null;
   }
 
   // ---------------------------------------------------------------- sleep
