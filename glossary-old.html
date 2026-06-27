@@ -77,7 +77,7 @@
       <div class="wordmark">stint</div>
       <div class="clock">a&nbsp;shared&nbsp;vocabulary &nbsp;·&nbsp; tt v1</div>
     </div>
-    <div class="mast-meta">Domain Language · Ubiquitous Glossary · v1 · macOS + Linux · single user</div>
+    <div class="mast-meta">Domain Language · Ubiquitous Glossary · v1 · cross-platform · single user</div>
   </header>
 
   <p class="lede">The words the codebase, the CLI, the UI copy, and these documents must all use the same way. One term per concept; the rejected synonyms are listed so they can be caught in review. Pair this with <a href="concept.html">concept.html</a> (the why) and <a href="prd.html">prd.html</a> (the what).</p>
@@ -132,14 +132,9 @@
           <td class="avoid" data-l="Avoid"><s>label</s>, <s>category</s></td>
         </tr>
         <tr>
-          <td class="term" data-l="Term">Favorite</td>
-          <td data-l="Definition">A named, pinned <strong>timer template</strong> capturing description, client, project, tags, and billable flag — created ("pinned") from any entry or the running timer. Stored in its own <code>favorite</code> table; it is <em>not</em> an entry and holds no times. Resuming a favorite (§02) <strong>starts a fresh entry</strong> from its template. The canonical pair: a favorite is "pinned," its instantiation is "resume from favorite."</td>
-          <td class="avoid" data-l="Avoid"><s>preset</s>, <s>quick-start</s>, <s>shortcut</s>, <s>saved timer</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Saved report</td>
-          <td data-l="Definition">A named, persistent <strong>report definition</strong>: a preset of {range-spec, group-by, filters, rounding}. Stored in its own <code>report</code> table; the range is held as a <strong>relative spec</strong> (e.g. <code>this-week</code>) or an absolute range. The <em>definition</em>, not its output — running it (§03 "report run") resolves it against current data. See §09 — "report" now carries two senses.</td>
-          <td class="avoid" data-l="Avoid"><s>report</s> (unqualified — see §09), <s>view</s>, <s>filter set</s>, <s>query</s></td>
+          <td class="term" data-l="Term">SleepSpan</td>
+          <td data-l="Definition">One sleep→wake cycle that occurred while an entry was open. Attached to that entry; multiple per entry are possible. <code>source</code> = <code>event</code> (live <code>powerMonitor</code> suspend/resume) | <code>gap</code> (inferred on launch from a wall-clock gap) | <code>unknown</code>. Evidence of dead time — never auto-applied.</td>
+          <td class="avoid" data-l="Avoid"><s>idle span</s>, <s>gap</s>, <s>pause</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Setting</td>
@@ -179,18 +174,8 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Resume</td>
-          <td data-l="Definition">Start a fresh entry that <strong>copies the most recent entry's</strong> description, client, project, and billable flag. A new entry — never a re-opening of the old one. Contrast <strong>resume from favorite</strong> below, which copies a <em>named template</em> rather than the last entry.</td>
+          <td data-l="Definition">Start a fresh entry that <strong>copies the most recent entry's</strong> description, client, project, and billable flag. A new entry — never a re-opening of the old one.</td>
           <td class="avoid" data-l="Avoid"><s>restart</s>, <s>continue</s>, <s>reopen</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Resume from favorite</td>
-          <td data-l="Definition">Start a fresh entry from a <strong>Favorite</strong> (§01) — one action that instantiates the named template's description/client/project/tags/billable. CLI: <code>tt fav start &lt;name&gt;</code> or <code>tt start --fav &lt;name&gt;</code>. Distinct from plain <strong>Resume</strong> (copies the <em>last</em> entry) and never re-opens an existing entry.</td>
-          <td class="avoid" data-l="Avoid"><s>resume</s> (unqualified, when a favorite is meant), <s>launch favorite</s>, <s>run favorite</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Pin</td>
-          <td data-l="Definition">Create a <strong>Favorite</strong> from an existing entry or the running timer, capturing its attributes as a reusable template. The inverse is <strong>unpin</strong> (delete the favorite). A favorite may also be <strong>renamed</strong>.</td>
-          <td class="avoid" data-l="Avoid"><s>save as favorite</s>, <s>bookmark</s>, <s>star</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Backfill</td>
@@ -225,12 +210,12 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Stored truth</td>
-          <td data-l="Definition">The exact <code>start</code> and <code>end</code> timestamps, UTC, to the second. <strong>Never mutated</strong> by rounding or sleep subtraction. The cardinal rule of a billing tool: store the truth, never silently change it. The hardening and recovery mechanisms (§05) exist to protect this truth, never to alter it.</td>
+          <td data-l="Definition">The exact <code>start</code> and <code>end</code> timestamps, UTC, to the second. <strong>Never mutated</strong> by rounding or sleep subtraction. The cardinal rule of a billing tool: store the truth, never silently change it.</td>
           <td class="avoid" data-l="Avoid"><s>actual time</s>, <s>real time</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Elapsed</td>
-          <td data-l="Definition"><code>now − start</code> for an <strong>open</strong> entry. The count-up shown live in the tray — pure display, never persisted, always correct on read because it is never kept anywhere to drift. Guarded against wall-clock skew: <code>now &lt; start</code> never yields a negative or garbage value.</td>
+          <td data-l="Definition"><code>now − start</code> for an <strong>open</strong> entry. The count-up shown live in the tray — pure display, never persisted, always correct on read because it is never kept anywhere to drift.</td>
           <td class="avoid" data-l="Avoid"><s>running total</s>, <s>current duration</s></td>
         </tr>
         <tr>
@@ -252,11 +237,6 @@
           <td class="term" data-l="Term">Rounding</td>
           <td data-l="Definition">A display/export <strong>lens, not an edit</strong>. Off by default. When on, it rounds the <strong>grouped billable line</strong> (not each entry) to a configurable increment — default nearest 15 min; nearest, not always-up. Stored truth is untouched.</td>
           <td class="avoid" data-l="Avoid"><s>rounding up</s>, <s>adjusting</s>, <s>snapping</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Report run</td>
-          <td data-l="Definition">One <strong>resolution</strong> of a saved report (§01) against current data: the range-spec resolves to concrete dates, filters and group-by apply, totals render, optionally rounded — optionally piped to a CSV/JSON <strong>export</strong>. A run is ephemeral output; the <em>definition</em> is the durable noun. CLI: <code>tt report run &lt;name&gt;</code>. See §09 — this is the second sense of "report."</td>
-          <td class="avoid" data-l="Avoid"><s>report</s> (the definition), <s>generate</s>, <s>render</s> (unqualified)</td>
         </tr>
       </tbody>
     </table>
@@ -290,15 +270,10 @@
   <section id="s5">
     <div class="eyebrow"><span class="n">05</span> Hygiene &amp; integrity</div>
     <h2>Keeping the hours honest</h2>
-    <p>The mechanisms that catch a number before it lands, wrong, on an invoice — and, newly, the mechanisms that keep the file itself intact. All surface the problem; none silently fixes the hours.</p>
+    <p>The mechanisms that catch a number before it lands, wrong, on an invoice. All surface the problem; none silently fixes it.</p>
     <table>
       <thead><tr><th>Term</th><th>Definition</th><th>Aliases to avoid</th></tr></thead>
       <tbody>
-        <tr>
-          <td class="term" data-l="Term">Core requirement</td>
-          <td data-l="Definition">The classification (PRD §C) for a requirement that does one of: <strong>(a) ensures data integrity</strong> (atomicity, invariants, immutability of stored truth); <strong>(b) protects against data loss</strong> (crash-safety, durability, backups, the export escape hatch, destructive-action confirmation); <strong>(c) enables core data entry</strong> (start, stop, manual backfill). Carries a <code>core</code> badge across the PRD. Explicitly <strong>not</strong> core: sleep accuracy, the offline/no-network guarantee, and cross-surface sync — judged accuracy / privacy / consistency, not integrity-or-loss.</td>
-          <td class="avoid" data-l="Avoid"><s>critical</s>, <s>P0</s>, <s>essential</s>, <s>must-have</s></td>
-        </tr>
         <tr>
           <td class="term" data-l="Term">Slept-through</td>
           <td data-l="Definition">The flag on an entry that was open while the computer slept. Set whenever one or more <strong>SleepSpans</strong> attach to the entry. The timer keeps running through sleep (wall-clock stays honest); the flag prompts a decision about the dead time.</td>
@@ -329,21 +304,6 @@
           <td data-l="Definition">The recurring schedule of check-ins for an open timer (the 60-then-30 rhythm, configurable). A custom interval picked from a notification applies to the <strong>next gap only</strong>, then reverts to default.</td>
           <td class="avoid" data-l="Avoid"><s>frequency</s>, <s>schedule</s> (unqualified)</td>
         </tr>
-        <tr>
-          <td class="term" data-l="Term">Backup</td>
-          <td data-l="Definition">A <strong>timestamped copy of the SQLite file</strong>, written beside the database on launch when the DB has changed since the last one; the last N are retained (default 5). The durability net for the <strong>stored truth</strong> — a copy, never a mutation. Source for <strong>restore</strong>.</td>
-          <td class="avoid" data-l="Avoid"><s>snapshot</s>, <s>dump</s>, <s>archive</s> (that's reference data), <s>export</s> (that's CSV/JSON data-out)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Restore</td>
-          <td data-l="Definition">Replace the live database with the latest good <strong>backup</strong>. Invoked on demand, or automatically by <strong>corruption recovery</strong>: when the integrity check fails on open, the corrupt file is quarantined (<code>.corrupted</code>) and the newest good backup is restored, informing the user. Data is never silently lost.</td>
-          <td class="avoid" data-l="Avoid"><s>rollback</s>, <s>revert</s>, <s>recover</s> (use "restore" for the act)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Integrity check</td>
-          <td data-l="Definition">The <code>PRAGMA quick_check</code>/<code>integrity_check</code> run at startup. On failure, <strong>Core does not write</strong> — it triggers <strong>restore</strong> from the latest backup. One of the §20 hardening guarantees, alongside WAL/FK/busy-timeout assertions on open and the partial unique index enforcing at-most-one-open at the DB level.</td>
-          <td class="avoid" data-l="Avoid"><s>health check</s>, <s>validation</s>, <s>db check</s></td>
-        </tr>
       </tbody>
     </table>
   </section>
@@ -357,7 +317,7 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Surface</td>
-          <td data-l="Definition">One of the two equal ways in — the <strong>tray app</strong> or the <strong><code>tt</code> CLI</strong>. Both import the same <code>Core</code> (<code>@stint/core</code>) and speak to the same database; neither is privileged. Use "surface" (or "front door") — <em>never</em> "client" — for these, to keep "Client" meaning the customer. Each runs on <strong>macOS and Linux</strong> (Windows is not supported).</td>
+          <td data-l="Definition">One of the two equal ways in — the <strong>tray app</strong> or the <strong><code>tt</code> CLI</strong>. Both import the same <code>Core</code> (<code>@stint/core</code>) and speak to the same database; neither is privileged. Use "surface" (or "front door") — <em>never</em> "client" — for these, to keep "Client" meaning the customer.</td>
           <td class="avoid" data-l="Avoid"><s>client</s> (the app), <s>frontend</s>, <s>UI</s> (as a synonym)</td>
         </tr>
         <tr>
@@ -367,38 +327,18 @@
         </tr>
         <tr>
           <td class="term" data-l="Term"><code>tt</code></td>
-          <td data-l="Definition">The CLI executable — Stint's terminal surface, at full parity with the GUI. Human-readable tables by default, <code>--json</code> for scripting. Favorites and saved reports are fully reachable here (<code>tt fav …</code>, <code>tt report …</code>).</td>
+          <td data-l="Definition">The CLI executable — Stint's terminal surface, at full parity with the GUI. Human-readable tables by default, <code>--json</code> for scripting.</td>
           <td class="avoid" data-l="Avoid"><s>the CLI tool</s> (just "<code>tt</code>" or "the CLI"), <s>stint-cli</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">The database</td>
-          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Default in the OS's standard app-data directory — macOS <code>~/Library/Application Support/stint/…</code>, Linux <code>~/.local/share/stint/…</code> (resolved via Electron's <code>app.getPath('userData')</code>, and the per-OS equivalent for <code>tt</code>), overridable via <code>TT_DB</code>. Offline, always.</td>
+          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Default in the OS's standard app-data directory (resolved via Electron's <code>app.getPath('userData')</code>, and the per-OS equivalent for <code>tt</code>), overridable via <code>TT_DB</code>. Offline, always.</td>
           <td class="avoid" data-l="Avoid"><s>the store</s>, <s>the DB file</s>, <s>local cache</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Invariant</td>
-          <td data-l="Definition">A rule <code>Core</code> enforces transactionally — chiefly <strong>at most one open entry</strong> (also defended by a DB-level partial unique index), and <strong>stored truth is never mutated</strong> by rounding or exclusion. When we say "the invariant," this is what we mean.</td>
+          <td data-l="Definition">A rule <code>Core</code> enforces transactionally — chiefly <strong>at most one open entry</strong>, and <strong>stored truth is never mutated</strong> by rounding or exclusion. When we say "the invariant," this is what we mean.</td>
           <td class="avoid" data-l="Avoid"><s>constraint</s> (unqualified), <s>rule</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Release</td>
-          <td data-l="Definition">A <strong>date/build-versioned artifact</strong> published to <strong>GitHub Releases</strong> — the public repo is the distribution backend. Every merge to <code>main</code> builds and publishes one. Versioned <code>YYYY.M.D</code> with a build suffix for same-day merges (e.g. <code>2026.6.27.2</code>). Synonymous with <strong>published version</strong>.</td>
-          <td class="avoid" data-l="Avoid"><s>build</s> (unqualified), <s>distribution</s>, <s>package</s> (overloaded), <s>tag</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Installer</td>
-          <td data-l="Definition">The <strong>single artifact</strong> that, in one step, places the GUI in Applications / the app launcher <strong>and</strong> puts <code>tt</code> on <code>PATH</code>. A macOS <code>.pkg</code>; a Linux install script or package. No Apple Developer ID / notarization dependency — the user clears Gatekeeper once.</td>
-          <td class="avoid" data-l="Avoid"><s>setup</s>, <s>bundle</s> (that's the app bundle), <s>package</s> (overloaded)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Update</td>
-          <td data-l="Definition">The in-app, guided <strong>download + install of a newer release</strong>. Settings → Software Update checks the GitHub Releases API, reports up-to-date or newer, then downloads the artifact and walks the user through replacing the app. An update <strong>never touches the database</strong>.</td>
-          <td class="avoid" data-l="Avoid"><s>upgrade</s>, <s>patch</s>, <s>auto-update</s> (it is guided, not silent)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Time-range picker</td>
-          <td data-l="Definition">The GUI's <strong>visual start+stop selection surface</strong>: a single-day calendar column with hour lines on which the entry is a draggable rectangle (drag body moves start, drag bottom resizes end; 5-min snap; other entries gray, overlaps yellow, warn-only). Opens on click of a time text field or its calendar icon. Used in add-entry, edit-closed-entry, and edit-running-start (not split); overnight spans use text. <strong>Text entry remains everywhere and stays authoritative</strong> — the picker is a convenience over it, never a replacement.</td>
-          <td class="avoid" data-l="Avoid"><s>calendar picker</s>, <s>timeline</s>, <s>scheduler</s>, <s>date picker</s></td>
         </tr>
       </tbody>
     </table>
@@ -415,9 +355,7 @@
         <tr><td class="term" data-l="Relationship">Project → Entry</td><td data-l="Cardinality">one-to-many (optional)</td><td data-l="Rule">An entry's project, if set, <strong>determines its client</strong> — the project's client is authoritative.</td></tr>
         <tr><td class="term" data-l="Relationship">Entry ↔ Tag</td><td data-l="Cardinality">many-to-many</td><td data-l="Rule">Via the <code>entry_tag</code> join. Tags are flat and cross-cutting.</td></tr>
         <tr><td class="term" data-l="Relationship">Entry → SleepSpan</td><td data-l="Cardinality">one-to-many</td><td data-l="Rule">A SleepSpan exists only against the entry that was open during it. Many cycles per entry are captured.</td></tr>
-        <tr><td class="term" data-l="Relationship">Favorite → Entry</td><td data-l="Cardinality">none (template only)</td><td data-l="Rule">A favorite holds no times and references no entry; resuming it <strong>creates</strong> a new entry from its captured attributes. Pinning from an entry copies attributes, leaving no link.</td></tr>
-        <tr><td class="term" data-l="Relationship">Saved report → Entry</td><td data-l="Cardinality">none (definition only)</td><td data-l="Rule">A saved report stores a spec, not rows; a <strong>run</strong> resolves it against whatever entries match at that moment. The relationship is recomputed each run, never stored.</td></tr>
-        <tr><td class="term" data-l="Relationship">Open entry</td><td data-l="Cardinality">at most one, globally</td><td data-l="Rule">The core invariant: at most one entry has <code>end IS NULL</code> at any moment, across all surfaces; enforced in Core and by a DB-level partial unique index.</td></tr>
+        <tr><td class="term" data-l="Relationship">Open entry</td><td data-l="Cardinality">at most one, globally</td><td data-l="Rule">The core invariant: at most one entry has <code>end IS NULL</code> at any moment, across all surfaces.</td></tr>
       </tbody>
     </table>
   </section>
@@ -439,42 +377,18 @@
       <p><span class="who">Owner</span>"Call them <strong>surfaces</strong>. <strong>Client</strong> is the customer you bill — if we overload it we'll confuse every report query."</p>
     </div>
     <div class="dlg">
-      <p><span class="who">Dev</span>"She clicked her 'Acme standup' tile and it picked up last night's description."</p>
-      <p><span class="who">Owner</span>"Then it wasn't a <strong>favorite</strong> — that's plain <strong>resume</strong>, which copies the <em>last</em> entry. <strong>Resume from favorite</strong> instantiates the named template. Two different starts."</p>
-    </div>
-    <div class="dlg">
-      <p><span class="who">Dev</span>"'Open the weekly report' — do you mean the saved one or run it?"</p>
-      <p><span class="who">Owner</span>"The <strong>saved report</strong> is the definition — range, group-by, filters, rounding. <strong>Running</strong> it resolves that against today's data. Edit the definition; read a run. Never say just 'report' when which one matters."</p>
-    </div>
-    <div class="dlg">
-      <p><span class="who">Dev</span>"The DB looked corrupt on launch — did we lose her morning?"</p>
-      <p><span class="who">Owner</span>"No. The <strong>integrity check</strong> failed, so Core didn't write — it quarantined the file and ran a <strong>restore</strong> from the latest <strong>backup</strong>. A backup is a copy of the stored truth; we never mutate it to fix it."</p>
+      <p><span class="who">Dev</span>"Rounding made one entry jump from 12 to 15 minutes — bug?"</p>
+      <p><span class="who">Owner</span>"That's the bug. <strong>Rounding</strong> is a lens on the grouped <strong>billable duration</strong>, not per entry, and the <strong>stored truth</strong> never changes. Round the line, not the row."</p>
     </div>
   </section>
 
   <section id="s9">
     <div class="eyebrow"><span class="n">09</span> Flagged ambiguities</div>
     <h2>Resolved here, watch for drift</h2>
-    <p>Terminology forks the source documents left open. Each is now decided; this section records the decision and the reasoning so it isn't relitigated.</p>
+    <p>Terminology forks the two source documents left open. Each is now decided; this section records the decision and the reasoning so it isn't relitigated.</p>
     <table>
       <thead><tr><th>Ambiguity</th><th>Resolution</th></tr></thead>
       <tbody>
-        <tr>
-          <td data-l="Ambiguity"><strong>"Report" means two things</strong> — the saved <em>definition</em> (range/group-by/filters/rounding), and a <em>run/export</em> of it against current data.</td>
-          <td data-l="Resolution"><strong>Saved report</strong> (or "report definition") = the persistent, named preset, the durable noun in the <code>report</code> table. <strong>Report run</strong> = one resolution of it into totals, optionally exported. When the distinction matters, never say bare "report." "Run" and "export" are verbs on a definition; "edit"/"rename"/"delete" act on the definition itself.</td>
-        </tr>
-        <tr>
-          <td data-l="Ambiguity"><strong>"Resume" — last entry or a favorite?</strong> Both start a fresh entry from copied attributes.</td>
-          <td data-l="Resolution"><strong>Resume</strong> (unqualified) copies the <strong>most recent entry</strong>. <strong>Resume from favorite</strong> instantiates a <strong>named, pinned template</strong> (the <code>favorite</code> table). A favorite is not an entry and holds no times. Don't say "resume" when a favorite is meant.</td>
-        </tr>
-        <tr>
-          <td data-l="Ambiguity"><strong>Visual range picker vs text entry</strong> — which is the source of truth for an entry's start/stop?</td>
-          <td data-l="Resolution"><strong>Text entry is authoritative</strong> and remains everywhere. The <strong>time-range picker</strong> is a visual convenience layered over it (and the only path for some interactions, but never the canonical store). Overnight spans use text; the picker covers same-day add/edit-closed/edit-running-start, not split.</td>
-        </tr>
-        <tr>
-          <td data-l="Ambiguity"><strong>"Backup" vs "export" vs "archive"</strong> — three ways something is "saved."</td>
-          <td data-l="Resolution"><strong>Backup</strong> = timestamped <em>copy of the SQLite file</em> for durability/recovery. <strong>Export</strong> = CSV/JSON <em>data-out</em> for invoicing. <strong>Archive</strong> = soft-retiring <em>reference data</em>. Three distinct concepts; none is a synonym for another.</td>
-        </tr>
         <tr>
           <td data-l="Ambiguity"><strong>"Client" means two things</strong> — the billed customer, and a consumer of the database (the app / the CLI).</td>
           <td data-l="Resolution"><strong>Client</strong> = the customer, always. The app and CLI are <strong>surfaces</strong> (or "front doors"). The concept doc's "two thin shells / two front doors" framing wins; "client" is never used for software here.</td>
@@ -494,10 +408,6 @@
         <tr>
           <td data-l="Ambiguity"><strong>Clientless time</strong> — "internal," "overhead," or literal?</td>
           <td data-l="Resolution"><strong>Clientless time</strong> (literal). "Internal time" / "overhead" stay as informal gloss in prose but are not the canonical term, since the defining fact is the absent client, not a category judgment.</td>
-        </tr>
-        <tr>
-          <td data-l="Ambiguity"><strong>What counts as "core"?</strong> — every must-ship requirement, or a narrower set?</td>
-          <td data-l="Resolution"><strong>Core requirement</strong> is a precise classification (§C): data integrity, data-loss protection, or core data entry — nothing else. Sleep accuracy, the offline guarantee, and cross-surface sync are deliberately <em>not</em> core. "Core" is not a priority synonym; it gates the QA-evidence regime (recordings, the AC-sufficiency review).</td>
         </tr>
       </tbody>
     </table>
