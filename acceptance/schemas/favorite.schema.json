@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/favorite.json",
+  "title": "tt fav ls --json",
+  "description": "A favorite — a pinned timer template (PRD §05 R09): a named preset of the attributes a timer starts with (description, client, project, billable, tags). `tt fav ls --json` emits an array of these.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "description", "client_id", "project_id", "billable", "tags"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "name": { "type": "string", "minLength": 1 },
+      "description": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+      "client_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+      "project_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+      "billable": { "type": "boolean" },
+      "tags": { "type": "array", "items": { "type": "string" } }
+    }
+  }
+}

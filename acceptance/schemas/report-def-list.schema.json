@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/report-def-list.json",
+  "title": "tt report ls --json",
+  "description": "An array of saved report definitions (PRD §09 R08). The item shape mirrors report-def.schema.json (inlined so the list schema validates standalone, no cross-file $ref).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "id",
+      "name",
+      "range_kind",
+      "range_preset",
+      "range_from_utc",
+      "range_to_utc",
+      "group_by",
+      "billable_filter",
+      "client_id",
+      "project_id",
+      "tag",
+      "search",
+      "rounding",
+      "rounding_increment_min",
+      "created_utc"
+    ],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "name": { "type": "string", "minLength": 1 },
+      "range_kind": { "enum": ["preset", "absolute"] },
+      "range_preset": {
+        "oneOf": [
+          { "enum": ["today", "week", "last-week", "month", "last-month"] },
+          { "type": "null" }
+        ]
+      },
+      "range_from_utc": {
+        "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+      },
+      "range_to_utc": {
+        "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+      },
+      "group_by": { "enum": ["client", "project", "day", "tag"] },
+      "billable_filter": { "enum": ["billable", "all", "non-billable"] },
+      "client_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+      "project_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+      "tag": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+      "search": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+      "rounding": { "type": "boolean" },
+      "rounding_increment_min": { "type": "integer", "minimum": 0 },
+      "created_utc": { "type": "string", "format": "date-time" }
+    }
+  }
+}

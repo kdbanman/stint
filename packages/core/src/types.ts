@@ -71,6 +71,38 @@ export interface EntryView extends Entry {
   billableSeconds: number;
 }
 
+/**
+ * A pinned timer template (PRD §05 R09) — a named preset of the attributes a timer
+ * starts with: description, client, project, billable, and tags. A favorite is NOT a
+ * timer (it has no start/end); resuming from it (§05 R10) starts a fresh entry copying
+ * this template. The name is the cross-surface handle, unique case-insensitively.
+ */
+export interface Favorite {
+  id: number;
+  name: string;
+  description: string | null;
+  clientId: number | null;
+  projectId: number | null;
+  billable: boolean;
+  tags: string[];
+}
+
+/**
+ * The attributes a favorite captures (PRD §05 R09). The `name` is the handle; the rest is
+ * the template a resume copies. When created from an entry, these are read off that entry;
+ * otherwise they are supplied explicitly. `fromEntryId` selects the source entry — a numeric
+ * id, or `'open'` for the currently running entry — and takes precedence over explicit attrs.
+ */
+export interface FavoriteTemplate {
+  name: string;
+  fromEntryId?: number | 'open';
+  description?: string | null;
+  clientId?: number | null;
+  projectId?: number | null;
+  billable?: boolean;
+  tags?: string[];
+}
+
 /** Result of `status`. */
 export interface Status {
   running: boolean;

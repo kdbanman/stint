@@ -39,14 +39,24 @@
           </button>
         </nav>
         <div class="views">
-          <!-- §12 R3: the Timer view placeholder. The live count-up / Active Timer card is
-               R5's work; until then the route lands on an instructive empty placeholder so
-               the nav has somewhere to go. -->
+          <!-- §12 R3 / §05 R09: the Timer view hosts the FAVORITES RAIL — pinned timer
+               templates, the parity twin of `tt fav add|ls|rename|rm`. Pin captures the running
+               timer's template (or, when idle, the Start form's attributes); each pinned
+               favorite carries a kebab → Rename / Unpin, over window.stint.* (no DB in the
+               page). The rail repaints over the existing `changed` broadcast on every write.
+               §05 R10: each favorite carries a one-click Resume that starts a FRESH timer from
+               its template over window.stint.startFavorite (parity with `tt fav start`). -->
           <section class="view" data-view="timer" hidden>
-            <div class="view-placeholder">
-              <div class="big">Timer</div>
-              <div>The live timer view lands here. Start one from <code>Entries</code> or run <code>tt start</code>.</div>
-            </div>
+            <section class="favorites" id="favorites">
+              <header class="fav-head">
+                <div class="fav-title">Favorites</div>
+                <button type="button" id="fav-pin" class="fav-pin">Pin as favorite</button>
+              </header>
+              <div class="fav-rail" id="fav-rail"></div>
+              <div class="fav-empty" id="fav-empty" hidden>
+                No favorites yet. Pin the running timer, or run <code>tt fav add</code>.
+              </div>
+            </section>
           </section>
 
           <!-- §12 R3: the Entries view — the default active view. Everything that was the

@@ -260,6 +260,68 @@ async function main() {
     record('TRAY_COUNTUP', ok, `popover count advanced ${t1} → ${t2} (+${delta}s)`, 'popover-running-2.png');
   });
 
+  // TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
+  // surface. The tray's single left-click opens this popover; the dropdown action menu is
+  // removed (the tray's own click/right-click has no host headless — confirmed under MANUAL).
+  // The half that IS headless-checkable: every tray action lives IN the popover. Drive the
+  // real popover renderer twice and assert all four actions are present —
+  //   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #switch visible, #open present;
+  //   idle snapshot:    #toggle reads 'Start', #switch hidden, #open present.
+  // If any of Stop / Switch / Start / Open Stint is absent from the popover, this fails —
+  // since the dropdown is gone, the popover MUST carry them all. Captures
+  // popover-tray-surface.png as the evidence that the popover is the one action surface.
+  await withPage(browser, runningState(), 'popover.html', async (page) => {
+    const runningProbe = await page.evaluate(() => {
+      const toggle = document.querySelector('#toggle');
+      const sw = document.querySelector('#switch');
+      const open = document.querySelector('#open');
+      const swCs = sw ? getComputedStyle(sw) : null;
+      return {
+        toggleLabel: toggle ? toggle.textContent.trim() : null,
+        togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
+        switchVisible: !!sw && !sw.hidden && swCs.display !== 'none',
+        openPresent: !!open,
+        openLabel: open ? open.textContent.trim() : null,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'popover-tray-surface.png') });
+
+    // The idle snapshot: the same popover offers Start (one-tap) and hides Switch (which only
+    // makes sense mid-timer) — Start is still reachable here, so the dropdown's Start is not lost.
+    const idleProbe = await withPage(browser, emptyState(), 'popover.html', async (ip) =>
+      ip.evaluate(() => {
+        const toggle = document.querySelector('#toggle');
+        const sw = document.querySelector('#switch');
+        const open = document.querySelector('#open');
+        return {
+          toggleLabel: toggle ? toggle.textContent.trim() : null,
+          togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
+          switchHidden: !!sw && sw.hidden,
+          openPresent: !!open,
+        };
+      }),
+    );
+
+    const runningOk =
+      runningProbe.toggleLabel === 'Stop' &&
+      runningProbe.togglePressed === 'true' &&
+      runningProbe.switchVisible &&
+      runningProbe.openPresent &&
+      /Open Stint/.test(runningProbe.openLabel ?? '');
+    const idleOk =
+      idleProbe.toggleLabel === 'Start' &&
+      idleProbe.togglePressed === 'false' &&
+      idleProbe.switchHidden &&
+      idleProbe.openPresent;
+    record(
+      'TRAY_POPOVER_SURFACE',
+      runningOk && idleOk,
+      `popover is the sole tray action surface — running: Stop+Switch+Open present ${JSON.stringify(runningProbe)}; ` +
+        `idle: Start (Switch hidden) + Open present ${JSON.stringify(idleProbe)}`,
+      'popover-tray-surface.png',
+    );
+  });
+
   // IN_WINDOW_TIMER (main window) — §12 R4: the main window shows an Active-Timer card that
   // mirrors `tt status`: a live per-second count-up, the running state, the running entry's
   // description + client/project, and Stop + Switch actions. Drive the real renderer on
@@ -356,6 +418,126 @@ async function main() {
       primaryUsesAccent && chromeMonochrome,
       `primary=${probe.primary} accent=${probe.accentRgb}; stray accent on [${probe.offenders.join(', ') || 'none'}]`,
       'main-running.png',
+    );
+  });
+
+  // CLICKABILITY — §15 R-clickability / G10: ONE clickability convention across the window.
+  // Over the running main window, walk every clickable text affordance and assert the
+  // convention deterministically:
+  //   POSITIVE — every clickable affordance (button:not(.primary), .nav-item, .nav-link,
+  //     a[href], [data-act]) carries a NON-transparent background OR a visible border, so
+  //     none reads as bare prose. Sanctioned sub-affordances (the in-chip .chip-x, the
+  //     .set-toggle knob, and any control nested inside an already-bordered .chip/.seg/
+  //     .presets) are whitelisted — the parent IS the affordance.
+  //   NEGATIVE — known inert text (.wordmark, .day-head, .entry .desc, .entry .time,
+  //     .summary) carries NO button-like pill fill (its backgroundColor stays transparent
+  //     or the page/wash colour, never the var(--paper)/var(--wash) affordance fill).
+  //   ACCENT-PER-VIEW — ONLY the sanctioned accent uses (button.primary / running state /
+  //     nav-item.active) carry the accent; the accent never leaks onto an ordinary clickable
+  //     affordance, and at least one primary action does carry it — the accent stays reserved
+  //     for the view's primary action(s) (the running view's Stop, mirrored on the card +
+  //     toolbar, are both the SAME primary Stop action).
+  await withPage(browser, runningState(), 'index.html', async (page) => {
+    await page.screenshot({ path: join(EVIDENCE, 'main-clickability.png') });
+    const probe = await page.evaluate(() => {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => {
+        const n = parseInt(hex.replace('#', ''), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      const accentRgb = toRgb(accent);
+      const isTransparent = (c) => !c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
+      // A control "carries the affordance" if it paints a non-transparent background OR a
+      // visible (non-zero, non-transparent) border on at least one edge.
+      const carriesAffordance = (el) => {
+        const cs = getComputedStyle(el);
+        if (!isTransparent(cs.backgroundColor)) return true;
+        const edges = ['Top', 'Right', 'Bottom', 'Left'];
+        for (const e of edges) {
+          const w = parseFloat(cs[`border${e}Width`]) || 0;
+          if (w > 0 && cs[`border${e}Style`] !== 'none' && !isTransparent(cs[`border${e}Color`])) {
+            return true;
+          }
+        }
+        return false;
+      };
+      // Sub-affordances inside an already-bordered control are whitelisted — the parent is
+      // the affordance, so the inner glyph/knob need not re-carry the convention.
+      const whitelisted = (el) =>
+        el.matches('.chip-x') ||
+        el.matches('.set-toggle i') ||
+        // Native form controls (the multi-select checkbox) render their own UA affordance —
+        // the browser draws the checkbox, so it is never bare prose even with no CSS chrome.
+        el.matches('input[type="checkbox"], .sel') ||
+        !!el.closest('.chip') ||
+        !!el.closest('.seg') ||
+        !!el.closest('.presets');
+      const visible = (el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        if (el.hidden || el.closest('[hidden]')) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      // POSITIVE: candidate clickable affordances minus the primary (already accent-filled,
+      // trivially carries the convention) and the whitelisted sub-affordances.
+      const candidates = [
+        ...document.querySelectorAll('button:not(.primary), .nav-item, .nav-link, a[href], [data-act]'),
+      ];
+      const offenders = [];
+      for (const el of candidates) {
+        if (!visible(el)) continue;
+        if (whitelisted(el)) continue;
+        if (!carriesAffordance(el)) {
+          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      // NEGATIVE: known inert text must NOT wear a button-like pill fill. The affordance
+      // fills are var(--paper)/var(--wash); inert text stays transparent or the page bg.
+      const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+      const wash = getComputedStyle(document.documentElement).getPropertyValue('--wash').trim();
+      const pillFills = new Set([toRgb(paper), toRgb(wash)]);
+      const inertSel = '.wordmark, .day-head, .entry .desc, .entry .time, .summary';
+      const inertOffenders = [];
+      for (const el of document.querySelectorAll(inertSel)) {
+        if (!visible(el)) continue;
+        const bg = getComputedStyle(el).backgroundColor;
+        if (!isTransparent(bg) && pillFills.has(bg)) {
+          inertOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      // ACCENT-PER-VIEW: the only elements that may FILL with the accent are the sanctioned
+      // uses (primary action / running state / active nav item). The accent must reach at
+      // least one primary action and never leak onto an ordinary affordance.
+      const accentSanctioned = (el) =>
+        el.matches('button.primary') ||
+        el.closest('button.primary') ||
+        el.closest('.entry.running') ||
+        el.closest('.timer-card.running') ||
+        el.closest('.nav-item.active');
+      const accentOffenders = [];
+      let primaryAccentCount = 0;
+      for (const el of document.querySelectorAll('*')) {
+        if (!visible(el)) continue;
+        const cs = getComputedStyle(el);
+        const fills = cs.backgroundColor === accentRgb;
+        if (fills && el.matches('button.primary')) primaryAccentCount++;
+        if (!accentSanctioned(el) && (fills || cs.color === accentRgb)) {
+          accentOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      return { offenders, inertOffenders, accentOffenders, primaryAccentCount };
+    });
+    const positiveOk = probe.offenders.length === 0;
+    const negativeOk = probe.inertOffenders.length === 0;
+    const accentOk = probe.accentOffenders.length === 0 && probe.primaryAccentCount >= 1;
+    record(
+      'CLICKABILITY',
+      positiveOk && negativeOk && accentOk,
+      `clickable affordances reading as bare prose=[${probe.offenders.join(', ') || 'none'}]; ` +
+        `inert text wearing a pill fill=[${probe.inertOffenders.join(', ') || 'none'}]; ` +
+        `stray accent=[${probe.accentOffenders.join(', ') || 'none'}], accent-filled primary action(s)=${probe.primaryAccentCount} (expect ≥1, reserved for the primary action)`,
+      'main-clickability.png',
     );
   });
 

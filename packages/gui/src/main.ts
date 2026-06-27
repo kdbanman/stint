@@ -43,16 +43,32 @@ import {
   type EntryGroupBy,
   type WriteResult,
 } from '@stint/core';
-import { CHANNELS, type WriteAck, type ListEntriesQuery, type EntryListView } from './ipc.js';
+import {
+  CHANNELS,
+  type WriteAck,
+  type ListEntriesQuery,
+  type EntryListView,
+  type SavedReportInputView,
+  type FavoriteInputView,
+} from './ipc.js';
+import {
+  pinFavorite as pinFavoriteHelper,
+  listFavorites as listFavoritesHelper,
+  favoriteToView,
+} from './favorites.js';
 import { buildUiState } from './uistate.js';
 import { nextTimerAction } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
 import { startWithAttributes, type StartPayload } from './start.js';
 import {
   buildReportView,
+  buildSavedReportView,
   resolveExportRange,
   exportPayload,
   exportFileName,
+  savedReportToView,
+  savedReportInputFromView,
+  savedReportPatchFromView,
   type ReportViewRequest,
   type ExportRequest,
 } from './reportview.js';
@@ -248,17 +264,15 @@ function updateTray(open: EntryView | null = store.openEntry()): void {
   }
 }
 
+/**
+ * §12 R01 (G8): the tray exposes NO dropdown of app actions. A single left-click opens
+ * the compact popover, which is the SOLE surface for Stop / Switch / Start + Open Stint.
+ * The right-click context menu is the minimal OS-convention Quit-only menu — no timer
+ * actions, nothing the popover already owns. The old 3-item Start/Stop + Open Stint
+ * dropdown is removed.
+ */
 function buildTrayMenu(): Menu {
-  const open = store.openEntry();
-  return Menu.buildFromTemplate([
-    open
-      ? { label: `Stop (${formatDuration(open.billableSeconds)})`, click: () => toggleTimer() }
-      : { label: 'Start / resume', click: () => toggleTimer() },
-    { type: 'separator' },
-    { label: 'Open Stint', click: () => showMainWindow() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]);
+  return Menu.buildFromTemplate([{ role: 'quit', label: 'Quit' }]);
 }
 
 function togglePopover(): void {
@@ -501,20 +515,93 @@ function registerIpc(): void {
       // returned shape is the core Report the report view paints verbatim.
       return buildReportView(store, p as ReportViewRequest, new Date());
     },
+    // §09 R08–R09: saved report definitions. Each delegates straight to @stint/core — the
+    // single source of truth — at parity with `tt report save|ls|show|rename|rm|run`. The
+    // mutators refresh all windows so an open Reports view repaints; the reads do not. The
+    // renderer never re-derives a range or a total: runReport returns the SAME core Report
+    // payload the ad-hoc `report` handler builds, resolved through core's resolveSavedRange.
+    saveReport: (p) => {
+      const def = store.saveReport(savedReportInputFromView(p as SavedReportInputView));
+      refreshAll();
+      return savedReportToView(def);
+    },
+    listReports: () => store.listReports().map(savedReportToView),
+    showReport: (p) => {
+      const def = store.getReport((p as { name: string }).name);
+      return def ? savedReportToView(def) : null;
+    },
+    renameReport: (p) => {
+      const { name, newName } = p as { name: string; newName: string };
+      const def = store.renameReport(name, newName);
+      refreshAll();
+      return savedReportToView(def);
+    },
+    editReport: (p) => {
+      const { name, patch } = p as { name: string; patch: Partial<SavedReportInputView> };
+      const def = store.editReport(name, savedReportPatchFromView(patch));
+      refreshAll();
+      return savedReportToView(def);
+    },
+    removeReport: (p) => {
+      store.removeReport((p as { name: string }).name);
+      refreshAll();
+    },
+    // §09 R09: run a saved report against current data. buildSavedReportView is a thin
+    // pass-through to store.runReport (resolving the stored RangeSpec through core), so the
+    // renderer paints the SAME core Report the ad-hoc `report` channel returns. Accepts a
+    // name or id ref so the Reports view can run a definition by whichever handle it holds.
+    runReport: (p) => buildSavedReportView(store, (p as { ref: string | number }).ref, new Date()),
+    // §05 R09: pinned timer favorites. Each delegates to @stint/core — the single source of
+    // truth — at parity with `tt fav add|ls|rename|rm`. The mutators refresh all windows so an
+    // open Timer view repaints its favorites rail; listFavorites is a read, no refresh. The
+    // pin/rename/unpin LOGIC (duplicate-name rejection, template capture, tag application) all
+    // lives in core; the helpers only resolve names + project to the renderer-safe view.
+    pinFavorite: (p) => {
+      const view = pinFavoriteHelper(store, p as FavoriteInputView);
+      refreshAll();
+      return view;
+    },
+    listFavorites: () => listFavoritesHelper(store),
+    renameFavorite: (p) => {
+      const { ref, name } = p as { ref: string | number; name: string };
+      const fav = store.renameFavorite(ref, name);
+      refreshAll();
+      return favoriteToView(fav);
+    },
+    unpinFavorite: (p) => {
+      store.unpinFavorite((p as { ref: string | number }).ref);
+      refreshAll();
+    },
+    // §05 R10: resume from a favorite — start a FRESH timer from the favorite's template. All
+    // logic is in core (store.startFromFavorite delegates to start: atomic stop-then-start, the
+    // ≤1-open invariant, the overlap warning); the favorite is never mutated. refreshAll repaints
+    // the Active-Timer card + favorites rail. Parity with `tt fav start` / `tt start --fav`.
+    startFavorite: (p): WriteAck => {
+      const res = store.startFromFavorite((p as { name: string }).name);
+      refreshAll();
+      return { warnings: res.warnings ?? [] };
+    },
     exportEntries: (p) => {
-      // §09 R6: the report view's Export CSV / Export JSON. The renderer cannot reach
-      // Node/fs, so the export round-trips through main. Resolve the same range the report
-      // used (preset via core's resolveRange, or the explicit custom from/to), list the
-      // raw entries (billable='all', no filter — exactly `tt export`), render the bytes via
-      // core's toCsv/toJsonEntries, and write them through the OS save dialog. No network.
+      // §09 R6 / R09: the report view's Export CSV / Export JSON. The renderer cannot reach
+      // Node/fs, so the export round-trips through main. When the request names a SAVED report
+      // (savedReportRef), export its definition's range via core's exportSavedReport (raw
+      // entries for the resolved window — byte-identical to `tt report run --csv|--json`);
+      // otherwise resolve the ad-hoc preset/custom range and export it (exactly `tt export`).
+      // Either way the bytes come from core's toCsv/toJsonEntries and write through the OS
+      // save dialog. No network.
       const req = p as ExportRequest;
       const now = new Date();
-      const range = resolveExportRange(req, store.settings().weekStart, now);
-      const entries = store.listEntries({
-        fromUtc: range.fromUtc,
-        toUtc: range.toUtc,
-        billable: 'all',
-      });
+      let range: { fromUtc: string; toUtc: string };
+      let entries: EntryView[];
+      if (req.savedReportRef !== undefined) {
+        // The saved definition carries its own range; resolve it through the one core path.
+        const run = store.runReport(req.savedReportRef, now);
+        range = { fromUtc: run.rangeFromUtc, toUtc: run.rangeToUtc };
+        entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
+      } else {
+        range = resolveExportRange(req, store.settings().weekStart, now);
+        entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
+      }
       const payload = exportPayload(entries, req.format, now);
       const options: Electron.SaveDialogSyncOptions = {
         title: req.format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
@@ -584,6 +671,23 @@ function registerIpc(): void {
       store.archiveTag((p as { id: number }).id);
       refreshAll();
     },
+    // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. Each
+    // delegates straight to @stint/core (store.listBackups / store.restoreFromBackup over the
+    // file-level backup module) at parity with `tt backup ls|restore`. listBackups is a read, no
+    // refresh; restoreBackup quarantines the current file, re-points the store at the chosen
+    // backup, and refreshes all windows so every open view repaints the restored truth.
+    listBackups: () =>
+      store.listBackups().map((b) => ({
+        name: b.name,
+        path: b.path,
+        createdUtc: b.createdUtc,
+        sizeBytes: b.sizeBytes,
+      })),
+    restoreBackup: (p) => {
+      const r = store.restoreFromBackup((p as { name: string }).name);
+      refreshAll();
+      return { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo };
+    },
     setSetting: (p) => {
       // §12 R11: the Settings view (and the report view's rounding controls) persist any §14
       // setting over this one channel — parity with `tt config set` (no new channel). A
@@ -617,6 +721,21 @@ function registerIpc(): void {
 function init(): void {
   const dbPath = resolveDbPath(process.env, app.getPath('userData'));
   store = Store.open({ path: dbPath });
+
+  // §20 R05 — if the database was corrupt on open, core quarantined it and restored the latest
+  // good backup before we ever wrote (nothing lost). Tell the user once, on launch — the
+  // Settings → Backups section also paints a "recovered" pill from this same lastRecovery.
+  const recovery = store.lastRecovery();
+  if (recovery) {
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Stint recovered your data',
+      message: 'A corrupted database was detected and recovered from a backup.',
+      detail:
+        `Restored from ${recovery.recoveredFrom}. ` +
+        `The corrupt file was set aside at ${recovery.quarantinedTo}. Nothing was lost.`,
+    });
+  }
 
   // Launch-time reconciliation: a sleep missed while the app was closed (PRD §10a).
   const lastSeen = store.getAppState(LAST_SEEN_KEY);

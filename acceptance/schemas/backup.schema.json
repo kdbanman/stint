@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/backup.json",
+  "title": "tt backup ls --json",
+  "description": "An automatic backup of the database (PRD §20 R04, §17 R12): a checkpointed plain copy written beside the DB as `<dbPath>.bak-<YYYYMMDDTHHMMSSZ>`. `tt backup ls --json` emits an array of these, newest-first.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["name", "path", "created_utc", "size_bytes"],
+    "additionalProperties": false,
+    "properties": {
+      "name": { "type": "string", "minLength": 1 },
+      "path": { "type": "string", "minLength": 1 },
+      "created_utc": { "type": "string", "format": "date-time" },
+      "size_bytes": { "type": "integer", "minimum": 0 }
+    }
+  }
+}

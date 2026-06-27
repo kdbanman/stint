@@ -6,9 +6,10 @@
 <title>Stint — Edit / Add entry (mockup)</title>
 <!--
   Slightly-noisy UI prototype for the inline entry editor / manual-add form.
-  Design intent for PRD §05 R05/R06, §06 R04, §12 R05–R07, and §12 R15
+  Design intent for PRD §05 R05/R06, §06 R04, §12 R05–R07, §12 R13, and §12 R15
   (the visual time-range picker wires into the Start/End fields; text entry
-  remains and stays authoritative). Keep in sync with the PRD.
+  remains and stays authoritative; Delete confirms IN-WINDOW — a two-step gate,
+  never an OS dialog — per §12 R13). Keep in sync with the PRD.
 -->
 <style>
   :root{
@@ -50,6 +51,10 @@
   .actions-extra span{cursor:pointer}
   .foot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:#fafafb}
   .foot .danger{color:#a8362a;font-size:13px;cursor:pointer}
+  /* in-window two-step confirm gate (§12 R13) — no OS dialog; the modal stays in-window */
+  .foot .confirm{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft)}
+  .foot .confirm button.confirm-delete{color:#a8362a;border-color:#e3b4ae;padding:5px 11px;font-weight:600}
+  .foot .confirm button.cancel-delete{padding:5px 11px}
   .foot .right{display:flex;gap:10px}
   button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 16px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
   button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
@@ -88,7 +93,13 @@
         </div>
       </div>
       <div class="foot">
-        <span class="danger">Delete entry</span>
+        <!-- §06 R1 / §12 R13: delete is GATED, never one-click. The first Delete click only
+             ARMS the in-window confirm below (a stray click never destroys); the bare "Delete
+             entry" affordance is hidden here to depict the armed loss-protection state. -->
+        <span class="danger" hidden>Delete entry</span>
+        <!-- armed state (after the first Delete click; in-window, never an OS dialog) — this is
+             the loss-protection: the destructive remove fires only from "Confirm delete?". -->
+        <span class="confirm">Confirm delete? <button class="confirm-delete">Delete</button><button class="cancel-delete">Cancel</button></span>
         <span class="right"><button>Cancel</button><button class="primary">Save</button></span>
       </div>
     </div>
