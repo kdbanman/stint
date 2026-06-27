@@ -2,7 +2,7 @@ Feature: Report grouping (group by client / project / day / tag)
   # PRD §09 R2 — the report's Group by control. The same range of this-week entries can be
   # regrouped by client, project, day, or tag; each grouping sums the SAME underlying
   # billable time into different buckets, so the grand total is grouping-invariant. This
-  # locks the grouping CONTRACT the GUI Group-by segment drives (gui/renderer/report.html
+  # locks the grouping CONTRACT the GUI Group-by segment drives (gui/renderer/reports.js
   # #by-seg → window.stint.report({ by })). It runs TWICE — once over @stint/core
   # (store.report with the chosen `by`) and once over tt (`tt report --by <client|project|
   # day|tag> --json`) — so the grouping engine the GUI control drives is proven identical on
@@ -67,7 +67,7 @@ Feature: Report grouping (group by client / project / day / tag)
     And a report for this week totals 5 billable hours grouped by tag
 
   # PRD §09 R4 — the report's Rounding control (the GUI report builder's Off/On toggle +
-  # 6/10/15/30-min increment picker, gui/renderer/report.html #rounding). Rounding applies to
+  # 6/10/15/30-min increment picker, gui/renderer/reports.js #rounding). Rounding applies to
   # the grouped BILLABLE LINE nearest the chosen increment (NOT always up), and never alters
   # stored time. This locks that CONTRACT surface-neutrally — it runs TWICE, over @stint/core
   # (store.report with rounding on) and over tt (`tt report --round <min> --json`) — so the
