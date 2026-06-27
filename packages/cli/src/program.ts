@@ -9,10 +9,12 @@ import { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import {
   Store,
+  APP_VERSION,
   parseTime,
   formatDuration,
   formatHours,
   resolveRange,
+  joinClientProject,
   toCsv,
   toJsonEntries,
   detectOverlaps,
@@ -24,6 +26,9 @@ import {
   type BillableFilter,
   type GroupBy,
   type Settings,
+  type SavedReportInput,
+  type SavedReportPatch,
+  type RangeSpec,
 } from '@stint/core';
 import {
   table,
@@ -31,8 +36,18 @@ import {
   clientProjectLabel,
   entryFlags,
   shortUtc,
+  reportRangeSpecLine,
+  reportDefDetail,
+  favoriteRow,
 } from './format.js';
-import { statusJson, reportJson } from './serialize.js';
+import {
+  statusJson,
+  reportJson,
+  reportDefJson,
+  reportDefListJson,
+  favoriteListJson,
+  backupListJson,
+} from './serialize.js';
 
 export interface Io {
   out: (s: string) => void;
@@ -160,10 +175,18 @@ function resolveEntityRef(
 export function buildProgram(deps: Deps): Command {
   const { io, now } = deps;
   const program = new Command();
+  // §09 R08 — `report` is BOTH an ad-hoc query (with options) AND a group of saved-report
+  // subcommands that reuse the same option names (--week/--by/--json/…). Positional options
+  // make a recognized subcommand terminate the parent's option parsing, so `report ls --json`
+  // binds --json to `ls` rather than to the parent `report`, while `report --week --json`
+  // (no subcommand) still parses against the ad-hoc form.
+  program.enablePositionalOptions();
   program
     .name('tt')
     .description('Stint time tracker — the command-line surface')
-    .version('1.0.0')
+    // §19 R06 — the date/build version stamped into @stint/core, the SAME constant the GUI
+    // Settings → Software Update view shows, so `tt --version` and the GUI report one version.
+    .version(APP_VERSION)
     .configureOutput({
       writeOut: (s) => io.out(s.replace(/\n$/, '')),
       writeErr: (s) => io.err(s.replace(/\n$/, '')),
@@ -190,8 +213,32 @@ export function buildProgram(deps: Deps): Command {
     .option('--bill', 'mark billable')
     .option('--no-bill', 'mark non-billable')
     .option('--at <time>', 'start time (default: now)')
+    .option('--fav <name>', 'start from a pinned favorite (other flags override its template)')
     .action((description: string | undefined, opts) => {
       withStore((store) => {
+        // §05 R10 — `tt start --fav <name>` resumes from a favorite's template, with any
+        // explicit attribute flags layered over it as overrides (override wins per field;
+        // tags replace when given). Without --fav the start behaves exactly as before.
+        if (opts.fav) {
+          const attrs = resolveAttributes(store, opts);
+          const overrides: Parameters<Store['startFromFavorite']>[1] = {};
+          if (description !== undefined) overrides.description = description;
+          if (opts.client !== undefined || opts.project !== undefined) {
+            overrides.clientId = attrs.clientId;
+            overrides.projectId = attrs.projectId;
+          }
+          if (attrs.billable !== undefined) overrides.billable = attrs.billable;
+          if (opts.tag && opts.tag.length) overrides.tags = attrs.tags;
+          if (opts.at) overrides.atUtc = parseTime(opts.at, now());
+          try {
+            const res = store.startFromFavorite(opts.fav, overrides);
+            printWarnings(io, res.warnings);
+            io.out(statusLine(res.value));
+          } catch (err) {
+            throw new CliError((err as Error).message);
+          }
+          return;
+        }
         const attrs = resolveAttributes(store, opts);
         const res = store.start({
           description: description ?? null,
@@ -467,9 +514,10 @@ export function buildProgram(deps: Deps): Command {
     });
 
   // ---------------------------------------------------------------- report
-  program
+  const report = program
     .command('report')
-    .description('Grouped totals')
+    .enablePositionalOptions()
+    .description('Grouped totals (ad-hoc query; saved reports under `report save|ls|show|rm|run`)')
     .option('--today', 'today')
     .option('--week', 'this week')
     .option('--last-week', 'last week')
@@ -518,9 +566,9 @@ export function buildProgram(deps: Deps): Command {
         }
         if (opts.tag) req.tag = opts.tag;
         if (opts.search) req.search = opts.search;
-        const report = store.report(req);
+        const built = store.report(req);
         if (opts.json) {
-          io.out(JSON.stringify(reportJson(report)));
+          io.out(JSON.stringify(reportJson(built)));
           return;
         }
         if (opts.csv) {
@@ -539,9 +587,171 @@ export function buildProgram(deps: Deps): Command {
           io.out(toCsv(entries, now()).replace(/\n$/, ''));
           return;
         }
-        io.out(renderReport(report, rounding));
+        io.out(renderReport(built, rounding));
       });
     });
+
+  // ----------------------------------------------- report save|ls|show|rm|run (§09 R08–R09)
+  // Saved reports are subcommands of `report`; the bare `report …` query form above stays
+  // intact. All logic is in @stint/core (store.saveReport/runReport/…); these verbs are
+  // thin shells, at full parity with the GUI Reports view.
+  report
+    .command('save')
+    .description('Save a named report definition')
+    .argument('<name>', 'saved report name')
+    .option('--today', 'today')
+    .option('--week', 'this week')
+    .option('--last-week', 'last week')
+    .option('--month', 'this month')
+    .option('--last-month', 'last month')
+    .option('--range <from...>', 'absolute range: FROM TO')
+    .option('--by <grouping>', 'client | project | day | tag', 'client')
+    .option('--round [minutes]', 'round grouped totals (default increment from settings)')
+    .option('--client <name>', 'filter by client')
+    .option('--project <name>', 'filter by project')
+    .option('--tag <tag>', 'filter by tag')
+    .option('--search <text>', 'free-text query on description/client/project/tag')
+    .option('--all', 'include non-billable')
+    .option('--non-billable', 'only non-billable')
+    .action((name: string, opts) => {
+      withStore((store) => {
+        const input = buildSavedReportInput(store, name, opts, now());
+        try {
+          const def = store.saveReport(input);
+          io.out(`saved report "${def.name}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      });
+    });
+  report
+    .command('ls')
+    .description('List saved report definitions')
+    .option('--json', 'machine-readable output')
+    .action((opts) =>
+      withStore((store) => {
+        const defs = store.listReports();
+        if (opts.json) {
+          io.out(JSON.stringify(reportDefListJson(defs)));
+          return;
+        }
+        if (defs.length === 0) {
+          io.out('no saved reports');
+          return;
+        }
+        io.out(
+          table(
+            ['NAME', 'RANGE', 'BY', 'BILLABLE'],
+            defs.map((d) => [d.name, reportRangeSpecLine(d), d.by, d.billableFilter]),
+          ),
+        );
+      }),
+    );
+  report
+    .command('show')
+    .description('Show a saved report definition')
+    .argument('<name>', 'saved report name')
+    .option('--json', 'machine-readable output')
+    .action((name: string, opts) =>
+      withStore((store) => {
+        const def = store.getReport(name);
+        if (!def) throw new CliError(`no saved report named "${name}"`);
+        if (opts.json) {
+          io.out(JSON.stringify(reportDefJson(def)));
+          return;
+        }
+        io.out(reportDefDetail(def));
+      }),
+    );
+  report
+    .command('edit')
+    .description('Amend a saved report definition (range/grouping/filters/rounding)')
+    .argument('<name>', 'saved report name')
+    .option('--today', 'today')
+    .option('--week', 'this week')
+    .option('--last-week', 'last week')
+    .option('--month', 'this month')
+    .option('--last-month', 'last month')
+    .option('--range <from...>', 'absolute range: FROM TO')
+    .option('--by <grouping>', 'client | project | day | tag')
+    .option('--round [minutes]', 'round grouped totals')
+    .option('--no-round', 'turn rounding off')
+    .option('--client <name>', 'filter by client')
+    .option('--project <name>', 'filter by project')
+    .option('--tag <tag>', 'filter by tag')
+    .option('--search <text>', 'free-text query on description/client/project/tag')
+    .option('--all', 'include non-billable')
+    .option('--billable', 'only billable')
+    .option('--non-billable', 'only non-billable')
+    .action((name: string, opts) => {
+      withStore((store) => {
+        const existing = store.getReport(name);
+        if (!existing) throw new CliError(`no saved report named "${name}"`);
+        const patch = buildSavedReportPatch(store, opts, now());
+        try {
+          store.editReport(name, patch);
+          io.out(`edited report "${name}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      });
+    });
+  report
+    .command('rename')
+    .description('Rename a saved report')
+    .argument('<name>', 'saved report name')
+    .argument('<newName>', 'new name')
+    .action((name: string, newName: string) =>
+      withStore((store) => {
+        try {
+          store.renameReport(name, newName);
+          io.out(`renamed report to "${newName}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      }),
+    );
+  report
+    .command('rm')
+    .description('Delete a saved report')
+    .argument('<name>', 'saved report name')
+    .action((name: string) =>
+      withStore((store) => {
+        try {
+          store.removeReport(name);
+          io.out(`deleted report "${name}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      }),
+    );
+  report
+    .command('run')
+    .description('Run a saved report against current data')
+    .argument('<name>', 'saved report name')
+    .option('--csv', 'CSV output')
+    .option('--json', 'machine-readable output')
+    .action((name: string, opts) =>
+      withStore((store) => {
+        const def = store.getReport(name);
+        if (!def) throw new CliError(`no saved report named "${name}"`);
+        if (opts.csv) {
+          // §09 R09 — CSV/JSON export from a saved report: the RAW entries for the resolved
+          // range (billable='all', no narrowing — byte-identical to `tt export` for that
+          // window), rendered through the SAME core export path the GUI export uses.
+          io.out((store.exportSavedReport(name, 'csv', now()) as string).replace(/\n$/, ''));
+          return;
+        }
+        // --json (and the default human view) render the grouped Report runReport builds —
+        // the standard Report shape `tt report` already emits (report.schema.json).
+        const built = store.runReport(name, now());
+        if (opts.json) {
+          io.out(JSON.stringify(reportJson(built)));
+          return;
+        }
+        io.out(renderReport(built, def.rounding));
+      }),
+    );
 
   // ---------------------------------------------------------------- export
   program
@@ -712,6 +922,189 @@ export function buildProgram(deps: Deps): Command {
       ),
     );
 
+  // ------------------------------------------------------------------- fav
+  // §05 R09 — favorites (pinned timer templates). All logic is in @stint/core
+  // (store.pinFavorite/listFavorites/renameFavorite/unpinFavorite); these verbs are thin
+  // shells at full parity with the GUI Timer view's favorites rail. (Resume from a favorite —
+  // `fav start` / `start --fav` — is §05 R10, not this command group.)
+  const fav = program.command('fav').description('Manage pinned timer favorites');
+  fav
+    .command('add')
+    .description('Pin a favorite from a running/closed entry or from explicit attributes')
+    .argument('<name>', 'favorite name')
+    .option('--from-entry <id>', 'capture the template from this entry')
+    .option('--running', 'capture the template from the running entry')
+    .option('--desc <text>', 'description')
+    .option('--client <name>', 'client name')
+    .option('--project <name>', 'project name')
+    .option('--tag <tag>', 'tag (repeatable)', collect, [])
+    .option('--bill', 'mark billable')
+    .option('--no-bill', 'mark non-billable')
+    .action((name: string, opts) => {
+      withStore((store) => {
+        const template: Parameters<Store['pinFavorite']>[0] = { name };
+        if (opts.running) {
+          template.fromEntryId = 'open';
+        } else if (opts.fromEntry !== undefined) {
+          template.fromEntryId = Number(opts.fromEntry);
+        } else {
+          // Explicit attributes: resolve client/project names through core's single rule.
+          const attrs = resolveAttributes(store, opts);
+          template.description = opts.desc ?? null;
+          template.clientId = attrs.clientId;
+          template.projectId = attrs.projectId;
+          template.tags = attrs.tags;
+          if (attrs.billable !== undefined) template.billable = attrs.billable;
+        }
+        try {
+          const created = store.pinFavorite(template);
+          io.out(`pinned favorite "${created.name}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      });
+    });
+  fav
+    .command('start')
+    .description('Start a fresh timer from a pinned favorite (§05 R10)')
+    .argument('<name>', 'favorite name')
+    .action((name: string) => {
+      withStore((store) => {
+        // §05 R10 — resume from a favorite: a FRESH entry from the template (core delegates to
+        // start, so it atomically closes any open entry and inherits the overlap warning). The
+        // favorite is never mutated. Parity with the GUI rail's Resume + `tt start --fav`.
+        try {
+          const res = store.startFromFavorite(name);
+          printWarnings(io, res.warnings);
+          io.out(statusLine(res.value));
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      });
+    });
+  fav
+    .command('ls')
+    .description('List pinned favorites')
+    .option('--json', 'machine-readable output')
+    .action((opts) =>
+      withStore((store) => {
+        const favs = store.listFavorites();
+        if (opts.json) {
+          io.out(JSON.stringify(favoriteListJson(favs)));
+          return;
+        }
+        if (favs.length === 0) {
+          io.out('no favorites');
+          return;
+        }
+        // Resolve each favorite's client/project ids to a label (the store holds the names).
+        const clientNames = new Map(store.listClients(true).map((c) => [c.id, c.name]));
+        const projectNames = new Map(store.listProjects(undefined, true).map((p) => [p.id, p.name]));
+        io.out(
+          table(
+            ['NAME', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'TAGS'],
+            favs.map((f) => {
+              const cp =
+                joinClientProject(
+                  f.clientId !== null ? clientNames.get(f.clientId) ?? null : null,
+                  f.projectId !== null ? projectNames.get(f.projectId) ?? null : null,
+                ) ?? '—';
+              return favoriteRow(f, cp);
+            }),
+          ),
+        );
+      }),
+    );
+  fav
+    .command('rename')
+    .description('Rename a favorite')
+    .argument('<ref>', 'favorite name or id')
+    .argument('<name>', 'new name')
+    .action((ref: string, name: string) =>
+      withStore((store) => {
+        try {
+          store.renameFavorite(/^\d+$/.test(ref) ? Number(ref) : ref, name);
+          io.out(`renamed favorite to "${name}"`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      }),
+    );
+  fav
+    .command('rm')
+    .description('Unpin a favorite')
+    .argument('<ref>', 'favorite name or id')
+    .action((ref: string) =>
+      withStore((store) => {
+        try {
+          store.unpinFavorite(/^\d+$/.test(ref) ? Number(ref) : ref);
+          io.out('unpinned');
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      }),
+    );
+
+  // ---------------------------------------------------------------- backup
+  // §20 R04/R05, §17 R12 — automatic backups + recovery. All logic is in @stint/core
+  // (store.listBackups/backupNow/restoreFromBackup over the file-level backup module); these
+  // verbs are thin shells, at full parity with the GUI Settings → Backups section (the tt mirror
+  // of "Last backup", "Back up now", and Restore…). Retention is the `backup_retention` setting,
+  // changed via `tt config set backup_retention <N>` — no separate backup-config command.
+  const backup = program.command('backup').description('Manage automatic backups (§20 R04/R05)');
+  backup
+    .command('ls')
+    .description('List the timestamped backups beside the database (newest first)')
+    .option('--json', 'machine-readable output')
+    .action((opts) =>
+      withStore((store) => {
+        const backups = store.listBackups();
+        if (opts.json) {
+          io.out(JSON.stringify(backupListJson(backups)));
+          return;
+        }
+        if (backups.length === 0) {
+          io.out('no backups');
+          return;
+        }
+        io.out(
+          table(
+            ['NAME', 'CREATED', 'SIZE'],
+            backups.map((b) => [b.name, shortUtc(b.createdUtc), `${b.sizeBytes}`]),
+          ),
+        );
+      }),
+    );
+  backup
+    .command('now')
+    .description('Force a backup now (a no-op when the database is unchanged)')
+    .action(() =>
+      withStore((store) => {
+        const made = store.backupNow();
+        io.out(made ? `backed up to ${made.name}` : 'unchanged — no new backup needed');
+      }),
+    );
+  backup
+    .command('restore')
+    .description('Restore the database from a named backup (destructive — current file set aside)')
+    .argument('<name>', 'backup file name (from `backup ls`)')
+    .option('--force', 'skip confirmation')
+    .action((name: string, opts) =>
+      withStore((store) => {
+        if (!opts.force) {
+          throw new CliError(
+            `refusing to restore from "${name}" without confirmation; pass --force`,
+          );
+        }
+        try {
+          const r = store.restoreFromBackup(name);
+          io.out(`restored from ${r.recoveredFrom}; previous file set aside at ${r.quarantinedTo}`);
+        } catch (err) {
+          throw new CliError((err as Error).message);
+        }
+      }),
+    );
+
   // ----------------------------------------------------------------- sleep
   const sleep = program.command('sleep').description('Review sleep-flagged entries');
   sleep
@@ -805,6 +1198,159 @@ function normalizeRange(opts: Record<string, unknown>): RangeOpts {
   };
   if (r && r.length >= 2) out.range = [r[0]!, r[1]!];
   return out;
+}
+
+/**
+ * §09 R08 — assemble a SavedReportInput from the `report save` flags. The range becomes
+ * an ABSOLUTE spec when `--range FROM TO` is given (the explicit bounds are parsed to UTC
+ * and frozen), otherwise a relative PRESET (default `week`, matching the ad-hoc report's
+ * default) that re-resolves on every run. Client/project names resolve to ids through the
+ * same core lookups the ad-hoc query uses; an unknown name throws (no silent empty report).
+ */
+function buildSavedReportInput(
+  store: Store,
+  name: string,
+  opts: {
+    today?: boolean;
+    week?: boolean;
+    lastWeek?: boolean;
+    month?: boolean;
+    lastMonth?: boolean;
+    range?: string[];
+    by?: string;
+    round?: string | boolean;
+    client?: string;
+    project?: string;
+    tag?: string;
+    search?: string;
+    all?: boolean;
+    nonBillable?: boolean;
+  },
+  nowDate: Date,
+): SavedReportInput {
+  const by = (opts.by ?? 'client') as GroupBy;
+  if (!['client', 'project', 'day', 'tag'].includes(by)) {
+    throw new CliError(`unknown --by grouping "${by}"`);
+  }
+  let rangeSpec: RangeSpec;
+  if (opts.range && opts.range.length >= 2) {
+    rangeSpec = {
+      kind: 'absolute',
+      fromUtc: parseTime(opts.range[0]!, nowDate),
+      toUtc: parseTime(opts.range[1]!, nowDate),
+    };
+  } else {
+    const preset = opts.today
+      ? 'today'
+      : opts.lastWeek
+        ? 'last-week'
+        : opts.month
+          ? 'month'
+          : opts.lastMonth
+            ? 'last-month'
+            : 'week';
+    rangeSpec = { kind: 'preset', preset };
+  }
+  const settings = store.settings();
+  let rounding = settings.rounding;
+  let roundingIncrementMin = settings.roundingIncrementMin;
+  if (opts.round !== undefined) {
+    rounding = true;
+    if (typeof opts.round === 'string') roundingIncrementMin = Number(opts.round);
+  } else {
+    rounding = false;
+  }
+  const input: SavedReportInput = {
+    name,
+    rangeSpec,
+    by,
+    billableFilter: billableFilter({ all: opts.all, nonBillable: opts.nonBillable }),
+    rounding,
+    roundingIncrementMin,
+  };
+  if (opts.client) {
+    const c = store.findClientByName(opts.client);
+    if (!c) throw new CliError(`no client "${opts.client}"`);
+    input.clientId = c.id;
+  }
+  if (opts.project) {
+    const p = store.findProjectByName(opts.project, input.clientId);
+    if (!p) throw new CliError(`no project "${opts.project}"`);
+    input.projectId = p.id;
+  }
+  if (opts.tag) input.tag = opts.tag;
+  if (opts.search) input.search = opts.search;
+  return input;
+}
+
+/**
+ * §09 R08 — assemble a SavedReportPatch from the `report edit` flags. Only the axes the
+ * user actually named are amended (an omitted flag leaves that field untouched); the range
+ * is patched only when a preset flag or `--range` is given, becoming the matching spec.
+ */
+function buildSavedReportPatch(
+  store: Store,
+  opts: {
+    today?: boolean;
+    week?: boolean;
+    lastWeek?: boolean;
+    month?: boolean;
+    lastMonth?: boolean;
+    range?: string[];
+    by?: string;
+    round?: string | boolean;
+    client?: string;
+    project?: string;
+    tag?: string;
+    search?: string;
+    all?: boolean;
+    billable?: boolean;
+    nonBillable?: boolean;
+  },
+  nowDate: Date,
+): SavedReportPatch {
+  const patch: SavedReportPatch = {};
+  if (opts.range && opts.range.length >= 2) {
+    patch.rangeSpec = {
+      kind: 'absolute',
+      fromUtc: parseTime(opts.range[0]!, nowDate),
+      toUtc: parseTime(opts.range[1]!, nowDate),
+    };
+  } else if (opts.today) patch.rangeSpec = { kind: 'preset', preset: 'today' };
+  else if (opts.week) patch.rangeSpec = { kind: 'preset', preset: 'week' };
+  else if (opts.lastWeek) patch.rangeSpec = { kind: 'preset', preset: 'last-week' };
+  else if (opts.month) patch.rangeSpec = { kind: 'preset', preset: 'month' };
+  else if (opts.lastMonth) patch.rangeSpec = { kind: 'preset', preset: 'last-month' };
+  if (opts.by !== undefined) {
+    if (!['client', 'project', 'day', 'tag'].includes(opts.by)) {
+      throw new CliError(`unknown --by grouping "${opts.by}"`);
+    }
+    patch.by = opts.by as GroupBy;
+  }
+  // commander sets opts.round to `false` when `--no-round` is passed, a string/true for
+  // `--round [min]`, and leaves it undefined when neither is given.
+  if (opts.round === false) {
+    patch.rounding = false;
+  } else if (opts.round !== undefined) {
+    patch.rounding = true;
+    if (typeof opts.round === 'string') patch.roundingIncrementMin = Number(opts.round);
+  }
+  if (opts.all) patch.billableFilter = 'all';
+  else if (opts.nonBillable) patch.billableFilter = 'non-billable';
+  else if (opts.billable) patch.billableFilter = 'billable';
+  if (opts.client !== undefined) {
+    const c = store.findClientByName(opts.client);
+    if (!c) throw new CliError(`no client "${opts.client}"`);
+    patch.clientId = c.id;
+  }
+  if (opts.project !== undefined) {
+    const p = store.findProjectByName(opts.project, patch.clientId);
+    if (!p) throw new CliError(`no project "${opts.project}"`);
+    patch.projectId = p.id;
+  }
+  if (opts.tag !== undefined) patch.tag = opts.tag;
+  if (opts.search !== undefined) patch.search = opts.search;
+  return patch;
 }
 
 function applySetting(store: Store, key: string, value: string): void {

@@ -3,6 +3,24 @@
  * typography; follows system light/dark via prefers-color-scheme. The system accent
  * (--accent, injected from the main process) is used ONLY on the primary action and
  * the running state — everything else is restrained system grays.
+ *
+ * §15 R-clickability / G10 — ONE clickability convention across the whole window:
+ *   • clickable text affordance / link → carries the neutral button background (a
+ *     non-transparent fill var(--paper)/var(--wash) AND/OR a visible 1px border on
+ *     var(--rule)/var(--rule-strong)). The base `button` rule below IS that convention;
+ *     every clickable text affordance (button.ghost, the nav rail items, the report nav
+ *     tabs, the chip pills) inherits or mirrors it, so nothing clickable reads as plain
+ *     prose. Quieter-than-primary variants stay quiet via muted ink / smaller sizing, not
+ *     by dropping the background/border.
+ *   • inert text (.wordmark, .summary, .day-head, .entry .desc/.time, .set-k,
+ *     .report-lab, .settings-title, group headings, labels) → carries NO button
+ *     background; it stays bare prose. The JUDGE CLICKABILITY scan enforces both halves.
+ *   • accent → reserved for each view's single primary action (button.primary) + the
+ *     running state; never on an ordinary clickable affordance (§15 accent discipline).
+ *   In-chip / in-control SUB-affordances are the one sanctioned exception: a control that
+ *   already carries the convention (.chip, .seg, .presets) may host a bare inner control
+ *   (.chip-x, the .set-toggle knob `i`) without re-bordering it — the parent IS the
+ *   affordance. These are whitelisted in the CLICKABILITY scan.
  */
 :root {
   --paper: #ffffff;
@@ -175,15 +193,19 @@ s {
   gap: 4px;
   padding: 10px 0 0;
 }
+/* §15 R-clickability / G10: these tab links are clickable text, so they carry the neutral
+   button background (a var(--wash) fill + a var(--rule) border) — mirroring mockups/main.html
+   `.nav .wk a` — rather than reading as bare prose. The active link keeps its weight/ink +
+   bottom-rule marker (never the accent — §15 accent discipline). */
 .nav .nav-link {
-  border: none;
-  background: transparent;
+  background: var(--wash);
+  border: 1px solid var(--rule);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
   padding: 6px 10px;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: 6px;
 }
 .nav .nav-link:hover { color: var(--ink-soft); }
 .nav .nav-link.active {
@@ -209,14 +231,18 @@ s {
   background: var(--wash);
   border-right: 1px solid var(--rule);
 }
+/* §15 R-clickability / G10: each rail item is clickable text, so in its resting state it
+   carries the neutral button background (a var(--paper) fill + a subtle var(--rule) border)
+   — it never reads as bare prose. :hover and the sanctioned .active accent-wash (the rail's
+   single accent use, whitelisted in the JUDGE scans) override this resting fill below. */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   text-align: left;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--rule);
+  background: var(--paper);
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 500;
@@ -360,7 +386,13 @@ button.primary {
   color: #fff;
   font-weight: 600;
 }
-button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+/* §15 R-clickability / G10: a ghost button (Edit / Delete / Split / Rename / Archive /
+   Cancel / Add project / the per-row kebab) is clickable TEXT — so it MUST carry the neutral
+   button background, not read as bare prose. It inherits the base button's var(--paper) fill +
+   var(--rule-strong) border and stays quieter than .primary only via the muted ink and the
+   .small sizing — never by going transparent (the old transparent ghost was the offender the
+   CLICKABILITY scan now rejects). */
+button.ghost { color: var(--muted); }
 button.small { font-size: 12px; padding: 3px 8px; }
 /* §05 R8: Switch is a plain (non-accent) button so it does not compete with the
    primary Stop/Start accent — accent discipline (§15) stays a single fill. It is
@@ -476,6 +508,10 @@ textarea:focus-visible {
   gap: 6px;
   align-items: center;
 }
+/* §15 R-clickability / G10: the removable × is a SUB-affordance INSIDE an already-bordered
+   chip (the .chip carries the neutral bg+border above), so it is the one sanctioned in-chip
+   exception — it stays a bare glyph and is whitelisted in the CLICKABILITY scan (the parent
+   chip IS the affordance). The same applies to the .set-toggle knob inside its bordered track. */
 .chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
 .chip .chip-x:hover { color: var(--ink-soft); }
 .tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
@@ -1068,7 +1104,9 @@ button.danger:hover { border-color: var(--ink-soft); }
 .editor.conflict-prompt .mc-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
 
 /* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button
-   in restrained system grays — no accent (the row actions never carry the accent, §15). */
+   in restrained system grays — no accent (the row actions never carry the accent, §15). It is
+   `.ghost`, so it carries the neutral button background + border (§15 R-clickability / G10);
+   these overrides only tune the glyph weight/ink and must NOT re-blank the background/border. */
 .entry .kebab {
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1194,3 +1232,69 @@ body.popover { background: var(--paper); }
   cursor: pointer;
 }
 .set-hotkey:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+
+/* §05 R09 — the Timer view's favorites rail. The Pin control and per-favorite kebab/menu are
+   NEUTRAL buttons (the base button convention: a --wash fill + a --rule-strong border) — the
+   accent stays reserved for the view primary action / running state (§15 accent discipline), so
+   no rule here pulls in var(--accent). The chips reuse the monochrome .chip rule above. */
+.favorites { display: flex; flex-direction: column; gap: 12px; }
+.fav-head { display: flex; align-items: center; justify-content: space-between; }
+.fav-title { font-weight: 600; color: var(--ink); }
+.fav-pin {
+  font-size: 12.5px;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--wash);
+  cursor: pointer;
+}
+.fav-rail { display: flex; flex-wrap: wrap; gap: 10px; }
+.fav-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--paper);
+}
+.fav-card-main { display: flex; flex-direction: column; gap: 4px; }
+.fav-name { font-weight: 600; color: var(--ink); }
+.fav-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+/* §05 R10: the favorite's one-click Resume. Monochrome (accent is confined to the running
+   Active-Timer card, §15) so the rail stays calm — it is an affordance, not the live state. */
+.fav-card .resume {
+  flex: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--wash);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+.fav-kebab {
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--wash);
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.fav-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.fav-empty { color: var(--faint); font-size: 13px; }

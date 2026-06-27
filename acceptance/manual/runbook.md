@@ -55,13 +55,28 @@ bundled Node ≥ 22.5 — see PRD §15). The CLI and GUI share the same database
 > `packages/core/test/prop/checkin.test.ts` and shown in the evidence transcript;
 > this runbook confirms the wall-clock firing on real hardware.
 
-## CHECK TRAY + GLOBAL HOTKEY (§12 R1/R2)
+## CHECK TRAY + GLOBAL HOTKEY (§12 R01/R2)
+
+§12 R01 (G8) requires the tray's **single left-click to open the compact popover only**
+— the old 3-item Start/Stop + Open Stint **dropdown action menu is removed**, and the
+popover is the sole surface for those actions. Verify on a real desktop session (no
+tray host headless, so this is the gating evidence for the tray's own click behavior).
 
 1. With the app running, observe the tray/menu-bar title.
    - [ ] While a timer runs, the tray title counts up once per second.
    - [ ] Pressing the global hotkey (default `Ctrl+Alt+T`) from another application
          toggles the timer — stops if running, resumes the last entry if idle.
-   - [ ] Clicking the tray opens the popover with the running timer; one click stops it.
+2. Click the tray icon and observe the click behavior (§12 R01).
+   - [ ] A single **LEFT-click** opens the **compact popover only** — **no dropdown
+         menu appears**.
+   - [ ] The popover shows **Stop** and **Switch** while a timer runs, **Start** while
+         idle, and **Open Stint** in both states.
+   - [ ] One click on the popover's Stop/Start toggles the timer; Switch (while running)
+         stops-then-starts; Open Stint opens the main window.
+   - [ ] A **RIGHT-click** yields at most a **minimal Quit-only OS menu** — it has **no
+         Start / Stop / Open Stint** items.
+   - [ ] There is **no 3-item dropdown action menu anywhere** (a left-click that shows a
+         menu, or any timer action reachable from a tray dropdown, is a FAIL).
 
 ## CHECK START WITH ATTRIBUTES (§05 R1, §12 R1, §17 R8)
 
@@ -806,3 +821,232 @@ reads. Run with `tt` in a second terminal on the same database.
 > `main-settings.png`) and the renderer-static guard pins the field set. This runbook confirms the
 > live hotkey re-registration, the accent-mode / date-format repaint against the real OS theme, and
 > the cross-surface round-trip on a real desktop/DB the headless host cannot exercise.
+
+## CHECK BUILD MATRIX — macOS + Linux only, no Windows (§19 R01)
+
+§19 R01 fixes the distribution build matrix at **macOS + Linux only**: a tagged/manual build
+produces installable artifacts for both platforms and **no Windows artifact anywhere**. The
+packaging is `electron-builder` driven by `packages/gui/electron-builder.yml` (mac `.dmg` +
+linux AppImage/`.deb`, output to the git-ignored `packages/gui/dist-pack/`) via the
+`npm --workspace @stint/gui run pack` script, and the `.github/workflows/release.yml` matrix
+(`macos-latest`, `ubuntu-latest` — deliberately no `windows-latest`). This check confirms the
+two-platform artifacts really build and launch and that Windows is absent. (Publishing the
+artifacts as a GitHub Release is §19 R05; the single-installer PATH symlink is §19 R02 — both
+out of scope here.)
+
+Run it either by triggering the workflow (`.github/workflows/release.yml` via the **Run
+workflow** / `workflow_dispatch` button, or a push to `main`) and inspecting its artifacts, or
+locally per platform with `npm ci && npm run build && npm --workspace @stint/gui run pack`.
+
+1. **No Windows in the configuration.** Inspect the two source files.
+   - [ ] `packages/gui/electron-builder.yml` declares `mac` and `linux` target blocks and
+         contains **no `win` block** (and no `nsis`/`portable`/`msi` Windows targets).
+   - [ ] `.github/workflows/release.yml`'s `strategy.matrix.os` is exactly
+         `[macos-latest, ubuntu-latest]` — **no `windows-latest`** entry.
+2. **macOS artifact (run on macos-latest / a Mac).**
+   - [ ] `npm --workspace @stint/gui run pack` produces a macOS app bundle / `.dmg` under
+         `packages/gui/dist-pack/` (and the `release.yml` `stint-macos` artifact carries it).
+3. **Linux artifact (run on ubuntu-latest / a Linux box).**
+   - [ ] `npm --workspace @stint/gui run pack` produces a Linux AppImage **or** `.deb` under
+         `packages/gui/dist-pack/` (and the `release.yml` `stint-linux` artifact carries it).
+4. **No Windows artifact.**
+   - [ ] No `.exe`, `.msi`, or NSIS installer is produced on any runner, and the workflow run
+         has **no Windows job** in the matrix.
+5. **The artifacts launch.**
+   - [ ] The macOS `.dmg`/app bundle opens the Stint GUI on macOS.
+   - [ ] The Linux AppImage/`.deb` opens the Stint GUI on Linux.
+
+> This check **FAILS** if any Windows target appears (a `win` block in `electron-builder.yml`,
+> a `windows-latest` matrix entry, or a `.exe`/`.msi`/NSIS artifact) or if either the macOS or
+> the Linux artifact is missing. R01 is satisfied only when both platform artifacts build and
+> launch and Windows is absent throughout.
+
+## CHECK BACKUP & RECOVERY (§17 R12, §20 R04/R05) — backup-on-launch, retention, corruption recovery
+
+§20 R04/R05 make Stint loss-resistant: every launch writes a timestamped backup beside the
+database **if the data changed** since the last one (keeping the last N, default 5), and every open
+**integrity-checks** the database before writing — on failure it quarantines the corrupt file and
+restores from the latest good backup, informing the user, **never silently losing data**. The
+backups are plain checkpointed copies (`timetracker.sqlite.bak-<UTC>`) that survive even a corrupt
+main file. The executable AC (`features/backup_recovery.feature`, run over core + tt) proves the
+mechanism headless; this MANUAL check confirms it on a real desktop install — the launch backup
+appearing on disk, the Settings → Backups status, retention pruning, the on-open corruption
+dialog, and the real round-trip on both surfaces. Run with `tt` in a second terminal on the same
+database (find it with `tt config ls` / the default path in PRD §13; below it is `timetracker.sqlite`).
+
+1. Launch the app fresh on a database that has at least one entry (e.g. `tt add "warmup" --from "2h
+   ago" --to "1h ago"`, then start the GUI).
+   - [ ] A timestamped backup file `timetracker.sqlite.bak-<YYYYMMDDTHHMMSSZ>` appears **beside**
+         `timetracker.sqlite`; `tt backup ls` lists it (same file, both surfaces).
+   - [ ] **Settings → Backups** shows **"Last backup &lt;ts&gt;"** with a **verified** pill matching
+         that newest backup.
+2. Relaunch the app **without changing anything**, then make a change (e.g. `tt add …`) and relaunch
+   again.
+   - [ ] The no-change relaunch creates **no duplicate** backup (`tt backup ls` count unchanged) —
+         the launch backup is a no-op when the DB is unchanged.
+   - [ ] The relaunch-after-a-change creates **one new** backup, and once more than N (default 5)
+         exist, the **oldest is pruned** so exactly N remain. Lower it (`tt config set
+         backup_retention 2`) and relaunch a few more times to watch the list prune to 2.
+3. Quit the app entirely. Corrupt the database on disk:
+   `printf 'x' | dd of=timetracker.sqlite bs=1 seek=30 conv=notrunc` (clobbers a header byte).
+   Relaunch the app.
+   - [ ] The app **detects the corruption on open** and does **not** start on an empty database.
+   - [ ] The corrupt file is **quarantined** as a `timetracker.sqlite.corrupted-<ts>` sibling
+         (still on disk — not destroyed), and the latest good backup is **restored** into
+         `timetracker.sqlite`.
+   - [ ] The app **informs the user** (a recovery dialog / notice naming the backup it restored
+         from and the quarantined file).
+   - [ ] `tt list --all` shows the **pre-corruption entries intact** — **zero data loss**.
+4. Use **Settings → Restore…** to restore a chosen earlier backup (and confirm the **tt mirror**
+   `tt backup restore <name>` behind its `--force` confirm gate behaves the same).
+   - [ ] Restoring quarantines the **current** file first (a `timetracker.sqlite.replaced-<ts>`
+         sibling appears — current data set aside, not lost), then the chosen backup becomes live.
+   - [ ] After restore, **both surfaces** read the restored data (`tt list` in the other terminal
+         and the GUI's entry list agree) — the restore is the same core operation on both.
+
+> Backup-on-launch + corruption recovery parity is proven over core + tt by
+> `features/backup_recovery.feature` and the parity rows (`listBackups`/`restoreBackup` ↔ `tt backup
+> ls`/`tt backup restore`); GOLD pins the `tt backup ls --json` shape (`backup.schema.json`) and the
+> `now`/`restore` exit contracts. This runbook confirms the live launch backup, retention pruning,
+> the on-open corruption dialog, and the real cross-surface round-trip a headless host cannot exercise.
+
+## CHECK SOFTWARE UPDATE — VERSION DISPLAYED (§19 R06)
+
+§19 R06 stamps a single date/build version (`YYYY.M.D`, with a numeric same-day suffix
+`YYYY.M.D.N`, e.g. `2026.6.27.2`) into the app and reports it identically on **both equal
+surfaces**: the GUI Settings → **Software Update** → **Current version** row and `tt --version`.
+The version is the shared `@stint/core` `APP_VERSION` constant (stamped by
+`scripts/stamp-version.mjs` before the build, overridable at runtime via `STINT_VERSION`); the
+GUI reads it off the `getState` snapshot's `appVersion`, the CLI off `--version`. This check
+confirms the two surfaces show the **same** stamped string on a real install (the GOLD contracts
+prove the constant + the CLI line headless; this is the cross-surface, on-screen confirmation).
+(The check-for-updates / download flow is §19 R03/R04 — out of scope here; this is the version
+display only.)
+
+1. Launch the installed (stamped) app and open **Settings → Software Update**.
+   - [ ] The **Current version** row shows a `YYYY.M.D` or `YYYY.M.D.N` string (e.g. `2026.6.27`
+         or `2026.6.27.2`) — **not** a semver like `1.0.0` and **not** the `0.0.0-dev` sentinel.
+2. In a terminal on the same install, run `tt --version`.
+   - [ ] It prints a single `YYYY.M.D[.N]` line.
+   - [ ] It is **byte-identical** to the version the GUI shows — the two equal surfaces report
+         **one** stamped version.
+
+> This check **FAILS** if either surface shows a different string, a non-date version (e.g. the
+> old hardcoded `1.0.0`), or the unstamped `0.0.0-dev` sentinel on a real release build. R06 is
+> satisfied only when the GUI Settings version and `tt --version` agree on one `YYYY.M.D[.N]`
+> value. Proven headless by GOLD (`cli/test/gold/cli.test.ts` version case + `version.schema.json`,
+> `core/test/gold/contracts.test.ts` `isReleaseVersion`/`APP_VERSION`).
+
+## CHECK INSTALL — single artifact puts the GUI in Applications/launcher and `tt` on PATH (§19 R02)
+
+§19 R02 (decision **G2**) is the single-installer mechanism: **one** artifact per platform, run
+**once**, leaves **both** the GUI installed (in Applications on macOS / the app launcher on Linux)
+**and** `tt` on `PATH` — with **no separate Node install**, because `tt` runs through the Node
+bundled in the GUI app. The mechanism is the `packaging/` tree: `packaging/tt-launcher.sh` is the
+on-`PATH` `tt` shim (it finds `packages/cli/dist/bin.js` in the installed bundle and exec's the
+bundled Node against it); on macOS the `.pkg` payload installs `Stint.app` into `/Applications`
+and its `postinstall.sh` symlinks `tt` (`/usr/local/bin/tt`, falling back to `~/.local/bin/tt`);
+on Linux `packaging/linux/install.sh` copies the AppImage to `/opt/stint` (or `~/.local/opt/stint`),
+writes a `.desktop` launcher entry, and symlinks `tt` the same way. This check confirms a **single**
+install run yields **both** outcomes on each platform, and that uninstall reverses both. It
+consumes the artifacts of §19 R01 (the `.pkg`/AppImage built by `electron-builder`); the in-app
+updater (§19 R03/R04), Release publishing (§19 R05), and versioning (§19 R06) are out of scope here.
+
+Build the platform artifact first (`npm ci && npm run build && npm --workspace @stint/gui run pack`,
+then on macOS `packaging/macos/build-pkg.sh <Stint.app> <version>` to wrap the `.pkg`). Then, per
+platform:
+
+### macOS — the `.pkg` double-click path
+1. Double-click `Stint-<version>.pkg` and complete the installer (a single run).
+   - [ ] **`Stint.app` is present in `/Applications`** and launches the GUI (open it from Finder /
+         Launchpad).
+2. Open a **new** terminal (fresh shell, so `PATH` is re-read).
+   - [ ] `which tt` resolves to a symlink on `PATH` — **`/usr/local/bin/tt`** (or
+         **`~/.local/bin/tt`** if `/usr/local/bin` was not writable) — and it points at
+         `…/Stint.app/Contents/Resources/app/packaging/tt-launcher.sh`
+         (`readlink "$(which tt)"`).
+   - [ ] `tt status` runs successfully against the shared DB **with no separate Node installed**
+         (verify the bundled-Node path by temporarily ensuring `node` is absent from `PATH`, or
+         confirm the launcher exec'd the Electron binary). It reads the same database the GUI shows.
+
+### Linux — the `install.sh` path
+3. Run the single installer: `packaging/linux/install.sh <path-to>/Stint-<version>.AppImage`.
+   - [ ] A **`.desktop` entry appears** (`/usr/share/applications/stint.desktop` or
+         `~/.local/share/applications/stint.desktop`); **Stint shows in the app launcher** and
+         launching it opens the GUI.
+4. Open a **new** terminal.
+   - [ ] `which tt` resolves to a symlink on `PATH` — **`/usr/local/bin/tt`** (or
+         **`~/.local/bin/tt`** fallback) — pointing at the installed `…/stint/tt-launcher.sh`
+         (`readlink "$(which tt)"`).
+   - [ ] `tt status` runs successfully against the shared DB. It reads the same database the GUI
+         shows (run `tt add …` and confirm it appears in the GUI, and vice-versa).
+
+### Uninstall reverses both
+5. Remove Stint: macOS — delete `/Applications/Stint.app` and the `tt` symlink (or your uninstall
+   path); Linux — run `packaging/linux/uninstall.sh`.
+   - [ ] The **GUI is gone** (not in `/Applications` / no `.desktop` entry / removed from the
+         launcher) **and** `which tt` no longer resolves — **both** the app and the symlink are
+         removed.
+   - [ ] The time-tracking **database is left untouched** (uninstall removes the app, never the
+         user's data).
+
+> This check **FAILS** if, after a **single** install run, **either** the GUI is missing from
+> Applications / the app launcher **or** `tt` is not on `PATH` (`which tt` does not resolve, or
+> `tt status` fails) — both outcomes must hold from one artifact. It also fails if `tt` requires a
+> separately installed Node, or if uninstall leaves either the app or the `tt` symlink behind. R02
+> is satisfied only when one install run yields both the launchable GUI and a working on-`PATH`
+> `tt`, on macOS (`.pkg`) and Linux (`install.sh`) alike. There is no executable AC for R02 — it is
+> an OS-level install reality (no new core API, no IPC channel, no DB table), so the proof is this
+> MANUAL procedure plus the syntactically-checked `packaging/` scripts.
+
+## CHECK PUBLISH-ON-MERGE — every merge to main publishes a GitHub Release with both artifacts (§19 R05)
+
+§19 R05 (decision **G4**) makes the public repo the distribution backend: **every merge to `main`**
+runs CI that builds both platform artifacts and **publishes a GitHub Release**. The mechanism is the
+publish pipeline in `.github/workflows/release.yml` — it runs on `push` to `main` (and
+`workflow_dispatch` for a manual re-run), guarded by `if: github.repository == 'kdbanman/stint'` so
+forks build but never publish. Four jobs chain: **`version`** computes the `YYYY.M.D[.N]` tag once
+(§19 R06's `scripts/stamp-version.mjs`; the same-day suffix `.N` = 1 + the count of release tags
+already cut for today's date) and exposes it as an output; the **`pack`** matrix
+(`macos-latest` + `ubuntu-latest` — **no `windows-latest`**) stamps that exact version, builds, runs
+`npm --workspace @stint/gui run pack` (§19 R01), and uploads the macOS `.dmg` and the Linux
+AppImage/`.deb`; **`publish`** (`needs: [version, pack]`, `permissions: contents: write`) downloads
+both artifacts and `gh release create`s a **published** (not draft, not prerelease) Release at tag
+`vYYYY.M.D[.N]` with exactly the two artifacts attached. This check confirms a real merge actually
+publishes — it consumes the R01 build artifacts and the R06 version stamp; the in-app updater that
+later consumes the published release is §19 R03/R04 (out of scope here). The existing `ci.yml`
+(PR/push verify + judge) is a separate workflow and is **not** folded into this pipeline.
+
+Run it by merging a PR to `main` (or pressing **Run workflow** / `workflow_dispatch` on
+`release.yml`) on the real upstream repo, then inspect the Actions run and the Releases page (e.g.
+`gh run list --workflow release.yml`, `gh release view <tag> --json isDraft,assets,tagName`).
+
+1. **The workflow runs on the merge.**
+   - [ ] A `Release build matrix` run appears for the merge commit on `main` (it is **not** skipped),
+         and the `version`, `pack · macos-latest`, `pack · ubuntu-latest`, and `publish` jobs all
+         finish **green** (all four jobs succeed).
+2. **A new GitHub Release appears, correctly tagged.**
+   - [ ] A **new** Release exists tagged **`vYYYY.M.D`** (e.g. `v2026.6.27`) — or **`vYYYY.M.D.N`**
+         (e.g. `v2026.6.27.2`) when a same-day release already existed, the suffix incrementing per
+         same-day merge.
+   - [ ] The release **target** is the merge commit on `main`.
+3. **Exactly the two expected artifacts are attached — and no Windows artifact.**
+   - [ ] The release has **exactly two** assets: **one macOS** (`.dmg` / app bundle) **and one
+         Linux** (AppImage **or** `.deb`).
+   - [ ] There is **no `.exe`, `.msi`, or NSIS** asset, and no `windows-latest` job ran (§19 R01).
+4. **The release is published, not a draft.**
+   - [ ] `gh release view <tag> --json isDraft` reports **`isDraft: false`** (and it is not a
+         prerelease) — the release is live on the Releases page, not held as a draft.
+5. **The release tag/version matches what the app and `tt` report (§19 R06 cross-check).**
+   - [ ] Install the published macOS/Linux artifact, then run `tt --version` and open **Settings →
+         Software Update → Current version**: both show the **same** `YYYY.M.D[.N]` string, and it
+         **equals the release tag without the leading `v`** (tag `v2026.6.27.2` ⇒ both surfaces show
+         `2026.6.27.2`).
+
+> This check **FAILS** if the workflow does **not** run on a merge to `main`, if **any** of the four
+> jobs fails, if **no new Release** is created (or it is left a **draft**/prerelease), if either the
+> macOS or the Linux artifact is **absent** (or a Windows artifact appears), or if the release
+> tag/version disagrees with what the installed app and `tt` report (§19 R06). R05 is an
+> Actions/GitHub-Releases reality — there is **no executable AC** (no new core API, IPC channel, or
+> DB table), so the proof is this MANUAL procedure observed on the **real upstream repo**; CI cannot
+> assert the publish actually firing. The pipeline itself lives in `.github/workflows/release.yml`.

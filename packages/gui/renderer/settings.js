@@ -120,6 +120,20 @@
     return html;
   }
 
+  // §19 R06 — the read-only Software Update → Current version row. It prints the shared
+  // appVersion carried on the getState snapshot (the SAME core APP_VERSION constant
+  // `tt --version` reports), matching the mockup's `.ver` span. Read-only display only —
+  // the actual check/download flow is §19 R03/R04, out of scope here.
+  function softwareUpdateHtml(appVersion) {
+    const ver = esc(appVersion || '—');
+    return (
+      `<div class="set-grp">Software Update</div>` +
+      `<div class="set-row"><div class="set-k">Current version` +
+      `<small>Date/build versioning · macOS + Linux only.</small></div>` +
+      `<div class="set-ctrl"><span class="ver">${ver}</span></div></div>`
+    );
+  }
+
   function wire(host) {
     // Selects (rounding increment, check-ins, accent, date format) — cast numeric values.
     for (const sel of host.querySelectorAll('select.set-field')) {
@@ -183,7 +197,7 @@
     dateFormatMode = settings.dateFormat === 'iso' ? 'iso' : 'system';
     applyAccentMode(accentMode, state && state.accent);
     applyDateFormat(dateFormatMode);
-    host.innerHTML = panelHtml(settings);
+    host.innerHTML = panelHtml(settings) + softwareUpdateHtml(state && state.appVersion);
     wire(host);
   }
 

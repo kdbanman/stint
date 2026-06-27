@@ -7,13 +7,15 @@
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc --build tsconfig.main.json",
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --mac --linux --config electron-builder.yml"
   },
   "dependencies": {
     "@stint/core": "1.0.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
-    "electron": "^42.5.0"
+    "electron": "^42.5.0",
+    "electron-builder": "^25.1.8"
   }
 }

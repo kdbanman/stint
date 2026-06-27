@@ -66,6 +66,8 @@ function fixture(): UiState {
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
     accent: '#2f6fed',
+    lastBackupUtc: null,
+    recoveryNotice: null,
   };
 }
 

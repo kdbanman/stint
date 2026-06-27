@@ -1269,6 +1269,7 @@ function route(view) {
   // Repaint the active data view from its current state so a route back restores it.
   if (view === 'entries') render();
   else if (view === 'clients') void renderClients();
+  else if (view === 'timer') void renderFavorites();
 }
 
 for (const item of document.querySelectorAll('.nav-item')) {
@@ -1538,9 +1539,121 @@ $('add-tag').addEventListener('click', () => {
   });
 });
 
+// §05 R09: render the Timer view's favorites rail from the same listFavorites capability tt
+// exposes (`tt fav ls`). Each pinned favorite shows its name + client/project + tags, with a
+// kebab (⋯) opening Rename / Unpin — over window.stint.renameFavorite / unpinFavorite (no DB
+// in the page), at parity with `tt fav rename` / `tt fav rm`. The Pin-as-favorite control
+// captures the running timer's template (or, when idle, the Start form's attributes) via
+// window.stint.pinFavorite. The rail repaints over the `changed` broadcast on every write.
+async function renderFavorites() {
+  const rail = $('fav-rail');
+  if (!rail) return;
+  rail.innerHTML = '';
+  const favs = await window.stint.listFavorites();
+  const empty = $('fav-empty');
+  if (empty) empty.hidden = favs.length > 0;
+  for (const f of favs) rail.appendChild(favoriteChip(f));
+  // The Pin control reads the running timer when one is running, else the Start form's fields.
+  const pinBtn = $('fav-pin');
+  if (pinBtn && !pinBtn.dataset.wired) {
+    pinBtn.dataset.wired = '1';
+    pinBtn.addEventListener('click', () => void pinAsFavorite());
+  }
+}
+
+function favoriteChip(f) {
+  const card = document.createElement('div');
+  card.className = 'fav-card';
+  // A favorite carries client/project IDS (not names); the rail's primary handle is the name,
+  // with the captured description as the secondary line and the tags as monochrome chips.
+  const tags = (f.tags ?? []).map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
+  card.innerHTML =
+    `<div class="fav-card-main">` +
+    `<span class="fav-name">${escapeHtml(f.name)}</span>` +
+    (f.description ? `<span class="where">${escapeHtml(f.description)}</span>` : '') +
+    (tags ? `<span class="fav-tags">${tags}</span>` : '') +
+    `</div>` +
+    // §05 R10: one-click Resume — start a fresh timer from this favorite's template over the
+    // startFavorite IPC (parity with `tt fav start` / `tt start --fav`). The `changed` broadcast
+    // the write fans out repaints the rail + Active-Timer card.
+    `<button type="button" class="resume" data-act="fav-resume">Resume</button>` +
+    `<button type="button" class="fav-kebab" data-act="fav-menu" title="favorite actions">⋯</button>`;
+  card.querySelector('[data-act="fav-resume"]').addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    await window.stint.startFavorite({ name: f.name });
+    await renderFavorites();
+  });
+  card.querySelector('[data-act="fav-menu"]').addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    openFavMenu(card, f);
+  });
+  return card;
+}
+
+function openFavMenu(card, f) {
+  // Replace the kebab with an inline Rename / Unpin menu (no native menus in the page).
+  const existing = card.querySelector('.fav-menu');
+  if (existing) {
+    existing.remove();
+    return;
+  }
+  const menu = document.createElement('div');
+  menu.className = 'fav-menu';
+  menu.innerHTML =
+    `<button type="button" class="small" data-act="fav-rename">Rename</button>` +
+    `<button type="button" class="small danger" data-act="fav-unpin">Unpin</button>`;
+  menu.querySelector('[data-act="fav-rename"]').addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    const next = window.prompt('Rename favorite', f.name);
+    if (next && next.trim() && next.trim() !== f.name) {
+      await window.stint.renameFavorite({ ref: f.id, name: next.trim() });
+    }
+    await renderFavorites();
+  });
+  menu.querySelector('[data-act="fav-unpin"]').addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    await window.stint.unpinFavorite({ ref: f.id });
+    await renderFavorites();
+  });
+  card.appendChild(menu);
+}
+
+async function pinAsFavorite() {
+  // From the running timer when one is running: capture its template (fromEntryId='open').
+  // Otherwise capture the Start form's attributes (description/client/project/tags/billable),
+  // exactly the payload `tt fav add` accepts — so the rail reaches nothing tt cannot.
+  const running = state?.status?.entry ?? null;
+  let payload;
+  if (running) {
+    const name = window.prompt('Pin the running timer as a favorite — name?', running.description ?? 'Favorite');
+    if (!name || !name.trim()) return;
+    payload = { name: name.trim(), fromEntryId: 'open' };
+  } else {
+    const name = window.prompt('Pin a favorite — name?', '');
+    if (!name || !name.trim()) return;
+    payload = {
+      name: name.trim(),
+      description: $('start-desc') ? $('start-desc').value || null : null,
+      client: $('start-client') ? $('start-client').value || undefined : undefined,
+      project: $('start-project') ? $('start-project').value || undefined : undefined,
+      tags: $('start-tags') && $('start-tags').value
+        ? $('start-tags').value.split(',').map((t) => t.trim()).filter(Boolean)
+        : [],
+      billable: $('start-bill') ? $('start-bill').checked : undefined,
+    };
+  }
+  try {
+    await window.stint.pinFavorite(payload);
+  } catch {
+    /* a duplicate name is rejected in core; leave the rail as-is */
+  }
+  await renderFavorites();
+}
+
 // §07/§12: an external change (a tt write) repaints whichever view is active.
 window.stint.onChange(() => {
   if (activeView === 'clients') void renderClients();
+  else if (activeView === 'timer') void renderFavorites();
   else void load();
 });
 setInterval(tick, 1000);

@@ -169,6 +169,94 @@ async function run() {
   paint(report);
 }
 
+// §09 R09: the saved reports rail. R08 persists the named definitions; this view lists
+// them (window.stint.listReports) with a Run action, and Run resolves the definition
+// against current data through core (window.stint.runReport) — the renderer re-derives no
+// range/grouping/rounding/totals. The currently-run saved report's name is held so the
+// run-output Export buttons can carry its ref (so main exports the definition's range,
+// byte-identical to `tt report run <name> --csv|--json`).
+let runningSavedRef = null;
+
+// Paint the saved-report run-output panel from the core Report runReport returned. Mirrors
+// paint() above (per-line + grand totals, with flags shown in context off window.SU.line
+// Flags) — the saved report's own rounding is honoured via report.options.rounding.
+function paintSavedRun(name, report) {
+  runningSavedRef = name;
+  const rounding = report.options.rounding;
+  const lineSec = (l) => (rounding ? l.roundedSeconds : l.totalSeconds);
+  const rowHtmlSaved = (line, depth) => {
+    const cls = depth === 0 ? 'report-grp' : 'report-sub';
+    const indent = depth > 0 ? ' style="padding-left:30px"' : '';
+    const flags = lineFlags(line, report.overlappedEntryIds, report.unreviewedSleepEntryIds)
+      .map((f) => ` <span class="report-flag" title="${escapeHtml(f)}">${escapeHtml(f)}</span>`)
+      .join('');
+    return (
+      `<tr class="${cls}"><td${indent}>${escapeHtml(line.key)}${flags}</td>` +
+      `<td class="num">${fmtHM(lineSec(line))}</td></tr>` +
+      (line.children || []).map((c) => rowHtmlSaved(c, depth + 1)).join('')
+    );
+  };
+  const grand = rounding ? report.grandRoundedSeconds : report.grandTotalSeconds;
+  $('saved-run-caption').textContent = `Run · ${name}`;
+  $('saved-run-rows').innerHTML =
+    report.lines.map((l) => rowHtmlSaved(l, 0)).join('') ||
+    '<tr><td colspan="2" class="report-empty">No time in this range.</td></tr>';
+  $('saved-run-total').textContent = fmtHM(grand);
+  $('saved-run-grand').textContent = fmtHM(grand);
+  $('saved-run-range').textContent = rangeLabel(report.rangeFromUtc, report.rangeToUtc);
+  $('saved-run').hidden = false;
+}
+
+// Run a saved definition by name. core resolves its stored range-spec and totals it
+// (window.stint.runReport) — no renderer-side math — and the returned core Report is painted.
+async function runSaved(name) {
+  const report = await window.stint.runReport({ ref: name });
+  paintSavedRun(name, report);
+}
+
+// §09 R09: export CSV / JSON FROM the currently-run saved report. The request carries the
+// saved-report ref, so main resolves the definition's range and exports its raw entries
+// (byte-identical to `tt report run <name> --csv|--json`); the renderer holds no export math.
+async function exportSaved(format) {
+  if (runningSavedRef === null) return;
+  const status = $('saved-export-status');
+  status.textContent = '';
+  try {
+    const res = await window.stint.exportEntries({ format, savedReportRef: runningSavedRef });
+    if (!res || res.canceled) {
+      status.textContent = 'Export canceled.';
+      return;
+    }
+    status.textContent = `Exported ${res.written} entr${res.written === 1 ? 'y' : 'ies'} to ${res.path}.`;
+  } catch (err) {
+    status.textContent = `Export failed: ${String((err && err.message) || err).replace(/^Error:\s*/, '')}`;
+  }
+}
+
+// List the saved definitions with a Run button each (the Run wires to runSaved). Best-effort:
+// a read failure leaves the rail empty and never blocks the ad-hoc builder above.
+async function renderSavedList() {
+  const list = $('saved-list');
+  if (!list) return;
+  let defs = [];
+  try {
+    defs = await window.stint.listReports();
+  } catch {
+    /* the saved rail is best-effort; the ad-hoc builder above still runs */
+  }
+  if (!defs.length) {
+    list.innerHTML = '<li class="report-empty">No saved reports yet.</li>';
+    return;
+  }
+  list.innerHTML = defs
+    .map(
+      (d) =>
+        `<li class="saved-item"><span class="saved-name">${escapeHtml(d.name)}</span>` +
+        `<button type="button" class="saved-run-btn" data-run="${escapeHtml(d.name)}">Run</button></li>`,
+    )
+    .join('');
+}
+
 // §09 R4: the increment picker only matters when rounding is ON. When rounding is off
 // the picker is disabled and de-emphasized (the .off class) so the control group reads as
 // a single Off/On decision with its increment a secondary choice — exact time is shown.
@@ -332,6 +420,17 @@ function wire() {
   $('export-csv').addEventListener('click', () => void exportEntries('csv'));
   $('export-json').addEventListener('click', () => void exportEntries('json'));
 
+  // §09 R09: the saved-reports rail. Clicking a definition's Run button resolves+runs it
+  // through core (runSaved → window.stint.runReport) and paints the run-output panel; the
+  // run-output Export buttons export FROM the saved report (carrying its ref).
+  $('saved-list').addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.saved-run-btn');
+    if (!btn) return;
+    void runSaved(btn.dataset.run);
+  });
+  $('saved-export-csv').addEventListener('click', () => void exportSaved('csv'));
+  $('saved-export-json').addEventListener('click', () => void exportSaved('json'));
+
   const back = document.querySelector('.nav-link[data-nav="index"]');
   if (back) back.addEventListener('click', () => (window.location.href = 'index.html'));
 
@@ -363,6 +462,13 @@ async function init() {
     await populateFilters();
   } catch {
     /* reference-data read is best-effort for the filter selects; the report still runs */
+  }
+  // §09 R09: populate the saved-reports rail (best-effort) so saved definitions are runnable
+  // and exportable from the view; a failure here leaves the ad-hoc builder fully usable.
+  try {
+    await renderSavedList();
+  } catch {
+    /* the saved rail is best-effort; the ad-hoc builder above still runs */
   }
   wire();
   await run();

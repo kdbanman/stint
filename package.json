@@ -14,6 +14,7 @@
     "packages/gui"
   ],
   "scripts": {
+    "version:stamp": "node scripts/stamp-version.mjs",
     "build": "tsc --build tsconfig.build.json",
     "clean": "tsc --build tsconfig.build.json --clean",
     "tt": "node packages/cli/dist/bin.js",

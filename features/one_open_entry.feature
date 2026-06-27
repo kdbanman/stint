@@ -1,8 +1,12 @@
 Feature: One open entry across surfaces
-  # PRD §05 R1, §16 "start while running", §17 R2 — the keystone invariant,
-  # observed as behaviour. Every scenario is run twice: once stepped onto
-  # @stint/core directly, once through the tt executable — which is how the
-  # "full parity" claim (§17 R8) is tested without a second copy of the spec.
+  # PRD §05 R1/R2, §16 "start while running", §17 R2 — the keystone invariant,
+  # observed as behaviour. §05 R1 Start AND R2 Stop are now classified `core` (data
+  # integrity / core-entry per §03); the classification is badge-only — behaviour is
+  # unchanged, and these scenarios remain their authoritative cross-surface anchor
+  # ("Stopping closes the open entry and leaves nothing running" is the load-bearing
+  # R2 assertion). Every scenario is run twice: once stepped onto @stint/core
+  # directly, once through the tt executable — which is how the "full parity" claim
+  # (§17 R8) is tested without a second copy of the spec.
 
   Background:
     Given an empty database

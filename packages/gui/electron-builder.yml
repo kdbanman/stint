@@ -1,0 +1,41 @@
+# electron-builder configuration — Stint GUI packaging (PRD §19 R01).
+#
+# Build matrix is macOS + Linux ONLY. There is deliberately NO `win` block:
+# Windows is dropped everywhere (PRD masthead "macOS + Linux", §19 R01). The
+# CHECK BUILD MATRIX runbook procedure fails if any Windows target appears here.
+#
+# This req (R01) only produces the two-platform artifacts. The single-installer
+# PATH symlink (§19 R02), the GitHub Release publishing (§19 R05), and date/build
+# versioning (§19 R06) are intentionally out of scope here.
+
+appId: com.stint.app
+productName: Stint
+
+# Compiled main + preload (./dist) plus the renderer assets and the @stint/core
+# workspace dependency. `main` in package.json points at ./dist/main.js.
+directories:
+  output: dist-pack
+  buildResources: build
+
+files:
+  - dist/**
+  - renderer/**
+  - package.json
+  - node_modules/@stint/core/**
+
+# macOS: minimal unsigned app bundle (.dmg). No notarization / code-signing
+# dependency — the one-time Gatekeeper approval is handled by the §19 R04 flow.
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  identity: null
+
+# Linux: AppImage (portable, runs anywhere) plus a .deb package.
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+
+# NOTE: no `win:` block — Windows is unsupported (PRD §19 R01).

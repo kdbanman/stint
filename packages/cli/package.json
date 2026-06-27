@@ -7,6 +7,8 @@
   "bin": {
     "tt": "./dist/bin.js"
   },
+  "comment:launcher": "Canonical CLI entrypoint, relative to this package, that the single-installer tt shim targets inside the bundled app (PRD §19 R02). packaging/tt-launcher.sh resolves <app>/Contents/Resources/app/packages/cli/dist/bin.js (macOS) or <opt>/resources/app/packages/cli/dist/bin.js (Linux) — keep CLI_REL in that shim in sync with the bin mapping above.",
+  "launcherEntry": "dist/bin.js",
   "files": ["dist"],
   "scripts": {
     "build": "tsc --build"

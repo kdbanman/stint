@@ -667,6 +667,35 @@ describe('renderer static contract', () => {
     expect(css).not.toMatch(/\.report-export-btn\s*\{[^}]*var\(--accent\)/s);
   });
 
+  it('the report view lists saved reports and runs/exports them through core (§09 R09)', () => {
+    const html = read('report.html');
+    const js = read('report.js');
+    // The saved-reports rail + its run-output panel and the run-output Export buttons are
+    // present in the page (the §09 R09 surface over the saved definitions R08 persists).
+    expect(html).toMatch(/id="saved-list"/);
+    expect(html).toMatch(/id="saved-run"/);
+    expect(html).toMatch(/id="saved-run-rows"/);
+    expect(html).toMatch(/id="saved-export-csv"/);
+    expect(html).toMatch(/id="saved-export-json"/);
+    // report.js lists the saved definitions over the same listReports IPC tt's `report ls`
+    // drives, and a Run resolves+runs a definition through core (window.stint.runReport) —
+    // the renderer re-derives no range/grouping/rounding/totals…
+    expect(js).toMatch(/window\.stint\.listReports\(\)/);
+    expect(js).toMatch(/window\.stint\.runReport\(\{\s*ref/);
+    // …the run-output panel paints the core Report's lines + grand total with flags in
+    // context via window.SU.lineFlags (no renderer-side flag derivation beyond membership)…
+    expect(js).toMatch(/function paintSavedRun\(/);
+    expect(js).toMatch(/lineFlags\(line,\s*report\.overlappedEntryIds,\s*report\.unreviewedSleepEntryIds\)/);
+    // …and the run-output Export buttons export FROM the saved report, carrying its ref so
+    // main exports the definition's range (byte-identical to `tt report run <name> --csv`).
+    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*savedReportRef/);
+    expect(js).toMatch(/\$\('saved-export-csv'\)\.addEventListener/);
+    expect(js).toMatch(/\$\('saved-export-json'\)\.addEventListener/);
+    // The run-output panel adds no rounding/summation arithmetic of its own beyond choosing
+    // which core-owned seconds to show (rounded vs exact), per §09 R4.
+    expect(js).not.toMatch(/roundSeconds/);
+  });
+
   it('the consolidated entry editor is a pure renderer module exposing openEditor + split/merge (§12 R6)', () => {
     const editor = read('editor.js');
     const app = read('app.js');
@@ -737,6 +766,49 @@ describe('renderer static contract', () => {
     // helpers (it derives no accent/date logic of its own beyond choosing the mode).
     expect(settings).toMatch(/applyAccentMode\(/);
     expect(settings).toMatch(/applyDateFormat\(/);
+  });
+
+  it('the Settings view shows a read-only Software Update → Current version off the shared appVersion (§19 R06)', () => {
+    const settings = read('settings.js');
+    // The Software Update group + the Current version row are rendered, matching the mockup's
+    // `.ver` span, and printed from state.appVersion (the shared @stint/core APP_VERSION the
+    // getState snapshot carries — the SAME value `tt --version` prints, parity by construction).
+    expect(settings).toMatch(/Software Update/);
+    expect(settings).toMatch(/Current version/);
+    expect(settings).toMatch(/class="ver"/);
+    expect(settings).toMatch(/state\.appVersion/);
+    // …rendered as a read-only display: the version row carries no setSetting-wired control
+    // (the check/download flow is §19 R03/R04, out of scope). softwareUpdateHtml is appended
+    // to the panel off the snapshot, never persisting a value.
+    expect(settings).toMatch(/function softwareUpdateHtml\(/);
+  });
+
+  it('the Timer view ships a favorites rail wired to the favorite IPC (§05 R09)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    const css = read('styles.css');
+    // The favorites rail + its Pin control live in the Timer view…
+    expect(html).toMatch(/data-view="timer"/);
+    expect(html).toMatch(/id="fav-rail"/);
+    expect(html).toMatch(/id="fav-pin"/);
+    expect(html).toMatch(/id="fav-empty"/);
+    // …app.js renders the rail from the same listFavorites IPC tt's `fav ls` drives, and the
+    // kebab opens Rename / Unpin over the rename/unpin mutators (no DB in the page)…
+    expect(app).toMatch(/function renderFavorites\(\)/);
+    expect(app).toMatch(/window\.stint\.listFavorites\(\)/);
+    expect(app).toMatch(/window\.stint\.pinFavorite\(/);
+    expect(app).toMatch(/window\.stint\.renameFavorite\(\{\s*ref/);
+    expect(app).toMatch(/window\.stint\.unpinFavorite\(\{\s*ref/);
+    // …Pin captures the running timer's template (fromEntryId) or the Start form's attributes…
+    expect(app).toMatch(/fromEntryId:\s*'open'/);
+    // …the rail repaints on route('timer') and over the change broadcast…
+    expect(app).toMatch(/view === 'timer'\)\s*void renderFavorites/);
+    expect(app).toMatch(/activeView === 'timer'\)\s*void renderFavorites/);
+    // …and the rail chrome is monochrome — the Pin/kebab/menu carry no accent (§15 discipline).
+    expect(css).toMatch(/\.fav-pin\s*\{/);
+    expect(css).toMatch(/\.fav-rail\s*\{/);
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.fav-(pin|kebab|card|menu)[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {

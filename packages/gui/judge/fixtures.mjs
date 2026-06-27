@@ -1053,6 +1053,19 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         }
         return Promise.resolve();
       },
+      // §20 R04–R05 / §17 R12: the Settings → Backups section. listBackups returns the canned
+      // backups (the restore list + "Last backup" status); restoreBackup records its payload so a
+      // scene could assert the Restore… action's argument. Present here so window.stint exposes
+      // EVERY IPC channel — the PARITY_REACH deterministic sub-fact reads this surface.
+      __BACKUPS__: [
+        { name: 'timetracker.sqlite.bak-20260627T101500Z', path: '/db/timetracker.sqlite.bak-20260627T101500Z', createdUtc: '2026-06-27T10:15:00Z', sizeBytes: 40960 },
+        { name: 'timetracker.sqlite.bak-20260626T090000Z', path: '/db/timetracker.sqlite.bak-20260626T090000Z', createdUtc: '2026-06-26T09:00:00Z', sizeBytes: 36864 },
+      ],
+      listBackups: function () { return Promise.resolve(this.__BACKUPS__); },
+      restoreBackup: (p) => {
+        window.__RESTORED_BACKUP__ = p;
+        return Promise.resolve({ recoveredFrom: (p && p.name) || '', quarantinedTo: '/db/timetracker.sqlite.replaced-20260627T120000Z' });
+      },
       // §08 R3 / §12 R8: the report builder calls this on load and on every control
       // change. Records the request (so the harness can assert the billableFilter the
       // Billable toggle passes) and returns a deterministic Report keyed by that filter,

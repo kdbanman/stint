@@ -147,6 +147,48 @@
           <button type="button" id="export-json" class="report-export-btn">Export JSON</button>
           <span id="export-status" class="report-export-status" role="status" aria-live="polite"></span>
         </div>
+
+        <!-- §09 R09: saved reports. R08 persists named definitions ({range-spec, group-by,
+             filters, rounding}); this rail lists them and Run resolves a definition against
+             current data through core (window.stint.runReport) — the renderer re-derives no
+             range/grouping/rounding. The run-output panel paints the core Report (per-line +
+             grand totals with overlap / unreviewed-sleep flags in context via window.SU.line
+             Flags), and its Export CSV / Export JSON carry the saved-report ref so main
+             exports the definition's range (byte-identical to `tt report run <name> --csv`). -->
+        <div class="saved-reports">
+          <div class="report-head">
+            <span>Saved reports</span>
+          </div>
+          <ul id="saved-list" class="saved-list"></ul>
+
+          <div class="saved-run" id="saved-run" hidden>
+            <div class="report-head">
+              <span id="saved-run-caption">Run</span>
+              <span>Total <b id="saved-run-total">0h 00m</b></span>
+            </div>
+            <div class="report-range" id="saved-run-range"></div>
+            <table class="report-table">
+              <thead>
+                <tr>
+                  <th>Group</th>
+                  <th class="num">Billable</th>
+                </tr>
+              </thead>
+              <tbody id="saved-run-rows"></tbody>
+              <tfoot>
+                <tr class="report-tot">
+                  <td>Total</td>
+                  <td class="num" id="saved-run-grand">0h 00m</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div class="report-export">
+              <button type="button" id="saved-export-csv" class="report-export-btn">Export CSV</button>
+              <button type="button" id="saved-export-json" class="report-export-btn">Export JSON</button>
+              <span id="saved-export-status" class="report-export-status" role="status" aria-live="polite"></span>
+            </div>
+          </div>
+        </div>
       </section>
     </div>
     <script src="util.js"></script>

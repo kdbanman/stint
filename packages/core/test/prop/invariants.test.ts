@@ -5,7 +5,8 @@
  * scenario pins one path, a property asserts a law over thousands.
  *
  *   PRD §03 / §17 R2 — at most one open entry under ANY interleaving
- *   PRD §03 / §17 R4 — stored truth immutable under rounding & subtract
+ *   PRD §03 / §09 R04 / §17 R4 — stored truth immutable under rounding & subtract;
+ *                                rounding is display/export-only, to the nearest increment
  *   PRD §03         — billable = max(0, raw - excluded)
  *   PRD §06         — split @t then merge restores the original span
  *   PRD §04 / §16   — duration is UTC math, so DST-/zone-safe
@@ -43,7 +44,10 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   fc.integer({ min: 1000, max: 3_600_000 }).map((ms): Op => ({ kind: 'gap', ms })),
 );
 
-describe('PROP: one open entry under any op sequence (§03, §17 R2)', () => {
+// §05 R01 Start is classified `core` (data integrity / core-entry per §03): this
+// property is the PROP evidence that the at-most-one-open invariant holds under the
+// `start` op in opArb — the badge labels behaviour this law already pins, unchanged.
+describe('PROP: one open entry under any op sequence (§03, §05 R01, §17 R2)', () => {
   test.prop([fc.array(opArb, { maxLength: 40 })])(
     'at most one open entry after every operation',
     (ops) => {
@@ -89,12 +93,12 @@ describe('PROP: one open entry under any op sequence (§03, §17 R2)', () => {
   );
 });
 
-describe('PROP: stored truth is immutable (§03, §17 R4)', () => {
+describe('PROP: stored truth is immutable under the rounding lens (§03/§09 R04/§17 R4)', () => {
   test.prop([
     fc.integer({ min: 60, max: 86_400 }),
     fc.constantFrom(6, 10, 15, 30),
     fc.integer({ min: 0, max: 3600 }),
-  ])('rounding and subtract never mutate start/end', (durationS, inc, sleptS) => {
+  ])('rounding and subtract never mutate start/end (the "stored time exact" half of §09 R04)', (durationS, inc, sleptS) => {
     const fixedNow = Date.parse('2026-03-15T18:00:00Z');
     const store = Store.openMemory(() => new Date(fixedNow));
     try {
@@ -111,8 +115,10 @@ describe('PROP: stored truth is immutable (§03, §17 R4)', () => {
       );
 
       const before = store.getEntry(entry.id)!;
-      // Apply the display lens (rounding) and the subtract — neither may touch storage.
-      store.report({
+      // Apply the display lens (rounding). Rounding is display/export-only: the
+      // derived report line may round, but the stored entry — start/end AND the
+      // stored raw/billable seconds — must come back byte-identical.
+      const report = store.report({
         fromUtc: new Date(fixedNow - 2 * durationS * 1000).toISOString(),
         toUtc: new Date(fixedNow + 1000).toISOString(),
         by: 'client',
@@ -120,8 +126,20 @@ describe('PROP: stored truth is immutable (§03, §17 R4)', () => {
         rounding: true,
         roundingIncrementMin: inc,
       });
-      store.subtractSleep(entry.id);
 
+      const afterRound = store.getEntry(entry.id)!;
+      // The stored truth is untouched by the rounding lens.
+      expect(afterRound.startUtc).toBe(before.startUtc);
+      expect(afterRound.endUtc).toBe(before.endUtc);
+      expect(afterRound.rawSeconds).toBe(before.rawSeconds);
+      expect(afterRound.billableSeconds).toBe(before.billableSeconds);
+      // The rounded total is a derived multiple of the increment, distinct from
+      // the exact total only in the report — never written back to the entry.
+      const step = inc * 60;
+      expect(report.grandRoundedSeconds % step).toBe(0);
+
+      // The subtract is likewise display-deriving on excluded, not on start/end.
+      store.subtractSleep(entry.id);
       const after = store.getEntry(entry.id)!;
       expect(after.startUtc).toBe(before.startUtc);
       expect(after.endUtc).toBe(before.endUtc);
@@ -195,9 +213,9 @@ describe('PROP: duration is UTC math, zone-/DST-safe (§04, §16)', () => {
   });
 });
 
-describe('PROP: rounding is to the nearest increment (§09 R4)', () => {
+describe('PROP: rounding is display/export-only and to the nearest increment (§09 R04)', () => {
   test.prop([fc.integer({ min: 0, max: 1_000_000 }), fc.constantFrom(6, 10, 15, 30)])(
-    'rounded value is the nearest multiple of the increment',
+    'rounded value is the nearest multiple of the increment (the "rounding display/export-only" half of §09 R04)',
     (seconds, inc) => {
       const step = inc * 60;
       const rounded = roundSeconds(seconds, inc);

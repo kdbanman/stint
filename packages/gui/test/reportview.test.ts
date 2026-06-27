@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { Store, resolveRange, toCsv, toJsonEntries } from '@stint/core';
 import {
   buildReportView,
+  buildSavedReportView,
   resolveExportRange,
   exportPayload,
   exportFileName,
@@ -167,6 +168,47 @@ describe('buildReportView — preset-resolving pass-through to store.report', ()
     expect(view.rangeToUtc).toBe('2026-06-24T00:00:00Z');
     // billable='all' keeps both entries: 3h Acme + 0.5h (no client).
     expect(view.grandTotalSeconds).toBe(3 * 3600 + 30 * 60);
+    store.close();
+  });
+});
+
+describe('buildSavedReportView — run a saved report through core (§09 R09)', () => {
+  it('is a faithful pass-through to store.runReport (same core Report)', () => {
+    const store = mem();
+    seed(store);
+    store.saveReport({
+      name: 'Weekly',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    const view = buildSavedReportView(store, 'Weekly', NOW);
+    // It equals store.runReport directly (no renderer-side range/grouping/rounding math)…
+    expect(view).toEqual(store.runReport('Weekly', NOW));
+    // …and the saved this-week billable report has the one Acme line (3h), the non-billable
+    // admin entry dropping out — proving the stored range-spec re-resolves at run time.
+    expect(view.lines.map((l) => l.key)).toEqual(['Acme']);
+    expect(view.grandTotalSeconds).toBe(3 * 3600);
+    const week = resolveRange('week', store.settings().weekStart, NOW);
+    expect(view.rangeFromUtc).toBe(week.fromUtc);
+    expect(view.rangeToUtc).toBe(week.toUtc);
+    store.close();
+  });
+
+  it('runs by id ref too (the Reports view may hold an id)', () => {
+    const store = mem();
+    seed(store);
+    const def = store.saveReport({
+      name: 'Weekly',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    expect(buildSavedReportView(store, def.id, NOW)).toEqual(buildSavedReportView(store, 'Weekly', NOW));
     store.close();
   });
 });

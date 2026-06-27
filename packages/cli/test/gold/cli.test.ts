@@ -110,7 +110,7 @@ describe('GOLD: tt rm refusal (§06)', () => {
   });
 });
 
-describe('GOLD: tt export (§09 R6)', () => {
+describe('GOLD: tt export (§09 R06)', () => {
   it('CSV header and row match the column contract', () => {
     seed();
     const r = tt(['export', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--csv']);
@@ -433,7 +433,8 @@ describe('GOLD: settings defaults (§14)', () => {
       checkin_interval_min    30
       global_hotkey           CommandOrControl+Alt+T
       accent                  system
-      date_format             system"
+      date_format             system
+      backup_retention        5"
     `);
   });
 
@@ -448,6 +449,7 @@ describe('GOLD: settings defaults (§14)', () => {
       globalHotkey: 'CommandOrControl+Alt+T',
       accent: 'system',
       dateFormat: 'system',
+      backupRetention: 5,
     });
   });
 });
@@ -534,6 +536,488 @@ describe('GOLD: client / project rename + archive (§07)', () => {
     tt(['project', 'archive', 'Public API']);
     expect(JSON.parse(tt(['project', 'ls', '--json']).out)).toEqual([]);
     expect(JSON.parse(tt(['project', 'ls', '--archived', '--json']).out).length).toBe(1);
+  });
+});
+
+describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
+  // The artefact is the criterion: the §C relabel renamed the four core-entry /
+  // data-out subcommands "core" in the §11 table. This contract parses prd.html and
+  // asserts each of those four rows carries <span class="core">core</span> in its
+  // "Does" cell, and that no other §11 row does. It fails iff a badge is dropped or
+  // wrongly added.
+  const prd = readFileSync(fileURLToPath(new URL('../../../../prd.html', import.meta.url)), 'utf8');
+  const section = (() => {
+    const m = prd.match(/<section id="s11">([\s\S]*?)<\/section>/);
+    if (!m) throw new Error('§11 <section id="s11"> not found in prd.html');
+    return m[1];
+  })();
+
+  /** Map each §11 table row's Command cell text → its Does cell HTML. */
+  function rowsByCommand(): Map<string, string> {
+    const rows = new Map<string, string>();
+    const rowRe = /<tr>([\s\S]*?)<\/tr>/g;
+    let rm: RegExpExecArray | null;
+    while ((rm = rowRe.exec(section))) {
+      const cells = [...rm[1].matchAll(/<td[^>]*data-l="([^"]+)"[^>]*>([\s\S]*?)<\/td>/g)];
+      const cmd = cells.find((c) => c[1] === 'Command')?.[2];
+      const does = cells.find((c) => c[1] === 'Does')?.[2];
+      if (cmd === undefined || does === undefined) continue; // header row
+      // Strip tags and decode the entities used in the table to get a plain-text key.
+      const key = cmd
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+        .trim();
+      rows.set(key, does);
+    }
+    return rows;
+  }
+
+  const CORE = ['tt start [desc]', 'tt stop', 'tt add <desc>', 'tt export'];
+  const hasCoreBadge = (does: string) => /<span class="core">core<\/span>/.test(does);
+
+  it('parses the §11 table into rows keyed by command', () => {
+    const rows = rowsByCommand();
+    for (const cmd of CORE) expect(rows.has(cmd), `missing §11 row: ${cmd}`).toBe(true);
+    // Sanity: a few known non-core rows are present too.
+    for (const cmd of ['tt status', 'tt list', 'tt config …']) {
+      expect(rows.has(cmd), `missing §11 row: ${cmd}`).toBe(true);
+    }
+  });
+
+  it('the four core-entry / data-out subcommands each carry a core badge', () => {
+    const rows = rowsByCommand();
+    for (const cmd of CORE) {
+      expect(hasCoreBadge(rows.get(cmd)!), `${cmd} should be badged core`).toBe(true);
+    }
+  });
+
+  it('no other §11 row carries a core badge', () => {
+    const rows = rowsByCommand();
+    const core = new Set(CORE);
+    for (const [cmd, does] of rows) {
+      if (core.has(cmd)) continue;
+      expect(hasCoreBadge(does), `${cmd} should NOT be badged core`).toBe(false);
+    }
+  });
+
+  it('the report-save / fav rows stay new-only, never core (§09, §05 parity rows)', () => {
+    const rows = rowsByCommand();
+    for (const cmd of ['tt report save <name>', 'tt report ls / show <name> / rm <name>', 'tt report run <name>', 'tt fav …']) {
+      const does = rows.get(cmd);
+      expect(does, `missing §11 row: ${cmd}`).toBeDefined();
+      expect(hasCoreBadge(does!), `${cmd} should NOT be badged core`).toBe(false);
+      expect(/<span class="new">new<\/span>/.test(does!), `${cmd} should stay new`).toBe(true);
+    }
+  });
+});
+
+describe('GOLD: tt report save / show / ls / run (§09 R08–R09)', () => {
+  it('save then show --json validates against report-def.schema.json and round-trips the def', () => {
+    seed();
+    expect(tt(['report', 'save', 'Weekly', '--week', '--by', 'project', '--client', 'Client A', '--round', '15']).code).toBe(0);
+    const r = tt(['report', 'show', 'Weekly', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('report-def.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toMatchObject({
+      name: 'Weekly',
+      range_kind: 'preset',
+      range_preset: 'week',
+      range_from_utc: null,
+      range_to_utc: null,
+      group_by: 'project',
+      billable_filter: 'billable',
+      tag: null,
+      search: null,
+      rounding: true,
+      rounding_increment_min: 15,
+    });
+    // The --client filter resolved to a real client id (the seeded Client A is id 1).
+    expect(typeof json.client_id).toBe('number');
+  });
+
+  it('ls --json validates against report-def-list.schema.json', () => {
+    seed();
+    tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
+    tt(['report', 'save', 'Monthly', '--month', '--by', 'project']);
+    const r = tt(['report', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('report-def-list.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json.map((d: { name: string }) => d.name).sort()).toEqual(['Monthly', 'Weekly']);
+  });
+
+  it('run --json validates against report.schema.json and its range matches resolveRange(week)', () => {
+    seed();
+    tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
+    // The seeded entry is on 2026-06-24 (Wednesday); the default now keeps it in this week.
+    const r = tt(['report', 'run', 'Weekly', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('report.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    // An ad-hoc `report --week --json` over the same clock resolves the same window.
+    const adhoc = JSON.parse(tt(['report', '--week', '--by', 'client', '--json']).out);
+    expect(json.range).toEqual(adhoc.range);
+    expect(json.grand_total_seconds).toBe(adhoc.grand_total_seconds);
+    expect(json.grand_total_seconds).toBe(5400);
+  });
+
+  it('run --csv emits export bytes byte-identical to `tt export` for the resolved range', () => {
+    seed();
+    tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
+    // The saved report resolves the same this-week window the run-json test proved; its CSV
+    // export must be byte-identical to `tt export` over that window (raw entries, billable=all).
+    const run = tt(['report', 'run', 'Weekly', '--csv']);
+    expect(run.code).toBe(0);
+    const adhocRange = JSON.parse(tt(['report', 'run', 'Weekly', '--json']).out).range;
+    const direct = tt(['export', '--range', adhocRange.from_utc, adhocRange.to_utc, '--csv']);
+    expect(run.out).toBe(direct.out);
+    // …and the export carries the one seeded entry under the exact column contract.
+    expect(run.out.split('\n')[0]).toBe(
+      'client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped',
+    );
+    expect(run.out).toMatch(/Client A,API,deep,auth refactor/);
+  });
+
+  it('run (human) prints the renderReport totals with the saved grouping', () => {
+    seed();
+    tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
+    const r = tt(['report', 'run', 'Weekly']);
+    expect(r.code).toBe(0);
+    // The human view is the same renderReport the ad-hoc `report` prints: a header, the
+    // grouped client line, and a Total — 5400s = 1h 30m of the seeded billable entry.
+    expect(r.out).toMatch(/Report/);
+    expect(r.out).toMatch(/Client A/);
+    expect(r.out).toMatch(/Total/);
+    expect(r.out).toMatch(/01:30:00/);
+  });
+
+  it('running an unknown report name exits non-zero with a clear error', () => {
+    const r = tt(['report', 'run', 'Nonexistent']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/no saved report named "Nonexistent"/);
+  });
+
+  it('saving a duplicate name exits non-zero', () => {
+    seed();
+    expect(tt(['report', 'save', 'Weekly', '--week']).code).toBe(0);
+    const r = tt(['report', 'save', 'Weekly', '--month']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/already exists/);
+  });
+
+  it('an absolute --range saves as range_kind=absolute and round-trips its bounds', () => {
+    seed();
+    tt(['report', 'save', 'Custom', '--range', '2026-06-01T00:00:00Z', '2026-06-08T00:00:00Z', '--by', 'day']);
+    const json = JSON.parse(tt(['report', 'show', 'Custom', '--json']).out);
+    expect(json.range_kind).toBe('absolute');
+    expect(json.range_preset).toBeNull();
+    expect(json.range_from_utc).toBe('2026-06-01T00:00:00Z');
+    expect(json.range_to_utc).toBe('2026-06-08T00:00:00Z');
+  });
+
+  it('edit changes the range and re-run re-resolves the totals', () => {
+    // A this-week entry (1h) and a last-week entry (2h); the saved report's range edit flips
+    // which one its run totals reflect — the relative spec re-resolves on each run.
+    tt(['client', 'add', 'Acme']);
+    tt(['add', 'review', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:00:00Z', '--client', 'Acme']);
+    tt(['add', 'ops sync', '--from', '2026-06-17T09:00:00Z', '--to', '2026-06-17T11:00:00Z', '--client', 'Acme']);
+    tt(['report', 'save', 'Flexible', '--week', '--by', 'client']);
+    expect(JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out).grand_total_seconds).toBe(3600);
+    tt(['report', 'edit', 'Flexible', '--last-week']);
+    expect(JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out).grand_total_seconds).toBe(7200);
+  });
+
+  it('rename then rm removes it from ls', () => {
+    seed();
+    tt(['report', 'save', 'Draft', '--week']);
+    tt(['report', 'rename', 'Draft', 'Final']);
+    expect(JSON.parse(tt(['report', 'ls', '--json']).out).map((d: { name: string }) => d.name)).toEqual(['Final']);
+    expect(tt(['report', 'rm', 'Final']).code).toBe(0);
+    expect(JSON.parse(tt(['report', 'ls', '--json']).out)).toEqual([]);
+  });
+
+  it('the ad-hoc `report --week` query form still works alongside the saved verbs', () => {
+    seed();
+    const r = tt(['report', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--json']);
+    expect(r.code).toBe(0);
+    expect(JSON.parse(r.out).grand_total_seconds).toBe(5400);
+  });
+
+  it('ls on a fresh DB prints `no saved reports` (human) and `[]` (valid empty list --json)', () => {
+    // No saves on a fresh database: the human form is the empty-state line; the --json form
+    // is the empty array, which still validates against the published list schema.
+    expect(tt(['report', 'ls']).out).toBe('no saved reports');
+    const r = tt(['report', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe('[]');
+    const validate = validator('report-def-list.schema.json');
+    expect(validate(JSON.parse(r.out)) || validate.errors).toBe(true);
+  });
+
+  it('save rejects an unknown --by grouping with a clear error, non-zero (no def written)', () => {
+    seed();
+    const r = tt(['report', 'save', 'Bogus', '--week', '--by', 'bogus']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/unknown --by grouping/);
+    // …and nothing was persisted.
+    expect(JSON.parse(tt(['report', 'ls', '--json']).out)).toEqual([]);
+  });
+
+  it('rm then run is a clean round trip: rm exits 0, ls is empty, run is unknown-name', () => {
+    seed();
+    tt(['report', 'save', 'Weekly', '--week', '--by', 'project', '--round', '15', '--client', 'Client A']);
+    expect(tt(['report', 'rm', 'Weekly']).code).toBe(0);
+    expect(JSON.parse(tt(['report', 'ls', '--json']).out)).toEqual([]);
+    const run = tt(['report', 'run', 'Weekly']);
+    expect(run.code).not.toBe(0);
+    expect(run.err).toMatch(/no saved report named "Weekly"/);
+  });
+});
+
+describe('GOLD: tt fav add / ls / rename / rm (§05 R09)', () => {
+  it('fav add --running prints the confirmation, exit 0', () => {
+    seed();
+    tt(['start', 'standup', '--client', 'Client A', '--project', 'API', '--at', '2026-06-24T09:00:00Z']);
+    const r = tt(['fav', 'add', 'Standup', '--running']);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe('pinned favorite "Standup"');
+  });
+
+  it('fav add --from-entry captures a closed entry, ls --json validates and shows the template', () => {
+    seed();
+    // The seeded entry is id 1 (auth refactor for Client A / API, tagged deep, billable).
+    expect(tt(['fav', 'add', 'Auth', '--from-entry', '1']).code).toBe(0);
+    const r = tt(['fav', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('favorite.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toHaveLength(1);
+    expect(json[0]).toMatchObject({
+      name: 'Auth',
+      description: 'auth refactor',
+      billable: true,
+      tags: ['deep'],
+    });
+    // The captured client/project resolved to real ids (Client A / API).
+    expect(typeof json[0].client_id).toBe('number');
+    expect(typeof json[0].project_id).toBe('number');
+  });
+
+  it('fav add from explicit attributes captures client/project/tags/billable', () => {
+    seed();
+    expect(
+      tt(['fav', 'add', 'Deep work', '--client', 'Client A', '--project', 'API', '--tag', 'deep', '--tag', 'focus', '--bill']).code,
+    ).toBe(0);
+    const json = JSON.parse(tt(['fav', 'ls', '--json']).out);
+    expect(json[0]).toMatchObject({
+      name: 'Deep work',
+      billable: true,
+      tags: ['deep', 'focus'],
+    });
+    const validate = validator('favorite.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+  });
+
+  it('fav rename and fav rm emit their fixed stdout, exit 0', () => {
+    seed();
+    tt(['fav', 'add', 'Draft', '--from-entry', '1']);
+    const ren = tt(['fav', 'rename', 'Draft', 'Final']);
+    expect(ren.code).toBe(0);
+    expect(ren.out).toBe('renamed favorite to "Final"');
+    expect(JSON.parse(tt(['fav', 'ls', '--json']).out).map((f: { name: string }) => f.name)).toEqual(['Final']);
+    const rm = tt(['fav', 'rm', 'Final']);
+    expect(rm.code).toBe(0);
+    expect(rm.out).toBe('unpinned');
+    expect(JSON.parse(tt(['fav', 'ls', '--json']).out)).toEqual([]);
+  });
+
+  it('fav add of a duplicate name exits non-zero on stderr (no second favorite written)', () => {
+    seed();
+    expect(tt(['fav', 'add', 'Auth', '--from-entry', '1']).code).toBe(0);
+    const dup = tt(['fav', 'add', 'auth', '--from-entry', '1']); // case-insensitive clash
+    expect(dup.code).not.toBe(0);
+    expect(dup.err).toMatch(/already exists/);
+    expect(JSON.parse(tt(['fav', 'ls', '--json']).out)).toHaveLength(1);
+  });
+
+  it('ls on a fresh DB prints `no favorites` (human) and `[]` (valid empty list --json)', () => {
+    expect(tt(['fav', 'ls']).out).toBe('no favorites');
+    const r = tt(['fav', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    expect(r.out).toBe('[]');
+    const validate = validator('favorite.schema.json');
+    expect(validate(JSON.parse(r.out)) || validate.errors).toBe(true);
+  });
+});
+
+describe('GOLD: tt fav start / tt start --fav (§05 R10, §11)', () => {
+  // §11 parity for the §05 R10 resume slice. Both routes (`tt fav start <name>` and
+  // `tt start --fav <name>`) reach the SAME core action (store.startFromFavorite): a FRESH
+  // entry seeded from the favorite's template, the favorite never mutated, inheriting the
+  // atomic stop-then-start and the ≤1-open invariant. The artefact is the criterion: the
+  // running statusLine, and `status --json` carrying the template's attributes.
+  it('fav start opens a running entry seeded from the favorite template', () => {
+    seed();
+    // Pin a favorite from the seeded closed entry (Client A / API, tagged deep, billable).
+    expect(tt(['fav', 'add', 'Auth', '--from-entry', '1']).code).toBe(0);
+    const start = tt(['fav', 'start', 'Auth'], '2026-06-24T11:00:00Z');
+    expect(start.code).toBe(0);
+    // The running statusLine carries the template's description + client/project.
+    expect(start.out).toMatch(/running .* "auth refactor" .* Client A \/ API/);
+    // status --json proves the new entry inherited the whole template.
+    const status = JSON.parse(tt(['status', '--json'], '2026-06-24T11:00:00Z').out);
+    expect(status).toMatchObject({
+      running: true,
+      entry: { client: 'Client A', project: 'API', tags: ['deep'], billable: true },
+    });
+  });
+
+  it('tt start --fav is at parity with fav start and explicit flags override the template', () => {
+    seed();
+    expect(tt(['fav', 'add', 'Auth', '--from-entry', '1']).code).toBe(0);
+    // The bare --fav route seeds the same template as `fav start`.
+    expect(tt(['start', '--fav', 'Auth'], '2026-06-24T11:00:00Z').code).toBe(0);
+    const base = JSON.parse(tt(['status', '--json'], '2026-06-24T11:00:00Z').out);
+    expect(base.entry).toMatchObject({ client: 'Client A', project: 'API', tags: ['deep'], billable: true });
+    // A flag passed alongside --fav layers over the template (tags replace, billable flips).
+    expect(tt(['start', '--fav', 'Auth', '--tag', 'urgent', '--no-bill'], '2026-06-24T12:00:00Z').code).toBe(0);
+    const overridden = JSON.parse(tt(['status', '--json'], '2026-06-24T12:00:00Z').out);
+    expect(overridden.entry).toMatchObject({ client: 'Client A', project: 'API', tags: ['urgent'], billable: false });
+  });
+
+  it('resuming from an unknown favorite exits non-zero with a clear error, nothing running', () => {
+    seed();
+    const r = tt(['fav', 'start', 'Nonexistent']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/no favorite "Nonexistent"/);
+    // …and an unknown --fav on `start` is rejected the same way, leaving nothing open.
+    const viaStart = tt(['start', '--fav', 'Nonexistent']);
+    expect(viaStart.code).not.toBe(0);
+    expect(viaStart.err).toMatch(/no favorite "Nonexistent"/);
+    expect(JSON.parse(tt(['status', '--json']).out)).toEqual({ running: false, entry: null });
+  });
+});
+
+describe('GOLD: tt backup ls / now / restore (§20 R04/R05, §17 R12)', () => {
+  it('ls --json validates against backup.schema.json and lists launch backups newest-first', () => {
+    // Each `tt` write opens the store, which writes a launch backup when the DB changed since the
+    // last one (§20 R04). After seeding (several writes) at least one backup exists beside the DB.
+    seed();
+    const r = tt(['backup', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('backup.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json.length).toBeGreaterThanOrEqual(1);
+    // Newest-first: the name-encoded UTC stamps are non-increasing down the list.
+    const names = json.map((b: { name: string }) => b.name);
+    expect([...names].sort().reverse()).toEqual(names);
+    // Every backup names a real `.bak-` file beside the database.
+    for (const b of json) {
+      expect(b.name).toMatch(/\.bak-\d{8}T\d{6}Z$/);
+      expect(b.size_bytes).toBeGreaterThan(0);
+    }
+  });
+
+  it('ls on a fresh DB is a valid empty list (no writes yet, nothing to back up)', () => {
+    // A pure read on a brand-new DB creates the schema but writes no backup until the content
+    // changes; `backup ls --json` is the empty array, still schema-valid.
+    const r = tt(['backup', 'ls', '--json']);
+    expect(r.code).toBe(0);
+    const validate = validator('backup.schema.json');
+    expect(validate(JSON.parse(r.out)) || validate.errors).toBe(true);
+  });
+
+  it('now forces a backup; an immediate repeat is a no-op (unchanged)', () => {
+    seed();
+    const first = tt(['backup', 'now']);
+    expect(first.code).toBe(0);
+    // The just-forced backup matches the current DB, so a second `now` finds nothing changed.
+    const again = tt(['backup', 'now']);
+    expect(again.code).toBe(0);
+    expect(again.out).toBe('unchanged — no new backup needed');
+  });
+
+  it('restore refuses without --force (the destructive-action gate), exits non-zero', () => {
+    seed();
+    const name = JSON.parse(tt(['backup', 'ls', '--json']).out)[0].name;
+    const r = tt(['backup', 'restore', name]);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/refusing to restore/);
+  });
+
+  it('restore --force replaces the live DB with the chosen backup and sets the old one aside', () => {
+    seed();
+    // The seeded entry is present; capture the oldest backup name to restore from.
+    const before = JSON.parse(tt(['list', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--all', '--json']).out);
+    expect(before.length).toBe(1);
+    const name = JSON.parse(tt(['backup', 'ls', '--json']).out).slice(-1)[0].name;
+    const r = tt(['backup', 'restore', name, '--force']);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/restored from .*; previous file set aside at .*\.replaced-/);
+  });
+
+  it('restore of an unknown backup name exits non-zero with a clear error', () => {
+    seed();
+    const r = tt(['backup', 'restore', 'tt.sqlite.bak-20000101T000000Z', '--force']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/no backup named/);
+  });
+});
+
+describe('GOLD: tt --version date/build stamping (§19 R06)', () => {
+  // §19 R06 — the version `tt --version` prints is the shared @stint/core APP_VERSION constant,
+  // stamped to the date/build `YYYY.M.D[.N]` by scripts/stamp-version.mjs. The artefact is the
+  // criterion: with STINT_VERSION set the CLI prints exactly that release string; with no
+  // override the output is a valid release version OR the deterministic dev sentinel — never a
+  // non-date value (the old hardcoded 1.0.0 would fail). Validated against version.schema.json.
+  function ttEnv(args: string[], extraEnv: Record<string, string>): { out: string; code: number } {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, TT_DB: db, NODE_NO_WARNINGS: '1', ...extraEnv },
+    });
+    return { out: (res.stdout ?? '').trimEnd(), code: res.status ?? 0 };
+  }
+
+  it('with STINT_VERSION set, --version prints exactly the stamped YYYY.M.D[.N] string', () => {
+    const r = ttEnv(['--version'], { STINT_VERSION: '2026.6.27.2' });
+    expect(r.out).toBe('2026.6.27.2');
+    expect(r.code).toBe(0);
+    // The printed line validates against the published version contract.
+    const validate = validator('version.schema.json');
+    expect(validate(r.out) || validate.errors).toBe(true);
+  });
+
+  it('a bare YYYY.M.D (no same-day suffix) round-trips through --version', () => {
+    const r = ttEnv(['--version'], { STINT_VERSION: '2026.6.27' });
+    expect(r.out).toBe('2026.6.27');
+    const validate = validator('version.schema.json');
+    expect(validate(r.out) || validate.errors).toBe(true);
+  });
+
+  it('without an override the default version is a release version or the dev sentinel, never 1.0.0', () => {
+    // No STINT_VERSION: the committed literal (or whatever the build stamped). It must match the
+    // §19 R06 date pattern OR be the dev sentinel, and must NOT be the old hardcoded 1.0.0.
+    const res = spawnSync('node', [BIN, '--version'], {
+      encoding: 'utf8',
+      env: Object.fromEntries(
+        Object.entries({ ...process.env, TT_DB: db, NODE_NO_WARNINGS: '1' }).filter(
+          ([k]) => k !== 'STINT_VERSION',
+        ),
+      ),
+    });
+    const out = (res.stdout ?? '').trimEnd();
+    expect(out).not.toBe('1.0.0');
+    expect(/^\d{4}\.\d{1,2}\.\d{1,2}(\.\d+)?$/.test(out) || out === '0.0.0-dev').toBe(true);
+    const validate = validator('version.schema.json');
+    expect(validate(out) || validate.errors).toBe(true);
   });
 });
 

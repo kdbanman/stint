@@ -2,7 +2,7 @@
  * Build the renderer's UiState snapshot from the shared core. Pure read; the
  * renderer paints exactly what tt would show, just visually (PRD §12).
  */
-import { Store, describeOverlaps, buildEntryList, joinClientProject } from '@stint/core';
+import { Store, describeOverlaps, buildEntryList, joinClientProject, APP_VERSION } from '@stint/core';
 import type { UiState } from './ipc.js';
 
 /**
@@ -94,5 +94,16 @@ export function buildUiState(
       dateFormat: settings.dateFormat,
     },
     accent,
+    // §19 R06 — the date/build version (the shared @stint/core APP_VERSION constant, the SAME
+    // one `tt --version` prints). Carried on getState so the Settings → Software Update view
+    // shows it without a new round-trip; read-only display (the check/download flow is R03/R04).
+    appVersion: APP_VERSION,
+    // §20 R04 — "Last backup <ts>" in the Settings → Backups section, off the newest backup file.
+    lastBackupUtc: store.listBackups()[0]?.createdUtc ?? null,
+    // §20 R05 — a one-shot recovery notice (corrupt DB recovered from a backup on this launch).
+    recoveryNotice: (() => {
+      const r = store.lastRecovery();
+      return r ? { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo } : null;
+    })(),
   };
 }
