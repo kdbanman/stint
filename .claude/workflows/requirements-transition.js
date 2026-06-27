@@ -1,23 +1,9 @@
 export const meta = {
   name: 'requirements-transition',
   description:
-    'Carry out the Stint old→new requirements transition end-to-end. Consumes ' +
-    'requirements-transition.md as the work-list: inventory every new/modified/deleted ' +
-    'requirement (with core flag, surfaces, files, mockup, AC methods, Rec flag), plan, ' +
-    'implement in dependency-ordered file-disjoint waves, verify the executable AC and ' +
-    'regenerate evidence, run TWO separate reviews (AC-evidence-sufficiency + ' +
-    'code-quality/architecture), apply review feedback in a bounded improvement loop, ' +
-    'gather screen-recording QA evidence LAST, aggregate everything into one GitHub PR, and ' +
-    '— only once every requirement has passing AC evidence and both reviews are clean — ' +
-    'perform the §Z old→new swap. Loops until every requirement has clear verification ' +
-    'evidence aggregated into the PR. The human gate is PR merge.',
+    'Carry out the Stint old→new requirements transition end-to-end. Consumes requirements-transition.md as the work-list: inventory every new/modified/deleted requirement (with core flag, surfaces, files, mockup, AC methods, Rec flag), plan, implement in dependency-ordered file-disjoint waves, verify the executable AC and regenerate evidence, run TWO separate reviews (AC-evidence-sufficiency + code-quality/architecture), apply review feedback in a bounded improvement loop, gather screen-recording QA evidence LAST, aggregate everything into one GitHub PR, and — only once every requirement has passing AC evidence and both reviews are clean — perform the §Z old→new swap. Loops until every requirement has clear verification evidence aggregated into the PR. The human gate is PR merge.',
   whenToUse:
-    'When you want the requirements-transition.md work-list executed in full: every pending ' +
-    'requirement implemented across core/cli/gui with parity, proven by its mapped AC methods, ' +
-    'reviewed twice, demonstrated by screen recordings, and packaged into one ready-for-review ' +
-    'PR. Pass args to scope a calibration run to a subset of requirement ids (e.g. ' +
-    'args: ["§05 R09", "§20"]); omit args for the full transition. The swap/cleanup (§Z) only ' +
-    'fires on a full, all-green, unscoped run.',
+    'When you want the requirements-transition.md work-list executed in full: every pending requirement implemented across core/cli/gui with parity, proven by its mapped AC methods, reviewed twice, demonstrated by screen recordings, and packaged into one ready-for-review PR. Pass args to scope a calibration run to a subset of requirement ids (e.g. args: ["§05 R09", "§20"]); omit args for the full transition. The swap/cleanup (§Z) only fires on a full, all-green, unscoped run.',
   // These titles MUST match the phase() calls below, in order.
   phases: [
     { title: 'Inventory', detail: 'Parse requirements-transition.md into a structured per-requirement work-list' },
