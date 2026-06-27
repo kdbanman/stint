@@ -62,6 +62,12 @@
   /* method code pill */
   .mc{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;color:var(--ink);white-space:nowrap;background:#fbfbfa}
   td .mc{margin-right:4px}
+  /* core badge */
+  .core{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--ink);border-radius:3px;padding:1px 4px;color:var(--paper);background:var(--ink);white-space:nowrap}
+  td .core{margin-left:4px}
+  /* not-AC marker for the screen-recording band */
+  .band{border:1px dashed var(--rule-strong);border-radius:6px;background:#fbfbfa;padding:20px 24px;margin:18px 0}
+  .band .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px}
   /* scorecard bar */
   .bar{display:flex;height:9px;border-radius:3px;overflow:hidden;border:1px solid var(--rule-strong);background:#fbfbfa;margin:3px 0 1px}
   .bar i{display:block;height:100%}
@@ -99,7 +105,9 @@
 
   <p class="lede">No single notation can verify the whole PRD well. This proposes a small set of five complementary acceptance-criteria methods, routes every PRD section to the right one, and shows one worked sample per method in the project's <a href="glossary.html">ubiquitous language</a>.</p>
 
-  <p>Read with <a href="concept.html">concept.html</a> (the why) and <a href="prd.html">prd.html</a> (the what); this is the <em>how we'll know it's true</em>. It is a strategy plus samples, not the full AC catalogue — the samples fix the house style for each method so the bulk can be authored against it. There is no implementation code yet, so criteria are written as authored specs (human- and LLM-readable), shaped to bind to <code>@stint/core</code>, <code>tt</code>, and the GUI once they exist.</p>
+  <p>Read with <a href="concept.html">concept.html</a> (the why) and <a href="prd.html">prd.html</a> (the what); this is the <em>how we'll know it's true</em>. It is a strategy plus samples, not the full AC catalogue — the samples fix the house style for each method so the bulk can be authored against it. The criteria bind to <code>@stint/core</code>, <code>tt</code>, and the GUI. Targets are <strong>macOS and Linux only</strong>; Windows is out of scope across code, build, docs, and runbooks.</p>
+
+  <div class="note"><span class="lbl">The five methods gate the build; recordings do not</span>Executable acceptance (<span class="mc">BDD</span> · <span class="mc">PROP</span> · <span class="mc">GOLD</span> · <span class="mc">JUDGE</span> · <span class="mc">MANUAL</span>) is the system that decides whether a requirement is met. The <strong>screen recordings</strong> described in <a href="#s12">§12</a> are <strong>QA evidence gathered at the tail of the workflow, not a sixth method</strong> — they demonstrate, they do not gate. The two <a href="#s13">reviews (§13)</a> are how the AC apparatus is enforced, distinct from authoring AC.</p></div>
 
   <nav class="toc">
     <h4>Contents</h4>
@@ -114,7 +122,10 @@
       <li><a href="#s8"><span class="tn">08</span>Sample — Golden &amp; schema</a></li>
       <li><a href="#s9"><span class="tn">09</span>Sample — LLM-judged + agentic</a></li>
       <li><a href="#s10"><span class="tn">10</span>Sample — Manual checklist</a></li>
-      <li><a href="#s11"><span class="tn">11</span>Coverage scorecard &amp; gaps</a></li>
+      <li><a href="#s11"><span class="tn">11</span>Sample — new requirements</a></li>
+      <li><a href="#s12"><span class="tn">12</span>Screen-recording QA evidence</a></li>
+      <li><a href="#s13"><span class="tn">13</span>The two review stages</a></li>
+      <li><a href="#s14"><span class="tn">14</span>Coverage scorecard &amp; gaps</a></li>
     </ol>
   </nav>
 
@@ -123,11 +134,11 @@
     <h2>The PRD has five kinds of claim</h2>
     <p>The requirements in <code>prd.html</code> are not uniform, and the temptation to pick one notation (all-Gherkin, or all-unit-tests) breaks on that variety. Sorting the PRD by <em>what kind of thing is being asserted</em> yields five distinct shapes, each with a notation that fits and several that don't:</p>
     <ul class="d">
-      <li><strong>Pure, deterministic logic</strong> — the one-open-entry invariant, derived elapsed, billable-duration arithmetic, rounding maths, split/merge, overlap detection, UTC/DST math. Truths over <em>all</em> inputs; best caught by properties and example tables, not prose scenarios.</li>
-      <li><strong>Observable behavioural flows</strong> — start/stop/resume/backfill, "start while open stops the open one", overlap warns-not-blocks. Given/When/Then in domain language reads as both spec and test: Cucumber's home turf.</li>
-      <li><strong>A machine contract</strong> — <code>tt</code>'s exit codes, table output, and <code>--json</code> shape; CSV columns; the export schema. Verified by golden/snapshot comparison and schema validation, where the artefact <em>is</em> the criterion.</li>
-      <li><strong>Subjective &amp; emergent qualities</strong> — "feels at home on the desktop," monochrome, accent on the primary action only, empty states that instruct, flags visible in context. No assertion captures these; a rubric judged by an LLM (or human) over driven-UI screenshots can.</li>
-      <li><strong>Physical / OS reality</strong> — real sleep/wake via <code>powerMonitor</code>, wall-clock-gap reconciliation on launch, notifications firing on a wall-clock schedule, and "makes no network connections." These resist CI; they need scripted-but-supervised checks on real hardware.</li>
+      <li><strong>Pure, deterministic logic</strong> — the one-open-entry invariant, derived elapsed, billable-duration arithmetic, rounding maths, split/merge, overlap detection, UTC/DST math, monotonic-time skew guard (§20 R06). Truths over <em>all</em> inputs; best caught by properties and example tables, not prose scenarios.</li>
+      <li><strong>Observable behavioural flows</strong> — start/stop/resume/backfill, resume from a favorite, save and run a report, "start while open stops the open one", overlap warns-not-blocks, backup-on-launch and corruption recovery. Given/When/Then in domain language reads as both spec and test: Cucumber's home turf.</li>
+      <li><strong>A machine contract</strong> — <code>tt</code>'s exit codes, table output, and <code>--json</code> shape for entries, favorites, and saved reports; CSV columns; the export schema; the <code>favorite</code> and <code>report</code> table shapes. Verified by golden/snapshot comparison and schema validation, where the artefact <em>is</em> the criterion.</li>
+      <li><strong>Subjective &amp; emergent qualities</strong> — "feels at home on the desktop," monochrome, accent on the primary action only, one clickability convention (§15), the visual time-range picker's drag affordances, empty states that instruct, flags visible in context. No assertion captures these; a rubric judged by an LLM (or human) over driven-UI screenshots can.</li>
+      <li><strong>Physical / OS reality</strong> — real sleep/wake via <code>powerMonitor</code>, wall-clock-gap reconciliation on launch, notifications firing on a wall-clock schedule, "makes no network connections," the single installer placing app + <code>tt</code>, the in-app updater completing a guided install, a real corrupt DB detected and recovered on open. These resist CI; they need scripted-but-supervised checks on real hardware.</li>
     </ul>
     <p>So the method set is chosen to <strong>cover those five shapes with minimal overlap</strong> — each method earns its place by being the best (often the only) fit for one shape, while a couple double as secondary nets for others.</p>
   </section>
@@ -141,36 +152,36 @@
         <tr>
           <td data-l="Code"><span class="mc">BDD</span></td>
           <td data-l="Method"><strong>Gherkin / Cucumber scenarios.</strong> Given/When/Then in ubiquitous language, stepped onto <code>@stint/core</code> and <code>tt</code> (<code>cucumber-js</code>, or plain <code>vitest</code> "scenario" helpers).</td>
-          <td data-l="Best for">User-observable flows and the §16 edge-case table; cross-surface behaviour; the living, readable spec a non-coder can check.</td>
+          <td data-l="Best for">User-observable flows and the §16 edge-case table; resume-from-favorite, save/run report, backup &amp; recovery flows; cross-surface behaviour; the living, readable spec a non-coder can check.</td>
           <td data-l="Weak for">Exhaustive input spaces (combinatorial blow-up), exact byte-for-byte output, anything visual or timing-physical.</td>
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">PROP</span></td>
           <td data-l="Method"><strong>Property-based tests.</strong> Generated input sequences against invariants (<code>fast-check</code>, run under <code>vitest</code>), plus stress/concurrency variants.</td>
-          <td data-l="Best for">Invariants that must hold over <em>all</em> inputs: one-open-entry under any start/stop ordering, stored-truth immutability, rounding/elapsed algebra, split-then-merge round-trips.</td>
+          <td data-l="Best for">Invariants that must hold over <em>all</em> inputs: one-open-entry under any start/stop ordering, the DB-level partial-unique-index enforcing it (§20 R02), stored-truth immutability, rounding/elapsed algebra, monotonic-time guard (§20 R06), <code>app_state</code> co-transactionality (§20 R07), split-then-merge round-trips.</td>
           <td data-l="Weak for">Pinning a specific expected value; explaining intent to a stakeholder; UI and OS effects.</td>
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">GOLD</span></td>
-          <td data-l="Method"><strong>Golden / snapshot + schema.</strong> Approval tests (<code>vitest</code> snapshots) over <code>tt</code> stdout/stderr and exit codes; JSON-Schema validation of <code>--json</code>; fixed-fixture CSV diffs.</td>
-          <td data-l="Best for">The CLI contract and export formats — the parts where the exact text, columns, and structure <em>are</em> the requirement.</td>
+          <td data-l="Method"><strong>Golden / snapshot + schema.</strong> Approval tests (<code>vitest</code> snapshots) over <code>tt</code> stdout/stderr and exit codes; JSON-Schema validation of <code>--json</code>; fixed-fixture CSV diffs; schema-shape fixtures for new tables.</td>
+          <td data-l="Best for">The CLI contract and export formats — including <code>tt fav</code> and <code>tt report</code> (saved) output, the <code>favorite</code>/<code>report</code> schema, and the <code>YYYY.M.D[.N]</code> version stamp — the parts where the exact text, columns, and structure <em>are</em> the requirement.</td>
           <td data-l="Weak for">Behaviour and intent (a snapshot says <em>what</em>, never <em>why</em>); brittle if used for logic that example tables should own.</td>
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">JUDGE</span></td>
           <td data-l="Method"><strong>LLM-judged + agentic UI exercising.</strong> A driver (Playwright driving the Electron app via Chromium) walks the renderer windows and captures screenshots + the accessibility tree; an LLM scores them against a written rubric. Deterministic GUI facts get plain Playwright assertions, and main-process state that lives outside the DOM — <code>globalShortcut</code> registration, tray-triggered actions — is exercised via <code>electronApp.evaluate()</code>. The renderer runs headless under <code>xvfb-run</code>; the tray icon itself has no host in headless CI, so its on-screen rendering goes to MANUAL.</td>
-          <td data-l="Best for">Subjective and emergent GUI qualities of the main window and popover, empty-state copy, "flag visible on the affected entry," look-and-feel — judged, not asserted.</td>
+          <td data-l="Best for">Subjective and emergent GUI qualities: the fixed-width sidebar in every view, the single-click popover, the full Timer view, the time-range picker's drag/snap/overlap-coloring, the one clickability convention (§15), empty-state copy, "flag visible on the affected entry," look-and-feel — judged, not asserted.</td>
           <td data-l="Weak for">Anything requiring exactness or a hard pass/fail boundary; non-deterministic, so gated by a rubric + human spot-check, never the sole gate on money-affecting logic.</td>
         </tr>
         <tr>
           <td data-l="Code"><span class="mc">MANUAL</span></td>
-          <td data-l="Method"><strong>Scripted manual / supervised checks.</strong> A numbered runbook on real hardware, using the OS's sleep controls (<code>systemctl suspend</code> / <code>rtcwake</code>, or the platform equivalent), simulated sleep, and a network monitor; an operator (human or agent) confirms each step and records evidence.</td>
-          <td data-l="Best for">Physical/OS reality: real sleep/wake + wall-clock-gap reconcile, notification wall-clock cadence across relaunch, the no-network guarantee, and the tray's on-screen count-up and global-hotkey toggle (no system-tray host under headless CI).</td>
+          <td data-l="Method"><strong>Scripted manual / supervised checks.</strong> A numbered runbook on real hardware (macOS / Linux), using the OS's sleep controls (<code>systemctl suspend</code> / <code>rtcwake</code> on Linux, <code>pmset</code> on macOS), a network monitor, and a real install of the artifacts; an operator (human or agent) confirms each step and records evidence.</td>
+          <td data-l="Best for">Physical/OS reality: real sleep/wake + wall-clock-gap reconcile, notification cadence across relaunch, the no-network guarantee, the tray's on-screen count-up and global-hotkey toggle, the single installer (app + <code>tt</code> on PATH), the in-app guided update, and real corruption detection + backup recovery on open.</td>
           <td data-l="Weak for">Regression speed and scale (slow, can't run on every commit); reserved for what genuinely can't be faked in CI.</td>
         </tr>
       </tbody>
     </table>
-    <div class="note"><span class="lbl">Cucumber, specifically</span>Gherkin is adopted for the <em>behavioural</em> layer only — it is not the whole strategy. Using it where input spaces explode (rounding, time parsing) or where output must match byte-for-byte (CLI/JSON) would be a misuse; those go to <span class="mc">PROP</span> and <span class="mc">GOLD</span>. One feature can drive either <code>@stint/core</code> directly or the <code>tt</code> executable, which is how the "full parity" claim (§17 R8) gets tested without writing every scenario twice.</div>
+    <div class="note"><span class="lbl">Cucumber, specifically</span>Gherkin is adopted for the <em>behavioural</em> layer only — it is not the whole strategy. Using it where input spaces explode (rounding, time parsing) or where output must match byte-for-byte (CLI/JSON) would be a misuse; those go to <span class="mc">PROP</span> and <span class="mc">GOLD</span>. One feature can drive either <code>@stint/core</code> directly or the <code>tt</code> executable, which is how the "full parity" claim (§17 R8, R14) gets tested without writing every scenario twice — now including parity for <strong>favorites</strong> and <strong>saved reports</strong>.</div>
   </section>
 
   <section id="s3">
@@ -178,60 +189,83 @@
     <h2>A decision rule for any new criterion</h2>
     <p>So the set stays disciplined as the catalogue grows, route each requirement by the first rule that matches:</p>
     <ol class="req">
-      <li>Does it touch <strong>money-affecting maths or a stored invariant</strong> (durations, rounding, exclusion, one-open-entry, immutability)? → <span class="mc">PROP</span> for the law, <span class="mc">GOLD</span>/example table for specific values. Never let <span class="mc">JUDGE</span> be the only gate here.</li>
-      <li>Is the deliverable <strong>exact text or a data shape</strong> (<code>tt</code> output, exit code, <code>--json</code>, CSV columns)? → <span class="mc">GOLD</span> + schema.</li>
-      <li>Is it a <strong>user-observable flow or decided edge case</strong> a stakeholder should be able to read? → <span class="mc">BDD</span>, stepped on <code>@stint/core</code> or <code>tt</code>.</li>
-      <li>Is it <strong>visual, subjective, or emergent</strong> in the GUI? → <span class="mc">JUDGE</span> over agentic exercising, with plain Playwright for any deterministic sub-fact in the renderer, and <code>electronApp.evaluate()</code> for main-process facts (e.g. the global shortcut is registered and its handler toggles the open entry).</li>
-      <li>Does it depend on <strong>real OS/hardware behaviour over wall-clock time</strong>? → <span class="mc">MANUAL</span> runbook, with as much scripted setup as possible.</li>
+      <li>Does it touch <strong>money-affecting maths or a stored invariant</strong> (durations, rounding, exclusion, one-open-entry, immutability, DB-open invariants, monotonic-time)? → <span class="mc">PROP</span> for the law, <span class="mc">GOLD</span>/example table for specific values. Never let <span class="mc">JUDGE</span> be the only gate here.</li>
+      <li>Is the deliverable <strong>exact text or a data shape</strong> (<code>tt</code> output, exit code, <code>--json</code>, CSV columns, the <code>favorite</code>/<code>report</code> schema, the version stamp)? → <span class="mc">GOLD</span> + schema.</li>
+      <li>Is it a <strong>user-observable flow or decided edge case</strong> a stakeholder should be able to read (resume-from-favorite, save/run report, backup &amp; recovery)? → <span class="mc">BDD</span>, stepped on <code>@stint/core</code> or <code>tt</code>.</li>
+      <li>Is it <strong>visual, subjective, or emergent</strong> in the GUI (sidebar shell, popover, Timer view, time-range picker, clickability convention)? → <span class="mc">JUDGE</span> over agentic exercising, with plain Playwright for any deterministic sub-fact in the renderer, and <code>electronApp.evaluate()</code> for main-process facts (e.g. single-click opens the popover only; no dropdown context menu).</li>
+      <li>Does it depend on <strong>real OS/hardware behaviour over wall-clock time, or on a real install / update / on-disk file</strong>? → <span class="mc">MANUAL</span> runbook, with as much scripted setup as possible.</li>
     </ol>
-    <p>Two requirements often split across methods: §17 R5 (sleep produces a flagged entry with second-accurate spans and a working subtract) becomes <span class="mc">PROP</span> for the <code>excluded_seconds</code> arithmetic, <span class="mc">BDD</span> for the subtract flow, <span class="mc">JUDGE</span> for the flag being visible in context, and <span class="mc">MANUAL</span> for the spans being real after an actual sleep. That decomposition is the point of having a set.</p>
+    <p>Two requirements often split across methods: §17 R12 (backups &amp; recovery) becomes <span class="mc">PROP</span>/<span class="mc">GOLD</span> for the backup-file shape and retention algebra, <span class="mc">BDD</span> for the detect-then-restore flow against a planted corrupt fixture, and <span class="mc">MANUAL</span> for a <em>real</em> corrupt DB recovered on open. That decomposition is the point of having a set.</p>
   </section>
 
   <section id="s4">
     <div class="eyebrow"><span class="n">04</span> Coverage map</div>
     <h2>Every PRD section, routed to its primary &amp; secondary method</h2>
-    <p>Primary method in <strong>bold</strong>; secondary nets follow. This is the table the full catalogue is built against.</p>
+    <p>Primary method in <strong>bold</strong>; secondary nets follow. The <span class="core">core</span> badge marks the new core-requirement classification (§C: data integrity, data-loss protection, core data entry). This is the table the full catalogue is built against; new and modified rows carry their transition id.</p>
     <table>
       <thead><tr><th>PRD §</th><th>Subject</th><th>Methods</th></tr></thead>
       <tbody>
         <tr><td class="m" data-l="§">03</td><td data-l="Subject">Domain invariants (≤1 open entry, derived elapsed, billable duration, project⇒client)</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="§">04</td><td data-l="Subject">Atomic transitions, file-watch propagation, busy-timeout cooperation, UTC math</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong> <span class="mc">BDD</span> <span class="mc">MANUAL</span></td></tr>
-        <tr><td class="m" data-l="§">05</td><td data-l="Subject">Start / stop / status / resume / backfill; editable open entry; billable defaults</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span></td></tr>
-        <tr><td class="m" data-l="§">06</td><td data-l="Subject">Edit / delete / split / merge; overlap warns-not-blocks; merge conflict rule</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">04 <span class="core">core</span></td><td data-l="Subject">Atomic transitions, derived elapsed, UTC storage <span class="core">core</span>; file-watch propagation (not core); cross-refs §20 hardening</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong> <span class="mc">GOLD</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">05 <span class="core">core</span></td><td data-l="Subject">Start / stop / status / backfill <span class="core">core</span>; editable open entry; billable defaults</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span></td></tr>
+        <tr><td class="m" data-l="§">05 R09–R10</td><td data-l="Subject"><strong>Favorites (pinned timer):</strong> create/pin, list, rename, unpin; resume-from-favorite as a fresh entry; CLI parity</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">06 <span class="core">core</span></td><td data-l="Subject">Edit / delete (confirm gate <span class="core">core</span>) / split / merge; overlap warns-not-blocks <span class="core">core</span></td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">GOLD</span></td></tr>
         <tr><td class="m" data-l="§">07</td><td data-l="Subject">Clients / projects / tags: create, rename, archive, on-the-fly tags</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong></td></tr>
         <tr><td class="m" data-l="§">08</td><td data-l="Subject">Billable flag override; clientless defaults; billable-only reporting default</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span></td></tr>
-        <tr><td class="m" data-l="§">09</td><td data-l="Subject">Report grouping / filters; rounding the line not the row; flags surfaced; CSV+JSON</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">09 <span class="core">core</span></td><td data-l="Subject">Report grouping / filters; rounding the line not the row <span class="core">core</span>; flags surfaced; CSV+JSON export <span class="core">core</span></td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">09 R08–R09</td><td data-l="Subject"><strong>Saved reports:</strong> named {range-spec, group-by, filters, rounding} preset — CRUD; run/resolve against current data; export from a saved report</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">GOLD</span> <span class="mc">JUDGE</span></td></tr>
         <tr><td class="m" data-l="§">10a</td><td data-l="Subject">Sleep-span flagging, wall-clock-gap reconcile on launch, subtract</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="§">10b</td><td data-l="Subject">Check-in cadence: first at 60m, then 30m, autonomous, survives relaunch, realigns from wake</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">PROP</span></td></tr>
-        <tr><td class="m" data-l="§">11</td><td data-l="Subject"><code>tt</code> command surface: output tables, <code>--json</code>, exit codes, time-arg parsing</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="§">12</td><td data-l="Subject">Tray count-up, hotkey toggle, main window, flags in context, empty states</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">MANUAL</span></td></tr>
-        <tr><td class="m" data-l="§">13</td><td data-l="Subject">Schema, WAL, <code>TT_DB</code> path resolution, default location</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">11 <span class="core">core</span></td><td data-l="Subject"><code>tt start/stop/add/export</code> <span class="core">core</span>; <code>tt fav</code>, <code>tt report</code> (saved); output tables, <code>--json</code>, exit codes</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span> <span class="mc">PROP</span></td></tr>
+        <tr><td class="m" data-l="§">12 R01/R03/R04</td><td data-l="Subject">Tray single-click = popover only (no dropdown); fixed-width sidebar in every view; active-timer panel placement</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="§">12 R05/R07 <span class="core">core</span></td><td data-l="Subject">Start/Switch form &amp; manual-add form (core data-entry surfaces) in the Timer view; manual add uses the range picker</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">JUDGE</span></td></tr>
+        <tr><td class="m" data-l="§">12 R08 <span class="core">core</span> (export)</td><td data-l="Subject"><strong>Reports view = saved reports:</strong> list/create/edit/run definitions; on-screen summary with flags; CSV/JSON export (replaces standalone <code>report.html</code>)</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">JUDGE</span> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">12 R13 <span class="core">core</span></td><td data-l="Subject">Confirm destructive actions in-window</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">12 R14 <span class="core">core</span> (entry)</td><td data-l="Subject"><strong>Full Timer view:</strong> live count-up + state; create/start with details; stop; switch; edit the running timer live (attributes + start, no stop); favorites rail with one-click resume</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">JUDGE</span></td></tr>
+        <tr><td class="m" data-l="§">12 R15</td><td data-l="Subject"><strong>Visual time-range picker:</strong> day-column drag (body=move, bottom=resize), 5-min snap, other entries gray / overlaps yellow (warn-only); overnight via text; text entry stays authoritative</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong> <span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="§">13 <span class="core">core</span></td><td data-l="Subject">Schema, WAL, path resolution (macOS / Linux only); <strong>new <code>favorite</code> &amp; <code>report</code> tables</strong>; cross-refs §20 hardening</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="§">14</td><td data-l="Subject">Settings &amp; their defaults (rounding off, week start Mon, cadence, hotkey…)</td><td data-l="Methods"><strong><span class="mc">GOLD</span></strong> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="§">16</td><td data-l="Subject">Decided edge cases (start-while-running, crash, DST, merge conflicts…)</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">MANUAL</span></td></tr>
-        <tr><td class="m" data-l="§">17 R9</td><td data-l="Subject">Makes no network connections</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">15 R-clickability</td><td data-l="Subject"><strong>One clickability convention:</strong> every clickable text affordance carries the neutral button background; inert text never does; accent reserved for each view's single primary action</td><td data-l="Methods"><strong><span class="mc">JUDGE</span></strong></td></tr>
+        <tr><td class="m" data-l="§">16</td><td data-l="Subject">Decided edge cases (start-while-running, crash, DST, merge conflicts, update-mid-timer, backup-on-launch, corruption-on-open)</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="§">17 R9</td><td data-l="Subject">Makes no network connections (offline guarantee — not core)</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">17 R12 <span class="core">core</span></td><td data-l="Subject"><strong>Backups &amp; recovery acceptance:</strong> fresh launch makes a recoverable backup; corrupted DB detected on open and recovered from latest backup with no data loss</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">17 R13</td><td data-l="Subject"><strong>Install &amp; update acceptance:</strong> installer puts app in Applications + <code>tt</code> on PATH; in-app updater detects a newer GitHub release &amp; completes a guided install</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong></td></tr>
+        <tr><td class="m" data-l="§">17 R14</td><td data-l="Subject"><strong>Parity for new entities:</strong> favorites and saved reports each fully reachable from both <code>tt</code> and the GUI</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong></td></tr>
+        <tr><td class="m" data-l="§">19 R01–R06</td><td data-l="Subject"><strong>Packaging, install &amp; updates:</strong> macOS+Linux build matrix; single installer; in-app check + guided download/install; publish-on-merge; <code>YYYY.M.D[.N]</code> versioning</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">GOLD</span> (version stamp)</td></tr>
+        <tr><td class="m" data-l="§">20 R01 <span class="core">core</span></td><td data-l="Subject">DB-open invariants enforced (WAL, FK on, busy timeout, synchronous) so committed writes survive power loss</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="§">20 R02 <span class="core">core</span></td><td data-l="Subject">At-most-one-open enforced at DB level (partial unique index on <code>end_utc IS NULL</code>), defense in depth</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong></td></tr>
+        <tr><td class="m" data-l="§">20 R03 <span class="core">core</span></td><td data-l="Subject">Integrity check on open (<code>quick_check</code>/<code>integrity_check</code>); on failure do not write — trigger recovery</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">20 R04 <span class="core">core</span></td><td data-l="Subject">Automatic timestamped backups on launch + retention (last N, default 5) + restore</td><td data-l="Methods"><strong><span class="mc">BDD</span></strong> <span class="mc">PROP</span> <span class="mc">GOLD</span> <span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="§">20 R05 <span class="core">core</span></td><td data-l="Subject">Corruption recovery: quarantine <code>.corrupted</code>, restore from latest good backup, inform user — never silently lose data</td><td data-l="Methods"><strong><span class="mc">MANUAL</span></strong> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="§">20 R06 <span class="core">core</span></td><td data-l="Subject">Monotonic-time guard: <code>now &lt; start</code> never yields negative/garbage elapsed under wall-clock skew</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong></td></tr>
+        <tr><td class="m" data-l="§">20 R07 <span class="core">core</span></td><td data-l="Subject"><code>app_state</code> durability: reconciliation/schedule state persisted in the same transaction as the write that changes it</td><td data-l="Methods"><strong><span class="mc">PROP</span></strong> <span class="mc">BDD</span></td></tr>
       </tbody>
     </table>
+    <div class="note"><span class="lbl">Backups &amp; recovery (§20 R04 / §17 R12) take all four executable nets</span>The retention algebra (keep last N, default 5) and the timestamped-copy shape are <span class="mc">PROP</span>/<span class="mc">GOLD</span>; the on-launch "DB changed → write a backup" and "corrupt → restore latest good" flows are <span class="mc">BDD</span> against planted fixtures; and a <em>genuinely</em> corrupt file recovered on open is <span class="mc">MANUAL</span>. No single method proves data-loss protection alone — this is the most heavily netted requirement in the catalogue, as a core data-loss guarantee should be.</div>
   </section>
 
   <section id="s5">
     <div class="eyebrow"><span class="n">05</span> The §17 criteria, routed</div>
     <h2>Each shipping gate, mapped to how it's proven</h2>
-    <p>The PRD's own nine acceptance criteria (§17) are the headline gates. Each decomposes onto the method set:</p>
+    <p>The PRD's acceptance criteria (§17) are the headline gates. Each decomposes onto the method set; the transition adds R12–R14 and a <span class="core">core</span> badge to R2–R4 and R7.</p>
     <table>
       <thead><tr><th>§17</th><th>Criterion (abridged)</th><th>Proven by</th></tr></thead>
       <tbody>
         <tr><td class="m" data-l="#">R1</td><td data-l="Criterion">tt-started timer shows in the tray near-instantly &amp; vice versa; status never disagrees</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">BDD</span> <span class="mc">PROP</span></td></tr>
-        <tr><td class="m" data-l="#">R2</td><td data-l="Criterion">At most one entry ever open under rapid start/stop from either surface</td><td data-l="By"><span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="#">R3</td><td data-l="Criterion">Close / sleep / crash mid-timer never corrupts elapsed</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
-        <tr><td class="m" data-l="#">R4</td><td data-l="Criterion">Stored times never altered by rounding/sleep; both reversible, derived-only</td><td data-l="By"><span class="mc">PROP</span> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="#">R2 <span class="core">core</span></td><td data-l="Criterion">At most one entry ever open under rapid start/stop from either surface (incl. DB-level index, §20 R02)</td><td data-l="By"><span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="#">R3 <span class="core">core</span></td><td data-l="Criterion">Close / sleep / crash mid-timer never corrupts elapsed</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="#">R4 <span class="core">core</span></td><td data-l="Criterion">Stored times never altered by rounding/sleep; both reversible, derived-only</td><td data-l="By"><span class="mc">PROP</span> <span class="mc">GOLD</span></td></tr>
         <tr><td class="m" data-l="#">R5</td><td data-l="Criterion">Sleep yields a flagged entry, second-accurate spans, working subtract</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">PROP</span> <span class="mc">BDD</span> <span class="mc">JUDGE</span></td></tr>
         <tr><td class="m" data-l="#">R6</td><td data-l="Criterion">First check-in at 60m; cadence autonomous, survives relaunch, realigns after sleep</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">PROP</span></td></tr>
-        <tr><td class="m" data-l="#">R7</td><td data-l="Criterion">Reports group/filter/round per spec, flag overlap &amp; unreviewed sleep, export valid CSV+JSON</td><td data-l="By"><span class="mc">GOLD</span> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
+        <tr><td class="m" data-l="#">R7 <span class="core">core</span></td><td data-l="Criterion">Reports group/filter/round per spec, flag overlap &amp; unreviewed sleep, export valid CSV+JSON</td><td data-l="By"><span class="mc">GOLD</span> <span class="mc">PROP</span> <span class="mc">BDD</span></td></tr>
         <tr><td class="m" data-l="#">R8</td><td data-l="Criterion">Every GUI capability is reachable from <code>tt</code></td><td data-l="By"><span class="mc">BDD</span> <span class="mc">GOLD</span> <span class="mc">JUDGE</span></td></tr>
         <tr><td class="m" data-l="#">R9</td><td data-l="Criterion">No network connections</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">GOLD</span></td></tr>
+        <tr><td class="m" data-l="#">R12 <span class="core">core</span></td><td data-l="Criterion">Fresh launch makes a recoverable backup; corrupt DB detected on open &amp; recovered from latest backup, no data loss</td><td data-l="By"><span class="mc">MANUAL</span> <span class="mc">BDD</span> <span class="mc">GOLD</span> <span class="mc">PROP</span></td></tr>
+        <tr><td class="m" data-l="#">R13</td><td data-l="Criterion">Installer puts the app in Applications + <code>tt</code> on PATH; in-app updater detects a newer release &amp; completes a guided install</td><td data-l="By"><span class="mc">MANUAL</span></td></tr>
+        <tr><td class="m" data-l="#">R14</td><td data-l="Criterion">Favorites &amp; saved reports each fully reachable from both <code>tt</code> and the GUI</td><td data-l="By"><span class="mc">BDD</span> <span class="mc">GOLD</span></td></tr>
       </tbody>
     </table>
-    <div class="note"><span class="lbl">On parity (R8)</span>Parity is a coverage claim, not a behaviour: it's proven by a <strong>capability matrix</strong> — every GUI action mapped to its <code>tt</code> command — kept as a <span class="mc">GOLD</span> fixture and asserted complete. <span class="mc">BDD</span> scenarios that run the same <code>.feature</code> against both surfaces back it up; <span class="mc">JUDGE</span> confirms nothing in the GUI is missing from the matrix.</div>
+    <div class="note"><span class="lbl">On parity (R8, R14)</span>Parity is a coverage claim, not a behaviour: it's proven by a <strong>capability matrix</strong> — every GUI action mapped to its <code>tt</code> command — kept as a <span class="mc">GOLD</span> fixture and asserted complete. The matrix now includes <strong>favorites</strong> (<code>tt fav add|ls|rm|rename|start</code>) and <strong>saved reports</strong> (<code>tt report save|ls|show|rm|run</code>). <span class="mc">BDD</span> scenarios that run the same <code>.feature</code> against both surfaces back it up; <span class="mc">JUDGE</span> confirms nothing in the GUI is missing from the matrix.</div>
   </section>
 
   <section id="s6">
@@ -265,26 +299,20 @@
     <span class="k">When</span>  I backfill an entry from 10:00 to 10:30
     <span class="k">Then</span>  the backfill succeeds
     <span class="k">And</span>   a non-blocking overlap warning is surfaced
-    <span class="k">And</span>   both entries are flagged "overlapped" in a report covering the day
-
-  <span class="k">Scenario:</span> Resume copies attributes but is a new entry
-    <span class="c"># PRD §05 R4 + glossary: resume is never a re-opening of the old row</span>
-    <span class="k">Given</span> a closed entry "auth refactor" for "Client A" / "API", billable
-    <span class="k">When</span>  I resume
-    <span class="k">Then</span>  a new open entry exists with description "auth refactor", "Client A", "API", billable
-    <span class="k">And</span>   it has a different id from the original</pre>
-    <p>The same Background + Scenario text, tagged <code>@cli</code>, is run a second time through the <code>tt</code> executable — directly exercising the §17 R8 parity claim without a second copy of the spec.</p>
+    <span class="k">And</span>   both entries are flagged "overlapped" in a report covering the day</pre>
+    <p>The same Background + Scenario text, tagged <code>@cli</code>, is run a second time through the <code>tt</code> executable — directly exercising the §17 R8 parity claim without a second copy of the spec. The new <strong>favorites</strong> and <strong>saved-report</strong> flows (§05 R09–R10, §09 R08–R09) are authored the same way; one is worked through in <a href="#s11">§11</a>.</p>
   </section>
 
   <section id="s7">
     <div class="eyebrow"><span class="n">07</span> Sample — Property-based</div>
     <h2><span class="mc">PROP</span> invariants over generated inputs</h2>
-    <p>Where Gherkin pins one path, properties assert a law over thousands of generated ones. These are the criteria guarding the numbers that reach an invoice.</p>
-    <pre><span class="c">// PRD §03 invariant + §17 R2 — at most one open entry, under ANY interleaving</span>
+    <p>Where Gherkin pins one path, properties assert a law over thousands of generated ones. These are the criteria guarding the numbers that reach an invoice — and now the core durability hardening of §20.</p>
+    <pre><span class="c">// PRD §03 invariant + §17 R2 + §20 R02 — at most one open entry, under ANY interleaving</span>
 <span class="k">test.prop</span>([fc.array(timerOp())])("at most one open entry after any op sequence", (ops) =&gt; {
     <span class="k">const</span> core = openCore({ inMemory: true });
     ops.forEach((op) =&gt; core.apply(op));       <span class="c">// start/stop/resume/backfill, any order</span>
     expect(core.openEntries().length).toBeLessThanOrEqual(1);
+    <span class="c">// and the partial unique index would reject a second open at the DB level</span>
 });
 
 <span class="c">// PRD §03 + §17 R4 — stored truth is immutable under rounding & subtract</span>
@@ -295,150 +323,206 @@
     expect([e.startUtc, e.endUtc]).toEqual(before);
 });
 
-<span class="c">// PRD §03 — billable duration is exactly raw minus exclusion, never negative</span>
-<span class="k">test.prop</span>([entryArb()])("billable = (end ?? now) - start - excluded, clamped ≥ 0", (e) =&gt; {
-    <span class="k">const</span> raw = (e.endUtc ?? now()) - e.startUtc;
-    expect(e.billableDuration).toBe(Math.max(0, raw - e.excludedSeconds));
+<span class="c">// PRD §20 R06 — monotonic-time guard: clock skew never yields negative/garbage elapsed</span>
+<span class="k">test.prop</span>([entryArb(), skewMillisArb()])("elapsed is clamped >= 0 under wall-clock skew", (e, skew) =&gt; {
+    <span class="k">const</span> nowSkewed = e.startUtc + skew;        <span class="c">// skew may be negative (NTP/manual change)</span>
+    expect(elapsedAt(e, nowSkewed)).toBeGreaterThanOrEqual(0);
 });
 
-<span class="c">// PRD §06 — split then merge is identity on the covered span (round-trip)</span>
-<span class="k">test.prop</span>([closedEntryArb(), instantArb()])("split @t then merge restores the original span", (e, t) =&gt; {
-    fc.pre(e.contains(t));                     <span class="c">// vacuously, t must be inside</span>
-    <span class="k">const</span> [a, b] = core.split(e, t);
-    <span class="k">const</span> m = core.merge([a, b]);
-    expect([m.startUtc, m.endUtc]).toEqual([e.startUtc, e.endUtc]);
-});
-
-<span class="c">// PRD §04/§16 — duration is DST-safe because it's UTC math</span>
-<span class="k">test.prop</span>([entryArb(), timeZoneArb()])("duration is invariant across the wall-clock zone it's rendered in", (e, tz) =&gt; {
-    expect(renderedIn(tz, e).rawDuration).toBe(e.rawDuration);
+<span class="c">// PRD §20 R04 — backup retention keeps exactly the last N (default 5), newest-first</span>
+<span class="k">test.prop</span>([fc.array(backupStampArb()), fc.integer({ min: 1, max: 20 })])("retention keeps the newest N", (stamps, n) =&gt; {
+    <span class="k">const</span> kept = applyRetention(stamps, n);
+    expect(kept.length).toBe(Math.min(n, new Set(stamps).size));
+    expect(kept).toEqual([...kept].sort((a, b) =&gt; b - a));   <span class="c">// newest-first, no older survivor</span>
 });</pre>
-    <p>The rapid-start/stop concurrency of §17 R2 also gets a stress variant: many concurrent processes issue <code>start</code>/<code>stop</code> against one WAL database with the busy timeout set, asserting the open-entry count stays ≤ 1 throughout — the property above, but proven across processes rather than in one.</p>
+    <p>The rapid-start/stop concurrency of §17 R2 also gets a stress variant: many concurrent processes issue <code>start</code>/<code>stop</code> against one WAL database with the busy timeout set, asserting the open-entry count stays ≤ 1 throughout — the property above, proven across processes rather than in one, and now backstopped by the §20 R02 DB-level index rejecting a second open row outright.</p>
   </section>
 
   <section id="s8">
     <div class="eyebrow"><span class="n">08</span> Sample — Golden &amp; schema</div>
     <h2><span class="mc">GOLD</span> the CLI contract &amp; export shapes</h2>
-    <p>For <code>tt</code> output, the CSV, and <code>--json</code>, the artefact is the criterion. Golden files capture human output; a JSON Schema validates structure so scripts can rely on it; exit codes are asserted directly.</p>
-    <pre><span class="c"># golden: tt status, nothing running  (approved fixture, byte-compared)</span>
-<span class="g">$</span> tt status
-nothing running
+    <p>For <code>tt</code> output, the CSV, <code>--json</code>, and the new table shapes, the artefact is the criterion. Golden files capture human output; a JSON Schema validates structure so scripts can rely on it; exit codes are asserted directly.</p>
+    <pre><span class="c"># golden: tt fav ls  (approved fixture, byte-compared)</span>
+<span class="g">$</span> tt fav ls
+NAME          CLIENT     PROJECT  BILLABLE  DESCRIPTION
+standup       Client A   —        yes       "daily standup"
+deep-api      Client A   API      yes       "API deep work"
 <span class="c"># exit 0</span>
 
-<span class="c"># golden: tt status with an open entry</span>
-<span class="g">$</span> tt status
-▸ running 01:24:07 · "auth refactor" · Client A / API
-<span class="c"># exit 0  — elapsed is normalised to a fixed clock in the fixture harness</span>
+<span class="c"># golden: tt fav start resolves a favorite into a fresh open entry</span>
+<span class="g">$</span> tt fav start deep-api
+started "API deep work" · Client A / API · billable
+<span class="c"># exit 0</span>
 
-<span class="c"># golden: tt rm without --force refuses and exits non-zero</span>
-<span class="g">$</span> tt rm 42
-refusing to delete entry 42 without confirmation; pass --force
-<span class="c"># exit 2  (stderr)</span></pre>
-    <pre><span class="c">// JSON-Schema for `tt status --json` (PRD §11) — the scripting contract</span>
+<span class="c"># golden: tt report run against a saved definition</span>
+<span class="g">$</span> tt report run weekly-acme --json
+<span class="c"># validated against the saved-report-result schema below; exit 0</span></pre>
+    <pre><span class="c">// JSON-Schema for the `report` table row / `tt report show --json` (PRD §09 R08, §13)</span>
 {
   "<span class="k">type</span>": "object",
-  "<span class="k">required</span>": ["running"],
+  "<span class="k">required</span>": ["name", "range_spec", "group_by", "filters", "rounding"],
   "<span class="k">properties</span>": {
-    "running": { "type": "boolean" },
-    "entry": {
-      "type": ["object", "null"],
-      "required": ["id", "start_utc", "billable", "elapsed_seconds"],
-      "properties": {
-        "id":              { "type": "integer" },
-        "description":     { "type": ["string", "null"] },
-        "client":          { "type": ["string", "null"] },
-        "project":         { "type": ["string", "null"] },
-        "start_utc":       { "type": "string", "format": "date-time" },
-        "elapsed_seconds": { "type": "integer", "minimum": 0 },
-        "billable":        { "type": "boolean" }
-      }
-    }
+    "name":       { "type": "string", "minLength": 1 },
+    "range_spec": {
+      "oneOf": [
+        { "type": "string", "enum": ["this-week", "last-week", "this-month", "today"] },
+        { "type": "object", "required": ["from_utc", "to_utc"],
+          "properties": { "from_utc": { "type": "string", "format": "date-time" },
+                          "to_utc":   { "type": "string", "format": "date-time" } } }
+      ]
+    },
+    "group_by":   { "type": "array", "items": { "type": "string",
+                    "enum": ["client", "project", "tag", "day", "billable"] } },
+    "filters":    { "type": "object" },
+    "rounding":   { "type": ["integer", "null"], "minimum": 0 }
   }
 }</pre>
-    <pre><span class="c"># golden: CSV export header is the exact §09 R6 column contract</span>
+    <pre><span class="c"># golden: CSV export header is the exact §09 R6 column contract (unchanged by the transition)</span>
 client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped
 Client A,API,"meeting;deep",auth refactor,2026-06-24T09:00:00Z,2026-06-24T10:30:00Z,5400,0,true,false</pre>
-    <p>Settings defaults (§14) are golden-checked the same way: a fresh database, then <code>tt</code> reads back rounding <code>off</code>, week start <code>Monday</code>, first check-in <code>60</code>, interval <code>30</code> — the defaults table becomes an approved fixture.</p>
+    <p>The <code>favorite</code> table shape, the release <strong>version stamp</strong> (<code>YYYY.M.D[.N]</code>, §19 R06, asserted to match a fixed pattern and to appear in Settings), and the settings defaults (§14) are golden-checked the same way: an approved fixture per artefact, byte- or schema-compared.</p>
   </section>
 
   <section id="s9">
     <div class="eyebrow"><span class="n">09</span> Sample — LLM-judged + agentic</div>
     <h2><span class="mc">JUDGE</span> the GUI qualities that resist assertion</h2>
-    <p>An agent drives the GUI through a scripted route (Playwright over the Electron app via Chromium), captures screenshots and the accessibility tree at each step, and an LLM scores the evidence against an explicit rubric. Deterministic facts in the renderer (a Stop button exists and is hittable) are plain Playwright assertions; facts that live in the main process rather than the DOM (the global shortcut is registered, its toggle handler ran) are exercised via <code>electronApp.evaluate()</code>. The renderer windows run headless under <code>xvfb-run</code>; the tray icon's own title text has no host there, so its live count-up is confirmed under <span class="mc">MANUAL</span> on a real desktop session.</p>
+    <p>An agent drives the GUI through a scripted route (Playwright over the Electron app via Chromium), captures screenshots and the accessibility tree at each step, and an LLM scores the evidence against an explicit rubric. Deterministic facts in the renderer (a Stop button exists and is hittable) are plain Playwright assertions; main-process facts (single-click opens the popover only, no dropdown context menu) are exercised via <code>electronApp.evaluate()</code>. The renderer windows run headless under <code>xvfb-run</code>; the tray icon's own title text has no host there, so its live count-up is confirmed under <span class="mc">MANUAL</span>.</p>
     <h3>Agentic route <span class="tag">driver script</span></h3>
     <ol class="req">
-      <li>Launch with an empty database. Capture the main window. <span class="c">→ empty state</span></li>
-      <li>Assert the global shortcut is registered, then invoke the timer-toggle it is bound to via <code>electronApp.evaluate()</code>. Open the tray popover window and capture it. <span class="c">→ running state, count-up</span></li>
-      <li>Wait 3s; re-capture the popover. <span class="c">→ count-up advanced</span></li>
-      <li>Backfill an overlapping entry via <code>tt</code>; refocus the window. Capture. <span class="c">→ overlap flag in context</span></li>
-      <li>Simulate a sleep span on the open entry; capture the affected entry row. <span class="c">→ slept-through flag + subtract affordance</span></li>
+      <li>Launch with an empty database. Capture the main window — assert the <strong>fixed-width sidebar is present</strong> and the current view is highlighted. <span class="c">→ shell + empty state (§12 R03)</span></li>
+      <li>Open the Timer view; create/start a timer with details; wait 3s and re-capture. <span class="c">→ live count-up advanced (§12 R14)</span></li>
+      <li>Pin the running timer as a favorite; capture the <strong>favorites rail</strong>; one-click resume from it. <span class="c">→ resume-from-favorite (§05 R09–R10)</span></li>
+      <li>Open a closed entry's edit form; click the time field to open the <strong>time-range picker</strong>; drag the rectangle body, then its bottom edge; capture overlapping neighbours. <span class="c">→ move/resize, 5-min snap, gray others / yellow overlap (§12 R15)</span></li>
+      <li>Open the Reports view; build &amp; save a definition; run it; capture totals + flags. <span class="c">→ saved reports in-sidebar (§12 R08)</span></li>
     </ol>
     <h3>Judge rubric <span class="tag">pass / fail per item</span></h3>
     <pre><span class="c"># Each item scored PASS/FAIL with a one-line justification citing the screenshot.</span>
 <span class="c"># Any FAIL fails the suite; a sample of PASSes is spot-checked by a human.</span>
 
-EMPTY_STATE     The empty main window instructs rather than decorates — it names a
-                concrete next action ("press Ctrl+Alt+T" or "run tt start"). (PRD §12 R5)
+SIDEBAR_SHELL    The fixed-width sidebar is present in EVERY captured view and does not
+                 reflow on window resize; the current view is highlighted. (§12 R03)
 
-TRAY_COUNTUP    The tray popover shows a single running timer counting up; between
-                the two captures the displayed elapsed increased by ~3s, not reset.
-                (The tray icon's own title count-up is checked under MANUAL.) (§12 R1)
+POPOVER_ONLY     A single tray left-click opens the compact popover ONLY — no 3-item
+                 dropdown context menu appears. (§12 R01)
 
-ACCENT_DISCIPLINE  The system accent colour appears on the running state / primary
-                action ONLY; the rest of the chrome is monochrome system grays. (§07, §15)
+FAVORITE_RESUME  The favorites rail shows the pinned template; one click starts a fresh
+                 open entry carrying its attributes (new id, not a re-open). (§05 R09-R10, §12 R14)
 
-FLAG_IN_CONTEXT The overlapped entry and the slept-through entry each show their flag
-                ON the affected row — not in a separate list — with the one-tap
-                subtract present on the slept entry. (§12 R4, §10 R5)
+PICKER_AFFORDANCE  The time-range picker shows a draggable entry rectangle; other entries
+                 render gray and overlaps render yellow (warn-only); text entry stays
+                 present and authoritative. (§12 R15)
 
-DESKTOP_FEEL    The window reads as a quiet, minimal desktop app that respects the
-                system (system typography, light/dark following the OS, monochrome
-                with restrained accent) — not a busy or branded web page. (§15)</pre>
-    <div class="note"><span class="lbl">Guardrail</span><span class="mc">JUDGE</span> is non-deterministic, so it is never the sole gate on anything that changes a billable number. It owns presentation and discoverability; the arithmetic underneath those screens is already nailed by <span class="mc">PROP</span> and <span class="mc">GOLD</span>. Rubric items are written as crisp PASS/FAIL claims, not vibes, to keep the judgement repeatable.</div>
+CLICKABILITY     Every clickable text affordance carries the neutral button background;
+                 inert text never does; the accent appears on this view's single primary
+                 action ONLY. (§15 R-clickability)</pre>
+    <div class="note"><span class="lbl">Guardrail</span><span class="mc">JUDGE</span> is non-deterministic, so it is never the sole gate on anything that changes a billable number. It owns presentation and discoverability — the sidebar shell, the popover, the Timer view, the picker, the one clickability convention — while the arithmetic underneath is nailed by <span class="mc">PROP</span> and <span class="mc">GOLD</span>, and the saved-report <em>results</em> are also <span class="mc">GOLD</span>-checked. Rubric items are crisp PASS/FAIL claims, not vibes.</div>
   </section>
 
   <section id="s10">
     <div class="eyebrow"><span class="n">10</span> Sample — Manual / supervised checklist</div>
     <h2><span class="mc">MANUAL</span> the physical &amp; OS-level guarantees</h2>
-    <p>Real sleep/wake, notification cadence over wall-clock time, and the no-network promise can't be faked in CI. Setup is scripted as far as possible; an operator (human or agent with shell + GUI access) confirms each step and attaches evidence.</p>
+    <p>Real sleep/wake, the no-network promise, a real install/update, and a real corrupt-DB recovery can't be faked in CI. Setup is scripted as far as possible; an operator (human or agent with shell + GUI access on macOS or Linux) confirms each step and attaches evidence.</p>
     <pre><span class="k">CHECK SLEEP-SPAN — second-accurate spans + working subtract</span>   <span class="c">(§10a, §17 R5)</span>
   1. tt start "deep work" --client "Client A"
-  2. Record start. Sleep the machine:  systemctl suspend  (or the platform's sleep)
+  2. Record start. Sleep the machine:  systemctl suspend  (Linux) / pmset sleepnow (macOS)
   3. Wake after ~120s. Note the suspend/resume times from the system log.
-  ✓ The open entry is flagged slept-through.
-  ✓ A SleepSpan (source=event) is attached; (resume − suspend) matches the
-    powerMonitor delta within 1s.
-  ✓ `tt sleep subtract &lt;id&gt;` moves those seconds into excluded_seconds;
-    billable duration drops by exactly the span; raw duration is unchanged.
-  ✓ Subtract is reversible — re-running restores the prior excluded_seconds.
+  ✓ The open entry is flagged slept-through; a SleepSpan (source=event) is attached;
+    (resume − suspend) matches the powerMonitor delta within 1s.
+  ✓ `tt sleep subtract &lt;id&gt;` moves those seconds into excluded_seconds; reversible.
 
-<span class="k">CHECK MISSED-SLEEP RECONCILE — wall-clock gap on launch</span>        <span class="c">(§10a, source=gap)</span>
-  1. With a timer open, fully quit the app, sleep the machine ~120s, wake, relaunch.
-  ✓ On launch a SleepSpan (source=gap) is created from the wall-clock gap and the
-    entry is flagged slept-through for review; the gap bounds the dead time.
-  ✓ Because the gap can't tell true sleep from app-closed time, the span is
-    a flagged suspicion only — never auto-subtracted (the operator decides).
+<span class="k">CHECK BACKUP-ON-LAUNCH + CORRUPTION RECOVERY</span>                  <span class="c">(§17 R12, §20 R03–R05)</span>
+  1. Make a change, then relaunch.
+  ✓ A timestamped backup is written beside the DB; retention keeps the last 5.
+  2. Quit. Overwrite the DB file with garbage bytes (planted corruption). Relaunch.
+  ✓ The integrity check on open FAILS; the app does NOT write to the corrupt file.
+  ✓ The corrupt file is quarantined as `.corrupted`; the latest good backup is restored;
+    the user is informed. No entries are lost vs. the pre-corruption state.
 
-<span class="k">CHECK CHECK-IN CADENCE + RELAUNCH</span>                            <span class="c">(§10b, §17 R6)</span>
-  1. Start a timer. (Use a test cadence to avoid waiting 60m, but verify the
-     real 60-then-30 defaults once in a long-form run.)
-  ✓ First check-in fires at start + first-interval; then every interval.
-  ✓ Ignoring one still fires the next on time (autonomous).
-  ✓ Quit the app across a due check-in, relaunch:
-    it fires ONCE on relaunch, then resumes cadence (no backlog).
-  ✓ After a long sleep, the next check-in realigns from wake — no flood.
+<span class="k">CHECK INSTALL + IN-APP UPDATE</span>                               <span class="c">(§17 R13, §19 R02–R04)</span>
+  1. Run the single installer (macOS .pkg / Linux install script) on a clean machine.
+  ✓ The GUI appears in Applications / the app launcher AND `tt` is on PATH — one step.
+  2. With an older version installed and a timer running, Settings → Software Update →
+     Check for updates.
+  ✓ A newer GitHub release is detected; download + guided install completes (one-time
+    Gatekeeper approval on macOS); the database is untouched; the running timer survives.
 
 <span class="k">CHECK NO NETWORK</span>                                             <span class="c">(§17 R9)</span>
-  1. Run the app + tt through a full session under a network monitor
-     (lsof -i / ss / a packet monitor), exercising every feature.
-  ✓ Zero outbound connections from the app or tt for the whole session.
-  ✓ The app opens no listening or outbound sockets; no telemetry,
-    update-check, or analytics code path exists.</pre>
-    <p>The no-network check has a cheap <span class="mc">GOLD</span> backstop that <em>does</em> run in CI — scanning the build's dependency tree and source for any networking import or outbound-request code path (none permitted) — so a regression is caught fast even though the live-traffic confirmation stays manual.</p>
+  1. Run the app + tt through a full session under a network monitor (lsof -i / ss).
+  ✓ Zero outbound connections EXCEPT the explicit, user-initiated update check
+    (Settings → Software Update); no telemetry/analytics path exists.</pre>
+    <p>The no-network check keeps a cheap <span class="mc">GOLD</span> backstop in CI — scanning the build's dependency tree and source for any networking import or outbound-request code path outside the single, user-initiated update-check module — so a regression is caught fast even though live-traffic confirmation stays manual.</p>
   </section>
 
   <section id="s11">
-    <div class="eyebrow"><span class="n">11</span> Coverage scorecard &amp; gaps</div>
+    <div class="eyebrow"><span class="n">11</span> Sample — a new requirement, end to end</div>
+    <h2>Worked: <span class="mc">BDD</span> resume-from-favorite + <span class="mc">GOLD</span> the saved-report shape</h2>
+    <p>The transition's two new entities each get a sample in the one-per-method spirit. First, the <strong>resume-from-favorite</strong> flow (§05 R09–R10) as a <span class="mc">BDD</span> feature, run against both surfaces for the §17 R14 parity claim:</p>
+    <pre><span class="k">Feature:</span> Favorites — pin a template and resume from it
+  <span class="c"># PRD §05 R09–R10, §12 R14, §17 R14. A favorite is a NAMED, pinned template;</span>
+  <span class="c"># resume starts a FRESH entry from it — never a re-open of a stored row.</span>
+
+  <span class="k">Background:</span>
+    <span class="k">Given</span> an empty database
+    <span class="k">And</span> a closed entry "API deep work" for "Client A" / "API", billable
+
+  <span class="k">Scenario:</span> Pin an entry, then resume from the favorite
+    <span class="k">When</span>  I pin that entry as a favorite named "deep-api"
+    <span class="k">Then</span>  `tt fav ls` lists "deep-api" for "Client A / API", billable
+    <span class="k">When</span>  I resume from the favorite "deep-api"
+    <span class="k">Then</span>  a new open entry exists with description "API deep work", "Client A", "API", billable
+    <span class="k">And</span>   it has a different id from the entry the favorite was pinned from
+
+  <span class="k">@cli</span>
+  <span class="k">Scenario:</span> The favorite is reachable identically from tt (parity, §17 R14)
+    <span class="k">When</span>  I run `tt fav add deep-api --from-entry 1`
+    <span class="k">And</span>   I run `tt fav start deep-api`
+    <span class="k">Then</span>  the exit code is 0
+    <span class="k">And</span>   `tt status` reports an open entry "API deep work" for "Client A / API"
+
+  <span class="k">Scenario:</span> Rename and unpin
+    <span class="k">Given</span> a favorite named "deep-api"
+    <span class="k">When</span>  I rename it to "acme-api" and then unpin it
+    <span class="k">Then</span>  `tt fav ls` lists no favorite</pre>
+    <p>And the <strong>saved-report definition</strong> (§09 R08) carries a <span class="mc">GOLD</span> schema note: a saved report stores a <em>relative</em> <code>range_spec</code> (e.g. <code>this-week</code>) or an absolute <code>{from_utc, to_utc}</code>, plus <code>group_by</code>, <code>filters</code>, and <code>rounding</code>. Storing the spec, not the resolved range, is the criterion — <code>tt report run</code> must re-resolve <code>this-week</code> against <em>current</em> data each time. The schema in <a href="#s8">§08</a> is the approved fixture; a <span class="mc">BDD</span> scenario then proves a definition saved on Monday yields a different week's totals when run the following Monday, confirming the relative spec is resolved at run time and not frozen at save time.</p>
+  </section>
+
+  <section id="s12">
+    <div class="eyebrow"><span class="n">12</span> Screen-recording QA evidence</div>
+    <h2>Demonstrations on the PR — <em>not</em> one of the five AC methods</h2>
+    <div class="band">
+      <span class="lbl">Not executable acceptance · does not gate the build</span>
+      <p style="margin:0">Screen recordings are <strong>QA evidence</strong>, gathered at the <strong>tail of the workflow</strong> — after plan → implement → verify (the executable AC above) → the two reviews (<a href="#s13">§13</a>) are complete. They are <strong>not a sixth acceptance method</strong>: they demonstrate requirements being exercised for a human reviewer on the PR, but they do <strong>not</strong> decide pass/fail and do <strong>not</strong> gate the build the way <span class="mc">BDD</span>/<span class="mc">PROP</span>/<span class="mc">GOLD</span>/<span class="mc">JUDGE</span>/<span class="mc">MANUAL</span> do. A requirement is "met" because its mapped executable AC passes with real evidence — the recording is a courtesy demonstration layered on top, never the proof.</p>
+    </div>
+    <p>This distinction is deliberate and load-bearing: the five methods are the contract; recordings are the show-and-tell. A green recording with a failing or stubbed AC does not pass; a passing AC with no recording still passes the gate (though the workflow requires the recording before merge as PR hygiene).</p>
+    <h3>Recording scope</h3>
+    <ul class="d">
+      <li><strong>All core-flow GUI requirements</strong> — every GUI requirement marked <span class="core">core</span> (●): §05 R01/R02/R05 (start / stop / add via the GUI), §12 R05/R07/R08-export/R13/R14.</li>
+      <li><strong>All changed / new GUI requirements</strong> — every <code>Rec ▶</code> row in the mapping: §12 R01, R03, R04, R08, R14, R15, and §05 R09/R10 (favorites).</li>
+      <li><strong>All code-change-adjacent requirements</strong> — any requirement whose implementation touched code in this transition and is demonstrable in the GUI, including the §19 update flow (R03/R04) and §20 backup/restore (R04/R05).</li>
+    </ul>
+    <h3>Where they live</h3>
+    <p>Recordings are attached to / linked from the PR body as QA evidence under <code>acceptance/evidence/recordings/</code>, indexed by requirement id. The binaries themselves are git-ignored and linked from the PR; only the index is tracked. They are captured on a real macOS or Linux desktop session — which is also why several of the same requirements have a <span class="mc">MANUAL</span> runbook: the runbook is the executable gate, the recording is its visible artefact.</p>
+  </section>
+
+  <section id="s13">
+    <div class="eyebrow"><span class="n">13</span> The two review stages</div>
+    <h2>How the AC apparatus is enforced — distinct from authoring it</h2>
+    <p>Authoring AC (everything above) says <em>how a requirement would be proven</em>. The two reviews, run after implementation and AC verification, are how that proof is <em>enforced</em> before the PR can merge. Each produces feedback that loops back into an improvement pass, and only then are recordings gathered.</p>
+    <h3>AC-evidence-sufficiency review <span class="tag">adversarial completeness critic</span></h3>
+    <p>A per-requirement critic that <strong>defaults to <em>insufficient</em></strong> and only flips to sufficient when the requirement is, all three: <strong>implemented</strong>, <strong>covered</strong> by its mapped executable AC (<span class="mc">BDD</span>/<span class="mc">PROP</span>/<span class="mc">GOLD</span>/<span class="mc">JUDGE</span>/<span class="mc">MANUAL</span> as the coverage map dictates), and <strong>reflected in regenerated evidence</strong>. It treats a stub, a skipped test, or a placeholder as a fail. Its question is not "is there a test?" but "is there <em>real, passing</em> evidence for the mapped method, today?"</p>
+    <h3>Code-quality &amp; architecture review <span class="tag">Pocock lineage</span></h3>
+    <p>Adapted from Matt Pocock's <em>improve-codebase-architecture</em> method. It hunts:</p>
+    <ul class="d">
+      <li><strong>Shallow modules</strong> — interfaces nearly as complex as their implementation; prefer deep modules (simple surface over substantial behaviour).</li>
+      <li><strong>Leaky seams</strong> — abstractions that leak their internals across the boundary (e.g. a favorite or saved-report API forcing callers to know the table shape).</li>
+      <li><strong>Poor locality / cognitive bounce</strong> — logic for one change scattered so a reader must hop between files to follow it.</li>
+      <li><strong>The deletion test</strong> — could this code, abstraction, or option be deleted with the requirement still met? If yes, it should be.</li>
+    </ul>
+    <p>Findings are rated <strong>Strong</strong> / <strong>Worth exploring</strong> / <strong>Speculative</strong>, with one top recommendation. The review feeds an improvement pass and <strong>must not regress AC</strong> — a cleaner architecture that breaks a passing acceptance criterion is rejected. Together these two reviews enforce the apparatus: the first guards that every requirement is genuinely proven, the second guards that it was built in a way worth keeping. The human gate remains the <strong>PR merge</strong>.</p>
+  </section>
+
+  <section id="s14">
+    <div class="eyebrow"><span class="n">14</span> Coverage scorecard &amp; gaps</div>
     <h2>What this set covers, and the honest residue</h2>
     <p>Rough share of each PRD area's criteria that lands as fast automated checks (<span class="mc">PROP</span>/<span class="mc">GOLD</span>/<span class="mc">BDD</span>), as semi-automated agentic checks (<span class="mc">JUDGE</span>), or as supervised manual runs (<span class="mc">MANUAL</span>):</p>
 
@@ -446,13 +530,13 @@ DESKTOP_FEEL    The window reads as a quiet, minimal desktop app that respects t
       <thead><tr><th>Area</th><th>Coverage profile</th></tr></thead>
       <tbody>
         <tr><td class="m" data-l="Area">Core logic &amp; invariants</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:95%"></i><i class="man" style="width:5%"></i></div></td></tr>
-        <tr><td class="m" data-l="Area">CLI / export contract</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:95%"></i><i class="man" style="width:5%"></i></div></td></tr>
+        <tr><td class="m" data-l="Area">CLI / export contract (incl. fav, saved reports)</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:95%"></i><i class="man" style="width:5%"></i></div></td></tr>
         <tr><td class="m" data-l="Area">Behavioural flows</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:88%"></i><i class="semi" style="width:12%"></i></div></td></tr>
-        <tr><td class="m" data-l="Area">Reports &amp; rounding</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:90%"></i><i class="semi" style="width:5%"></i><i class="man" style="width:5%"></i></div></td></tr>
-        <tr><td class="m" data-l="Area">GUI presentation</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:25%"></i><i class="semi" style="width:60%"></i><i class="man" style="width:15%"></i></div></td></tr>
+        <tr><td class="m" data-l="Area">Reports, rounding &amp; saved reports</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:88%"></i><i class="semi" style="width:7%"></i><i class="man" style="width:5%"></i></div></td></tr>
+        <tr><td class="m" data-l="Area">GUI presentation (sidebar, picker, clickability)</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:22%"></i><i class="semi" style="width:63%"></i><i class="man" style="width:15%"></i></div></td></tr>
+        <tr><td class="m" data-l="Area">Backups, integrity &amp; recovery</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:55%"></i><i class="man" style="width:45%"></i></div></td></tr>
         <tr><td class="m" data-l="Area">Sleep / wake / reconcile</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:45%"></i><i class="man" style="width:55%"></i></div></td></tr>
-        <tr><td class="m" data-l="Area">Check-in cadence</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:50%"></i><i class="man" style="width:50%"></i></div></td></tr>
-        <tr><td class="m" data-l="Area">Cross-surface propagation</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:60%"></i><i class="man" style="width:40%"></i></div></td></tr>
+        <tr><td class="m" data-l="Area">Install / update / packaging</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:20%"></i><i class="man" style="width:80%"></i></div></td></tr>
         <tr><td class="m" data-l="Area">No-network guarantee</td><td data-l="Profile"><div class="bar"><i class="auto" style="width:55%"></i><i class="man" style="width:45%"></i></div></td></tr>
       </tbody>
     </table>
@@ -465,17 +549,18 @@ DESKTOP_FEEL    The window reads as a quiet, minimal desktop app that respects t
     <h3>Residual risk we accept</h3>
     <ul class="d">
       <li><strong>Sleep reconciliation is wall-clock-approximate.</strong> A sleep missed while the app was closed is reconstructed from the wall-clock gap (<code>source=gap</code>), which bounds the dead time but can't tell true sleep from app-closed time — so gap-sourced spans are flagged for review and never auto-applied. Verified on real hardware before release, not per commit.</li>
-      <li><strong>Tray and global hotkey aren't exercised end-to-end in CI.</strong> Headless <code>xvfb-run</code> has no system-tray host and can't deliver an OS-global hotkey, so JUDGE covers the renderer windows and main-process state (<code>electronApp.evaluate()</code>) while the tray icon's live count-up and a real hotkey press are confirmed under MANUAL on a real desktop session.</li>
-      <li><strong>Long-form cadence is sampled, not exhaustive.</strong> The real 60-then-30 schedule is verified in a long-running pass; day-to-day regression uses a compressed test cadence, so a defect that only appears at the true intervals could slip between full runs.</li>
-      <li><strong>"Near-instantly" is a soft bound.</strong> File-watch propagation (§17 R1) is checked against a generous latency budget on the test machine; it is observed, not guaranteed under arbitrary system load.</li>
-      <li><strong>JUDGE is advisory on look-and-feel.</strong> "Feels like a quiet desktop app" is scored by rubric and spot-checked by a human; it gates presentation but never a billable number.</li>
+      <li><strong>Install &amp; update are MANUAL by nature.</strong> The single installer, the in-app guided update, and publish-on-merge run on real macOS/Linux machines and against the live GitHub Releases backend; the only CI-fast piece is the <span class="mc">GOLD</span> version-stamp pattern. A real Gatekeeper-approval flow is supervised, not scripted end-to-end.</li>
+      <li><strong>Corruption recovery is sampled, not exhaustive.</strong> Backup/retention algebra is <span class="mc">PROP</span>-covered and the detect-then-restore flow is <span class="mc">BDD</span>-covered against planted fixtures, but the space of <em>real</em> corruption modes is open-ended; a genuinely corrupt file is recovered under <span class="mc">MANUAL</span> for the modes we can produce.</li>
+      <li><strong>Tray and global hotkey aren't exercised end-to-end in CI.</strong> Headless <code>xvfb-run</code> has no system-tray host and can't deliver an OS-global hotkey, so JUDGE covers the renderer windows and main-process state (<code>electronApp.evaluate()</code>) while the tray's live count-up and a real hotkey press are confirmed under MANUAL.</li>
+      <li><strong>JUDGE is advisory on look-and-feel.</strong> "Feels like a quiet desktop app," the clickability convention, and the picker's feel are scored by rubric and spot-checked by a human; they gate presentation but never a billable number.</li>
+      <li><strong>Recordings demonstrate, they don't prove.</strong> The screen recordings (§12) are PR evidence, not a gate; the gate is always the executable AC. A recording that looks right over a stubbed or skipped AC does not pass the sufficiency review.</li>
     </ul>
-    <p>Net: the money-affecting core (invariants, durations, rounding, exclusion, exports) reaches near-complete deterministic coverage; the irreducibly physical and the irreducibly subjective are covered by the right weaker instrument and named here as known residue rather than papered over.</p>
+    <p>Net: the money-affecting and data-loss core (invariants, durations, rounding, exclusion, exports, DB-open hardening, backups) reaches near-complete deterministic coverage; the irreducibly physical (sleep, install, update, real corruption) and the irreducibly subjective (GUI feel, clickability, the picker) are covered by the right weaker instrument and named here as known residue rather than papered over.</p>
   </section>
 
   <div class="foot">
     <span>stint — acceptance criteria strategy</span>
-    <span>v1 · BDD · PROP · GOLD · JUDGE · MANUAL</span>
+    <span>v1 · BDD · PROP · GOLD · JUDGE · MANUAL · (+ recordings as QA evidence)</span>
   </div>
 
 </main>
