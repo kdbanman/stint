@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Product Requirements</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  h3 .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:middle}
+  /* implementation-status badges (§ status field on every requirement) */
+  .st{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:1px 6px 0;border-radius:9px;margin-left:7px;vertical-align:middle;white-space:nowrap;border:1px solid;line-height:1.7}
+  .st-done{color:#1f6b3a;background:#eaf6ee;border-color:#bfe3cc}
+  .st-partial{color:#8a5a00;background:#fbf3e2;border-color:#ecd9a8}
+  .st-todo{color:#9a3b2c;background:#fbece9;border-color:#f0cabf}
+  td .st{margin-left:0}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:7px}
+  .new{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#3b5b9a;background:#eaeffb;border:1px solid #c4d0f4;border-radius:9px;padding:1px 6px 0;margin-left:7px;vertical-align:middle;line-height:1.7}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  ol.req{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:r}
+  ol.req li{position:relative;padding-left:34px;margin-bottom:11px;counter-increment:r;color:var(--ink-soft)}
+  ol.req li::before{content:"R" counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  pre{background:#fbfbfa;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-soft);padding:16px 18px;margin:16px 0;overflow-x:auto;white-space:pre}
+  pre .k{color:var(--ink);font-weight:600}
+  pre .c{color:var(--faint)}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">00:00:00&nbsp; <b>■ idle</b> &nbsp;·&nbsp; tt v1</div>
+    </div>
+    <div class="mast-meta">Product Requirements · v1 · cross-platform · single user · offline</div>
+  </header>
+
+  <p class="lede">A cross-platform desktop time tracker for one freelancer who bills by time. A tray app and a CLI (<code>tt</code>) are equal surfaces over one local SQLite database. The unit is time; no money lives in the app.</p>
+
+  <div class="note">
+    <span class="lbl">Status field</span>
+    Every requirement below carries an implementation status, so the PRD doubles as a live build map. <code>@stint/core</code> and the <code>tt</code> CLI are essentially complete; most remaining gaps are GUI affordances that already exist in core/CLI but have no window to reach them yet. Requirements added in the current round are marked <span class="new">new</span>.
+    <div class="legend">
+      <span class="item"><span class="st st-done">implemented</span> shipped &amp; covered by tests</span>
+      <span class="item"><span class="st st-partial">partial</span> works in some surface; gaps noted</span>
+      <span class="item"><span class="st st-todo">todo</span> specified, not yet built</span>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>Overview &amp; goals</a></li>
+      <li><a href="#s2"><span class="tn">02</span>Non-goals</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Concepts &amp; domain model</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Architecture</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Timer &amp; entries</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Editing: split, merge, overlap</a></li>
+      <li><a href="#s7"><span class="tn">07</span>Clients, projects, tags</a></li>
+      <li><a href="#s8"><span class="tn">08</span>Billable &amp; non-billable</a></li>
+      <li><a href="#s9"><span class="tn">09</span>Reports &amp; export</a></li>
+      <li><a href="#s10"><span class="tn">10</span>Running-timer hygiene</a></li>
+      <li><a href="#s11"><span class="tn">11</span>CLI specification</a></li>
+      <li><a href="#s12"><span class="tn">12</span>GUI specification</a></li>
+      <li><a href="#s13"><span class="tn">13</span>Storage &amp; schema</a></li>
+      <li><a href="#s14"><span class="tn">14</span>Settings</a></li>
+      <li><a href="#s15"><span class="tn">15</span>Platform &amp; tech</a></li>
+      <li><a href="#s16"><span class="tn">16</span>Edge cases &amp; rules</a></li>
+      <li><a href="#s17"><span class="tn">17</span>v1 acceptance criteria</a></li>
+      <li><a href="#s18"><span class="tn">18</span>UI mockups &amp; prototypes</a></li>
+      <li><a href="#a1"><span class="tn">A</span>Power/idle APIs</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> Overview &amp; goals</div>
+    <h2>What Stint is</h2>
+    <p>Stint is a single-user cross-platform desktop application for tracking billable time, in the spirit of early Toggl: a live start/stop timer, with manual backfill, organized by client. It runs locally, stores all data in one SQLite file, and is fully offline. Its output is trustworthy time totals per client and date range, exported as CSV or JSON, which the user turns into invoices in a separate tool.</p>
+    <h3>Primary goals</h3>
+    <ul class="d">
+      <li><strong>Accurate billable hours.</strong> The stored total is always the exact truth; nothing is silently rounded, added, or removed.</li>
+      <li><strong>Equal CLI and GUI.</strong> Anything the tray app can do, <code>tt</code> can do, over the same database, with no privileged surface.</li>
+      <li><strong>Low-friction tracking.</strong> Starting a timer takes one keystroke or one click; forgetting to start one is always recoverable by hand.</li>
+      <li><strong>Quiet, minimal, cross-platform.</strong> A monochrome desktop app that respects system light/dark and stays out of the way.</li>
+    </ul>
+    <h3>Primary user</h3>
+    <p>A freelancer, consultant, or contractor working solo at their own computer, tracking a handful of clients, comfortable in a terminal, who invoices from the exported numbers using other software.</p>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> Non-goals</div>
+    <h2>Explicitly out of scope for v1</h2>
+    <table>
+      <thead><tr><th>Excluded</th><th>Rationale</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Excluded">Money</td><td data-l="Rationale">No rates, currency, tax, or invoice generation. The unit is time; billing happens downstream.</td></tr>
+        <tr><td class="m" data-l="Excluded">Sync / cloud</td><td data-l="Rationale">No accounts, network, sync, or telemetry. The file is portable; pointing <code>TT_DB</code> at a synced folder is the user's own risk, not an app feature.</td></tr>
+        <tr><td class="m" data-l="Excluded">Multi-user / team</td><td data-l="Rationale">Single user, single machine. No sharing, roles, or dashboards.</td></tr>
+        <tr><td class="m" data-l="Excluded">OS user-idle</td><td data-l="Rationale">Keyboard/mouse idle detection is fuzzy, OS-version-dependent, and a cross-application concern. Sleep/wake (clean, timestamped) is used instead.</td></tr>
+        <tr><td class="m" data-l="Excluded">Mobile</td><td data-l="Rationale">Desktop instrument only.</td></tr>
+        <tr><td class="m" data-l="Excluded">PDF / Markdown export</td><td data-l="Rationale">CSV and JSON cover the bridge to invoicing and scripting; a renderer is weight for little gain.</td></tr>
+        <tr><td class="m" data-l="Excluded">Tracking reminders</td><td data-l="Rationale">"You're working but nothing is tracking" nudges are deferred to v2; v1 ships only the left-running-timer check-in.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Concepts &amp; domain model</div>
+    <h2>Entities and the core invariant</h2>
+    <p>The conceptual keystone: <strong>a running timer is the single time entry whose <code>end</code> is null.</strong> "Running" is a row state, not a separate object. Elapsed time is always derived (<code>now − start</code>), never stored or incremented.</p>
+    <table>
+      <thead><tr><th>Entity</th><th>Key fields</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Entity">Client</td><td data-l="Fields"><code>id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Top of the hierarchy. No rate. Archivable, not deleted, once referenced.</td></tr>
+        <tr><td class="m" data-l="Entity">Project</td><td data-l="Fields"><code>id</code>, <code>client_id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Optional refinement. A project belongs to exactly one client; selecting a project implies its client.</td></tr>
+        <tr><td class="m" data-l="Entity">Entry</td><td data-l="Fields"><code>id</code>, <code>client_id?</code>, <code>project_id?</code>, <code>description?</code>, <code>start</code>, <code>end?</code>, <code>billable</code>, <code>excluded_seconds</code></td><td data-l="Notes">The core record. <code>end</code> null ⇒ running. Times stored UTC. <code>client_id</code> nullable (clientless = internal time).</td></tr>
+        <tr><td class="m" data-l="Entity">Tag</td><td data-l="Fields"><code>id</code>, <code>name</code>, <code>archived</code></td><td data-l="Notes">Flat, reusable, cross-cutting. Many-to-many with entries via a join.</td></tr>
+        <tr><td class="m" data-l="Entity">SleepSpan</td><td data-l="Fields"><code>id</code>, <code>entry_id</code>, <code>sleep_at</code>, <code>wake_at</code>, <code>source</code></td><td data-l="Notes">A sleep→wake cycle that occurred during a running entry. Multiple per entry. <code>source</code> = event | gap | unknown.</td></tr>
+        <tr><td class="m" data-l="Entity">Setting</td><td data-l="Fields"><code>key</code>, <code>value</code></td><td data-l="Notes">Key-value app config (rounding, week start, check-in cadence, etc.).</td></tr>
+      </tbody>
+    </table>
+    <h3>Invariants</h3>
+    <ul class="d">
+      <li><strong>At most one open entry</strong> (<code>end IS NULL</code>) exists at any time. Enforced transactionally in the shared core.</li>
+      <li><strong>Billable duration</strong> of an entry = <code>(end ?? now) − start − excluded_seconds</code>. Stored truth (<code>start</code>, <code>end</code>) is never mutated by rounding or sleep subtraction.</li>
+      <li><strong>A project's client</strong> is authoritative: an entry with a project takes that project's client.</li>
+    </ul>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Architecture</div>
+    <h2>One core, one file, two thin shells</h2>
+    <ol class="req">
+      <li><strong>Shared core.</strong> A TypeScript package (<code>@stint/core</code>) owns the schema, every state transition, and all invariants. The tray app and the <code>tt</code> CLI both import it; there is no duplicated logic and no privileged surface. <span class="st st-done">implemented</span></li>
+      <li><strong>Single source of truth.</strong> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>@stint/core</code>. <span class="st st-done">implemented</span></li>
+      <li><strong>Derived elapsed.</strong> No process holds or increments a timer. Elapsed is computed <code>now − start</code> on demand; the tray's per-second update is display only. <span class="st st-done">implemented</span></li>
+      <li><strong>Atomic transitions.</strong> Starting a timer is one transaction (<code>BEGIN IMMEDIATE</code>): close any open entry (<code>end = now</code>), insert a new open entry. This makes "start while running" safe regardless of which surface triggers it. The CLI uses a busy timeout so it cooperates with the running app. <span class="st st-done">implemented</span></li>
+      <li><strong>Change propagation by file-watch.</strong> Each surface watches the SQLite file (and its <code>-wal</code>) via <code>fs.watch</code> and refreshes on change, so a write from one surfaces in the other near-instantly. (The tray's 1-second display tick is independent of this.) <span class="st st-done">implemented</span></li>
+      <li><strong>UTC storage, local display.</strong> All timestamps stored UTC; rendered in the system locale and time zone. Durations are timezone-independent and DST-safe. <span class="st st-done">implemented</span></li>
+    </ol>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Timer &amp; entries</div>
+    <h2>Tracking and backfill</h2>
+    <ol class="req">
+      <li><strong>Start</strong> opens a new entry; any currently open entry is stopped first. Description, client, project, tags, and billable are all optional at start and editable later. Nothing is required to start a bare timer. <span class="st st-partial">partial</span> <em>core + <code>tt start</code> accept all attributes at start; the GUI Start control is parameterless — setting description/client/project/tags at start is TODO (§12 R5).</em></li>
+      <li><strong>Stop</strong> sets <code>end = now</code> on the open entry. <span class="st st-done">implemented</span></li>
+      <li><strong>Status</strong> reports the open entry and its derived elapsed, or that nothing is running. <span class="st st-done">implemented</span></li>
+      <li><strong>Resume</strong> starts a fresh entry copying the most recent entry's description, client, project, and billable flag. <span class="st st-done">implemented</span></li>
+      <li><strong>Manual add</strong> creates a completed entry from explicit <code>from</code>/<code>to</code> times (backfill). Backfilled entries are first-class and indistinguishable from tracked ones except by their timestamps. <span class="st st-done">implemented</span> <em>core + <code>tt add</code> + the GUI "Add Entry Manually" form (§12 R7) all complete.</em></li>
+      <li><strong>The running entry is editable</strong> like any other (description, client, project, tags, even <code>start</code>); its <code>end</code> is set only by stopping it. <span class="st st-done">implemented</span> <em>core + <code>tt edit</code> and the GUI inline editor (§12 R6) all complete; editing the open entry omits <code>end</code> so the patch never stops it.</em></li>
+      <li>Default <code>billable</code> is <strong>true</strong> when a client is set, <strong>false</strong> when clientless; always overridable. <span class="st st-done">implemented</span></li>
+      <li><strong>Switch</strong> <span class="new">new</span> — a single action that stops the open entry and immediately starts a new one, optionally carrying forward or clearing client/project. Equivalent to stop-then-start as one atomic transition; surfaced as a dedicated control so the common "moved to a different task" case is one step. <span class="st st-done">implemented</span> <em>core's atomic stop-then-start, <code>tt switch</code>, and the GUI Switch affordance (§12 R5, shown only while running) all complete; proven surface-neutral by <code>features/tracking.feature</code> run on both core and <code>tt</code>.</em></li>
+    </ol>
+  </section>
+
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Editing</div>
+    <h2>Split, merge, delete, overlap</h2>
+    <ol class="req">
+      <li><strong>Edit</strong> any field of any entry. <strong>Delete</strong> any entry (CLI requires confirmation or <code>--force</code>). <span class="st st-done">implemented</span> <em>core + <code>tt edit</code>/<code>tt rm</code> and the GUI inline editor (§12 R6) — every <code>tt edit</code> field editable in-context — plus the GUI two-step delete confirm (§12 R13) all complete.</em></li>
+      <li><strong>Split</strong> cuts one entry into two at a chosen instant within its span; both inherit the original's client/project/tags/billable; the user adjusts from there. <span class="st st-partial">partial</span> <em>core + <code>tt split</code> complete; the GUI split affordance is TODO (§12 R6).</em></li>
+      <li><strong>Merge</strong> combines a contiguous selection into one entry spanning the earliest start to the latest end. <strong>Conflict rule:</strong> when merged entries disagree on client/project/billable, the GUI prompts which to keep; descriptions are concatenated and tags unioned. <code>tt merge</code> uses the first entry's attributes unless <code>--client</code>/<code>--project</code> override. <span class="st st-done">implemented</span> <em>core + <code>tt merge</code> and the GUI multi-select + conflict prompt (§12 R6) all complete; the conflict prompt sends a <code>winnerId</code> the <code>merge</code> handler resolves, so the renderer resolves no names.</em></li>
+      <li><strong>Overlap is warned, not blocked.</strong> Any add/edit that overlaps an existing entry surfaces a clear warning (GUI banner; <code>tt</code> note on stderr) but is allowed. Overlapped spans are flagged in reports so the same time cannot silently bill twice. <span class="st st-done">implemented</span> <em>(detection + <code>tt</code> stderr note + report flagging complete; the GUI surfaces both the at-write-time <code>#overlap-banner</code> (§12 R7) and the durable per-row detailed overlap banner of §12 R9 — "Overlap: Nm with previous/next entry" off core's <code>describeOverlaps</code>.)</em></li>
+    </ol>
+  </section>
+
+  <section id="s7">
+    <div class="eyebrow"><span class="n">07</span> Clients, projects, tags</div>
+    <h2>Reference data</h2>
+    <ol class="req">
+      <li><strong>Clients</strong> and <strong>projects</strong> can be created, renamed, archived, and listed from both GUI and CLI. A project must name a client. Referenced records are archived rather than hard-deleted to preserve history. <span class="st st-done">implemented</span> <em>core + <code>tt client</code>/<code>tt project</code> and the GUI Clients view (§12 R10) — create/rename/archive in place — all complete.</em></li>
+      <li><strong>Tags</strong> are flat, reusable labels, applied many-per-entry, used for filtering and grouping (e.g. all "meetings" across clients). Created on the fly when first applied. <span class="st st-done">implemented</span> <em>core + CLI (<code>tt tag add/rename/archive/ls</code>) and the GUI — tag chips on entries, the in-context tag editor (§12 R6), and the Clients-view tag management strip (§12 R10) — all complete.</em></li>
+    </ol>
+  </section>
+
+  <section id="s8">
+    <div class="eyebrow"><span class="n">08</span> Billable &amp; non-billable</div>
+    <h2>Tracking overhead without billing it</h2>
+    <ol class="req">
+      <li>An entry may have <strong>no client</strong>; clientless time defaults to non-billable internal time (admin, email, own tooling). <span class="st st-done">implemented</span></li>
+      <li>The <strong><code>billable</code> flag</strong> overrides either way: a client entry can be marked non-billable (goodwill), and internal time can rarely be flagged billable. <span class="st st-done">implemented</span></li>
+      <li>Reports default to <strong>billable-only</strong>, with a toggle to show all or non-billable, so the user can see total worked vs. invoiceable. <span class="st st-partial">partial</span> <em>core + <code>tt report --all|--non-billable</code> complete; the GUI report builder (with this toggle) is TODO (§12 R8).</em></li>
+    </ol>
+  </section>
+
+  <section id="s9">
+    <div class="eyebrow"><span class="n">09</span> Reports &amp; export</div>
+    <h2>The deliverable</h2>
+    <ol class="req">
+      <li><strong>Date range:</strong> presets (today, this week, last week, this month, last month) plus arbitrary custom ranges. <span class="st st-done">implemented</span> <em>core + <code>tt report</code>/<code>tt list</code> ranges and the GUI preset/custom-range picker (§12 R8) all complete; the picker sends the preset name so the main process resolves it through core's <code>resolveRange</code>, never re-deriving date math in the renderer.</em></li>
+      <li><strong>Grouping:</strong> default client → project → entries; also by day or by tag. <span class="st st-done">implemented</span> <em>core + <code>tt report --by</code> and the GUI group-by control (§12 R8) all complete; the grand total stays grouping-invariant across client/project/day/tag.</em></li>
+      <li><strong>Filters:</strong> client, project, tag, billable. <span class="st st-done">implemented</span> <em>core + <code>tt</code> filter flags and the GUI filter controls (§12 R8) all complete; each control carries the entity id (never a name) and omits any unset filter key.</em></li>
+      <li><strong>Rounding:</strong> stored time is exact; rounding applies only at display/export, <strong>off by default</strong>. When on, grouped totals (the billable line, not each entry) round to a configurable increment — default <strong>nearest 15 min</strong>; 6 / 10 / 30 also available; nearest, not always-up. <span class="st st-done">implemented</span> <em>core + <code>tt report --round</code> and the GUI rounding toggle + increment picker (§12 R8) all complete; the renderer paints the core-owned rounded line and re-derives no rounding.</em></li>
+      <li><strong>Flags surfaced:</strong> overlapped time and unreviewed sleep-flagged entries are marked in every report so they can't quietly reach an invoice. <span class="st st-done">implemented</span></li>
+      <li><strong>Export:</strong> <strong>CSV</strong> (one row per entry: client, project, tags, description, start, end, raw duration, excluded sleep, billable, overlapped) and <strong>JSON</strong>. The GUI also shows an on-screen summary. No PDF, no Markdown. <span class="st st-done">implemented</span> <em>core + <code>tt export</code> and the GUI on-screen grouped summary (flags surfaced in context) + Export CSV / Export JSON buttons (§12 R8) all complete; the GUI <code>exportPayload</code> is byte-identical to <code>tt export</code>.</em></li>
+      <li><strong>Search</strong> <span class="new">new</span> — a free-text query filters the entry list and reports by matching the description (and, secondarily, client/project/tag names), case-insensitively. Combines with the active range and filters (search narrows within them). Available in both surfaces for parity: <code>tt list --search &lt;text&gt;</code> / <code>tt report --search &lt;text&gt;</code> and the GUI search box. <span class="st st-todo">todo</span> <em>(core query support + CLI flag + GUI search box all TODO; GUI box shown in §12 R8 and the §18 prototype).</em></li>
+    </ol>
+  </section>
+
+  <section id="s10">
+    <div class="eyebrow"><span class="n">10</span> Running-timer hygiene</div>
+    <h2>Two independent mechanisms</h2>
+    <h3>Sleep-span flagging <span class="tag">suspend + resume</span></h3>
+    <ol class="req">
+      <li>While an entry is open, the app listens for the OS <strong>suspend</strong> and <strong>resume</strong> events (Electron <code>powerMonitor</code>) and timestamps each on receipt (<code>source = event</code>). <span class="st st-done">implemented</span></li>
+      <li>Each suspend→resume cycle during the open entry is recorded as a <strong>SleepSpan</strong> and attached to the entry, which is flagged "slept through." Multiple cycles per timer are all captured. <span class="st st-done">implemented</span></li>
+      <li>On launch, the app <strong>reconciles</strong> by comparing the wall-clock gap since its last recorded timestamp against the open entry: a gap large enough to imply the machine slept is recorded as a SleepSpan (<code>source = gap</code>), recovering a cycle missed while the app was not running. The wall-clock comparison captures that a sleep occurred and its approximate bounds. <span class="st st-done">implemented</span></li>
+      <li>The timer keeps running through sleep (<code>now − start</code> stays honest as wall-clock); the flag and spans let the user decide about the dead time. <span class="st st-done">implemented</span></li>
+      <li><strong>Slept time handling:</strong> flagged, not auto-subtracted. A one-tap action (GUI) / flag (<code>tt</code>) adds the span(s) to <code>excluded_seconds</code>, trimming billable duration precisely and reversibly. <span class="st st-done">implemented</span></li>
+      <li><code>powerMonitor</code> reports user-visible suspend/resume, so each sleep is recorded as one span. A sleep that occurs while the app is closed is recovered by the wall-clock-gap reconciliation in item 3 (see Appendix A). <span class="st st-done">implemented</span></li>
+    </ol>
+    <h3>Check-ins <span class="tag">notification</span></h3>
+    <ol class="req">
+      <li>The first check-in notification fires at <strong>start + 60 min</strong>, then every <strong>30 min</strong> by default. <span class="st st-done">implemented</span></li>
+      <li>The schedule is <strong>autonomous</strong>: if the user ignores a notification, the next still fires on time. <span class="st st-done">implemented</span></li>
+      <li>The notification shows <strong>light context</strong> — the description if present (and client if set), otherwise "your timer." <span class="st st-done">implemented</span></li>
+      <li>It offers an inline <strong>Stop</strong> and a <strong>keep going</strong> action, plus a <strong>dropdown</strong> setting minutes until the next check-in (default 30). A custom pick applies to the <strong>next gap only</strong>, then reverts to the default. <span class="st st-done">implemented</span> <em>each fired notification offers Stop, Keep going, and an inline set of interval choices (+15m/+30m/+60m/+120m — the OS-notification form of the dropdown); a pick reschedules only the next check-in, then cadence reverts to the configured default without touching the persisted setting (PROP-proven next-gap-only).</em></li>
+      <li>Cadence applies to <strong>every</strong> running timer, billable or not. <span class="st st-done">implemented</span></li>
+      <li>The schedule is persisted/derivable so it <strong>survives relaunch</strong>: a check-in that came due while the app was closed fires <strong>once</strong> on relaunch, then resumes cadence. After a long sleep, cadence <strong>realigns from wake</strong> — no backlog of missed notifications. <span class="st st-done">implemented</span></li>
+    </ol>
+    <div class="note"><span class="lbl">Out of scope</span>OS-level user-idle detection (keyboard/mouse inactivity). It is fuzzy, OS-version-dependent, and a cross-application concern. Stint builds only on sleep/wake, which are clean and authoritative. See Appendix A.</div>
+  </section>
+
+  <section id="s11">
+    <div class="eyebrow"><span class="n">11</span> CLI specification</div>
+    <h2><code>tt</code> — full parity</h2>
+    <p>Human-readable tables by default; <code>--json</code> on every read command for scripting. Clean exit codes (0 success, non-zero on error). All writes go through <code>@stint/core</code> with <code>BEGIN IMMEDIATE</code> + busy timeout so they cooperate with the running app.</p>
+    <table>
+      <thead><tr><th>Command</th><th>Does</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Command">tt start [desc]</td><td data-l="Does">Stop any open entry, open a new one. Flags: <code>--client</code> <code>--project</code> <code>--tag</code> (repeatable) <code>--no-bill</code> <code>--at &lt;time&gt;</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt stop</td><td data-l="Does">Close the open entry. <code>--at &lt;time&gt;</code> to backdate the stop.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt status</td><td data-l="Does">Show the open entry + derived elapsed, or "nothing running." <code>--json</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt resume</td><td data-l="Does">Start a new entry from the last entry's description/client/project/billable.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt add &lt;desc&gt;</td><td data-l="Does">Backfill a completed entry. Requires <code>--from</code> <code>--to</code>; same attribute flags as start.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt edit &lt;id&gt;</td><td data-l="Does">Amend any field: <code>--desc --from --to --client --project --tag/--untag --bill/--no-bill</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt split &lt;id&gt; --at &lt;time&gt;</td><td data-l="Does">Cut an entry into two at an instant within its span.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt merge &lt;id…&gt;</td><td data-l="Does">Merge a contiguous selection. <code>--client</code>/<code>--project</code> resolve conflicts.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt rm &lt;id&gt;</td><td data-l="Does">Delete an entry. Confirms unless <code>--force</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt list</td><td data-l="Does">List entries. <code>--today --week --range a b</code> + filters + <code>--json</code>. <code>--search &lt;text&gt;</code> <span class="new">new</span>.</td><td data-l="Status"><span class="st st-partial">partial</span></td></tr>
+        <tr><td class="m" data-l="Command">tt report</td><td data-l="Does">Totals. <code>--week --month --range a b</code>, <code>--by client|project|day|tag</code>, <code>--round 15</code>, <code>--all|--non-billable</code>, <code>--csv|--json</code>. <code>--search &lt;text&gt;</code> <span class="new">new</span>.</td><td data-l="Status"><span class="st st-partial">partial</span></td></tr>
+        <tr><td class="m" data-l="Command">tt export</td><td data-l="Does">Raw entries for a range. <code>--csv|--json</code>, <code>-o &lt;file&gt;</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt client …</td><td data-l="Does"><code>add | rename | archive | ls</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt project …</td><td data-l="Does"><code>add --client | rename | archive | ls</code>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt sleep …</td><td data-l="Does">Review sleep-flagged entries; <code>tt sleep subtract &lt;id&gt;</code> excludes slept time.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+        <tr><td class="m" data-l="Command">tt config …</td><td data-l="Does"><code>ls | set &lt;key&gt; &lt;value&gt;</code> — read/write settings (§14). <span class="new">new (documented)</span>.</td><td data-l="Status"><span class="st st-done">done</span></td></tr>
+      </tbody>
+    </table>
+    <p>Time arguments accept absolute (<code>14:30</code>, <code>2026-06-24T14:30</code>) and relative (<code>-90m</code>, <code>-1h30m</code>) forms. The database path resolves to <code>TT_DB</code> if set, else the default location (§13).</p>
+  </section>
+
+  <section id="s12">
+    <div class="eyebrow"><span class="n">12</span> GUI specification</div>
+    <h2>Tray + main window</h2>
+    <p>The GUI is the second equal surface (§04). Its job is to make every <code>@stint/core</code> capability reachable by hand — not just starting and stopping a timer, but editing, backfilling, organizing, reporting, and configuring — so that §17 R8 (full parity) holds for a non-terminal user. The tray, the live-timer plumbing, and the <strong>main window</strong> views below are built; the §18 prototype shows the intended shape.</p>
+    <ol class="req">
+      <li><strong>Tray (Electron <code>Tray</code> + popover <code>BrowserWindow</code>):</strong> the running timer, counting up; one click to stop, switch, or start; quick-pick recent client/project; opens the main window. It lives in the system tray on Windows and Linux and in the menu bar on macOS. <span class="st st-done">implemented</span></li>
+      <li><strong>Global hotkey</strong> (default <code>Ctrl+Alt+T</code>, registered via Electron <code>globalShortcut</code> as <code>CommandOrControl+Alt+T</code>) toggles the timer from anywhere — stops if running, resumes the last entry if idle. <span class="st st-done">implemented</span></li>
+      <li><strong>Window shell &amp; navigation.</strong> <span class="new">new</span> The main window presents a persistent left-hand nav with the views <strong>Timer</strong>, <strong>Entries</strong>, <strong>Clients</strong>, <strong>Reports</strong>, and <strong>Settings</strong>; the current view is highlighted. The title bar follows system light/dark. <em>Done when</em> each nav item routes to its view and the active item is visually marked. <span class="st st-todo">todo</span> <em>(today the window is a single entry list with a Start toggle and a dead "this week" button).</em></li>
+      <li><strong>Active-timer panel (in-window).</strong> <span class="new">new</span> The Timer/Entries views show a card with the live count-up, running/idle state, the running entry's description, client, project, and tag chips, and primary actions <strong>Stop</strong> and <strong>Switch</strong> (§05 R8). <em>Done when</em> the card mirrors <code>tt status</code> and updates per-second while running. <span class="st st-done">implemented</span> <em>the <code>#timer-card</code> paints the running/idle face with description + client/project + flags; the per-second clock advances off derived <code>elapsed(now − start)</code>, Stop reuses the <code>toggle</code> write, and Switch reuses the atomic <code>start</code> channel (§05 R8).</em></li>
+      <li><strong>Start / Switch form.</strong> <span class="new">new</span> Starting a timer (and Switch) from the window offers optional inline fields — description, client (with create-on-the-fly), project (scoped to the chosen client), tags, and a billable toggle — defaulting per §05 R7, and starts immediately with whatever is filled. <em>Done when</em> a timer can be started from the GUI with a description and client without later editing, reaching parity with <code>tt start "desc" --client …</code>. <span class="st st-done">implemented</span> <em>the <code>#start-form</code> carries every attribute over the existing <code>start</code> IPC (resolved in core via <code>startWithAttributes</code>); the form flips to the dedicated Switch affordance while running. No new channel — the attributes ride the <code>start</code> payload.</em></li>
+      <li><strong>Inline entry editing, split &amp; merge.</strong> Each entry exposes a context (kebab) menu and/or inline editor to change description, client, project, tags, billable, and start/end times; to <strong>split</strong> at a chosen instant; to <strong>merge</strong> a multi-selection (with the conflict prompt of §06 R3); and to <strong>delete</strong>. <em>Done when</em> every field editable via <code>tt edit</code> is editable in the window, and split/merge are reachable. <span class="st st-done">implemented</span> <em>the kebab opens a consolidated editor (<code>editor.js</code>) surfacing every <code>tt edit</code> field, plus Split-at-instant, multi-select Merge with the §06 R3 conflict prompt, and a two-step Delete (§12 R13) — a pure renderer over the existing <code>edit</code>/<code>split</code>/<code>merge</code>/<code>remove</code> channels; editing the open entry omits <code>end</code>.</em></li>
+      <li><strong>Manual add (backfill) form.</strong> An "Add Entry Manually" action opens a form for a completed entry with explicit from/to times plus the same attribute fields as start (§05 R5). Overlap with existing entries is warned inline but allowed (§06 R4). <em>Done when</em> a past entry can be created entirely in the window, at parity with <code>tt add</code>. <span class="st st-done">implemented</span> <em>(the <code>#add-form</code> disclosure carries from/to + description/client/project/tags/billable over the <code>add</code> IPC → <code>store.add</code>; an overlapping span raises the shared non-blocking <code>#overlap-banner</code> — warned, not blocked. JUDGE <code>ADD_FORM</code>/<code>MANUAL_ADD_FORM</code>, BDD backfill scenarios, parity <code>add</code>→<code>tt add</code>.)</em></li>
+      <li><strong>Report builder &amp; export.</strong> A Reports view with: range <strong>presets</strong> (today / this week / last week / this month / last month) and a custom range; <strong>group by</strong> client / project / day / tag; <strong>filters</strong> for client, project, tag; a <strong>billable</strong> toggle (billable-only default, all, non-billable); a <strong>rounding</strong> toggle and increment (off / 6 / 10 / 15 / 30); a <strong>search</strong> box (§09 search); an on-screen <strong>summary</strong> of grouped totals with flags surfaced; and <strong>Export CSV / Export JSON</strong> buttons. <em>Done when</em> every option of <code>tt report</code>/<code>tt export</code> is drivable from the window and totals match the CLI. <span class="st st-todo">todo</span> <em>(today the "this week" button has no handler).</em></li>
+      <li><strong>Entry list: grouping, filtering &amp; search.</strong> <span class="new">new</span> The Entries view groups entries (default by day; also by client, project, or tag), honors the range presets/custom range, and offers the same filters and search box as the report builder, applied live to the list. <em>Done when</em> the visible list reflects the chosen grouping, range, filters, and query. <span class="st st-done">implemented</span> <em>the <code>#entries-ctrl</code> control bar (group-by, range presets/custom, client/project/tag/billable filters, search box) re-runs the read-only <code>listEntries</code> IPC over core's <code>buildEntryList</code>; the default Day/This-week/no-filter state paints exactly the <code>getState</code> load, so the two paths never drift.</em></li>
+      <li><strong>Flags visible in context.</strong> Overlap warnings and sleep-through flags appear on the affected entries; overlap shows the overlapping amount as a banner ("Overlap: 15m with previous entry"), and slept entries show a one-tap <strong>subtract slept time</strong> action with the strike-through of the trimmed billable duration. <em>Done when</em> both flags render in the list with their inline actions. <span class="st st-done">implemented</span> <em>(the compact "overlap"/"slept" badges, the detailed overlap banner — the worst-neighbour minutes + previous/next relation from core's <code>describeOverlaps</code>, painted by <code>app.js</code> <code>overlapBannerHtml</code> — and, on a trimmed slept entry, the raw duration struck through beside the live trimmed billable (<code>durHtml</code>/<code>.struck</code>) all render in the list with the subtract toggle. GOLD <code>describeOverlaps</code> contract, PROP overlap-seconds invariants, JUDGE <code>FLAG_IN_CONTEXT</code> + renderer-static guards.)</em></li>
+      <li><strong>Reference-data management.</strong> The Clients view lists clients and their projects with create / rename / archive; tags can be created, renamed, and archived. Archived records stay selectable in history but are hidden from pickers (§07). <em>Done when</em> clients, projects, and tags can be fully managed in the window, at parity with <code>tt client</code>/<code>tt project</code>. <span class="st st-done">implemented</span> <em>the Clients view nests each client's projects with in-place rename/archive + Add, and a Tags strip lists active tags with rename/archive + Add; every mutation rides the matching <code>window.stint.*</code> channel (the new <code>listTags</code>/<code>addTag</code>/<code>renameTag</code>/<code>archiveTag</code> + the existing client/project channels), each parity-mapped to its <code>tt</code> path.</em></li>
+      <li><strong>Settings view.</strong> A Settings view exposes every §14 setting — rounding default &amp; increment, week start, first check-in, check-in interval, global hotkey, accent usage, date/number format — with validation and immediate persistence. <em>Done when</em> each setting is editable in the window, at parity with <code>tt config</code>. <span class="st st-done">implemented</span> <em>the <code>#settings-panel</code> renders a control per §14 setting (incl. the new accent-usage + date/number-format core settings), each persisting over the same <code>setSetting</code> IPC <code>tt config set</code> uses; a hotkey edit re-registers the OS shortcut live. Proven editable on both core and <code>tt</code> by <code>features/settings.feature</code>.</em></li>
+      <li><strong>Empty states</strong> instruct rather than decorate (e.g. "No entries yet — press Ctrl+Alt+T or run <code>tt start</code> to begin"). Each view (entries, reports, clients) has its own instructive empty state. <span class="st st-partial">partial</span> <em>the entry-list empty state is implemented; per-view empty states arrive with their views.</em></li>
+      <li><strong>Confirm destructive actions.</strong> <span class="new">new</span> Deleting an entry, or archiving a referenced client/project, asks for confirmation in the window (the GUI counterpart to <code>tt rm</code>'s confirm / <code>--force</code>). <em>Done when</em> no entry is destroyed on a single stray click without a confirm step. <span class="st st-done">implemented</span> <em>a single Delete click only arms an in-window <code>.confirm</code> gate; <code>window.stint.remove</code> is reachable only from the explicit confirm, so no entry is destroyed on a stray click. The same gate is factored for the archive-when-referenced confirm in the Clients view.</em></li>
+      <li><strong>Theme, accent &amp; accessibility.</strong> The window follows system light/dark, uses system typography, and applies the system accent only to the primary action and running state (§14). Controls are keyboard-reachable and focus-visible. <em>Done when</em> the window is fully operable from the keyboard and respects the OS theme/accent. <span class="st st-partial">partial</span> <em>light/dark, system type, and accent-on-primary are implemented; a full keyboard/focus pass lands with the new views.</em></li>
+    </ol>
+  </section>
+
+  <section id="s13">
+    <div class="eyebrow"><span class="n">13</span> Storage &amp; schema</div>
+    <h2>One file, overridable path</h2>
+    <p>Default location: the OS's standard per-user app-data directory — the GUI resolves it via Electron's <code>app.getPath('userData')</code>, and <code>tt</code> resolves the documented per-OS equivalent (e.g. <code>$XDG_DATA_HOME</code>/<code>~/.local/share</code> on Linux, <code>~/Library/Application Support</code> on macOS, <code>%APPDATA%</code> on Windows) — holding <code>timetracker.sqlite</code> (WAL mode). Both the app and <code>tt</code> resolve the same path, overridable by the <code>TT_DB</code> environment variable. Backup = copy the file; export = <code>tt export</code>. No network, ever.</p>
+    <pre><span class="c">-- schema sketch (illustrative)</span>
+<span class="k">CREATE TABLE</span> client  (id INTEGER PK, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> project (id INTEGER PK, client_id INT REFERENCES client, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> entry (
+  id INTEGER PK,
+  client_id  INT REFERENCES client,        <span class="c">-- nullable</span>
+  project_id INT REFERENCES project,        <span class="c">-- nullable; implies client</span>
+  description TEXT,
+  start_utc  TEXT NOT NULL,                 <span class="c">-- ISO-8601 UTC</span>
+  end_utc    TEXT,                          <span class="c">-- NULL = running</span>
+  billable   INT NOT NULL DEFAULT 1,
+  excluded_seconds INT NOT NULL DEFAULT 0   <span class="c">-- subtracted sleep</span>
+);
+<span class="k">CREATE TABLE</span> tag (id INTEGER PK, name TEXT, archived INT DEFAULT 0);
+<span class="k">CREATE TABLE</span> entry_tag (entry_id INT, tag_id INT, PRIMARY KEY(entry_id, tag_id));
+<span class="k">CREATE TABLE</span> sleep_span (id INTEGER PK, entry_id INT REFERENCES entry,
+  sleep_utc TEXT, wake_utc TEXT, source TEXT);
+<span class="k">CREATE TABLE</span> setting (key TEXT PRIMARY KEY, value TEXT);
+<span class="k">CREATE TABLE</span> app_state (key TEXT PRIMARY KEY, value TEXT);  <span class="c">-- heartbeat / last-seen &amp; check-in schedule (gap reconciliation, §10)</span>
+<span class="c">-- invariant: at most one row with end_utc IS NULL, enforced in @stint/core transactions</span></pre>
+    <p class="note"><span class="lbl">Status</span>The schema, WAL pragma, one-open-entry triggers, and migrations (current <code>SCHEMA_VERSION</code> 2, which adds <code>app_state</code>) are <strong>implemented</strong> in <code>@stint/core</code>. <span class="st st-done">implemented</span></p>
+  </section>
+
+  <section id="s14">
+    <div class="eyebrow"><span class="n">14</span> Settings</div>
+    <h2>Configurable defaults</h2>
+    <table>
+      <thead><tr><th>Setting</th><th>Default</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Setting">Rounding</td><td class="m" data-l="Default">off</td></tr>
+        <tr><td data-l="Setting">Rounding increment</td><td class="m" data-l="Default">15 min</td></tr>
+        <tr><td data-l="Setting">Week start</td><td class="m" data-l="Default">Monday</td></tr>
+        <tr><td data-l="Setting">First check-in</td><td class="m" data-l="Default">60 min</td></tr>
+        <tr><td data-l="Setting">Check-in interval</td><td class="m" data-l="Default">30 min</td></tr>
+        <tr><td data-l="Setting">Global hotkey</td><td class="m" data-l="Default">Ctrl+Alt+T</td></tr>
+        <tr><td data-l="Setting">Accent usage</td><td class="m" data-l="Default">system accent, primary action only</td></tr>
+        <tr><td data-l="Setting">Date/number format</td><td class="m" data-l="Default">system locale</td></tr>
+      </tbody>
+    </table>
+    <p class="note"><span class="lbl">Status</span>The settings store, defaults, and validation are <strong>implemented</strong> in <code>@stint/core</code> and editable via <code>tt config</code>, and the GUI <strong>Settings view</strong> that edits them (§12 R11) now ships <span class="st st-done">implemented</span>.</p>
+  </section>
+
+  <section id="s15">
+    <div class="eyebrow"><span class="n">15</span> Platform &amp; tech</div>
+    <h2>Cross-platform, shared-core</h2>
+    <ul class="d">
+      <li><strong>GUI:</strong> Electron — a <code>Tray</code> with a popover <code>BrowserWindow</code> for the running timer, and a standard <code>BrowserWindow</code> for lists and reports. The renderer is web tech (HTML/CSS, framework optional). Follows system light/dark; uses system typography; system accent applied only to the primary action and running state.</li>
+      <li><strong>CLI:</strong> a Node executable, <code>tt</code>, built on <code>commander</code> with <code>--json</code> everywhere, importing the same <code>@stint/core</code> package.</li>
+      <li><strong>Core:</strong> a TypeScript package, <code>@stint/core</code>, owning schema, transitions, invariants, reporting, and rounding. Both surfaces import it; no duplicated logic.</li>
+      <li><strong>Persistence:</strong> SQLite via Node's built-in <code>node:sqlite</code> (Node 22.5+), WAL mode set by pragma, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation. No native build step. <code>node:sqlite</code> only exists on Node 22.5+ and runs in two distinct runtimes — the system Node behind <code>tt</code> and Electron's own bundled Node — so v1 requires system Node ≥ 22.5 <em>and</em> an Electron whose bundled Node is ≥ 22.5 with <code>node:sqlite</code> loadable in the packaged main process (it is a stability-experimental module; confirm against the pinned versions).</li>
+      <li><strong>System integration:</strong> <code>fs.watch</code> for file-watch; Electron <code>powerMonitor</code> <code>suspend</code>/<code>resume</code> events (with wall-clock-gap reconciliation on launch) for sleep flagging, and <code>powerMonitor.getSystemIdleTime()</code> available for idle; Electron <code>globalShortcut</code> for the hotkey; Electron <code>Notification</code> for check-ins.</li>
+    </ul>
+  </section>
+
+  <section id="s16">
+    <div class="eyebrow"><span class="n">16</span> Edge cases &amp; rules</div>
+    <h2>Decided behavior</h2>
+    <table>
+      <thead><tr><th>Situation</th><th>Behavior</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Situation">Start while a timer runs</td><td data-l="Behavior">Atomically stop the open entry, then open the new one.</td></tr>
+        <tr><td data-l="Situation">App closed for an hour, timer open</td><td data-l="Behavior">On reopen, elapsed is correct (derived <code>now − start</code>); nothing to recover.</td></tr>
+        <tr><td data-l="Situation">Crash with a timer open</td><td data-l="Behavior">Entry remains correctly open; it is simply still running on relaunch.</td></tr>
+        <tr><td data-l="Situation">Manual edit overlaps another entry</td><td data-l="Behavior">Warn, allow, flag in reports.</td></tr>
+        <tr><td data-l="Situation">Merge entries with differing attributes</td><td data-l="Behavior">GUI prompts which client/project/billable to keep; descriptions concatenated, tags unioned. CLI uses first entry unless overridden.</td></tr>
+        <tr><td data-l="Situation">Check-in due while app closed</td><td data-l="Behavior">Fire once on relaunch, then resume cadence.</td></tr>
+        <tr><td data-l="Situation">Long sleep mid-timer</td><td data-l="Behavior">Record sleep span(s), flag entry, realign check-in cadence from wake (no backlog).</td></tr>
+        <tr><td data-l="Situation">Entry spans a DST change</td><td data-l="Behavior">Duration correct (UTC math); displayed in local time.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s17">
+    <div class="eyebrow"><span class="n">17</span> Acceptance criteria</div>
+    <h2>v1 is done when…</h2>
+    <ol class="req">
+      <li>A timer started in <code>tt</code> appears in the tray near-instantly, and vice versa; <code>tt status</code> and the tray never disagree. <span class="st st-done">implemented</span></li>
+      <li>At most one entry is ever open, regardless of how rapidly start/stop is issued from either surface. <span class="st st-done">implemented</span></li>
+      <li>Closing the app, sleeping the machine, or crashing mid-timer never corrupts elapsed time. <span class="st st-done">implemented</span></li>
+      <li>Stored entry times are never altered by rounding or sleep subtraction; both are reversible and applied only to derived/billable duration. <span class="st st-done">implemented</span></li>
+      <li>A sleep through a running timer produces a flagged entry with second-accurate span(s) and a working one-tap subtract. <span class="st st-done">implemented</span></li>
+      <li>The first check-in fires at 60 min and the cadence continues autonomously, surviving relaunch and realigning after sleep. <span class="st st-done">implemented</span></li>
+      <li>Reports group, filter, and round per spec, flag overlaps and unreviewed sleep, and export valid CSV and JSON. <span class="st st-done">implemented</span> <em>in <code>@stint/core</code> and <code>tt</code>, and the GUI report builder that drives them (§12 R8) now ships.</em></li>
+      <li>Every GUI capability is reachable from <code>tt</code>, <strong>and every <code>tt</code> capability is reachable from the GUI.</strong> <span class="st st-done">implemented</span> <em>both directions hold: every GUI IPC channel is parity-mapped to an existing <code>tt</code> path (<code>parity-matrix.json</code>, asserted by <code>gui/test/parity.test.ts</code>), and the editing, manual-add, report-builder, reference-data, and settings views of §12 (R5–R11) now ship — so the GUI is no longer a strict subset. The full by-hand capability set is proven surface-neutral on core and <code>tt</code> by <code>features/reachable_by_hand.feature</code> (see R10).</em></li>
+      <li>The app makes no network connections. <span class="st st-done">implemented</span></li>
+      <li><span class="new">new</span> Every <code>@stint/core</code> capability is reachable <strong>by hand in the window</strong>: starting with attributes, editing/splitting/merging entries, manual backfill, search/filter/group, the report builder with export, reference-data management, and settings — none requiring a drop to the terminal. <span class="st st-done">implemented</span> <em>the §12 main-window views (R4–R11) all ship; the by-hand capability set is proven surface-neutral on core <strong>and</strong> <code>tt</code> by <code>features/reachable_by_hand.feature</code> (the named BDD AC), every GUI IPC channel is parity-mapped to an existing <code>tt</code> path (<code>parity-matrix.json</code>), each view is screenshotted (JUDGE), and the whole terminal-closed workflow is walked under MANUAL.</em></li>
+      <li><span class="new">new</span> Destructive actions in the GUI (delete, archive-when-referenced) confirm before acting, and search/filter/group selections in a view are reflected live in the list and report totals. <span class="st st-done">implemented</span> <em>the confirm gate (§12 R13) arms before any destroy, and the pure <code>deriveView</code> recomputes the Entries view's visible groups and both totals off the in-memory snapshot, so a search/filter/group selection moves the list and the week total in lockstep with no IPC round-trip; the live total sums core-owned <code>billableSeconds</code> so it equals <code>tt report</code> for the same selection.</em></li>
+    </ol>
+  </section>
+
+  <section id="s18">
+    <div class="eyebrow"><span class="n">18</span> UI mockups &amp; prototypes</div>
+    <h2>Slightly noisy UI prototypes</h2>
+    <p>The window requirements in §12 are easier to agree on against a picture. The repo keeps a small set of <strong>standalone HTML mockups</strong> under <a href="mockups/"><code>mockups/</code></a> — self-contained, dependency-free pages that render the intended layout in any browser (and via htmlpreview, per <code>CLAUDE.md</code>). They are deliberately <strong>"slightly noisy"</strong>: they show more than what ships today and include illustrative sample data, overlap/sleep flags, and not-yet-built affordances so the target is concrete. They are <strong>design intent, not screenshots of the build</strong> — where a mockup and §12 disagree, §12 wins.</p>
+    <div class="note"><span class="lbl">Keep in sync</span>Mockups track the PRD. When a change adds or materially alters a window requirement (§12, or anything with a GUI surface), update the affected mockup in the same change, or add a new one. A mockup that has drifted from the PRD is a bug. Treat the set as the minimal visual companion to §12 — enough to pin the layout of each major view, not an exhaustive screen inventory.</p></div>
+    <table>
+      <thead><tr><th>Mockup</th><th>Shows</th><th>Backing requirements</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Mockup"><a href="mockups/main.html">main.html</a></td><td data-l="Shows">The Entries view: left nav, the Active Timer card (running, with client/project/tags, Stop + Switch), group-by &amp; range presets, search, day-grouped entries with overlap banner and sleep-subtract, billable strike-through, per-entry menu, and "Add Entry Manually."</td><td data-l="Backing">§12 R3–R9, R13</td></tr>
+        <tr><td class="m" data-l="Mockup"><a href="mockups/reports.html">reports.html</a></td><td data-l="Shows">The report builder: range presets/custom, group-by, client/project/tag filters, billable toggle, rounding control, search, on-screen grouped summary with flags, and CSV/JSON export.</td><td data-l="Backing">§09, §12 R8</td></tr>
+        <tr><td class="m" data-l="Mockup"><a href="mockups/edit-entry.html">edit-entry.html</a></td><td data-l="Shows">The inline entry editor / manual-add form: description, client, project, tags, billable, start/end, with the overlap warning and split/merge actions.</td><td data-l="Backing">§05 R5/R6, §06, §12 R5–R7</td></tr>
+        <tr><td class="m" data-l="Mockup"><a href="mockups/settings.html">settings.html</a></td><td data-l="Shows">The settings view: rounding default &amp; increment, week start, check-in timing, global hotkey, accent, and date/number format.</td><td data-l="Backing">§14, §12 R11</td></tr>
+      </tbody>
+    </table>
+    <p>The <a href="mockups/main.html"><code>main.html</code></a> mockup is the faithful reproduction of the prototype that motivated this round of requirements.</p>
+  </section>
+
+  <section id="a1">
+    <div class="eyebrow"><span class="n">A</span> Appendix — Power/idle APIs</div>
+    <h2>What the process can actually observe</h2>
+    <p>Reference for §10, expressed against Electron's <code>powerMonitor</code>. Sleep/wake are event-backed (live <code>suspend</code>/<code>resume</code>), with a wall-clock-gap fallback on launch; idle is only pollable and fuzzy — which is why §10 builds on the former and excludes the latter. <code>powerMonitor</code> surfaces user-visible suspend/resume, so each sleep is one span and a missed sleep is reconstructed from the wall-clock gap.</p>
+    <table>
+      <thead><tr><th>Signal</th><th>Available?</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td data-l="Signal">Went to sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'suspend'</code> (stamp on receipt, <code>source = event</code>). If missed (app not running), inferred after the fact from a wall-clock gap, <code>source = gap</code>.</td></tr>
+        <tr><td data-l="Signal">Woke from sleep</td><td class="m" data-l="Available?">Yes, live event</td><td data-l="How"><code>powerMonitor</code> <code>'resume'</code>. A wake missed while the app was closed is recovered on launch by comparing the wall-clock gap against the open entry.</td></tr>
+        <tr><td data-l="Signal">Became idle</td><td class="m" data-l="Available?">Poll only, fuzzy</td><td data-l="How">No event. Poll <code>powerMonitor.getSystemIdleTime()</code> (seconds since last input); infer start as <code>now − idle</code>. The OS "idle" definition is OS-provided and version-variable. Excluded from v1 per §10.</td></tr>
+        <tr><td data-l="Signal">Stopped being idle</td><td class="m" data-l="Available?">Inferred</td><td data-l="How">Idle time resets to 0 on input; <code>powerMonitor</code> <code>'unlock-screen'</code> as a coarse proxy.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="foot">
+    <span>stint — product requirements</span>
+    <span>v1 · cross-platform · Electron + tt · @stint/core · SQLite/WAL</span>
+  </div>
+
+</main>
+</body>
+</html>

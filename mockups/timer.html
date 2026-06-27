@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Timer (mockup)</title>
+<!--
+  Slightly-noisy UI prototype for the Stint Timer view.
+  Design intent for PRD §12 R14 (full Timer view), §12 R04/R05/R07,
+  §05 R01/R02/R05 (start/stop/add), §05 R09/R10 (favorites). Keep in sync.
+  Shows MORE than ships today. Where this and the PRD disagree, the PRD wins.
+-->
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f4f4f6;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d8d8d4;
+    --nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
+    --ok:#2c9b5a;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;--warn-ink:#7a5a00;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
+  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
+  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:14px}
+  .lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
+  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600;pointer-events:none}
+  /* shell — sidebar present in every view, FIXED width on resize (§12 R03/G7) */
+  .shell{display:flex;min-height:560px}
+  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
+  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;font-size:14px;margin-bottom:2px}
+  .nav a .ic{width:18px;text-align:center;opacity:.7}
+  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
+  .nav a.active .ic{opacity:1}
+  .nav a:hover:not(.active){background:#eeeef1}
+  .main{flex:1;padding:18px 22px 20px;overflow:hidden;position:relative;display:flex;flex-direction:column}
+  h2{font-size:18px;margin:0 0 14px;font-weight:680}
+  /* clickability convention (§15 R-clickability / G10):
+     clickable text carries the neutral button background; accent is reserved
+     for each view's single primary action only. */
+  button,.btn{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 14px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer;text-decoration:none;display:inline-flex;align-items:center;gap:7px}
+  button.primary,.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .linkbtn{font-size:12.5px;color:var(--ink-soft);background:var(--wash);border:1px solid var(--rule);border-radius:6px;padding:3px 9px;cursor:pointer;text-decoration:none}
+
+  /* live count-up panel */
+  .clockpanel{border:1px solid var(--rule);border-radius:11px;padding:18px 20px;background:#fff;display:flex;gap:26px;align-items:center;margin-bottom:14px}
+  .clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-size:52px;font-weight:680;letter-spacing:-.01em;line-height:1}
+  .clock.idle{color:var(--faint)}
+  .runrow{display:flex;align-items:center;gap:9px;margin-top:9px}
+  .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
+  .dot.run{background:var(--ok)}.dot.idle{background:var(--faint)}
+  .state{font-size:13px;color:var(--ink-soft)}
+  .state b{font-weight:680}
+  .ctx{flex:1}
+  .ctx .desc{font-size:16px;font-weight:600;margin-bottom:5px}
+  .ctx .meta{font-size:13px;color:var(--muted)}
+  .ctx .meta b{color:var(--ink-soft);font-weight:600}
+  .chips{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
+  .chip{font-size:11px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:1px 9px}
+  .btns{display:flex;gap:9px;flex:none;flex-wrap:wrap;justify-content:flex-end;max-width:200px}
+
+  /* live-edit-the-running-timer strip (§12 R14: attributes + start time, no stop) */
+  .liveedit{border:1px dashed var(--accent);background:var(--accent-soft);border-radius:10px;padding:12px 16px;margin-bottom:16px}
+  .liveedit .lehd{font-size:12px;color:var(--accent);font-weight:600;margin-bottom:9px;display:flex;align-items:center;gap:7px}
+  .liveedit .lehd .pill{font-size:10px;background:#fff;border:1px solid var(--accent);border-radius:10px;padding:0 7px;font-weight:600}
+  .legrid{display:grid;grid-template-columns:1.6fr 1fr 1fr;gap:10px}
+  .legrid .f label{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}
+  .legrid .f input,.legrid .f select{width:100%;font-family:inherit;font-size:13px;border:1px solid var(--rule-strong);border-radius:7px;padding:6px 9px;background:#fff;color:var(--ink)}
+  .startfield{position:relative}
+  .startfield .cal{position:absolute;right:7px;top:26px;cursor:pointer;color:var(--accent);font-size:14px}
+  .lerow2{display:flex;align-items:center;gap:14px;margin-top:10px;flex-wrap:wrap}
+  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft)}
+  .switch{width:36px;height:21px;border-radius:11px;background:var(--accent);position:relative}
+  .switch i{position:absolute;top:2px;left:17px;width:17px;height:17px;border-radius:50%;background:#fff}
+  .switch.off{background:#cfcfd6}.switch.off i{left:2px}
+  .lenote{font-size:11.5px;color:var(--muted);margin-left:auto}
+
+  /* split columns: start form + favorites rail */
+  .cols{display:grid;grid-template-columns:1fr 270px;gap:18px;flex:1;min-height:0}
+  .panel{border:1px solid var(--rule);border-radius:11px;padding:16px 18px;background:#fff;display:flex;flex-direction:column}
+  .panel h3{font-size:13px;margin:0 0 12px;font-weight:680;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  .f{margin-bottom:12px}
+  .f label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
+  .f input,.f select,.f textarea{width:100%;font-family:inherit;font-size:14px;border:1px solid var(--rule-strong);border-radius:7px;padding:8px 10px;color:var(--ink);background:#fff}
+  .f textarea{resize:vertical;min-height:36px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--rule-strong);border-radius:7px;padding:6px 8px;min-height:38px}
+  .tagchips .chip{display:flex;gap:6px;align-items:center}
+  .tagchips .chip b{color:var(--faint);cursor:pointer;font-weight:400}
+  .tagchips input{border:0;outline:0;flex:1;min-width:70px;font-size:13px}
+  .startrow{display:flex;gap:10px;align-items:center;margin-top:6px}
+  .startrow .pinnow{margin-left:auto}
+
+  /* favorites rail */
+  .favrail{background:var(--wash)}
+  .favrail h3{display:flex;align-items:center;justify-content:space-between}
+  .favhint{font-size:10px;color:var(--faint);font-weight:400;text-transform:none;letter-spacing:0}
+  .fav{display:flex;align-items:center;gap:10px;border:1px solid var(--rule);background:#fff;border-radius:9px;padding:10px 11px;margin-bottom:9px}
+  .fav .pin{color:var(--accent);font-size:13px}
+  .fav .fi{flex:1;min-width:0}
+  .fav .fname{font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fav .fmeta{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fav .fmeta .nb{color:var(--faint)}
+  .fav .resume{font-size:12px;padding:5px 11px;flex:none}
+  .fav .kebab{color:var(--faint);cursor:pointer;font-size:15px;flex:none}
+  .favfoot{margin-top:auto;font-size:11px;color:var(--muted);padding-top:10px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center}
+
+  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+</style>
+</head>
+<body>
+  <div class="window">
+    <div class="titlebar">
+      <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
+      <div class="title">Stint — Timer</div>
+    </div>
+    <div class="shell">
+      <nav class="nav">
+        <a href="#" class="active"><span class="ic">◷</span> Timer</a>
+        <a href="main.html"><span class="ic">▤</span> Entries</a>
+        <a href="#"><span class="ic">◎</span> Clients</a>
+        <a href="reports.html"><span class="ic">▥</span> Reports</a>
+        <a href="settings.html"><span class="ic">⚙</span> Settings</a>
+      </nav>
+      <div class="main">
+        <h2>Timer</h2>
+
+        <!-- Live count-up + running state (§05 R01/R02, §12 R14) -->
+        <div class="clockpanel">
+          <div>
+            <div class="clock">01:23:45</div>
+            <div class="runrow"><span class="dot run"></span><span class="state"><b>running</b> · since 09:00</span></div>
+          </div>
+          <div class="ctx">
+            <div class="desc">Drafting proposals</div>
+            <div class="meta">Client: <b>Globex Corp</b> &nbsp;&nbsp; Project: <b>Q3 Strategy</b></div>
+            <div class="chips"><span class="chip">admin</span><span class="chip">proposal</span></div>
+          </div>
+          <div class="btns">
+            <button class="primary">Stop Timer</button>
+            <button>Switch…</button>
+            <button class="linkbtn" style="padding:5px 9px">📌 Pin as favorite</button>
+          </div>
+        </div>
+
+        <!-- Edit the running timer live — no stop (§12 R14, G5) -->
+        <div class="liveedit">
+          <div class="lehd">Editing the running timer live <span class="pill">no stop</span></div>
+          <div class="legrid">
+            <div class="f"><label>Description</label><input value="Drafting proposals"></div>
+            <div class="f"><label>Client</label><select><option>Globex Corp</option><option>Initech</option><option>— none —</option></select></div>
+            <div class="f startfield">
+              <label>Start time <span style="color:var(--accent)">(editable)</span></label>
+              <input value="2026-06-27 09:00"><span class="cal" title="Open time-range picker">▦</span>
+            </div>
+          </div>
+          <div class="lerow2">
+            <span class="toggle"><span class="switch"><i></i></span> Billable</span>
+            <span class="linkbtn">Edit tags…</span>
+            <span class="linkbtn">Edit project…</span>
+            <span class="lenote">Changes apply immediately to the open row — the timer keeps running. End time is not editable while running.</span>
+          </div>
+        </div>
+
+        <div class="cols">
+          <!-- Start-with-details form (core data entry — §12 R05, §05 R01) -->
+          <div class="panel">
+            <h3>Start a new timer</h3>
+            <div class="f"><label>Description</label><textarea placeholder="What are you working on?"></textarea></div>
+            <div class="two">
+              <div class="f"><label>Client</label><select><option>— none (internal) —</option><option>Globex Corp</option><option>Initech</option><option>+ New client…</option></select></div>
+              <div class="f"><label>Project</label><select><option>— none —</option><option>Q3 Strategy</option><option>Project Alpha</option><option>+ New project…</option></select></div>
+            </div>
+            <div class="f">
+              <label>Tags</label>
+              <div class="tagchips"><span class="chip">research <b>×</b></span><input placeholder="add a tag…"></div>
+            </div>
+            <div class="startrow">
+              <span class="toggle"><span class="switch off"><i></i></span> Billable</span>
+              <span class="linkbtn pinnow">📌 Save these as a favorite</span>
+            </div>
+            <div class="startrow" style="margin-top:14px">
+              <button class="primary">Start Timer</button>
+              <span style="font-size:11.5px;color:var(--muted)">Starting will switch from the currently running timer.</span>
+            </div>
+          </div>
+
+          <!-- Pinned favorites rail — one-click resume (§05 R09/R10, §12 R14) -->
+          <div class="panel favrail">
+            <h3>Favorites <span class="favhint">pinned templates</span></h3>
+
+            <div class="fav">
+              <span class="pin">📌</span>
+              <div class="fi">
+                <div class="fname">Standup</div>
+                <div class="fmeta">Globex · Q3 Strategy · <span class="nb">non-billable</span></div>
+              </div>
+              <button class="resume">Resume</button>
+              <span class="kebab" title="Rename / unpin">⋮</span>
+            </div>
+
+            <div class="fav">
+              <span class="pin">📌</span>
+              <div class="fi">
+                <div class="fname">Deep work · Alpha</div>
+                <div class="fmeta">Globex · Project Alpha · billable</div>
+              </div>
+              <button class="resume">Resume</button>
+              <span class="kebab">⋮</span>
+            </div>
+
+            <div class="fav">
+              <span class="pin">📌</span>
+              <div class="fi">
+                <div class="fname">Admin / email</div>
+                <div class="fmeta"><span class="nb">no client</span> · billable · #admin</div>
+              </div>
+              <button class="resume">Resume</button>
+              <span class="kebab">⋮</span>
+            </div>
+
+            <div class="favfoot">
+              <span>One click resumes a fresh timer.</span>
+              <span class="linkbtn" style="font-size:10.5px">tt fav</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §12 R14 + §05 R09/R10 · not a screenshot of the current build</div>
+  </div>
+</body>
+</html>
