@@ -32,6 +32,12 @@ export interface Settings {
    * unambiguous ISO time. A pure display preference — stored instants are always UTC ISO.
    */
   dateFormat: DateFormat;
+  /**
+   * §20 R04 — how many automatic timestamped backups to keep beside the database. On launch
+   * the store writes a fresh backup if the DB changed since the last one, then prunes the
+   * oldest so at most this many remain. Default 5; 0 disables retention pruning entirely.
+   */
+  backupRetention: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -43,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
   globalHotkey: 'CommandOrControl+Alt+T',
   accent: 'system',
   dateFormat: 'system',
+  backupRetention: 5,
 };
 
 const ALLOWED_INCREMENTS = [6, 10, 15, 30];
@@ -116,6 +123,16 @@ export const SETTING_DESCRIPTORS: SettingDescriptor[] = [
     parse: (r) => (r === 'system' || r === 'iso' ? r : undefined),
     validate: (v) => {
       if (v !== 'system' && v !== 'iso') throw new Error('date_format must be system or iso');
+    },
+  },
+  {
+    key: 'backupRetention',
+    snake: 'backup_retention',
+    parse: (r) => Number(r),
+    validate: (v) => {
+      if (!Number.isInteger(v) || v < 0) {
+        throw new Error('backup_retention must be a whole number of backups to keep (0 or more)');
+      }
     },
   },
 ];

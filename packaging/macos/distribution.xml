@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  distribution.xml — productbuild distribution for the Stint macOS .pkg (PRD §19 R02).
+
+  Drives the single-installer experience on macOS: the component payload places
+  Stint.app into /Applications (GUI half), and the component package's embedded
+  postinstall.sh symlinks `tt` onto PATH (CLI half). One .pkg double-click does
+  both. No code-signing / notarization dependency (G3) — the one-time Gatekeeper
+  approval is the §19 R04 update flow's concern, not R02's.
+
+  build-pkg.sh produces stint-component.pkg (via pkgbuild, with the postinstall
+  scripts dir) and then runs productbuild against this file to wrap it.
+-->
+<installer-gui-script minSpecVersion="2">
+  <title>Stint</title>
+  <organization>com.stint</organization>
+
+  <!-- Single payload: install into the local /Applications domain. -->
+  <options customize="never" require-scripts="true" hostArchitectures="x86_64,arm64"/>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+
+  <welcome    file="welcome.html"    mime-type="text/html"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+
+  <choices-outline>
+    <line choice="default">
+      <line choice="com.stint.app"/>
+    </line>
+  </choices-outline>
+
+  <choice id="default"/>
+  <choice id="com.stint.app" visible="false" title="Stint">
+    <pkg-ref id="com.stint.app"/>
+  </choice>
+
+  <!-- The component package built by build-pkg.sh (pkgbuild). Its postinstall
+       script (postinstall.sh) is what puts `tt` on PATH. -->
+  <pkg-ref id="com.stint.app" version="0" onConclusion="none">stint-component.pkg</pkg-ref>
+</installer-gui-script>

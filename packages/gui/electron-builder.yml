@@ -1,0 +1,66 @@
+# electron-builder configuration — Stint GUI packaging (PRD §19 R01).
+#
+# Build matrix is macOS + Linux ONLY. There is deliberately NO `win` block:
+# Windows is dropped everywhere (PRD masthead "macOS + Linux", §19 R01). The
+# CHECK BUILD MATRIX runbook procedure fails if any Windows target appears here.
+#
+# This req (R01) only produces the two-platform artifacts. The single-installer
+# PATH symlink (§19 R02), the GitHub Release publishing (§19 R05), and date/build
+# versioning (§19 R06) are intentionally out of scope here.
+
+appId: com.stint.app
+productName: Stint
+
+# Compiled main + preload (./dist) plus the renderer assets and the @stint/core
+# workspace dependency. `main` in package.json points at ./dist/main.js.
+directories:
+  output: dist-pack
+  buildResources: build
+
+# The bundle's app root (Contents/Resources/app on macOS, resources/app on Linux)
+# is this gui package. The single installer (§19 R02) needs TWO extra trees inside
+# that root, so they MUST be in this glob or the installer breaks:
+#
+#   1. packages/cli/dist/**  — the CLI entrypoint bin.js. tt-launcher.sh resolves
+#      <app>/.../app/packages/cli/dist/bin.js (CLI_REL), so the built CLI must land
+#      at packages/cli/dist inside the app root. Sourced outside the gui project dir
+#      via a {from,to} mapping (mirrors packages/cli/package.json `bin`).
+#   2. packaging/**          — the launcher shim + install scripts. build-pkg.sh
+#      FAILS ("ensure packaging/ is included in the electron-builder files glob") if
+#      <app>/.../app/packaging/tt-launcher.sh is absent, and postinstall.sh/install.sh
+#      symlink `tt` to that shim. Sourced from the repo root via a {from,to} mapping.
+files:
+  - dist/**
+  - renderer/**
+  - package.json
+  - node_modules/@stint/core/**
+  # The CLI's one runtime dependency (commander). Bundled bin.js resolves it by
+  # walking up to the app root's node_modules; @stint/core itself has no deps.
+  - node_modules/commander/**
+  # CLI entrypoint (bin.js) — must resolve at app/packages/cli/dist/bin.js.
+  - from: ../cli/dist
+    to: packages/cli/dist
+    filter:
+      - '**/*'
+  # Single-installer launcher shim + install scripts — must resolve at app/packaging.
+  - from: ../../packaging
+    to: packaging
+    filter:
+      - '**/*'
+
+# macOS: minimal unsigned app bundle (.dmg). No notarization / code-signing
+# dependency — the one-time Gatekeeper approval is handled by the §19 R04 flow.
+mac:
+  target:
+    - dmg
+  category: public.app-category.productivity
+  identity: null
+
+# Linux: AppImage (portable, runs anywhere) plus a .deb package.
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Utility
+
+# NOTE: no `win:` block — Windows is unsupported (PRD §19 R01).

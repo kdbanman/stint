@@ -1,5 +1,5 @@
 {
-  "$comment": "PRD §17 R8 — every GUI capability is reachable from tt. This is a GOLD fixture asserted complete by packages/gui/test/parity.test.ts: each GUI IPC channel (a capability) maps to a tt command that actually exists in the CLI program. Parity is a coverage claim, not a behaviour (acceptance.html §05 'On parity').",
+  "$comment": "PRD §17 R8 — every GUI capability is reachable from tt. This is a GOLD fixture asserted complete by packages/gui/test/parity.test.ts: each GUI IPC channel (a capability) maps to a tt command that actually exists in the CLI program. Parity is a coverage claim, not a behaviour (acceptance.html §05 'On parity'). NOTE (§19 R03): the in-app update check is a GUI/OS-only capability with NO tt equivalent (a CLI install is updated by the package manager/installer), exactly like the tray and the global hotkey, so — by design — it is NOT in ipc.ts CHANNELS and has NO row here. It lives on a separate update:getVersion / update:check IPC surface (main.ts registerUpdateIpc, bridged as window.stint.update), kept off the parity-asserted channel set; it is covered by MANUAL (runbook 'CHECK SOFTWARE UPDATE — CHECK FOR UPDATES (§19 R03)') + GOLD (packages/gui/test/update.test.ts).",
   "capabilities": [
     { "gui": "getState", "description": "see the running timer, entries, and current settings — the single snapshot the renderer paints (status + list + config ls, folded into one read)", "tt": ["status", "list", "config ls"] },
     { "gui": "search", "description": "§09 R7 — free-text search over the day-grouped history (description / client / project / tag, case-insensitive); narrows the visible list, parity with tt list/report --search", "tt": ["list", "report"] },
@@ -15,7 +15,19 @@
     { "gui": "remove", "description": "delete an entry", "tt": ["rm"] },
     { "gui": "subtractSleep", "description": "exclude slept time (reversible)", "tt": ["sleep subtract"] },
     { "gui": "report", "description": "grouped totals, filters, rounding, on-screen summary with flags; date-range presets (today/week/last-week/month/last-month) + custom from/to — the preset travels inside the report payload and is resolved through core's resolveRange, no new channel", "tt": ["report"] },
+    { "gui": "saveReport", "description": "§09 R08 — save a named report definition (range-spec / group-by / filters / rounding) from the Reports view's builder; delegates to core store.saveReport, parity with tt report save", "tt": ["report save"] },
+    { "gui": "listReports", "description": "§09 R08 — list the saved report definitions (the Reports view's saved-definitions rail); parity with tt report ls", "tt": ["report ls"] },
+    { "gui": "showReport", "description": "§09 R08 — inspect one saved report definition; parity with tt report show", "tt": ["report show"] },
+    { "gui": "renameReport", "description": "§09 R08 — rename a saved report; parity with tt report rename", "tt": ["report rename"] },
+    { "gui": "editReport", "description": "§09 R08 — amend a saved report's range/grouping/filters/rounding from the builder; parity with tt report edit", "tt": ["report edit"] },
+    { "gui": "removeReport", "description": "§09 R08 — delete a saved report; parity with tt report rm", "tt": ["report rm"] },
+    { "gui": "runReport", "description": "§09 R09 — run a saved report against current data and render grouped totals (the same core Report payload the ad-hoc report channel builds, resolved through core's resolveSavedRange); parity with tt report run", "tt": ["report run"] },
     { "gui": "exportEntries", "description": "§09 R6 — write the raw entries for a range to a CSV / JSON file via the OS save dialog; renders the bytes through core's toCsv/toJsonEntries (byte-identical to tt export) since the renderer cannot touch fs", "tt": ["export"] },
+    { "gui": "pinFavorite", "description": "§05 R09 — pin a favorite (a named timer template) from the running entry, a closed entry, or explicit attributes, from the Timer view's favorites rail; delegates to core store.pinFavorite, parity with tt fav add", "tt": ["fav add"] },
+    { "gui": "listFavorites", "description": "§05 R09 — list the pinned favorites (the Timer view's favorites rail); parity with tt fav ls", "tt": ["fav ls"] },
+    { "gui": "renameFavorite", "description": "§05 R09 — rename a favorite; parity with tt fav rename", "tt": ["fav rename"] },
+    { "gui": "unpinFavorite", "description": "§05 R09 — unpin (delete) a favorite; parity with tt fav rm", "tt": ["fav rm"] },
+    { "gui": "startFavorite", "description": "§05 R10 — resume from a favorite: one action starts a FRESH timer from the favorite's template (atomic stop-then-start, overlap warned not blocked, the favorite unchanged), from the Timer view's favorites rail; delegates to core store.startFromFavorite, parity with tt fav start / tt start --fav", "tt": ["fav start", "start"] },
     { "gui": "addClient", "description": "create a client", "tt": ["client add"] },
     { "gui": "addProject", "description": "create a project", "tt": ["project add"] },
     { "gui": "listClients", "description": "list clients", "tt": ["client ls"] },
@@ -28,6 +40,8 @@
     { "gui": "addTag", "description": "§12 R10 — create a tag (create-or-return; the explicit manage-it-first path)", "tt": ["tag add"] },
     { "gui": "renameTag", "description": "§12 R10 — rename a tag", "tt": ["tag rename"] },
     { "gui": "archiveTag", "description": "§12 R10 — archive a tag (reversible hide from pickers, keeps history)", "tt": ["tag archive"] },
-    { "gui": "setSetting", "description": "§12 R11 / §14 — change any §14 setting from the GUI Settings view (rounding, rounding increment, week start, first check-in, check-in interval, global hotkey, accent usage, date format); the report view's rounding controls ride the same channel — parity with tt config set", "tt": ["config set"] }
+    { "gui": "setSetting", "description": "§12 R11 / §14 — change any §14 setting from the GUI Settings view (rounding, rounding increment, week start, first check-in, check-in interval, global hotkey, accent usage, date format, backup retention); the report view's rounding controls ride the same channel — parity with tt config set", "tt": ["config set"] },
+    { "gui": "listBackups", "description": "§20 R04 / §17 R12 — list the automatic timestamped backups beside the database (the Settings → Backups restore list + 'Last backup' status); delegates to core store.listBackups, parity with tt backup ls", "tt": ["backup ls"] },
+    { "gui": "restoreBackup", "description": "§20 R05 / §17 R12 — restore the database from a chosen backup (the Settings → Restore… action): core quarantines the current file and re-points the store at the backup; parity with tt backup restore", "tt": ["backup restore"] }
   ]
 }

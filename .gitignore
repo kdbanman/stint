@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-pack/
 *.tsbuildinfo
 coverage/
 *.sqlite
@@ -8,3 +9,5 @@ coverage/
 .DS_Store
 acceptance/evidence/tmp/
 packages/gui/screenshots/tmp/
+.claude/settings.local.json
+.claude/worktrees/

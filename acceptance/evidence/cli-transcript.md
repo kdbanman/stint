@@ -184,6 +184,55 @@ no-network check passed: no networking imports, APIs, or unexpected prod deps.
 # exit 0
 ```
 
+## §19 R01 — build matrix: macOS + Linux only (no Windows)
+
+The packaging config is fixed at two platforms. This block is the verbatim verdict of the static config guard `packages/gui/test/build-matrix.test.ts` (no build, no network): it FAILS the moment a Windows target is added to `electron-builder.yml` or a `windows-latest` runner appears in a CI matrix. The live two-platform artifact build + launch is the MANUAL `CHECK BUILD MATRIX` runbook procedure.
+
+```text
+electron-builder.yml: mac+linux targets, no `win` block ............ OK
+electron-builder.yml: no Windows-only targets / .exe / .msi ........ OK
+release.yml pack matrix == [macos-latest, ubuntu-latest] .......... OK (macos-latest, ubuntu-latest)
+no `windows-latest` runner in release.yml or ci.yml ............... OK
+
+build matrix is macOS + Linux only (§19 R01): CONFIRMED
+```
+
+## §19 R05 — publish-on-merge: workflow wired to publish a Release
+
+Every merge to `main` must publish a GitHub Release with both artifacts. The publish *actually firing* is an Actions/GitHub-Releases reality observed by the MANUAL `CHECK PUBLISH-ON-MERGE` runbook procedure on the real upstream repo. This block is the verbatim verdict of the static config guard `packages/gui/test/build-matrix.test.ts` ("publish-on-merge workflow is wired to publish a Release") over the *authoring* of `release.yml` (no build, no network, no Actions run): it FAILS the moment the merge trigger, the job chain, the upstream-only guard, or the non-draft release-create is edited away — so a regression cannot silently defeat R05 until the next real merge.
+
+```text
+release.yml triggers on push to `main` ............................ OK
+version → pack → publish job chain (needs: wiring) ................ OK
+upstream-only guard (`github.repository == 'kdbanman/stint'`) ..... OK
+publish: contents:write + non-draft release w/ both artifacts .... OK
+
+publish-on-merge pipeline is wired to publish (§19 R05): CONFIRMED
+(live publish firing on a real merge: see MANUAL CHECK PUBLISH-ON-MERGE)
+```
+
+## §16 / §19 R04 — in-app update never touches the database (simulated app-replacement)
+
+The §19 R04 download + guided install replaces the *application* only; it never opens, migrates, or rewrites the database. This block EXECUTES the headless-drivable core of the MANUAL `CHECK UPDATE-MID-TIMER` procedure: start a live timer, capture the open entry + the live DB's byte hash, then SIMULATE the app-replacement (swap a stand-in app bundle, leave the data directory alone — the runbook step-2 "simulate the §19 R04 app-replacement step" path), and re-open on BOTH surfaces. The live `tt.sqlite` must be byte-identical and the same entry still open with an unchanged id/start, the derived elapsed continuing to grow. The real GitHub artifact download + the OS-level Gatekeeper swap remain the live MANUAL check; the byte-untouched invariant it gates is what this executes.
+
+```text
+# A live timer is open across a SIMULATED in-app update (the app bundle is swapped,
+# the data directory is left alone). The relaunch reads BOTH surfaces.
+pre-update : open entry id=1 start=2026-06-24T09:00:00Z elapsed=28800s
+             db sha256=d8f4c602a4fc34ed… size=98304
+app swap   : Stint.app v2026.6.24 → v2026.7.1 (data dir untouched; no Store write)
+post-update: open entry id=1 start=2026-06-24T09:00:00Z elapsed=31500s (tt)
+             gui surface (core Store) sees open entry id=1 start=2026-06-24T09:00:00Z
+             db sha256=d8f4c602a4fc34ed… size=98304
+
+live tt.sqlite byte-identical across the swap ..................... OK
+same entry still open, id + start unchanged (both surfaces) ....... OK
+derived elapsed continued (+2700s == 2700s wall) ........... OK
+
+in-app update touched no data (§16 / §19 R04): CONFIRMED
+(live GitHub download + OS Gatekeeper swap: see MANUAL CHECK UPDATE-MID-TIMER / CHECK INSTALL & UPDATE part (c)/(d))
+```
+
 ## Machine contract — `--json` everywhere, clean exit codes
 
 ```console

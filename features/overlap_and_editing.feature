@@ -68,6 +68,19 @@ Feature: Overlap, split and merge
     And there are exactly 1 entries
     And the entry "keep" is closed with end 10:00
 
+  Scenario: Deleting an entry without confirmation is refused (the entry survives)
+    # PRD §06 R1 — the confirm gate IS the loss-protection (a core requirement): a
+    # destructive delete that is NOT confirmed never destroys data. Surface-neutral over
+    # the World `removeUnconfirmed` capability — core never auto-confirms a destructive
+    # delete, and `tt rm` (no --force) refuses on stderr with a non-zero exit — so the gate
+    # behaves identically on both surfaces. Regresses if either surface deletes unconfirmed.
+    Given a closed entry "keep" from 09:00 to 10:00
+    And a closed entry "scratch" from 10:00 to 11:00
+    When I attempt to delete the entry "scratch" without confirming
+    Then the delete is refused
+    And there is still an entry "scratch"
+    And there are exactly 2 entries
+
   Scenario: Editing the running entry's start does not stop it
     # PRD §05 R6 — the open entry is editable, including its start, without closing it.
     Given I start an entry "deep work" at 09:00

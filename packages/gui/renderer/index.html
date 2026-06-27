@@ -11,12 +11,15 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <!-- §12 R3: the persistent window shell — a fixed left-hand nav rail beside the routed
-         views. The nav routes (client-side, no IPC: R3 is presentation only) between Timer,
-         Entries, Clients, Reports, and Settings; the active item is marked with the system
-         accent (R13). The per-view data work (Timer/Reports/Settings) lands in R5–R11; until
-         then those routes show an instructive placeholder. Wired in app.js (no inline
-         handlers, CSP unchanged). -->
+    <!-- §12 R3 (G7): the persistent window shell — a fixed left-hand nav rail beside the routed
+         views. Two hardened guarantees: the sidebar is present in EVERY view (every .view section
+         below sits INSIDE this shell, so routing never escapes it), and the rail stays a FIXED
+         width on resize (styles.css pins `.shell .nav` flex-none/168px and lets `.views` absorb
+         all resize). The nav routes (client-side, no IPC: R3 is presentation only) between Timer,
+         Entries, Clients, Reports, and Settings; the current view is highlighted — the active
+         item is marked with the system accent (R13). The standalone report.html page is retired
+         (R08) so no view renders outside this shell. Wired in app.js (no inline handlers, CSP
+         unchanged). -->
     <div class="app">
       <div class="shell">
         <nav class="nav" aria-label="Views">
@@ -39,35 +42,28 @@
           </button>
         </nav>
         <div class="views">
-          <!-- §12 R3: the Timer view placeholder. The live count-up / Active Timer card is
-               R5's work; until then the route lands on an instructive empty placeholder so
-               the nav has somewhere to go. -->
+          <!-- §12 R3 / §05 R09: the Timer view hosts the FAVORITES RAIL — pinned timer
+               templates, the parity twin of `tt fav add|ls|rename|rm`. Pin captures the running
+               timer's template (or, when idle, the Start form's attributes); each pinned
+               favorite carries a kebab → Rename / Unpin, over window.stint.* (no DB in the
+               page). The rail repaints over the existing `changed` broadcast on every write.
+               §05 R10: each favorite carries a one-click Resume that starts a FRESH timer from
+               its template over window.stint.startFavorite (parity with `tt fav start`). -->
           <section class="view" data-view="timer" hidden>
-            <div class="view-placeholder">
-              <div class="big">Timer</div>
-              <div>The live timer view lands here. Start one from <code>Entries</code> or run <code>tt start</code>.</div>
-            </div>
-          </section>
-
-          <!-- §12 R3: the Entries view — the default active view. Everything that was the
-               main window (mast, overlap banner, toolbar/forms, the day-grouped list, and the
-               merge bar) lives here. -->
-          <section class="view" data-view="entries">
-            <header class="mast">
-              <div class="wordmark">stint</div>
-              <div class="summary" id="summary">— idle</div>
-            </header>
-            <!-- §12 R4: the Active-Timer card — the in-window mirror of `tt status`. It shows a
+            <!-- §12 R04: the FULL Active-Timer panel lives here in the Timer view (R14 authors
+                 the panel's internals — create/start-with-details, live editing of the running
+                 timer, the favorites rail). R04 is the PLACEMENT contract: the full card — the
                  live per-second count-up (id timer-clock), a running/idle state indicator
-                 (id timer-state), the running entry's description (id timer-desc) and its
-                 client/project label (id timer-meta), its billable/slept attributes (id
-                 timer-flags), and the primary actions Stop + Switch. Painted by app.js's
-                 render()/tick(); the count-up advances independent of data changes. Accent is
-                 confined (§15) to the running clock/state and the primary Stop button — the
-                 card's running container is `.timer-card.running`, the one sanctioned accent use
-                 the JUDGE ACCENT_DISCIPLINE scan allows here. The Switch button reuses the
-                 existing `start` IPC (store.start = atomic stop-then-start, §05 R8); Stop reuses
-                 `toggle`. No new IPC channel, so no new parity row. -->
+                 (id timer-state), the running entry's description (id timer-desc) + its
+                 client/project label (id timer-meta) + billable/slept attributes (id
+                 timer-flags), and the primary actions Stop + Switch — is hosted in the Timer
+                 view, NOT on Entries (which keeps only a compact strip below). Painted by
+                 app.js's renderTimerCard()/tick(); the count-up advances independent of data
+                 changes. Accent is confined (§15) to the running clock/state and the primary
+                 Stop button — `.timer-card.running` is the sanctioned accent use the JUDGE
+                 ACCENT_DISCIPLINE scan allows here. Switch reuses the existing `start` IPC
+                 (store.start = atomic stop-then-start, §05 R8); Stop reuses `toggle`. No new
+                 IPC channel, so no new parity row. -->
             <section class="timer-card idle" id="timer-card">
               <div class="tc-clock-block">
                 <div class="tc-lbl">Active Timer</div>
@@ -82,17 +78,129 @@
               <div class="btns">
                 <button class="primary" id="timer-stop" hidden>Stop</button>
                 <button id="timer-switch" hidden>Switch</button>
+                <!-- §05 R09: Pin the RUNNING timer (or, idle, the Start form's attributes) as a
+                     favorite — over window.stint.pinFavorite (parity with `tt fav add`). It reads
+                     as a quiet neutral control (the accent stays on Stop), shown only while running
+                     here; the idle pin lives on the Start form below (#fav-pin). -->
+                <button type="button" id="timer-pin" class="ghost" hidden>Pin as favorite</button>
               </div>
             </section>
+            <!-- §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the OPEN entry's attributes AND
+                 its start time WITHOUT stopping it. Every change debounces a window.stint.edit
+                 ({ id, patch }) whose patch NEVER carries endUtc (timerview.liveEditPatch enforces
+                 this), so the row stays open and the timer keeps running (§05 R6). The End time is
+                 deliberately absent (the "End time not editable while running" note + the "no stop"
+                 pill make that explicit). Hidden while idle (nothing to edit live). The Start-time
+                 field is a datetime-local; tags/project edits route to the fuller inline editor.
+                 Accent is confined (§15) to the running clock/Stop — this strip's chrome stays
+                 monochrome (the dashed accent border is the SAME sanctioned running-context use the
+                 ACCENT_DISCIPLINE scan allows for the running card). -->
+            <section class="liveedit" id="live-edit" hidden aria-label="Edit the running timer">
+              <div class="le-head">
+                <span class="le-title">Editing the running timer live</span>
+                <span class="le-pill">no stop</span>
+              </div>
+              <div class="le-grid">
+                <label class="le-field le-desc">Description
+                  <input id="le-desc" type="text" autocomplete="off" placeholder="What are you working on?" />
+                </label>
+                <label class="le-field le-start">Start time <span class="le-editable">(editable)</span>
+                  <span class="range-field">
+                    <input id="le-start" type="datetime-local" aria-label="Running timer start time" />
+                    <button id="le-start-pick" type="button" class="range-pick-btn"
+                            aria-controls="le-start" aria-label="Open visual time-range picker">▦</button>
+                  </span>
+                </label>
+              </div>
+              <div class="le-row2">
+                <label class="le-bill"><input id="le-bill" type="checkbox" /> Billable</label>
+                <button type="button" id="le-tags" class="ghost small">Edit tags…</button>
+                <button type="button" id="le-project" class="ghost small">Edit client / project…</button>
+                <span class="le-note">Changes apply immediately to the open row — the timer keeps running. End time is not editable while running.</span>
+              </div>
+            </section>
+            <!-- §12 R05 (core): the GUI CORE-ENTRY surface — the Start / Switch form. It now
+                 lives in the Timer view (relocated from the Entries toolbar). The toolbar pair is
+                 the canonical primary: the one-tap #toggle (Start, flips to nothing mid-timer per
+                 §12 R04's strip) and the dedicated #switch (the atomic stop-then-start, §05 R08,
+                 shown only while running). The `+ with details` disclosure (#start-toggle) reveals
+                 the inline attribute form (#start-form) — description / client / project / tags /
+                 a Billable toggle (defaulting per §05 R07, the §08 client rule) — and starts
+                 immediately with whatever is filled, over the SAME `start` IPC tt uses
+                 (window.stint.start → core startWithAttributes). No new channel, so no parity row.
+                 All ids are byte-identical to the prior Entries placement so app.js $() lookups and
+                 the JUDGE field probes keep matching. Accent stays confined (§15) to the single
+                 primary Start (button.primary). -->
+            <section class="start-panel" id="start-panel">
+              <header class="sp-head">
+                <div class="sp-title">Start a new timer</div>
+              </header>
+              <div class="sp-actions">
+                <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
+                <button id="switch" hidden>Switch</button>
+                <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">+ with details</button>
+              </div>
+              <form id="start-form" class="start-form" hidden>
+                <input id="start-desc" type="text" placeholder="Description" autocomplete="off" />
+                <div class="start-row">
+                  <input id="start-client" type="text" placeholder="Client" autocomplete="off" />
+                  <input id="start-project" type="text" placeholder="Project" autocomplete="off" />
+                </div>
+                <input id="start-tags" type="text" placeholder="Tags (comma-separated)" autocomplete="off" />
+                <label class="start-bill"><input id="start-bill" type="checkbox" checked /> Billable</label>
+                <button id="start-go" type="submit" class="primary">Start with details</button>
+              </form>
+            </section>
+            <section class="favorites" id="favorites">
+              <header class="fav-head">
+                <div class="fav-title">Favorites</div>
+                <button type="button" id="fav-pin" class="fav-pin">Pin as favorite</button>
+              </header>
+              <div class="fav-rail" id="fav-rail"></div>
+              <div class="fav-empty" id="fav-empty" hidden>
+                No favorites yet. Pin the running timer, or run <code>tt fav add</code>.
+              </div>
+            </section>
+          </section>
+
+          <!-- §12 R3: the Entries view — the default active view. Everything that was the
+               main window (mast, overlap banner, toolbar/forms, the day-grouped list, and the
+               merge bar) lives here. -->
+          <section class="view" data-view="entries">
+            <header class="mast">
+              <div class="wordmark">stint</div>
+              <div class="summary" id="summary">— idle</div>
+            </header>
+            <!-- §12 R04: the Entries view keeps only a COMPACT STRIP of the Active-Timer panel —
+                 the full card lives in the Timer view (above). The strip mirrors the running
+                 count-up (id strip-clock), the running/idle dot + state (id strip-state), and the
+                 running entry's description (id strip-desc); it carries NO Stop/Switch buttons and
+                 NO flags grid (those are the full panel's, in the Timer view). The whole strip is a
+                 button that routes to the Timer view (app.js → route('timer')), and an explicit
+                 "Open Timer" affordance does the same. Accent stays confined (§15) to the running
+                 clock/state — `.timer-strip.running` is the sanctioned accent use the JUDGE
+                 ACCENT_DISCIPLINE scan allows here, mirroring `.timer-card.running`. The strip is
+                 painted by app.js's renderTimerStrip()/tick(); the count-up advances independent of
+                 data changes. No IPC — routing is presentation-only. -->
+            <button type="button" class="timer-strip idle" id="timer-strip" aria-label="Open the Timer view">
+              <span class="strip-clock-block">
+                <span class="strip-dot" aria-hidden="true"></span>
+                <span class="clock" id="strip-clock">00:00:00</span>
+                <span class="state" id="strip-state">idle</span>
+              </span>
+              <span class="strip-desc" id="strip-desc">nothing running</span>
+              <span class="strip-open">Open Timer ›</span>
+            </button>
             <!-- §06 R4: the at-write-time overlap banner. A write (edit/start/stop/resume/merge)
                  that lands on an overlapping span surfaces this non-blocking advisory inline at
                  the moment of the edit — the durable signal stays the per-row overlap flag. It is
                  role=status + aria-live so it is announced and visible in the accessibility tree. -->
             <div id="overlap-banner" class="banner" hidden role="status" aria-live="polite"></div>
+            <!-- §12 R05: the canonical Start / Switch / +with-details surface moved to the Timer
+                 view (the GUI core-entry surface). The Entries toolbar keeps only the read/manage
+                 affordances: backfill add, the week-total → Reports link, merge-selected, and the
+                 search box. The compact running strip above carries the route-to-Timer affordance. -->
             <div class="toolbar">
-              <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
-              <button id="switch" hidden>Switch</button>
-              <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">+ with details</button>
               <button id="add-toggle" class="ghost" aria-expanded="false" aria-controls="add-form">Add entry</button>
               <button id="report-btn" class="ghost" aria-label="Open this week's report">This week: <span id="week-total">0.00h</span></button>
               <!-- §06 R3 / §12 R6: a toolbar Merge action over the row multi-select, routed
@@ -104,16 +212,6 @@
                    with `tt list --search`); clearing it restores the full list via load(). -->
               <input type="search" id="search" class="search" placeholder="Search…" autocomplete="off" aria-label="Search entries" />
             </div>
-            <form id="start-form" class="start-form" hidden>
-              <input id="start-desc" type="text" placeholder="Description" autocomplete="off" />
-              <div class="start-row">
-                <input id="start-client" type="text" placeholder="Client" autocomplete="off" />
-                <input id="start-project" type="text" placeholder="Project" autocomplete="off" />
-              </div>
-              <input id="start-tags" type="text" placeholder="Tags (comma-separated)" autocomplete="off" />
-              <label class="start-bill"><input id="start-bill" type="checkbox" checked /> Billable</label>
-              <button id="start-go" type="submit" class="primary">Start with details</button>
-            </form>
             <form id="add-form" class="start-form" hidden>
               <input id="add-desc" type="text" placeholder="Description" autocomplete="off" />
               <div class="start-row">
@@ -121,10 +219,31 @@
                 <datalist id="add-client-list"></datalist>
                 <input id="add-project" type="text" placeholder="Project" autocomplete="off" />
               </div>
+              <!-- §05 R05 / §12 R15 (G9): text entry stays authoritative — the from/to are
+                   datetime-local inputs — but each gets a calendar-icon trigger that opens the
+                   shared visual time-range picker for the add-form's span. The trigger carries
+                   the neutral button background (§15 R-clickability); the accent stays reserved
+                   for the form's single primary action (Save entry). -->
               <div class="start-row">
-                <label class="add-field">From <input id="add-from" type="datetime-local" /></label>
-                <label class="add-field">To <input id="add-to" type="datetime-local" /></label>
+                <label class="add-field">From
+                  <span class="range-field">
+                    <input id="add-from" type="datetime-local" />
+                    <button id="add-from-pick" type="button" class="range-pick-btn"
+                            aria-controls="add-from" aria-label="Open visual time-range picker">▦</button>
+                  </span>
+                </label>
+                <label class="add-field">To
+                  <span class="range-field">
+                    <input id="add-to" type="datetime-local" />
+                    <button id="add-to-pick" type="button" class="range-pick-btn"
+                            aria-controls="add-to" aria-label="Open visual time-range picker">▦</button>
+                  </span>
+                </label>
               </div>
+              <!-- §12 R07 (G9): mirror the edit-entry mockup's .pickhint — make the calendar
+                   triggers discoverable and state the durability contract: the typed times are
+                   what submit (text stays authoritative), and overnight spans use text entry. -->
+              <p class="pickhint" id="add-pickhint">Type the times, or open the visual picker (▦) to drag start &amp; stop. Text stays authoritative · overnight spans use text entry.</p>
               <input id="add-tags" type="text" placeholder="Tags (comma-separated)" autocomplete="off" />
               <label class="start-bill"><input id="add-bill" type="checkbox" checked /> Billable</label>
               <div id="add-warning" class="add-warning" hidden></div>
@@ -222,13 +341,155 @@
             <div id="tags-list" class="tags-list"></div>
           </section>
 
-          <!-- §12 R3: the Reports view placeholder. The in-window report builder is the
-               §09 work (report.html today); this route lands on an instructive placeholder.
-               The toolbar's "This week" button still opens the report view. -->
-          <section class="view" data-view="reports" hidden>
-            <div class="view-placeholder">
-              <div class="big">Reports</div>
-              <div>Open the report builder from <code>This week</code> on the Entries view, or run <code>tt report</code>.</div>
+          <!-- §12 R08 / §09 R08–R09 (G11): the Reports view — SAVED, named report definitions.
+               This in-shell view replaces the retired standalone report.html (so no view escapes
+               the sidebar, §12 R03/G7). It is the PRIMARY surface for creating a saved report:
+               a "Saved reports" header with the single accent primary action (+ New report), a
+               .defs list of saved-definition cards (name + spec summary + Run / Edit / kebab →
+               Rename / Delete), an inline .builder that creates OR edits a definition (name +
+               range seg incl Custom + group-by seg + client/project/tag filters + billable seg +
+               rounding toggle/increment + Save / Cancel / Delete), and a run-output .summary that
+               paints the core Report runReport returns (grouped totals with overlap / unreviewed-
+               sleep flags IN CONTEXT) plus Export CSV / JSON. Every saved-report capability is the
+               parity twin of `tt report save|ls|show|rename|edit|rm|run` (§17 R8/R14) — the
+               renderer resolves no names (sends ids) and re-derives no range / grouping / total.
+               Wired in reports.js (loaded after app.js); accent stays on the one + New report
+               primary action only (§15 / G10 accent discipline). -->
+          <section class="view reports-view" data-view="reports" hidden>
+            <div class="reports-head">
+              <h2 class="reports-title">Saved reports</h2>
+              <!-- The single accent primary action of this view (§15 / G10). -->
+              <button type="button" id="rep-new" class="primary">+ New report</button>
+            </div>
+
+            <!-- §09 R08: the saved-definition list. One card per saved report (window.stint
+                 .listReports, parity with `tt report ls`): its name + a spec summary, and the
+                 Run / Edit / kebab affordances. The kebab opens Rename / Delete in place. Each
+                 clickable affordance carries the neutral button background (§15 / G10); none
+                 carry the accent. Rendered by reports.js; repaints over the `changed` broadcast. -->
+            <div class="defs" id="rep-defs"></div>
+            <div class="defs-empty" id="rep-defs-empty" hidden>
+              No saved reports yet. Click <code>+ New report</code>, or run <code>tt report save</code>.
+            </div>
+
+            <!-- §09 R08: the inline builder — create a NEW definition or edit an existing one.
+                 The name input + the range segment (incl Custom from/to) + group-by + the
+                 client / project / tag filters + the billable segment + the rounding toggle and
+                 increment picker. Save persists over window.stint.saveReport / editReport
+                 (parity with `tt report save` / `tt report edit`); Delete over removeReport
+                 (parity with `tt report rm`). The renderer sends client/project IDS, never names.
+                 Hidden until + New report or a card's Edit opens it. -->
+            <form class="builder" id="rep-builder" hidden>
+              <div class="builder-head">
+                <h3 class="builder-title" id="rep-builder-title">New report</h3>
+                <input id="rep-name" class="builder-name" type="text" placeholder="Report name" autocomplete="off" aria-label="Report name" />
+                <span class="builder-note">stored as a saved report</span>
+              </div>
+
+              <div class="report-ctrl">
+                <span class="report-lab">Range</span>
+                <div class="report-row">
+                  <div class="seg presets" id="rep-preset-seg" role="group" aria-label="Date range">
+                    <button type="button" class="preset" data-preset="today">Today</button>
+                    <button type="button" class="preset on" data-preset="week" aria-pressed="true">This week</button>
+                    <button type="button" class="preset" data-preset="last-week">Last week</button>
+                    <button type="button" class="preset" data-preset="month">This month</button>
+                    <button type="button" class="preset" data-preset="last-month">Last month</button>
+                    <button type="button" class="preset" data-preset="custom">Custom…</button>
+                  </div>
+                </div>
+                <div class="custom-range" id="rep-custom-range" hidden>
+                  <label class="report-lab" for="rep-range-from">From</label>
+                  <input id="rep-range-from" class="report-field" type="datetime-local" aria-label="Range from" />
+                  <label class="report-lab" for="rep-range-to">To</label>
+                  <input id="rep-range-to" class="report-field" type="datetime-local" aria-label="Range to" />
+                </div>
+
+                <span class="report-lab">Group by</span>
+                <div class="report-row">
+                  <div class="seg" id="rep-by-seg" role="group" aria-label="Group by">
+                    <button type="button" class="seg-btn on" data-by="client">Client</button>
+                    <button type="button" class="seg-btn" data-by="project">Project</button>
+                    <button type="button" class="seg-btn" data-by="day">Day</button>
+                    <button type="button" class="seg-btn" data-by="tag">Tag</button>
+                  </div>
+                </div>
+
+                <span class="report-lab">Filters</span>
+                <div class="report-row">
+                  <select id="rep-client" class="report-field" aria-label="Filter by client">
+                    <option value="">All clients</option>
+                  </select>
+                  <select id="rep-project" class="report-field" aria-label="Filter by project" disabled>
+                    <option value="">All projects</option>
+                  </select>
+                  <input id="rep-tag" class="report-field" type="text" placeholder="Filter by tag" autocomplete="off" aria-label="Filter by tag" />
+                </div>
+
+                <span class="report-lab">Billable</span>
+                <div class="report-row">
+                  <div class="seg" id="rep-billable-seg" role="group" aria-label="Billable filter">
+                    <button type="button" class="seg-btn on" data-billable="billable" aria-pressed="true">Billable</button>
+                    <button type="button" class="seg-btn" data-billable="all" aria-pressed="false">All</button>
+                    <button type="button" class="seg-btn" data-billable="non-billable" aria-pressed="false">Non-billable</button>
+                  </div>
+                </div>
+
+                <span class="report-lab">Rounding</span>
+                <div class="report-row">
+                  <label class="report-toggle">
+                    <input id="rep-rounding" type="checkbox" />
+                    Round grouped totals
+                  </label>
+                  <select id="rep-rounding-increment" class="report-field" aria-label="Rounding increment">
+                    <option value="15">nearest 15 min</option>
+                    <option value="6">nearest 6 min</option>
+                    <option value="10">nearest 10 min</option>
+                    <option value="30">nearest 30 min</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="builder-foot">
+                <button type="button" id="rep-cancel" class="report-export-btn">Cancel</button>
+                <button type="button" id="rep-delete" class="report-export-btn" hidden>Delete</button>
+                <button type="submit" id="rep-save" class="report-apply">Save definition</button>
+              </div>
+            </form>
+
+            <!-- §09 R09: the run-output panel. Run on a card resolves+runs its definition through
+                 core (window.stint.runReport, parity with `tt report run`) and paints the core
+                 Report here: the resolved-range header, the grouped per-line + grand totals, and
+                 the overlap / unreviewed-sleep flags IN CONTEXT on the affected rows (the SAME
+                 rowHtml / lineFlags logic the old builder used). Export CSV / JSON carry the saved
+                 ref so main exports the definition's range (byte-identical to `tt report run --csv`).
+                 The renderer re-derives no range / grouping / rounding / total. -->
+            <div class="report-summary" id="rep-run" hidden>
+              <div class="report-head">
+                <span id="rep-run-caption">Run</span>
+                <span>Total <b id="rep-run-total">0h 00m</b></span>
+              </div>
+              <div class="report-range" id="rep-run-range"></div>
+              <table class="report-table">
+                <thead>
+                  <tr>
+                    <th>Group</th>
+                    <th class="num">Billable</th>
+                  </tr>
+                </thead>
+                <tbody id="rep-run-rows"></tbody>
+                <tfoot>
+                  <tr class="report-tot">
+                    <td>Total</td>
+                    <td class="num" id="rep-run-grand">0h 00m</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <div class="report-export" id="rep-run-export" hidden>
+              <button type="button" id="rep-export-csv" class="report-export-btn">Export CSV</button>
+              <button type="button" id="rep-export-json" class="report-export-btn">Export JSON</button>
+              <span id="rep-export-status" class="report-export-status" role="status" aria-live="polite"></span>
             </div>
           </section>
 
@@ -244,13 +505,25 @@
               <p class="settings-sub">Stored locally; identical to what <code>tt config set</code> writes. Changes save immediately.</p>
             </div>
             <div id="settings-panel" class="settings-panel"></div>
+            <!-- §19 R03 — Software Update: a read-only current-version row + a "Check now"
+                 action that queries GitHub Releases and reports up-to-date / update-available
+                 (with a link) / a graceful error. Rendered by settings.js into this host over
+                 the GUI-only window.stint.update bridge (no parity channel — no tt twin). The
+                 check is the app's ONLY outbound request (§17 R9) and never touches the DB. -->
+            <div id="software-update" class="settings-panel"></div>
           </section>
         </div>
       </div>
     </div>
     <script src="util.js"></script>
     <script src="editor.js"></script>
+    <!-- §12 R15: the visual time-range picker (window.STP). Loaded BEFORE app.js so the
+         add / inline-edit / running-start triggers can open it. Classic script (file://),
+         no ES modules, no Node import, no network — a pure renderer affordance over the
+         existing authoritative datetime-local text inputs. -->
+    <script src="timepicker.js"></script>
     <script src="app.js"></script>
+    <script src="reports.js"></script>
     <script src="settings.js"></script>
   </body>
 </html>

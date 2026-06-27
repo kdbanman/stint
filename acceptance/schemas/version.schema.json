@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/version.json",
+  "title": "tt --version",
+  "description": "§19 R06 — the version string `tt --version` prints (commander's plain single-line output), the SAME date/build version the GUI Settings → Software Update view shows. A stamped release is `YYYY.M.D` with an optional same-day build suffix `.N` (month/day NOT zero-padded, e.g. `2026.6.27` or `2026.6.27.2`); an unstamped local/dev build prints the deterministic `0.0.0-dev` sentinel. A non-date value (e.g. the old hardcoded `1.0.0`) fails validation.",
+  "type": "string",
+  "oneOf": [
+    {
+      "description": "A stamped release version: YYYY.M.D[.N], not zero-padded.",
+      "pattern": "^\\d{4}\\.\\d{1,2}\\.\\d{1,2}(\\.\\d+)?$"
+    },
+    {
+      "description": "The deterministic, offline dev sentinel an unstamped build carries.",
+      "const": "0.0.0-dev"
+    }
+  ]
+}
