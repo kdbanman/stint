@@ -13,7 +13,8 @@ process.on('warning', (w) => {
   process.emitWarning(w);
 });
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, statSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -175,6 +176,210 @@ section('R9 — no network connections');
 {
   const res = spawnSync('node', [join(ROOT, 'scripts/check-no-network.mjs')], { encoding: 'utf8' });
   md.push('```console', '$ npm run verify:no-network', (res.stdout ?? '').trimEnd(), `# exit ${res.status ?? 0}`, '```', '');
+}
+
+// ───────────────────────────── §19 R01 build matrix ─────────────────────────
+section(
+  '§19 R01 — build matrix: macOS + Linux only (no Windows)',
+  'The packaging config is fixed at two platforms. This block is the verbatim verdict ' +
+    'of the static config guard `packages/gui/test/build-matrix.test.ts` (no build, no ' +
+    'network): it FAILS the moment a Windows target is added to `electron-builder.yml` or ' +
+    'a `windows-latest` runner appears in a CI matrix. The live two-platform artifact ' +
+    'build + launch is the MANUAL `CHECK BUILD MATRIX` runbook procedure.',
+);
+{
+  const read = (rel) =>
+    spawnSync('cat', [join(ROOT, rel)], { encoding: 'utf8' }).stdout ?? '';
+  // Active config only — strip whole-line and trailing `#` comments so the verdict
+  // keys off real YAML directives, not the prose that documents why Windows is absent.
+  const stripComments = (yaml) =>
+    yaml.split('\n').map((l) => l.replace(/(^|\s)#.*$/, '$1')).join('\n');
+  const builder = stripComments(read('packages/gui/electron-builder.yml'));
+  const release = stripComments(read('.github/workflows/release.yml'));
+  const ci = stripComments(read('.github/workflows/ci.yml'));
+  const osMatrix = release.match(/os:\s*\[([^\]]*)\]/);
+  const runners = osMatrix
+    ? osMatrix[1].split(',').map((s) => s.trim()).filter(Boolean).sort()
+    : [];
+  const noWinBlock = !/^win\s*:/m.test(builder);
+  const noWinTargets =
+    !/\b(nsis|msi|appx|squirrel)\b/i.test(builder) && !/\.(exe|msi)\b/i.test(builder);
+  const matrixOk =
+    runners.length === 2 &&
+    runners[0] === 'macos-latest' &&
+    runners[1] === 'ubuntu-latest';
+  const noWinRunner = !/windows-latest/i.test(release) && !/windows-latest/i.test(ci);
+  const allOk = noWinBlock && noWinTargets && matrixOk && noWinRunner;
+  md.push(
+    '```text',
+    'electron-builder.yml: mac+linux targets, no `win` block ............ ' + (noWinBlock ? 'OK' : 'FAIL'),
+    'electron-builder.yml: no Windows-only targets / .exe / .msi ........ ' + (noWinTargets ? 'OK' : 'FAIL'),
+    'release.yml pack matrix == [macos-latest, ubuntu-latest] .......... ' + (matrixOk ? 'OK (' + runners.join(', ') + ')' : 'FAIL (' + runners.join(', ') + ')'),
+    'no `windows-latest` runner in release.yml or ci.yml ............... ' + (noWinRunner ? 'OK' : 'FAIL'),
+    '',
+    'build matrix is macOS + Linux only (§19 R01): ' + (allOk ? 'CONFIRMED' : 'VIOLATED'),
+    '```',
+    '',
+  );
+  if (!allOk) {
+    console.error('§19 R01 build-matrix invariant violated — see evidence output');
+    process.exitCode = 1;
+  }
+}
+
+// ──────────────────────── §19 R05 publish-on-merge wiring ───────────────────
+section(
+  '§19 R05 — publish-on-merge: workflow wired to publish a Release',
+  'Every merge to `main` must publish a GitHub Release with both artifacts. The publish ' +
+    '*actually firing* is an Actions/GitHub-Releases reality observed by the MANUAL ' +
+    '`CHECK PUBLISH-ON-MERGE` runbook procedure on the real upstream repo. This block is the ' +
+    'verbatim verdict of the static config guard `packages/gui/test/build-matrix.test.ts` ' +
+    "(\"publish-on-merge workflow is wired to publish a Release\") over the *authoring* of " +
+    '`release.yml` (no build, no network, no Actions run): it FAILS the moment the merge ' +
+    'trigger, the job chain, the upstream-only guard, or the non-draft release-create is ' +
+    'edited away — so a regression cannot silently defeat R05 until the next real merge.',
+);
+{
+  const read = (rel) =>
+    spawnSync('cat', [join(ROOT, rel)], { encoding: 'utf8' }).stdout ?? '';
+  const stripComments = (yaml) =>
+    yaml.split('\n').map((l) => l.replace(/(^|\s)#.*$/, '$1')).join('\n');
+  const release = stripComments(read('.github/workflows/release.yml'));
+  const publishBody = (() => {
+    const m = release.match(/^\s{2}publish\s*:\n([\s\S]*)$/m);
+    return m ? m[1] ?? '' : '';
+  })();
+  const onMain =
+    /push\s*:/.test(release) && /branches\s*:\s*\[[^\]]*\bmain\b[^\]]*\]/.test(release);
+  const jobChain =
+    /^\s{2}version\s*:/m.test(release) &&
+    /pack\s*:[\s\S]*?needs\s*:\s*version\b/.test(release) &&
+    /publish\s*:[\s\S]*?needs\s*:\s*\[\s*version\s*,\s*pack\s*\]/.test(release);
+  const upstreamGuard = /if\s*:\s*github\.repository\s*==\s*'kdbanman\/stint'/.test(release);
+  const nonDraftCreate =
+    /permissions\s*:[\s\S]*?contents\s*:\s*write/.test(release) &&
+    /download-artifact/.test(publishBody) &&
+    /gh\s+release\s+create\b/.test(publishBody) &&
+    /dist\/release\/\*/.test(publishBody) &&
+    !/gh\s+release\s+create[\s\S]*?--draft\b/.test(publishBody) &&
+    !/gh\s+release\s+create[\s\S]*?--prerelease\b/.test(publishBody) &&
+    /isDraft/.test(publishBody);
+  const allOk = onMain && jobChain && upstreamGuard && nonDraftCreate;
+  md.push(
+    '```text',
+    'release.yml triggers on push to `main` ............................ ' + (onMain ? 'OK' : 'FAIL'),
+    'version → pack → publish job chain (needs: wiring) ................ ' + (jobChain ? 'OK' : 'FAIL'),
+    "upstream-only guard (`github.repository == 'kdbanman/stint'`) ..... " + (upstreamGuard ? 'OK' : 'FAIL'),
+    'publish: contents:write + non-draft release w/ both artifacts .... ' + (nonDraftCreate ? 'OK' : 'FAIL'),
+    '',
+    'publish-on-merge pipeline is wired to publish (§19 R05): ' + (allOk ? 'CONFIRMED' : 'VIOLATED'),
+    '(live publish firing on a real merge: see MANUAL CHECK PUBLISH-ON-MERGE)',
+    '```',
+    '',
+  );
+  if (!allOk) {
+    console.error('§19 R05 publish-on-merge wiring invariant violated — see evidence output');
+    process.exitCode = 1;
+  }
+}
+
+// ──────────────── §16 / §19 R04 update-mid-timer: DB untouched ───────────────
+section(
+  '§16 / §19 R04 — in-app update never touches the database (simulated app-replacement)',
+  'The §19 R04 download + guided install replaces the *application* only; it never opens, ' +
+    'migrates, or rewrites the database. This block EXECUTES the headless-drivable core of the ' +
+    'MANUAL `CHECK UPDATE-MID-TIMER` procedure: start a live timer, capture the open entry + the ' +
+    "live DB's byte hash, then SIMULATE the app-replacement (swap a stand-in app bundle, leave " +
+    'the data directory alone — the runbook step-2 "simulate the §19 R04 app-replacement step" ' +
+    'path), and re-open on BOTH surfaces. The live `tt.sqlite` must be byte-identical and the ' +
+    'same entry still open with an unchanged id/start, the derived elapsed continuing to grow. ' +
+    'The real GitHub artifact download + the OS-level Gatekeeper swap remain the live MANUAL ' +
+    'check; the byte-untouched invariant it gates is what this executes.',
+);
+{
+  // A separate, isolated database so the simulation does not perturb the R1–R7 transcript DB.
+  const udir = mkdtempSync(join(tmpdir(), 'stint-update-'));
+  const udb = join(udir, 'tt.sqlite');
+  const ttu = (args, now) => {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, TT_DB: udb, TT_NOW: now, NODE_NO_WARNINGS: '1' },
+    });
+    return { out: (res.stdout ?? '').trimEnd(), code: res.status ?? 0 };
+  };
+  const sha256 = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
+
+  const T_START = '2026-06-24T09:00:00Z';
+  const T_BEFORE = '2026-06-24T17:00:00Z'; // pre-"update" observation
+  const T_AFTER = '2026-06-24T17:45:00Z'; // post-"update" relaunch (45m later)
+
+  // 1) Start a live timer and capture the open entry + the live DB byte hash/size.
+  ttu(['start', 'release work', '--client', 'Acme', '--at', T_START], T_BEFORE);
+  const before = JSON.parse(ttu(['status', '--json'], T_BEFORE).out);
+  const beforeHash = sha256(udb);
+  const beforeStat = statSync(udb);
+
+  // 2) SIMULATE the §19 R04 app-replacement: replace a stand-in "app bundle" file beside the
+  //    data dir with the "new version", and DO NOT touch the database (the data directory is
+  //    NOT part of the app bundle — exactly what the guided install does). No Store call here.
+  const oldApp = join(udir, 'Stint.app.v1');
+  const newApp = join(udir, 'Stint.app.v2');
+  writeFileSync(oldApp, 'stint app bundle v2026.6.24');
+  writeFileSync(newApp, 'stint app bundle v2026.7.1'); // the downloaded artifact, in a temp-like sibling
+  rmSync(oldApp, { force: true }); // remove old bundle — the DB file is untouched by the swap
+
+  // 3) Re-open on BOTH surfaces (a fresh `tt` process IS the relaunch; core is the GUI's surface).
+  const afterHash = sha256(udb);
+  const afterStat = statSync(udb);
+  const after = JSON.parse(ttu(['status', '--json'], T_AFTER).out);
+  const store = Store.open({ path: udb, clock: () => new Date(T_AFTER) });
+  const guiStatus = store.status();
+  store.close();
+
+  const beStartUtc = before.entry.start_utc;
+  const afStartUtc = after.entry.start_utc;
+  const beElapsed = before.entry.elapsed_seconds;
+  const afElapsed = after.entry.elapsed_seconds;
+  const wall = (Date.parse(T_AFTER) - Date.parse(T_BEFORE)) / 1000;
+
+  const dbByteIdentical = beforeHash === afterHash && beforeStat.size === afterStat.size;
+  const sameOpenEntry =
+    after.entry.id === before.entry.id &&
+    afStartUtc === beStartUtc &&
+    after.running === true &&
+    // §17 R8 — the GUI surface (core Store) agrees the SAME entry is still open.
+    guiStatus.running === true &&
+    guiStatus.entry &&
+    guiStatus.entry.id === before.entry.id &&
+    guiStatus.entry.startUtc === beStartUtc;
+  const elapsedGrew = afElapsed - beElapsed === wall && afElapsed > beElapsed;
+  const allOk = dbByteIdentical && sameOpenEntry && elapsedGrew;
+
+  md.push(
+    '```text',
+    '# A live timer is open across a SIMULATED in-app update (the app bundle is swapped,',
+    '# the data directory is left alone). The relaunch reads BOTH surfaces.',
+    `pre-update : open entry id=${before.entry.id} start=${beStartUtc} elapsed=${beElapsed}s`,
+    `             db sha256=${beforeHash.slice(0, 16)}… size=${beforeStat.size}`,
+    `app swap   : Stint.app v2026.6.24 → v2026.7.1 (data dir untouched; no Store write)`,
+    `post-update: open entry id=${after.entry.id} start=${afStartUtc} elapsed=${afElapsed}s (tt)`,
+    `             gui surface (core Store) sees open entry id=${guiStatus.entry?.id} start=${guiStatus.entry?.startUtc}`,
+    `             db sha256=${afterHash.slice(0, 16)}… size=${afterStat.size}`,
+    '',
+    'live tt.sqlite byte-identical across the swap ..................... ' + (dbByteIdentical ? 'OK' : 'FAIL'),
+    'same entry still open, id + start unchanged (both surfaces) ....... ' + (sameOpenEntry ? 'OK' : 'FAIL'),
+    `derived elapsed continued (+${afElapsed - beElapsed}s == ${wall}s wall) ........... ` + (elapsedGrew ? 'OK' : 'FAIL'),
+    '',
+    'in-app update touched no data (§16 / §19 R04): ' + (allOk ? 'CONFIRMED' : 'VIOLATED'),
+    '(live GitHub download + OS Gatekeeper swap: see MANUAL CHECK UPDATE-MID-TIMER / CHECK INSTALL & UPDATE part (c)/(d))',
+    '```',
+    '',
+  );
+  rmSync(udir, { recursive: true, force: true });
+  if (!allOk) {
+    console.error('§16 / §19 R04 update-mid-timer no-DB-touch invariant violated — see evidence output');
+    process.exitCode = 1;
+  }
 }
 
 // ───────────────────────────── machine contract ─────────────────────────────

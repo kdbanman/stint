@@ -81,6 +81,20 @@ describe('renderer static contract', () => {
     for (const id of ['start-desc', 'start-client', 'start-project', 'start-tags', 'start-bill']) {
       expect(html, `index.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
     }
+    // §12 R05 (core): the GUI core-entry surface lives in the Timer view, NOT the Entries
+    // toolbar — the form + its disclosure are hosted inside <section data-view="timer">.
+    const timerView = html.match(
+      /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
+    )?.[0];
+    expect(timerView, 'index.html must declare the Timer view section').toBeTruthy();
+    expect(timerView!).toMatch(/id="start-form"/);
+    expect(timerView!).toMatch(/id="start-toggle"/);
+    const entriesView = html.match(
+      /<section class="view" data-view="entries">[\s\S]*?<!-- §07\/§12: the Clients view/,
+    )?.[0];
+    expect(entriesView, 'index.html must declare the Entries view section').toBeTruthy();
+    expect(entriesView!).not.toMatch(/id="start-form"/);
+    expect(entriesView!).not.toMatch(/id="start-toggle"/);
     // …and app.js builds a payload and calls window.stint.start with it (catching a
     // regression to a parameterless Start that silently drops attributes).
     const app = read('app.js');
@@ -92,14 +106,31 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/billable:/);
   });
 
-  it('the start surface offers the inline attribute form and flips to Switch while running (§12 R5)', () => {
+  it('the start surface is the Timer-view core-entry form and flips to Switch while running (§12 R5)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    // The inline Start form exposes every attribute control (the start-immediately surface)…
-    expect(html).toMatch(/id="start-form"/);
+    // §12 R05 (core): the inline Start form exposes every attribute control (the
+    // start-immediately surface) and is hosted in the Timer view — the GUI core-entry
+    // surface relocated from the Entries toolbar (the form + disclosure + #toggle/#switch
+    // primary live inside <section data-view="timer">, not the Entries section).
+    const timerView = html.match(
+      /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
+    )?.[0];
+    expect(timerView, 'index.html must declare the Timer view section').toBeTruthy();
+    expect(timerView!).toMatch(/id="start-form"/);
+    expect(timerView!).toMatch(/id="start-toggle"/);
+    expect(timerView!).toMatch(/id="toggle"/);
+    expect(timerView!).toMatch(/id="switch"/);
     for (const id of ['start-desc', 'start-client', 'start-project', 'start-tags', 'start-bill']) {
-      expect(html, `index.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
+      expect(timerView!, `the Timer view must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
     }
+    // The Entries view no longer hosts the start surface (the relocation guarantee).
+    const entriesView = html.match(
+      /<section class="view" data-view="entries">[\s\S]*?<!-- §07\/§12: the Clients view/,
+    )?.[0];
+    expect(entriesView, 'index.html must declare the Entries view section').toBeTruthy();
+    expect(entriesView!).not.toMatch(/id="start-form"/);
+    expect(entriesView!).not.toMatch(/id="start-toggle"/);
     // …app.js builds the payload (resolving client/project + splitting tags) and starts
     // immediately over the same start IPC tt uses, defaulting the billable from the form…
     expect(app).toMatch(/window\.stint\.start\(\s*payload\s*\)/);
@@ -123,13 +154,30 @@ describe('renderer static contract', () => {
     }
     expect(html).toMatch(/id="add-from"[^>]*type="datetime-local"/);
     expect(html).toMatch(/id="add-to"[^>]*type="datetime-local"/);
+    // §05 R05 / §12 R15 (G9): each from/to field also offers a calendar-icon trigger that
+    // opens the shared visual time-range picker — tied to its field via aria-controls and
+    // an aria-label, carrying the neutral .range-pick-btn background (§15 R-clickability).
+    // Text entry stays authoritative; this only adds the picker affordance.
+    expect(html).toMatch(
+      /id="add-from-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-from"[\s\S]*?aria-label="[^"]+"/,
+    );
+    expect(html).toMatch(
+      /id="add-to-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-to"[\s\S]*?aria-label="[^"]+"/,
+    );
     // …and app.js sends a payload carrying fromLocal/toLocal over window.stint.add
-    // (catching a regression that drops the from/to or never reaches core's add).
+    // (catching a regression that drops the from/to or never reaches core's add). The
+    // picker write-back lands in the SAME fields, so the IPC payload shape is unchanged.
     const app = read('app.js');
     expect(app).toMatch(/window\.stint\.add\(payload\)/);
     expect(app).toMatch(/fromLocal:/);
     expect(app).toMatch(/toLocal:/);
     expect(app).toMatch(/window\.stint\.listClients\(\)/);
+    // The trigger opens the shared picker (the §12 R15 component, window.STP) bound to the
+    // two add inputs and writes the chosen start/stop back into #add-from/#add-to — it does
+    // not author a second picker.
+    expect(app).toMatch(/add-from-pick'\)\.addEventListener/);
+    expect(app).toMatch(/add-to-pick'\)\.addEventListener/);
+    expect(app).toMatch(/window\.STP\.open\(/);
   });
 
   it('Switch is a dedicated affordance shown only while running, over the start IPC (§05 R8)', () => {
@@ -372,7 +420,7 @@ describe('renderer static contract', () => {
     expect(withoutRootVar).not.toMatch(/\.chip[^{]*\{[^}]*var\(--accent\)/s);
   });
 
-  it('the main window ships an in-window Active-Timer card mirroring tt status (§12 R4)', () => {
+  it('the FULL Active-Timer card lives in the Timer view and Entries keeps a compact strip (§12 R04)', () => {
     const html = read('index.html');
     const app = read('app.js');
     const css = read('styles.css');
@@ -388,32 +436,84 @@ describe('renderer static contract', () => {
     // is a plain button — accent discipline keeps a single fill).
     expect(html).toMatch(/id="timer-stop"[^>]*class="primary"|class="primary"[^>]*id="timer-stop"/);
     expect(html).toMatch(/id="timer-switch"/);
-    // app.js paints the card from the running entry and reveals/hides the actions by state…
+
+    // §12 R04 PLACEMENT: the full #timer-card is hosted in the Timer view section, NOT in the
+    // Entries section. Slice each top-level view section and assert where the card lives.
+    const timerView = html.match(
+      /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
+    )?.[0];
+    expect(timerView, 'index.html must declare the Timer view section').toBeTruthy();
+    expect(timerView!).toMatch(/id="timer-card"/);
+    expect(timerView!).toMatch(/id="timer-stop"/);
+    expect(timerView!).toMatch(/id="timer-switch"/);
+    // The Entries section runs from its comment to the start of the Clients view; the full card
+    // must NOT live there — only the compact strip does.
+    const entriesView = html.match(
+      /<section class="view" data-view="entries">[\s\S]*?<!-- §07\/§12: the Clients view/,
+    )?.[0];
+    expect(entriesView, 'index.html must declare the Entries view section').toBeTruthy();
+    expect(entriesView!).not.toMatch(/id="timer-card"/);
+    expect(entriesView!).not.toMatch(/id="timer-stop"/);
+    expect(entriesView!).not.toMatch(/id="timer-switch"/);
+    // The Entries view ships the COMPACT STRIP — the live count-up, running/idle state, the
+    // running description, plus a route-to-Timer affordance (the strip is itself a button).
+    expect(entriesView!).toMatch(/id="timer-strip"/);
+    expect(entriesView!).toMatch(/id="strip-clock"/);
+    expect(entriesView!).toMatch(/id="strip-state"/);
+    expect(entriesView!).toMatch(/id="strip-desc"/);
+    expect(entriesView!).toMatch(/<button[^>]*class="timer-strip[^"]*"[^>]*id="timer-strip"|id="timer-strip"[^>]*class="timer-strip/);
+
+    // app.js paints the FULL card (renderTimerCard) from the running entry and reveals/hides the
+    // actions by state, AND paints the COMPACT strip (renderTimerStrip) on the Entries path…
     expect(app).toMatch(/function renderTimerCard\(running\)/);
-    expect(app).toMatch(/renderTimerCard\(running\)/);
+    expect(app).toMatch(/renderTimerCard\(/);
     expect(app).toMatch(/card\.classList\.toggle\('running'/);
+    expect(app).toMatch(/function renderTimerStrip\(running\)/);
+    expect(app).toMatch(/renderTimerStrip\(running\)/);
+    expect(app).toMatch(/strip\.classList\.toggle\('running'/);
+    // …render() (Entries path) paints the strip, route('timer') paints the full card…
+    expect(app).toMatch(/renderTimerCard\(state && state\.status\.running/);
+    // …the strip routes to the Timer view (presentation only, no IPC)…
+    expect(app).toMatch(/timerStrip\.addEventListener\('click',\s*\(\)\s*=>\s*route\('timer'\)\)/);
     // …the Stop reuses the existing toggle write and Switch reuses the start IPC (no new
     // channel — store.start is the atomic stop-then-start, §05 R8)…
     expect(app).toMatch(/\$\('timer-stop'\)\.addEventListener[\s\S]*?window\.stint\.toggle\(/);
     expect(app).toMatch(/\$\('timer-switch'\)\.addEventListener[\s\S]*?window\.stint\.start\(/);
-    // …and the per-second count-up advances the card clock on the tick path (independent of
-    // data changes), derived from elapsed(now − start), never stored.
+    // …and the per-second count-up advances BOTH the card clock and the strip clock on the tick
+    // path (independent of data changes), derived from elapsed(now − start), never stored.
     expect(app).toMatch(/function tick\(\)/);
     expect(app).toMatch(/\$\('timer-clock'\)/);
+    expect(app).toMatch(/\$\('strip-clock'\)/);
     expect(app).toMatch(/clock\.textContent\s*=\s*fmtDur\(elapsed\(/);
-    // The card's accent stays on the running clock/state only, always via var(--accent) —
-    // no hardcoded seed hex (the §15 accent-discipline guard above also covers the file).
+    expect(app).toMatch(/stripClock\.textContent\s*=\s*fmtDur\(elapsed\(/);
+    // The card's accent stays on the running clock/state only, always via var(--accent) — and
+    // the strip mirrors it (`.timer-strip.running .clock`). No hardcoded seed hex (the §15
+    // accent-discipline guard above also covers the file).
     expect(css).toMatch(/\.timer-card\.running\s+\.clock\s*\{[^}]*var\(--accent\)/s);
+    expect(css).toMatch(/\.timer-strip\.running\s+\.clock\s*\{[^}]*var\(--accent\)/s);
     const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
     expect(withoutRootVar).not.toMatch(/\.timer-card[^{]*\{[^}]*#2f6fed/s);
+    expect(withoutRootVar).not.toMatch(/\.timer-strip[^{]*\{[^}]*#2f6fed/s);
   });
 
   it('the window shell ships a persistent left nav routing the five views (§12 R3)', () => {
     const html = read('index.html');
     const app = read('app.js');
+    const css = read('styles.css');
     // The shell wraps a persistent nav rail and the routed views…
     expect(html).toMatch(/class="shell"/);
     expect(html).toMatch(/class="views"/);
+    // §12 R3 (G7): the rail is a FIXED width on resize — `.shell .nav` declares flex-none
+    // (no grow/shrink) and a fixed 168px width, and `.views` is the sole grow/shrink target
+    // (`flex: 1; min-width: 0`) so resize lands on the content, never the rail. This is a cheap
+    // per-commit guard that the fixed-width rule is not accidentally removed; the behavioural
+    // proof (byte-identical 168 across viewports) stays in JUDGE NAV_SHELL FIXED_WIDTH_ON_RESIZE.
+    const navRule = css.match(/\.shell \.nav\s*\{[^}]*\}/s)?.[0] ?? '';
+    expect(navRule).toMatch(/flex:\s*none|flex-shrink:\s*0/);
+    expect(navRule).toMatch(/width:\s*168px/);
+    const viewsRule = css.match(/\.views\s*\{[^}]*\}/s)?.[0] ?? '';
+    expect(viewsRule).toMatch(/flex:\s*1/);
+    expect(viewsRule).toMatch(/min-width:\s*0/);
     // …with exactly the five nav items, in the Timer/Entries/Clients/Reports/Settings order
     // (a regression to a missing/re-ordered item is caught here, cheaply, per commit).
     const navViews = [...html.matchAll(/class="nav-item[^"]*"\s+data-view="([^"]+)"/g)].map((m) => m[1]);
@@ -478,222 +578,139 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.archiveTag\(/);
   });
 
-  it('the report builder offers the §08 R3 three-way Billable toggle wired to report() (§08 R3, §12 R8)', () => {
-    const html = read('report.html');
-    // The report view exists, shares index.html's CSP, and loads util.js then report.js.
-    expect(html).toMatch(/Content-Security-Policy/);
-    expect(html).toMatch(/default-src 'none'/);
-    expect(html).toMatch(/src="util\.js"/);
-    expect(html).toMatch(/src="report\.js"/);
-    // The Billable control is a single segmented control offering all three filters…
-    expect(html).toMatch(/id="billable-seg"/);
-    expect(html).toMatch(/data-billable="billable"/);
-    expect(html).toMatch(/data-billable="all"/);
-    expect(html).toMatch(/data-billable="non-billable"/);
-    expect(html).toMatch(/Billable only/);
-    expect(html).toMatch(/Non-billable/);
-    // …with the billable-only segment active by default (reports default billable-only).
-    expect(html).toMatch(/data-billable="billable"[^>]*class="seg-btn on"|class="seg-btn on"[^>]*data-billable="billable"/);
-
-    const js = read('report.js');
-    // report.js drives the view entirely through window.stint.report — no arithmetic here.
-    expect(js).toMatch(/window\.stint\.report\(/);
-    expect(js).toMatch(/billableFilter/);
-    // The default filter is billable-only, and clicking a segment sets billableFilter and
-    // re-runs the report (catching a regression to a static or all-filter default).
-    expect(js).toMatch(/billableFilter:\s*'billable'/);
-    expect(js).toMatch(/opts\.billableFilter\s*=\s*btn\.dataset\.billable/);
-    // app.js's report button navigates to the report view (no new window-open IPC channel).
+  it('the Reports view is in the window shell, not a standalone page (§12 R08 / G7)', () => {
+    const html = read('index.html');
+    // The retired standalone report.html page is gone; the Reports view is a routed .view
+    // section INSIDE the shell (so the sidebar is present, §12 R03). reports.js drives it,
+    // loaded after app.js. No code references the deleted standalone page anymore.
+    expect(() => read('report.html')).toThrow();
+    expect(() => read('report.js')).toThrow();
+    expect(html).toMatch(/<section class="view reports-view" data-view="reports"/);
+    expect(html).toMatch(/src="reports\.js"/);
+    // app.js's "This week" button routes to the in-shell Reports view (no window.location to
+    // the deleted page); routing is the shell router, not a navigation.
     const app = read('app.js');
     expect(app).toMatch(/report-btn/);
-    expect(app).toMatch(/report\.html/);
+    expect(app).toMatch(/route\('reports'\)/);
+    expect(app).not.toMatch(/['"`]report\.html['"`]/);
   });
 
-  it('the report view offers a date-range preset/custom picker resolved through core (§09 R1)', () => {
-    const html = read('report.html');
-    // The five named presets render as labelled chips, plus a Custom escape hatch…
-    expect(html).toMatch(/data-preset="today"/);
-    expect(html).toMatch(/data-preset="week"/);
-    expect(html).toMatch(/data-preset="last-week"/);
-    expect(html).toMatch(/data-preset="month"/);
-    expect(html).toMatch(/data-preset="last-month"/);
-    expect(html).toMatch(/data-preset="custom"/);
-    for (const label of ['Today', 'This week', 'Last week', 'This month', 'Last month']) {
-      expect(html, `report.html must label the ${label} preset`).toMatch(new RegExp(label));
-    }
-    // …with This week active by default (the at-a-glance figure)…
-    expect(html).toMatch(/data-preset="week"[^>]*class="preset on"|class="preset on"[^>]*data-preset="week"/);
-    // …the custom from/to inputs are present (revealed only for Custom)…
-    expect(html).toMatch(/id="range-from"/);
-    expect(html).toMatch(/id="range-to"/);
-    // …and a resolved-range header is painted so the chosen window is visible.
-    expect(html).toMatch(/id="report-range"/);
+  it('the Reports view lists saved definitions with Run/Edit/kebab over listReports (§09 R08 / §12 R08)', () => {
+    const html = read('index.html');
+    const js = read('reports.js');
+    // The saved-defs list + empty state are present (the primary saved-reports surface).
+    expect(html).toMatch(/id="rep-defs"/);
+    expect(html).toMatch(/id="rep-defs-empty"/);
+    // reports.js lists the saved definitions over the SAME listReports IPC tt's `report ls`
+    // drives, and paints one card (name + spec summary) per def with Run/Edit/kebab acts…
+    expect(js).toMatch(/window\.stint\.listReports\(\)/);
+    expect(js).toMatch(/class="def-run"/);
+    expect(js).toMatch(/class="def-edit"/);
+    expect(js).toMatch(/class="def-kebab"/);
+    // …Run resolves+runs through core (runReport), Edit opens the builder, the kebab routes
+    // to rename/delete (renameReport / removeReport, parity with tt report rename/rm)…
+    expect(js).toMatch(/window\.stint\.runReport\(\{\s*ref/);
+    expect(js).toMatch(/window\.stint\.renameReport\(/);
+    expect(js).toMatch(/window\.stint\.removeReport\(/);
+    // …and the destructive delete is confirmed in-window (§12 R13).
+    expect(js).toMatch(/window\.confirm\(/);
+  });
 
-    const js = read('report.js');
-    // The preset chips send the preset NAME over window.stint.report — core resolves the
-    // bounds — and the custom path passes the user's explicit from/to straight through…
-    expect(js).toMatch(/preset:\s*range\.preset/);
-    expect(js).toMatch(/fromUtc:\s*range\.fromUtc/);
-    expect(js).toMatch(/toUtc:\s*range\.toUtc/);
-    // …the default selection is This week…
-    expect(js).toMatch(/preset:\s*'week'/);
-    // …the resolved range header is painted off the Report core returned (not re-derived)…
-    expect(js).toMatch(/report\.rangeFromUtc/);
-    expect(js).toMatch(/report\.rangeToUtc/);
-    // …and the renderer re-derives NO preset date math: no setHours/getDay/setDate week
-    // arithmetic survives (the old renderer-side thisWeekRange is gone — core owns it).
+  it('the only accent affordance in the Reports view is the single + New report primary action (§15 / G10)', () => {
+    const html = read('index.html');
+    const css = read('styles.css');
+    // The + New report action is the view's single primary action…
+    expect(html).toMatch(/id="rep-new" class="primary"/);
+    expect(html).toMatch(/\+ New report/);
+    // …it carries the accent (the one sanctioned use here)…
+    expect(css).toMatch(/#rep-new\s*\{[^}]*var\(--accent\)/s);
+    // …and the saved-definition cards + the builder + the run-output stay monochrome — none
+    // of the card affordances or the builder outline carry the accent (§15 discipline).
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.def[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.builder[^{]*\{[^}]*var\(--accent\)/s);
+  });
+
+  it('the Reports builder creates/edits a saved definition (range/group-by/filters/rounding) over save/editReport (§09 R08)', () => {
+    const html = read('index.html');
+    const js = read('reports.js');
+    // The inline builder carries: a name input, the range seg (incl Custom), the group-by
+    // seg, client/project/tag filters, the billable seg, the rounding toggle + increment.
+    expect(html).toMatch(/id="rep-builder"/);
+    expect(html).toMatch(/id="rep-name"/);
+    expect(html).toMatch(/id="rep-preset-seg"/);
+    expect(html).toMatch(/data-preset="custom"/);
+    expect(html).toMatch(/id="rep-custom-range"/);
+    expect(html).toMatch(/id="rep-by-seg"/);
+    const byValues = [...html.matchAll(/data-by="([^"]*)"/g)].map((m) => m[1]);
+    expect([...new Set(byValues)].sort()).toEqual(['client', 'day', 'project', 'tag']);
+    for (const id of ['rep-client', 'rep-project', 'rep-tag', 'rep-billable-seg']) {
+      expect(html, `index.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
+    }
+    expect(html).toMatch(/id="rep-rounding"/);
+    expect(html).toMatch(/id="rep-rounding-increment"/);
+    // The five named presets + Custom are offered…
+    for (const p of ['today', 'week', 'last-week', 'month', 'last-month']) {
+      expect(html, `index.html must offer the ${p} preset`).toMatch(new RegExp(`data-preset="${p}"`));
+    }
+    // …and the increment picker offers exactly the four core increments (default nearest 15).
+    const incrementValues = [...html.matchAll(/id="rep-rounding-increment"[\s\S]*?<\/select>/g)].join('').match(/value="(\d+)"/g) ?? [];
+    for (const v of ['6', '10', '15', '30']) {
+      expect(incrementValues.join(','), `must offer the ${v}-min increment`).toMatch(new RegExp(`"${v}"`));
+    }
+    // reports.js: Save creates a NEW def (saveReport) or amends the edited one (editReport),
+    // both at parity with tt report save / tt report edit. The renderer sends client/project
+    // IDS (never names): the client filter sends an id, an unset filter is omitted…
+    expect(js).toMatch(/window\.stint\.saveReport\(/);
+    expect(js).toMatch(/window\.stint\.editReport\(/);
+    expect(js).toMatch(/window\.stint\.showReport\(/);
+    expect(js).toMatch(/draft\.clientId\s*=\s*v === ''\s*\?\s*null\s*:\s*Number\(v\)/);
+    expect(js).toMatch(/window\.stint\.listProjects\(\{\s*clientId:\s*draft\.clientId\s*\}\)/);
+    expect(js).toMatch(/window\.stint\.listClients\(\)/);
+    // …the range-spec is a relative preset OR an absolute custom window (kind preset/absolute)…
+    expect(js).toMatch(/kind:\s*'preset'/);
+    expect(js).toMatch(/kind:\s*'absolute'/);
+    // …rounding rides the saved DEFINITION (no setSetting from the builder — it is per-def)…
+    expect(js).not.toMatch(/setSetting/);
+    // …and the renderer re-derives no preset date math (core owns resolveRange).
     expect(js).not.toMatch(/setHours\(0, 0, 0, 0\)/);
     expect(js).not.toMatch(/thisWeekRange/);
   });
 
-  it('the report view offers a Group-by control over the four groupings wired to report() (§09 R2)', () => {
-    const html = read('report.html');
-    // The Group-by segmented control exists with EXACTLY the four core groupings as its
-    // data-by values — client / project / day / tag (the §09 grouping the GUI control drives).
-    expect(html).toMatch(/id="by-seg"/);
-    const byValues = [...html.matchAll(/data-by="([^"]*)"/g)].map((m) => m[1]);
-    expect(byValues.sort()).toEqual(['client', 'day', 'project', 'tag']);
-    // Group-by labels mirror the mockup's segment (Client / Project / Day / Tag).
-    for (const label of ['Client', 'Project', 'Day', 'Tag']) {
-      expect(html, `report.html must label the ${label} grouping`).toMatch(new RegExp(`>${label}<`));
-    }
-    // Exactly one segment is active by default (Client — the default grouping).
-    expect(html).toMatch(/data-by="client"[^>]*class="seg-btn on"|class="seg-btn on"[^>]*data-by="client"/);
-
-    const js = read('report.js');
-    // report.js drives the grouping entirely through window.stint.report — no arithmetic
-    // here — sending a `by` field taken straight from the control's dataset…
-    expect(js).toMatch(/window\.stint\.report\(/);
-    expect(js).toMatch(/by:\s*opts\.by/);
-    // …the default grouping is client, and clicking a segment sets opts.by from the clicked
-    // button's data-by and re-runs the report (catching a regression to a static grouping).
-    expect(js).toMatch(/by:\s*'client'/);
-    expect(js).toMatch(/opts\.by\s*=\s*btn\.dataset\.by/);
-    expect(js).toMatch(/\$\('by-seg'\)\.addEventListener/);
-    // The grouping never re-derives keys/totals in the renderer: lines are painted straight
-    // off the Report core returns (line.key + the core-owned seconds), so the §09 R4 rule
-    // (rounding/grouping owned by core) holds — no renderer-side bucketing.
-    expect(js).toMatch(/line\.key/);
-    expect(js).not.toMatch(/reduce\(/); // no renderer-side summation of the grouped lines
-  });
-
-  it('the report view offers client/project/tag filter controls wired to report() (§09 R3, §12 R8)', () => {
-    const html = read('report.html');
-    // All four filter controls are present and discoverable: the client/project selects,
-    // the tag input, and the billable segment (the three-way control covered above).
-    for (const id of ['f-client', 'f-project', 'f-tag', 'billable-seg']) {
-      expect(html, `report.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
-    }
-    // The client/project filters default to an "All …" (no-filter) option…
-    expect(html).toMatch(/id="f-client"[\s\S]*?All clients/);
-    expect(html).toMatch(/id="f-project"[\s\S]*?All projects/);
-
-    const js = read('report.js');
-    // report.js folds the chosen client/project/tag into the report request — an unset
-    // client/project is omitted (no filter), the chosen entity id is sent (the renderer
-    // resolves no names), and the request spreads the filter params alongside the range…
-    expect(js).toMatch(/req\.clientId\s*=\s*filter\.clientId/);
-    expect(js).toMatch(/req\.projectId\s*=\s*filter\.projectId/);
-    expect(js).toMatch(/req\.tag\s*=\s*filter\.tag/);
-    expect(js).toMatch(/\.\.\.filterReq\(\)/);
-    // …the client filter sends an id (not a name), repopulating the project options from
-    // the same source tt uses, and the controls re-run the report on change…
-    expect(js).toMatch(/filter\.clientId\s*=\s*v === ''\s*\?\s*null\s*:\s*Number\(v\)/);
-    expect(js).toMatch(/window\.stint\.listProjects\(\{\s*clientId:\s*filter\.clientId\s*\}\)/);
-    expect(js).toMatch(/window\.stint\.listClients\(\)/);
-    expect(js).toMatch(/\$\('f-client'\)\.addEventListener/);
-    expect(js).toMatch(/\$\('f-tag'\)\.addEventListener/);
-  });
-
-  it('the report view offers a rounding toggle + 6/10/15/30 increment picker persisted via setSetting (§09 R4, §12 R8)', () => {
-    const html = read('report.html');
-    // The rounding control group exists: an Off/On toggle and an increment picker…
-    expect(html).toMatch(/id="rounding"/);
-    expect(html).toMatch(/id="rounding-increment"/);
-    // …the picker offers exactly the four core increments (6 / 10 / 15 / 30 min)…
-    const incrementValues = [...html.matchAll(/<option value="(\d+)"/g)].map((m) => m[1]);
-    for (const v of ['6', '10', '15', '30']) {
-      expect(incrementValues, `report.html must offer the ${v}-min increment`).toContain(v);
-    }
-    // …with nearest-15 the default (PRD §09: default nearest 15).
-    expect(html).toMatch(/<option value="15"[^>]*>[^<]*nearest 15/);
-
-    const js = read('report.js');
-    // The toggle and the increment picker BOTH persist the choice over the same setSetting
-    // channel tt config set uses (parity-covered — no new channel), then re-run the report…
-    expect(js).toMatch(/window\.stint\.setSetting\(\{\s*key:\s*'rounding',\s*value:\s*opts\.rounding\s*\}\)/);
-    expect(js).toMatch(/window\.stint\.setSetting\(\{\s*key:\s*'roundingIncrementMin',\s*value:\s*opts\.roundingIncrementMin\s*\}\)/);
-    // …the displayed line picks the rounded total when rounding is on and the exact total
-    // when off — core owns the rounding, the renderer only chooses which seconds to show…
-    expect(js).toMatch(/opts\.rounding\s*\?\s*line\.roundedSeconds\s*:\s*line\.totalSeconds/);
-    expect(js).toMatch(/opts\.rounding\s*\?\s*report\.grandRoundedSeconds\s*:\s*report\.grandTotalSeconds/);
-    // …and the increment picker is disabled/de-emphasized when rounding is off (a secondary
-    // choice once the Off/On decision is made), so the renderer re-derives no rounding.
-    expect(js).toMatch(/function reflectRounding\(\)/);
-    expect(js).toMatch(/inc\.disabled\s*=\s*!opts\.rounding/);
-    // The renderer adds no rounding arithmetic of its own (no Math.round/roundSeconds here).
-    expect(js).not.toMatch(/roundSeconds/);
-  });
-
-  it('the report view offers Export CSV/JSON over the exportEntries IPC and an on-screen summary with flags in context (§09 R6, §12 R8)', () => {
-    const html = read('report.html');
-    const js = read('report.js');
+  it('the Reports run-output paints grouped totals with flags in context + Export CSV/JSON from the saved report (§09 R09 / R06)', () => {
+    const html = read('index.html');
+    const js = read('reports.js');
     const css = read('styles.css');
-    // The on-screen grouped summary container + the two Export buttons are present and
-    // discoverable in the report view (the §09 R6 export surface over the same range).
-    expect(html).toMatch(/id="report-summary"|class="report-summary"/);
-    expect(html).toMatch(/id="report-rows"/);
-    expect(html).toMatch(/id="export-csv"/);
-    expect(html).toMatch(/id="export-json"/);
+    // The run-output panel reuses the report-summary/table chrome, plus a resolved-range
+    // header and the two Export buttons (the §09 R06 export surface over the saved range).
+    expect(html).toMatch(/id="rep-run"/);
+    expect(html).toMatch(/id="rep-run-rows"/);
+    expect(html).toMatch(/id="rep-run-range"/);
+    expect(html).toMatch(/id="rep-export-csv"/);
+    expect(html).toMatch(/id="rep-export-json"/);
     expect(html).toMatch(/Export CSV/);
     expect(html).toMatch(/Export JSON/);
-    // report.js drives the export over a dedicated exportEntries IPC channel (the renderer
-    // cannot touch fs — main writes the file), carrying the chosen format + the shown range,
-    // and never renders or builds the bytes itself…
-    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format[\s\S]*?\.\.\.rangeReq\(\)\s*\}\)/);
-    expect(js).toMatch(/exportEntries\('csv'\)/);
-    expect(js).toMatch(/exportEntries\('json'\)/);
-    expect(js).toMatch(/\$\('export-csv'\)\.addEventListener/);
-    expect(js).toMatch(/\$\('export-json'\)\.addEventListener/);
-    // …the summary surfaces flags IN CONTEXT on the affected rows via the pure window.SU
-    // .lineFlags over the core Report's overlapped / unreviewed-sleep id sets — no separate
-    // flag list and no renderer-side flag derivation beyond the set membership…
+    // reports.js paints the core Report runReport returned (lines + grand total), with flags
+    // IN CONTEXT on the affected rows via the pure window.SU.lineFlags over the Report's
+    // overlapped / unreviewed-sleep id sets — no separate flag list, no renderer flag math…
+    expect(js).toMatch(/function paintRun\(/);
     expect(js).toMatch(/lineFlags\(line,\s*report\.overlappedEntryIds,\s*report\.unreviewedSleepEntryIds\)/);
     expect(js).toMatch(/class="report-flag"/);
-    // …and the flag chip uses the --flag tokens, never the accent (§15 accent discipline);
-    // the export buttons are likewise monochrome (no accent fill/var on either).
+    // …the displayed line picks the rounded total when the def rounds, the exact total
+    // otherwise (the renderer chooses which core-owned seconds to show — no rounding math)…
+    expect(js).toMatch(/rounding\s*\?\s*line\.roundedSeconds\s*:\s*line\.totalSeconds/);
+    expect(js).toMatch(/report\.options\.rounding/);
+    expect(js).not.toMatch(/roundSeconds/);
+    // …the run-output Export buttons export FROM the saved report, carrying its ref so main
+    // exports the definition's range (byte-identical to `tt report run <name> --csv|--json`).
+    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*savedReportRef/);
+    expect(js).toMatch(/\$\('rep-export-csv'\)\.addEventListener/);
+    expect(js).toMatch(/\$\('rep-export-json'\)\.addEventListener/);
+    // The flag chip uses the --flag tokens, never the accent; the export buttons are
+    // monochrome too (no accent fill/var on either) — §15 accent discipline.
     expect(css).toMatch(/\.report-flag\s*\{[^}]*var\(--flag\)/s);
     expect(css).not.toMatch(/\.report-flag\s*\{[^}]*var\(--accent\)/s);
     expect(css).not.toMatch(/\.report-export-btn\s*\{[^}]*var\(--accent\)/s);
-  });
-
-  it('the report view lists saved reports and runs/exports them through core (§09 R09)', () => {
-    const html = read('report.html');
-    const js = read('report.js');
-    // The saved-reports rail + its run-output panel and the run-output Export buttons are
-    // present in the page (the §09 R09 surface over the saved definitions R08 persists).
-    expect(html).toMatch(/id="saved-list"/);
-    expect(html).toMatch(/id="saved-run"/);
-    expect(html).toMatch(/id="saved-run-rows"/);
-    expect(html).toMatch(/id="saved-export-csv"/);
-    expect(html).toMatch(/id="saved-export-json"/);
-    // report.js lists the saved definitions over the same listReports IPC tt's `report ls`
-    // drives, and a Run resolves+runs a definition through core (window.stint.runReport) —
-    // the renderer re-derives no range/grouping/rounding/totals…
-    expect(js).toMatch(/window\.stint\.listReports\(\)/);
-    expect(js).toMatch(/window\.stint\.runReport\(\{\s*ref/);
-    // …the run-output panel paints the core Report's lines + grand total with flags in
-    // context via window.SU.lineFlags (no renderer-side flag derivation beyond membership)…
-    expect(js).toMatch(/function paintSavedRun\(/);
-    expect(js).toMatch(/lineFlags\(line,\s*report\.overlappedEntryIds,\s*report\.unreviewedSleepEntryIds\)/);
-    // …and the run-output Export buttons export FROM the saved report, carrying its ref so
-    // main exports the definition's range (byte-identical to `tt report run <name> --csv`).
-    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*savedReportRef/);
-    expect(js).toMatch(/\$\('saved-export-csv'\)\.addEventListener/);
-    expect(js).toMatch(/\$\('saved-export-json'\)\.addEventListener/);
-    // The run-output panel adds no rounding/summation arithmetic of its own beyond choosing
-    // which core-owned seconds to show (rounded vs exact), per §09 R4.
-    expect(js).not.toMatch(/roundSeconds/);
   });
 
   it('the consolidated entry editor is a pure renderer module exposing openEditor + split/merge (§12 R6)', () => {
@@ -783,6 +800,83 @@ describe('renderer static contract', () => {
     expect(settings).toMatch(/function softwareUpdateHtml\(/);
   });
 
+  it('the Settings view ships a Software Update → Check-for-updates action over the update bridge (§19 R03)', () => {
+    const html = read('index.html');
+    const settings = read('settings.js');
+    const css = read('styles.css');
+    // The dedicated Software Update host element lives in the page (after the settings panel),
+    // and index.html still loads settings.js (which renders into it).
+    expect(html).toMatch(/id="software-update"/);
+    expect(html).toMatch(/src="settings\.js"/);
+    // settings.js renders the Check-for-updates row + button and reads the version + runs the
+    // check over the GUI-ONLY window.stint.update bridge (NOT a parity channel — no tt twin,
+    // like the tray / global hotkey). The button and the result line are present.
+    expect(settings).toMatch(/Check for updates/);
+    expect(settings).toMatch(/id="update-check"/);
+    expect(settings).toMatch(/window\.stint\.update/);
+    expect(settings).toMatch(/bridge\.getVersion\(\)/);
+    expect(settings).toMatch(/bridge\.check\(\)/);
+    // …it paints the three verdicts: up-to-date, "update available · <version>" (a link to the
+    // release), and a graceful error message — never crashing on a failed check.
+    expect(settings).toMatch(/status === 'up-to-date'/);
+    expect(settings).toMatch(/status === 'update-available'/);
+    expect(settings).toMatch(/update available · /);
+    expect(settings).toMatch(/result\.releaseUrl/);
+    expect(settings).toMatch(/result\.message/);
+    // …the release link opens in the browser (target=_blank + rel=noopener), never an
+    // in-window navigation.
+    expect(settings).toMatch(/data-update-link/);
+    expect(settings).toMatch(/setAttribute\('target',\s*'_blank'\)/);
+    // …and the Check-now button + the update pill stay monochrome — neutral background, the
+    // --flag tokens for the notice, never the accent (§15 accent discipline / R-clickability).
+    expect(css).toMatch(/\.set-update-btn\s*\{/);
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.set-update-btn[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.update-result[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.pill\.new[^{]*\{[^}]*var\(--accent\)/s);
+  });
+
+  it('the Settings view ships a Software Update → download + guided install over the update bridge (§19 R04)', () => {
+    const settings = read('settings.js');
+    const css = read('styles.css');
+    // When an update is available, the guided-install panel renders: a "Download & install"
+    // primary action wired to the GUI-ONLY window.stint.update.download() bridge (R04), a live
+    // progress bar fed by onUpdateProgress, and the numbered guided steps. After the artifact is
+    // on disk the action flips to "Reveal installer" (window.stint.update.reveal()).
+    expect(settings).toMatch(/function guidedInstallHtml\(/);
+    expect(settings).toMatch(/id="update-download"/);
+    expect(settings).toMatch(/id="update-reveal"/);
+    expect(settings).toMatch(/Download &amp; install/);
+    expect(settings).toMatch(/Reveal installer/);
+    expect(settings).toMatch(/bridge\.download\(\)/);
+    expect(settings).toMatch(/bridge\.reveal\(\)/);
+    // …progress (the live bar + numbered steps) arrives over the dedicated update-progress
+    // broadcast via the preload onUpdateProgress subscription — same shape as onChange.
+    expect(settings).toMatch(/onUpdateProgress/);
+    expect(settings).toMatch(/lastUpdateProgress/);
+    // …the three download phases each paint: downloading (a bar), ready (reveal), error (a
+    // graceful message) — never crashing on a failed download.
+    expect(settings).toMatch(/phase === 'downloading'/);
+    expect(settings).toMatch(/phase === 'ready'/);
+    expect(settings).toMatch(/phase === 'error'/);
+    // …the guided steps include the macOS one-time Gatekeeper beat — NO Developer ID /
+    // notarization (decision G3) — and the replace-the-app-in-/Applications step.
+    expect(settings).toMatch(/Gatekeeper/);
+    expect(settings).toMatch(/no Developer ID/);
+    expect(settings).toMatch(/\/Applications/);
+    // …and the panel reassures the user the database is never touched (the artifact lands in a
+    // temp folder, never beside the data — §19 R04 / §16 update-mid-timer).
+    expect(settings).toMatch(/never touch the database/);
+    // The Download & install action is this section's SINGLE accent action (button.primary);
+    // the guided panel chrome itself stays the monochrome --flag notice — never the accent
+    // beyond the one primary (§15 accent discipline / R-clickability).
+    expect(css).toMatch(/\.update\s*\{/);
+    expect(css).toMatch(/\.step\s+\.bar\s*\{/);
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.update[^-][^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.step[^{]*\{[^}]*var\(--accent\)/s);
+  });
+
   it('the Timer view ships a favorites rail wired to the favorite IPC (§05 R09)', () => {
     const html = read('index.html');
     const app = read('app.js');
@@ -801,9 +895,11 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.unpinFavorite\(\{\s*ref/);
     // …Pin captures the running timer's template (fromEntryId) or the Start form's attributes…
     expect(app).toMatch(/fromEntryId:\s*'open'/);
-    // …the rail repaints on route('timer') and over the change broadcast…
+    // …the rail repaints on route('timer') and over the change broadcast (§12 R14: a tt write
+    // on the Timer view reloads the state — repainting the card + live-edit strip — AND repaints
+    // the rail, so the in-window timer surface tracks the other surface)…
     expect(app).toMatch(/view === 'timer'\)\s*void renderFavorites/);
-    expect(app).toMatch(/activeView === 'timer'\)\s*void renderFavorites/);
+    expect(app).toMatch(/activeView === 'timer'\)\s*void load\(\)\.then\(\(\) => renderFavorites\(\)\)/);
     // …and the rail chrome is monochrome — the Pin/kebab/menu carry no accent (§15 discipline).
     expect(css).toMatch(/\.fav-pin\s*\{/);
     expect(css).toMatch(/\.fav-rail\s*\{/);
@@ -811,8 +907,46 @@ describe('renderer static contract', () => {
     expect(withoutRootVar).not.toMatch(/\.fav-(pin|kebab|card|menu)[^{]*\{[^}]*var\(--accent\)/s);
   });
 
+  it('the Timer view ships a live-edit-running strip whose edit never carries endUtc (§12 R14)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    const css = read('styles.css');
+    // The live-edit-running strip lives in the Timer view, with the no-stop pill + the
+    // "End time not editable while running" note that make the no-close contract explicit…
+    const timerView = html.match(
+      /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
+    )?.[0];
+    expect(timerView, 'index.html must declare the Timer view section').toBeTruthy();
+    expect(timerView!).toMatch(/id="live-edit"/);
+    expect(timerView!).toMatch(/id="le-desc"/);
+    expect(timerView!).toMatch(/id="le-start"/);
+    expect(timerView!).toMatch(/id="le-bill"/);
+    expect(timerView!).toMatch(/no stop/i);
+    expect(timerView!).toMatch(/End time (is )?not editable while running/i);
+    // …the strip carries NO End-time input (editing the open row must not close it)…
+    const strip = timerView!.match(/<section class="liveedit"[\s\S]*?<\/section>/)?.[0];
+    expect(strip, 'the live-edit strip must be present').toBeTruthy();
+    expect(strip!).not.toMatch(/id="le-end"/);
+    // …app.js builds the patch from only changed fields and never writes an endUtc onto it,
+    // committing through window.stint.edit({ id, patch }) so the open row stays open…
+    expect(app).toMatch(/function liveEditPatch\(strip\)/);
+    expect(app).toMatch(/window\.stint\.edit\(\{\s*id,\s*patch\s*\}\)/);
+    const patchBody = app.match(/function liveEditPatch\(strip\)\s*\{[\s\S]*?\n\}/)?.[0];
+    expect(patchBody, 'liveEditPatch body must be present').toBeTruthy();
+    expect(patchBody!).not.toMatch(/endUtc/);
+    expect(patchBody!).toMatch(/patch\.startUtc/);
+    expect(patchBody!).toMatch(/patch\.description/);
+    expect(patchBody!).toMatch(/patch\.billable/);
+    // …and the strip's chrome is monochrome — its controls carry no accent fill (§15: the
+    // accent stays on the running clock/state + the single primary Stop; the strip's dashed
+    // accent border is the sanctioned running-context use, not on any control).
+    const leControls = css.match(/\.liveedit \.le-field input[\s\S]*?\}/)?.[0];
+    expect(leControls, 'the live-edit inputs must be styled').toBeTruthy();
+    expect(leControls!).not.toMatch(/var\(--accent\)/);
+  });
+
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
-    for (const f of ['app.js', 'editor.js', 'popover.js', 'util.js', 'report.js', 'settings.js']) {
+    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       expect(src).not.toMatch(/require\(['"]node:/);
       expect(src).not.toMatch(/@stint\/core/);
@@ -824,9 +958,63 @@ describe('renderer static contract', () => {
     // page; assert it uses none of the browser request APIs. (The no-network backstop
     // now also walks this directory; this keeps the guard close to the renderer.)
     const forbidden = [/\bfetch\s*\(/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /sendBeacon/];
-    for (const f of ['app.js', 'editor.js', 'popover.js', 'util.js', 'report.js', 'settings.js']) {
+    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
     }
+  });
+
+  it('the visual time-range picker is a pure renderer component (window.STP) wired on every R15 surface (§12 R15)', () => {
+    const stp = read('timepicker.js');
+    const app = read('app.js');
+    const html = read('index.html');
+    const css = read('styles.css');
+    // timepicker.js exposes the window.STP module with STP.open + the pure geometry/snap
+    // helpers (snapTo5 / minutesToY / yToMinutes) so the guard + JUDGE can drive the math
+    // deterministically. It is a classic script (no ES module export, loads over file://).
+    expect(stp).toMatch(/window\.STP\s*=/);
+    expect(stp).toMatch(/function open\(/);
+    for (const fn of ['snapTo5', 'minutesToY', 'yToMinutes']) {
+      expect(stp, `timepicker.js must define the pure helper ${fn}`).toMatch(new RegExp(`function ${fn}\\b`));
+    }
+    expect(stp).toMatch(/snapTo5,\s*minutesToY,\s*yToMinutes/); // exported on window.STP
+    // The picker NEVER resolves anything itself — it only writes localInputValue strings back
+    // into the bound text inputs and fires input/change so the existing add/edit paths see it
+    // (text stays authoritative). No new IPC channel: it never calls window.stint.*.
+    expect(stp).toMatch(/function localInputValue\(/);
+    expect(stp).toMatch(/dispatchEvent\(new Event\('input'/);
+    expect(stp).not.toMatch(/window\.stint\./);
+    // The me-rectangle is dragged: BODY drag moves start+stop together; the BOTTOM resize
+    // grip moves only the stop. Both go through snapTo5 (the 5-min grid).
+    expect(stp).toMatch(/stp-block me/);
+    expect(stp).toMatch(/stp-resize/);
+    expect(stp).toMatch(/pointerdown/);
+    // Other entries render gray and overlaps render yellow (warn-only).
+    expect(stp).toMatch(/stp-block other/);
+    expect(stp).toMatch(/stp-overlap/);
+    // index.html loads timepicker.js BEFORE app.js (the triggers depend on window.STP)…
+    expect(html).toMatch(/src="timepicker\.js"[\s\S]*src="app\.js"/);
+    // …and the running-edit Start field carries its own calendar trigger (#le-start-pick).
+    expect(html).toMatch(/id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="le-start"/);
+    // app.js wires the picker on EVERY R15 surface: the add form (#add-from/#add-to), the
+    // inline closed-entry edit form (.edit-pick over .edit-start/.edit-end), and the
+    // running-entry start (#le-start-pick → start-only, endInput null so no stop is written).
+    expect(app).toMatch(/window\.STP\.open\(/);
+    expect(app).toMatch(/le-start-pick'\)/);
+    expect(app).toMatch(/\.edit-pick/);
+    // The running-start case opens start-only (endInput: null) so editing the open row can
+    // never write a stop (§05 R6) — the picker only writes #le-start.
+    expect(app).toMatch(/endInput:\s*null/);
+    // The closed-entry inline form binds both inputs; the open row's editEndInput is null.
+    expect(app).toMatch(/const editEndInput = running \? null : form\.querySelector\('\.edit-end'\)/);
+    // Accent discipline (§15): only the picker's primary Apply button + the "me" rectangle
+    // (and the selected calendar day) carry the accent; the rest of the chrome is monochrome.
+    expect(css).toMatch(/\.stp-block\.me\s*\{[^}]*var\(--accent\)/s);
+    expect(css).toMatch(/\.stp-apply\.primary\s*\{[^}]*var\(--accent\)/s);
+    // The non-primary picker controls (Cancel / nav / day cells / track / others) never
+    // fill with the accent — scan the rule bodies (ignoring the :root token definition).
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.stp-cancel[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.stp-block\.other[^{]*\{[^}]*var\(--accent\)/s);
   });
 });

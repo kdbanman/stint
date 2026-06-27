@@ -19,6 +19,7 @@ import {
   systemClock,
   toUtc,
   secondsBetween,
+  elapsedSeconds,
   type Clock,
 } from './time.js';
 import {
@@ -44,6 +45,12 @@ import {
   type RangePreset,
 } from './savedreport.js';
 import { toCsv, toJsonEntries, type JsonEntry } from './export.js';
+import {
+  initCheckinState,
+  CHECKIN_STATE_KEY,
+  LAST_SEEN_KEY,
+  type CheckinState,
+} from './checkin.js';
 import type {
   Entry,
   EntryView,
@@ -315,6 +322,17 @@ export class Store {
         excludedSeconds: 0,
       });
       this.applyTags(id, opts.tags ?? []);
+      // §20 R07 — seed the check-in schedule and stamp last-seen INSIDE this same
+      // transaction as the entry write. The schedule is anchored at the new open entry's
+      // start, so it can never drift from the entry it describes: either both the open row
+      // and its schedule state commit, or neither does (a crash mid-transition rolls back
+      // to the previous consistent state). The GUI tick then advances this schedule; it no
+      // longer has to lazily seed it on first tick.
+      this.writeAppStateTx(
+        CHECKIN_STATE_KEY,
+        JSON.stringify(initCheckinState(at, this.settings().firstCheckinMin)),
+      );
+      this.writeAppStateTx(LAST_SEEN_KEY, at);
       return this.withOverlapWarning(id);
     });
   }
@@ -329,6 +347,12 @@ export class Store {
         throw new StoreError('stop time is before the entry started');
       }
       this.db.prepare('UPDATE entry SET end_utc = ? WHERE id = ?').run(at, open.id);
+      // §20 R07 — clear the check-in schedule and stamp last-seen INSIDE this same
+      // transaction as the close. With nothing running the schedule is meaningless, so it
+      // commits-or-rolls-back together with the entry's end: a crash can never leave a stale
+      // schedule pointing at an entry that is no longer open.
+      this.writeAppStateTx(CHECKIN_STATE_KEY, null);
+      this.writeAppStateTx(LAST_SEEN_KEY, at);
       return this.withOverlapWarning(open.id);
     });
   }
@@ -398,6 +422,10 @@ export class Store {
         excludedSeconds: 0,
       });
       this.applyTags(id, opts.tags ?? []);
+      // §20 R07 — backfill creates a CLOSED entry (no open timer), so it must NOT establish or
+      // touch the check-in schedule: any schedule belongs to whatever is currently open, and
+      // add() never changes what is open. Deliberately no writeAppStateTx here — the schedule
+      // state is left exactly as it was (asserted by prop/appstate.test.ts).
       return this.withOverlapWarning(id);
     });
   }
@@ -736,12 +764,14 @@ export class Store {
   }
 
   /**
-   * Run a saved report against current data (PRD §09 R09): resolve its definition (the
-   * stored RangeSpec re-resolves through the SAME core resolveRange the ad-hoc report path
-   * uses; the def's grouping/filters/rounding fold in) via resolveReportDef, then reuse the
-   * one report() resolution+grouping path. So a saved report and an ad-hoc report over the
-   * same resolved range produce identical totals. `ref` is a name (case-insensitive) or a
-   * numeric id, so either surface can run a definition by whichever handle it holds.
+   * Run a saved report against current data (PRD §09 R09). `ref` is a name (case-insensitive)
+   * or a numeric id, so either surface can run a definition by whichever handle it holds.
+   *
+   * NEVER-DIVERGE GUARANTEE (the crux, stated here at the call site): the definition is resolved
+   * through resolveReportDef, which delegates to the SAME core resolveRange the ad-hoc report
+   * path uses, and then folded into the one report() resolution+grouping path. So a saved report
+   * and an ad-hoc report with identical filters over the same resolved range produce identical
+   * totals — there is exactly one place range/grouping/rounding turn into a Report.
    */
   runReport(ref: string | number, now: Date = this.now()): Report {
     const def = this.requireReportDefByRef(ref);
@@ -782,9 +812,7 @@ export class Store {
   }
 
   private findReportByName(name: string): ReportRow | undefined {
-    return this.db.prepare('SELECT * FROM report WHERE name = ? COLLATE NOCASE').get(name) as
-      | ReportRow
-      | undefined;
+    return this.findByNameCI<ReportRow>('report', name);
   }
 
   private requireReport(name: string): ReportRow {
@@ -804,9 +832,7 @@ export class Store {
    */
   private requireReportDefByRef(ref: string | number): SavedReport {
     if (typeof ref === 'number') {
-      const row = this.db.prepare('SELECT * FROM report WHERE id = ?').get(ref) as
-        | ReportRow
-        | undefined;
+      const row = this.findByIdRow<ReportRow>('report', ref);
       if (!row) throw new StoreError(`no saved report with id ${ref}`);
       return this.toSavedReport(row);
     }
@@ -814,8 +840,7 @@ export class Store {
   }
 
   private reportDefById(id: number): SavedReport {
-    const row = this.db.prepare('SELECT * FROM report WHERE id = ?').get(id) as ReportRow | undefined;
-    return this.toSavedReport(row!);
+    return this.toSavedReport(this.findByIdRow<ReportRow>('report', id)!);
   }
 
   private toSavedReport(row: ReportRow): SavedReport {
@@ -935,17 +960,13 @@ export class Store {
   }
 
   private findFavoriteRowByName(name: string): FavoriteRow | undefined {
-    return this.db.prepare('SELECT * FROM favorite WHERE name = ? COLLATE NOCASE').get(name) as
-      | FavoriteRow
-      | undefined;
+    return this.findByNameCI<FavoriteRow>('favorite', name);
   }
 
   /** Resolve a favorite handle — a numeric id OR a name (case-insensitive) — to its row. */
   private requireFavoriteRow(ref: string | number): FavoriteRow {
     if (typeof ref === 'number') {
-      const row = this.db.prepare('SELECT * FROM favorite WHERE id = ?').get(ref) as
-        | FavoriteRow
-        | undefined;
+      const row = this.findByIdRow<FavoriteRow>('favorite', ref);
       if (!row) throw new StoreError(`no favorite with id ${ref}`);
       return row;
     }
@@ -955,8 +976,7 @@ export class Store {
   }
 
   private favoriteById(id: number): Favorite {
-    const row = this.db.prepare('SELECT * FROM favorite WHERE id = ?').get(id) as FavoriteRow | undefined;
-    return this.toFavorite(row!);
+    return this.toFavorite(this.findByIdRow<FavoriteRow>('favorite', id)!);
   }
 
   private toFavorite(row: FavoriteRow): Favorite {
@@ -1282,7 +1302,82 @@ export class Store {
     this.stmt('DELETE FROM app_state WHERE key = ?').run(key);
   }
 
+  /**
+   * §20 R07 — upsert (value) or delete (null) an `app_state` key with NO transaction of its
+   * own. This is the in-transaction primitive: the entry transitions (start/stop) call it
+   * INSIDE their existing `tx()` body so the schedule/last-seen write commits atomically with
+   * the entry row. It is private precisely because an `app_state` write that changes state
+   * must ride the transaction of the entry write that changed it (the §20 R07 contract);
+   * standalone writes go through the typed methods below, each of which owns its own short tx.
+   */
+  private writeAppStateTx(key: string, value: string | null): void {
+    if (value === null) {
+      this.db.prepare('DELETE FROM app_state WHERE key = ?').run(key);
+    } else {
+      this.db
+        .prepare(
+          'INSERT INTO app_state(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        )
+        .run(key, value);
+    }
+  }
+
+  /**
+   * §20 R07 — the persisted check-in schedule for the running entry, or null when nothing is
+   * running (start() seeds it atomically; stop() clears it atomically). The GUI tick reads
+   * this instead of reaching into `app_state` by string key, so the schedule survives relaunch
+   * (§10b) on the SAME durable state the entry transitions wrote.
+   */
+  checkinState(): CheckinState | null {
+    const raw = this.getAppState(CHECKIN_STATE_KEY);
+    return raw ? (JSON.parse(raw) as CheckinState) : null;
+  }
+
+  /**
+   * §20 R07 — persist an advanced check-in schedule together with the last-seen heartbeat as
+   * ONE durable unit. The GUI tick calls this when `evaluateCheckin` advances the schedule
+   * (a fire): the schedule advance and the heartbeat that proves the app was alive at that
+   * instant commit-or-rollback together, so they can never disagree. `state === null` clears
+   * the schedule (defensive; the normal clear path is stop()).
+   */
+  setCheckinState(state: CheckinState | null, nowUtc: string): void {
+    this.tx(() => {
+      this.writeAppStateTx(CHECKIN_STATE_KEY, state === null ? null : JSON.stringify(state));
+      this.writeAppStateTx(LAST_SEEN_KEY, nowUtc);
+    });
+  }
+
+  /**
+   * §20 R07 — stamp the last-seen heartbeat (launch-time gap reconciliation, §10a). This is a
+   * standalone state write whose "same transaction as the write that changes it" IS its own
+   * short transaction — there is no entry write to ride. The GUI heartbeat path calls this.
+   */
+  recordLastSeen(nowUtc: string): void {
+    this.tx(() => {
+      this.writeAppStateTx(LAST_SEEN_KEY, nowUtc);
+    });
+  }
+
   // ---------------------------------------------------------------- internals
+
+  /**
+   * The one case-insensitive name lookup the named-entity tables (favorite, report) share —
+   * `SELECT * FROM <table> WHERE name = ? COLLATE NOCASE`. Centralising it means the unique
+   * cross-surface name handle resolves the SAME way for every such entity, instead of the
+   * SELECT being copy-pasted per entity (the favorites and saved-reports groups had it twice).
+   * `table` is an internal literal (never user input), so interpolating it carries no injection
+   * risk; the name is bound. Each caller keeps its own typed row cast and its own error strings.
+   */
+  private findByNameCI<R>(table: 'favorite' | 'report', name: string): R | undefined {
+    return this.db.prepare(`SELECT * FROM ${table} WHERE name = ? COLLATE NOCASE`).get(name) as
+      | R
+      | undefined;
+  }
+
+  /** Resolve a numeric-id row from a named-entity table (favorite, report) by primary key. */
+  private findByIdRow<R>(table: 'favorite' | 'report', id: number): R | undefined {
+    return this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as R | undefined;
+  }
 
   private requireEntry(id: number): EntryRow {
     const row = this.stmt('SELECT * FROM entry WHERE id = ?').get(id) as EntryRow | undefined;
@@ -1388,8 +1483,13 @@ export class Store {
           | undefined)?.name ?? null)
       : null;
     const sleepSpans = this.sleepSpansFor(row.id);
-    const endMs = row.end_utc ? Date.parse(row.end_utc) : now.getTime();
-    const rawSeconds = Math.max(0, Math.round((endMs - Date.parse(row.start_utc)) / 1000));
+    // Open entry: derive live elapsed through the monotonic-time guard (PRD §20 R06) so a
+    // wall-clock jump behind `start` (NTP / manual change) clamps to 0, never negative.
+    // Closed entry: span from the stored end, still clamped for safety against a corrupt
+    // stored end < start.
+    const rawSeconds = row.end_utc
+      ? Math.max(0, Math.round((Date.parse(row.end_utc) - Date.parse(row.start_utc)) / 1000))
+      : elapsedSeconds(row.start_utc, now.toISOString());
     const billableSeconds = Math.max(0, rawSeconds - row.excluded_seconds);
     return {
       id: row.id,

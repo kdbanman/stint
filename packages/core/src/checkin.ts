@@ -12,6 +12,18 @@
  * "fire once on relaunch" and "realign from wake, no backlog" from one rule.
  */
 
+/**
+ * §20 R07 — the canonical `app_state` keys for the running app's reconciliation/schedule
+ * state. Owned here, in core, so the store, the GUI, and the tests never duplicate the
+ * literal string (a typo on one surface would silently desynchronise the schedule from the
+ * entry it describes). The store writes BOTH keys inside the SAME transaction as the entry
+ * write that changes them, so a crash can never leave the open entry and its schedule state
+ * divergent.
+ */
+export const CHECKIN_STATE_KEY = 'checkin_state';
+/** §20 R07 — the last-seen heartbeat key (launch-time gap reconciliation, §10a). */
+export const LAST_SEEN_KEY = 'last_seen_utc';
+
 export interface CheckinState {
   /** When the running entry started (anchor of the nominal grid). ISO-8601 UTC. */
   startUtc: string;

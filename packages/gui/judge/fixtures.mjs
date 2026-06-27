@@ -542,6 +542,68 @@ export function settingsState() {
   return emptyState();
 }
 
+/**
+ * §19 R03/R04/R06 — the SOFTWARE_UPDATE scene's snapshot. The Settings view's Software Update
+ * group reads its version over the GUI-only window.stint.update bridge (injected by initScript's
+ * `update` option), so the snapshot itself is just the empty-state shape; the version, the
+ * check verdict, and the download progress frames are supplied via UPDATE_FIXTURE below.
+ */
+export function softwareUpdateState() {
+  return emptyState();
+}
+
+/**
+ * §19 R03/R04 — the canned Software Update bridge config the SOFTWARE_UPDATE scene injects.
+ *   - `version`  — the stamped APP_VERSION the Current-version row prints (R06; the SAME value
+ *                  `tt --version` reports — see GOLD contracts for the one shared constant).
+ *   - `verdict`  — the update-available check result (R03) Check now resolves: a newer release
+ *                  with its tag + release URL, so the result line + pill paint "update available".
+ *   - `progress` — the ordered progress frames download() replays over onUpdateProgress (R04):
+ *                  a mid-download 'downloading' frame (drives the progress bar) and the terminal
+ *                  'ready' frame, carrying the numbered guided steps incl. the one-time Gatekeeper
+ *                  beat (download → replace the app → approve once at first launch, no Developer ID).
+ */
+export const UPDATE_FIXTURE = {
+  version: '2026.6.24',
+  verdict: {
+    status: 'update-available',
+    currentVersion: '2026.6.24',
+    latestVersion: '2026.7.1',
+    releaseUrl: 'https://github.com/kdbanman/stint/releases/tag/v2026.7.1',
+  },
+  steps: [
+    'Download the new version',
+    'Replace the app in /Applications (Stint reveals the installer for you)',
+    'Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed',
+  ],
+  progress: [
+    {
+      phase: 'downloading',
+      percent: 42,
+      version: '2026.7.1',
+      steps: [
+        'Download the new version',
+        'Replace the app in /Applications (Stint reveals the installer for you)',
+        'Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed',
+      ],
+      artifactPath: null,
+      message: null,
+    },
+    {
+      phase: 'ready',
+      percent: 100,
+      version: '2026.7.1',
+      steps: [
+        'Download the new version',
+        'Replace the app in /Applications (Stint reveals the installer for you)',
+        'Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed',
+      ],
+      artifactPath: '/tmp/stint-update/Stint-2026.7.1.pkg',
+      message: null,
+    },
+  ],
+};
+
 /** The empty-state snapshot the START_ATTRIBUTES scene drives the Start form over. */
 export function startFormState() {
   return emptyState();
@@ -562,6 +624,30 @@ export function switchState() {
 /** The empty-state snapshot the ADD_FORM scene drives the manual-backfill form over. */
 export function addFormState() {
   return emptyState();
+}
+
+/**
+ * §12 R15 (G9) — the TIME_RANGE_PICKER fixture. The manual-add form reads the snapshot's
+ * CLOSED entries (via app.js snapshotEntries) so the visual picker can draw them gray on
+ * its day column and paint overlaps yellow (warn-only). Two closed entries on 2026-06-24
+ * (the day the scene fills #add-from/#add-to against, under the UTC-pinned picker page):
+ *   - 09:00–11:00 — above the dragged span, no overlap.
+ *   - 14:00–15:00 — overlaps the seeded 13:00–14:30 "me" span (14:00–14:30 → yellow).
+ * The scene runs its page in timezoneId 'UTC' so these UTC instants land on the SAME local
+ * day as the filled 2026-06-24T13:00 start, making the gray/overlap geometry deterministic.
+ */
+export function pickerState() {
+  const closed = [
+    { id: 1, description: 'morning sync', clientLabel: 'Acme / API', startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: [] },
+    { id: 2, description: 'market research', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T14:00:00Z', endUtc: '2026-06-24T15:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+  ];
+  return {
+    status: { running: false, entry: null },
+    days: [{ day: '2026-06-24', entries: closed }],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+    accent: ACCENT,
+  };
 }
 
 /**
@@ -592,6 +678,29 @@ export function reportSummaryState() {
 }
 
 /**
+ * §12 R08 / §09 R08–R09 — the saved-reports fixture. emptyState plus a seeded list of saved
+ * report definitions (window.stint.listReports returns SAVED_REPORTS below). The REPORTS_VIEW
+ * scene drives the real in-shell Reports view: the saved-definition list paints one card per
+ * def (name + spec summary + Run/Edit affordances); + New report / Edit opens the inline
+ * builder; Run paints the grouped run-output with flags in context; Export CSV/JSON drive a
+ * real exportEntries call carrying the saved ref; and the sidebar stays present with Reports
+ * active. The mock's runReport returns the flag-carrying REPORT_SUMMARY report so the run-
+ * output paints overlap + unreviewed-sleep flags on the affected rows (reusing the
+ * REPORT_SUMMARY shape).
+ */
+export function savedReportsState() {
+  return emptyState();
+}
+
+/**
+ * §09 R09 — the saved-report run-output fixture. Same as savedReportsState (the run-output
+ * is driven by clicking Run on a card); kept as a named entry point so a scene reads clearly.
+ */
+export function savedReportSummaryState() {
+  return emptyState();
+}
+
+/**
  * §09 R4 — the rounding-toggle fixture. Settings carry rounding ON at the default 15-min
  * increment, so the report view loads with the toggle checked and the increment picker
  * enabled; the ROUNDING_TOGGLE scene then drives the toggle off/on and the increment
@@ -604,6 +713,43 @@ export function roundingState() {
   const s = emptyState();
   s.settings = { ...DEFAULT_SETTINGS, rounding: true, roundingIncrementMin: 15 };
   return s;
+}
+
+/**
+ * §12 R14 (G5) — the TIMER_VIEW fixture. The same canonical runningState (a single open entry
+ * 'auth refactor' for 'Client A / API', started a fixed 01:24:07 before the pinned JUDGE clock),
+ * so the Timer view's live clock reads a deterministic 01:24:07 that advances +3s on a pinned-
+ * clock step, the running state shows, and the live-edit-running strip seeds from this entry. The
+ * scene asserts the strip's Save sends an `edit` patch carrying the start-time/attributes but
+ * NEVER endUtc (window.__EDITED__ recorded by the edit mock), so the row stays open.
+ */
+export function timerViewRunningState() {
+  return runningState();
+}
+
+/** §05 R09 — three seeded favorites for the FAVORITES_RAIL scene (name + client/project/billable
+ * meta + a one-click Resume), so the rail paints one row per FavoriteView deterministically. */
+export const FAVORITES = [
+  { id: 10, name: 'Standup', description: 'daily standup', clientId: 1, projectId: 2, billable: false, tags: ['daily'] },
+  { id: 11, name: 'Deep work', description: 'focus block', clientId: 1, projectId: 3, billable: true, tags: ['deep'] },
+  { id: 12, name: 'Admin / email', description: null, clientId: null, projectId: null, billable: true, tags: ['admin'] },
+];
+
+/**
+ * §05 R09 / §12 R14 — the FAVORITES_RAIL fixture. The running snapshot (so the Pin-as-favorite
+ * affordance reads the open entry) plus the seeded FAVORITES list the listFavorites mock returns;
+ * the scene asserts one rail row per favorite, a one-click Resume firing startFavorite({name})
+ * exactly once, the Pin/kebab affordances, and that window.stint exposes a callable method for
+ * each of the five favorite channels.
+ */
+export function timerViewFavoritesState() {
+  return runningState();
+}
+
+/** §05 R09 — the empty-favorites variant: idle, with NO favorites seeded, so the rail paints its
+ * empty state ('pin a favorite' / mentions `tt fav`) the FAVORITES_RAIL scene asserts. */
+export function timerViewEmptyFavoritesState() {
+  return emptyState();
 }
 
 // Deterministic Report objects keyed by billableFilter, so the three-way Billable toggle
@@ -883,15 +1029,52 @@ const REPORT_SUMMARY = {
   rangeToUtc: '2026-06-29T00:00:00.000Z',
 };
 
+// §12 R08 / §09 R08 — the seeded saved report definitions the Reports view's REPORTS_VIEW
+// scene lists. Each is the renderer-safe SavedReportView shape (the mirror of core's
+// SavedReport): a relative preset or absolute range-spec + group-by + billable + rounding.
+// Distinct so the list paints recognisable cards (name + spec summary) and Edit re-opens the
+// matching def. listReports returns these; showReport looks one up by name; runReport returns
+// the flag-carrying REPORT_SUMMARY report so the run-output paints flags in context.
+const SAVED_REPORTS = [
+  {
+    id: 1,
+    name: 'Weekly billables — Globex',
+    rangeSpec: { kind: 'preset', preset: 'week' },
+    by: 'project',
+    billableFilter: 'billable',
+    clientId: 2,
+    rounding: false,
+    roundingIncrementMin: 15,
+    createdUtc: '2026-06-20T10:00:00.000Z',
+  },
+  {
+    id: 2,
+    name: 'Monthly — all clients by client',
+    rangeSpec: { kind: 'preset', preset: 'last-month' },
+    by: 'client',
+    billableFilter: 'all',
+    rounding: true,
+    roundingIncrementMin: 15,
+    createdUtc: '2026-06-18T10:00:00.000Z',
+  },
+];
+
 /**
  * The mock window.stint, as an init script string parameterised by a state. When
  * `overlap` is true, every write resolves to a WriteAck carrying an overlap warning —
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, switchOnStart = false } = {}) {
   return `
     window.__STATE__ = ${stateJson};
+    // §05 R01 (RECORD only) — when set, the start mock performs core's atomic stop-then-start
+    // ON the injected snapshot: it closes any currently-open row at the pinned now and inserts a
+    // single fresh open row from the submitted attributes, so the subsequent load()/getState
+    // repaint visibly SHOWS the previous timer stopping and the new entry becoming the one live
+    // count-up (the start-while-running switch). Off by default → JUDGE's start mock is unchanged.
+    window.__SWITCH_ON_START__ = ${switchOnStart ? 'true' : 'false'};
+    window.__JUDGE_NOW__ = '${JUDGE_NOW}';
     // §09 R6: in the REPORT_SUMMARY scene the report mock routes EVERY report request to the
     // single flag-carrying REPORT_SUMMARY report, so the summary always paints the nested
     // grouping with the overlap + unreviewed-sleep flags on their affected rows.
@@ -960,7 +1143,45 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       toggle: () => Promise.resolve(window.__ACK__),
       // Records the attributed-start payload so the harness can assert the Start form
       // sends description/client/project/tags/billable (not a parameterless start).
-      start: (p) => { window.__STARTED__ = p; return Promise.resolve(window.__ACK__); },
+      start: (p) => {
+        window.__STARTED__ = p;
+        // §05 R01 (RECORD): emulate core's atomic stop-then-start on the snapshot so the
+        // recording shows the switch. Close the open row at the pinned now, then make the
+        // submitted attributes the single new open row; getState repaints the new live count-up.
+        if (window.__SWITCH_ON_START__ && window.__STATE__) {
+          const now = window.__JUDGE_NOW__;
+          const st = window.__STATE__;
+          const day = now.slice(0, 10);
+          for (const d of (st.days || [])) {
+            for (const e of d.entries) {
+              if (e.endUtc == null) {
+                e.endUtc = now;
+                const sec = Math.max(0, Math.round((Date.parse(now) - Date.parse(e.startUtc)) / 1000) - (e.excludedSeconds || 0));
+                e.billableSeconds = sec;
+                e.rawSeconds = sec;
+              }
+            }
+          }
+          const tags = Array.isArray(p && p.tags) ? p.tags.slice() : [];
+          const fresh = {
+            id: 200,
+            description: (p && p.description) || null,
+            clientLabel: [(p && p.client) || null, (p && p.project) || null].filter(Boolean).join(' / ') || null,
+            startUtc: now,
+            endUtc: null,
+            billableSeconds: 0,
+            billable: !(p && p.billable === false),
+            overlapped: false, overlapMinutes: 0, overlapRelation: null,
+            sleptThrough: false, excludedSeconds: 0, rawSeconds: 0,
+            tags,
+          };
+          let dayBlock = (st.days || []).find((d) => d.day === day);
+          if (!dayBlock) { dayBlock = { day, entries: [] }; (st.days ||= []).unshift(dayBlock); }
+          dayBlock.entries.unshift(fresh);
+          st.status = { running: true, entry: { id: fresh.id, description: fresh.description, clientLabel: fresh.clientLabel, startUtc: now, billableSeconds: 0, billable: fresh.billable, sleptThrough: false, tags } };
+        }
+        return Promise.resolve(window.__ACK__);
+      },
       // Records the backfill payload so the harness can assert the Add form sends an
       // explicit from/to plus the same attributes tt add accepts. Returns the uniform
       // WriteAck (window.__ACK__) so a backfill that lands on an overlap (overlap scene)
@@ -1134,6 +1355,108 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         }
         return Promise.resolve(this.__REPORTS__[(p && p.billableFilter)] || this.__REPORTS__.billable);
       },
+      // §12 R08 / §09 R08–R09: the saved report definitions the Reports view drives, at parity
+      // with tt report save|ls|show|rename|edit|rm|run. listReports returns the seeded defs;
+      // showReport looks one up by name (so Edit re-opens it); the mutators record their payload
+      // (and keep the in-memory list current) so a scene can assert what the builder/kebab sent;
+      // runReport returns the flag-carrying REPORT_SUMMARY report so the run-output paints the
+      // grouped totals with overlap + unreviewed-sleep flags on the affected rows. Present here
+      // so window.stint exposes EVERY IPC channel — the PARITY_REACH sub-fact reads this surface.
+      __SAVED_REPORTS__: ${JSON.stringify(SAVED_REPORTS)},
+      listReports: function () { return Promise.resolve(this.__SAVED_REPORTS__.map((d) => ({ ...d }))); },
+      showReport: function (p) {
+        const name = p && p.name;
+        const def = this.__SAVED_REPORTS__.find((d) => d.name === name);
+        return Promise.resolve(def ? { ...def } : null);
+      },
+      saveReport: function (p) {
+        window.__SAVED_REPORT__ = p;
+        const def = { id: 99, createdUtc: '2026-06-24T00:00:00.000Z', ...p };
+        this.__SAVED_REPORTS__.push(def);
+        return Promise.resolve({ ...def });
+      },
+      renameReport: function (p) {
+        window.__RENAMED_REPORT__ = p;
+        const def = this.__SAVED_REPORTS__.find((d) => d.name === (p && p.name));
+        if (def) def.name = (p && p.newName) || def.name;
+        return Promise.resolve(def ? { ...def } : null);
+      },
+      editReport: function (p) {
+        window.__EDITED_REPORT__ = p;
+        const def = this.__SAVED_REPORTS__.find((d) => d.name === (p && p.name));
+        if (def && p && p.patch) Object.assign(def, p.patch);
+        return Promise.resolve(def ? { ...def } : null);
+      },
+      removeReport: function (p) {
+        window.__REMOVED_REPORT__ = p;
+        this.__SAVED_REPORTS__ = this.__SAVED_REPORTS__.filter((d) => d.name !== (p && p.name));
+        return Promise.resolve();
+      },
+      // §09 R09: run a saved report → the SAME core Report shape the ad-hoc report channel
+      // returns. Records the ref so the scene can assert Run sent the card's name, and returns
+      // the flag-carrying summary so the run-output paints flags in context.
+      __SAVED_RUN__: ${JSON.stringify(REPORT_SUMMARY)},
+      runReport: function (p) { window.__RUN_REPORT__ = p; return Promise.resolve(this.__SAVED_RUN__); },
+      // §05 R09 / §12 R14: the Timer view's favorites rail. All five favorite channels are
+      // present so window.stint exposes a callable for each (the PARITY_REACH + FAVORITES_RAIL
+      // sub-fact) and the FAVORITES_RAIL scene can drive the rail end-to-end. listFavorites
+      // returns the seeded set (the empty-favorites variant injects []); pinFavorite records its
+      // payload and (for an explicit-name pin) appends a row so the rail repaints; rename/unpin
+      // mutate the in-memory list; startFavorite (resume) records the name so the scene asserts a
+      // one-click resume fired exactly once. Core owns the real template capture / atomic start.
+      __FAVORITES__: ${JSON.stringify(favorites)},
+      listFavorites: function () { return Promise.resolve(this.__FAVORITES__.map((f) => ({ ...f }))); },
+      pinFavorite: function (p) {
+        window.__PINNED__ = p;
+        const fav = { id: 90 + this.__FAVORITES__.length, description: null, clientId: null, projectId: null, billable: true, tags: [], ...p };
+        this.__FAVORITES__.push(fav);
+        return Promise.resolve({ ...fav });
+      },
+      renameFavorite: function (p) {
+        window.__RENAMED_FAV__ = p;
+        const f = this.__FAVORITES__.find((x) => x.id === (p && p.ref) || x.name === (p && p.ref));
+        if (f) f.name = (p && p.name) || f.name;
+        return Promise.resolve(f ? { ...f } : null);
+      },
+      unpinFavorite: function (p) {
+        window.__UNPINNED__ = p;
+        this.__FAVORITES__ = this.__FAVORITES__.filter((x) => x.id !== (p && p.ref) && x.name !== (p && p.ref));
+        return Promise.resolve();
+      },
+      startFavorite: function (p) {
+        (window.__RESUMED__ ||= []).push(p);
+        return Promise.resolve(window.__ACK__);
+      },
     };
+    // §19 R03/R04 — the GUI-only Software Update bridge (window.stint.update), mirroring the
+    // EXACT preload shape (getVersion / check / download / reveal / onUpdateProgress). It is
+    // off the parity-asserted CHANNELS set (in-app update has no tt twin), so it is injected
+    // here only for the SOFTWARE_UPDATE scene and ONLY when an update config is supplied. The
+    // mock is fully deterministic: getVersion returns the stamped version, check returns the
+    // canned verdict, and download replays the canned progress frames over the same
+    // onUpdateProgress listener the real renderer subscribes — so the harness scores the real
+    // version row, Check-now result line, progress bar, and numbered guided steps.
+    window.__UPDATE__ = ${update ? JSON.stringify(update) : 'null'};
+    if (window.__UPDATE__) {
+      window.__UPDATE_LISTENERS__ = [];
+      window.stint.update = {
+        getVersion: () => Promise.resolve(window.__UPDATE__.version),
+        check: () => { window.__CHECKED__ = true; return Promise.resolve(window.__UPDATE__.verdict); },
+        download: () => {
+          window.__DOWNLOADED__ = true;
+          for (const frame of (window.__UPDATE__.progress || [])) {
+            for (const cb of window.__UPDATE_LISTENERS__) cb(frame);
+          }
+          return Promise.resolve({ started: true });
+        },
+        reveal: () => { window.__REVEALED__ = true; return Promise.resolve(window.__UPDATE__.steps || []); },
+        onUpdateProgress: (cb) => {
+          window.__UPDATE_LISTENERS__.push(cb);
+          return () => {
+            window.__UPDATE_LISTENERS__ = window.__UPDATE_LISTENERS__.filter((x) => x !== cb);
+          };
+        },
+      };
+    }
   `;
 }

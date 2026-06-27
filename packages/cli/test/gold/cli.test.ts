@@ -93,6 +93,61 @@ describe('GOLD: tt status (§11)', () => {
   });
 });
 
+describe('GOLD: tt add backfill — the core-entry contract (§05 R05)', () => {
+  // §05 R05 is classified `core` (core data entry — manual backfill). The contract: a
+  // backfill from explicit --from/--to is a COMPLETED (closed) entry carrying those exact
+  // instants, with a billable duration computed from the span; afterward NOTHING is open.
+  // It is the CLI half of the surface-neutral BDD "Backfill creates a completed entry";
+  // this pins the serialized --json shape against the published schemas. It would fail if
+  // the add contract dropped from/to, left the entry open, or miscomputed the duration.
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+
+  it('--json emits one closed entry with the exact from/to and computed billable duration', () => {
+    tt(['client', 'add', 'Client A']);
+    tt(['project', 'add', 'API', '--client', 'Client A']);
+    const r = tt([
+      'add',
+      'spec review',
+      '--from',
+      '2026-06-24T13:00:00Z',
+      '--to',
+      '2026-06-24T14:30:00Z',
+      '--client',
+      'Client A',
+      '--project',
+      'API',
+      '--tag',
+      'deep',
+    ]);
+    expect(r.code).toBe(0);
+
+    // The serialized list/export shape validates against the published per-entry schema…
+    const rows = JSON.parse(tt(['list', ...RANGE, '--all', '--json']).out);
+    const validateList = validator('list.schema.json');
+    const validateExport = validator('export-entry.schema.json');
+    expect(validateList(rows) || validateList.errors).toBe(true);
+    expect(validateExport(rows) || validateExport.errors).toBe(true);
+    expect(rows).toHaveLength(1);
+    // …carrying the EXACT from/to instants (closed entry — end_utc is non-null)…
+    expect(rows[0]).toMatchObject({
+      description: 'spec review',
+      client: 'Client A',
+      project: 'API',
+      start_utc: '2026-06-24T13:00:00Z',
+      end_utc: '2026-06-24T14:30:00Z',
+      billable: true,
+      raw_duration_s: 5400, // 90 minutes — the span computed from from→to
+    });
+    expect(rows[0].end_utc).not.toBeNull();
+  });
+
+  it('leaves nothing open afterward — a backfill is completed, not running', () => {
+    tt(['add', 'spec review', '--from', '2026-06-24T13:00:00Z', '--to', '2026-06-24T14:30:00Z']);
+    const status = JSON.parse(tt(['status', '--json']).out);
+    expect(status).toEqual({ running: false, entry: null });
+  });
+});
+
 describe('GOLD: tt rm refusal (§06)', () => {
   it('refuses without --force and exits non-zero on stderr', () => {
     seed();
