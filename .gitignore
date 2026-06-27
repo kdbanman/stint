@@ -9,3 +9,4 @@ coverage/
 .DS_Store
 acceptance/evidence/tmp/
 packages/gui/screenshots/tmp/
+.claude/settings.local.json
