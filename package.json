@@ -26,6 +26,7 @@
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
     "verify:no-network": "node scripts/check-no-network.mjs",
+    "prejudge": "npm run build",
     "judge": "node packages/gui/judge/run-judge.mjs",
     "gui": "electron packages/gui"
   },
