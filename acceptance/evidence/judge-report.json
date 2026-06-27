@@ -10,10 +10,28 @@
       "screenshot": "main-empty.png"
     },
     {
+      "item": "NAV_SHELL",
+      "pass": true,
+      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]",
+      "screenshot": "main-nav.png"
+    },
+    {
+      "item": "KEYBOARD_FOCUS",
+      "pass": true,
+      "justification": "Tab-walk reached 25/25 controls (empty) and 32/32 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "screenshot": "main-focus.png"
+    },
+    {
       "item": "TRAY_COUNTUP",
       "pass": true,
       "justification": "popover count advanced 01:24:07 → 01:24:10 (+3s)",
       "screenshot": "popover-running-2.png"
+    },
+    {
+      "item": "IN_WINDOW_TIMER",
+      "pass": true,
+      "justification": "in-window Active-Timer card count advanced 01:24:07 → 01:24:10 (+3s); {\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"hasSwitch\":true}",
+      "screenshot": "main-timer.png"
     },
     {
       "item": "ACCENT_DISCIPLINE",
@@ -24,13 +42,175 @@
     {
       "item": "FLAG_IN_CONTEXT",
       "pass": true,
-      "justification": "overlap flag on row, slept flag + subtract on slept row: {\"overlapFlag\":true,\"sleptFlag\":true,\"subtractBtn\":true}",
+      "justification": "overlap flag + detailed banner (\"Overlap: 30m with previous entry\") on row, slept flag + subtract + struck raw duration beside trimmed billable on slept row: {\"overlapFlag\":true,\"sleptFlag\":true,\"subtractBtn\":true,\"overlapBannerText\":\"Overlap: 30m with previous entry\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"}",
       "screenshot": "main-flags.png"
+    },
+    {
+      "item": "START_ATTRIBUTES",
+      "pass": true,
+      "justification": "Start form sent: {\"billable\":false,\"description\":\"auth refactor\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}",
+      "screenshot": "main-start-form.png"
+    },
+    {
+      "item": "START_FORM",
+      "pass": true,
+      "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"switchHiddenWhenIdle\":true}; running surface offers Switch={\"present\":true,\"visible\":true,\"label\":\"Switch\"}",
+      "screenshot": "main-start-form.png"
+    },
+    {
+      "item": "ADD_FORM",
+      "pass": true,
+      "justification": "add form visible=true, fields={\"from\":true,\"to\":true,\"desc\":true,\"client\":true,\"project\":true,\"bill\":true,\"tags\":true}, saveAccent=true",
+      "screenshot": "add-form.png"
+    },
+    {
+      "item": "MANUAL_ADD_FORM",
+      "pass": true,
+      "justification": "backfill payload={\"fromLocal\":\"2026-06-24T09:00\",\"toLocal\":\"2026-06-24T10:00\",\"billable\":true,\"description\":\"backfilled call\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}; overlap warned-not-blocked (form closed=true, banner={\"visible\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"role\":\"status\",\"ariaLive\":\"polite\"})",
+      "screenshot": "main-add-form.png"
+    },
+    {
+      "item": "EDIT_RUNNING",
+      "pass": true,
+      "justification": "inline edit form on running row: {\"formVisible\":true,\"descSeeded\":\"auth refactor\",\"startSeeded\":true,\"stillRunning\":true}",
+      "screenshot": "main-edit-running.png"
+    },
+    {
+      "item": "EDIT_INLINE",
+      "pass": true,
+      "justification": "inline edit form seeded in-context: {\"inContext\":true,\"descSeeded\":\"design review\",\"startSeeded\":true,\"endPresent\":true,\"endSeeded\":true,\"billSeeded\":true,\"clientOptions\":3,\"clientSeeded\":\"1\"}",
+      "screenshot": "main-edit.png"
+    },
+    {
+      "item": "INLINE_EDITOR",
+      "pass": true,
+      "justification": "kebab opens the consolidated editor with every tt-editable field + Split/Merge reachable: {\"fields\":{\"description\":true,\"client\":true,\"project\":true,\"start\":true,\"end\":true,\"tags\":true,\"billable\":true},\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"splitReachable\":true,\"rowSelect\":true,\"mergeWiring\":true}",
+      "screenshot": "main-editor.png"
+    },
+    {
+      "item": "OVERLAP_BANNER",
+      "pass": true,
+      "justification": "overlap write raises inline banner (hidden before=true): {\"visible\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"role\":\"status\",\"ariaLive\":\"polite\"}",
+      "screenshot": "main-overlap-banner.png"
+    },
+    {
+      "item": "SPLIT_AFFORDANCE",
+      "pass": true,
+      "justification": "closed row exposes Split (open row none=true); split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
+      "screenshot": "main-split.png"
+    },
+    {
+      "item": "MERGE_CONFLICT",
+      "pass": true,
+      "justification": "merge bar hidden until 2 selected (true); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
+      "screenshot": "main-merge-conflict.png"
+    },
+    {
+      "item": "MERGE_NOCONFLICT",
+      "pass": true,
+      "justification": "agreeing selection merges with no prompt: {\"promptShown\":false,\"merged\":{\"ids\":[50,51]}}",
+      "screenshot": "main-merge-conflict.png"
+    },
+    {
+      "item": "DELETE_CONFIRM",
+      "pass": true,
+      "justification": "delete arms a confirm step, no immediate remove: {\"confirmShown\":true,\"confirmText\":true,\"confirmBtn\":true,\"removed\":false}",
+      "screenshot": "main-edit.png"
+    },
+    {
+      "item": "CONFIRM_DELETE",
+      "pass": true,
+      "justification": "single Delete click surfaces a confirm and does not remove (calls after arm=0); only the explicit confirm removes, exactly once: [{\"id\":20}]",
+      "screenshot": "main-confirm-delete.png"
+    },
+    {
+      "item": "CONFIRM_DESTRUCTIVE",
+      "pass": true,
+      "justification": "Delete confirms before acting: present pre-confirm=true (remove calls=0); gone post-confirm=true, removed once: [{\"id\":20}]",
+      "screenshot": "main-confirm.png"
+    },
+    {
+      "item": "SWITCH_AFFORDANCE",
+      "pass": true,
+      "justification": "Switch visible while running: main={\"present\":true,\"visible\":true} popover={\"present\":true,\"visible\":true}; idle main={\"present\":true,\"visible\":false}",
+      "screenshot": "main-running.png"
+    },
+    {
+      "item": "CLIENTS_VIEW",
+      "pass": true,
+      "justification": "clients listed with nested projects, rename/archive in place, accent discipline holds: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[]}",
+      "screenshot": "main-clients.png"
+    },
+    {
+      "item": "TAG_CHIPS",
+      "pass": true,
+      "justification": "tags render as chips on rows + running summary, in-context edit affordance present: {\"openRowChips\":[\"deep\",\"urgent\"],\"closedRowChips\":[\"meeting\"],\"summaryChips\":[\"deep\",\"urgent\"],\"openEditTags\":true,\"closedEditTags\":true,\"totalRowChips\":3}",
+      "screenshot": "main-tags.png"
+    },
+    {
+      "item": "REPORT_BILLABLE_TOGGLE",
+      "pass": true,
+      "justification": "billable toggle: default={\"labels\":[\"Billable only\",\"All\",\"Non-billable\"],\"activeCount\":1,\"activeFilter\":\"billable\",\"loadFilter\":\"billable\",\"total\":\"5h 00m\"} → all={\"reqFilter\":\"all\",\"activeFilter\":[\"all\"],\"total\":\"8h 00m\"} → non-billable={\"reqFilter\":\"non-billable\",\"activeFilter\":[\"non-billable\"],\"total\":\"3h 00m\"}",
+      "screenshot": "report-billable.png"
+    },
+    {
+      "item": "REPORT_RANGE_PICKER",
+      "pass": true,
+      "justification": "range picker: default={\"labels\":[\"Today\",\"This week\",\"Last week\",\"This month\",\"Last month\",\"Custom…\"],\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"activeCount\":1,\"activePreset\":\"week\",\"loadPreset\":\"week\",\"customFrom\":true,\"customTo\":true,\"customHidden\":true,\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"rows\":[\"Acme\",\"Globex\"],\"total\":\"5h 00m\"} → last-week={\"reqPreset\":\"last-week\",\"activePreset\":[\"last-week\"],\"rangeHeader\":\"Jun 15, 2026 → Jun 21, 2026\",\"rows\":[\"Globex\"],\"total\":\"7h 00m\"} → custom={\"req\":{\"fromUtc\":\"2026-06-10T00:00:00.000Z\",\"toUtc\":\"2026-06-13T00:00:00.000Z\",\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"activePreset\":[\"custom\"],\"customVisible\":true,\"rangeHeader\":\"Jun 10, 2026 → Jun 12, 2026\",\"total\":\"3h 30m\"}",
+      "screenshot": "reports-default.png"
+    },
+    {
+      "item": "REPORT_GROUPING",
+      "pass": true,
+      "justification": "group-by: default={\"labels\":[\"Client\",\"Project\",\"Day\",\"Tag\"],\"options\":[\"client\",\"project\",\"day\",\"tag\"],\"activeCount\":1,\"activeBy\":\"client\",\"loadBy\":\"client\",\"rows\":[\"Acme\",\"Globex\"],\"total\":\"5h 00m\"} → day={\"reqBy\":\"day\",\"activeBy\":[\"day\"],\"rows\":[\"2026-06-23\",\"2026-06-24\"],\"total\":\"5h 00m\"}",
+      "screenshot": "main-report-client.png"
+    },
+    {
+      "item": "REPORT_FILTERS",
+      "pass": true,
+      "justification": "report filters: controls present=true, default={\"hasClient\":true,\"hasProject\":true,\"hasTag\":true,\"hasBillable\":true,\"clientOptions\":[\"All clients\",\"Acme\",\"Globex\"],\"projectDisabled\":true,\"loadReq\":{\"preset\":\"week\",\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"total\":\"5h 00m\",\"rows\":[\"Acme\",\"Globex\"]} → billable 'all' reran=true → client={\"reqClientId\":1,\"projectEnabled\":true,\"total\":\"2h 00m\",\"rows\":[\"Acme\"]} (base total 5h 00m)",
+      "screenshot": "report-filters.png"
+    },
+    {
+      "item": "ROUNDING_TOGGLE",
+      "pass": true,
+      "justification": "rounding controls: on(default)={\"toggleChecked\":true,\"incrementOptions\":[\"15\",\"6\",\"10\",\"30\"],\"activeIncrement\":\"15\",\"incrementDisabled\":false,\"line\":\"1h 30m\",\"setSetting\":null} → off={\"toggleChecked\":false,\"incrementDisabled\":true,\"line\":\"1h 37m\",\"setSetting\":{\"key\":\"rounding\",\"value\":false}} → increment 30={\"setSetting\":{\"key\":\"roundingIncrementMin\",\"value\":30},\"line\":\"1h 30m\"}",
+      "screenshot": "reports-rounding.png"
+    },
+    {
+      "item": "REPORT_SUMMARY",
+      "pass": true,
+      "justification": "report summary: {\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"lineTotals\":[\"16h 50m\",\"7h 30m\",\"9h 20m\",\"4h 45m\",\"4h 45m\"],\"grand\":\"21h 35m\",\"headTotal\":\"21h 35m\",\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutsideTable\":0,\"hasCsv\":true,\"hasJson\":true,\"exportAccented\":false} → export CSV={\"format\":\"csv\",\"preset\":\"week\"} JSON={\"format\":\"json\",\"preset\":\"week\"}",
+      "screenshot": "reports-summary.png"
+    },
+    {
+      "item": "ENTRY_LIST_SEARCH",
+      "pass": true,
+      "justification": "entry list: default={\"byOptions\":[\"day\",\"client\",\"project\",\"tag\"],\"byActive\":[\"day\"],\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"rowCount\":4,\"groupHeads\":[\"2026-06-24\",\"2026-06-23\"]} → search={\"reqSearch\":\"refactor\",\"rowCount\":2,\"descs\":[\"auth refactorAcme / APIdeep⋯EditEdit tagsSplitDelete\",\"refactor testsGlobex / Opsci⋯EditEdit tagsSplitDelete\"]} → by client={\"reqBy\":\"client\",\"byActive\":[\"client\"],\"groupHeads\":[\"Acme\",\"Globex\"],\"rowCount\":4}",
+      "screenshot": "entries-grouped.png"
+    },
+    {
+      "item": "LIVE_FILTER",
+      "pass": true,
+      "justification": "live filter: list 4→2→4 rows, report total 5.00h→3.50h→5.00h (both reflect the selection live; getState unchanged during the keystroke: true)",
+      "screenshot": "main-filtered.png"
+    },
+    {
+      "item": "SETTINGS_VIEW",
+      "pass": true,
+      "justification": "settings panel exposes all eight §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"accent\",\"dateFormat\"]), accent discipline holds (offenders=[none]), accent-usage edit fired setSetting={\"key\":\"accent\",\"value\":\"monochrome\"}",
+      "screenshot": "main-settings.png"
+    },
+    {
+      "item": "PARITY_REACH",
+      "pass": true,
+      "justification": "window.stint exposes 28/28 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
+      "screenshot": "parity-settings.png"
     },
     {
       "item": "DESKTOP_FEEL",
       "pass": null,
-      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-flags, popover-running)",
+      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-editor, main-tags, main-report-client, main-report-day, main-focus, popover-running)",
       "screenshot": "main-running.png"
     }
   ]
