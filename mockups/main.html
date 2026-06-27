@@ -6,7 +6,12 @@
 <title>Stint — Entries (mockup)</title>
 <!--
   Slightly-noisy UI prototype for the Stint main window — Entries view.
-  Standalone, dependency-free; design intent for PRD §12 (R3–R9, R13).
+  Standalone, dependency-free; design intent for PRD §12 (R03–R09, R13).
+  Reflects the transition: sidebar present in every view & fixed width on
+  resize (§12 R03/G7); one clickability convention (§15/G10 — clickable text
+  carries the neutral button background, accent reserved for the single primary
+  action); the "This week" summary opens the in-sidebar Reports view (§12 R08/G7);
+  tray single-click = compact popover, no dropdown menu (§12 R01/G8).
   This shows MORE than ships today and uses illustrative sample data.
   Where this and the PRD disagree, the PRD wins. Keep this in sync with §12.
 -->
@@ -31,7 +36,14 @@
   .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600;pointer-events:none}
   /* shell */
   .shell{display:flex;min-height:560px}
+  /* sidebar present in every view; flex:none keeps it a FIXED width on resize (§12 R03/G7) */
   .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
+  .nav .wk{margin-top:14px;padding:10px;border-top:1px solid var(--rule)}
+  .nav .wk .wlbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:6px}
+  /* clickable text → neutral button background (§15/G10) */
+  .nav .wk a{display:block;background:var(--wash);border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:12.5px;color:var(--ink-soft);text-decoration:none}
+  .nav .wk a:hover{background:#ededf0}
+  .nav .wk a b{display:block;color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums;margin-top:2px}
   .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;font-size:14px;margin-bottom:2px}
   .nav a .ic{width:18px;text-align:center;opacity:.7}
   .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
@@ -81,14 +93,17 @@
   .bill{font-variant-numeric:tabular-nums;font-size:13px;display:flex;gap:6px;align-items:center}
   .strike{color:var(--faint);text-decoration:line-through}
   .flagpin{color:var(--flag)}
-  .kebab{color:var(--faint);cursor:pointer;padding:0 4px;font-size:16px}
+  .kebab{color:var(--ink-soft);cursor:pointer;font-size:15px;background:var(--wash);border:1px solid var(--rule);border-radius:6px;padding:1px 7px}
+  .kebab:hover{background:#ededf0}
   .banner{margin:2px 0 2px 30px;border-radius:6px;padding:4px 12px;font-size:12.5px}
   .banner.overlap{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink)}
   .banner.sleep{background:var(--sleep-bg);border:1px solid var(--sleep-bd);color:var(--ink-soft)}
-  .sublink{display:block;margin:2px 0 4px 168px;font-size:12.5px;color:var(--accent);cursor:pointer}
+  /* clickable text affordance carries the neutral button background, NOT accent (§15/G10) */
+  .sublink{display:inline-block;margin:2px 0 4px 168px;font-size:12px;color:var(--ink-soft);background:var(--wash);border:1px solid var(--rule);border-radius:6px;padding:3px 9px;cursor:pointer}
+  .sublink:hover{background:#ededf0}
   /* FAB */
   .fab{position:absolute;right:22px;bottom:18px;background:#fff;border:1px solid var(--rule-strong);border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.12);padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
-  .fab .plus{color:var(--accent);font-size:16px}
+  .fab .plus{color:var(--ink-soft);font-size:16px}
   .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
 </style>
 </head>
@@ -100,11 +115,16 @@
     </div>
     <div class="shell">
       <nav class="nav">
-        <a href="#"><span class="ic">◷</span> Timer</a>
+        <a href="timer.html"><span class="ic">◷</span> Timer</a>
         <a href="#" class="active"><span class="ic">▤</span> Entries</a>
         <a href="#"><span class="ic">◎</span> Clients</a>
         <a href="reports.html"><span class="ic">▥</span> Reports</a>
         <a href="settings.html"><span class="ic">⚙</span> Settings</a>
+        <!-- "This week" summary opens the in-sidebar Reports view (§12 R08/G7), not a separate page -->
+        <div class="wk">
+          <div class="wlbl">This week</div>
+          <a href="reports.html" title="Opens the Reports view">21h 35m billable<b>→ open Reports</b></a>
+        </div>
       </nav>
       <div class="main">
 
@@ -192,10 +212,10 @@
 
         </div>
 
-        <div class="fab"><span class="plus">+</span> Add Entry Manually</div>
+        <a href="edit-entry.html" class="fab" style="text-decoration:none;color:var(--ink)"><span class="plus">+</span> Add Entry Manually</a>
       </div>
     </div>
-    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §12 · not a screenshot of the current build</div>
+    <div class="note-strip">Tray: a single left-click opens the compact popover (Stop / Switch / Start + Open Stint) — no dropdown menu (§12 R01/G8). · Manual add opens the entry form with the visual time-range picker (§12 R15). · Slightly-noisy UI prototype · not a screenshot of the current build</div>
   </div>
 </body>
 </html>

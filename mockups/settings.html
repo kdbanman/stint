@@ -6,7 +6,8 @@
 <title>Stint — Settings (mockup)</title>
 <!--
   Slightly-noisy UI prototype for the Stint settings view.
-  Design intent for PRD §14 and §12 R11. Keep in sync with the PRD.
+  Design intent for PRD §14, §12 R11, §19 R03/R04/R06 (Software Update),
+  §20 R04/R05 (Backups & recovery), §17 R12/R13. Keep in sync with the PRD.
 -->
 <style>
   :root{
@@ -44,6 +45,23 @@
   .switch i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff}
   .switch.on{background:var(--accent)}.switch.on i{left:17px}
   .hk{font-family:var(--mono);font-size:12.5px;border:1px solid var(--rule-strong);border-radius:6px;padding:5px 10px;background:#fafafb}
+  button{font-family:inherit;font-size:13px;border-radius:7px;padding:7px 13px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  .ver{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft)}
+  .pill{font-size:11px;border-radius:11px;padding:1px 9px;border:1px solid var(--rule-strong);color:var(--muted);background:#fafafb}
+  .pill.ok{color:#1f7a44;background:#e8f6ee;border-color:#bfe3cc}
+  .pill.new{color:var(--accent);background:var(--accent-soft);border-color:#c4d6fb}
+  /* guided in-app update flow (§19 R04) */
+  .update{margin:8px 0 4px;border:1px solid #c4d6fb;background:var(--accent-soft);border-radius:9px;padding:12px 14px}
+  .update .uhd{font-size:13px;font-weight:680;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
+  .steps{display:flex;flex-direction:column;gap:7px}
+  .step{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-soft)}
+  .step .n{width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+  .step.done .n{background:var(--accent);color:#fff}
+  .step .bar{flex:1;height:6px;border-radius:3px;background:#d6e2fb;overflow:hidden}
+  .step .bar i{display:block;height:100%;width:62%;background:var(--accent)}
+  .step .gate{font-size:11px;color:var(--muted)}
+  .restore-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.4}
   .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
 </style>
 </head>
@@ -52,7 +70,7 @@
     <div class="titlebar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="title">Stint — Settings</div></div>
     <div class="shell">
       <nav class="nav">
-        <a href="#"><span class="ic">◷</span> Timer</a>
+        <a href="timer.html"><span class="ic">◷</span> Timer</a>
         <a href="main.html"><span class="ic">▤</span> Entries</a>
         <a href="#"><span class="ic">◎</span> Clients</a>
         <a href="reports.html"><span class="ic">▥</span> Reports</a>
@@ -75,6 +93,41 @@
         <div class="row"><div class="k">Global hotkey <small>Toggles the timer from anywhere.</small></div><span class="hk">Ctrl + Alt + T</span></div>
         <div class="row"><div class="k">Accent usage</div><select class="field"><option selected>System accent (primary action only)</option><option>Monochrome</option></select></div>
         <div class="row"><div class="k">Date / number format</div><select class="field"><option selected>System locale</option></select></div>
+
+        <!-- Software Update (§19 R03/R04/R06) -->
+        <div class="grp">Software Update</div>
+        <div class="row">
+          <div class="k">Current version <small>Date/build versioning · macOS + Linux only.</small></div>
+          <span><span class="ver">2026.6.27.2</span> &nbsp; <span class="pill new">update available · 2026.6.27.3</span></span>
+        </div>
+        <div class="row">
+          <div class="k">Check for updates <small>Queries GitHub Releases. Updates never touch the database.</small></div>
+          <span><button>Check now</button></span>
+        </div>
+        <div class="update">
+          <div class="uhd">⬇ Guided install — downloading 2026.6.27.3</div>
+          <div class="steps">
+            <div class="step"><span class="n">1</span><span class="bar"><i></i></span><span>Downloading artifact… 62%</span></div>
+            <div class="step"><span class="n">2</span>Replace the app in /Applications (Stint walks you through it)</div>
+            <div class="step"><span class="n">3</span>Approve once at first launch <span class="gate">— one-time Gatekeeper clearance, no Developer ID needed</span></div>
+          </div>
+        </div>
+
+        <!-- Backups & recovery (§20 R04/R05, §17 R12) -->
+        <div class="grp">Backups</div>
+        <div class="row">
+          <div class="k">Last backup <small>Automatic timestamped copy on launch when the database changed.</small></div>
+          <span><span class="ver">2026-06-27 08:59</span> &nbsp; <span class="pill ok">verified</span></span>
+        </div>
+        <div class="row">
+          <div class="k">Retention <small>Keeps the most recent backups beside the database.</small></div>
+          <select class="field"><option>keep last 3</option><option selected>keep last 5</option><option>keep last 10</option></select>
+        </div>
+        <div class="row">
+          <div class="k">Restore from backup <small>Replaces the current database with a chosen good copy.</small></div>
+          <span><button>Restore…</button></span>
+        </div>
+        <p class="restore-note">On open, Stint runs an integrity check. If the database is corrupt it is quarantined as <code>.corrupted</code> and the latest good backup is restored automatically — you are told, and nothing is silently lost.</p>
       </div>
     </div>
     <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §14 + §12 R11 · not a screenshot of the current build</div>

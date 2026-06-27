@@ -6,7 +6,9 @@
 <title>Stint — Edit / Add entry (mockup)</title>
 <!--
   Slightly-noisy UI prototype for the inline entry editor / manual-add form.
-  Design intent for PRD §05 R5/R6, §06, §12 R5–R7. Keep in sync with the PRD.
+  Design intent for PRD §05 R05/R06, §06 R04, §12 R05–R07, and §12 R15
+  (the visual time-range picker wires into the Start/End fields; text entry
+  remains and stays authoritative). Keep in sync with the PRD.
 -->
 <style>
   :root{
@@ -29,6 +31,12 @@
   .f label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
   .f input,.f select,.f textarea{width:100%;font-family:inherit;font-size:14px;border:1px solid var(--rule-strong);border-radius:7px;padding:8px 10px;color:var(--ink);background:#fff}
   .f textarea{resize:vertical;min-height:38px}
+  /* time field with a calendar icon that opens the visual time-range picker (§12 R15) */
+  .timefield{position:relative}
+  .timefield input{padding-right:34px;font-family:var(--mono);font-size:13px}
+  .timefield .cal{position:absolute;right:8px;bottom:8px;cursor:pointer;color:var(--accent);font-size:15px}
+  .pickhint{font-size:11.5px;color:var(--muted);margin:-8px 0 14px;display:flex;gap:6px;align-items:center}
+  .pickhint a{color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:6px;padding:2px 8px;text-decoration:none}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
   .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--rule-strong);border-radius:7px;padding:6px 8px;min-height:38px}
   .chip{font-size:12px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:2px 9px;display:flex;gap:6px;align-items:center}
@@ -65,9 +73,10 @@
           <div class="f"><label>Project</label><select><option>Q3 Strategy</option><option>Project Alpha</option><option>+ New project…</option></select></div>
         </div>
         <div class="two">
-          <div class="f"><label>Start</label><input value="2026-06-22 10:30"></div>
-          <div class="f"><label>End</label><input value="2026-06-22 16:15"></div>
+          <div class="f timefield"><label>Start</label><input value="2026-06-22 10:30"><a class="cal" href="time-range-picker.html" title="Open time-range picker">▦</a></div>
+          <div class="f timefield"><label>End</label><input value="2026-06-22 16:15"><a class="cal" href="time-range-picker.html" title="Open time-range picker">▦</a></div>
         </div>
+        <div class="pickhint">Type the times, or <a href="time-range-picker.html">▦ open the visual picker</a> to drag start &amp; stop. Text stays authoritative · overnight spans use text entry.</div>
         <div class="warn">⚠ Overlaps “Researching market trends” (13:00–15:45) by 2h 45m. Allowed — will be flagged in reports.</div>
         <div class="f">
           <label>Tags</label>
