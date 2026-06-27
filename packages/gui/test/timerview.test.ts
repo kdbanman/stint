@@ -38,7 +38,9 @@ const baseSettings = {
   backupRetention: 7,
 };
 
-function runningSnapshot(over: Partial<UiState['status']['entry']> = {}): UiState {
+function runningSnapshot(
+  over: Partial<NonNullable<UiState['status']['entry']> & { excludedSeconds?: number }> = {},
+): UiState {
   return {
     status: {
       running: true,
@@ -193,12 +195,12 @@ describe('favoriteRows — project the rail rows (§12 R14 / §05 R09)', () => {
       billable: false,
       resumeName: 'Standup',
     });
-    expect(rows[1].meta).toBe('Client A / Alpha · billable');
+    expect(rows[1]!.meta).toBe('Client A / Alpha · billable');
   });
 
   it('a clientless favorite shows just the billable word', () => {
     const rows = favoriteRows(favs, labelFor);
-    expect(rows[2].meta).toBe('billable');
+    expect(rows[2]!.meta).toBe('billable');
   });
 
   it('the resume handle is the favorite name (parity with tt fav start <name>)', () => {

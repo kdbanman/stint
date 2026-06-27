@@ -604,7 +604,7 @@ describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
   const section = (() => {
     const m = prd.match(/<section id="s11">([\s\S]*?)<\/section>/);
     if (!m) throw new Error('§11 <section id="s11"> not found in prd.html');
-    return m[1];
+    return m[1] ?? '';
   })();
 
   /** Map each §11 table row's Command cell text → its Does cell HTML. */
@@ -613,7 +613,7 @@ describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
     const rowRe = /<tr>([\s\S]*?)<\/tr>/g;
     let rm: RegExpExecArray | null;
     while ((rm = rowRe.exec(section))) {
-      const cells = [...rm[1].matchAll(/<td[^>]*data-l="([^"]+)"[^>]*>([\s\S]*?)<\/td>/g)];
+      const cells = [...(rm[1] ?? '').matchAll(/<td[^>]*data-l="([^"]+)"[^>]*>([\s\S]*?)<\/td>/g)];
       const cmd = cells.find((c) => c[1] === 'Command')?.[2];
       const does = cells.find((c) => c[1] === 'Does')?.[2];
       if (cmd === undefined || does === undefined) continue; // header row
