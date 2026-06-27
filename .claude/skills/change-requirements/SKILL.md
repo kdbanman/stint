@@ -222,10 +222,14 @@ pending work. It must encode these stages in order:
    - all **changed/new GUI requirements** (every `Rec ▶` row);
    - all **code-change-adjacent requirements** demonstrable in the GUI.
    Recordings land under `acceptance/evidence/recordings/`, indexed by
-   requirement id, and **embedded** in the PR body (not linked by path) with
-   `<video src="<github-video-url>" autoplay loop muted controls></video>` —
-   upload each `.webm` to GitHub (drag-drop in the web editor, or commit it and
-   use its raw URL) to obtain the URL.
+   requirement id, and surfaced in the PR body. For **inline autoplay**, the
+   `.webm` must be drag-dropped into GitHub's web editor (yields a
+   `user-attachments` URL) and embedded with
+   `<video src="<github-attachment-url>" autoplay loop muted controls></video>`
+   — GitHub's CSP only allows media from its attachment host, so committed
+   `raw.githubusercontent.com` URLs will NOT play inline. Without a manual
+   upload, commit the files and link each to its **blob view**
+   (`.../blob/<sha>/...`), which plays on click.
 7. **Evidence aggregation → one GitHub PR** — collect AC evidence, both review
    reports, and the recordings into a single PR.
 8. **Auto-swap, gated on all-green** — only when every requirement has passing AC
