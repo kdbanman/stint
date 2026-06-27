@@ -429,7 +429,7 @@ export class CoreWorld implements World {
   getConfig(key: string): string {
     const d = settingDescriptor(key);
     if (!d) throw new Error(`unknown setting "${key}"`);
-    return String((this.store.settings() as Record<string, unknown>)[d.key]);
+    return String((this.store.settings() as unknown as Record<string, unknown>)[d.key]);
   }
   list(): EntryRec[] {
     return this.store.listEntries().map((e) => ({
