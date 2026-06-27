@@ -10,3 +10,6 @@ coverage/
 acceptance/evidence/tmp/
 packages/gui/screenshots/tmp/
 .claude/settings.local.json
+.claude/worktrees/
+acceptance/evidence/recordings/*.webm
+acceptance/evidence/recordings/*.mp4

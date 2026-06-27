@@ -178,6 +178,12 @@ export interface UiState {
     accent: string;
     /** §12 R11 — date rendering mode ('system' | 'iso'). */
     dateFormat: string;
+    /**
+     * §20 R04 — how many automatic timestamped backups to keep beside the database. The
+     * Settings → Backups retention picker paints this and changes it over the existing
+     * `setSetting` channel (key `backupRetention`), parity with `tt config set backup_retention`.
+     */
+    backupRetention: number;
   };
   /** The system accent colour string (e.g. '#2f6fed') for theming — see settings.accent for the mode. */
   accent: string;
@@ -286,4 +292,30 @@ export interface SavedReportInputView {
   search?: string;
   rounding: boolean;
   roundingIncrementMin: number;
+}
+
+/**
+ * §19 R04 — the renderer-safe progress value the Settings → Software Update panel paints as a
+ * live progress bar + numbered guided steps. The main process pushes it over the dedicated
+ * `update-progress` broadcast (mirroring the existing `changed` broadcast), exposed to the
+ * renderer via preload's `onUpdateProgress`. No core import in the page (renderer-safe shape).
+ *
+ *  - `phase`        — 'downloading' while bytes stream, 'ready' once the artifact is on disk
+ *                     (and revealable), 'error' on failure.
+ *  - `percent`      — clamped [0,100] download progress for the `.bar`.
+ *  - `version`      — the version being installed (the guided-install header).
+ *  - `steps`        — the ordered, platform-specific guided-install plan (numbered steps:
+ *                     download → replace the app in /Applications → approve once at first launch
+ *                     with the one-time Gatekeeper note — macOS, no Developer ID).
+ *  - `artifactPath` — the on-disk path of the downloaded artifact once `phase === 'ready'`
+ *                     (under the OS temp dir, NEVER beside the database — §19 R04), else null.
+ *  - `message`      — a graceful message when `phase === 'error'`, else null.
+ */
+export interface UpdateProgress {
+  phase: 'downloading' | 'ready' | 'error';
+  percent: number;
+  version: string;
+  steps: string[];
+  artifactPath: string | null;
+  message: string | null;
 }

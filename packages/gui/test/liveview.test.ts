@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   accent: 'system',
   dateFormat: 'system',
+  backupRetention: 5,
 };
 
 function row(p: Partial<EntryRowView> & { id: number; startUtc: string }): EntryRowView {

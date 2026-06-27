@@ -5,7 +5,17 @@
  * without a second copy of the spec.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, openSync, writeSync, closeSync, existsSync, readdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  openSync,
+  writeSync,
+  closeSync,
+  existsSync,
+  readdirSync,
+  writeFileSync,
+  readFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +26,7 @@ import {
   buildEntryList,
   listBackups,
   openDb,
+  RecoveryError,
   toCsv,
   toJsonEntries,
   settingDescriptor,
@@ -282,6 +293,8 @@ export interface World {
   listReportNames(): string[];
   /** §09 R08 — amend a saved report's range preset (CoreWorld store.editReport / CliWorld `tt report edit <name> --<preset>`). */
   editReportRange(name: string, preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month'): void;
+  /** §09 R08 — amend a saved report's group-by (CoreWorld store.editReport / CliWorld `tt report edit <name> --by <by>`). */
+  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void;
   /** §09 R08 — rename a saved report (CoreWorld store.renameReport / CliWorld `tt report rename`). */
   renameReport(name: string, to: string): void;
   /** §09 R08 — delete a saved report (CoreWorld store.removeReport / CliWorld `tt report rm`). */
@@ -350,6 +363,14 @@ export interface World {
   /** §05 R10 — the running timer as a surface-neutral record (desc / client label / billable / tags), or null when idle. */
   running(): { description: string | null; clientLabel: string | null; billable: boolean; tags: string[] } | null;
   /**
+   * §20 R07 — the persisted check-in schedule's anchor (`startUtc`) as committed durably on
+   * disk, or null when no schedule is persisted. Surface-neutral: CoreWorld reads
+   * store.checkinState(); CliWorld reads the committed `app_state` row off the SAME database
+   * file the tt process wrote (process-per-command, so this proves the schedule was durably
+   * committed across the process boundary). The SAME step asserts identical truth on both.
+   */
+  checkinScheduleAnchor(): string | null;
+  /**
    * §20 R04 / §17 R12 — close and re-open the store on the SAME database (a fresh "launch").
    * Surface-neutral: CoreWorld closes the on-disk store and re-opens Store.open at its file (so
    * the launch backup + integrity gate run); CliWorld is process-per-command, so each `tt`
@@ -378,6 +399,23 @@ export interface World {
    * corrupt file was set aside, not destroyed, during recovery).
    */
   hasQuarantinedFile(): boolean;
+  /**
+   * §20 R03 — write garbage bytes to a FRESH on-disk database path that has NO backup beside it,
+   * so the only possible outcome on open is detection + refusal (recovery is impossible without a
+   * good copy). Isolated from the backup scenarios' database so this proves the bare detect-and-
+   * refuse contract: no quarantine, no restore — just "corruption detected, do not write". Records
+   * the exact bytes written so `openCorruptDatabase` can prove the file was not mutated.
+   */
+  corruptDatabaseFile(): void;
+  /**
+   * §20 R03 — attempt to open/use the corrupted (backup-less) database on this surface through the
+   * NORMAL open path and report whether the open was REFUSED (no write could proceed) and whether
+   * the corrupt file was MUTATED. `refused` is true when corruption was detected and the open did
+   * not fall through to normal operation (core: an open error was thrown; tt: a non-zero exit with
+   * an integrity/corruption error on stderr). `wrote` is true when the file's bytes changed versus
+   * what `corruptDatabaseFile` wrote — it MUST be false, since R03 must not write to a corrupt file.
+   */
+  openCorruptDatabase(): { refused: boolean; wrote: boolean };
 }
 
 const label = joinClientProject;
@@ -409,6 +447,13 @@ export class CoreWorld implements World {
   // gate). Every other scenario is unaffected — the Store API is identical to the memory store.
   private dir!: string;
   private dbPath!: string;
+  // §20 R03 — an isolated, lazily-created temp dir + db path for the bare detect-and-refuse
+  // scenario (a corrupt file with NO backup beside it). Kept separate from the backup-feature
+  // database (which always carries a launch backup) so this exercises the pure write-refusal
+  // path: corruption detected, recovery impossible, the open refused, the file untouched.
+  private integrityDir?: string;
+  private integrityPath?: string;
+  private integrityBytes?: Buffer;
 
   reset(): void {
     this.store?.close();
@@ -420,6 +465,7 @@ export class CoreWorld implements World {
   dispose(): void {
     this.store?.close();
     if (this.dir) rmSync(this.dir, { recursive: true, force: true });
+    if (this.integrityDir) rmSync(this.integrityDir, { recursive: true, force: true });
   }
   ensureClientProject(client: string, project: string): void {
     const c = this.store.ensureClient(client);
@@ -735,6 +781,9 @@ export class CoreWorld implements World {
   editReportRange(name: string, preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month'): void {
     this.store.editReport(name, { rangeSpec: { kind: 'preset', preset } });
   }
+  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void {
+    this.store.editReport(name, { by });
+  }
   renameReport(name: string, to: string): void {
     this.store.renameReport(name, to);
   }
@@ -820,6 +869,11 @@ export class CoreWorld implements World {
       tags: open.tags,
     };
   }
+  checkinScheduleAnchor(): string | null {
+    // §20 R07 — read the schedule the entry transitions committed atomically through the
+    // typed core reader (the same one the GUI tick uses).
+    return this.store.checkinState()?.startUtc ?? null;
+  }
   relaunch(): void {
     // §20 R04 — close and re-open the store on the same file: a fresh launch, so Store.open's
     // launch backup (and the integrity gate + recovery, if the file is corrupt) run. Tolerate an
@@ -861,6 +915,38 @@ export class CoreWorld implements World {
   }
   hasQuarantinedFile(): boolean {
     return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.dbPath)}.corrupted-`));
+  }
+  corruptDatabaseFile(): void {
+    // §20 R03 — a brand-new temp dir holding only a garbage "database" file: no `.bak-*` sibling
+    // exists, so the open below cannot recover and the ONLY correct outcome is detect-and-refuse.
+    this.integrityDir = mkdtempSync(join(tmpdir(), 'stint-bdd-core-integrity-'));
+    this.integrityPath = join(this.integrityDir, 'tt.sqlite');
+    this.integrityBytes = Buffer.from('this is not a sqlite database');
+    writeFileSync(this.integrityPath, this.integrityBytes);
+  }
+  openCorruptDatabase(): { refused: boolean; wrote: boolean } {
+    // §20 R03 — open the corrupt, backup-less file through the SAME openDb every launch uses.
+    // quick_check fails (or the pragmas raise "file is not a database"), recovery finds no backup
+    // and throws RecoveryError — the open is REFUSED before any write. Catching it proves the
+    // refusal; re-reading the file proves the corrupt bytes were left exactly as written (no write).
+    let refused = false;
+    let db: ReturnType<typeof openDb> | undefined;
+    try {
+      db = openDb(this.integrityPath!);
+    } catch (err) {
+      // An open error (RecoveryError: corruption detected, no backup to recover from) is the
+      // refusal — corruption was caught and the open did not fall through to normal operation.
+      refused = err instanceof RecoveryError;
+    } finally {
+      try {
+        db?.close();
+      } catch {
+        /* never opened a usable handle */
+      }
+    }
+    const after = readFileSync(this.integrityPath!);
+    const wrote = !after.equals(this.integrityBytes!);
+    return { refused, wrote };
   }
 }
 
@@ -1310,6 +1396,9 @@ export class CliWorld implements World {
     };
     this.tt(['report', 'edit', name, PRESET_FLAG[preset]]);
   }
+  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void {
+    this.tt(['report', 'edit', name, '--by', by]);
+  }
   renameReport(name: string, to: string): void {
     this.tt(['report', 'rename', name, to]);
   }
@@ -1420,6 +1509,21 @@ export class CliWorld implements World {
       tags: s.entry.tags,
     };
   }
+  checkinScheduleAnchor(): string | null {
+    // §20 R07 — read the schedule the tt process committed to `app_state` directly off the DB
+    // file. tt is process-per-command, so the row is only there if the `start`/`stop` process
+    // durably committed it — exactly the cross-process durability the requirement is about.
+    // (No new CLI surface: the test harness reads the committed bytes, like entriesInLatestBackup.)
+    const db = openDb(this.db);
+    try {
+      const row = db.prepare("SELECT value FROM app_state WHERE key = 'checkin_state'").get() as
+        | { value: string }
+        | undefined;
+      return row ? (JSON.parse(row.value) as { startUtc: string }).startUtc : null;
+    } finally {
+      db.close();
+    }
+  }
   relaunch(): void {
     // §20 R04 — tt is process-per-command: every `tt` invocation already re-opens the store (so
     // the launch backup + integrity gate + recovery run). A cheap read forces that fresh open —
@@ -1453,5 +1557,28 @@ export class CliWorld implements World {
   }
   hasQuarantinedFile(): boolean {
     return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.db)}.corrupted-`));
+  }
+  // §20 R03 — the garbage bytes written to the (backup-less) db, kept so openCorruptDatabase can
+  // prove the failed open did not mutate the file.
+  private integrityBytes?: Buffer;
+  corruptDatabaseFile(): void {
+    // §20 R03 — write a garbage "database" to the world's fresh temp db path. This feature has no
+    // Background that calls reset(), so initialize the temp dir/path lazily; either way the dir
+    // holds no `.bak-*` sibling (nothing has opened/backed-up), so the next `tt` open cannot
+    // recover and must detect-and-refuse.
+    if (!this.dir) this.reset();
+    this.integrityBytes = Buffer.from('this is not a sqlite database');
+    writeFileSync(this.db, this.integrityBytes);
+  }
+  openCorruptDatabase(): { refused: boolean; wrote: boolean } {
+    // §20 R03 — open the corrupt, backup-less db through a REAL `tt` command (status --json), the
+    // normal open path. Corruption is detected and, with no backup to recover from, Store.open
+    // throws — `tt` exits non-zero and names the integrity failure on stderr. refused = that
+    // signal; wrote = the file's bytes changed (it must NOT — R03 must not write to a corrupt file).
+    const r = this.tt(['status', '--json']);
+    const refused = r.code !== 0 && /integrity|corrupt/i.test(r.err);
+    const after = readFileSync(this.db);
+    const wrote = !after.equals(this.integrityBytes!);
+    return { refused, wrote };
   }
 }

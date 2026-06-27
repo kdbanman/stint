@@ -38,7 +38,7 @@ import {
   buildEntryList,
   describeOverlaps,
   joinClientProject,
-  type CheckinState,
+  LAST_SEEN_KEY,
   type EntryView,
   type EntryGroupBy,
   type WriteResult,
@@ -50,12 +50,14 @@ import {
   type EntryListView,
   type SavedReportInputView,
   type FavoriteInputView,
+  type UpdateProgress,
 } from './ipc.js';
 import {
   pinFavorite as pinFavoriteHelper,
   listFavorites as listFavoritesHelper,
   favoriteToView,
 } from './favorites.js';
+import { listBackups as listBackupsHelper } from './backupview.js';
 import { buildUiState } from './uistate.js';
 import { nextTimerAction } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
@@ -63,7 +65,7 @@ import { startWithAttributes, type StartPayload } from './start.js';
 import {
   buildReportView,
   buildSavedReportView,
-  resolveExportRange,
+  resolveExportDefinition,
   exportPayload,
   exportFileName,
   savedReportToView,
@@ -72,6 +74,18 @@ import {
   type ReportViewRequest,
   type ExportRequest,
 } from './reportview.js';
+import {
+  currentVersion,
+  checkForUpdates,
+  fetchReleasesViaNet,
+  latestPublishedRelease,
+  normalizePlatform,
+  planGuidedInstall,
+  downloadUpdate,
+  revealInstaller,
+  type GithubRelease,
+} from './update.js';
+import { platform as osPlatform } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(__dirname, '..', 'renderer');
@@ -90,9 +104,6 @@ let lastSeenWrite = 0;
 // once by the next tick (then cleared), so the cadence reverts to the persisted
 // default. This is NOT the persisted `checkin_interval_min` setting.
 let pendingCheckinOverrideMin: number | undefined;
-
-const LAST_SEEN_KEY = 'last_seen_utc';
-const CHECKIN_KEY = 'checkin_state';
 
 // ----------------------------------------------------------------- tray icon
 
@@ -164,22 +175,22 @@ function broadcast(): void {
   }
 }
 
+/**
+ * §19 R04 — push a Software Update progress frame to the main window over the dedicated
+ * `update-progress` broadcast (mirroring the `changed` broadcast above). The Settings panel
+ * paints the live progress bar + the numbered guided steps from this. It carries NO database
+ * state — updates never touch the DB (§19 R04).
+ */
+function broadcastUpdateProgress(p: UpdateProgress): void {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', p);
+}
+
 function refreshAll(): void {
   updateTray();
   broadcast();
 }
 
 // ------------------------------------------------------------------- check-in
-
-function loadCheckinState(): CheckinState | null {
-  const raw = store.getAppState(CHECKIN_KEY);
-  return raw ? (JSON.parse(raw) as CheckinState) : null;
-}
-
-function saveCheckinState(state: CheckinState | null): void {
-  if (state === null) store.deleteAppState(CHECKIN_KEY);
-  else store.setAppState(CHECKIN_KEY, JSON.stringify(state));
-}
 
 function tick(): void {
   const open = store.openEntry();
@@ -190,14 +201,20 @@ function tick(): void {
   maybeWriteLastSeen();
 
   if (!open) {
-    saveCheckinState(null);
+    // §20 R07 — store.stop() already cleared the schedule atomically with the close, so
+    // there is normally nothing here; this is a defensive belt-and-braces clear for a DB
+    // mutated out-of-band (e.g. a tt write that left no open entry but a stale schedule).
+    if (store.checkinState() !== null) store.setCheckinState(null, toUtc(new Date()));
     return;
   }
   const settings = store.settings();
-  let state = loadCheckinState();
+  // §20 R07 — the schedule is normally seeded atomically by store.start(); this lazy init is
+  // only a fallback for an open entry that predates that seeding (or an out-of-band write),
+  // and it persists the seed together with the heartbeat as one durable unit.
+  let state = store.checkinState();
   if (!state) {
     state = initCheckinState(open.startUtc, settings.firstCheckinMin);
-    saveCheckinState(state);
+    store.setCheckinState(state, toUtc(new Date()));
   }
   // A per-notification interval pick (PRD §10b R4) overrides the NEXT gap only. It was
   // set by a notification action since the last tick; consume it exactly once here and
@@ -209,7 +226,8 @@ function tick(): void {
   const res = evaluateCheckin(state, settings.checkinIntervalMin, new Date(), override);
   if (res.fire) {
     fireCheckin(open);
-    saveCheckinState(res.state);
+    // §20 R07 — persist the advanced schedule + the heartbeat as ONE durable unit.
+    store.setCheckinState(res.state, toUtc(new Date()));
   }
 }
 
@@ -242,7 +260,9 @@ function fireCheckin(open: EntryView): void {
 }
 
 function setLastSeen(): void {
-  store.setAppState(LAST_SEEN_KEY, toUtc(new Date()));
+  // §20 R07 — the heartbeat is a standalone state write; recordLastSeen owns its own short
+  // transaction (there is no entry write to ride here).
+  store.recordLastSeen(toUtc(new Date()));
   lastSeenWrite = Date.now();
 }
 
@@ -591,17 +611,9 @@ function registerIpc(): void {
       // save dialog. No network.
       const req = p as ExportRequest;
       const now = new Date();
-      let range: { fromUtc: string; toUtc: string };
-      let entries: EntryView[];
-      if (req.savedReportRef !== undefined) {
-        // The saved definition carries its own range; resolve it through the one core path.
-        const run = store.runReport(req.savedReportRef, now);
-        range = { fromUtc: run.rangeFromUtc, toUtc: run.rangeToUtc };
-        entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
-      } else {
-        range = resolveExportRange(req, store.settings().weekStart, now);
-        entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
-      }
+      // One pure decision in core/reportview: saved-report ref → its own resolved range, else
+      // the ad-hoc preset/custom range — both yielding the RAW entries for the window.
+      const { range, entries } = resolveExportDefinition(req, store, now);
       const payload = exportPayload(entries, req.format, now);
       const options: Electron.SaveDialogSyncOptions = {
         title: req.format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
@@ -676,13 +688,7 @@ function registerIpc(): void {
     // file-level backup module) at parity with `tt backup ls|restore`. listBackups is a read, no
     // refresh; restoreBackup quarantines the current file, re-points the store at the chosen
     // backup, and refreshes all windows so every open view repaints the restored truth.
-    listBackups: () =>
-      store.listBackups().map((b) => ({
-        name: b.name,
-        path: b.path,
-        createdUtc: b.createdUtc,
-        sizeBytes: b.sizeBytes,
-      })),
+    listBackups: () => listBackupsHelper(store),
     restoreBackup: (p) => {
       const r = store.restoreFromBackup((p as { name: string }).name);
       refreshAll();
@@ -716,6 +722,116 @@ function registerIpc(): void {
   }
 }
 
+/**
+ * §19 R03/R04 — the Software Update IPC surface. Deliberately registered OUTSIDE the parity-
+ * asserted CHANNELS loop (and bridged separately in preload under `window.stint.update`):
+ * in-app update is a GUI/OS-only capability with NO `tt` equivalent (a CLI install is updated
+ * by the package manager / installer), exactly like the tray and the global hotkey, so it is
+ * not a parity-matrix channel.
+ *
+ * EVERY handler is read-only with respect to the database — none calls `store` — so updates
+ * never touch the database (§19 R04 / §16 update-mid-timer). `update:check` + `update:download`
+ * perform the app's only outbound requests through update.ts (Electron `net`, never node:https /
+ * fetch — §17 R9); the downloaded artifact lands under the OS temp dir (`app.getPath('temp')`),
+ * NEVER beside the DB. On macOS the returned guided plan surfaces the one-time Gatekeeper beat
+ * (no Developer ID / notarization).
+ */
+function registerUpdateIpc(): void {
+  // The latest published release the most recent check found, kept so download/reveal operate
+  // on the same release without re-querying. The downloaded artifact path, kept so reveal can
+  // open it. Neither is database state.
+  let pendingRelease: GithubRelease | null = null;
+  let downloadedArtifactPath: string | null = null;
+
+  ipcMain.handle('update:getVersion', () => currentVersion());
+  ipcMain.handle('update:check', async () => {
+    const verdict = await checkForUpdates();
+    // Remember the release behind an available update so a subsequent download targets it.
+    if (verdict.status === 'update-available') {
+      try {
+        pendingRelease = latestPublishedRelease(await fetchReleasesViaNet());
+      } catch {
+        pendingRelease = null;
+      }
+    } else {
+      pendingRelease = null;
+    }
+    return verdict;
+  });
+
+  // R04 — kick off the artifact download for the pending release. Returns a started ack
+  // immediately; progress (and the terminal ready/error frame) is pushed over `update-progress`.
+  ipcMain.handle('update:download', async () => {
+    const platform = normalizePlatform(osPlatform());
+    const release = pendingRelease;
+    if (!release || !platform) {
+      const frame: UpdateProgress = {
+        phase: 'error',
+        percent: 0,
+        version: '',
+        steps: platform ? planGuidedInstall(platform) : [],
+        artifactPath: null,
+        message: 'No downloadable update is available. Check for updates first.',
+      };
+      broadcastUpdateProgress(frame);
+      return { started: false };
+    }
+    const version = release.tag_name.replace(/^v/, '');
+    const steps = planGuidedInstall(platform);
+    // Run the download out-of-band; stream progress frames to the renderer.
+    void (async () => {
+      try {
+        broadcastUpdateProgress({
+          phase: 'downloading',
+          percent: 0,
+          version,
+          steps,
+          artifactPath: null,
+          message: null,
+        });
+        const path = await downloadUpdate(release, (percent) => {
+          broadcastUpdateProgress({
+            phase: 'downloading',
+            percent,
+            version,
+            steps,
+            artifactPath: null,
+            message: null,
+          });
+        });
+        downloadedArtifactPath = path;
+        broadcastUpdateProgress({
+          phase: 'ready',
+          percent: 100,
+          version,
+          steps,
+          artifactPath: path,
+          message: null,
+        });
+      } catch (err) {
+        broadcastUpdateProgress({
+          phase: 'error',
+          percent: 0,
+          version,
+          steps,
+          artifactPath: null,
+          message: err instanceof Error ? err.message : 'The update download failed.',
+        });
+      }
+    })();
+    return { started: true };
+  });
+
+  // R04 — reveal the downloaded installer in Finder / the file manager and return the ordered,
+  // platform-specific guided-step plan (so the renderer can repaint the numbered steps).
+  ipcMain.handle('update:reveal', () => {
+    const platform = normalizePlatform(osPlatform());
+    const steps = platform ? planGuidedInstall(platform) : [];
+    if (downloadedArtifactPath) revealInstaller(downloadedArtifactPath);
+    return { steps, artifactPath: downloadedArtifactPath };
+  });
+}
+
 // -------------------------------------------------------------------- lifecycle
 
 function init(): void {
@@ -743,6 +859,7 @@ function init(): void {
   setLastSeen();
 
   registerIpc();
+  registerUpdateIpc();
 
   tray = new Tray(trayIcon());
   tray.setContextMenu(buildTrayMenu());

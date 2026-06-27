@@ -29,6 +29,8 @@
     "verify:no-network": "node scripts/check-no-network.mjs",
     "prejudge": "npm run build",
     "judge": "node packages/gui/judge/run-judge.mjs",
+    "prerecord": "npm run build",
+    "record": "node packages/gui/judge/record.mjs",
     "gui": "electron packages/gui"
   },
   "devDependencies": {

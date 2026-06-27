@@ -92,9 +92,14 @@ CREATE TABLE IF NOT EXISTS setting (
   value TEXT NOT NULL
 );
 
--- Internal application state owned by the running app (check-in cadence, last-seen
--- heartbeat) — kept in its own table so the user-facing \`setting\` table that
--- \`config ls\` enumerates is not polluted with private keys (PRD §04, §10).
+-- Internal application state owned by the running app (check-in schedule under
+-- \`checkin_state\`, last-seen heartbeat under \`last_seen_utc\`) — kept in its own table so
+-- the user-facing \`setting\` table that \`config ls\` enumerates is not polluted with private
+-- keys (PRD §04, §10). DURABILITY CONTRACT (§20 R07): the schedule/last-seen rows are written
+-- INSIDE the same transaction as the entry write that changes them (start seeds the schedule,
+-- stop clears it — both atomically with the entry row), so a crash can never leave the open
+-- entry and its schedule state divergent. The canonical key names live in @stint/core
+-- (\`checkin.ts\` CHECKIN_STATE_KEY / LAST_SEEN_KEY); this is a key/value table, no DDL change.
 CREATE TABLE IF NOT EXISTS app_state (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -121,11 +126,18 @@ BEGIN
 END;
 
 -- DB-level teeth for the one-open-entry invariant (PRD §20 R02), defense in depth
--- alongside the triggers above: a partial UNIQUE index over entry(end_utc) where the row
--- is still open makes a second open row impossible at the storage layer. It takes effect
--- from SCHEMA_VERSION 3; an existing v2 DB with a single open entry migrates cleanly (one
--- open row never violates uniqueness), so the additive v2→v3 upgrade needs no data fix-up.
-CREATE UNIQUE INDEX IF NOT EXISTS one_open_entry_idx ON entry(end_utc) WHERE end_utc IS NULL;
+-- alongside the triggers above: a partial UNIQUE index over the CONSTANT expression (1),
+-- restricted to open rows (WHERE end_utc IS NULL), makes a second open row impossible at the
+-- storage layer. Indexing the constant — NOT end_utc — is deliberate: every open row has
+-- end_utc = NULL, and SQLite treats NULLs as DISTINCT in a unique index, so a unique index on
+-- entry(end_utc) would permit unlimited NULLs (multiple open rows). All open rows collide on
+-- the value 1 instead, so the second open row is rejected with
+-- "UNIQUE constraint failed: index 'one_open_entry_idx'". Closed rows (end_utc NOT NULL) are
+-- excluded from the partial index entirely, so unlimited closed rows and reopen-after-close
+-- both remain free. It takes effect from SCHEMA_VERSION 3; an existing v2 DB held at most one
+-- open row under the triggers, so CREATE UNIQUE INDEX never fails on existing data and the
+-- additive v2→v3 upgrade needs no data fix-up.
+CREATE UNIQUE INDEX IF NOT EXISTS one_open_entry_idx ON entry((1)) WHERE end_utc IS NULL;
 
 -- Saved report definition (PRD §09 R08, §13): a named, persistent preset of
 -- {range-spec, group-by, filters, rounding}. The range is stored EITHER as a relative

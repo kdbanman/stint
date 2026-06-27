@@ -17,11 +17,36 @@ directories:
   output: dist-pack
   buildResources: build
 
+# The bundle's app root (Contents/Resources/app on macOS, resources/app on Linux)
+# is this gui package. The single installer (§19 R02) needs TWO extra trees inside
+# that root, so they MUST be in this glob or the installer breaks:
+#
+#   1. packages/cli/dist/**  — the CLI entrypoint bin.js. tt-launcher.sh resolves
+#      <app>/.../app/packages/cli/dist/bin.js (CLI_REL), so the built CLI must land
+#      at packages/cli/dist inside the app root. Sourced outside the gui project dir
+#      via a {from,to} mapping (mirrors packages/cli/package.json `bin`).
+#   2. packaging/**          — the launcher shim + install scripts. build-pkg.sh
+#      FAILS ("ensure packaging/ is included in the electron-builder files glob") if
+#      <app>/.../app/packaging/tt-launcher.sh is absent, and postinstall.sh/install.sh
+#      symlink `tt` to that shim. Sourced from the repo root via a {from,to} mapping.
 files:
   - dist/**
   - renderer/**
   - package.json
   - node_modules/@stint/core/**
+  # The CLI's one runtime dependency (commander). Bundled bin.js resolves it by
+  # walking up to the app root's node_modules; @stint/core itself has no deps.
+  - node_modules/commander/**
+  # CLI entrypoint (bin.js) — must resolve at app/packages/cli/dist/bin.js.
+  - from: ../cli/dist
+    to: packages/cli/dist
+    filter:
+      - '**/*'
+  # Single-installer launcher shim + install scripts — must resolve at app/packaging.
+  - from: ../../packaging
+    to: packaging
+    filter:
+      - '**/*'
 
 # macOS: minimal unsigned app bundle (.dmg). No notarization / code-signing
 # dependency — the one-time Gatekeeper approval is handled by the §19 R04 flow.

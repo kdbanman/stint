@@ -51,6 +51,21 @@ Feature: Saved reports
     And the saved report export has a row "ops sync" for "Globex" of 7200 seconds
     And the saved report export does not have a row "review"
 
+  Scenario: Editing a saved report's group-by regroups the same total
+    # The grand total is invariant on the grouping (it only changes how the totals are
+    # bucketed, never their sum). Save grouped by client, run; then change the group-by to
+    # project and re-run — the regrouped run totals the SAME billable hours. Proven on both
+    # surfaces (store.editReport --by / `tt report edit --by`).
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    And a closed entry "build" for "Globex" this week lasting 2 hours
+    When I save a report "Grouped" for this week grouped by client over billable time
+    And I run the saved report "Grouped"
+    Then the saved report run totals 3 billable hours
+    When I change the saved report "Grouped" grouping to project
+    And I run the saved report "Grouped"
+    Then the saved report run totals 3 billable hours
+    And the saved report run total is unchanged
+
   Scenario: Renaming then deleting a saved report removes it from the list
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     When I save a report "Draft" for this week grouped by client over billable time

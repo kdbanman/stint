@@ -211,6 +211,94 @@ describe('buildSavedReportView — run a saved report through core (§09 R09)', 
     expect(buildSavedReportView(store, def.id, NOW)).toEqual(buildSavedReportView(store, 'Weekly', NOW));
     store.close();
   });
+
+  it('a RELATIVE range-spec resolves through core to the SAME Report a direct store.report over the resolved bounds returns', () => {
+    const store = mem();
+    seed(store);
+    // The GUI runReport plumbing is a faithful pass-through to core: a saved this-week
+    // definition runs to byte/shape-identically what a direct store.report over the
+    // resolveRange('week') absolute bounds returns — the renderer/main re-derive nothing.
+    store.saveReport({
+      name: 'ThisWeek',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    const week = resolveRange('week', store.settings().weekStart, NOW);
+    const direct = store.report({
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+      fromUtc: week.fromUtc,
+      toUtc: week.toUtc,
+    });
+    expect(buildSavedReportView(store, 'ThisWeek', NOW)).toEqual(direct);
+    store.close();
+  });
+
+  it('an ABSOLUTE range-spec passes straight through (no preset re-resolution)', () => {
+    const store = mem();
+    seed(store);
+    // A saved def with an absolute from/to carries its own window verbatim; running it must
+    // total exactly what a direct store.report over those bounds returns, with the group-by /
+    // billable / rounding honoured verbatim (no renderer/main re-derivation).
+    store.saveReport({
+      name: 'FixedWindow',
+      rangeSpec: { kind: 'absolute', fromUtc: '2026-06-22T00:00:00Z', toUtc: '2026-06-24T00:00:00Z' },
+      by: 'client',
+      billableFilter: 'all',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    const direct = store.report({
+      by: 'client',
+      billableFilter: 'all',
+      rounding: false,
+      roundingIncrementMin: 15,
+      fromUtc: '2026-06-22T00:00:00Z',
+      toUtc: '2026-06-24T00:00:00Z',
+    });
+    const view = buildSavedReportView(store, 'FixedWindow', NOW);
+    expect(view).toEqual(direct);
+    expect(view.rangeFromUtc).toBe('2026-06-22T00:00:00Z');
+    expect(view.rangeToUtc).toBe('2026-06-24T00:00:00Z');
+    // billable='all' keeps both seeded entries: 3h Acme + 0.5h (no client).
+    expect(view.grandTotalSeconds).toBe(3 * 3600 + 30 * 60);
+    store.close();
+  });
+
+  it('honours the saved def group-by / rounding verbatim (no renderer re-derivation)', () => {
+    const store = mem();
+    seed(store);
+    // A by:'day' def with rounding on must run to the SAME Report a direct store.report with
+    // those exact options over the resolved week returns — the plumbing changes nothing.
+    store.saveReport({
+      name: 'ByDayRounded',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'day',
+      billableFilter: 'all',
+      rounding: true,
+      roundingIncrementMin: 30,
+    });
+    const week = resolveRange('week', store.settings().weekStart, NOW);
+    const direct = store.report({
+      by: 'day',
+      billableFilter: 'all',
+      rounding: true,
+      roundingIncrementMin: 30,
+      fromUtc: week.fromUtc,
+      toUtc: week.toUtc,
+    });
+    const view = buildSavedReportView(store, 'ByDayRounded', NOW);
+    expect(view).toEqual(direct);
+    expect(view.options.by).toBe('day');
+    expect(view.options.rounding).toBe(true);
+    expect(view.options.roundingIncrementMin).toBe(30);
+    store.close();
+  });
 });
 
 describe('exportFileName — a dated default for the save dialog', () => {

@@ -103,6 +103,11 @@ function render() {
     ? `▸ <b>running</b> ${fmtDur(elapsed(running.startUtc))} · ${escapeHtml(running.description ?? 'your timer')}${tagsHtml(running)}`
     : '■ idle';
 
+  // §12 R04: the Entries view hosts only the COMPACT STRIP; the full Active-Timer card lives
+  // in the Timer view. Paint both from the same running state so a write from either view (the
+  // card's Stop/Switch reloads via load()→render()) keeps the strip AND the Timer-view card in
+  // sync — even though only one is on-screen at a time. route('timer') also repaints the card.
+  renderTimerStrip(running);
   renderTimerCard(running);
 
   const toggle = $('toggle');
@@ -160,12 +165,13 @@ function renderEntries() {
   renderMergeBar();
 }
 
-// §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. When a timer
-// runs it paints the live count-up (derived now − start, never stored), the running
-// state, the entry's description + client/project label and its billable/slept
-// attributes, and reveals the primary Stop + Switch actions. When idle it shows an idle
-// face (00:00:00, "nothing running") and hides the actions. The per-second advance is
-// driven by tick() updating #timer-clock; this only repaints when the data changes.
+// §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
+// the Timer view (R14). When a timer runs it paints the live count-up (derived now − start,
+// never stored), the running state, the entry's description + client/project label and its
+// billable/slept attributes, and reveals the primary Stop + Switch actions. When idle it
+// shows an idle face (00:00:00, "nothing running") and hides the actions. The per-second
+// advance is driven by tick() updating #timer-clock; this only repaints when the data
+// changes. Called from route('timer') so the Timer view's card is fresh on every visit.
 function renderTimerCard(running) {
   const card = $('timer-card');
   if (!card) return;
@@ -185,6 +191,99 @@ function renderTimerCard(running) {
   }
   $('timer-stop').hidden = !running;
   $('timer-switch').hidden = !running;
+  // §05 R09: the Pin-as-favorite control on the running card (captures the open entry's
+  // template via window.stint.pinFavorite, parity with `tt fav add`). Shown only while running.
+  const pin = $('timer-pin');
+  if (pin) pin.hidden = !running;
+  renderLiveEdit(running);
+}
+
+// §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the OPEN entry's attributes + its start
+// time WITHOUT stopping it. Mirrors src/timerview.ts's liveEditPatch (the testable main-process
+// unit) in the page: each change debounces a window.stint.edit({ id, patch }) whose patch NEVER
+// carries endUtc, so the row stays open and the timer keeps running (§05 R6). Hidden while idle.
+// The Start-time field seeds from the running entry's start; the End time is deliberately absent.
+function renderLiveEdit(running) {
+  const strip = $('live-edit');
+  if (!strip) return;
+  strip.hidden = !running;
+  if (!running) return;
+  // Seed the fields from the running entry, but only when not focused — so a debounced commit
+  // mid-typing (or a 1s tick repaint) never clobbers what the user is editing.
+  const desc = $('le-desc');
+  if (desc && document.activeElement !== desc) desc.value = running.description ?? '';
+  const start = $('le-start');
+  if (start && document.activeElement !== start) start.value = localInputValue(new Date(running.startUtc));
+  const bill = $('le-bill');
+  if (bill) bill.checked = !!running.billable;
+  // Stash the open entry's id + the last-seeded values so the change handlers send a minimal
+  // patch (only the changed field) and target the right row.
+  strip.dataset.entryId = String(running.id);
+  strip.dataset.seedDesc = running.description ?? '';
+  strip.dataset.seedStart = new Date(running.startUtc).toISOString();
+  strip.dataset.seedBill = String(!!running.billable);
+}
+
+// Build the live-edit patch — ONLY changed fields, and NEVER an endUtc (the open row stays
+// open, §05 R6 / §12 R14). The same rule src/timerview.ts.liveEditPatch enforces and the GOLD
+// timerview.test.ts proves; mirrored here for the page (which cannot import the TS module).
+function liveEditPatch(strip) {
+  const patch = {};
+  const desc = $('le-desc');
+  if (desc) {
+    const next = desc.value.trim() === '' ? null : desc.value;
+    const seed = strip.dataset.seedDesc === '' ? null : strip.dataset.seedDesc;
+    if (next !== seed) patch.description = next;
+  }
+  const start = $('le-start');
+  if (start && start.value) {
+    const nextIso = new Date(start.value).toISOString();
+    if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+  }
+  const bill = $('le-bill');
+  if (bill && String(bill.checked) !== strip.dataset.seedBill) patch.billable = bill.checked;
+  // The patch never gains an end instant — editing the open row keeps it open (§05 R6).
+  return patch;
+}
+
+let liveEditTimer = null;
+async function commitLiveEdit() {
+  const strip = $('live-edit');
+  if (!strip || strip.hidden) return;
+  const id = Number(strip.dataset.entryId);
+  if (!Number.isFinite(id)) return;
+  const patch = liveEditPatch(strip);
+  if (Object.keys(patch).length === 0) return; // a no-op edit sends nothing
+  const ack = await window.stint.edit({ id, patch });
+  await load();
+  applyAck(ack);
+}
+function scheduleLiveEdit() {
+  if (liveEditTimer) clearTimeout(liveEditTimer);
+  liveEditTimer = setTimeout(() => void commitLiveEdit(), 500);
+}
+
+// §12 R04: the COMPACT STRIP on the Entries view — a one-line mirror of the running timer
+// that links to the full Timer-view panel. It carries the live count-up (#strip-clock), the
+// running/idle state (#strip-state, with the .running class driving the accented dot + clock),
+// and the running entry's description (#strip-desc). It hosts NO Stop/Switch and no flags grid
+// — those belong to the full card in the Timer view. Like the card, the per-second advance is
+// driven by tick(); this only repaints when the data changes. The strip itself routes to the
+// Timer view (wired below), so a click anywhere on it opens the full panel.
+function renderTimerStrip(running) {
+  const strip = $('timer-strip');
+  if (!strip) return;
+  strip.classList.toggle('running', !!running);
+  strip.classList.toggle('idle', !running);
+  const stateEl = $('strip-state');
+  if (stateEl) stateEl.textContent = running ? 'running' : 'idle';
+  if (running) {
+    $('strip-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
+    $('strip-desc').textContent = running.description ?? 'your timer';
+  } else {
+    $('strip-clock').textContent = '00:00:00';
+    $('strip-desc').textContent = 'nothing running';
+  }
 }
 
 // The card's attribute row: the billable/non-billable badge plus a slept flag when the
@@ -703,17 +802,21 @@ async function openEditForm(row, e) {
   form.className = 'edit-form';
   // End is omitted for the open entry (§05 R6/§06 R1): editing the running entry's
   // start must not require an end, so the open row stays open.
+  // §12 R15: each time field gets a calendar-icon trigger that opens the shared visual
+  // picker bound to the form's own .edit-start/.edit-end inputs (text stays authoritative).
   const endField = running
     ? ''
     : `<label class="edit-field"><span>End</span>` +
-      `<input type="datetime-local" class="edit-end" /></label>`;
+      `<span class="range-field"><input type="datetime-local" class="edit-end" />` +
+      `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker">▦</button></span></label>`;
   form.innerHTML =
     `<div class="edit-row">` +
     `<input type="text" class="edit-desc" placeholder="(no description)" />` +
     `</div>` +
     `<div class="edit-row">` +
     `<label class="edit-field"><span>Start</span>` +
-    `<input type="datetime-local" class="edit-start" /></label>` +
+    `<span class="range-field"><input type="datetime-local" class="edit-start" />` +
+    `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker">▦</button></span></label>` +
     endField +
     `</div>` +
     `<div class="edit-row">` +
@@ -742,6 +845,28 @@ async function openEditForm(row, e) {
     ev.stopPropagation();
     armDelete(ev.currentTarget, e);
   });
+  // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's
+  // own time inputs. The closed entry's picker carries both start+stop; the running (open)
+  // entry's form has only a Start field (no End), so its picker is seeded start-only and
+  // never writes a stop — editing the open row cannot close it (§05 R6). The picker writes
+  // localInputValue strings back into the inputs (text stays authoritative) — the submit
+  // path then sends the same patch over window.stint.edit unchanged.
+  const editStartInput = form.querySelector('.edit-start');
+  const editEndInput = running ? null : form.querySelector('.edit-end');
+  for (const pick of form.querySelectorAll('.edit-pick')) {
+    pick.addEventListener('click', () => {
+      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
+        editStartInput.focus();
+        return;
+      }
+      window.STP.open({
+        startInput: editStartInput,
+        endInput: editEndInput, // null for the open row → start-only, no stop written
+        otherEntries: snapshotEntries(e.id),
+        onApply: () => {},
+      });
+    });
+  }
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const desc = form.querySelector('.edit-desc').value.trim();
@@ -814,14 +939,18 @@ function escapeHtml(s) {
 }
 
 // Live count-up on the running entry (display tick, independent of data changes). It
-// advances the compact summary glance line, the Active-Timer card clock (§12 R4), and the
-// running entry's row duration — all derived from now − start, never stored.
+// advances the compact summary glance line, the Timer-view Active-Timer card clock and the
+// Entries-view compact strip clock (§12 R04), and the running entry's row duration — all
+// derived from now − start, never stored.
 function tick() {
   if (!state?.status.running) return;
   const e = state.status.entry;
   $('summary').innerHTML = `▸ <b>running</b> ${fmtDur(elapsed(e.startUtc))} · ${escapeHtml(e.description ?? 'your timer')}${tagsHtml(e)}`;
   const clock = $('timer-clock');
   if (clock) clock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
+  // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card.
+  const stripClock = $('strip-clock');
+  if (stripClock) stripClock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
   const row = document.querySelector(`.entry.running .dur`);
   if (row) row.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds));
 }
@@ -844,9 +973,37 @@ $('switch').addEventListener('click', async () => {
   applyAck(ack);
 });
 
-// §12 R4: the Active-Timer card's primary Stop reuses the same `toggle` write the toolbar
-// Start/Stop uses (stopping the open entry); the card's Switch reuses the `start` IPC
-// (store.start = atomic stop-then-start, §05 R8), exactly like the toolbar Switch. No new
+// §12 R14: the live-edit-running strip wiring. Description + Start-time changes debounce a
+// commit (so a multi-keystroke edit sends one patch on settle); the Billable toggle commits
+// immediately. Every commit goes through commitLiveEdit → window.stint.edit with a patch that
+// never carries endUtc, so the open row stays open and the timer keeps running (§05 R6).
+{
+  const leDesc = $('le-desc');
+  const leStart = $('le-start');
+  const leBill = $('le-bill');
+  if (leDesc) leDesc.addEventListener('input', scheduleLiveEdit);
+  if (leStart) leStart.addEventListener('change', () => void commitLiveEdit());
+  if (leBill) leBill.addEventListener('change', () => void commitLiveEdit());
+  // Tags + client/project are richer than a single inline field, so they route to the
+  // consolidated editor (window.SE.openEditor) for the OPEN entry — which omits the End field
+  // on the running row for the same §05 R6 reason, so editing it still cannot stop the timer.
+  const openRunningEditor = () => {
+    const e = state?.status?.running ? state.status.entry : null;
+    if (e) window.SE.openEditor({ ...e, endUtc: null }, clientList, { onDone: () => load() });
+  };
+  const leTags = $('le-tags');
+  const leProject = $('le-project');
+  if (leTags) leTags.addEventListener('click', openRunningEditor);
+  if (leProject) leProject.addEventListener('click', openRunningEditor);
+  // §05 R09: the running card's Pin-as-favorite — captures the open entry's template
+  // (fromEntryId='open') via window.stint.pinFavorite (parity with `tt fav add`).
+  const timerPin = $('timer-pin');
+  if (timerPin) timerPin.addEventListener('click', () => void pinAsFavorite());
+}
+
+// §12 R4: the Active-Timer card's primary Stop reuses the same `toggle` write the Timer-view
+// #toggle primary uses (stopping the open entry); the card's Switch reuses the `start` IPC
+// (store.start = atomic stop-then-start, §05 R8), exactly like the #switch primary. No new
 // channel — the card is a presentation surface over the existing writes.
 $('timer-stop').addEventListener('click', async () => {
   const ack = await window.stint.toggle();
@@ -858,6 +1015,11 @@ $('timer-switch').addEventListener('click', async () => {
   await load();
   applyAck(ack);
 });
+
+// §12 R04: the Entries-view compact strip routes to the full Timer view. The whole strip is a
+// button (a click anywhere on it opens the Timer view); routing is presentation-only (no IPC).
+const timerStrip = $('timer-strip');
+if (timerStrip) timerStrip.addEventListener('click', () => route('timer'));
 
 // §09 R7 / §12 R9: free-text search over the entry list. Each keystroke updates the active
 // query. When the §12 R9 control bar is idle, search routes through the `search` IPC over
@@ -1090,17 +1252,17 @@ async function populateEntryClients() {
 }
 void populateEntryClients();
 
-// §08 R3 / §12 R8: open the report builder. The report capability already exists as a
-// core method and the `report` IPC channel (parity with `tt report`); this just
-// navigates the same window to that view — no new window-open IPC, so no new parity row.
-// The preload re-runs on the navigation, so window.stint is available on report.html.
-$('report-btn').addEventListener('click', () => {
-  window.location.href = 'report.html';
-});
+// §12 R08 (G7): the Entries toolbar's "This week" opens the in-shell Reports view — the
+// saved-reports surface (reports.js owns it). It routes client-side via the shell router
+// (route('reports')); the standalone report.html page is retired, so this never navigates
+// out of the window shell. No new IPC, so no new parity row.
+$('report-btn').addEventListener('click', () => route('reports'));
 
-// The explicit attributed start (PRD §05 R1, §12 R1): the primary Start stays
-// one-tap; this disclosure reveals optional description/client/project/tags/billable
-// fields and sends them all over the same `start` IPC the tt CLI uses.
+// §12 R05 (core): the GUI core-entry surface — the Start / Switch form. It lives in the
+// Timer view (relocated from the Entries toolbar); the ids are unchanged, so these $()
+// lookups resolve the moved nodes. The primary Start stays one-tap; this disclosure
+// (#start-toggle) reveals optional description/client/project/tags/billable fields and
+// sends them all over the same `start` IPC the tt CLI uses (core startWithAttributes).
 const startForm = $('start-form');
 $('start-toggle').addEventListener('click', () => {
   const open = startForm.hidden;
@@ -1222,6 +1384,80 @@ addForm.addEventListener('submit', async (ev) => {
   await submitAddForm();
 });
 
+// §05 R05 / §12 R15 (G9): the from/to calendar icons open the shared visual time-range
+// picker (window.STP, timepicker.js) for the add-form's span. TEXT ENTRY REMAINS
+// AUTHORITATIVE — the picker only writes a chosen start/stop BACK into the existing
+// #add-from/#add-to datetime-local fields (5-min snapping lives inside the picker), so the
+// unchanged submit path (fromLocal/toLocal → window.stint.add) is the one source of truth
+// and the add IPC payload shape never changes. When the picker is unavailable, or the span
+// crosses midnight (overnight spans use text entry per G9), the click degrades to a plain
+// focus on the field so the user just types — text entry is always reachable.
+
+// §12 R15: the snapshot's CLOSED entries (other than the one being edited) so the picker can
+// paint them gray on its day column and flag overlaps yellow (warn-only). The running/open
+// entry has no stop, so it is excluded; the picker resolves nothing itself — it only reads
+// the already-loaded start/stop instants the snapshot carries.
+function snapshotEntries(excludeId) {
+  if (!state || !Array.isArray(state.days)) return [];
+  return state.days
+    .flatMap((d) => d.entries)
+    .filter((e) => e.endUtc !== null && e.id !== excludeId)
+    .map((e) => ({ startUtc: e.startUtc, endUtc: e.endUtc, description: e.description }));
+}
+
+function openAddRangePicker(focusField) {
+  const fromInput = $('add-from');
+  const toInput = $('add-to');
+  // Default span = existing values, else last-stop→now (G9). The text fields are already
+  // seeded by openAddForm (last hour), so their current values are the seed.
+  const seedFrom = fromInput.value ? new Date(fromInput.value) : null;
+  const seedTo = toInput.value ? new Date(toInput.value) : null;
+  const overnight =
+    seedFrom && seedTo && seedFrom.toDateString() !== seedTo.toDateString();
+  // Overnight spans, or no picker available, fall back to text entry — focus the field so
+  // the user types the times directly (text entry remains authoritative everywhere).
+  if (overnight || typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
+    $(focusField).focus();
+    return;
+  }
+  // §12 R15: open the shared visual picker bound to the two authoritative add inputs. The
+  // picker writes localInputValue strings back into #add-from/#add-to (text stays
+  // authoritative), so the unchanged submit path (fromLocal/toLocal → window.stint.add) is
+  // the single source of truth — no new capability, no IPC change.
+  window.STP.open({
+    startInput: fromInput,
+    endInput: toInput,
+    otherEntries: snapshotEntries(null),
+    onApply: () => {},
+  });
+}
+$('add-from-pick').addEventListener('click', () => openAddRangePicker('add-from'));
+$('add-to-pick').addEventListener('click', () => openAddRangePicker('add-to'));
+
+// §12 R15: the running entry's live-edit start (#le-start) opens the picker SEEDED START-ONLY
+// — there is no End input on the open row (editing it must never close the timer, §05 R6), so
+// the picker shows only a start handle and never writes a stop. The picker writes the start
+// back into #le-start and fires its `change` event, which the live-edit strip already commits
+// over window.stint.edit with a patch that never carries endUtc.
+{
+  const leStartPick = $('le-start-pick');
+  if (leStartPick) {
+    leStartPick.addEventListener('click', () => {
+      const leStart = $('le-start');
+      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
+        leStart.focus();
+        return;
+      }
+      window.STP.open({
+        startInput: leStart,
+        endInput: null, // start-only: the open row has no stop
+        otherEntries: snapshotEntries(state?.status?.entry?.id ?? null),
+        onApply: () => {},
+      });
+    });
+  }
+}
+
 // §06 R3: the Merge action folds the current contiguous selection. mergeSelected()
 // decides whether the selection agrees (merge directly) or disagrees (raise the inline
 // conflict prompt to pick the winning client/project/billable first).
@@ -1269,7 +1505,10 @@ function route(view) {
   // Repaint the active data view from its current state so a route back restores it.
   if (view === 'entries') render();
   else if (view === 'clients') void renderClients();
-  else if (view === 'timer') void renderFavorites();
+  // §12 R04: repaint the favorites rail (R14) and the full Active-Timer card (the Timer view
+  // hosts it) from the current running state. The card's count-up keeps advancing via tick().
+  else if (view === 'timer')
+    void renderFavorites(), renderTimerCard(state && state.status.running ? state.status.entry : null);
 }
 
 for (const item of document.querySelectorAll('.nav-item')) {
@@ -1653,7 +1892,11 @@ async function pinAsFavorite() {
 // §07/§12: an external change (a tt write) repaints whichever view is active.
 window.stint.onChange(() => {
   if (activeView === 'clients') void renderClients();
-  else if (activeView === 'timer') void renderFavorites();
+  // §12 R14: on the Timer view a tt write repaints both the favorites rail AND the
+  // Active-Timer card + live-edit strip (a tt start/stop/edit changes the running state), so
+  // the in-window timer surface tracks the other surface (parity). load() refreshes `state`
+  // (→ render() repaints the card + live-edit strip); renderFavorites repaints the rail.
+  else if (activeView === 'timer') void load().then(() => renderFavorites());
   else void load();
 });
 setInterval(tick, 1000);

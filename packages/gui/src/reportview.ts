@@ -109,6 +109,38 @@ export function buildSavedReportView(
 }
 
 /**
+ * §09 R6 / R09 — resolve an export request to its absolute range AND the raw entries it
+ * covers, handling BOTH cases in one place so main.ts no longer fragments the decision:
+ *
+ *   - a SAVED report (savedReportRef): its range is resolved through the one core path
+ *     (store.runReport → resolveReportDef → resolveRange), and we take the resolved window
+ *     straight off the returned Report rather than re-deriving it;
+ *   - an AD-HOC range: the preset/custom from/to is resolved through resolveExportRange.
+ *
+ * Either way the entries are the RAW set for the resolved window (billable='all', NO
+ * client/project/tag/search narrowing), exactly `tt export` / `tt report run --csv|--json`,
+ * so a saved-report export and an ad-hoc export with identical resolved bounds produce
+ * byte-identical files. Pure (Electron-free): main.ts just renders + writes the result.
+ */
+export function resolveExportDefinition(
+  req: ExportRequest,
+  store: Pick<Store, 'runReport' | 'listEntries' | 'settings'>,
+  now: Date,
+): { range: { fromUtc: string; toUtc: string }; entries: EntryView[] } {
+  const range =
+    req.savedReportRef !== undefined
+      ? (() => {
+          // The saved definition carries its own range; resolve it through the one core path
+          // and read the resolved window off the Report (no re-extraction of date math).
+          const run = store.runReport(req.savedReportRef, now);
+          return { fromUtc: run.rangeFromUtc, toUtc: run.rangeToUtc };
+        })()
+      : resolveExportRange(req, store.settings().weekStart, now);
+  const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
+  return { range, entries };
+}
+
+/**
  * The export file's bytes for a resolved range. Raw entries (billable='all', no filter),
  * rendered to CSV or the JSON-entries shape — byte-identical to `tt export --csv/--json`
  * for the same range, with a trailing newline so the file ends cleanly.

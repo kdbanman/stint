@@ -103,7 +103,7 @@ describe('GOLD: settings defaults (§14)', () => {
 describe('GOLD: schema shape (§13)', () => {
   // Artefact-is-criterion: the v3 schema IS the contract. A fresh in-memory DB must carry
   // the new favorite / favorite_tag / report tables with the exact §13 column sets and the
-  // §20 R02 partial unique index on entry(end_utc) WHERE end_utc IS NULL — and open with
+  // §20 R02 partial unique index over the constant (1) WHERE end_utc IS NULL — and open with
   // foreign_keys ON. A regression (missing table/column/index, or a stale version) fails here.
   const objects = (db: Db, type: 'table' | 'index') =>
     (
@@ -180,6 +180,11 @@ describe('GOLD: schema shape (§13)', () => {
     // The index is PARTIAL (only open rows) and UNIQUE — the DB-level teeth for one-open-entry.
     expect(sql).toMatch(/UNIQUE/i);
     expect(sql).toMatch(/WHERE\s+end_utc\s+IS\s+NULL/i);
+    // It indexes the CONSTANT expression (1), NOT end_utc: a unique index on end_utc would
+    // permit unlimited open rows because SQLite treats NULLs as distinct. Pinning the constant
+    // keeps the second-open-row collision (proven by prop/invariants.test.ts) load-bearing.
+    expect(sql).toMatch(/\(\s*1\s*\)/);
+    expect(sql).not.toMatch(/\(\s*end_utc\s*\)\s*WHERE/i);
     db.close();
   });
 });

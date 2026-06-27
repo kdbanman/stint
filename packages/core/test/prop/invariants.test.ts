@@ -15,6 +15,7 @@ import { describe, expect } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
 import {
   Store,
+  openDb,
   roundSeconds,
   secondsBetween,
   renderLocal,
@@ -88,6 +89,74 @@ describe('PROP: one open entry under any op sequence (§03, §05 R01, §17 R2)',
         }
       } finally {
         store.close();
+      }
+    },
+  );
+});
+
+// §20 R02 — the at-most-one-open invariant given DB-level teeth. The property above proves the
+// invariant holds along the TRANSACTIONAL core path (start/stop under BEGIN IMMEDIATE). This one
+// proves the storage-layer backstop INDEPENDENTLY of the human-readable triggers: with the
+// one_open_entry_* triggers dropped (so the partial unique index alone is under test), a RAW
+// second INSERT that bypasses core logic entirely is still rejected by `one_open_entry_idx`, for
+// arbitrary generated entry attributes — and unlimited CLOSED rows (excluded from the partial
+// index) never collide. This is what fails if the index ever regresses to indexing end_utc
+// instead of the constant (1): SQLite treats NULLs as distinct, so end_utc would permit a second
+// open row and this property would catch it. openDb runs migrate(), so the index is present.
+describe('PROP: a raw second open INSERT is rejected by the DB index (§20 R02)', () => {
+  const attrsArb = fc.record({
+    startMs: fc.integer({ min: BASE, max: BASE + 365 * 24 * 3_600_000 }),
+    billable: fc.constantFrom(0, 1),
+    excludedSeconds: fc.integer({ min: 0, max: 86_400 }),
+  });
+
+  test.prop([attrsArb, fc.array(attrsArb, { maxLength: 12 })])(
+    'with triggers dropped, a second RAW open INSERT throws a UNIQUE error while closed rows never do',
+    (open, closed) => {
+      const db = openDb(':memory:');
+      try {
+        // Seed exactly one open row (end_utc NULL) — the single permitted open entry.
+        db.prepare(
+          'INSERT INTO entry(start_utc, end_utc, billable, excluded_seconds) VALUES(?, NULL, ?, ?)',
+        ).run(new Date(open.startMs).toISOString(), open.billable, open.excludedSeconds);
+
+        // Drop the BEFORE INSERT/UPDATE triggers so the partial unique index is the SOLE remaining
+        // defense — otherwise the trigger would abort first with 'an entry is already open' and we
+        // would never exercise the index. This isolates the storage-layer backstop §20 R02 promises.
+        db.exec('DROP TRIGGER IF EXISTS one_open_entry_insert');
+        db.exec('DROP TRIGGER IF EXISTS one_open_entry_update');
+
+        // A RAW second open INSERT (end_utc NULL) bypassing the transactional core path must be
+        // rejected by the partial unique index alone, whatever the generated attributes.
+        expect(() =>
+          db
+            .prepare(
+              'INSERT INTO entry(start_utc, end_utc, billable, excluded_seconds) VALUES(?, NULL, ?, ?)',
+            )
+            .run(new Date(open.startMs + 1000).toISOString(), open.billable, open.excludedSeconds),
+        ).toThrow(/UNIQUE constraint failed: index 'one_open_entry_idx'/);
+
+        // Closed rows (end_utc NOT NULL) are excluded from the partial index — unlimited closed
+        // rows coexist with the single open row and never collide.
+        for (const c of closed) {
+          const start = new Date(c.startMs).toISOString();
+          const end = new Date(c.startMs + 60_000).toISOString();
+          expect(() =>
+            db
+              .prepare(
+                'INSERT INTO entry(start_utc, end_utc, billable, excluded_seconds) VALUES(?, ?, ?, ?)',
+              )
+              .run(start, end, c.billable, c.excludedSeconds),
+          ).not.toThrow();
+        }
+
+        // Exactly one open row survives the whole sequence.
+        const openCount = (
+          db.prepare('SELECT COUNT(*) AS n FROM entry WHERE end_utc IS NULL').get() as { n: number }
+        ).n;
+        expect(openCount).toBe(1);
+      } finally {
+        db.close();
       }
     },
   );

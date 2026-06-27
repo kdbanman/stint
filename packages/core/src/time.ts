@@ -25,6 +25,48 @@ export function secondsBetween(aUtc: string, bUtc: string): number {
   return Math.round((Date.parse(bUtc) - Date.parse(aUtc)) / 1000);
 }
 
+/**
+ * Monotonic-time guard for *derived* elapsed of an open entry (PRD §20 R06).
+ *
+ * Wall clocks are not monotonic: NTP corrections and manual clock changes can move
+ * `now` *behind* an entry's `start`. The live count-up of a running entry must never
+ * report negative, NaN, or otherwise garbage elapsed when that happens — it clamps to
+ * 0 until the clock catches back up.
+ *
+ * Returns whole seconds `max(0, round((now - start) / 1000))`, and 0 (never negative,
+ * never NaN) when `now < start` or when either timestamp fails to parse. Unlike
+ * {@link secondsBetween} — the *signed* raw-span primitive used for stored start/end
+ * span math (sleep spans, §10a) — this is the asymmetric, never-negative guard for
+ * live/derived elapsed only.
+ *
+ * Do NOT reach for this as a general "clamp a duration to ≥ 0" helper. It is correct
+ * *only* for the live count-up of an OPEN entry, where the second argument is the
+ * wall-clock `now` and the asymmetry (clamp when `now < start`) absorbs a clock that
+ * jumped backwards. For a CLOSED entry the span is bounded by a *stored* end, not by
+ * `now`, so a backwards clock cannot corrupt it and there is nothing to absorb;
+ * clamping that math here would only mask a genuinely corrupt `end < start` row instead
+ * of surfacing it. Store.toView deliberately keeps the closed-entry span on its own
+ * inline `max(0, …)` for exactly this reason — it is not an oversight to be "unified".
+ */
+export function elapsedSeconds(startUtc: string, nowUtc: string): number {
+  const start = parseIsoUtc(startUtc);
+  const now = parseIsoUtc(nowUtc);
+  if (Number.isNaN(start) || Number.isNaN(now)) return 0;
+  return Math.max(0, Math.round((now - start) / 1000));
+}
+
+/**
+ * Strictly parse an ISO-8601 instant, returning epoch ms or NaN. Unlike bare
+ * {@link Date.parse} — which leniently reads `"0"` as a year, `"1995"` as a date, etc. —
+ * this requires a full date-time with an explicit zone, so garbage strings reaching the
+ * monotonic guard yield NaN (and thus a clamped 0) instead of a spurious instant.
+ */
+const ISO_UTC_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/;
+function parseIsoUtc(s: string): number {
+  if (!ISO_UTC_RE.test(s)) return NaN;
+  return Date.parse(s);
+}
+
 export class TimeParseError extends Error {
   constructor(input: string) {
     super(`could not parse time: "${input}"`);

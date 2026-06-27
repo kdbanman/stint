@@ -26,12 +26,16 @@ export interface Ctx {
   listGroups?: EntryGroupRec[];
   /** §09 R09 — the grand total seconds of the most recent saved-report run. */
   runTotalSeconds?: number;
+  /** §09 R09 — the grand total captured before a re-grouping edit, to prove regroup-invariance. */
+  priorRunTotalSeconds?: number;
   /** §09 R09 — the rows from the most recent export-from-saved-report. */
   savedExportRows?: ExportRowRec[];
   /** §05 R09 — the favorites from the most recent `When I view the favorites`. */
   favorites?: FavoriteRec[];
   /** §05 R10 — the result of the most recent `When I attempt to resume from favorite "X"`. */
   resumeFavResult?: { rejected: boolean };
+  /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
+  integrityOpen?: { refused: boolean; wrote: boolean };
 }
 
 export interface StepDef {
@@ -908,6 +912,22 @@ export const steps: StepDef[] = [
     run: (w, _c, name, preset) => w.editReportRange(name, presetKeyFull(preset)),
   },
   {
+    // §09 R08 — amend a saved def's group-by. Captures the current run total first so a
+    // subsequent re-run can assert the regrouped total is unchanged (grouping is invariant
+    // on the grand total). Proven on both surfaces (store.editReport / `tt report edit --by`).
+    pattern: /^I change the saved report "([^"]*)" grouping to (client|project|day|tag)$/,
+    run: (w, ctx, name, by) => {
+      ctx.priorRunTotalSeconds = ctx.runTotalSeconds;
+      w.editReportBy(name, groupBy(by));
+    },
+  },
+  {
+    pattern: /^the saved report run total is unchanged$/,
+    run: (_w, ctx) => {
+      expect(ctx.runTotalSeconds).toBe(ctx.priorRunTotalSeconds);
+    },
+  },
+  {
     pattern: /^I rename the saved report "([^"]*)" to "([^"]*)"$/,
     run: (w, _c, name, to) => w.renameReport(name, to),
   },
@@ -1125,6 +1145,72 @@ export const steps: StepDef[] = [
     // §20 R05 — the corrupt file was set aside, not destroyed: a `.corrupted-*` sibling remains.
     pattern: /^the corrupt database file is quarantined beside the database$/,
     run: (w) => expect(w.hasQuarantinedFile()).toBe(true),
+  },
+
+  // ---- §20 R03 integrity check on open (detect corruption, refuse to write) ----
+  // The bare detect-and-refuse contract, isolated from R05's recover-from-backup path: a corrupt
+  // database with NO backup beside it must be DETECTED on open and the open REFUSED before any
+  // write — never falling through to normal operation on a corrupt file. Surface-neutral over the
+  // World integrity capabilities: CoreWorld opens via openDb (a RecoveryError is the refusal);
+  // CliWorld runs a real `tt status` (non-zero exit + integrity error on stderr). Run TWICE so the
+  // write-refusal is proven identical on @stint/core and tt (§17 R8). The corrupt file's bytes must
+  // be UNCHANGED after the refused open — concrete proof that R03 wrote nothing to the bad file.
+  {
+    pattern: /^the database file is corrupted$/,
+    run: (w) => w.corruptDatabaseFile(),
+  },
+  {
+    pattern: /^I open the database$/,
+    run: (w, c) => {
+      c.integrityOpen = w.openCorruptDatabase();
+    },
+  },
+  {
+    pattern: /^the open is refused before any write$/,
+    run: (_w, c) => {
+      expect(c.integrityOpen, 'expected a prior `When I open the database`').toBeDefined();
+      // Refused: corruption was detected and the open did not proceed to normal operation.
+      expect(c.integrityOpen!.refused).toBe(true);
+      // And not a single byte of the corrupt file was rewritten — R03 must not write to it.
+      expect(c.integrityOpen!.wrote).toBe(false);
+    },
+  },
+
+  // ---- §20 R07 app_state durability (the schedule never drifts from its entry) ----
+  // start() seeds the check-in schedule in the SAME transaction as the open entry (anchored at
+  // its start); stop() clears it in the SAME transaction as the close. Surface-neutral over the
+  // World schedule capability: CoreWorld reads store.checkinState(); CliWorld reads the committed
+  // `app_state` row off the DB file the tt process wrote (durable across the process boundary).
+  // Each assertion has an "after reopening the store" twin that re-reads through a fresh launch,
+  // proving the state was committed durably — not merely held in-process — and runs TWICE (§17 R8).
+  {
+    pattern: /^the persisted check-in schedule is anchored at (\d{1,2}:\d{2})$/,
+    run: (w, _c, at) => expect(w.checkinScheduleAnchor()).toBe(iso(at)),
+  },
+  {
+    pattern: /^the persisted check-in schedule is anchored at (\d{1,2}:\d{2}) after reopening the store$/,
+    run: (w, _c, at) => {
+      w.relaunch();
+      expect(w.checkinScheduleAnchor()).toBe(iso(at));
+    },
+  },
+  {
+    pattern: /^no check-in schedule is persisted$/,
+    run: (w) => expect(w.checkinScheduleAnchor()).toBeNull(),
+  },
+  {
+    pattern: /^no check-in schedule is persisted after reopening the store$/,
+    run: (w) => {
+      w.relaunch();
+      expect(w.checkinScheduleAnchor()).toBeNull();
+    },
+  },
+  {
+    pattern: /^nothing is running after reopening the store$/,
+    run: (w) => {
+      w.relaunch();
+      expect(w.status().running).toBe(false);
+    },
   },
 ];
 

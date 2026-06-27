@@ -46,6 +46,11 @@ Feature: Tracking and backfill
     And I mark the open entry non-billable
     Then the open entry is non-billable
 
+  # PRD §05 R05 (core: core data entry) — manual backfill creates a COMPLETED entry from
+  # explicit from/to. Runs twice (CoreWorld.backfill = store.add, CliWorld.backfill =
+  # `tt add --from --to`), proving the core-entry behaviour is identical and reachable on
+  # both surfaces. The GUI from/to fields also open the §12 R15 range picker, but text
+  # entry stays authoritative, so this surface-neutral scenario is the core-entry AC.
   Scenario: Backfill creates a completed entry
     When I backfill an entry "spec review" from 13:00 to 14:30
     Then exactly zero entries are open

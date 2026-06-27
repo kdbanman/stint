@@ -838,7 +838,10 @@ Run it either by triggering the workflow (`.github/workflows/release.yml` via th
 workflow** / `workflow_dispatch` button, or a push to `main`) and inspecting its artifacts, or
 locally per platform with `npm ci && npm run build && npm --workspace @stint/gui run pack`.
 
-1. **No Windows in the configuration.** Inspect the two source files.
+1. **No Windows in the configuration.** Inspect the two source files. (This step is also
+   the **automated CI safety valve** `packages/gui/test/build-matrix.test.ts` — a GOLD-style
+   static config guard that **fails CI** if a `win` block or a `windows-latest` matrix entry
+   creeps back in; run it standalone with `npx vitest run packages/gui/test/build-matrix.test.ts`.)
    - [ ] `packages/gui/electron-builder.yml` declares `mac` and `linux` target blocks and
          contains **no `win` block** (and no `nsis`/`portable`/`msi` Windows targets).
    - [ ] `.github/workflows/release.yml`'s `strategy.matrix.os` is exactly
@@ -860,6 +863,40 @@ locally per platform with `npm ci && npm run build && npm --workspace @stint/gui
 > a `windows-latest` matrix entry, or a `.exe`/`.msi`/NSIS artifact) or if either the macOS or
 > the Linux artifact is missing. R01 is satisfied only when both platform artifacts build and
 > launch and Windows is absent throughout.
+
+## CHECK INTEGRITY-ON-OPEN (§20 R03) — corruption detected before any write
+
+§20 R03 is the gate that makes recovery possible: on every open the database is **integrity-checked
+(`PRAGMA quick_check`) BEFORE any write**, and on failure the app/CLI must **not write to the corrupt
+file** and must surface the corruption rather than proceed to normal operation on the bad data. This
+check isolates that **detect-and-refuse** half — the restore half is verified by **CHECK BACKUP &
+RECOVERY (§20 R05)** below, which this hands off to. The executable AC
+(`features/integrity_check.feature`, run over core + tt) proves the bare write-refusal headless (a
+corrupt, backup-less DB: open refused, file bytes unchanged); this MANUAL check confirms it on a real
+install. Run with `tt` available (the database is `timetracker.sqlite` — find it with `tt config ls` /
+the default path in PRD §13).
+
+1. With the app **quit**, copy the real database aside so you can compare it afterwards
+   (`cp timetracker.sqlite /tmp/tt-before.sqlite`), and note its size + mtime (`ls -l --time-style=full-iso timetracker.sqlite`).
+2. Corrupt the database on disk — e.g. zero the SQLite header
+   (`dd if=/dev/zero of=timetracker.sqlite bs=1 count=16 conv=notrunc`) **or** truncate it mid-file
+   (`truncate -s 100 timetracker.sqlite`) **or** append garbage (`printf 'xxxx' >> timetracker.sqlite`).
+3. Open the database through each surface and observe the open is refused **before any write**:
+   - [ ] Run `tt status` (or any `tt` command): it **detects the corruption at open**, exits
+         **non-zero**, and prints an **integrity/corruption error** on stderr — it does **not** print a
+         normal status or silently start fresh.
+   - [ ] Launch the GUI: it **detects the corruption on open** and does **not** proceed to normal
+         operation on the corrupt file (it surfaces the corruption / recovery flow, never an empty,
+         business-as-usual window over the bad data).
+   - [ ] The corrupt file is **not modified by the failed open**: its **size and mtime are unchanged**
+         versus step 1 (the open read it, found it bad, and wrote nothing to it). *(If a good backup
+         exists, recovery from §20 R05 will then quarantine + replace it — that is the next check; R03
+         alone must never write to the corrupt file.)*
+
+> R03 is the **before-any-write detection**; the **quarantine + restore-from-backup + user
+> notification** is §20 R05, exercised by **CHECK BACKUP & RECOVERY** below. This check fails if any
+> write touches the corrupt file before detection, or if either surface proceeds to normal operation
+> on a corrupt database instead of surfacing the corruption.
 
 ## CHECK BACKUP & RECOVERY (§17 R12, §20 R04/R05) — backup-on-launch, retention, corruption recovery
 
@@ -937,6 +974,59 @@ display only.)
 > value. Proven headless by GOLD (`cli/test/gold/cli.test.ts` version case + `version.schema.json`,
 > `core/test/gold/contracts.test.ts` `isReleaseVersion`/`APP_VERSION`).
 
+## CHECK SOFTWARE UPDATE — CHECK FOR UPDATES (§19 R03)
+
+§19 R03 (decision **G3**) adds the **Check for updates** action to GUI **Settings → Software
+Update**: alongside the Current version row (R06), a **Check now** button queries the **GitHub
+Releases API** and reports either **up to date** (the latest published release tag equals the
+running version) or **update available · `<newer version>`** with a **link** to the release,
+comparing tags by the §19 R06 `YYYY.M.D[.N]` rule (year → month → day → same-day build suffix).
+This is a **GUI/OS-only** capability — there is **no `tt` equivalent** (a CLI install is updated
+by the package manager / installer), so, like the tray and the global hotkey, it is **not** a
+parity-matrix channel: it rides a separate `update:getVersion` / `update:check` IPC surface,
+bridged to the renderer as `window.stint.update`. The check is the app's **single, explicit,
+user-initiated outbound request** (Electron's built-in `net` to GitHub — never `node:https` /
+global `fetch`; §17 R9), and it **never writes the database** (§19 R04). The download + guided
+install is §19 R04 — out of scope here; this is the **check** only. The pure ordering + verdict
+logic is proven offline by GOLD (`packages/gui/test/update.test.ts`); the renderer wiring by
+`packages/gui/test/renderer-static.test.ts`. This MANUAL CHECK confirms the live query + the
+on-screen verdict + the no-DB-write invariant on a real install.
+
+1. **The current version is shown.** Launch the installed app and open **Settings → Software
+   Update**.
+   - [ ] The **Current version** row shows the packaged app version (`app.getVersion()`), the
+         same `YYYY.M.D[.N]` string `tt --version` prints (R06 cross-check).
+2. **A check with the network present reports a correct verdict.** With internet access, click
+   **Check now**.
+   - [ ] The button shows a brief in-progress state, then a result appears.
+   - [ ] If the latest **published** GitHub release tag **equals** the current version, it reports
+         **up to date**.
+   - [ ] If a **newer** published release exists (by the `YYYY.M.D[.N]` rule — e.g. current
+         `2026.6.27` vs. release `2026.6.27.3`, or `2026.6.28`), it reports **update available ·
+         `<newer version>`** with a **link** to that release (clicking it opens the GitHub release
+         page in the browser, not in the app window).
+   - [ ] Draft / prerelease GitHub releases are **ignored** — only the latest published, date-shaped
+         tag is considered.
+3. **The check makes no database write (§19 R04).** Note the database file's modification time
+   (e.g. `stat` the `timetracker.sqlite` under the app's data dir) before clicking **Check now**,
+   then again after the verdict appears.
+   - [ ] The database **mtime is unchanged** — the update check reads no entries and writes nothing.
+4. **A check with the network unavailable degrades gracefully.** Disable networking (or block the
+   GitHub API) and click **Check now** again.
+   - [ ] The app does **not** crash or hang; it shows a **graceful error** message (e.g. it could
+         not reach GitHub Releases), and the rest of Settings stays usable.
+
+> This check **FAILS** if the Current version shown differs from `app.getVersion()` / `tt
+> --version`; if **Check now** does not query GitHub Releases or misreports the verdict (calling an
+> equal/older release an update, or a newer release up-to-date, against the `YYYY.M.D[.N]` rule);
+> if an update-available verdict omits the newer version or its release link; if the check **writes
+> the database** (mtime changes — violating §19 R04); or if a failed/offline check **crashes** the
+> app instead of showing a graceful error. R03 is a live-network + GUI reality with no headless
+> network AC (the no-network backstop forbids a test reaching GitHub); the pure verdict logic is
+> proven offline by GOLD `packages/gui/test/update.test.ts` and the wiring by
+> `packages/gui/test/renderer-static.test.ts`, so the **live query** itself is confirmed by this
+> MANUAL CHECK on a real install.
+
 ## CHECK INSTALL — single artifact puts the GUI in Applications/launcher and `tt` on PATH (§19 R02)
 
 §19 R02 (decision **G2**) is the single-installer mechanism: **one** artifact per platform, run
@@ -955,6 +1045,18 @@ updater (§19 R03/R04), Release publishing (§19 R05), and versioning (§19 R06)
 Build the platform artifact first (`npm ci && npm run build && npm --workspace @stint/gui run pack`,
 then on macOS `packaging/macos/build-pkg.sh <Stint.app> <version>` to wrap the `.pkg`). Then, per
 platform:
+
+### Pre-flight — the bundle actually contains the CLI + launcher
+The single installer only works if `electron-builder.yml`'s `files:` glob bundled the CLI entrypoint
+and the `packaging/` tree into the app root (the executable guard `packages/gui/test/build-matrix.test.ts`
+asserts the glob, but confirm the *built* bundle here):
+0. Inspect the freshly built app bundle (macOS: `Stint.app/Contents/Resources/app/…`; Linux: the
+   extracted AppImage `…/resources/app/…` or `/opt/stint/resources/app/…`).
+   - [ ] **`packages/cli/dist/bin.js` exists** in the bundle (the path `tt-launcher.sh` resolves via
+         `CLI_REL`), and `packages/cli/dist/program.js` alongside it.
+   - [ ] **`packaging/tt-launcher.sh` exists** in the bundle (on macOS `build-pkg.sh` already FAILED
+         the wrap with "ensure packaging/ is included in the electron-builder files glob" if it did not).
+   - [ ] **`node_modules/commander`** is present in the app root (bin.js's lone runtime dependency).
 
 ### macOS — the `.pkg` double-click path
 1. Double-click `Stint-<version>.pkg` and complete the installer (a single run).
@@ -1046,7 +1148,311 @@ Run it by merging a PR to `main` (or pressing **Run workflow** / `workflow_dispa
 > This check **FAILS** if the workflow does **not** run on a merge to `main`, if **any** of the four
 > jobs fails, if **no new Release** is created (or it is left a **draft**/prerelease), if either the
 > macOS or the Linux artifact is **absent** (or a Windows artifact appears), or if the release
-> tag/version disagrees with what the installed app and `tt` report (§19 R06). R05 is an
-> Actions/GitHub-Releases reality — there is **no executable AC** (no new core API, IPC channel, or
-> DB table), so the proof is this MANUAL procedure observed on the **real upstream repo**; CI cannot
-> assert the publish actually firing. The pipeline itself lives in `.github/workflows/release.yml`.
+> tag/version disagrees with what the installed app and `tt` report (§19 R06). The publish
+> **actually firing** is an Actions/GitHub-Releases reality — no new core API, IPC channel, or DB
+> table to unit-test — so that step's proof is this MANUAL procedure observed on the **real upstream
+> repo**; CI cannot assert the publish actually firing. The *authoring* of the pipeline that makes it
+> fire IS executably guarded: **GOLD** `packages/gui/test/build-matrix.test.ts` ("publish-on-merge
+> workflow is wired to publish a Release (§19 R05)") statically asserts `release.yml`'s `push: [main]`
+> trigger, the `version → pack → publish` `needs:` chain, the `kdbanman/stint` upstream-only guard,
+> and the `publish` job's `contents: write` + non-draft `gh release create` with both artifacts — so
+> a regression that drops the trigger, deletes the publish job, or drafts the release **fails CI**
+> before it can reach a real merge, leaving only the live firing for this MANUAL check. The pipeline
+> itself lives in `.github/workflows/release.yml`.
+
+## CHECK UPDATE-MID-TIMER (§16, §19 R04) — a running entry survives an in-app update untouched
+
+§16's decided behavior for **"Update arrives mid-timer"** is that the in-app update (§19 R04) **never
+touches the database**: a timer left running while the app is replaced is **still open, unchanged**
+after relaunch, because the update flow replaces the *application* only and migrates/rewrites **no**
+data. This is the §16 edge-case lens over §19 R04 (whose no-DB-write invariant on the *check* step is
+also asserted in **CHECK SOFTWARE UPDATE — CHECK FOR UPDATES**); here it is exercised across the full
+**download + guided install** with a **live open entry**, the one residual a headless host cannot drive
+(no real app-replacement, no real running timer across a relaunch). Run with `tt` available on the same
+database (find it with `tt config ls` / the default path in PRD §13; below it is `timetracker.sqlite`).
+
+1. Start a live timer and **capture the pre-update state** while it runs:
+   `tt start "release work" --client "Acme"`, then note from `tt status --json` the open entry's
+   **id** and **`startUtc`**, and capture the on-disk DB **content hash + mtime/size**
+   (`sha256sum timetracker.sqlite` and `ls -l --time-style=full-iso timetracker.sqlite`). Confirm the
+   tray title is counting up — the entry is genuinely open, not closed.
+2. From **Settings → Software Update**, run the **download + guided install** (§19 R04) — or, if no
+   newer release is available to install, **simulate the §19 R04 app-replacement step**: quit the GUI,
+   replace the app bundle/AppImage in place with the new artifact (the data directory is **not** part
+   of the app bundle), and clear Gatekeeper once if prompted (the one-time approval §19 R04 accounts
+   for). Do **not** touch the data directory during the swap.
+3. Relaunch the updated app and re-observe state on **both** surfaces.
+   - [ ] The **same** entry is **still open** — `tt status --json` reports an open entry with the
+         **identical id and `startUtc`** captured in step 1 (the update did **not** drop, close, or
+         re-create the running entry), and the GUI's running card / tray shows it still counting up.
+   - [ ] The live count-up **continues from `now − start`** (elapsed kept growing across the update;
+         it did **not** reset to zero or jump).
+   - [ ] The DB file is **byte-identical** to the pre-update capture: `sha256sum timetracker.sqlite`
+         matches step 1 (and mtime/size unchanged) — **the update touched no data** (a backup-on-launch
+         write, if it fires, is a *separate sibling* file, never an in-place rewrite of the live DB;
+         confirm the live `timetracker.sqlite` itself is unchanged).
+
+> This check **FAILS** if, after an in-app update completes mid-timer, the previously-open entry is no
+> longer open, its id or `startUtc` changed, the elapsed reset, or the live `timetracker.sqlite` is not
+> byte-identical to its pre-update capture (i.e. the update flow rewrote, migrated, or otherwise touched
+> the database, or dropped the running entry) — any of these violates §16 / §19 R04. There is no
+> executable AC for the real app-replacement across a live timer (no Playwright host for the OS-level
+> swap, and the no-network backstop forbids reaching GitHub); §19 R04's no-DB-write is pinned headless
+> for **both** the *check* step **and the download + guided install** by GOLD
+> `packages/gui/test/update.test.ts` (artifact selection, progress maths, the guided-step plan, and the
+> size-verified `downloadUpdate` over an injected byte source — asserting the artifact lands in the TEMP
+> dir, never beside the database, and the flow makes zero Store calls) and the renderer wiring by
+> `packages/gui/test/renderer-static.test.ts`, so the **install-across-a-live-timer** reality is this
+> MANUAL CHECK on a real install.
+>
+> **Executed evidence.** The headless-drivable core of this check — the **no-DB-touch invariant across a
+> live open timer** — is run by `npm run evidence` and checked in: `acceptance/evidence/cli-transcript.md`
+> → section **"§16 / §19 R04 — in-app update never touches the database (simulated app-replacement)"**
+> starts a live timer, captures the open entry + the live DB's sha256/size, simulates the §19 R04
+> app-replacement (swap the app bundle, leave the data directory — step 2's "simulate the app-replacement
+> step" path), and re-reads **both** surfaces (`tt` + the core Store the GUI is a surface over): it
+> confirms the live `tt.sqlite` is byte-identical, the same entry is still open with an unchanged
+> id/start, and the derived elapsed continued to grow. The Settings → Software Update **chrome**
+> (version row, Check-now verdict + release link, Download & install → progress bar → guided steps incl.
+> the one-time Gatekeeper beat → Reveal installer) is exercised through the real renderer by the JUDGE
+> harness — item **`SOFTWARE_UPDATE`** in `acceptance/evidence/judge-report.json`, screenshot
+> `acceptance/evidence/screenshots/main-software-update.png`. The residual **live** part (the real GitHub
+> artifact download + the OS-level app replacement + the one-time Gatekeeper approval, across a real
+> running timer on a real install) awaits a real desktop operator's screen recording in
+> `acceptance/evidence/recordings/` (see that directory's `README.md` for the execution status table).
+
+## CHECK BACKUP-ON-LAUNCH (§16, §20 R04) — a fresh launch writes a recoverable backup when the DB changed
+
+§16's decided behavior for **"Fresh launch"** is that if the DB **changed since the last backup**, a
+**timestamped backup** is written beside it **before any write** (§20 R04), the last **N** (default 5)
+are kept, and a launch with **no change** writes **none**. This is the §16 edge-case lens over §20 R04;
+the executable AC (`features/backup_recovery.feature`, run over core + tt) proves the mechanism headless,
+and the broader live walk is **CHECK BACKUP & RECOVERY** above — this focused check isolates the
+**backup-on-launch** edge case: it fires on change, is a valid recoverable copy, is bounded by retention,
+and is a no-op when nothing changed. Run with `tt` in a second terminal on the same database (find it
+with `tt config ls` / the default path in PRD §13; below it is `timetracker.sqlite`).
+
+1. **A change since the last backup makes one valid timestamped backup on launch.** With the app quit,
+   make a change so the DB differs from the last backup (`tt add "warmup" --from "2h ago" --to "1h ago"`),
+   then launch the GUI.
+   - [ ] A new **`timetracker.sqlite.bak-<YYYYMMDDTHHMMSSZ>`** appears **beside** `timetracker.sqlite`;
+         `tt backup ls` lists it (same file on both surfaces) and **Settings → Backups** shows it as the
+         newest with a **verified** pill.
+   - [ ] The backup is a **valid SQLite database that opens and contains the latest entry**: it opens
+         without an integrity error and contains the "warmup" entry just added (e.g. restore a copy of it
+         aside and `tt list --all` against it, or use the Settings → Backups verify pill — it must hold
+         the post-change data, proving the copy is recoverable, not truncated).
+2. **An unchanged launch writes none.** Quit, then relaunch **without changing anything**.
+   - [ ] `tt backup ls` count is **unchanged** — the launch backup is a **no-op when the DB is
+         unchanged** (no redundant duplicate).
+3. **Retention caps at N (default 5); the oldest is pruned.** Make a change and relaunch repeatedly
+   (`tt add …` then relaunch) until **more than 5** launch-with-change cycles have run.
+   - [ ] At most **N = 5** backups ever remain (`tt backup ls` never exceeds 5); the **6th**
+         launch-with-change **prunes the oldest** so exactly 5 remain (the surviving set is the 5 most
+         recent timestamps). Optionally lower it (`tt config set backup_retention 2`) and relaunch a few
+         more times to watch the list prune to 2.
+
+> This check **FAILS** if a launch after a DB change writes **no** backup, writes one that is **not** a
+> valid/recoverable SQLite copy of the latest data, writes a **redundant** backup when nothing changed,
+> or lets backups grow **unbounded** past N (the oldest must be pruned) — any of these violates §16 /
+> §20 R04. The mechanism is proven surface-neutral over core + tt by `features/backup_recovery.feature`
+> and pinned by GOLD `tt backup ls --json` (`backup.schema.json`); this runbook confirms the launch
+> backup actually landing on disk, its recoverability, the no-change no-op, and retention pruning on a
+> real install the headless host cannot exercise.
+
+## CHECK CORRUPTION-RECOVERY (§16, §20 R03/R05) — a corrupt DB is detected, quarantined, and recovered with no data loss
+
+§16's decided behavior for **"Corruption detected on open"** is: **do not write**; **quarantine** the
+corrupt file (`.corrupted`); **restore from the latest good backup**; **inform the user** — never
+silently lose data (§20 R03 detects, §20 R05 recovers). This is the §16 edge-case lens over §20 R03/R05;
+the detect-and-refuse half is **CHECK INTEGRITY-ON-OPEN (§20 R03)** above and the full mechanism is
+**CHECK BACKUP & RECOVERY (§20 R04/R05)** — this focused check walks the §16 edge case end-to-end: with a
+**known-good backup present**, a corrupted DB is detected, never written, quarantined, restored from the
+latest backup, the user informed, and the pre-corruption data is intact afterward. Run with `tt` in a
+second terminal on the same database (find it with `tt config ls` / the default path in PRD §13; below it
+is `timetracker.sqlite`).
+
+1. **Establish a known-good backup and capture the pre-corruption data.** With at least one entry in the
+   DB (`tt add "billing work" --from "2h ago" --to "1h ago" --client "Acme"`), launch once so a fresh
+   backup is written (CHECK BACKUP-ON-LAUNCH), confirm `tt backup ls` lists a recent good backup, and
+   note the current entries (`tt list --all --json`). Then **quit the app entirely**.
+2. **Deliberately corrupt the live DB while the app is closed** — e.g. clobber a header byte
+   (`printf 'x' | dd of=timetracker.sqlite bs=1 seek=30 conv=notrunc`), zero the SQLite header
+   (`dd if=/dev/zero of=timetracker.sqlite bs=1 count=16 conv=notrunc`), or truncate it
+   (`truncate -s 100 timetracker.sqlite`). Note the corrupt file's size/mtime
+   (`ls -l --time-style=full-iso timetracker.sqlite`).
+3. **Launch the app** and observe the recovery on **both** surfaces.
+   - [ ] The **integrity check fails on open** — the app **detects the corruption** and does **not**
+         proceed to normal operation on the bad data / start on an empty DB (and `tt status` likewise
+         detects it rather than printing a normal status).
+   - [ ] The app **does not write to the corrupt file** before recovery (§20 R03): the quarantined copy
+         it sets aside has the **same corrupt bytes** captured in step 2 — nothing was appended/written
+         to the bad file before it was moved.
+   - [ ] The corrupt file is **quarantined** to a **`timetracker.sqlite.corrupted-<ts>`** sibling (still
+         on disk, not destroyed).
+   - [ ] The DB is **restored from the latest good backup** into `timetracker.sqlite` (the backup from
+         step 1), and the app **informs the user** (a recovery dialog / notice naming the backup it
+         restored from and the quarantined file).
+4. **The pre-corruption data is intact afterward.**
+   - [ ] `tt status` / `tt list --all` show the **pre-corruption entries intact** — the "billing work"
+         entry (and any others from step 1) are present, matching the step-1 capture: **zero data loss**.
+   - [ ] Both surfaces agree (the GUI entry list and `tt list` in the second terminal show the same
+         restored data) — recovery is the same core operation on both.
+
+> This check **FAILS** if a corrupted `timetracker.sqlite` is **not detected** on open, is **opened for
+> write** / overwritten before recovery, is **not quarantined** to a `.corrupted` sibling, is **not
+> restored** from the latest good backup, the user is **not informed**, or any pre-corruption data is
+> **lost** on recovery — any of these violates §16 / §20 R03/R05. The detect-and-refuse + quarantine +
+> restore mechanism is proven surface-neutral over core + tt by `features/integrity_check.feature` and
+> `features/backup_recovery.feature`; this runbook confirms the on-open corruption dialog, the
+> quarantine + restore, and the zero-data-loss round-trip on a real desktop install the headless host
+> cannot drive.
+
+## CHECK INSTALL & UPDATE (§17 R13) — the installer lands both surfaces on one version, and the in-app updater completes a guided install without touching the DB
+
+§17 R13 is the **acceptance umbrella** over the whole §19 packaging-installation-update story: the
+single installer puts the GUI in Applications / the app launcher **and** `tt` on `PATH` (§19 R02),
+both reporting the **same** `YYYY.M.D[.N]` version (§19 R06); the in-app updater detects a newer
+GitHub release (§19 R03) and completes a **download + guided install** (§19 R04) that **never touches
+the database** (§16 / §19 R04). The component mechanisms are each proven in their own checks above —
+**CHECK INSTALL** (§19 R02), **CHECK SOFTWARE UPDATE — VERSION DISPLAYED** (§19 R06), **CHECK
+SOFTWARE UPDATE — CHECK FOR UPDATES** (§19 R03), and **CHECK UPDATE-MID-TIMER** (§16 / §19 R04) — and
+their headless backstops are GOLD `packages/gui/test/update.test.ts` (the `YYYY.M.D[.N]` ordering +
+verdicts), `cli/test/gold/cli.test.ts` + `core/test/gold/contracts.test.ts` (the one shared
+`APP_VERSION`), and `packages/gui/test/renderer-static.test.ts` (the Settings → Software Update
+wiring). **This umbrella walks the end-to-end install→update reality as ONE criterion**: a freshly
+installed app, the same version on both surfaces, a real update detected and applied, and the open
+timer + the live DB completely untouched across the swap. It is **MANUAL** because every step is an
+OS-level / live-network reality the headless host cannot drive (real `.pkg`/AppImage install, real
+GitHub Releases query, real app replacement + Gatekeeper, a running timer across a relaunch), and
+because there is **no new core API, IPC channel, or DB table** unique to R13 — it is the integrated
+proof that the §19 parts cohere. Run a **clean install** (not a `git` checkout) of a **stamped
+release** artifact, with `tt` available in a terminal on the same database (find it with
+`tt config ls` / the default path in PRD §13; below it is `timetracker.sqlite`).
+
+### (a) The single installer leaves the GUI launchable AND `tt` on PATH — both on the same version
+1. Run the **single** installer once — macOS: double-click `Stint-<version>.pkg`; Linux:
+   `packaging/linux/install.sh <path-to>/Stint-<version>.AppImage` — then open a **new** terminal so
+   `PATH` is re-read.
+   - [ ] **The GUI is launchable**: `Stint.app` is in `/Applications` (macOS) **or** a `stint.desktop`
+         entry shows Stint in the app launcher (Linux), and launching it opens the GUI window.
+   - [ ] **`tt` is on `PATH`**: `which tt` resolves to a symlink (`/usr/local/bin/tt`, or the
+         `~/.local/bin/tt` fallback) — a single install run yielded **both** outcomes (full mechanism
+         in **CHECK INSTALL**, §19 R02).
+2. Read the version off **both equal surfaces**: open **Settings → Software Update → Current version**
+   in the GUI, and run `tt --version` in the terminal.
+   - [ ] Both show the **same** `YYYY.M.D[.N]` string (e.g. `2026.6.27` / `2026.6.27.2`) — **not** a
+         semver like `1.0.0` and **not** the `0.0.0-dev` sentinel — proving the one stamped
+         `APP_VERSION` reaches both surfaces from one installer (§19 R06).
+
+### (b) With a newer release published, "Check now" reports update-available with the newer version
+3. Ensure a **newer published** GitHub release exists than the installed version (cut one on the
+   upstream repo, or point at a fixture release whose tag is newer by the `YYYY.M.D[.N]` rule), then
+   in **Settings → Software Update** click **Check now** with the network present.
+   - [ ] The check reports **update available · `<newer version>`** with a link to that release (and
+         it would report **up to date** if the latest published tag equalled the current version;
+         drafts/prereleases are ignored) — the live GitHub-Releases verdict (§19 R03, full mechanism
+         in **CHECK SOFTWARE UPDATE — CHECK FOR UPDATES**).
+
+### (c) The guided install downloads + walks the replace-the-app steps incl. the one-time Gatekeeper, and relaunch shows the new version
+4. Start a **live timer first** so part (d) can be observed on the same run:
+   `tt start "release work" --client "Acme"`; note from `tt status --json` the open entry's **id** and
+   **`startUtc`**, and capture the live DB's **content hash + mtime/size**
+   (`sha256sum timetracker.sqlite` and `ls -l --time-style=full-iso timetracker.sqlite`). Confirm the
+   tray title is counting up — the entry is genuinely open.
+5. From **Settings → Software Update**, run the **download + guided install** (§19 R04): it downloads
+   the newer artifact and walks the **replace-the-app** steps, including the **one-time Gatekeeper
+   approval** (no Developer ID / notarization dependency — the user clears Gatekeeper once). Follow the
+   steps to replace the installed app in place; do **not** touch the data directory during the swap.
+   - [ ] The flow **downloads the artifact** and presents the numbered **replace-the-app** guidance,
+         including the **one-time Gatekeeper / first-launch approval** note (the guided-install step
+         list depicted in `mockups/settings.html` — design intent for §19 R04).
+6. Relaunch the updated app and re-read the version on **both** surfaces.
+   - [ ] **Settings → Software Update → Current version** and `tt --version` now show the **new**
+         `YYYY.M.D[.N]` version (the one from step 3), still **identical** across the two surfaces.
+
+### (d) A mid-timer update leaves the open entry and its elapsed — and the DB — completely untouched
+7. With the timer that was started in step 4 still the subject, re-observe state after the relaunch on
+   **both** surfaces (this is the §16 "update arrives mid-timer" lens, full walk in
+   **CHECK UPDATE-MID-TIMER**).
+   - [ ] The **same** entry is **still open** — `tt status --json` reports an open entry with the
+         **identical id and `startUtc`** captured in step 4, and the GUI running card / tray shows it
+         still counting up (the update did **not** drop, close, or re-create the running entry).
+   - [ ] The live count-up **continued from `now − start`** (elapsed kept growing across the update;
+         it did **not** reset to zero or jump).
+   - [ ] The live DB is **byte-identical** to the pre-update capture: `sha256sum timetracker.sqlite`
+         matches step 4 (mtime/size unchanged) — **the update touched no data** (a backup-on-launch
+         write, if it fires, is a *separate sibling* file, never an in-place rewrite of the live DB).
+
+> This umbrella **FAILS** if any of: (a) the single installer omits the **PATH symlink** (`which tt`
+> does not resolve) or leaves the GUI unlaunchable, or the GUI and `tt --version` report **different**
+> versions (or a non-`YYYY.M.D[.N]` value); (b) **Check now** **misreports** the verdict against a
+> newer published release (calls a newer release up-to-date, or an equal/older one an update), or omits
+> the newer version / its link; (c) the guided install does not **download** the artifact, skips the
+> **replace-the-app** guidance or the **one-time Gatekeeper** note, or the relaunched version does not
+> become the new `YYYY.M.D[.N]`; or (d) the update **touches the DB** — the previously-open entry is no
+> longer open, its id/`startUtc` changed, the elapsed reset, or `timetracker.sqlite` is not
+> byte-identical to its pre-update capture. R13 is satisfied only when **one** installer lands both
+> surfaces on **one** version AND the in-app updater completes a guided install that updates the
+> version while leaving the database and the running entry **untouched**. R13 is an integrated
+> OS-level / live-network acceptance reality with **no executable AC of its own** (it has no new core
+> API, IPC channel, or DB table); the per-part mechanisms are pinned headless by the GOLD + static
+> tests named above, so the **whole install→update story cohering** is this MANUAL CHECK on a real,
+> stamped install of a published release.
+>
+> **Executed evidence.** The headless-drivable parts of this umbrella are run + checked in: part **(c)**'s
+> guided-install **chrome** (download → progress bar → numbered guided steps incl. the one-time Gatekeeper
+> beat → Reveal installer) and **(b)**'s Check-now verdict are exercised through the real renderer by the
+> JUDGE item **`SOFTWARE_UPDATE`** (`acceptance/evidence/judge-report.json`; screenshot
+> `acceptance/evidence/screenshots/main-software-update.png`), and part **(d)**'s mid-timer
+> **DB-byte-identical / still-open entry** invariant is executed by `npm run evidence`
+> (`acceptance/evidence/cli-transcript.md` → "§16 / §19 R04 — in-app update never touches the database").
+> Part **(a)**'s no-Windows install + single-installer bundle is backstopped by the `packaging/` static
+> guards (GOLD `packages/gui/test/build-matrix.test.ts`) reported in the transcript's §19 R01 section. The
+> residual **live** end-to-end — a clean install of a stamped release, a real GitHub download, the OS-level
+> replacement + Gatekeeper, and the relaunch across a running timer — awaits a real desktop operator's
+> screen recording in `acceptance/evidence/recordings/` (see that directory's `README.md`).
+
+## CHECK VISUAL TIME-RANGE PICKER (GUI) (§12 R15)
+
+The §12 R15 visual time-range picker (G9) must let the user pick a **start + stop together**
+on a single-day calendar column — drag the body to move, drag the bottom to resize, with
+5-min snapping — while the **text fields stay authoritative** everywhere it appears
+(add-entry, edit-closed-entry, edit-running-start). Overnight spans stay text-only.
+
+1. In a real desktop session, open the main window and click **Add entry**. Click the
+   **calendar icon** (▦) beside the **From** field.
+   - [ ] A picker popover opens with a **month calendar** on the left and a **single-day
+         column with hour lines** on the right; the **Start/Stop text values are echoed at
+         the top**. It **defaults to the form's current span** (else last-stop → now).
+   - [ ] **Drag the body** of the accent rectangle up/down: **both** Start and Stop move
+         together, with a visible **5-minute snap** (the echoed times jump in 5-min steps).
+   - [ ] **Drag the bottom handle**: only the **Stop** moves (also 5-min-snapped); the Start
+         stays put.
+   - [ ] Any **other entries** on that day render **gray**; where your span **overlaps** one,
+         the overlap region renders **yellow** — and **Apply is never blocked** by it.
+   - [ ] Click **Apply range**: the popover closes and the chosen times appear in the **From**
+         /**To** text fields. Click **Save entry** — the entry lands with exactly those times.
+2. **Text stays authoritative.** Re-open the picker, then instead of dragging, **type**
+   directly into the **From**/**To** fields (or into the picker's bound fields) — your typed
+   times win; the picker only ever *writes* the fields, it never overrides a manual edit.
+3. **Edit a closed entry.** Open the inline edit form for a completed entry and click the
+   calendar icon beside **Start** (or **End**).
+   - [ ] The same picker opens, seeded from that entry's span, and dragging/Apply writes the
+         `.edit-start`/`.edit-end` fields; Save commits the amended span.
+4. **Edit the running timer's start.** With a timer running, open the Timer view's live-edit
+   strip and click the calendar icon beside **Start time**.
+   - [ ] The picker opens **start-only** (no Stop handle, no end label) — it **never writes a
+         stop**, so editing the open row cannot close it (§05 R6). Apply writes only the start.
+5. **Overnight span.** Set a **From** today and a **To** tomorrow by **typing** the dates.
+   - [ ] The span is accepted via text; the picker's day column stays **single-day** and shows
+         a footer note that **overnight spans use text entry** (the visual column does not span
+         days).
+
+> The drag-to-move / drag-to-resize geometry, 5-min snap, gray-others / yellow-overlap
+> painting, the top text-echo, Apply write-back, and accent discipline with the picker open
+> are pinned headless under JUDGE (`TIME_RANGE_PICKER`, `time-range-picker.png`) driving the
+> real renderer; the add-form trigger + authoritative-Save path is also covered by
+> `ADD_FORM_PICKER`. This runbook confirms, on a real build, that the picker opens on every
+> R15 surface, that dragging snaps and writes the authoritative text fields, that overlaps
+> warn without blocking, and that overnight spans round-trip through text entry.

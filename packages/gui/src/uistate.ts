@@ -92,6 +92,9 @@ export function buildUiState(
       // distinct from the top-level `accent` colour string (the system accent for theming).
       accent: settings.accent,
       dateFormat: settings.dateFormat,
+      // §20 R04: the current backup-retention count the Settings → Backups picker paints; it
+      // changes over the same setSetting channel `tt config set backup_retention` drives.
+      backupRetention: settings.backupRetention,
     },
     accent,
     // §19 R06 — the date/build version (the shared @stint/core APP_VERSION constant, the SAME
