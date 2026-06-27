@@ -16,6 +16,17 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # §19 R06 — stamp the date/build version (YYYY.M.D[.N]) into @stint/core before the build,
+      # so the built artifacts and the GOLD version contract see a real version, not the dev
+      # sentinel. STINT_BUILD_N is the same-day build counter: 1 + the number of release tags
+      # already cut for today's date (so the first same-day release has no suffix, the second is
+      # `.2`, etc.). On PR builds it is deterministic from the date alone (no tag lookup needed);
+      # the actual publish/tag workflow that consumes the echoed version is §19 R05.
+      - name: Stamp version (§19 R06)
+        run: |
+          today="$(date -u +%Y.%-m.%-d)"
+          n="$(( $(git tag -l "${today}*" | wc -l) + 1 ))"
+          STINT_BUILD_N="$n" npm run version:stamp
       - name: Build (core + cli + gui main)
         run: npm run build
       - name: Lint

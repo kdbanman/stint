@@ -3,6 +3,24 @@
  * typography; follows system light/dark via prefers-color-scheme. The system accent
  * (--accent, injected from the main process) is used ONLY on the primary action and
  * the running state — everything else is restrained system grays.
+ *
+ * §15 R-clickability / G10 — ONE clickability convention across the whole window:
+ *   • clickable text affordance / link → carries the neutral button background (a
+ *     non-transparent fill var(--paper)/var(--wash) AND/OR a visible 1px border on
+ *     var(--rule)/var(--rule-strong)). The base `button` rule below IS that convention;
+ *     every clickable text affordance (button.ghost, the nav rail items, the report nav
+ *     tabs, the chip pills) inherits or mirrors it, so nothing clickable reads as plain
+ *     prose. Quieter-than-primary variants stay quiet via muted ink / smaller sizing, not
+ *     by dropping the background/border.
+ *   • inert text (.wordmark, .summary, .day-head, .entry .desc/.time, .set-k,
+ *     .report-lab, .settings-title, group headings, labels) → carries NO button
+ *     background; it stays bare prose. The JUDGE CLICKABILITY scan enforces both halves.
+ *   • accent → reserved for each view's single primary action (button.primary) + the
+ *     running state; never on an ordinary clickable affordance (§15 accent discipline).
+ *   In-chip / in-control SUB-affordances are the one sanctioned exception: a control that
+ *   already carries the convention (.chip, .seg, .presets) may host a bare inner control
+ *   (.chip-x, the .set-toggle knob `i`) without re-bordering it — the parent IS the
+ *   affordance. These are whitelisted in the CLICKABILITY scan.
  */
 :root {
   --paper: #ffffff;
@@ -48,9 +66,13 @@ html, body {
 /* ---- main window ------------------------------------------------------- */
 .app { max-width: 920px; margin: 0 auto; padding: 0; }
 
-/* §12 R3: the window shell — a persistent left nav rail beside the routed views. The shell
-   is the flex row; the rail is fixed-width and the views take the rest. The Entries view
-   keeps its own 760-ish reading width via the section padding below. */
+/* §12 R3 (G7): the window shell — a persistent left nav rail beside the routed views, present
+   in EVERY view. The shell is the flex row; the rail is a FIXED width on resize and the views
+   column absorbs all of it. `.views { flex: 1; min-width: 0 }` is load-bearing twice: `flex: 1`
+   makes the views column the sole grow/shrink target so resize lands on the content, never the
+   rail, and `min-width: 0` lets a wide entry/report line shrink the column instead of pushing
+   the rail (a flex item's default `min-width: auto` would otherwise let overflow squeeze the
+   fixed rail). The Entries view keeps its own 760-ish reading width via the section padding. */
 .shell { display: flex; align-items: stretch; min-height: 100vh; }
 .views { flex: 1; min-width: 0; padding: 0 20px 40px; }
 
@@ -128,7 +150,155 @@ header.mast {
 .timer-card .ctx .meta { font-size: 13px; color: var(--muted); }
 .timer-card .ctx .flags { display: flex; gap: 6px; margin-top: 8px; margin-left: 0; }
 .timer-card .ctx .flags:empty { display: none; }
-.timer-card .btns { display: flex; gap: 9px; flex: none; }
+.timer-card .btns { display: flex; gap: 9px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+
+/* §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the open entry's attributes + start time
+   without stopping it. The dashed accent border + the accent header word read as the SAME
+   sanctioned running-context accent the running card uses (§15 ACCENT_DISCIPLINE allows it
+   inside the running timer surface); every CONTROL inside stays monochrome (the inputs carry
+   the neutral wash/rule chrome, no accent fill), so the single primary action (Stop) keeps the
+   accent. Hidden while idle. Mirrors mockups/timer.html's .liveedit. */
+.liveedit {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px dashed var(--accent);
+  border-radius: 10px;
+  background: var(--wash);
+}
+.liveedit .le-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.liveedit .le-title {
+  font-size: 12px;
+  font-weight: 600;
+  /* Strip chrome stays monochrome (§15): the only sanctioned running-context
+     accent here is the dashed .liveedit border, not the title text. */
+  color: var(--ink);
+}
+.liveedit .le-pill {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* Monochrome system grays (§15) — accent stays on the primary action /
+     running state only. */
+  color: var(--muted);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 10px;
+  padding: 1px 8px;
+}
+.liveedit .le-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 10px;
+}
+.liveedit .le-field {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.liveedit .le-editable { color: var(--muted); }
+.liveedit .le-field input[type='text'],
+.liveedit .le-field input[type='datetime-local'] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  padding: 6px 9px;
+}
+.liveedit .le-row2 {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+.liveedit .le-bill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink-soft, var(--ink));
+}
+.liveedit .le-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-left: auto;
+}
+
+/* §12 R04: the Entries-view COMPACT STRIP — a one-line mirror of the running timer that
+   links to the full Timer-view panel. It carries only the live count-up, the running/idle
+   state, and the description; no Stop/Switch, no flags grid (those live on the full card).
+   The whole strip is a button (clicking it routes to the Timer view). Accent discipline
+   (§15): like the card, the system accent appears ONLY on the running clock + the
+   running-state dot/text (`.timer-strip.running .clock` / `.state` / `.strip-dot`); the idle
+   strip and the rest of its chrome (the description, the Open Timer affordance) stay
+   restrained system grays, mirroring `.timer-card.running`. */
+.timer-strip {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+.timer-strip .strip-clock-block { display: flex; align-items: center; gap: 9px; flex: none; }
+.timer-strip .strip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.timer-strip.running .strip-dot { background: var(--accent); }
+.timer-strip .clock {
+  font-family: var(--mono);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+/* The running count-up is one of the sanctioned accent uses on the strip (§15). */
+.timer-strip.running .clock { color: var(--accent); }
+.timer-strip .state {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* The running-state text is the other sanctioned accent use on the strip (§15). */
+.timer-strip.running .state { color: var(--accent); }
+.timer-strip .strip-desc {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.timer-strip.idle .strip-desc { color: var(--muted); font-weight: 500; }
+.timer-strip .strip-open { flex: none; font-size: 12px; color: var(--muted); }
 
 /* §06 R4: the at-write-time overlap banner. A quiet, flag-coloured advisory (the same
    --flag tokens the per-row overlap flag uses) shown inline right after a write that
@@ -175,15 +345,19 @@ s {
   gap: 4px;
   padding: 10px 0 0;
 }
+/* §15 R-clickability / G10: these tab links are clickable text, so they carry the neutral
+   button background (a var(--wash) fill + a var(--rule) border) — mirroring mockups/main.html
+   `.nav .wk a` — rather than reading as bare prose. The active link keeps its weight/ink +
+   bottom-rule marker (never the accent — §15 accent discipline). */
 .nav .nav-link {
-  border: none;
-  background: transparent;
+  background: var(--wash);
+  border: 1px solid var(--rule);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
   padding: 6px 10px;
   border-bottom: 2px solid transparent;
-  border-radius: 0;
+  border-radius: 6px;
 }
 .nav .nav-link:hover { color: var(--ink-soft); }
 .nav .nav-link.active {
@@ -200,23 +374,39 @@ s {
    keyboard-reachable with a visible focus ring (R13). The bare `.nav` rules above do not
    apply here because this rail is `display:flex` column and overrides them. */
 .shell .nav {
+  /* §12 R3 (G7): the rail is a FIXED width on resize. `flex: none` already pins it, but make
+     the fixed width robust against the views column overflowing by spelling out every flex
+     term: no grow, no shrink, a 168px basis (and an explicit width as the belt-and-braces
+     fallback), with border-box sizing so the padding/border never pad past 168px. A wide or
+     narrow window thus can never squeeze or grow the rail — the views column absorbs it all
+     (see the `.views` rule above, which sets `flex: 1` with `min-width: 0` as the sole
+     grow/shrink target). The JUDGE NAV_SHELL FIXED_WIDTH_ON_RESIZE
+     sub-fact measures this byte-identical 168 across 480/760/1200px viewports. */
   flex: none;
+  flex-grow: 0;
+  flex-shrink: 0;
+  flex-basis: 168px;
+  width: 168px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: 168px;
   padding: 16px 10px;
   background: var(--wash);
   border-right: 1px solid var(--rule);
 }
+/* §15 R-clickability / G10: each rail item is clickable text, so in its resting state it
+   carries the neutral button background (a var(--paper) fill + a subtle var(--rule) border)
+   — it never reads as bare prose. :hover and the sanctioned .active accent-wash (the rail's
+   single accent use, whitelisted in the JUDGE scans) override this resting fill below. */
 .nav-item {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
   text-align: left;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--rule);
+  background: var(--paper);
   color: var(--ink-soft);
   font-size: 14px;
   font-weight: 500;
@@ -277,6 +467,31 @@ s {
   background: var(--wash);
 }
 
+/* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface,
+   relocated from the Entries toolbar. A quiet bordered block holding the panel title, the
+   canonical Start / Switch / +with-details actions, and the collapsible attribute form.
+   Accent discipline (§15): the system accent appears ONLY on the single primary Start
+   (button.primary); the Switch and disclosure buttons + the title stay system grays. */
+.start-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+}
+.start-panel .sp-head { display: flex; align-items: center; }
+.start-panel .sp-title {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.start-panel .sp-actions { display: flex; gap: 8px; align-items: center; }
+
 /* The optional attributed-start form — collapsed by default so the primary Start
    stays one-tap; no new accent (the submit reuses button.primary). */
 .start-form {
@@ -333,6 +548,42 @@ s {
   padding: 6px 10px;
 }
 .start-form input[type="datetime-local"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+
+/* §05 R05 / §12 R15 (G9): each from/to field pairs its text input with a calendar-icon
+   trigger that opens the shared visual time-range picker. The wrapper lets the input keep
+   flexing while the trigger sits flush beside it. */
+.start-form .range-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+}
+/* §15 R-clickability / G10: the picker trigger is a clickable affordance, so it carries the
+   NEUTRAL button background (a var(--paper) fill + a subtle var(--rule) border) — never the
+   accent, which stays reserved for the form's single primary action (Save entry). */
+.start-form .range-pick-btn {
+  flex: none;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+.start-form .range-pick-btn:hover { background: var(--wash); }
+.start-form .range-pick-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* §12 R07 (G9): the picker hint under the from/to row — mirrors the edit-entry mockup's
+   .pickhint. Muted, inert helper copy (no accent, no button chrome) stating the durability
+   contract: text entry stays authoritative and overnight spans use text entry. */
+.start-form .pickhint {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin: -2px 0 2px;
+}
+
 .add-warning {
   font-size: 12px;
   color: var(--flag);
@@ -360,7 +611,13 @@ button.primary {
   color: #fff;
   font-weight: 600;
 }
-button.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+/* §15 R-clickability / G10: a ghost button (Edit / Delete / Split / Rename / Archive /
+   Cancel / Add project / the per-row kebab) is clickable TEXT — so it MUST carry the neutral
+   button background, not read as bare prose. It inherits the base button's var(--paper) fill +
+   var(--rule-strong) border and stays quieter than .primary only via the muted ink and the
+   .small sizing — never by going transparent (the old transparent ghost was the offender the
+   CLICKABILITY scan now rejects). */
+button.ghost { color: var(--muted); }
 button.small { font-size: 12px; padding: 3px 8px; }
 /* §05 R8: Switch is a plain (non-accent) button so it does not compete with the
    primary Stop/Start accent — accent discipline (§15) stays a single fill. It is
@@ -476,6 +733,10 @@ textarea:focus-visible {
   gap: 6px;
   align-items: center;
 }
+/* §15 R-clickability / G10: the removable × is a SUB-affordance INSIDE an already-bordered
+   chip (the .chip carries the neutral bg+border above), so it is the one sanctioned in-chip
+   exception — it stays a bare glyph and is whitelisted in the CLICKABILITY scan (the parent
+   chip IS the affordance). The same applies to the .set-toggle knob inside its bordered track. */
 .chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
 .chip .chip-x:hover { color: var(--ink-soft); }
 .tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
@@ -970,6 +1231,95 @@ button.danger:hover { border-color: var(--ink-soft); }
 .report-export-btn:hover { background: var(--wash); }
 .report-export-status { font-size: 12px; color: var(--muted); }
 
+/* §12 R08 / §09 R08–R09 (G11): the Reports view — SAVED, named report definitions. The
+   in-shell saved-reports surface (it replaces the retired standalone report.html). Its one
+   accent affordance is the + New report primary action (§15 / G10 accent discipline); the
+   saved-definition cards, the builder controls, and the run-output stay restrained grays. */
+.reports-view { padding: 16px 4px; }
+.reports-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.reports-title { font-size: 18px; margin: 0; font-weight: 680; }
+/* The single accent primary action of the view (§15). Reuses the global `.primary` fill. */
+#rep-new {
+  font-family: inherit;
+  font-size: 13px;
+  border-radius: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* §09 R08: the saved-definition list — one card per saved report. Each card carries the
+   name + a spec summary and the Run / Edit / kebab affordances (all neutral-bg, no accent). */
+.defs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
+.def {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--paper);
+}
+/* The definition being edited is marked — inked outline, not the accent (§15). */
+.def.sel { border-color: var(--ink); box-shadow: 0 0 0 2px var(--rule-strong); }
+.def .di { flex: 1; min-width: 0; }
+.def .dname { font-size: 14.5px; font-weight: 680; margin-bottom: 3px; }
+.def .dspec { font-size: 12.5px; color: var(--muted); }
+.def .dspec .k { color: var(--ink-soft); font-weight: 600; }
+.def .dactions { display: flex; gap: 8px; flex: none; align-items: center; }
+/* Every clickable affordance on a card carries the neutral button background (§15 / G10). */
+.def .def-run,
+.def .def-edit,
+.def .def-kebab {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.def .def-kebab { padding: 5px 8px; color: var(--ink-soft); }
+.def .def-run:hover,
+.def .def-edit:hover,
+.def .def-kebab:hover { background: var(--wash); }
+.defs-empty { font-size: 13px; color: var(--muted); padding: 14px 2px; }
+
+/* §09 R08: the inline builder — create / edit a definition. Inked outline (not the accent)
+   so the accent stays on + New report alone (§15); the controls reuse the .report-ctrl /
+   .seg / .report-field rules above. */
+.builder {
+  border: 1px solid var(--rule-strong);
+  border-radius: 11px;
+  padding: 16px 18px;
+  margin: 14px 0 4px;
+  background: var(--wash);
+}
+.builder[hidden] { display: none; }
+.builder-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.builder-title { font-size: 14px; margin: 0; font-weight: 680; flex: none; }
+.builder-name {
+  flex: 1;
+  font-family: inherit;
+  font-size: 14px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.builder-note { font-size: 11.5px; color: var(--muted); flex: none; }
+.builder-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+
 /* §12 R6: the consolidated entry editor (window.SE). A centred modal dialog over a dim
    backdrop, surfacing every tt-editable field plus Split / Delete. Restrained system grays
    throughout — only the primary Save (and the Split/Merge confirm) reuse .primary, so §15
@@ -1067,8 +1417,193 @@ button.danger:hover { border-color: var(--ink-soft); }
 .editor.conflict-prompt .mc-q { font-size: 12px; color: var(--muted); min-width: 96px; }
 .editor.conflict-prompt .mc-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
 
+/* ====================================================================== */
+/* §12 R15 (G9): the visual time-range picker (timepicker.js / window.STP). */
+/* A modal popover over the authoritative time text inputs: a month calendar */
+/* (pick the day) + a single-day column with hour lines, where the edited    */
+/* entry is a DRAGGABLE accent rectangle. Accent discipline (§15): only the   */
+/* primary "Apply range" button (.stp .primary) and the dragged "me"         */
+/* rectangle (.stp-block.me) carry the accent — everything else is monochrome.*/
+/* The JUDGE ACCENT_DISCIPLINE probe sanctions exactly those two selectors.   */
+
+/* The inline-edit form's time fields reuse the .range-pick-btn trigger the   */
+/* add form ships; broaden the neutral-affordance styling beyond .start-form. */
+.range-field { position: relative; display: inline-flex; align-items: center; gap: 6px; }
+.edit-field .range-pick-btn,
+.liveedit .range-pick-btn {
+  flex: none;
+  font-size: 13px;
+  line-height: 1;
+  color: var(--ink-soft);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+.edit-field .range-pick-btn:hover,
+.liveedit .range-pick-btn:hover { background: var(--wash); }
+.edit-field .range-pick-btn:focus-visible,
+.liveedit .range-pick-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* The dim backdrop + centred popover, layered above the editor (z-index 60 > 50). */
+.stp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 40px 16px;
+  background: color-mix(in srgb, var(--ink) 38%, transparent);
+  overflow: auto;
+}
+.stp {
+  width: 100%;
+  max-width: 660px;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  box-shadow: 0 16px 50px color-mix(in srgb, var(--ink) 28%, transparent);
+  overflow: hidden;
+}
+.stp-head {
+  padding: 13px 18px;
+  border-bottom: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.stp-head h2 { font-size: 15px; margin: 0; font-weight: 600; color: var(--ink); }
+.stp-head .stp-hint { font-size: 11.5px; color: var(--muted); }
+
+/* The authoritative text fields echoed at the top (read-only mirror; the real */
+/* inputs live in the form behind — the picker writes those on Apply). */
+.stp-textfields {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--wash);
+}
+.stp-tf { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.stp-tf span { font-size: 11px; color: var(--muted); }
+.stp-tf input {
+  width: 100%;
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 13px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 7px;
+  padding: 7px 10px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.stp-authnote { flex: none; max-width: 160px; font-size: 11px; color: var(--muted); line-height: 1.35; padding-bottom: 6px; }
+
+.stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
+
+/* month calendar */
+.stp-cal { border-right: 1px solid var(--rule); padding: 14px; }
+.stp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.stp-month { font-size: 13px; font-weight: 600; color: var(--ink); }
+.stp-nav { display: flex; gap: 6px; }
+.stp-nav button {
+  cursor: pointer; color: var(--ink-soft); background: var(--wash);
+  border: 1px solid var(--rule); border-radius: 6px;
+  width: 24px; height: 24px; font-size: 12px; padding: 0;
+}
+.stp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.stp-dow { font-size: 10px; color: var(--faint); text-align: center; padding: 3px 0; text-transform: uppercase; }
+.stp-d {
+  text-align: center; padding: 6px 0; font-size: 12.5px; border-radius: 6px;
+  cursor: pointer; color: var(--ink-soft); background: var(--paper);
+  border: 1px solid transparent;
+}
+.stp-d.stp-mut { color: transparent; cursor: default; }
+.stp-d:hover { background: var(--wash); }
+/* the selected day carries the accent — sanctioned as part of the picker's */
+/* "me"/primary surface (the chosen day IS the active span's day). */
+.stp-d.stp-sel { background: var(--accent); color: #fff; font-weight: 600; border-color: var(--accent); }
+.stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
+.stp-cal-foot { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+/* single-day column with hour lines */
+.stp-day { padding: 12px 16px 12px 8px; }
+.stp-day-lbl { font-size: 12px; color: var(--muted); margin: 0 0 8px 50px; }
+.stp-track {
+  position: relative; height: 720px;
+  border-left: 1px solid var(--rule); margin-left: 50px;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 29px, var(--rule) 29px, var(--rule) 30px);
+}
+.stp-hour {
+  position: absolute; left: -50px; width: 46px; text-align: right;
+  font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums;
+  transform: translateY(-6px);
+}
+.stp-block { position: absolute; left: 8px; right: 14px; border-radius: 6px; }
+/* other entries — light gray, monochrome */
+.stp-block.other {
+  background: var(--wash); border: 1px solid var(--rule-strong);
+  color: var(--muted); font-size: 11px; padding: 3px 8px; overflow: hidden; z-index: 2;
+}
+/* this entry — the solid accent rectangle, draggable (sanctioned accent use) */
+.stp-block.me {
+  background: var(--accent); color: #fff; border: 1px solid var(--accent);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 32%, transparent);
+  cursor: grab; z-index: 3; touch-action: none; user-select: none;
+}
+.stp-block.me:active { cursor: grabbing; }
+.stp-block.me .stp-lab-top, .stp-block.me .stp-lab-bot {
+  position: absolute; left: 0; font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums; padding: 0 9px;
+}
+.stp-block.me .stp-lab-top { top: 4px; }
+.stp-block.me .stp-lab-bot { bottom: 4px; }
+.stp-block.me .stp-grip {
+  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
+  text-align: center; font-size: 11px; opacity: 0.85; letter-spacing: 0.04em;
+}
+.stp-block.me .stp-resize {
+  position: absolute; left: 0; right: 0; bottom: -1px; height: 12px;
+  cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
+}
+.stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); display: block; }
+/* overlap region — yellow hatch, warn only (never blocks Apply) */
+.stp-overlap {
+  position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;
+  border: 1px solid var(--warn-bd, #ecd8a0); border-radius: 5px;
+  background: repeating-linear-gradient(45deg, var(--warn-bg, #fdf3d3), var(--warn-bg, #fdf3d3) 7px, #f7e9bf 7px, #f7e9bf 14px);
+}
+.stp-overlap .stp-otag {
+  position: absolute; right: 6px; top: 3px; font-size: 10px; color: var(--flag);
+  background: var(--warn-bg, #fdf3d3); border: 1px solid var(--warn-bd, #ecd8a0);
+  border-radius: 4px; padding: 0 5px;
+}
+.stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 50px; display: flex; align-items: center; gap: 8px; }
+.stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 10px; padding: 1px 8px; }
+
+.stp-foot {
+  padding: 12px 18px; border-top: 1px solid var(--rule);
+  display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--wash);
+}
+.stp-overnight { font-size: 11.5px; color: var(--muted); }
+.stp-overnight[hidden] { display: none; }
+.stp-actions { display: flex; gap: 10px; }
+/* the picker's buttons reuse the base button chrome; only .primary carries the accent. */
+.stp-cancel {
+  font-family: inherit; font-size: 13px; border-radius: 7px; padding: 8px 16px;
+  border: 1px solid var(--rule-strong); background: var(--paper); color: var(--ink); cursor: pointer;
+}
+.stp-apply.primary {
+  font-family: inherit; font-size: 13px; border-radius: 7px; padding: 8px 16px;
+  background: var(--accent); border: 1px solid var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+}
+
 /* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button
-   in restrained system grays — no accent (the row actions never carry the accent, §15). */
+   in restrained system grays — no accent (the row actions never carry the accent, §15). It is
+   `.ghost`, so it carries the neutral button background + border (§15 R-clickability / G10);
+   these overrides only tune the glyph weight/ink and must NOT re-blank the background/border. */
 .entry .kebab {
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -1194,3 +1729,142 @@ body.popover { background: var(--paper); }
   cursor: pointer;
 }
 .set-hotkey:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+/* §19 R03/R06 — Software Update. The version string is monospace/soft; the Check-now button
+   is a plain neutral button (§15 R-clickability — neutral background, never the accent: the
+   accent stays on each view's single primary action). The update pill + result line use the
+   monochrome --flag tokens (the same warn-not-block palette the overlap flag uses), so an
+   "update available" notice is visually distinct without smuggling in the accent. */
+.ver { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); }
+.set-update-btn {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--wash);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+.set-update-btn:disabled { color: var(--muted); cursor: default; }
+.set-update-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
+.pill.new,
+.update-result.new {
+  color: var(--flag);
+  background: var(--flag-bg);
+  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12px;
+  text-decoration: none;
+}
+.update-result { font-size: 12.5px; color: var(--ink-soft); }
+.update-result.ok { color: var(--ink-soft); }
+.update-result.err { color: var(--flag); }
+.update-result a, .pill.new { color: inherit; }
+
+/* §19 R04 — the guided download + install panel. A bordered notice block (the --flag notice
+   token, not the accent — the accent stays on the Download & install primary action inside it),
+   a live progress bar (.step .bar), and the numbered guided steps. */
+.update {
+  margin: 12px 0 4px;
+  border: 1px solid var(--rule-strong);
+  background: var(--flag-bg);
+  border-radius: 9px;
+  padding: 12px 14px;
+}
+.update .uhd {
+  font-size: 13px;
+  font-weight: 680;
+  color: var(--flag);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.steps { display: flex; flex-direction: column; gap: 7px; }
+.step { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-soft); }
+.step .n {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+.step.done .n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.step .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--rule-strong); overflow: hidden; }
+.step .bar i { display: block; height: 100%; width: 0%; background: var(--ink); transition: width 0.15s ease; }
+.update .restore-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+
+/* §05 R09 — the Timer view's favorites rail. The Pin control and per-favorite kebab/menu are
+   NEUTRAL buttons (the base button convention: a --wash fill + a --rule-strong border) — the
+   accent stays reserved for the view primary action / running state (§15 accent discipline), so
+   no rule here pulls in var(--accent). The chips reuse the monochrome .chip rule above. */
+.favorites { display: flex; flex-direction: column; gap: 12px; }
+.fav-head { display: flex; align-items: center; justify-content: space-between; }
+.fav-title { font-weight: 600; color: var(--ink); }
+.fav-pin {
+  font-size: 12.5px;
+  color: var(--ink);
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  padding: 5px 10px;
+  background: var(--wash);
+  cursor: pointer;
+}
+.fav-rail { display: flex; flex-wrap: wrap; gap: 10px; }
+.fav-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--paper);
+}
+.fav-card-main { display: flex; flex-direction: column; gap: 4px; }
+.fav-name { font-weight: 600; color: var(--ink); }
+.fav-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+/* §05 R10: the favorite's one-click Resume. Monochrome (accent is confined to the running
+   Active-Timer card, §15) so the rail stays calm — it is an affordance, not the live state. */
+.fav-card .resume {
+  flex: none;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--wash);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 4px 11px;
+  font-size: 12px;
+}
+.fav-kebab {
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--wash);
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+.fav-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 4px;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.fav-empty { color: var(--faint); font-size: 13px; }

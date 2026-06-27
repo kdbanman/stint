@@ -12,13 +12,13 @@
     {
       "item": "NAV_SHELL",
       "pass": true,
-      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]",
+      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (480/760/1200) views=312/592/752 → true",
       "screenshot": "main-nav.png"
     },
     {
       "item": "KEYBOARD_FOCUS",
       "pass": true,
-      "justification": "Tab-walk reached 25/25 controls (empty) and 32/32 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "justification": "Tab-walk reached 24/24 controls (empty) and 28/28 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
@@ -28,16 +28,40 @@
       "screenshot": "popover-running-2.png"
     },
     {
+      "item": "TRAY_POPOVER_SURFACE",
+      "pass": true,
+      "justification": "popover is the sole tray action surface — running: Stop+Switch+Open present {\"toggleLabel\":\"Stop\",\"togglePressed\":\"true\",\"switchVisible\":true,\"openPresent\":true,\"openLabel\":\"Open Stint\"}; idle: Start (Switch hidden) + Open present {\"toggleLabel\":\"Start\",\"togglePressed\":\"false\",\"switchHidden\":true,\"openPresent\":true}",
+      "screenshot": "popover-tray-surface.png"
+    },
+    {
       "item": "IN_WINDOW_TIMER",
       "pass": true,
-      "justification": "in-window Active-Timer card count advanced 01:24:07 → 01:24:10 (+3s); {\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"hasSwitch\":true}",
-      "screenshot": "main-timer.png"
+      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"hasSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}",
+      "screenshot": "timer-view.png"
+    },
+    {
+      "item": "TIMER_VIEW",
+      "pass": true,
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"noStopText\":true,\"hasStop\":true,\"hasSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
+      "screenshot": "timer-view-full.png"
+    },
+    {
+      "item": "FAVORITES_RAIL",
+      "pass": true,
+      "justification": "rail {\"rows\":3,\"names\":[\"Standup\",\"Deep work\",\"Admin / email\"],\"hasResume\":true,\"hasKebab\":true,\"hasPin\":true,\"emptyHidden\":true,\"callableChannels\":[\"listFavorites\",\"pinFavorite\",\"renameFavorite\",\"unpinFavorite\",\"startFavorite\"]}; resume fired [{\"name\":\"Standup\"}]; empty {\"shown\":true,\"text\":\"No favorites yet. Pin the running timer, or run tt fav add.\"}",
+      "screenshot": "timer-favorites.png"
     },
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": true,
       "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237); stray accent on [none]",
       "screenshot": "main-running.png"
+    },
+    {
+      "item": "CLICKABILITY",
+      "pass": true,
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "screenshot": "main-clickability.png"
     },
     {
       "item": "FLAG_IN_CONTEXT",
@@ -68,6 +92,18 @@
       "pass": true,
       "justification": "backfill payload={\"fromLocal\":\"2026-06-24T09:00\",\"toLocal\":\"2026-06-24T10:00\",\"billable\":true,\"description\":\"backfilled call\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}; overlap warned-not-blocked (form closed=true, banner={\"visible\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"role\":\"status\",\"ariaLive\":\"polite\"})",
       "screenshot": "main-add-form.png"
+    },
+    {
+      "item": "ADD_FORM_PICKER",
+      "pass": true,
+      "justification": "affordances={\"from\":true,\"to\":true,\"fromInput\":true,\"toInput\":true,\"hint\":true}; opened-echo={\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\"}; wrote-back from=2026-06-24T13:00 to=2026-06-24T14:30; Save sent {\"fromLocal\":\"2026-06-24T13:00\",\"toLocal\":\"2026-06-24T14:30\"} (text authoritative)",
+      "screenshot": "add-form-picker.png"
+    },
+    {
+      "item": "TIME_RANGE_PICKER",
+      "pass": true,
+      "justification": "present={\"cal\":true,\"track\":true,\"hourLines\":25,\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\",\"me\":true,\"others\":2}; body-drag→{\"start\":\"2026-06-24T14:00\",\"end\":\"2026-06-24T15:30\"} (moved-together=true); resize→{\"start\":\"2026-06-24T14:00\",\"end\":\"2026-06-24T16:00\"} (stop-only=true); warn={\"others\":2,\"overlaps\":1,\"overlapInert\":true}; accent offenders=[none] apply=true me=true; applied={\"from\":\"2026-06-24T14:00\",\"to\":\"2026-06-24T16:00\",\"popoverGone\":true}",
+      "screenshot": "time-range-picker.png"
     },
     {
       "item": "EDIT_RUNNING",
@@ -148,40 +184,10 @@
       "screenshot": "main-tags.png"
     },
     {
-      "item": "REPORT_BILLABLE_TOGGLE",
+      "item": "REPORTS_VIEW",
       "pass": true,
-      "justification": "billable toggle: default={\"labels\":[\"Billable only\",\"All\",\"Non-billable\"],\"activeCount\":1,\"activeFilter\":\"billable\",\"loadFilter\":\"billable\",\"total\":\"5h 00m\"} → all={\"reqFilter\":\"all\",\"activeFilter\":[\"all\"],\"total\":\"8h 00m\"} → non-billable={\"reqFilter\":\"non-billable\",\"activeFilter\":[\"non-billable\"],\"total\":\"3h 00m\"}",
-      "screenshot": "report-billable.png"
-    },
-    {
-      "item": "REPORT_RANGE_PICKER",
-      "pass": true,
-      "justification": "range picker: default={\"labels\":[\"Today\",\"This week\",\"Last week\",\"This month\",\"Last month\",\"Custom…\"],\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"activeCount\":1,\"activePreset\":\"week\",\"loadPreset\":\"week\",\"customFrom\":true,\"customTo\":true,\"customHidden\":true,\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"rows\":[\"Acme\",\"Globex\"],\"total\":\"5h 00m\"} → last-week={\"reqPreset\":\"last-week\",\"activePreset\":[\"last-week\"],\"rangeHeader\":\"Jun 15, 2026 → Jun 21, 2026\",\"rows\":[\"Globex\"],\"total\":\"7h 00m\"} → custom={\"req\":{\"fromUtc\":\"2026-06-10T00:00:00.000Z\",\"toUtc\":\"2026-06-13T00:00:00.000Z\",\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"activePreset\":[\"custom\"],\"customVisible\":true,\"rangeHeader\":\"Jun 10, 2026 → Jun 12, 2026\",\"total\":\"3h 30m\"}",
-      "screenshot": "reports-default.png"
-    },
-    {
-      "item": "REPORT_GROUPING",
-      "pass": true,
-      "justification": "group-by: default={\"labels\":[\"Client\",\"Project\",\"Day\",\"Tag\"],\"options\":[\"client\",\"project\",\"day\",\"tag\"],\"activeCount\":1,\"activeBy\":\"client\",\"loadBy\":\"client\",\"rows\":[\"Acme\",\"Globex\"],\"total\":\"5h 00m\"} → day={\"reqBy\":\"day\",\"activeBy\":[\"day\"],\"rows\":[\"2026-06-23\",\"2026-06-24\"],\"total\":\"5h 00m\"}",
-      "screenshot": "main-report-client.png"
-    },
-    {
-      "item": "REPORT_FILTERS",
-      "pass": true,
-      "justification": "report filters: controls present=true, default={\"hasClient\":true,\"hasProject\":true,\"hasTag\":true,\"hasBillable\":true,\"clientOptions\":[\"All clients\",\"Acme\",\"Globex\"],\"projectDisabled\":true,\"loadReq\":{\"preset\":\"week\",\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"total\":\"5h 00m\",\"rows\":[\"Acme\",\"Globex\"]} → billable 'all' reran=true → client={\"reqClientId\":1,\"projectEnabled\":true,\"total\":\"2h 00m\",\"rows\":[\"Acme\"]} (base total 5h 00m)",
-      "screenshot": "report-filters.png"
-    },
-    {
-      "item": "ROUNDING_TOGGLE",
-      "pass": true,
-      "justification": "rounding controls: on(default)={\"toggleChecked\":true,\"incrementOptions\":[\"15\",\"6\",\"10\",\"30\"],\"activeIncrement\":\"15\",\"incrementDisabled\":false,\"line\":\"1h 30m\",\"setSetting\":null} → off={\"toggleChecked\":false,\"incrementDisabled\":true,\"line\":\"1h 37m\",\"setSetting\":{\"key\":\"rounding\",\"value\":false}} → increment 30={\"setSetting\":{\"key\":\"roundingIncrementMin\",\"value\":30},\"line\":\"1h 30m\"}",
-      "screenshot": "reports-rounding.png"
-    },
-    {
-      "item": "REPORT_SUMMARY",
-      "pass": true,
-      "justification": "report summary: {\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"lineTotals\":[\"16h 50m\",\"7h 30m\",\"9h 20m\",\"4h 45m\",\"4h 45m\"],\"grand\":\"21h 35m\",\"headTotal\":\"21h 35m\",\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutsideTable\":0,\"hasCsv\":true,\"hasJson\":true,\"exportAccented\":false} → export CSV={\"format\":\"csv\",\"preset\":\"week\"} JSON={\"format\":\"json\",\"preset\":\"week\"}",
-      "screenshot": "reports-summary.png"
+      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · grouped by project · billable only · rounding off\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · grouped by client · all entries · round nearest 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export CSV={\"format\":\"csv\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"savedReportRef\":\"Weekly billables — Globex\"}",
+      "screenshot": "reports-list.png"
     },
     {
       "item": "ENTRY_LIST_SEARCH",
@@ -202,9 +208,15 @@
       "screenshot": "main-settings.png"
     },
     {
+      "item": "SOFTWARE_UPDATE",
+      "pass": true,
+      "justification": "version row=\"2026.6.24\" (R06); Check now → {\"checked\":true,\"resultText\":\"Update available · 2026.7.1\",\"resultIsNew\":true,\"linkHref\":\"https://github.com/kdbanman/stint/releases/tag/v2026.7.1\",\"linkOpensExternally\":true,\"pillPresent\":true,\"downloadLabel\":\"Download & install 2026.7.1\"} (R03); Download & install → {\"downloaded\":true,\"head\":\"✓ Downloaded 2026.7.1 Reveal installer\",\"steps\":[\"1Download the new version\",\"2Replace the app in /Applications (Stint reveals the installer for you)\",\"3Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed\"],\"revealPresent\":true,\"gatekeeperStep\":true,\"noDbNote\":true}, reveal fired=true (R04)",
+      "screenshot": "main-software-update.png"
+    },
+    {
       "item": "PARITY_REACH",
       "pass": true,
-      "justification": "window.stint exposes 28/28 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
+      "justification": "window.stint exposes 42/42 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
     },
     {

@@ -9,9 +9,17 @@
 import { openDb, type Db } from './db.js';
 import { resolveDbPath } from './paths.js';
 import {
+  backupDb,
+  listBackups as listBackupsFs,
+  restoreFromBackup as restoreFromBackupFs,
+  type BackupInfo,
+  type RecoveryResult,
+} from './backup.js';
+import {
   systemClock,
   toUtc,
   secondsBetween,
+  elapsedSeconds,
   type Clock,
 } from './time.js';
 import {
@@ -27,6 +35,22 @@ import {
   type BillableFilter,
 } from './report.js';
 import { matchesQuery } from './entrylist.js';
+import {
+  resolveSavedRange,
+  resolveReportDef,
+  type SavedReport,
+  type SavedReportInput,
+  type SavedReportPatch,
+  type RangeSpec,
+  type RangePreset,
+} from './savedreport.js';
+import { toCsv, toJsonEntries, type JsonEntry } from './export.js';
+import {
+  initCheckinState,
+  CHECKIN_STATE_KEY,
+  LAST_SEEN_KEY,
+  type CheckinState,
+} from './checkin.js';
 import type {
   Entry,
   EntryView,
@@ -42,6 +66,8 @@ import type {
   MergeOptions,
   Warning,
   WriteResult,
+  Favorite,
+  FavoriteTemplate,
 } from './types.js';
 
 interface EntryRow {
@@ -53,6 +79,33 @@ interface EntryRow {
   end_utc: string | null;
   billable: number;
   excluded_seconds: number;
+}
+
+interface FavoriteRow {
+  id: number;
+  name: string;
+  description: string | null;
+  client_id: number | null;
+  project_id: number | null;
+  billable: number;
+}
+
+interface ReportRow {
+  id: number;
+  name: string;
+  range_kind: string;
+  range_preset: string | null;
+  range_from_utc: string | null;
+  range_to_utc: string | null;
+  group_by: string;
+  billable_filter: string;
+  client_id: number | null;
+  project_id: number | null;
+  tag: string | null;
+  search: string | null;
+  rounding: number;
+  rounding_increment_min: number;
+  created_utc: string;
 }
 
 export interface ListFilter {
@@ -95,9 +148,17 @@ export class Store {
    */
   private readonly stmtCache = new Map<string, ReturnType<Db['prepare']>>();
 
+  /**
+   * §20 R05 — the recovery that happened on the most recent open, or null. The GUI reads this
+   * after Store.open to inform the user a corrupt DB was recovered from a backup (nothing lost).
+   */
+  private recovery: RecoveryResult | null = null;
+
   private constructor(
-    private readonly db: Db,
+    private db: Db,
     private readonly clock: Clock,
+    /** The on-disk path (`:memory:` for the in-memory store), needed for backup/recovery. */
+    private readonly path: string,
   ) {}
 
   /** A cached prepared statement for a fixed SQL string (hot read paths). */
@@ -110,24 +171,102 @@ export class Store {
     return s;
   }
 
-  /** Open the store at the resolved path (TT_DB or per-OS default). */
+  /**
+   * Open the store at the resolved path (TT_DB or per-OS default). On a file-backed open this
+   * integrity-checks the DB and recovers from the latest backup if it is corrupt (§20 R03/R05),
+   * then writes a fresh launch backup if the DB changed since the last one (§20 R04). The launch
+   * backup is best-effort: a backup failure must never block opening the store.
+   */
   static open(
     opts: { path?: string; clock?: Clock; userDataDir?: string; busyTimeoutMs?: number } = {},
   ): Store {
     const path = opts.path ?? resolveDbPath(process.env, opts.userDataDir);
-    return new Store(
-      openDb(path, opts.busyTimeoutMs !== undefined ? { busyTimeoutMs: opts.busyTimeoutMs } : {}),
-      opts.clock ?? systemClock,
-    );
+    let recovery: RecoveryResult | null = null;
+    const db = openDb(path, {
+      ...(opts.busyTimeoutMs !== undefined ? { busyTimeoutMs: opts.busyTimeoutMs } : {}),
+      onRecovered: (r) => {
+        recovery = r;
+      },
+    });
+    const store = new Store(db, opts.clock ?? systemClock, path);
+    store.recovery = recovery;
+    store.makeLaunchBackup();
+    return store;
   }
 
-  /** Open an in-memory store (tests). */
+  /** Open an in-memory store (tests). Backups/recovery are no-ops for `:memory:`. */
   static openMemory(clock: Clock = systemClock): Store {
-    return new Store(openDb(':memory:'), clock);
+    return new Store(openDb(':memory:'), clock, ':memory:');
+  }
+
+  /**
+   * §20 R04 — write a launch backup if the DB content changed since the last one (a no-op on a
+   * relaunch with no edits, and on `:memory:`). Best-effort: a filesystem hiccup here must not
+   * stop the app from starting, so any failure is swallowed (the integrity gate still protects).
+   */
+  private makeLaunchBackup(): void {
+    if (this.path === ':memory:') return;
+    try {
+      backupDb(this.path, this.db, { retention: this.settings().backupRetention });
+    } catch {
+      /* a backup write must never block opening the store */
+    }
   }
 
   close(): void {
     this.db.close();
+  }
+
+  // -------------------------------------------------------------- backups (§20 R04/R05, §17 R12)
+
+  /**
+   * §20 R05 — the recovery performed on the most recent open, or null. The GUI reads this once
+   * after open to tell the user a corrupt database was recovered from a backup (nothing lost).
+   */
+  lastRecovery(): RecoveryResult | null {
+    return this.recovery;
+  }
+
+  /** §20 R04 — the timestamped backups beside the database, newest-first. */
+  listBackups(): BackupInfo[] {
+    return listBackupsFs(this.path);
+  }
+
+  /**
+   * §20 R04 — force a backup now (the explicit Settings "Back up now" / `tt backup now` path).
+   * Returns the new BackupInfo, or null when the DB is unchanged since the last backup (so the
+   * surface can say "unchanged") or in-memory. Honors the retention setting like the launch path.
+   */
+  backupNow(): BackupInfo | null {
+    if (this.path === ':memory:') return null;
+    return backupDb(this.path, this.db, { retention: this.settings().backupRetention });
+  }
+
+  /**
+   * §20 R05 / §17 R12 — restore the store from a named backup. Closes the live handle, quarantines
+   * the current file to a `.replaced-*` sibling (never destroyed), copies the chosen backup into
+   * place, and reopens the store on the restored file. Throws when in-memory or the name is unknown.
+   */
+  restoreFromBackup(backupName: string): RecoveryResult {
+    if (this.path === ':memory:') {
+      throw new StoreError('an in-memory store has no backups to restore from');
+    }
+    // Validate the name BEFORE closing the live handle, so an unknown name fails cleanly with the
+    // store still open (a failed restore must never leave the store in a half-closed state).
+    if (!listBackupsFs(this.path).some((b) => b.name === backupName)) {
+      throw new StoreError(`no backup named "${backupName}" beside the database`);
+    }
+    this.stmtCache.clear();
+    this.db.close();
+    try {
+      const result = restoreFromBackupFs(this.path, backupName);
+      this.db = openDb(this.path);
+      return result;
+    } catch (err) {
+      // Re-open on the original file so the store stays usable even if the restore copy failed.
+      this.db = openDb(this.path);
+      throw err;
+    }
   }
 
   private now(): Date {
@@ -183,6 +322,17 @@ export class Store {
         excludedSeconds: 0,
       });
       this.applyTags(id, opts.tags ?? []);
+      // §20 R07 — seed the check-in schedule and stamp last-seen INSIDE this same
+      // transaction as the entry write. The schedule is anchored at the new open entry's
+      // start, so it can never drift from the entry it describes: either both the open row
+      // and its schedule state commit, or neither does (a crash mid-transition rolls back
+      // to the previous consistent state). The GUI tick then advances this schedule; it no
+      // longer has to lazily seed it on first tick.
+      this.writeAppStateTx(
+        CHECKIN_STATE_KEY,
+        JSON.stringify(initCheckinState(at, this.settings().firstCheckinMin)),
+      );
+      this.writeAppStateTx(LAST_SEEN_KEY, at);
       return this.withOverlapWarning(id);
     });
   }
@@ -197,6 +347,12 @@ export class Store {
         throw new StoreError('stop time is before the entry started');
       }
       this.db.prepare('UPDATE entry SET end_utc = ? WHERE id = ?').run(at, open.id);
+      // §20 R07 — clear the check-in schedule and stamp last-seen INSIDE this same
+      // transaction as the close. With nothing running the schedule is meaningless, so it
+      // commits-or-rolls-back together with the entry's end: a crash can never leave a stale
+      // schedule pointing at an entry that is no longer open.
+      this.writeAppStateTx(CHECKIN_STATE_KEY, null);
+      this.writeAppStateTx(LAST_SEEN_KEY, at);
       return this.withOverlapWarning(open.id);
     });
   }
@@ -220,6 +376,34 @@ export class Store {
     });
   }
 
+  /**
+   * Resume from a favorite (PRD §05 R10): start a FRESH entry from a pinned favorite's
+   * template (description / client / project / billable / tags). The favorite is a template,
+   * never mutated — a new row with a new id is created. Delegates to `start()`, so it inherits
+   * the atomic close-open-then-open behavior (§05 R1, §16) and the overlap warning (§06 R4),
+   * keeping the ≤1-open invariant. `overrides` lets the CLI `tt start --fav <name> [flags]`
+   * path layer explicit attributes over the template — an override wins per field; tags are
+   * replaced when given (matching `start`'s replace-not-merge semantics), kept otherwise.
+   */
+  startFromFavorite(name: string, overrides: Partial<StartOptions> = {}): WriteResult<EntryView> {
+    const fav = this.findFavoriteByName(name);
+    if (!fav) throw new StoreError(`no favorite "${name}"`);
+    const opts: StartOptions = {
+      description: fav.description,
+      clientId: fav.clientId,
+      projectId: fav.projectId,
+      billable: fav.billable,
+      tags: fav.tags,
+    };
+    if (overrides.description !== undefined) opts.description = overrides.description;
+    if (overrides.clientId !== undefined) opts.clientId = overrides.clientId;
+    if (overrides.projectId !== undefined) opts.projectId = overrides.projectId;
+    if (overrides.billable !== undefined) opts.billable = overrides.billable;
+    if (overrides.tags !== undefined) opts.tags = overrides.tags;
+    if (overrides.atUtc !== undefined) opts.atUtc = overrides.atUtc;
+    return this.start(opts);
+  }
+
   /** Backfill a completed entry from explicit from/to times (PRD §05 R5). */
   add(opts: AddOptions): WriteResult<EntryView> {
     if (Date.parse(opts.toUtc) <= Date.parse(opts.fromUtc)) {
@@ -238,6 +422,10 @@ export class Store {
         excludedSeconds: 0,
       });
       this.applyTags(id, opts.tags ?? []);
+      // §20 R07 — backfill creates a CLOSED entry (no open timer), so it must NOT establish or
+      // touch the check-in schedule: any schedule belongs to whatever is currently open, and
+      // add() never changes what is open. Deliberately no writeAppStateTx here — the schedule
+      // state is left exactly as it was (asserted by prop/appstate.test.ts).
       return this.withOverlapWarning(id);
     });
   }
@@ -439,6 +627,390 @@ export class Store {
       { fromUtc: req.fromUtc, toUtc: req.toUtc },
       this.now(),
     );
+  }
+
+  // -------------------------------------------------------- saved reports (§09 R08–R09)
+
+  /**
+   * Create a saved report definition (PRD §09 R08). The name is the cross-surface handle
+   * and is unique case-insensitively; a duplicate is a StoreError, not a silent overwrite.
+   * The range is stored as either a preset (re-resolved on each run) or absolute bounds.
+   */
+  saveReport(input: SavedReportInput): SavedReport {
+    return this.tx(() => {
+      if (this.findReportByName(input.name)) {
+        throw new StoreError(`a saved report named "${input.name}" already exists`);
+      }
+      const createdUtc = toUtc(this.now());
+      const spec = input.rangeSpec;
+      const id = Number(
+        this.db
+          .prepare(
+            `INSERT INTO report(
+               name, range_kind, range_preset, range_from_utc, range_to_utc,
+               group_by, billable_filter, client_id, project_id, tag, search,
+               rounding, rounding_increment_min, created_utc
+             ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          )
+          .run(
+            input.name,
+            spec.kind,
+            spec.kind === 'preset' ? spec.preset : null,
+            spec.kind === 'absolute' ? spec.fromUtc : null,
+            spec.kind === 'absolute' ? spec.toUtc : null,
+            input.by,
+            input.billableFilter,
+            input.clientId ?? null,
+            input.projectId ?? null,
+            input.tag ?? null,
+            input.search ?? null,
+            input.rounding ? 1 : 0,
+            input.roundingIncrementMin,
+            createdUtc,
+          ).lastInsertRowid,
+      );
+      return this.reportDefById(id);
+    });
+  }
+
+  /** List all saved report definitions, name-ordered (PRD §09 R08). */
+  listReports(): SavedReport[] {
+    return (this.db.prepare('SELECT * FROM report ORDER BY name COLLATE NOCASE').all() as unknown as ReportRow[]).map(
+      (r) => this.toSavedReport(r),
+    );
+  }
+
+  /** A saved report by name (case-insensitive), or null. */
+  getReport(name: string): SavedReport | null {
+    const row = this.findReportByName(name);
+    return row ? this.toSavedReport(row) : null;
+  }
+
+  /** Rename a saved report (PRD §09 R08). Rejects an unknown source or a duplicate target. */
+  renameReport(name: string, newName: string): SavedReport {
+    return this.tx(() => {
+      const row = this.requireReport(name);
+      const clash = this.findReportByName(newName);
+      if (clash && clash.id !== row.id) {
+        throw new StoreError(`a saved report named "${newName}" already exists`);
+      }
+      this.db.prepare('UPDATE report SET name = ? WHERE id = ?').run(newName, row.id);
+      return this.reportDefById(row.id);
+    });
+  }
+
+  /** Amend a saved report's range/grouping/filters/rounding (PRD §09 R08). */
+  editReport(name: string, patch: SavedReportPatch): SavedReport {
+    return this.tx(() => {
+      const row = this.requireReport(name);
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (patch.rangeSpec !== undefined) {
+        const spec = patch.rangeSpec;
+        sets.push('range_kind = ?', 'range_preset = ?', 'range_from_utc = ?', 'range_to_utc = ?');
+        params.push(
+          spec.kind,
+          spec.kind === 'preset' ? spec.preset : null,
+          spec.kind === 'absolute' ? spec.fromUtc : null,
+          spec.kind === 'absolute' ? spec.toUtc : null,
+        );
+      }
+      if (patch.by !== undefined) {
+        sets.push('group_by = ?');
+        params.push(patch.by);
+      }
+      if (patch.billableFilter !== undefined) {
+        sets.push('billable_filter = ?');
+        params.push(patch.billableFilter);
+      }
+      if (patch.clientId !== undefined) {
+        sets.push('client_id = ?');
+        params.push(patch.clientId);
+      }
+      if (patch.projectId !== undefined) {
+        sets.push('project_id = ?');
+        params.push(patch.projectId);
+      }
+      if (patch.tag !== undefined) {
+        sets.push('tag = ?');
+        params.push(patch.tag);
+      }
+      if (patch.search !== undefined) {
+        sets.push('search = ?');
+        params.push(patch.search);
+      }
+      if (patch.rounding !== undefined) {
+        sets.push('rounding = ?');
+        params.push(patch.rounding ? 1 : 0);
+      }
+      if (patch.roundingIncrementMin !== undefined) {
+        sets.push('rounding_increment_min = ?');
+        params.push(patch.roundingIncrementMin);
+      }
+      if (sets.length > 0) {
+        params.push(row.id);
+        this.db.prepare(`UPDATE report SET ${sets.join(', ')} WHERE id = ?`).run(...(params as never[]));
+      }
+      return this.reportDefById(row.id);
+    });
+  }
+
+  /** Delete a saved report by name (PRD §09 R08). Rejects an unknown name. */
+  removeReport(name: string): void {
+    this.tx(() => {
+      const row = this.requireReport(name);
+      this.db.prepare('DELETE FROM report WHERE id = ?').run(row.id);
+    });
+  }
+
+  /**
+   * Run a saved report against current data (PRD §09 R09). `ref` is a name (case-insensitive)
+   * or a numeric id, so either surface can run a definition by whichever handle it holds.
+   *
+   * NEVER-DIVERGE GUARANTEE (the crux, stated here at the call site): the definition is resolved
+   * through resolveReportDef, which delegates to the SAME core resolveRange the ad-hoc report
+   * path uses, and then folded into the one report() resolution+grouping path. So a saved report
+   * and an ad-hoc report with identical filters over the same resolved range produce identical
+   * totals — there is exactly one place range/grouping/rounding turn into a Report.
+   */
+  runReport(ref: string | number, now: Date = this.now()): Report {
+    const def = this.requireReportDefByRef(ref);
+    return this.report(resolveReportDef(def, this.settings().weekStart, now));
+  }
+
+  /**
+   * Export the RAW entries a saved report covers (PRD §09 R09, §09 R6): resolve the def's
+   * range, list its entries with billable='all' and NO client/project/tag/search narrowing —
+   * byte-identical to `tt export` for the resolved window — and render them through the SAME
+   * core toCsv/toJsonEntries the ad-hoc export uses. The saved report's filters shape its
+   * on-screen totals (runReport), not the exported file: the export is the durability/data-out
+   * path (the full range), so CSV/JSON from a saved report and `tt export --range …` agree.
+   */
+  exportSavedReport(
+    ref: string | number,
+    format: 'csv',
+    now?: Date,
+  ): string;
+  exportSavedReport(
+    ref: string | number,
+    format: 'json',
+    now?: Date,
+  ): JsonEntry[];
+  exportSavedReport(
+    ref: string | number,
+    format: 'csv' | 'json',
+    now: Date = this.now(),
+  ): string | JsonEntry[] {
+    const def = this.requireReportDefByRef(ref);
+    const range = resolveSavedRange(def.rangeSpec, this.settings().weekStart, now);
+    const entries = this.listEntries({
+      fromUtc: range.fromUtc,
+      toUtc: range.toUtc,
+      billable: 'all',
+    });
+    return format === 'csv' ? toCsv(entries, now) : toJsonEntries(entries, now);
+  }
+
+  private findReportByName(name: string): ReportRow | undefined {
+    return this.findByNameCI<ReportRow>('report', name);
+  }
+
+  private requireReport(name: string): ReportRow {
+    const row = this.findReportByName(name);
+    if (!row) throw new StoreError(`no saved report named "${name}"`);
+    return row;
+  }
+
+  private requireReportDef(name: string): SavedReport {
+    return this.toSavedReport(this.requireReport(name));
+  }
+
+  /**
+   * Resolve a saved-report handle — a numeric id OR a name (case-insensitive) — to its
+   * definition, throwing a clear StoreError when nothing matches. One lookup for runReport
+   * and exportSavedReport, so a name and an id reach the same definition on either surface.
+   */
+  private requireReportDefByRef(ref: string | number): SavedReport {
+    if (typeof ref === 'number') {
+      const row = this.findByIdRow<ReportRow>('report', ref);
+      if (!row) throw new StoreError(`no saved report with id ${ref}`);
+      return this.toSavedReport(row);
+    }
+    return this.requireReportDef(ref);
+  }
+
+  private reportDefById(id: number): SavedReport {
+    return this.toSavedReport(this.findByIdRow<ReportRow>('report', id)!);
+  }
+
+  private toSavedReport(row: ReportRow): SavedReport {
+    const spec: RangeSpec =
+      row.range_kind === 'preset'
+        ? { kind: 'preset', preset: row.range_preset as RangePreset }
+        : { kind: 'absolute', fromUtc: row.range_from_utc!, toUtc: row.range_to_utc! };
+    const out: SavedReport = {
+      id: row.id,
+      name: row.name,
+      rangeSpec: spec,
+      by: row.group_by as SavedReport['by'],
+      billableFilter: row.billable_filter as SavedReport['billableFilter'],
+      rounding: row.rounding === 1,
+      roundingIncrementMin: row.rounding_increment_min,
+      createdUtc: row.created_utc,
+    };
+    if (row.client_id !== null) out.clientId = row.client_id;
+    if (row.project_id !== null) out.projectId = row.project_id;
+    if (row.tag !== null) out.tag = row.tag;
+    if (row.search !== null) out.search = row.search;
+    return out;
+  }
+
+  // ------------------------------------------------------------ favorites (§05 R09)
+
+  /**
+   * Pin a favorite — a named timer template (PRD §05 R09). When `fromEntryId` is given (a
+   * numeric id, or `'open'` for the running entry), the template is captured off that entry's
+   * description / client / project / billable / tags; otherwise the explicit attributes are
+   * used (resolved through the SAME resolveClientProject every start/add uses, so a project's
+   * client stays authoritative). The name is the cross-surface handle and is unique
+   * case-insensitively; a duplicate is a StoreError (the table's UNIQUE gives it teeth), not a
+   * silent overwrite. Tags are applied through the favorite_tag twin of the entry_tag path.
+   */
+  pinFavorite(t: FavoriteTemplate): Favorite {
+    return this.tx(() => {
+      if (this.findFavoriteRowByName(t.name)) {
+        throw new StoreError(`a favorite named "${t.name}" already exists`);
+      }
+      let description: string | null;
+      let clientId: number | null;
+      let projectId: number | null;
+      let billable: boolean;
+      let tags: string[];
+      if (t.fromEntryId !== undefined) {
+        const src =
+          t.fromEntryId === 'open'
+            ? (() => {
+                const open = this.db
+                  .prepare('SELECT * FROM entry WHERE end_utc IS NULL')
+                  .get() as EntryRow | undefined;
+                if (!open) throw new StoreError('no running entry to pin');
+                return open;
+              })()
+            : this.requireEntry(t.fromEntryId);
+        description = src.description;
+        clientId = src.client_id;
+        projectId = src.project_id;
+        billable = src.billable === 1;
+        tags = this.tagsFor(src.id);
+      } else {
+        const resolved = this.resolveClientProject({
+          clientId: t.clientId,
+          projectId: t.projectId,
+        });
+        clientId = resolved.clientId;
+        projectId = resolved.projectId;
+        description = t.description ?? null;
+        billable = t.billable ?? clientId !== null;
+        tags = t.tags ?? [];
+      }
+      const id = Number(
+        this.db
+          .prepare(
+            'INSERT INTO favorite(name, description, client_id, project_id, billable) VALUES(?,?,?,?,?)',
+          )
+          .run(t.name, description, clientId, projectId, billable ? 1 : 0).lastInsertRowid,
+      );
+      this.applyFavoriteTags(id, tags);
+      return this.favoriteById(id);
+    });
+  }
+
+  /** List all favorites, name-ordered, with tags joined (PRD §05 R09). */
+  listFavorites(): Favorite[] {
+    return (
+      this.db.prepare('SELECT * FROM favorite ORDER BY name COLLATE NOCASE').all() as unknown as FavoriteRow[]
+    ).map((r) => this.toFavorite(r));
+  }
+
+  /** A favorite by name (case-insensitive), or null. */
+  findFavoriteByName(name: string): Favorite | null {
+    const row = this.findFavoriteRowByName(name);
+    return row ? this.toFavorite(row) : null;
+  }
+
+  /** Rename a favorite (PRD §05 R09). Rejects an unknown source or a duplicate target. */
+  renameFavorite(ref: string | number, newName: string): Favorite {
+    return this.tx(() => {
+      const row = this.requireFavoriteRow(ref);
+      const clash = this.findFavoriteRowByName(newName);
+      if (clash && clash.id !== row.id) {
+        throw new StoreError(`a favorite named "${newName}" already exists`);
+      }
+      this.db.prepare('UPDATE favorite SET name = ? WHERE id = ?').run(newName, row.id);
+      return this.favoriteById(row.id);
+    });
+  }
+
+  /** Unpin (delete) a favorite by name or id (PRD §05 R09). favorite_tag cascades. */
+  unpinFavorite(ref: string | number): void {
+    this.tx(() => {
+      const row = this.requireFavoriteRow(ref);
+      this.db.prepare('DELETE FROM favorite WHERE id = ?').run(row.id);
+    });
+  }
+
+  private findFavoriteRowByName(name: string): FavoriteRow | undefined {
+    return this.findByNameCI<FavoriteRow>('favorite', name);
+  }
+
+  /** Resolve a favorite handle — a numeric id OR a name (case-insensitive) — to its row. */
+  private requireFavoriteRow(ref: string | number): FavoriteRow {
+    if (typeof ref === 'number') {
+      const row = this.findByIdRow<FavoriteRow>('favorite', ref);
+      if (!row) throw new StoreError(`no favorite with id ${ref}`);
+      return row;
+    }
+    const row = this.findFavoriteRowByName(ref);
+    if (!row) throw new StoreError(`no favorite named "${ref}"`);
+    return row;
+  }
+
+  private favoriteById(id: number): Favorite {
+    return this.toFavorite(this.findByIdRow<FavoriteRow>('favorite', id)!);
+  }
+
+  private toFavorite(row: FavoriteRow): Favorite {
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      clientId: row.client_id,
+      projectId: row.project_id,
+      billable: row.billable === 1,
+      tags: this.favoriteTagsFor(row.id),
+    };
+  }
+
+  /** Apply tags to a favorite — the favorite_tag twin of applyTags (entry_tag). */
+  private applyFavoriteTags(favoriteId: number, tags: string[]): void {
+    for (const name of tags) {
+      const trimmed = name.trim();
+      if (!trimmed) continue;
+      const tagId = this.ensureTag(trimmed);
+      this.db
+        .prepare('INSERT OR IGNORE INTO favorite_tag(favorite_id, tag_id) VALUES(?, ?)')
+        .run(favoriteId, tagId);
+    }
+  }
+
+  private favoriteTagsFor(favoriteId: number): string[] {
+    return (
+      this.db
+        .prepare(
+          'SELECT t.name FROM tag t JOIN favorite_tag ft ON ft.tag_id = t.id WHERE ft.favorite_id = ? ORDER BY t.name',
+        )
+        .all(favoriteId) as { name: string }[]
+    ).map((r) => r.name);
   }
 
   // ---------------------------------------------------------- reference data
@@ -730,7 +1302,82 @@ export class Store {
     this.stmt('DELETE FROM app_state WHERE key = ?').run(key);
   }
 
+  /**
+   * §20 R07 — upsert (value) or delete (null) an `app_state` key with NO transaction of its
+   * own. This is the in-transaction primitive: the entry transitions (start/stop) call it
+   * INSIDE their existing `tx()` body so the schedule/last-seen write commits atomically with
+   * the entry row. It is private precisely because an `app_state` write that changes state
+   * must ride the transaction of the entry write that changed it (the §20 R07 contract);
+   * standalone writes go through the typed methods below, each of which owns its own short tx.
+   */
+  private writeAppStateTx(key: string, value: string | null): void {
+    if (value === null) {
+      this.db.prepare('DELETE FROM app_state WHERE key = ?').run(key);
+    } else {
+      this.db
+        .prepare(
+          'INSERT INTO app_state(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+        )
+        .run(key, value);
+    }
+  }
+
+  /**
+   * §20 R07 — the persisted check-in schedule for the running entry, or null when nothing is
+   * running (start() seeds it atomically; stop() clears it atomically). The GUI tick reads
+   * this instead of reaching into `app_state` by string key, so the schedule survives relaunch
+   * (§10b) on the SAME durable state the entry transitions wrote.
+   */
+  checkinState(): CheckinState | null {
+    const raw = this.getAppState(CHECKIN_STATE_KEY);
+    return raw ? (JSON.parse(raw) as CheckinState) : null;
+  }
+
+  /**
+   * §20 R07 — persist an advanced check-in schedule together with the last-seen heartbeat as
+   * ONE durable unit. The GUI tick calls this when `evaluateCheckin` advances the schedule
+   * (a fire): the schedule advance and the heartbeat that proves the app was alive at that
+   * instant commit-or-rollback together, so they can never disagree. `state === null` clears
+   * the schedule (defensive; the normal clear path is stop()).
+   */
+  setCheckinState(state: CheckinState | null, nowUtc: string): void {
+    this.tx(() => {
+      this.writeAppStateTx(CHECKIN_STATE_KEY, state === null ? null : JSON.stringify(state));
+      this.writeAppStateTx(LAST_SEEN_KEY, nowUtc);
+    });
+  }
+
+  /**
+   * §20 R07 — stamp the last-seen heartbeat (launch-time gap reconciliation, §10a). This is a
+   * standalone state write whose "same transaction as the write that changes it" IS its own
+   * short transaction — there is no entry write to ride. The GUI heartbeat path calls this.
+   */
+  recordLastSeen(nowUtc: string): void {
+    this.tx(() => {
+      this.writeAppStateTx(LAST_SEEN_KEY, nowUtc);
+    });
+  }
+
   // ---------------------------------------------------------------- internals
+
+  /**
+   * The one case-insensitive name lookup the named-entity tables (favorite, report) share —
+   * `SELECT * FROM <table> WHERE name = ? COLLATE NOCASE`. Centralising it means the unique
+   * cross-surface name handle resolves the SAME way for every such entity, instead of the
+   * SELECT being copy-pasted per entity (the favorites and saved-reports groups had it twice).
+   * `table` is an internal literal (never user input), so interpolating it carries no injection
+   * risk; the name is bound. Each caller keeps its own typed row cast and its own error strings.
+   */
+  private findByNameCI<R>(table: 'favorite' | 'report', name: string): R | undefined {
+    return this.db.prepare(`SELECT * FROM ${table} WHERE name = ? COLLATE NOCASE`).get(name) as
+      | R
+      | undefined;
+  }
+
+  /** Resolve a numeric-id row from a named-entity table (favorite, report) by primary key. */
+  private findByIdRow<R>(table: 'favorite' | 'report', id: number): R | undefined {
+    return this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as R | undefined;
+  }
 
   private requireEntry(id: number): EntryRow {
     const row = this.stmt('SELECT * FROM entry WHERE id = ?').get(id) as EntryRow | undefined;
@@ -836,8 +1483,13 @@ export class Store {
           | undefined)?.name ?? null)
       : null;
     const sleepSpans = this.sleepSpansFor(row.id);
-    const endMs = row.end_utc ? Date.parse(row.end_utc) : now.getTime();
-    const rawSeconds = Math.max(0, Math.round((endMs - Date.parse(row.start_utc)) / 1000));
+    // Open entry: derive live elapsed through the monotonic-time guard (PRD §20 R06) so a
+    // wall-clock jump behind `start` (NTP / manual change) clamps to 0, never negative.
+    // Closed entry: span from the stored end, still clamped for safety against a corrupt
+    // stored end < start.
+    const rawSeconds = row.end_utc
+      ? Math.max(0, Math.round((Date.parse(row.end_utc) - Date.parse(row.start_utc)) / 1000))
+      : elapsedSeconds(row.start_utc, now.toISOString());
     const billableSeconds = Math.max(0, rawSeconds - row.excluded_seconds);
     return {
       id: row.id,

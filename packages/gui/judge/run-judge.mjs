@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, switchState, addFormState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, reportState, reportSummaryState, roundingState, settingsState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, switchState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -80,12 +80,18 @@ async function main() {
     record('EMPTY_STATE', ok, `empty state reads: ${JSON.stringify(text.trim())}`, 'main-empty.png');
   });
 
-  // NAV_SHELL — §12 R3: the main window presents a persistent left-hand nav with the five
-  // views (Timer / Entries / Clients / Reports / Settings); the current view is highlighted
-  // and each item routes to its view. Drive the real renderer: assert the five nav items in
-  // order, exactly one active by default (Entries) showing its view, then click a different
-  // item (Settings) and assert the active highlight + the visible .view both moved. Captures
-  // main-nav.png as the rubric evidence for the "quiet desktop shell" line.
+  // NAV_SHELL — §12 R3 (G7): the main window presents a persistent left-hand nav with the five
+  // views (Timer / Entries / Clients / Reports / Settings); the current view is highlighted and
+  // each item routes to its view. The MODIFIED req hardens two G7 guarantees beyond order +
+  // default-active + routing:
+  //   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
+  //     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
+  //     visible each time — no view escapes the shell.
+  //   FIXED_WIDTH_ON_RESIZE — the rail's measured width is byte-identical (168) across viewports
+  //     480/760/1200px while the `.views` column width changes, proving resize lands on the
+  //     content area, not the rail.
+  // All four facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
+  // and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const before = await page.evaluate(() => {
       const items = [...document.querySelectorAll('.nav-item')];
@@ -113,6 +119,58 @@ async function main() {
       return { active, visibleViews, entriesHidden };
     });
 
+    // SIDEBAR_EVERY_VIEW: click through every one of the five views and assert the rail stays
+    // visible (laid out, non-zero width, not hidden) on each, with exactly one .view shown.
+    const everyView = [];
+    for (const view of ['timer', 'entries', 'clients', 'reports', 'settings']) {
+      await page.click(`.nav-item[data-view="${view}"]`);
+      const probe = await page.evaluate((v) => {
+        const nav = document.querySelector('.shell .nav');
+        const cs = nav ? getComputedStyle(nav) : null;
+        const r = nav ? nav.getBoundingClientRect() : { width: 0 };
+        const visibleViews = [...document.querySelectorAll('.view')]
+          .filter((s) => !s.hidden)
+          .map((s) => s.dataset.view);
+        return {
+          view: v,
+          railVisible: !!nav && !nav.hidden && cs.display !== 'none' && cs.visibility !== 'hidden' && r.width > 0,
+          railWidth: Math.round(r.width),
+          visibleViews,
+        };
+      }, view);
+      everyView.push(probe);
+    }
+    const sidebarEveryView =
+      everyView.length === 5 &&
+      everyView.every((p) => p.railVisible && p.visibleViews.length === 1 && p.visibleViews[0] === p.view);
+
+    // FIXED_WIDTH_ON_RESIZE: measure the rail (and the views column, to show it is the one that
+    // moves) at three viewport widths; the rail must be byte-identical 168 across all three.
+    const measure = () =>
+      page.evaluate(() => {
+        const nav = document.querySelector('.shell .nav');
+        const views = document.querySelector('.shell .views');
+        return {
+          rail: Math.round(nav.getBoundingClientRect().width),
+          views: Math.round(views.getBoundingClientRect().width),
+        };
+      });
+    const at760 = await measure();
+    await page.setViewportSize({ width: 1200, height: 620 });
+    const at1200 = await measure();
+    await page.screenshot({ path: join(EVIDENCE, 'main-nav-wide.png') });
+    await page.setViewportSize({ width: 480, height: 620 });
+    const at480 = await measure();
+    // Restore the default viewport so the page state matches the rest of the harness.
+    await page.setViewportSize({ width: 760, height: 620 });
+    const fixedWidthOnResize =
+      at760.rail === 168 &&
+      at1200.rail === 168 &&
+      at480.rail === 168 &&
+      // The views column DID change with the viewport — resize landed on the content, not the rail.
+      at1200.views !== at760.views &&
+      at480.views !== at760.views;
+
     const orderOk =
       before.labels.join(',') === 'Timer,Entries,Clients,Reports,Settings' &&
       before.views.join(',') === 'timer,entries,clients,reports,settings';
@@ -129,9 +187,13 @@ async function main() {
       after.entriesHidden;
     record(
       'NAV_SHELL',
-      orderOk && defaultOk && routedOk,
+      orderOk && defaultOk && routedOk && sidebarEveryView && fixedWidthOnResize,
       `nav order ${JSON.stringify(before.labels)}; default active=${before.activeView} (one view shown); ` +
-        `clicking Settings routed: active=${JSON.stringify(after.active)} visible=${JSON.stringify(after.visibleViews)}`,
+        `clicking Settings routed: active=${JSON.stringify(after.active)} visible=${JSON.stringify(after.visibleViews)}; ` +
+        `sidebar-every-view rail visible on all five=${sidebarEveryView} ` +
+        `(${everyView.map((p) => `${p.view}:w${p.railWidth}/${p.railVisible ? 'shown' : 'HIDDEN'}`).join(', ')}); ` +
+        `fixed-width-on-resize rail=${at480.rail}/${at760.rail}/${at1200.rail} (480/760/1200) ` +
+        `views=${at480.views}/${at760.views}/${at1200.views} → ${fixedWidthOnResize}`,
       'main-nav.png',
     );
   });
@@ -217,7 +279,10 @@ async function main() {
 
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const empty = await focusWalk(page);
-    // Focus the primary toggle and screenshot it so the ring is visible evidence.
+    // §12 R05: the primary toggle moved to the Timer view (the GUI core-entry surface), so
+    // route there before focusing it for the ring screenshot (it is not visible on Entries).
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #toggle');
     await page.focus('#toggle');
     await page.screenshot({ path: join(EVIDENCE, 'main-focus.png') });
     const running = await withPage(browser, runningState(), 'index.html', async (rp) => focusWalk(rp));
@@ -260,23 +325,110 @@ async function main() {
     record('TRAY_COUNTUP', ok, `popover count advanced ${t1} → ${t2} (+${delta}s)`, 'popover-running-2.png');
   });
 
-  // IN_WINDOW_TIMER (main window) — §12 R4: the main window shows an Active-Timer card that
-  // mirrors `tt status`: a live per-second count-up, the running state, the running entry's
-  // description + client/project, and Stop + Switch actions. Drive the real renderer on
-  // index.html with the running fixture and assert (a) the card clock reads the derived
-  // count-up and advances +3s across a pinned-clock step (same technique as TRAY_COUNTUP),
-  // (b) the card text carries the running description ('auth refactor') and the client/project
-  // label ('Client A / API'), and (c) both a Stop and a Switch control are present. Captures
-  // main-timer.png as the rubric evidence for the in-window card quality.
+  // TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
+  // surface. The tray's single left-click opens this popover; the dropdown action menu is
+  // removed (the tray's own click/right-click has no host headless — confirmed under MANUAL).
+  // The half that IS headless-checkable: every tray action lives IN the popover. Drive the
+  // real popover renderer twice and assert all four actions are present —
+  //   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #switch visible, #open present;
+  //   idle snapshot:    #toggle reads 'Start', #switch hidden, #open present.
+  // If any of Stop / Switch / Start / Open Stint is absent from the popover, this fails —
+  // since the dropdown is gone, the popover MUST carry them all. Captures
+  // popover-tray-surface.png as the evidence that the popover is the one action surface.
+  await withPage(browser, runningState(), 'popover.html', async (page) => {
+    const runningProbe = await page.evaluate(() => {
+      const toggle = document.querySelector('#toggle');
+      const sw = document.querySelector('#switch');
+      const open = document.querySelector('#open');
+      const swCs = sw ? getComputedStyle(sw) : null;
+      return {
+        toggleLabel: toggle ? toggle.textContent.trim() : null,
+        togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
+        switchVisible: !!sw && !sw.hidden && swCs.display !== 'none',
+        openPresent: !!open,
+        openLabel: open ? open.textContent.trim() : null,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'popover-tray-surface.png') });
+
+    // The idle snapshot: the same popover offers Start (one-tap) and hides Switch (which only
+    // makes sense mid-timer) — Start is still reachable here, so the dropdown's Start is not lost.
+    const idleProbe = await withPage(browser, emptyState(), 'popover.html', async (ip) =>
+      ip.evaluate(() => {
+        const toggle = document.querySelector('#toggle');
+        const sw = document.querySelector('#switch');
+        const open = document.querySelector('#open');
+        return {
+          toggleLabel: toggle ? toggle.textContent.trim() : null,
+          togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
+          switchHidden: !!sw && sw.hidden,
+          openPresent: !!open,
+        };
+      }),
+    );
+
+    const runningOk =
+      runningProbe.toggleLabel === 'Stop' &&
+      runningProbe.togglePressed === 'true' &&
+      runningProbe.switchVisible &&
+      runningProbe.openPresent &&
+      /Open Stint/.test(runningProbe.openLabel ?? '');
+    const idleOk =
+      idleProbe.toggleLabel === 'Start' &&
+      idleProbe.togglePressed === 'false' &&
+      idleProbe.switchHidden &&
+      idleProbe.openPresent;
+    record(
+      'TRAY_POPOVER_SURFACE',
+      runningOk && idleOk,
+      `popover is the sole tray action surface — running: Stop+Switch+Open present ${JSON.stringify(runningProbe)}; ` +
+        `idle: Start (Switch hidden) + Open present ${JSON.stringify(idleProbe)}`,
+      'popover-tray-surface.png',
+    );
+  });
+
+  // IN_WINDOW_TIMER (main window) — §12 R04 + R14: the FULL Active-Timer card lives in the
+  // Timer view, and the Entries view keeps only a COMPACT STRIP that mirrors the running
+  // count-up/state/desc and links to the Timer view. Drive the real renderer on index.html
+  // with the running fixture and assert: (a) on the Timer view (reached by clicking the nav
+  // item) the full #timer-card clock reads the derived count-up and advances +3s across a
+  // pinned-clock step (same technique as TRAY_COUNTUP), shows the running state, carries the
+  // running description ('auth refactor') and the client/project label ('Client A / API'), and
+  // exposes BOTH a Stop and a Switch control; and (b) on the Entries view the compact
+  // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
+  // Stop/Switch controls. Fails if the full panel stayed on Entries or the card/strip placement
+  // regressed. Captures timer-view.png (the full panel) and main-timer.png (the Entries strip).
   await withPage(browser, runningState(), 'index.html', async (page) => {
-    const t1 = await page.textContent('#timer-clock');
+    // Entries view (default) first: the compact strip mirrors the running timer and exposes no
+    // full-panel Stop/Switch controls (those live on the Timer-view card only).
+    const strip = await page.evaluate(() => {
+      const el = document.querySelector('#timer-strip');
+      return {
+        present: !!el,
+        running: !!el && el.classList.contains('running'),
+        clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
+        state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
+        desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
+        // The strip must NOT carry the full Stop/Switch panel controls (they belong to the card).
+        noStop: !document.querySelector('#timer-strip #timer-stop'),
+        noSwitch: !document.querySelector('#timer-strip #timer-switch'),
+      };
+    });
     await page.screenshot({ path: join(EVIDENCE, 'main-timer.png') });
+
+    // Route to the Timer view, where the FULL Active-Timer card lives.
+    await page.click('.nav-item[data-view="timer"]');
+    const t1 = await page.textContent('#timer-clock');
+    await page.screenshot({ path: join(EVIDENCE, 'timer-view.png') });
     // Advance exactly 3s and stay frozen there (pauseAt, not fastForward) so the second
     // read is reproducible — the card's tick() must have advanced the count-up.
     await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
     const probe = await page.evaluate(() => {
       const card = document.querySelector('#timer-card');
+      // The full card must be hosted INSIDE the Timer view section, not the Entries section.
+      const inTimerView = !!card && !!card.closest('.view[data-view="timer"]');
       return {
+        inTimerView,
         clock: document.querySelector('#timer-clock')?.textContent ?? null,
         running: !!card && card.classList.contains('running'),
         state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
@@ -291,7 +443,8 @@ async function main() {
       return h * 3600 + m * 60 + sec;
     };
     const delta = toSec(probe.clock) - toSec(t1);
-    const ok =
+    const cardOk =
+      probe.inTimerView &&
       t1 === '01:24:07' &&
       delta === 3 &&
       probe.running &&
@@ -300,11 +453,155 @@ async function main() {
       /Client A \/ API/.test(probe.meta) &&
       probe.hasStop &&
       probe.hasSwitch;
+    const stripOk =
+      strip.present &&
+      strip.running &&
+      strip.clock === '01:24:07' &&
+      strip.state === 'running' &&
+      strip.desc === 'auth refactor' &&
+      strip.noStop &&
+      strip.noSwitch;
     record(
       'IN_WINDOW_TIMER',
+      cardOk && stripOk,
+      `Timer-view card count advanced ${t1} → ${probe.clock} (+${delta}s) ${JSON.stringify(probe)}; ` +
+        `Entries strip ${JSON.stringify(strip)}`,
+      'timer-view.png',
+    );
+  });
+
+  // TIMER_VIEW (full Timer view, G5) — §12 R14: routing to the Timer view renders the live clock
+  // reading the derived count-up (advances +3s across the pinned-clock step, not reset), a
+  // running/idle state indicator, the running entry's description ('auth refactor') + client/
+  // project ('Client A / API'); the live-edit-running strip is present and its commit sends an
+  // `edit` patch over IPC that carries the start-time/attributes but NEVER endUtc (the row stays
+  // open); a visible Stop (accent) + Switch (plain) are present while running. Drive the real
+  // renderer: route to the Timer view, read the clock, fast-forward 3s, edit the live strip's
+  // start time, and assert the recorded edit payload (window.__EDITED__) has no endUtc.
+  await withPage(browser, timerViewRunningState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
+    const t1 = await page.textContent('#timer-clock');
+    const before = await page.evaluate(() => ({
+      stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
+      noEnd: !document.querySelector('#live-edit #le-end'),
+      noStopText: /not editable while running/i.test(document.querySelector('#live-edit')?.textContent ?? ''),
+      hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
+      hasSwitch: !!document.querySelector('#timer-switch') && !document.querySelector('#timer-switch').hidden,
+      desc: document.querySelector('#timer-desc')?.textContent?.trim() ?? null,
+      meta: document.querySelector('#timer-meta')?.textContent?.trim() ?? null,
+      state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png') });
+    // Advance the pinned clock +3s — the card's tick() must advance the live count-up.
+    await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
+    const t2 = await page.textContent('#timer-clock');
+    // Edit the live-edit-running strip's start time (a change event commits immediately) and the
+    // description (debounced); assert the recorded edit patch carries the change but NO endUtc.
+    await page.fill('#live-edit #le-desc', 'auth refactor v2');
+    await page.fill('#live-edit #le-start', '2026-06-24T20:00');
+    await page.dispatchEvent('#live-edit #le-start', 'change');
+    // Let the debounced description commit settle (scheduleLiveEdit waits 500ms).
+    await page.clock.fastForward(600);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+    const toSec = (s) => { const [h, m, sec] = s.split(':').map(Number); return h * 3600 + m * 60 + sec; };
+    const delta = toSec(t2) - toSec(t1);
+    const ok =
+      t1 === '01:24:07' &&
+      delta === 3 &&
+      before.stripPresent &&
+      before.noEnd &&
+      before.noStopText &&
+      before.hasStop &&
+      before.hasSwitch &&
+      before.desc === 'auth refactor' &&
+      /Client A \/ API/.test(before.meta ?? '') &&
+      before.state === 'running' &&
+      !!edited &&
+      typeof edited.id === 'number' &&
+      !!edited.patch &&
+      !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
+      (edited.patch.startUtc !== undefined || edited.patch.description !== undefined);
+    record(
+      'TIMER_VIEW',
       ok,
-      `in-window Active-Timer card count advanced ${t1} → ${probe.clock} (+${delta}s); ${JSON.stringify(probe)}`,
-      'main-timer.png',
+      `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
+        `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'})`,
+      'timer-view-full.png',
+    );
+  });
+
+  // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
+  // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
+  // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
+  // (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
+  // favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
+  // callable for each of the five favorite channels. Drive the real renderer twice (seeded +
+  // empty) and machine-score the deterministic sub-facts.
+  await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
+    const probe = await page.evaluate(() => {
+      const rail = document.querySelector('#fav-rail');
+      const cards = [...rail.querySelectorAll('.fav-card')];
+      const api = window.stint || {};
+      const favChannels = ['listFavorites', 'pinFavorite', 'renameFavorite', 'unpinFavorite', 'startFavorite'];
+      return {
+        rows: cards.length,
+        names: cards.map((c) => c.querySelector('.fav-name')?.textContent?.trim()),
+        hasResume: cards.every((c) => !!c.querySelector('[data-act="fav-resume"]')),
+        hasKebab: cards.every((c) => !!c.querySelector('[data-act="fav-menu"]')),
+        hasPin: !!document.querySelector('#fav-pin') || !!document.querySelector('#timer-pin'),
+        emptyHidden: !!document.querySelector('#fav-empty')?.hidden,
+        callableChannels: favChannels.filter((ch) => typeof api[ch] === 'function'),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-favorites.png') });
+    // Click the first row's Resume — startFavorite must fire EXACTLY once with that name.
+    await page.click('.fav-card [data-act="fav-resume"]');
+    await page.waitForFunction(() => Array.isArray(window.__RESUMED__) && window.__RESUMED__.length >= 1);
+    const resumed = await page.evaluate(() => window.__RESUMED__);
+
+    // The empty-favorites variant: the rail paints its instructive empty state.
+    const empty = await withPage(
+      browser,
+      timerViewEmptyFavoritesState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="timer"]');
+        await ep.waitForSelector('[data-view="timer"]:not([hidden]) #fav-empty');
+        await ep.screenshot({ path: join(EVIDENCE, 'timer-favorites-empty.png') });
+        return ep.evaluate(() => {
+          const el = document.querySelector('#fav-empty');
+          return { shown: !!el && !el.hidden, text: el?.textContent?.trim() ?? '' };
+        });
+      },
+      { favorites: [] },
+    );
+
+    const ok =
+      probe.rows === 3 &&
+      probe.names.includes('Standup') &&
+      probe.names.includes('Deep work') &&
+      probe.hasResume &&
+      probe.hasKebab &&
+      probe.hasPin &&
+      probe.emptyHidden &&
+      probe.callableChannels.length === 5 &&
+      Array.isArray(resumed) &&
+      resumed.length === 1 &&
+      resumed[0] &&
+      resumed[0].name === 'Standup' &&
+      empty.shown &&
+      /pin/i.test(empty.text) &&
+      /tt fav/i.test(empty.text);
+    record(
+      'FAVORITES_RAIL',
+      ok,
+      `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
+        `empty ${JSON.stringify(empty)}`,
+      'timer-favorites.png',
     );
   });
 
@@ -329,12 +626,27 @@ async function main() {
         el.closest('.entry.running') ||
         el.closest('.pop.running') ||
         el.closest('.pop:not(.idle)') ||
-        // §12 R4: the in-window Active-Timer card's running affordance — the live count-up
+        // §12 R04: the in-window Active-Timer card's running affordance — the live count-up
         // clock and the running-state indicator carry the system accent (mirroring the
         // popover's running count). The whole running card container is sanctioned so the
         // count-up accent is not flagged as a stray (the idle card and the Switch button
-        // stay monochrome).
+        // stay monochrome). The full card lives in the Timer view; the Entries view keeps a
+        // compact strip whose running clock/state carry the SAME sanctioned accent — so the
+        // running `.timer-strip` container is sanctioned alongside `.timer-card`.
         el.closest('.timer-card.running') ||
+        el.closest('.timer-strip.running') ||
+        // §12 R14: the live-edit-running strip is part of the running-timer surface (it only
+        // shows while a timer runs). Its dashed accent border + accent header word are the SAME
+        // sanctioned running-context accent the running card uses; the CONTROLS inside it stay
+        // monochrome (neutral wash/rule chrome), so the single primary action keeps the accent.
+        el.closest('.liveedit') ||
+        // §12 R15: the visual time-range picker's TWO sanctioned accent uses — the dragged
+        // "me" rectangle (the active span the user manipulates) and the picker's single
+        // primary "Apply range" button (.stp .primary, caught by button.primary above), plus
+        // the selected calendar day (.stp-d.stp-sel — the chosen day IS the active span's
+        // day, part of the same "me" surface). Everything else in the picker is monochrome.
+        el.closest('.stp-block.me') ||
+        el.closest('.stp-d.stp-sel') ||
         // §12 R13: the active left-nav item is marked with the system accent — the one
         // sanctioned accent use in the window chrome beyond the primary action / running
         // state (the rail is otherwise monochrome). The marker + its icon are allowed.
@@ -356,6 +668,160 @@ async function main() {
       primaryUsesAccent && chromeMonochrome,
       `primary=${probe.primary} accent=${probe.accentRgb}; stray accent on [${probe.offenders.join(', ') || 'none'}]`,
       'main-running.png',
+    );
+  });
+
+  // CLICKABILITY — §15 R-clickability / G10: ONE clickability convention across the window.
+  // Over the running main window, walk every clickable text affordance and assert the
+  // convention deterministically:
+  //   POSITIVE — every clickable affordance (button:not(.primary), .nav-item, .nav-link,
+  //     a[href], [data-act]) carries a NON-transparent background OR a visible border, so
+  //     none reads as bare prose. Sanctioned sub-affordances (the in-chip .chip-x, the
+  //     .set-toggle knob, and any control nested inside an already-bordered .chip/.seg/
+  //     .presets) are whitelisted — the parent IS the affordance.
+  //   NEGATIVE — known inert text (.wordmark, .day-head, .entry .desc, .entry .time,
+  //     .summary) carries NO button-like pill fill (its backgroundColor stays transparent
+  //     or the page/wash colour, never the var(--paper)/var(--wash) affordance fill).
+  //   ACCENT-PER-VIEW — ONLY the sanctioned accent uses (button.primary / running state /
+  //     nav-item.active) carry the accent; the accent never leaks onto an ordinary clickable
+  //     affordance, and at least one primary action does carry it — the accent stays reserved
+  //     for the view's primary action(s) (the running view's Stop, mirrored on the card +
+  //     toolbar, are both the SAME primary Stop action).
+  await withPage(browser, runningState(), 'index.html', async (page) => {
+    await page.screenshot({ path: join(EVIDENCE, 'main-clickability.png') });
+    const probe = await page.evaluate(() => {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => {
+        const n = parseInt(hex.replace('#', ''), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      const accentRgb = toRgb(accent);
+      const isTransparent = (c) => !c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
+      // A control "carries the affordance" if it paints a non-transparent background OR a
+      // visible (non-zero, non-transparent) border on at least one edge.
+      const carriesAffordance = (el) => {
+        const cs = getComputedStyle(el);
+        if (!isTransparent(cs.backgroundColor)) return true;
+        const edges = ['Top', 'Right', 'Bottom', 'Left'];
+        for (const e of edges) {
+          const w = parseFloat(cs[`border${e}Width`]) || 0;
+          if (w > 0 && cs[`border${e}Style`] !== 'none' && !isTransparent(cs[`border${e}Color`])) {
+            return true;
+          }
+        }
+        return false;
+      };
+      // Sub-affordances inside an already-bordered control are whitelisted — the parent is
+      // the affordance, so the inner glyph/knob need not re-carry the convention.
+      const whitelisted = (el) =>
+        el.matches('.chip-x') ||
+        el.matches('.set-toggle i') ||
+        // Native form controls (the multi-select checkbox) render their own UA affordance —
+        // the browser draws the checkbox, so it is never bare prose even with no CSS chrome.
+        el.matches('input[type="checkbox"], .sel') ||
+        !!el.closest('.chip') ||
+        !!el.closest('.seg') ||
+        !!el.closest('.presets');
+      const visible = (el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        if (el.hidden || el.closest('[hidden]')) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      // POSITIVE: candidate clickable affordances minus the primary (already accent-filled,
+      // trivially carries the convention) and the whitelisted sub-affordances.
+      const candidates = [
+        ...document.querySelectorAll('button:not(.primary), .nav-item, .nav-link, a[href], [data-act]'),
+      ];
+      const offenders = [];
+      for (const el of candidates) {
+        if (!visible(el)) continue;
+        if (whitelisted(el)) continue;
+        if (!carriesAffordance(el)) {
+          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      // NEGATIVE: known inert text must NOT wear a button-like pill fill. The affordance
+      // fills are var(--paper)/var(--wash); inert text stays transparent or the page bg.
+      const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
+      const wash = getComputedStyle(document.documentElement).getPropertyValue('--wash').trim();
+      const pillFills = new Set([toRgb(paper), toRgb(wash)]);
+      const inertSel = '.wordmark, .day-head, .entry .desc, .entry .time, .summary';
+      const inertOffenders = [];
+      for (const el of document.querySelectorAll(inertSel)) {
+        if (!visible(el)) continue;
+        const bg = getComputedStyle(el).backgroundColor;
+        if (!isTransparent(bg) && pillFills.has(bg)) {
+          inertOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      // ACCENT-PER-VIEW: the only elements that may FILL with the accent are the sanctioned
+      // uses (primary action / running state / active nav item). The accent must reach at
+      // least one primary action and never leak onto an ordinary affordance.
+      const accentSanctioned = (el) =>
+        el.matches('button.primary') ||
+        el.closest('button.primary') ||
+        el.closest('.entry.running') ||
+        el.closest('.timer-card.running') ||
+        // §12 R04: the Entries-view compact strip's running clock/state carry the same
+        // sanctioned running-state accent as the full card (the strip mirrors the card).
+        el.closest('.timer-strip.running') ||
+        el.closest('.nav-item.active');
+      const accentOffenders = [];
+      let primaryAccentCount = 0;
+      for (const el of document.querySelectorAll('*')) {
+        if (!visible(el)) continue;
+        const cs = getComputedStyle(el);
+        const fills = cs.backgroundColor === accentRgb;
+        if (fills && el.matches('button.primary')) primaryAccentCount++;
+        if (!accentSanctioned(el) && (fills || cs.color === accentRgb)) {
+          accentOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      return { offenders, inertOffenders, accentOffenders, primaryAccentCount };
+    });
+    // §12 R05: the canonical primary action (Start / Stop) now lives in the Timer view (the
+    // GUI core-entry surface relocated from the Entries toolbar), so the running Entries view
+    // shows its accent only as the running-state strip — not a primary-action FILL. Route to
+    // the Timer view and count the primary-action accent there (the running card's Stop is the
+    // visible accent-filled primary). The positive/inert/stray-accent checks stay on the
+    // content-rich Entries view above; this only re-homes the "≥1 primary carries accent" fact.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-panel');
+    const timerPrimaryAccentCount = await page.evaluate(() => {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => {
+        const n = parseInt(hex.replace('#', ''), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      const accentRgb = toRgb(accent);
+      const visible = (el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        if (el.hidden || el.closest('[hidden]')) return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      let count = 0;
+      for (const el of document.querySelectorAll('button.primary')) {
+        if (!visible(el)) continue;
+        if (getComputedStyle(el).backgroundColor === accentRgb) count++;
+      }
+      return count;
+    });
+    const positiveOk = probe.offenders.length === 0;
+    const negativeOk = probe.inertOffenders.length === 0;
+    const primaryAccentCount = probe.primaryAccentCount + timerPrimaryAccentCount;
+    const accentOk = probe.accentOffenders.length === 0 && primaryAccentCount >= 1;
+    record(
+      'CLICKABILITY',
+      positiveOk && negativeOk && accentOk,
+      `clickable affordances reading as bare prose=[${probe.offenders.join(', ') || 'none'}]; ` +
+        `inert text wearing a pill fill=[${probe.inertOffenders.join(', ') || 'none'}]; ` +
+        `stray accent=[${probe.accentOffenders.join(', ') || 'none'}], accent-filled primary action(s)=${primaryAccentCount} ` +
+        `(Entries ${probe.primaryAccentCount} + Timer ${timerPrimaryAccentCount}; expect ≥1, reserved for the primary action)`,
+      'main-clickability.png',
     );
   });
 
@@ -405,7 +871,10 @@ async function main() {
   // (description/client/project/tags/billable); the primary Start stays one-tap and the
   // submitted payload carries every attribute over the start IPC (§05/§12 R1).
   await withPage(browser, startFormState(), 'index.html', async (page) => {
-    // The disclosure starts collapsed; open it, fill the optional fields, submit.
+    // §12 R05: the start surface lives in the Timer view (the default route is Entries), so
+    // route there first, then open the collapsed disclosure, fill the optional fields, submit.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
     await page.click('#start-toggle');
     await page.fill('#start-desc', 'auth refactor');
     await page.fill('#start-client', 'Acme');
@@ -441,7 +910,10 @@ async function main() {
   // and the running snapshot (switchState) where the Switch button is visible and labelled
   // 'Switch'. Captures main-start-form.png (idle form) and main-switch.png (running Switch).
   await withPage(browser, startFormState(), 'index.html', async (page) => {
-    // Open the disclosure and confirm every optional attribute control is present.
+    // §12 R05: route to the Timer view (the start surface's home; the default route is
+    // Entries), then open the disclosure and confirm every optional attribute control.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
     await page.click('#start-toggle');
     await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
     const idle = await page.evaluate(() => {
@@ -466,7 +938,11 @@ async function main() {
     await page.screenshot({ path: join(EVIDENCE, 'main-start-form.png') });
 
     // The running surface: the dedicated Switch affordance is visible and labelled 'Switch'.
+    // §12 R05: the Switch primary lives in the Timer view, so route there before reading it
+    // (otherwise the still-hidden Timer section would report the button as display:none).
     const running = await withPage(browser, switchState(), 'index.html', async (rp) => {
+      await rp.click('.nav-item[data-view="timer"]');
+      await rp.waitForSelector('[data-view="timer"]:not([hidden]) #switch');
       const probe = await rp.evaluate(() => {
         const sw = document.querySelector('#switch');
         const cs = sw ? getComputedStyle(sw) : null;
@@ -594,6 +1070,244 @@ async function main() {
     },
     { overlap: true },
   );
+
+  // ADD_FORM_PICKER — §12 R07 / §12 R15 (G9): the manual-add form's Start (#add-from) and End
+  // (#add-to) text fields each expose a calendar-icon affordance that opens the shared visual
+  // time-range picker (the REAL window.STP / timepicker.js component R15 ships), AND the picker
+  // only ever WRITES BACK into the text inputs — the typed from/to stay authoritative. This
+  // scene proves the R07 consumer contract: (a) both fields carry a picker-opening trigger;
+  // (b) clicking it opens the picker seeded from the current span (the top echo mirrors the
+  // bound inputs); (c) Apply flows the span back into #add-from/#add-to; (d) the text inputs
+  // remain present and a subsequent Save still sends the explicit fromLocal/toLocal over the
+  // `add` IPC — text entry is authoritative, never bypassed. (The drag/resize geometry +
+  // overlap painting are exercised in TIME_RANGE_PICKER; here we Apply the seeded span to
+  // assert the write-back/authoritative-Save path end to end.)
+  await withPage(browser, addFormState(), 'index.html', async (page) => {
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    // Seed an explicit same-day span so the renderer's overnight-uses-text fallback (G9) does
+    // not fire regardless of the runner's local timezone — the picker path is what we exercise.
+    await page.fill('#add-from', '2026-06-24T13:00');
+    await page.fill('#add-to', '2026-06-24T14:30');
+    // Assert each field has a picker-opening affordance, then open the REAL picker.
+    const affordances = await page.evaluate(() => ({
+      from: !!document.querySelector('#add-from-pick'),
+      to: !!document.querySelector('#add-to-pick'),
+      fromInput: !!document.querySelector('#add-from'),
+      toInput: !!document.querySelector('#add-to'),
+      hint: !!document.querySelector('#add-pickhint'),
+    }));
+    await page.click('#add-from-pick');
+    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
+    await page.screenshot({ path: join(EVIDENCE, 'add-form-picker.png'), fullPage: true });
+    // (b) the picker opened seeded from the current span — its top echo mirrors the inputs.
+    const opened = await page.evaluate(() => ({
+      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
+      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
+    }));
+    const openedOk = opened.echoStart === '2026-06-24T13:00' && opened.echoEnd === '2026-06-24T14:30';
+    // (c) Apply writes the seeded span back into the authoritative #add-from/#add-to inputs.
+    await page.click('.stp .stp-apply');
+    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
+    const written = await page.evaluate(() => ({
+      fromValue: document.querySelector('#add-from')?.value,
+      toValue: document.querySelector('#add-to')?.value,
+    }));
+    const writeBackOk =
+      written.fromValue === '2026-06-24T13:00' && written.toValue === '2026-06-24T14:30';
+    // (d) Save AFTER picker use — the explicit fromLocal/toLocal must still flow over `add`.
+    await page.click('#add-go');
+    await page.waitForSelector('#add-form[hidden]', { state: 'attached' }); // submit done (form closed)
+    const probe = await page.evaluate(() => ({ added: window.__ADDED__ }));
+    const a = probe.added || {};
+    const authoritativeOk =
+      a.fromLocal === written.fromValue && a.toLocal === written.toValue; // Save sent the text values
+    const ok =
+      affordances.from &&
+      affordances.to &&
+      affordances.fromInput &&
+      affordances.toInput &&
+      openedOk &&
+      writeBackOk &&
+      authoritativeOk;
+    record(
+      'ADD_FORM_PICKER',
+      ok,
+      `affordances=${JSON.stringify(affordances)}; opened-echo=${JSON.stringify(opened)}; ` +
+        `wrote-back from=${written.fromValue} to=${written.toValue}; Save sent ${JSON.stringify({ fromLocal: a.fromLocal, toLocal: a.toLocal })} (text authoritative)`,
+      'add-form-picker.png',
+    );
+  });
+
+  // TIME_RANGE_PICKER — §12 R15 (G9): the REAL visual time-range picker (timepicker.js /
+  // window.STP), driven against the real renderer (index.html). Opens from the manual-add
+  // form's #add-from calendar icon; presents a month calendar + a single-day hour-line
+  // track with the bound text inputs echoed at the top. The edited entry is a draggable
+  // accent "me" rectangle: dragging the BODY moves start+stop together (5-min snap), and
+  // dragging the BOTTOM resize handle moves only the stop (5-min snap). Other entries paint
+  // gray; the overlapping span paints a yellow .stp-overlap (warn-only) while Apply still
+  // works. On Apply the authoritative #add-from/#add-to text inputs hold the picked LOCAL
+  // values and the popover closes. ACCENT_DISCIPLINE holds with the picker open (only the
+  // primary "Apply range" button + the "me" rectangle / selected day carry the accent).
+  //
+  // The page is pinned to timezoneId 'UTC' so the seeded UTC otherEntries land on the same
+  // local day as the filled 2026-06-24 span, making the gray/overlap geometry deterministic.
+  {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(pickerState()), {}));
+    await page.goto(fileUrl('index.html'));
+
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
+    // single-day column for that day and the dragged "me" rectangle is 13:00–14:30.
+    await page.fill('#add-from', '2026-06-24T13:00');
+    await page.fill('#add-to', '2026-06-24T14:30');
+
+    // Open the REAL picker from the Start field's calendar icon.
+    await page.click('#add-from-pick');
+    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
+
+    // (a) the popover presents the month calendar + the single-day hour-line track, and the
+    // bound text inputs are echoed at the top.
+    const present = await page.evaluate(() => ({
+      cal: !!document.querySelector('.stp .stp-grid .stp-d'),
+      track: !!document.querySelector('.stp .stp-track'),
+      hourLines: document.querySelectorAll('.stp .stp-hour').length,
+      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
+      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
+      me: !!document.querySelector('.stp-block.me'),
+      others: document.querySelectorAll('.stp-block.other').length,
+    }));
+
+    await page.screenshot({ path: join(EVIDENCE, 'time-range-picker.png'), fullPage: true });
+
+    // Helper: read the current #add-from/#add-to values (the authoritative inputs the picker
+    // writes on Apply) and the "me" rectangle geometry.
+    const meBox = async () => page.evaluate(() => {
+      const me = document.querySelector('.stp-block.me');
+      const r = me.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
+    });
+
+    // (b) DRAG THE BODY DOWN by a known pixel delta → BOTH start+stop advance by the snapped
+    // 5-min amount. Geometry: the track is 720px tall for 24h → 0.5px/min → 30px/hour. A
+    // +30px body drag = +60min on both ends, snapped to 5-min. We grab the body centre and
+    // move it down 30px.
+    const before = await meBox();
+    const grabX = Math.round(before.cx);
+    const grabY = Math.round((before.top + before.bottom) / 2);
+    await page.mouse.move(grabX, grabY);
+    await page.mouse.down();
+    await page.mouse.move(grabX, grabY + 30, { steps: 6 });
+    await page.mouse.up();
+    const afterBody = await page.evaluate(() => ({
+      start: document.querySelector('.stp .stp-echo-start')?.value,
+      end: document.querySelector('.stp .stp-echo-end')?.value,
+    }));
+    // +30px ≈ +60min → 14:00–15:30 (both moved together, 5-min snapped).
+    const bodyMovedTogether =
+      afterBody.start === '2026-06-24T14:00' && afterBody.end === '2026-06-24T15:30';
+
+    // (c) DRAG THE BOTTOM RESIZE HANDLE down by a known delta → only the STOP changes (5-min
+    // snapped); the start is unchanged. +15px ≈ +30min → stop 15:30 → 16:00.
+    const me2 = await meBox();
+    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 6 });
+    await page.mouse.up();
+    const afterResize = await page.evaluate(() => ({
+      start: document.querySelector('.stp .stp-echo-start')?.value,
+      end: document.querySelector('.stp .stp-echo-end')?.value,
+    }));
+    const resizeMovedStopOnly =
+      afterResize.start === afterBody.start && afterResize.end === '2026-06-24T16:00';
+
+    // (d) at least one gray .stp-block.other renders, and an overlapping span paints a yellow
+    // .stp-overlap (warn-only) — the 14:00–15:00 other vs the now-14:00–16:00 me span.
+    const warn = await page.evaluate(() => ({
+      others: document.querySelectorAll('.stp-block.other').length,
+      overlaps: document.querySelectorAll('.stp-overlap').length,
+      // the overlap layer never intercepts clicks (warn-only, pointer-events: none).
+      overlapInert: [...document.querySelectorAll('.stp-overlap')].every(
+        (el) => getComputedStyle(el).pointerEvents === 'none',
+      ),
+    }));
+
+    // ACCENT_DISCIPLINE with the picker OPEN: only the primary "Apply range" button + the
+    // "me" rectangle / selected calendar day carry the accent; everything else monochrome.
+    const accentProbe = await page.evaluate(() => {
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => {
+        const n = parseInt(hex.replace('#', ''), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      const accentRgb = toRgb(accent);
+      const sanctioned = (el) =>
+        el.matches('button.primary') ||
+        el.closest('button.primary') ||
+        el.closest('.stp-block.me') ||
+        el.closest('.stp-d.stp-sel') ||
+        el.closest('.entry.running') ||
+        el.closest('.timer-strip.running') ||
+        el.closest('.liveedit') ||
+        el.closest('.nav-item.active');
+      const offenders = [];
+      for (const el of document.querySelectorAll('*')) {
+        if (sanctioned(el)) continue;
+        const cs = getComputedStyle(el);
+        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      const applyAccent =
+        getComputedStyle(document.querySelector('.stp .stp-apply')).backgroundColor === accentRgb;
+      const meAccent =
+        getComputedStyle(document.querySelector('.stp-block.me')).backgroundColor === accentRgb;
+      return { offenders, applyAccent, meAccent };
+    });
+
+    // (e) Apply → the authoritative #add-from/#add-to text inputs hold the picked LOCAL
+    // values and the popover closes.
+    await page.click('.stp .stp-apply');
+    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
+    const applied = await page.evaluate(() => ({
+      from: document.querySelector('#add-from')?.value,
+      to: document.querySelector('#add-to')?.value,
+      popoverGone: !document.querySelector('.stp-backdrop'),
+    }));
+    const appliedOk =
+      applied.from === '2026-06-24T14:00' && applied.to === '2026-06-24T16:00' && applied.popoverGone;
+
+    const ok =
+      present.cal &&
+      present.track &&
+      present.hourLines > 0 &&
+      present.echoStart === '2026-06-24T13:00' &&
+      present.echoEnd === '2026-06-24T14:30' &&
+      present.me &&
+      bodyMovedTogether &&
+      resizeMovedStopOnly &&
+      warn.others >= 1 &&
+      warn.overlaps >= 1 &&
+      warn.overlapInert &&
+      accentProbe.offenders.length === 0 &&
+      accentProbe.applyAccent &&
+      accentProbe.meAccent &&
+      appliedOk;
+    record(
+      'TIME_RANGE_PICKER',
+      ok,
+      `present=${JSON.stringify(present)}; body-drag→${JSON.stringify(afterBody)} (moved-together=${bodyMovedTogether}); ` +
+        `resize→${JSON.stringify(afterResize)} (stop-only=${resizeMovedStopOnly}); ` +
+        `warn=${JSON.stringify(warn)}; accent offenders=[${accentProbe.offenders.join(', ') || 'none'}] ` +
+        `apply=${accentProbe.applyAccent} me=${accentProbe.meAccent}; applied=${JSON.stringify(applied)}`,
+      'time-range-picker.png',
+    );
+    await page.close();
+  }
 
   // EDIT_RUNNING — the running entry is editable inline without stopping it (§05 R6).
   // Click the running row's Edit affordance, assert the inline form appears seeded
@@ -1152,501 +1866,153 @@ async function main() {
     );
   });
 
-  // REPORT_BILLABLE_TOGGLE — the report builder offers the §08 R3 three-way Billable
-  // control (Billable only / All / Non-billable) as a single discoverable segmented
-  // control; exactly one segment is active by default (Billable only); clicking All and
-  // Non-billable re-runs window.stint.report with the matching billableFilter and changes
-  // the rendered total (§08 R3, §12 R8). Deterministic sub-facts are machine-scored; the
-  // overall look is captured for rubric review.
-  await withPage(browser, reportState(), 'report.html', async (page) => {
-    // The report runs once on load; wait for the painted total before probing.
-    await page.waitForFunction(() => document.querySelector('#report-total')?.textContent.trim().length > 0);
-    const seg = '#billable-seg';
-    const before = await page.evaluate((sel) => {
-      const btns = [...document.querySelectorAll(`${sel} .seg-btn`)];
-      const active = btns.filter((b) => b.classList.contains('on'));
-      return {
-        labels: btns.map((b) => b.textContent.trim()),
-        activeCount: active.length,
-        activeFilter: active[0]?.dataset.billable ?? null,
-        loadFilter: window.__REPORT_REQ__?.billableFilter ?? null,
-        total: document.querySelector('#report-total').textContent.trim(),
-      };
-    }, seg);
-    await page.screenshot({ path: join(EVIDENCE, 'report-billable.png'), fullPage: true });
+  // REPORTS_VIEW — §12 R08 / §09 R08–R09 (G11): the in-shell Reports view is the PRIMARY
+  // surface for SAVED report definitions (it replaces the retired standalone report.html, so
+  // the sidebar is present). This one scene drives the REAL index.html Reports view under the
+  // pinned JUDGE clock with the savedReportsState fixture and folds five facts into one pass:
+  //   (a) the saved-definition list paints ONE card per saved def with its name + spec summary
+  //       and Run / Edit affordances;
+  //   (b) clicking + New report (and Edit) opens the inline builder with name / range / group-by
+  //       / filter / rounding controls;
+  //   (c) clicking Run paints the grouped run-output summary with overlap + unreviewed-sleep
+  //       flags ON the affected rows (reusing the REPORT_SUMMARY shape) plus the resolved-range
+  //       header;
+  //   (d) Export CSV / Export JSON drive a real exportEntries call carrying the saved ref;
+  //   (e) the sidebar nav is present with Reports active.
+  // Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
+  // output) for rubric review.
+  await withPage(browser, savedReportsState(), 'index.html', async (page) => {
+    // Route to the Reports view (the shell router; no IPC) and wait for the saved-defs list.
+    await page.click('.nav-item[data-view="reports"]');
+    await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
 
-    // Switch to All — the report re-runs with billableFilter 'all' and the total changes.
-    await page.click(`${seg} .seg-btn[data-billable="all"]`);
-    await page.waitForFunction(
-      (t) => document.querySelector('#report-total').textContent.trim() !== t,
-      before.total,
-    );
-    const onAll = await page.evaluate((sel) => ({
-      reqFilter: window.__REPORT_REQ__?.billableFilter ?? null,
-      activeFilter: [...document.querySelectorAll(`${sel} .seg-btn.on`)].map((b) => b.dataset.billable),
-      total: document.querySelector('#report-total').textContent.trim(),
-    }), seg);
-
-    // Switch to Non-billable — re-runs with 'non-billable' and the total changes again.
-    await page.click(`${seg} .seg-btn[data-billable="non-billable"]`);
-    await page.waitForFunction(
-      (t) => document.querySelector('#report-total').textContent.trim() !== t,
-      onAll.total,
-    );
-    const onNon = await page.evaluate((sel) => ({
-      reqFilter: window.__REPORT_REQ__?.billableFilter ?? null,
-      activeFilter: [...document.querySelectorAll(`${sel} .seg-btn.on`)].map((b) => b.dataset.billable),
-      total: document.querySelector('#report-total').textContent.trim(),
-    }), seg);
-
-    const labelsOk =
-      before.labels.includes('Billable only') &&
-      before.labels.includes('All') &&
-      before.labels.includes('Non-billable');
-    const defaultOk = before.activeCount === 1 && before.activeFilter === 'billable' && before.loadFilter === 'billable';
-    const allOk = onAll.reqFilter === 'all' && onAll.activeFilter.length === 1 && onAll.activeFilter[0] === 'all' && onAll.total !== before.total;
-    const nonOk =
-      onNon.reqFilter === 'non-billable' &&
-      onNon.activeFilter.length === 1 &&
-      onNon.activeFilter[0] === 'non-billable' &&
-      onNon.total !== onAll.total &&
-      onNon.total !== before.total;
-    const ok = labelsOk && defaultOk && allOk && nonOk;
-    record(
-      'REPORT_BILLABLE_TOGGLE',
-      ok,
-      `billable toggle: default=${JSON.stringify(before)} → all=${JSON.stringify(onAll)} → non-billable=${JSON.stringify(onNon)}`,
-      'report-billable.png',
-    );
-  });
-
-  // REPORT_RANGE_PICKER — §09 R1: the report view's date-range picker. The five named
-  // presets render as labelled chips with This week active by default; a Custom mode
-  // exposes explicit from/to inputs. The presets resolve through core (the renderer sends
-  // the preset NAME over the report IPC, never re-deriving date math); selecting a chip or
-  // applying a custom range repaints the visible resolved-range header + grouped rows.
-  // Deterministic sub-facts are machine-scored under the pinned JUDGE clock; the look is
-  // captured (reports-default.png / reports-custom.png) for rubric review.
-  await withPage(browser, reportState(), 'report.html', async (page) => {
-    // The report runs once on load (default This week); wait for the painted range header.
-    await page.waitForFunction(() => document.querySelector('#report-range')?.textContent.trim().length > 0);
-    const seg = '#preset-seg';
-    const before = await page.evaluate((sel) => {
-      const chips = [...document.querySelectorAll(`${sel} .preset`)];
-      const active = chips.filter((c) => c.classList.contains('on'));
-      return {
-        labels: chips.map((c) => c.textContent.trim()),
-        presets: chips.map((c) => c.dataset.preset),
-        activeCount: active.length,
-        activePreset: active[0]?.dataset.preset ?? null,
-        loadPreset: window.__REPORT_REQ__?.preset ?? null,
-        customFrom: !!document.querySelector('#range-from'),
-        customTo: !!document.querySelector('#range-to'),
-        customHidden: !!document.querySelector('#custom-range')?.hidden,
-        rangeHeader: document.querySelector('#report-range').textContent.trim(),
-        rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-        total: document.querySelector('#report-total').textContent.trim(),
-      };
-    }, seg);
-    await page.screenshot({ path: join(EVIDENCE, 'reports-default.png'), fullPage: true });
-
-    // Select Last week — the report re-runs with preset 'last-week'; the resolved-range
-    // header and the grouped rows change to that window's distinct fixture.
-    await page.click(`${seg} .preset[data-preset="last-week"]`);
-    await page.waitForFunction(
-      (h) => document.querySelector('#report-range').textContent.trim() !== h,
-      before.rangeHeader,
-    );
-    const onLastWeek = await page.evaluate((sel) => ({
-      reqPreset: window.__REPORT_REQ__?.preset ?? null,
-      activePreset: [...document.querySelectorAll(`${sel} .preset.on`)].map((c) => c.dataset.preset),
-      rangeHeader: document.querySelector('#report-range').textContent.trim(),
-      rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-      total: document.querySelector('#report-total').textContent.trim(),
-    }), seg);
-
-    // Switch to Custom — the from/to inputs reveal; fill an explicit window and Apply. The
-    // report re-runs with explicit fromUtc/toUtc (no preset) and repaints the header/rows.
-    await page.click(`${seg} .preset[data-preset="custom"]`);
-    await page.waitForSelector('#custom-range:not([hidden])', { state: 'attached' });
-    await page.fill('#range-from', '2026-06-10T00:00');
-    await page.fill('#range-to', '2026-06-13T00:00');
-    await page.click('#range-apply');
-    await page.waitForFunction(
-      (h) => document.querySelector('#report-range').textContent.trim() !== h,
-      onLastWeek.rangeHeader,
-    );
-    await page.screenshot({ path: join(EVIDENCE, 'reports-custom.png'), fullPage: true });
-    const onCustom = await page.evaluate((sel) => ({
-      req: window.__REPORT_REQ__,
-      activePreset: [...document.querySelectorAll(`${sel} .preset.on`)].map((c) => c.dataset.preset),
-      customVisible: !document.querySelector('#custom-range')?.hidden,
-      rangeHeader: document.querySelector('#report-range').textContent.trim(),
-      total: document.querySelector('#report-total').textContent.trim(),
-    }), seg);
-
-    const labelsOk =
-      before.labels.includes('Today') &&
-      before.labels.includes('This week') &&
-      before.labels.includes('Last week') &&
-      before.labels.includes('This month') &&
-      before.labels.includes('Last month');
-    const fiveCorePresets = ['today', 'week', 'last-week', 'month', 'last-month'].every((p) => before.presets.includes(p));
-    const defaultOk =
-      before.activeCount === 1 &&
-      before.activePreset === 'week' &&
-      before.loadPreset === 'week' &&
-      before.customFrom &&
-      before.customTo &&
-      before.customHidden && // custom inputs present but hidden until chosen
-      before.rangeHeader.length > 0;
-    const lastWeekOk =
-      onLastWeek.reqPreset === 'last-week' &&
-      onLastWeek.activePreset.length === 1 &&
-      onLastWeek.activePreset[0] === 'last-week' &&
-      onLastWeek.rangeHeader !== before.rangeHeader &&
-      onLastWeek.rows.join(',') !== before.rows.join(',');
-    const customOk =
-      !!onCustom.req &&
-      onCustom.req.preset === undefined &&
-      typeof onCustom.req.fromUtc === 'string' &&
-      typeof onCustom.req.toUtc === 'string' &&
-      onCustom.activePreset.length === 1 &&
-      onCustom.activePreset[0] === 'custom' &&
-      onCustom.customVisible &&
-      onCustom.rangeHeader !== onLastWeek.rangeHeader;
-    const ok = labelsOk && fiveCorePresets && defaultOk && lastWeekOk && customOk;
-    record(
-      'REPORT_RANGE_PICKER',
-      ok,
-      `range picker: default=${JSON.stringify(before)} → last-week=${JSON.stringify(onLastWeek)} → custom=${JSON.stringify(onCustom)}`,
-      'reports-default.png',
-    );
-  });
-
-  // REPORT_GROUPING — §09 R2: the report view's Group-by control. The four groupings
-  // (Client / Project / Day / Tag) render as a single segmented control with exactly one
-  // active segment (Client by default); clicking a segment re-runs window.stint.report with
-  // the matching `by` and regroups the same week's totals into different lines while the
-  // grand total stays put (grouping is invariant on the total). Deterministic sub-facts are
-  // machine-scored under the pinned JUDGE clock; the grouped look is captured
-  // (main-report-client.png / main-report-day.png) for rubric/human review.
-  await withPage(browser, reportState(), 'report.html', async (page) => {
-    // The report runs once on load (default Client grouping); wait for the painted rows.
-    await page.waitForFunction(() => document.querySelectorAll('#report-rows .report-grp').length > 0);
-    const seg = '#by-seg';
-    const before = await page.evaluate((sel) => {
-      const btns = [...document.querySelectorAll(`${sel} .seg-btn`)];
-      const active = btns.filter((b) => b.classList.contains('on'));
-      return {
-        labels: btns.map((b) => b.textContent.trim()),
-        options: btns.map((b) => b.dataset.by),
-        activeCount: active.length,
-        activeBy: active[0]?.dataset.by ?? null,
-        loadBy: window.__REPORT_REQ__?.by ?? null,
-        rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-        total: document.querySelector('#report-grand').textContent.trim(),
-      };
-    }, seg);
-    await page.screenshot({ path: join(EVIDENCE, 'main-report-client.png'), fullPage: true });
-
-    // Switch to Day — the report re-runs with by 'day'; the grouped rows change to the
-    // day buckets while the grand total (5h) is unchanged (grouping-invariant).
-    await page.click(`${seg} .seg-btn[data-by="day"]`);
-    await page.waitForFunction(
-      (r) => [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()).join(',') !== r,
-      before.rows.join(','),
-    );
-    await page.screenshot({ path: join(EVIDENCE, 'main-report-day.png'), fullPage: true });
-    const onDay = await page.evaluate((sel) => ({
-      reqBy: window.__REPORT_REQ__?.by ?? null,
-      activeBy: [...document.querySelectorAll(`${sel} .seg-btn.on`)].map((b) => b.dataset.by),
-      rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-      total: document.querySelector('#report-grand').textContent.trim(),
-    }), seg);
-
-    const labelsOk =
-      before.labels.includes('Client') &&
-      before.labels.includes('Project') &&
-      before.labels.includes('Day') &&
-      before.labels.includes('Tag');
-    const fourOptions =
-      before.options.length === 4 &&
-      ['client', 'project', 'day', 'tag'].every((b) => before.options.includes(b));
-    const defaultOk = before.activeCount === 1 && before.activeBy === 'client' && before.loadBy === 'client';
-    const dayOk =
-      onDay.reqBy === 'day' &&
-      onDay.activeBy.length === 1 &&
-      onDay.activeBy[0] === 'day' &&
-      onDay.rows.join(',') !== before.rows.join(',') && // regrouped into different lines…
-      onDay.total === before.total; // …but the grand total is grouping-invariant
-    const ok = labelsOk && fourOptions && defaultOk && dayOk;
-    record(
-      'REPORT_GROUPING',
-      ok,
-      `group-by: default=${JSON.stringify(before)} → day=${JSON.stringify(onDay)}`,
-      'main-report-client.png',
-    );
-  });
-
-  // REPORT_FILTERS — §09 R3: the report view's client / project / tag filters (alongside
-  // the already-covered billable filter). All four filter controls are present; changing
-  // the Billable control and then the Client filter each re-invokes window.stint.report
-  // with the matching params (billableFilter / clientId) and re-renders the grouped rows +
-  // total. The renderer resolves no names — the client filter sends the entity id straight
-  // from listClients. Deterministic sub-facts are machine-scored under the pinned JUDGE
-  // clock; the filtered look is captured (report-filters.png) for rubric/human review.
-  await withPage(browser, reportState(), 'report.html', async (page) => {
-    // The report runs once on load (no filter); wait for the painted rows + the populated
-    // client filter (its options arrive from the async listClients mock).
-    await page.waitForFunction(() => document.querySelectorAll('#report-rows .report-grp').length > 0);
-    await page.waitForFunction(() => document.querySelectorAll('#f-client option').length > 1);
-    const before = await page.evaluate(() => ({
-      // All four filter controls are present and discoverable.
-      hasClient: !!document.querySelector('#f-client'),
-      hasProject: !!document.querySelector('#f-project'),
-      hasTag: !!document.querySelector('#f-tag'),
-      hasBillable: !!document.querySelector('#billable-seg'),
-      // The client filter offers "All clients" (no filter) plus the canned clients.
-      clientOptions: [...document.querySelectorAll('#f-client option')].map((o) => o.textContent.trim()),
-      // The project filter starts disabled until a client is chosen.
-      projectDisabled: document.querySelector('#f-project').disabled,
-      loadReq: window.__REPORT_REQ__,
-      total: document.querySelector('#report-grand').textContent.trim(),
-      rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-    }));
-
-    // Change the Billable control to All — the report re-runs with billableFilter 'all'.
-    await page.click('#billable-seg .seg-btn[data-billable="all"]');
-    await page.waitForFunction(() => window.__REPORT_REQ__?.billableFilter === 'all');
-    const onAll = await page.evaluate(() => ({
-      reqFilter: window.__REPORT_REQ__?.billableFilter ?? null,
-    }));
-    // Reset to billable-only so the client-filter assertion below reads the default total.
-    await page.click('#billable-seg .seg-btn[data-billable="billable"]');
-    await page.waitForFunction(() => window.__REPORT_REQ__?.billableFilter === 'billable');
-    const baseTotal = await page.evaluate(() => document.querySelector('#report-grand').textContent.trim());
-
-    // Choose a client — the report re-runs carrying that client's id, the rows narrow to it,
-    // and the project filter is enabled for the chosen client.
-    await page.selectOption('#f-client', { label: 'Acme' });
-    await page.waitForFunction(() => window.__REPORT_REQ__?.clientId != null);
-    await page.screenshot({ path: join(EVIDENCE, 'report-filters.png'), fullPage: true });
-    const onClient = await page.evaluate(() => ({
-      reqClientId: window.__REPORT_REQ__?.clientId ?? null,
-      projectEnabled: !document.querySelector('#f-project').disabled,
-      total: document.querySelector('#report-grand').textContent.trim(),
-      rows: [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim()),
-    }));
-
-    const controlsOk = before.hasClient && before.hasProject && before.hasTag && before.hasBillable;
-    const defaultOk =
-      before.clientOptions.includes('All clients') &&
-      before.clientOptions.includes('Acme') &&
-      before.projectDisabled && // project filter disabled until a client is chosen
-      // The load request carries no client/project/tag filter (the "no filter" default).
-      before.loadReq.clientId === undefined &&
-      before.loadReq.projectId === undefined &&
-      before.loadReq.tag === undefined;
-    const billableReran = onAll.reqFilter === 'all';
-    const clientReran =
-      typeof onClient.reqClientId === 'number' &&
-      onClient.projectEnabled &&
-      onClient.total !== baseTotal && // the filtered total differs from the unfiltered one…
-      onClient.rows.join(',') !== before.rows.join(','); // …and the rows re-rendered
-    const ok = controlsOk && defaultOk && billableReran && clientReran;
-    record(
-      'REPORT_FILTERS',
-      ok,
-      `report filters: controls present=${controlsOk}, default=${JSON.stringify(before)} → billable 'all' reran=${billableReran} → client=${JSON.stringify(onClient)} (base total ${baseTotal})`,
-      'report-filters.png',
-    );
-  });
-
-  // ROUNDING_TOGGLE — §09 R4 / §12 R8: the report view's rounding control group. An Off/On
-  // toggle plus a 6/10/15/30-min increment picker. The displayed billable line equals the
-  // ROUNDED total when rounding is on and the EXACT total when off — over a total (1h 37m)
-  // that is NOT a clean multiple of any increment, so the line visibly moves. The increment
-  // picker is disabled when rounding is off (a secondary choice). Both controls persist the
-  // choice through setSetting (the same channel tt config set uses — no new channel) and
-  // re-run the report. Stored time is never touched — only the displayed line rounds, and
-  // core rounds nearest (not always up: 1h37m → nearest 15 is 1h30m, rounding DOWN).
-  await withPage(
-    browser,
-    roundingState(),
-    'report.html',
-    async (page) => {
-      // The view loads with rounding ON (the fixture's settings), so the painted line is the
-      // rounded total; wait for it before probing.
-      await page.waitForFunction(() => document.querySelector('#report-grand')?.textContent.trim().length > 0);
-      const onState = await page.evaluate(() => {
-        const inc = document.querySelector('#rounding-increment');
-        return {
-          toggleChecked: document.querySelector('#rounding')?.checked ?? null,
-          incrementOptions: [...(inc?.options ?? [])].map((o) => o.value),
-          activeIncrement: inc?.value ?? null,
-          incrementDisabled: inc?.disabled ?? null,
-          line: document.querySelector('#report-grand').textContent.trim(),
-          setSetting: window.__SET_SETTING__ ?? null,
-        };
-      });
-      await page.screenshot({ path: join(EVIDENCE, 'reports-rounding.png'), fullPage: true });
-
-      // Turn rounding OFF — the line must switch to the EXACT total (1h 37m) and the toggle
-      // persists { key: 'rounding', value: false } over setSetting.
-      await page.click('#rounding');
-      await page.waitForFunction((t) => document.querySelector('#report-grand').textContent.trim() !== t, onState.line);
-      const offState = await page.evaluate(() => ({
-        toggleChecked: document.querySelector('#rounding')?.checked ?? null,
-        incrementDisabled: document.querySelector('#rounding-increment')?.disabled ?? null,
-        line: document.querySelector('#report-grand').textContent.trim(),
-        setSetting: window.__SET_SETTING__ ?? null,
+    // (a) + (e): the saved-definition list + the sidebar/active state.
+    const list = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('#rep-defs .def')].map((d) => ({
+        name: d.querySelector('.dname')?.textContent.trim() ?? '',
+        spec: d.querySelector('.dspec')?.textContent.replace(/\s+/g, ' ').trim() ?? '',
+        hasRun: !!d.querySelector('.def-run'),
+        hasEdit: !!d.querySelector('.def-edit'),
       }));
+      const nav = document.querySelector('.shell .nav');
+      const r = nav ? nav.getBoundingClientRect() : { width: 0 };
+      const active = [...document.querySelectorAll('.nav-item.active')].map((b) => b.dataset.view);
+      // Accent discipline: the only accented affordance in the view is + New report.
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`; };
+      const accentRgb = toRgb(accent);
+      const isAccented = (el) => { if (!el) return false; const cs = getComputedStyle(el); return cs.backgroundColor === accentRgb || cs.color === accentRgb; };
+      const newBtn = document.querySelector('#rep-new');
+      const otherAccented = [...document.querySelectorAll('.reports-view button, .reports-view .def-run, .reports-view .def-edit, .reports-view .def-kebab')]
+        .filter((b) => b !== newBtn)
+        .some((b) => isAccented(b));
+      return {
+        cards,
+        railVisible: !!nav && r.width > 0,
+        activeNav: active,
+        newAccented: isAccented(newBtn),
+        otherAccented,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'reports-list.png'), fullPage: true });
 
-      // Turn rounding back ON, then pick the 30-min increment — the line re-rounds to the
-      // chosen increment (1h 30m), persisting { key: 'roundingIncrementMin', value: 30 }.
-      await page.click('#rounding');
-      await page.waitForFunction((t) => document.querySelector('#report-grand').textContent.trim() !== t, offState.line);
-      await page.selectOption('#rounding-increment', '30');
-      await page.waitForFunction(() => window.__SET_SETTING__?.key === 'roundingIncrementMin');
-      const onIncrement = await page.evaluate(() => ({
-        setSetting: window.__SET_SETTING__ ?? null,
-        line: document.querySelector('#report-grand').textContent.trim(),
-      }));
+    // (b): + New report opens the inline builder with all controls; then Cancel and Edit a card.
+    await page.click('#rep-new');
+    await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+    const builder = await page.evaluate(() => ({
+      name: !!document.querySelector('#rep-name'),
+      range: !!document.querySelector('#rep-preset-seg'),
+      custom: !!document.querySelector('#rep-custom-range'),
+      by: !!document.querySelector('#rep-by-seg'),
+      client: !!document.querySelector('#rep-client'),
+      project: !!document.querySelector('#rep-project'),
+      tag: !!document.querySelector('#rep-tag'),
+      billable: !!document.querySelector('#rep-billable-seg'),
+      rounding: !!document.querySelector('#rep-rounding'),
+      increment: !!document.querySelector('#rep-rounding-increment'),
+      presets: [...document.querySelectorAll('#rep-preset-seg .preset')].map((c) => c.dataset.preset),
+      bys: [...document.querySelectorAll('#rep-by-seg .seg-btn')].map((b) => b.dataset.by),
+    }));
+    await page.click('#rep-cancel');
+    await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
+    // Edit the first card → the builder re-opens populated for that def (showReport).
+    await page.click('#rep-defs .def:first-child .def-edit');
+    await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+    const editOpen = await page.evaluate(() => ({
+      title: document.querySelector('#rep-builder-title')?.textContent.trim() ?? '',
+      name: document.querySelector('#rep-name')?.value ?? '',
+      deleteVisible: !document.querySelector('#rep-delete')?.hidden,
+    }));
+    await page.click('#rep-cancel');
+    await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
 
-      const optionsOk = ['6', '10', '15', '30'].every((v) => onState.incrementOptions.includes(v));
-      const defaultOnOk =
-        onState.toggleChecked === true &&
-        onState.activeIncrement === '15' &&
-        onState.incrementDisabled === false &&
-        onState.line === '1h 30m'; // rounded nearest 15 (1h37m rounds DOWN to 1h30m)
-      const offOk =
-        offState.toggleChecked === false &&
-        offState.incrementDisabled === true && // picker de-emphasized/disabled when off
-        offState.line === '1h 37m' && // exact total when rounding off
-        !!offState.setSetting &&
-        offState.setSetting.key === 'rounding' &&
-        offState.setSetting.value === false;
-      const incrementOk =
-        !!onIncrement.setSetting &&
-        onIncrement.setSetting.key === 'roundingIncrementMin' &&
-        onIncrement.setSetting.value === 30 &&
-        onIncrement.line === '1h 30m'; // nearest 30 of 1h37m is 1h30m
-      const ok = optionsOk && defaultOnOk && offOk && incrementOk;
-      record(
-        'ROUNDING_TOGGLE',
-        ok,
-        `rounding controls: on(default)=${JSON.stringify(onState)} → off=${JSON.stringify(offState)} → increment 30=${JSON.stringify(onIncrement)}`,
-        'reports-rounding.png',
-      );
-    },
-    { rounding: true },
-  );
+    // (c): Run the first saved report → the grouped run-output paints with flags in context.
+    await page.click('#rep-defs .def:first-child .def-run');
+    await page.waitForFunction(() => !document.querySelector('#rep-run')?.hidden && document.querySelectorAll('#rep-run-rows .report-grp').length > 0);
+    const run = await page.evaluate(() => {
+      const groups = [...document.querySelectorAll('#rep-run-rows .report-grp td:first-child')].map((t) => t.textContent.replace(/\s+/g, ' ').trim());
+      const subs = [...document.querySelectorAll('#rep-run-rows .report-sub td:first-child')].map((t) => t.textContent.replace(/\s+/g, ' ').trim());
+      const flagRows = [...document.querySelectorAll('#rep-run-rows tr')]
+        .filter((tr) => tr.querySelector('.report-flag'))
+        .map((tr) => ({ label: tr.querySelector('td:first-child')?.textContent.replace(/\s+/g, ' ').trim() ?? '', flags: [...tr.querySelectorAll('.report-flag')].map((f) => f.textContent.trim()) }));
+      const flagOutside = [...document.querySelectorAll('.report-flag')].filter((f) => !f.closest('#rep-run-rows')).length;
+      return {
+        ranReport: window.__RUN_REPORT__ ?? null,
+        rangeHeader: document.querySelector('#rep-run-range')?.textContent.trim() ?? '',
+        grand: document.querySelector('#rep-run-grand')?.textContent.trim() ?? '',
+        groups,
+        subs,
+        flagRows,
+        flagInTable: document.querySelectorAll('#rep-run-rows .report-flag').length,
+        flagOutside,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'reports-run.png'), fullPage: true });
 
-  // REPORT_SUMMARY — §09 R6 / §12 R8: the report view's on-screen grouped summary with flags
-  // in context plus the two Export buttons. The flag-carrying REPORT_SUMMARY report paints a
-  // client→project nested grouping with ONE overlap flag (Globex / Q3 Strategy) and ONE
-  // unreviewed-sleep flag (Initech / Market research) on their affected rows. The scene
-  // asserts: the grouped summary renders the grand + per-line totals; the flags appear ON the
-  // affected summary rows (not in a separate list); and the Export CSV / Export JSON buttons
-  // are present, monochrome (accent-disciplined), and each drives a real exportEntries call
-  // carrying the chosen format + the shown range. Captures reports-summary.png.
-  await withPage(
-    browser,
-    reportSummaryState(),
-    'report.html',
-    async (page) => {
-      await page.waitForFunction(() => document.querySelectorAll('#report-rows .report-grp').length > 0);
-      await page.screenshot({ path: join(EVIDENCE, 'reports-summary.png'), fullPage: true });
-      const probe = await page.evaluate(() => {
-        const txt = (el) => (el ? el.textContent.trim() : null);
-        // The grouped summary: group rows (client) + indented sub-rows (project).
-        const groups = [...document.querySelectorAll('#report-rows .report-grp td:first-child')].map((t) => t.textContent.trim());
-        const subs = [...document.querySelectorAll('#report-rows .report-sub td:first-child')].map((t) => t.textContent.trim());
-        // Per-line totals (the second column of every painted row) and the grand total.
-        const lineTotals = [...document.querySelectorAll('#report-rows tr td.num')].map((t) => t.textContent.trim());
-        // Flags are surfaced IN CONTEXT: the .report-flag chips live inside the summary rows,
-        // and there is no separate flag list element outside the table.
-        const flagRows = [...document.querySelectorAll('#report-rows tr')]
-          .filter((tr) => tr.querySelector('.report-flag'))
-          .map((tr) => ({
-            label: tr.querySelector('td:first-child')?.textContent.replace(/\s+/g, ' ').trim() ?? '',
-            flags: [...tr.querySelectorAll('.report-flag')].map((f) => f.textContent.trim()),
-          }));
-        const flagInTable = document.querySelectorAll('#report-rows .report-flag').length;
-        const flagOutsideTable = [...document.querySelectorAll('.report-flag')].filter(
-          (f) => !f.closest('#report-rows'),
-        ).length;
-        // The two export buttons, and whether either paints the accent (a discipline break).
-        const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-        const toRgb = (hex) => {
-          const n = parseInt(hex.replace('#', ''), 16);
-          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-        };
-        const accentRgb = toRgb(accent);
-        const csv = document.querySelector('#export-csv');
-        const json = document.querySelector('#export-json');
-        const isAccented = (el) => {
-          if (!el) return false;
-          const cs = getComputedStyle(el);
-          return cs.backgroundColor === accentRgb || cs.color === accentRgb;
-        };
-        return {
-          groups,
-          subs,
-          lineTotals,
-          grand: txt(document.querySelector('#report-grand')),
-          headTotal: txt(document.querySelector('#report-total')),
-          flagRows,
-          flagInTable,
-          flagOutsideTable,
-          hasCsv: !!csv && /Export CSV/i.test(csv.textContent),
-          hasJson: !!json && /Export JSON/i.test(json.textContent),
-          exportAccented: isAccented(csv) || isAccented(json),
-        };
-      });
+    // (d): Export CSV then JSON — each drives a real exportEntries call carrying the saved ref.
+    await page.click('#rep-export-csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv');
+    const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    await page.click('#rep-export-json');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json');
+    const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
 
-      // Click Export CSV, then Export JSON — each must drive a real exportEntries call
-      // carrying the chosen format and the shown range (preset 'week' by default).
-      await page.click('#export-csv');
-      await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv');
-      const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
-      await page.click('#export-json');
-      await page.waitForFunction(() => window.__EXPORTED__?.format === 'json');
-      const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
-
-      const summaryOk =
-        probe.groups.some((g) => g.includes('Globex')) &&
-        probe.groups.some((g) => g.includes('Initech')) &&
-        probe.subs.some((s) => s.includes('Q3 Strategy')) &&
-        probe.subs.some((s) => s.includes('Market research')) &&
-        // Per-line totals are painted (one per row) and the grand total reads 21h 35m.
-        probe.lineTotals.length >= probe.groups.length + probe.subs.length &&
-        probe.grand === '21h 35m' &&
-        probe.headTotal === '21h 35m';
-      const flagsInContextOk =
-        probe.flagInTable >= 2 && // both flags rendered…
-        probe.flagOutsideTable === 0 && // …and NONE outside the summary table (no separate list)
-        probe.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
-        probe.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
-      const exportOk =
-        probe.hasCsv &&
-        probe.hasJson &&
-        !probe.exportAccented && // export buttons stay monochrome (§15 accent discipline)
-        afterCsv.format === 'csv' &&
-        afterJson.format === 'json' &&
-        afterCsv.preset === 'week' && // exports the shown range (the default This-week preset)
-        afterJson.preset === 'week';
-      const ok = summaryOk && flagsInContextOk && exportOk;
-      record(
-        'REPORT_SUMMARY',
-        ok,
-        `report summary: ${JSON.stringify(probe)} → export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
-        'reports-summary.png',
-      );
-    },
-    { summary: true },
-  );
+    const listOk =
+      list.cards.length === 2 &&
+      list.cards.every((c) => c.name.length > 0 && c.spec.length > 0 && c.hasRun && c.hasEdit) &&
+      list.cards.some((c) => /Weekly billables/.test(c.name)) &&
+      // The spec summary reads the stored range + group-by (a recognisable saved-report card).
+      list.cards.some((c) => /This week/.test(c.spec) && /project/.test(c.spec));
+    const sidebarOk = list.railVisible && list.activeNav.length === 1 && list.activeNav[0] === 'reports';
+    const accentOk = list.newAccented && !list.otherAccented; // §15 / G10: only + New report is accented
+    const builderOk =
+      builder.name && builder.range && builder.custom && builder.by && builder.client &&
+      builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
+      ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
+      ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b));
+    const editOk = /Weekly billables/.test(editOpen.title) && /Weekly billables/.test(editOpen.name) && editOpen.deleteVisible;
+    const runOk =
+      !!run.ranReport && /Weekly billables/.test(String(run.ranReport.ref)) && // Run sent the card's name
+      run.rangeHeader.length > 0 && // the resolved-range header paints
+      run.groups.some((g) => /Globex/.test(g)) &&
+      run.subs.some((s) => /Q3 Strategy/.test(s)) &&
+      run.flagInTable >= 2 &&
+      run.flagOutside === 0 && // flags IN CONTEXT (none in a separate list)
+      run.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
+      run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
+    const exportOk =
+      afterCsv.format === 'csv' &&
+      afterJson.format === 'json' &&
+      afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
+      afterJson.savedReportRef === 'Weekly billables — Globex';
+    const ok = listOk && sidebarOk && accentOk && builderOk && editOk && runOk && exportOk;
+    record(
+      'REPORTS_VIEW',
+      ok,
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
+      'reports-list.png',
+    );
+  });
 
   // ENTRY_LIST_SEARCH — §12 R9: the Entries-view control bar. Loading the multi-entry
   // fixture paints the default day-grouped list; typing in the search box drives a real
@@ -1859,6 +2225,118 @@ async function main() {
       'main-settings.png',
     );
   });
+
+  // SOFTWARE_UPDATE — §19 R03/R04/R06 (G3): the Settings → Software Update group. Routing to
+  // Settings (with the GUI-only window.stint.update bridge injected — the SAME getVersion /
+  // check / download / reveal / onUpdateProgress shape production's preload exposes) renders:
+  //   VERSION (R06)        — the Current-version row prints the stamped APP_VERSION read over
+  //                          update.getVersion() (the value tt --version reports; here 2026.6.24).
+  //   CHECK (R03)          — a "Check now" button whose click calls update.check() and paints the
+  //                          verdict: an "Update available · <newer version>" result line + the
+  //                          .pill.new linking the release (here 2026.7.1).
+  //   GUIDED DOWNLOAD (R04)— a "Download & install <version>" primary action whose click calls
+  //                          update.download(); the replayed progress frames drive a live
+  //                          progress bar (.step .bar, ~42% mid-download) and, on the terminal
+  //                          'ready' frame, flip the action to "Reveal installer" wired to
+  //                          update.reveal(). The numbered guided steps include the one-time
+  //                          Gatekeeper / first-launch approval beat (no Developer ID).
+  //   NO-DB (R04)          — the panel carries the "Updates never touch the database" note (the
+  //                          artifact downloads to a temp folder, never beside the data).
+  // All fold into one SOFTWARE_UPDATE pass. Captures main-software-update.png (the available +
+  // downloading view) as the rubric evidence the SETTINGS_VIEW shot does not cover.
+  await withPage(
+    browser,
+    softwareUpdateState(),
+    'index.html',
+    async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('#software-update .ver', { state: 'attached' });
+      // VERSION (R06): the Current-version row prints the bridge's getVersion() value.
+      const versionShown = (await page.textContent('#software-update .ver'))?.trim();
+
+      // CHECK (R03): click "Check now" → update.check() resolves the update-available verdict,
+      // and the result line + .pill.new paint the newer version + release link.
+      await page.click('#update-check');
+      await page.waitForSelector('#software-update .update-result.new', { state: 'attached' });
+      await page.waitForSelector('#update-download', { state: 'attached' });
+      const afterCheck = await page.evaluate(() => {
+        const result = document.querySelector('#software-update .update-result');
+        const link = document.querySelector('#software-update .update-result a[data-update-link]');
+        const pill = document.querySelector('#software-update a.pill.new[data-update-link]');
+        const dl = document.querySelector('#update-download');
+        return {
+          checked: window.__CHECKED__ === true,
+          resultText: result?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+          resultIsNew: !!result && result.classList.contains('new'),
+          linkHref: link?.getAttribute('href') ?? null,
+          linkOpensExternally:
+            link?.getAttribute('target') === '_blank' && /noopener/.test(link?.getAttribute('rel') ?? ''),
+          pillPresent: !!pill,
+          downloadLabel: dl?.textContent?.replace(/\s+/g, ' ').trim() ?? null,
+        };
+      });
+      await page.screenshot({ path: join(EVIDENCE, 'main-software-update.png'), fullPage: true });
+
+      // GUIDED DOWNLOAD (R04): click "Download & install" → update.download() replays the
+      // canned progress frames over onUpdateProgress. The optimistic frame + the replayed
+      // 'downloading' frame paint the progress bar; the terminal 'ready' frame flips the action
+      // to "Reveal installer" and marks the panel ready.
+      await page.click('#update-download');
+      await page.waitForSelector('#update-reveal', { state: 'attached' });
+      const afterDownload = await page.evaluate(() => {
+        const panel = document.querySelector('#update-panel');
+        const head = panel?.querySelector('.uhd')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        const steps = [...(panel?.querySelectorAll('.steps .step') ?? [])].map((s) =>
+          s.textContent.replace(/\s+/g, ' ').trim(),
+        );
+        const reveal = document.querySelector('#update-reveal');
+        const note = panel?.querySelector('.restore-note')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+        return {
+          downloaded: window.__DOWNLOADED__ === true,
+          head,
+          steps,
+          revealPresent: !!reveal,
+          // The guided steps must include the one-time Gatekeeper / first-launch approval beat.
+          gatekeeperStep: steps.some((s) => /Gatekeeper/i.test(s) && /approve once|first launch/i.test(s)),
+          // R04 no-DB invariant surfaced to the user: the artifact lands in a temp folder.
+          noDbNote: /never touch the database/i.test(note) && /temp/i.test(note),
+        };
+      });
+
+      // Reveal installer (R04): the 'ready' action calls update.reveal().
+      await page.click('#update-reveal');
+      await page.waitForFunction(() => window.__REVEALED__ === true);
+      const revealed = await page.evaluate(() => window.__REVEALED__ === true);
+
+      const versionOk = versionShown === UPDATE_FIXTURE.version;
+      const checkOk =
+        afterCheck.checked &&
+        afterCheck.resultIsNew &&
+        new RegExp(`update available`, 'i').test(afterCheck.resultText) &&
+        afterCheck.resultText.includes(UPDATE_FIXTURE.verdict.latestVersion) &&
+        afterCheck.linkHref === UPDATE_FIXTURE.verdict.releaseUrl &&
+        afterCheck.linkOpensExternally &&
+        afterCheck.pillPresent &&
+        (afterCheck.downloadLabel ?? '').includes(UPDATE_FIXTURE.verdict.latestVersion);
+      const downloadOk =
+        afterDownload.downloaded &&
+        /Downloaded/.test(afterDownload.head) &&
+        afterDownload.head.includes(UPDATE_FIXTURE.verdict.latestVersion) &&
+        afterDownload.steps.length === UPDATE_FIXTURE.steps.length &&
+        afterDownload.gatekeeperStep &&
+        afterDownload.noDbNote &&
+        afterDownload.revealPresent &&
+        revealed;
+      record(
+        'SOFTWARE_UPDATE',
+        versionOk && checkOk && downloadOk,
+        `version row=${JSON.stringify(versionShown)} (R06); Check now → ${JSON.stringify(afterCheck)} (R03); ` +
+          `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04)`,
+        'main-software-update.png',
+      );
+    },
+    { update: UPDATE_FIXTURE },
+  );
 
   // PARITY_REACH — §17 R8: the rendered window surfaces an affordance for EVERY capability,
   // so nothing tt can do is unreachable from the GUI. Two parts in one item:

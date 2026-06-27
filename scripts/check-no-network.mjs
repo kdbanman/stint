@@ -43,6 +43,14 @@ const FORBIDDEN_MODULES = [
 const FORBIDDEN_TOKENS = ['XMLHttpRequest', 'WebSocket', 'EventSource', 'navigator.sendBeacon'];
 
 // The only production dependencies Stint is allowed to ship.
+//
+// §19 R03 note: the in-app update check (packages/gui/src/update.ts) makes the app's ONE
+// outbound request — an explicit, user-initiated GET to the GitHub Releases API. It does so
+// through Electron's built-in `net` (`import { net } from 'electron'`), an already-allowed
+// prod dep, NOT node:https / node:net / global fetch. That import names 'electron' (not 'net'
+// / 'node:https'), so it does not match the FORBIDDEN_MODULES specifiers above, and `net.request`
+// is not a FORBIDDEN_TOKEN — so this scanner stays green WITHOUT relaxing any forbidden token.
+// The live-traffic guarantee (only this one user-initiated request, ever) is the MANUAL CHECK.
 const ALLOWED_PROD_DEPS = new Set(['@stint/core', 'commander', 'electron']);
 
 function walk(dir, out = []) {

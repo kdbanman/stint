@@ -10,11 +10,25 @@ export * from './time.js';
 export * from './paths.js';
 export * from './settings.js';
 export * from './report.js';
+export * from './savedreport.js';
 export * from './entrylist.js';
 export * from './label.js';
 export * from './export.js';
 export * from './checkin.js';
+export * from './version.js';
 export { Store, StoreError } from './store.js';
 export type { ListFilter, ReportRequest } from './store.js';
-export { SCHEMA_VERSION, openDb } from './db.js';
+export { SCHEMA_VERSION, openDb, assertOpenPragmas, DbOpenError } from './db.js';
 export type { Db } from './db.js';
+export {
+  backupDb,
+  listBackups,
+  latestBackup,
+  pruneBackups,
+  checkIntegrity,
+  quarantineAndRecover,
+  restoreFromBackup,
+  backupStamp,
+  RecoveryError,
+} from './backup.js';
+export type { BackupInfo, RecoveryResult } from './backup.js';

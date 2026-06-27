@@ -3,7 +3,7 @@
  * binds to the World interface, so it runs identically against @stint/core and tt.
  */
 import { expect } from 'vitest';
-import type { World, EntryRec, ExportRowRec, EntryGroupRec, ListViewReq } from './world.js';
+import type { World, EntryRec, ExportRowRec, EntryGroupRec, ListViewReq, FavoriteRec } from './world.js';
 
 /** Scenario-scoped scratch shared across steps. */
 export interface Ctx {
@@ -14,6 +14,8 @@ export interface Ctx {
   twoIds?: [number, number];
   mergedId?: number;
   lastWarned?: boolean;
+  /** §06 R1 — the result of the most recent `When I attempt to delete … without confirming`. */
+  removeResult?: { refused: boolean };
   /** §09 R7 — the rows returned by the most recent `When I search for "X"`. */
   searchResults?: EntryRec[];
   /** §09 R6 — the rows returned by the most recent `When I export the range …`. */
@@ -22,6 +24,18 @@ export interface Ctx {
   listQuery?: ListViewReq;
   /** §12 R9 — the grouped result of the most recent Entries-view query. */
   listGroups?: EntryGroupRec[];
+  /** §09 R09 — the grand total seconds of the most recent saved-report run. */
+  runTotalSeconds?: number;
+  /** §09 R09 — the grand total captured before a re-grouping edit, to prove regroup-invariance. */
+  priorRunTotalSeconds?: number;
+  /** §09 R09 — the rows from the most recent export-from-saved-report. */
+  savedExportRows?: ExportRowRec[];
+  /** §05 R09 — the favorites from the most recent `When I view the favorites`. */
+  favorites?: FavoriteRec[];
+  /** §05 R10 — the result of the most recent `When I attempt to resume from favorite "X"`. */
+  resumeFavResult?: { rejected: boolean };
+  /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
+  integrityOpen?: { refused: boolean; wrote: boolean };
 }
 
 export interface StepDef {
@@ -289,6 +303,16 @@ export const steps: StepDef[] = [
     pattern: /^I delete the entry "([^"]*)"$/,
     run: (w, _c, desc) => w.remove(byDesc(w, desc).id),
   },
+  // §06 R1 — the confirm gate IS the loss-protection (core): attempt a delete WITHOUT
+  // confirming over the World `removeUnconfirmed` capability (CoreWorld never auto-confirms a
+  // destructive delete, CliWorld `tt rm` without --force refuses) and stash the result so the
+  // assertions below can prove the gate held identically on both surfaces — the entry survives.
+  {
+    pattern: /^I attempt to delete the entry "([^"]*)" without confirming$/,
+    run: (w, ctx, desc) => {
+      ctx.removeResult = w.removeUnconfirmed(byDesc(w, desc).id);
+    },
+  },
   {
     pattern: /^I rename client "([^"]*)" to "([^"]*)"$/,
     run: (w, _c, name, to) => w.renameClient(name, to),
@@ -366,6 +390,16 @@ export const steps: StepDef[] = [
   {
     pattern: /^there is no entry "([^"]*)"$/,
     run: (w, _c, desc) => expect(w.list().some((e) => e.description === desc)).toBe(false),
+  },
+  // §06 R1 — the loss-protection gate held: the unconfirmed delete was refused, and the named
+  // entry is still present (the destructive action never destroyed data on either surface).
+  {
+    pattern: /^the delete is refused$/,
+    run: (_w, ctx) => expect(ctx.removeResult?.refused).toBe(true),
+  },
+  {
+    pattern: /^there is still an entry "([^"]*)"$/,
+    run: (w, _c, desc) => expect(w.list().some((e) => e.description === desc)).toBe(true),
   },
   {
     pattern: /^there are exactly (\d+) entries$/,
@@ -803,6 +837,381 @@ export const steps: StepDef[] = [
       }
     },
   },
+
+  // ---- §09 R08–R09 saved reports (the contract the GUI Reports view drives) ----
+  // A saved report stores a RELATIVE preset spec (e.g. "this-week") + group-by + billable
+  // filter + rounding; it re-resolves through the SAME core resolveRange the ad-hoc report
+  // uses on every run. Surface-neutral over the World saved-report capabilities: CoreWorld
+  // store.saveReport/runReport/editReport/…, CliWorld `tt report save|ls|run|edit|rename|rm`.
+  // Run TWICE so the relative-spec resolution + CRUD persistence + run totals are proven
+  // identical on @stint/core and tt (§17 R8/R14).
+  {
+    pattern:
+      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+    run: (w, _c, name, preset, by, filter) => {
+      w.saveReport({
+        name,
+        preset: presetKeyFull(preset),
+        by: groupBy(by),
+        billableFilter: filter as 'billable' | 'all' | 'non-billable',
+      });
+    },
+  },
+  {
+    pattern:
+      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time rounded to (\d+) minutes$/,
+    run: (w, _c, name, preset, by, filter, inc) => {
+      w.saveReport({
+        name,
+        preset: presetKeyFull(preset),
+        by: groupBy(by),
+        billableFilter: filter as 'billable' | 'all' | 'non-billable',
+        rounding: true,
+        roundingIncrementMin: Number(inc),
+      });
+    },
+  },
+  {
+    pattern: /^the saved report list includes "([^"]*)"$/,
+    run: (w, _c, name) => expect(w.listReportNames()).toContain(name),
+  },
+  {
+    pattern: /^the saved report list does not include "([^"]*)"$/,
+    run: (w, _c, name) => expect(w.listReportNames()).not.toContain(name),
+  },
+  {
+    pattern: /^I run the saved report "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.runTotalSeconds = w.runReportTotalSeconds(name);
+    },
+  },
+  {
+    pattern: /^the saved report run totals (\d+) billable hours?$/,
+    run: (_w, ctx, hours) => {
+      expect(ctx.runTotalSeconds).toBe(Number(hours) * 3600);
+    },
+  },
+  {
+    // §09 R09 — the saved run's total equals an equivalent ad-hoc report over the same
+    // resolved preset window: the saved relative spec and the ad-hoc preset resolve through
+    // the one core resolveRange, so they can never diverge. Asserted on both surfaces.
+    pattern:
+      /^the saved report run total equals an ad-hoc (this week|last week|today|this month|last month) report grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+    run: (w, ctx, preset, by, filter) => {
+      const adhoc = w.report({
+        preset: presetKeyFull(preset),
+        by: groupBy(by),
+        billableFilter: filter as 'billable' | 'all' | 'non-billable',
+      });
+      expect(ctx.runTotalSeconds).toBe(adhoc.grandTotalSeconds);
+    },
+  },
+  {
+    pattern:
+      /^I change the saved report "([^"]*)" range to (this week|last week|today|this month|last month)$/,
+    run: (w, _c, name, preset) => w.editReportRange(name, presetKeyFull(preset)),
+  },
+  {
+    // §09 R08 — amend a saved def's group-by. Captures the current run total first so a
+    // subsequent re-run can assert the regrouped total is unchanged (grouping is invariant
+    // on the grand total). Proven on both surfaces (store.editReport / `tt report edit --by`).
+    pattern: /^I change the saved report "([^"]*)" grouping to (client|project|day|tag)$/,
+    run: (w, ctx, name, by) => {
+      ctx.priorRunTotalSeconds = ctx.runTotalSeconds;
+      w.editReportBy(name, groupBy(by));
+    },
+  },
+  {
+    pattern: /^the saved report run total is unchanged$/,
+    run: (_w, ctx) => {
+      expect(ctx.runTotalSeconds).toBe(ctx.priorRunTotalSeconds);
+    },
+  },
+  {
+    pattern: /^I rename the saved report "([^"]*)" to "([^"]*)"$/,
+    run: (w, _c, name, to) => w.renameReport(name, to),
+  },
+  {
+    pattern: /^I delete the saved report "([^"]*)"$/,
+    run: (w, _c, name) => w.removeReport(name),
+  },
+  {
+    // §09 R09 — export FROM a saved report: the RAW entries for the definition's resolved
+    // range (CoreWorld store.exportSavedReport → toCsv; CliWorld `tt report run <name> --csv`),
+    // proving CSV export-from-saved is reachable + identical on both surfaces.
+    pattern: /^I export the saved report "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.savedExportRows = w.exportSavedReportRows(name);
+    },
+  },
+  {
+    pattern: /^the saved report export has (\d+) rows?$/,
+    run: (_w, ctx, count) => {
+      expect(ctx.savedExportRows ?? []).toHaveLength(Number(count));
+    },
+  },
+  {
+    pattern: /^the saved report export has a row "([^"]*)" for "([^"]*)" of (\d+) seconds$/,
+    run: (_w, ctx, desc, client, seconds) => {
+      const row = (ctx.savedExportRows ?? []).find((r) => r.description === desc);
+      expect(row, `expected an exported row "${desc}"`).toBeDefined();
+      expect(row!.client).toBe(client);
+      expect(row!.rawSeconds).toBe(Number(seconds));
+    },
+  },
+  {
+    pattern: /^the saved report export does not have a row "([^"]*)"$/,
+    run: (_w, ctx, desc) => {
+      expect((ctx.savedExportRows ?? []).find((r) => r.description === desc)).toBeUndefined();
+    },
+  },
+
+  // ---- §05 R09 favorites (the contract the GUI Timer view's favorites rail drives) ----
+  // A favorite is a named timer template capturing description / client / project / billable /
+  // tags — pinned from the running timer, a closed entry, or explicit attributes; listed;
+  // renamed; unpinned. Surface-neutral over the World favorite capabilities: CoreWorld
+  // store.pinFavorite/listFavorites/renameFavorite/unpinFavorite, CliWorld `tt fav
+  // add|ls|rename|rm`. Run TWICE so the template capture + CRUD persistence are proven
+  // identical on @stint/core and tt (§17 R8/R14). (Resume from a favorite is §05 R10.)
+  {
+    pattern: /^I pin a favorite "([^"]*)" from the running entry$/,
+    run: (w, _c, name) => w.pinFavoriteFromEntry(name, 'open'),
+  },
+  {
+    pattern: /^I pin a favorite "([^"]*)" from the entry "([^"]*)"$/,
+    run: (w, _c, name, desc) => w.pinFavoriteFromEntry(name, byDesc(w, desc).id),
+  },
+  {
+    pattern:
+      /^I pin a favorite "([^"]*)" for "([^"]*)" \/ "([^"]*)" tagged "([^"]*)"$/,
+    run: (w, _c, name, client, project, tags) =>
+      w.pinFavoriteFromAttrs({
+        name,
+        client,
+        project,
+        billable: true,
+        tags: tags.split(',').map((t) => t.trim()).filter(Boolean),
+      }),
+  },
+  {
+    pattern: /^I view the favorites$/,
+    run: (w, ctx) => {
+      ctx.favorites = w.listFavorites();
+    },
+  },
+  {
+    pattern: /^I rename the favorite "([^"]*)" to "([^"]*)"$/,
+    run: (w, _c, name, to) => w.renameFavorite(name, to),
+  },
+  {
+    pattern: /^I unpin the favorite "([^"]*)"$/,
+    run: (w, _c, name) => w.unpinFavorite(name),
+  },
+  {
+    pattern: /^the favorites list includes "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      const favs = ctx.favorites ?? w.listFavorites();
+      expect(favs.map((f) => f.name)).toContain(name);
+    },
+  },
+  {
+    pattern: /^the favorites list does not include "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      const favs = ctx.favorites ?? w.listFavorites();
+      expect(favs.map((f) => f.name)).not.toContain(name);
+    },
+  },
+  {
+    pattern: /^the favorite "([^"]*)" is for "([^"]*)"$/,
+    run: (w, ctx, name, lbl) => {
+      const fav = (ctx.favorites ?? w.listFavorites()).find((f) => f.name === name);
+      expect(fav, `expected a favorite "${name}"`).toBeDefined();
+      expect(fav!.clientLabel).toBe(lbl);
+    },
+  },
+  {
+    pattern: /^the favorite "([^"]*)" has description "([^"]*)"$/,
+    run: (w, ctx, name, desc) => {
+      const fav = (ctx.favorites ?? w.listFavorites()).find((f) => f.name === name);
+      expect(fav, `expected a favorite "${name}"`).toBeDefined();
+      expect(fav!.description).toBe(desc);
+    },
+  },
+  {
+    pattern: /^the favorite "([^"]*)" has tag "([^"]*)"$/,
+    run: (w, ctx, name, tag) => {
+      const fav = (ctx.favorites ?? w.listFavorites()).find((f) => f.name === name);
+      expect(fav, `expected a favorite "${name}"`).toBeDefined();
+      expect(fav!.tags).toContain(tag);
+    },
+  },
+  {
+    pattern: /^the favorite "([^"]*)" is (billable|non-billable)$/,
+    run: (w, ctx, name, bill) => {
+      const fav = (ctx.favorites ?? w.listFavorites()).find((f) => f.name === name);
+      expect(fav, `expected a favorite "${name}"`).toBeDefined();
+      expect(fav!.billable).toBe(bill === 'billable');
+    },
+  },
+
+  // ---- §05 R10 resume from a favorite (the rail's one-click Resume / tt fav start /
+  // tt start --fav) -------------------------------------------------------------------------
+  // One action starts a FRESH timer from the favorite's template; the favorite is never mutated.
+  // Surface-neutral over World.startFromFavorite (CoreWorld store.startFromFavorite / CliWorld
+  // `tt fav start`) and World.startWithFav (the `tt start --fav` route to the SAME core action),
+  // so both CLI entry points + the GUI rail are proven to reach identical behavior (§17 R8/R14).
+  {
+    pattern: /^I resume from favorite "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.lastId = w.startFromFavorite(name).id;
+    },
+  },
+  {
+    pattern: /^I start with --fav "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.lastId = w.startWithFav(name).id;
+    },
+  },
+  {
+    pattern: /^I attempt to resume from favorite "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.resumeFavResult = w.attemptStartFromFavorite(name);
+    },
+  },
+  {
+    pattern: /^the resume from favorite is rejected$/,
+    run: (_w, ctx) => expect(ctx.resumeFavResult?.rejected).toBe(true),
+  },
+  {
+    pattern: /^the running timer is for "([^"]*)"$/,
+    run: (w, _c, lbl) => {
+      const r = w.running();
+      expect(r, 'expected a running timer').not.toBeNull();
+      expect(r!.clientLabel).toBe(lbl);
+    },
+  },
+  {
+    pattern: /^the running timer is (billable|non-billable)$/,
+    run: (w, _c, bill) => {
+      const r = w.running();
+      expect(r, 'expected a running timer').not.toBeNull();
+      expect(r!.billable).toBe(bill === 'billable');
+    },
+  },
+  {
+    pattern: /^the running timer has tag "([^"]*)"$/,
+    run: (w, _c, tag) => {
+      const r = w.running();
+      expect(r, 'expected a running timer').not.toBeNull();
+      expect(r!.tags).toContain(tag);
+    },
+  },
+
+  // ---- §20 R04/R05, §17 R12 backups & recovery (the data-loss-protection contract) ----
+  // A fresh launch makes a recoverable backup; a corrupted database is detected on open and
+  // recovered from the latest backup without data loss. Surface-neutral over the World backup
+  // capabilities: CoreWorld closes+re-opens the file-backed Store (launch backup + integrity
+  // gate + recovery) and reads its backups; CliWorld re-runs `tt` (process-per-command already
+  // re-opens) and reads `tt backup ls --json`. Run TWICE so backup-on-launch and corruption
+  // recovery are proven identical on @stint/core and tt (§17 R8/R12).
+  {
+    // The launch backup captures the state AT launch (before this command's own writes), so a
+    // relaunch is what snapshots the data just written — exactly how the GUI's launch backup works.
+    pattern: /^I relaunch the store$/,
+    run: (w) => w.relaunch(),
+  },
+  {
+    pattern: /^I corrupt the database and relaunch the store$/,
+    run: (w) => {
+      w.corruptDatabase();
+      w.relaunch();
+    },
+  },
+  {
+    pattern: /^there is at least one backup$/,
+    run: (w) => expect(w.backupCount()).toBeGreaterThanOrEqual(1),
+  },
+  {
+    pattern: /^the latest backup contains (\d+) entr(?:y|ies)$/,
+    run: (w, _c, count) => expect(w.entriesInLatestBackup()).toBe(Number(count)),
+  },
+  {
+    // §20 R05 — recovery left no data behind: the reopened database still reports exactly the
+    // pre-corruption entry count (the surface-neutral entry list is the live, recovered DB).
+    pattern: /^the database has exactly (\d+) entr(?:y|ies)$/,
+    run: (w, _c, count) => expect(w.list()).toHaveLength(Number(count)),
+  },
+  {
+    // §20 R05 — the corrupt file was set aside, not destroyed: a `.corrupted-*` sibling remains.
+    pattern: /^the corrupt database file is quarantined beside the database$/,
+    run: (w) => expect(w.hasQuarantinedFile()).toBe(true),
+  },
+
+  // ---- §20 R03 integrity check on open (detect corruption, refuse to write) ----
+  // The bare detect-and-refuse contract, isolated from R05's recover-from-backup path: a corrupt
+  // database with NO backup beside it must be DETECTED on open and the open REFUSED before any
+  // write — never falling through to normal operation on a corrupt file. Surface-neutral over the
+  // World integrity capabilities: CoreWorld opens via openDb (a RecoveryError is the refusal);
+  // CliWorld runs a real `tt status` (non-zero exit + integrity error on stderr). Run TWICE so the
+  // write-refusal is proven identical on @stint/core and tt (§17 R8). The corrupt file's bytes must
+  // be UNCHANGED after the refused open — concrete proof that R03 wrote nothing to the bad file.
+  {
+    pattern: /^the database file is corrupted$/,
+    run: (w) => w.corruptDatabaseFile(),
+  },
+  {
+    pattern: /^I open the database$/,
+    run: (w, c) => {
+      c.integrityOpen = w.openCorruptDatabase();
+    },
+  },
+  {
+    pattern: /^the open is refused before any write$/,
+    run: (_w, c) => {
+      expect(c.integrityOpen, 'expected a prior `When I open the database`').toBeDefined();
+      // Refused: corruption was detected and the open did not proceed to normal operation.
+      expect(c.integrityOpen!.refused).toBe(true);
+      // And not a single byte of the corrupt file was rewritten — R03 must not write to it.
+      expect(c.integrityOpen!.wrote).toBe(false);
+    },
+  },
+
+  // ---- §20 R07 app_state durability (the schedule never drifts from its entry) ----
+  // start() seeds the check-in schedule in the SAME transaction as the open entry (anchored at
+  // its start); stop() clears it in the SAME transaction as the close. Surface-neutral over the
+  // World schedule capability: CoreWorld reads store.checkinState(); CliWorld reads the committed
+  // `app_state` row off the DB file the tt process wrote (durable across the process boundary).
+  // Each assertion has an "after reopening the store" twin that re-reads through a fresh launch,
+  // proving the state was committed durably — not merely held in-process — and runs TWICE (§17 R8).
+  {
+    pattern: /^the persisted check-in schedule is anchored at (\d{1,2}:\d{2})$/,
+    run: (w, _c, at) => expect(w.checkinScheduleAnchor()).toBe(iso(at)),
+  },
+  {
+    pattern: /^the persisted check-in schedule is anchored at (\d{1,2}:\d{2}) after reopening the store$/,
+    run: (w, _c, at) => {
+      w.relaunch();
+      expect(w.checkinScheduleAnchor()).toBe(iso(at));
+    },
+  },
+  {
+    pattern: /^no check-in schedule is persisted$/,
+    run: (w) => expect(w.checkinScheduleAnchor()).toBeNull(),
+  },
+  {
+    pattern: /^no check-in schedule is persisted after reopening the store$/,
+    run: (w) => {
+      w.relaunch();
+      expect(w.checkinScheduleAnchor()).toBeNull();
+    },
+  },
+  {
+    pattern: /^nothing is running after reopening the store$/,
+    run: (w) => {
+      w.relaunch();
+      expect(w.status().running).toBe(false);
+    },
+  },
 ];
 
 /** Map the spoken group-by word to the report() `by` option (the GUI #by-seg value). */
@@ -813,6 +1222,27 @@ function groupBy(spoken: string): 'client' | 'project' | 'day' | 'tag' {
 /** Map the spoken "this week"/"last week" to core's resolveRange preset key. */
 function presetKey(spoken: string): 'week' | 'last-week' {
   return spoken === 'last week' ? 'last-week' : 'week';
+}
+
+/**
+ * §09 R08 — map the full spoken preset phrase (this week / last week / today / this month /
+ * last month) to core's resolveRange preset key (the same enum the saved RangeSpec carries).
+ */
+function presetKeyFull(spoken: string): 'today' | 'week' | 'last-week' | 'month' | 'last-month' {
+  switch (spoken) {
+    case 'today':
+      return 'today';
+    case 'this week':
+      return 'week';
+    case 'last week':
+      return 'last-week';
+    case 'this month':
+      return 'month';
+    case 'last month':
+      return 'last-month';
+    default:
+      throw new Error(`unknown preset phrase "${spoken}"`);
+  }
 }
 
 /**

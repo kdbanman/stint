@@ -1,0 +1,154 @@
+name: Release build matrix
+
+# Build the installable GUI artifacts on macOS + Linux ONLY (PRD §19 R01) and,
+# on a merge to main, PUBLISH them as a GitHub Release (PRD §19 R05).
+#
+# There is deliberately no windows-latest entry in the matrix: Windows is
+# dropped everywhere. The CHECK BUILD MATRIX runbook procedure fails if a
+# windows-latest entry appears here or any Windows artifact is produced.
+#
+# Scope split:
+#   §19 R01 — produce the two-platform artifacts (the `pack` matrix).
+#   §19 R02 — the single-installer PATH symlink (the packaging/ tree, not here).
+#   §19 R05 — publish on merge-to-main: the `version` + `publish` jobs below cut a
+#             GitHub Release tagged vYYYY.M.D[.N] with BOTH artifacts attached.
+#   §19 R06 — the YYYY.M.D[.N] version string (scripts/stamp-version.mjs); this
+#             workflow CONSUMES it (the `version` job runs the script for the tag,
+#             `pack` re-stamps the same value) so the tag, the stamped artifacts,
+#             and what the app/`tt` report are one value.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Only the real upstream repo publishes — forks build but never cut releases.
+permissions:
+  contents: write
+
+jobs:
+  # §19 R06 (consumed here) — compute the date/build version ONCE so the tag, the
+  # stamped artifacts, and the published release name all agree on a single value.
+  # The same-day suffix .N is 1 + the count of release tags already cut for today,
+  # so the first release of the day has no suffix, the second is .2, etc.
+  version:
+    name: version (§19 R06)
+    runs-on: ubuntu-latest
+    if: github.repository == 'kdbanman/stint'
+    outputs:
+      version: ${{ steps.compute.outputs.version }}
+      tag: ${{ steps.compute.outputs.tag }}
+      build_n: ${{ steps.compute.outputs.build_n }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - id: compute
+        name: Compute YYYY.M.D[.N]
+        run: |
+          today="$(date -u +%Y.%-m.%-d)"
+          n="$(( $(git tag -l "v${today}*" "${today}*" | sort -u | wc -l) + 1 ))"
+          # stamp-version.mjs derives the version from the UTC date + STINT_BUILD_N
+          # (the single source of truth, §19 R06) and echoes it to stdout.
+          version="$(STINT_BUILD_N="$n" node scripts/stamp-version.mjs)"
+          echo "build_n=${n}" >> "$GITHUB_OUTPUT"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          echo "Release version: ${version} (tag v${version})"
+
+  pack:
+    name: pack · ${{ matrix.os }}
+    needs: version
+    if: github.repository == 'kdbanman/stint'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # §19 R06 — stamp the SAME computed version into @stint/core before the build,
+      # so the packaged artifacts report exactly the release tag (and what the app /
+      # `tt` show — the §19 R06 cross-check in CHECK PUBLISH-ON-MERGE).
+      - name: Stamp version (§19 R06)
+        run: STINT_BUILD_N="${{ needs.version.outputs.build_n }}" npm run version:stamp
+      - name: Build (core + cli + gui main)
+        run: npm run build
+      - name: Package GUI (macOS + Linux targets)
+        run: npm --workspace @stint/gui run pack
+      - name: Upload macOS artifacts
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stint-macos
+          path: |
+            packages/gui/dist-pack/*.dmg
+            packages/gui/dist-pack/mac/**
+          if-no-files-found: error
+      - name: Upload Linux artifacts
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: stint-linux
+          path: |
+            packages/gui/dist-pack/*.AppImage
+            packages/gui/dist-pack/*.deb
+          if-no-files-found: error
+
+  # §19 R05 — publish on merge-to-main. Downloads BOTH packed artifacts and cuts a
+  # published (not draft, not prerelease) GitHub Release at the computed tag with
+  # exactly the macOS + Linux artifacts attached. workflow_dispatch re-runs are
+  # idempotent-ish: a clobbering tag fails the release create, which is the signal
+  # to bump the same-day suffix.
+  publish:
+    name: publish release (§19 R05)
+    needs: [version, pack]
+    if: github.repository == 'kdbanman/stint'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: stint-macos
+          path: dist/macos
+      - name: Download Linux artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: stint-linux
+          path: dist/linux
+      - name: Collect release assets (macOS .dmg + Linux AppImage/.deb only)
+        id: assets
+        run: |
+          mkdir -p dist/release
+          # Exactly the two installable artifacts — the macOS .dmg and the Linux
+          # AppImage/.deb. No Windows artifact is ever produced (§19 R01).
+          find dist/macos -maxdepth 2 -name '*.dmg' -exec cp {} dist/release/ \;
+          find dist/linux -maxdepth 2 \( -name '*.AppImage' -o -name '*.deb' \) -exec cp {} dist/release/ \;
+          echo "Release assets:"
+          ls -1 dist/release
+          test -n "$(find dist/release -name '*.dmg')" || { echo 'missing macOS .dmg'; exit 1; }
+          test -n "$(find dist/release \( -name '*.AppImage' -o -name '*.deb' \))" || { echo 'missing Linux artifact'; exit 1; }
+      - name: Create published GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.version.outputs.tag }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Stint $VERSION" \
+            --notes "Automated release of Stint $VERSION (macOS + Linux). Published on merge to main — PRD §19 R05." \
+            dist/release/*
+          # Confirm the release landed published (not draft) with both assets.
+          gh release view "$TAG" --json isDraft,assets \
+            --jq 'if .isDraft then error("release is draft") else (.assets | length) end'

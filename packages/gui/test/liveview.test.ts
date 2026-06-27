@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   accent: 'system',
   dateFormat: 'system',
+  backupRetention: 5,
 };
 
 function row(p: Partial<EntryRowView> & { id: number; startUtc: string }): EntryRowView {
@@ -66,6 +67,9 @@ function fixture(): UiState {
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
     accent: '#2f6fed',
+    appVersion: '0.0.0-dev',
+    lastBackupUtc: null,
+    recoveryNotice: null,
   };
 }
 

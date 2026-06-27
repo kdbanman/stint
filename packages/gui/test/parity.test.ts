@@ -89,8 +89,12 @@ const CANONICAL: Record<string, string> = {
  *  - `sleep ls`— the sleep-flagged set is surfaced inline on the affected rows (the §10
  *                flag + one-tap subtract), not as a standalone list view; the actionable
  *                capability (subtract) maps to the subtractSleep channel.
+ *  - `backup now`— the GUI makes a backup AUTOMATICALLY on every launch (§20 R04, store.open),
+ *                so there is no explicit "back up now" button; the user-facing capabilities the
+ *                Settings → Backups section exposes are list (listBackups) and restore
+ *                (restoreBackup). The force-a-backup verb is a tt convenience with no GUI twin.
  */
-const GUI_ABSENT_TT = new Set<string>(['status', 'sleep ls']);
+const GUI_ABSENT_TT = new Set<string>(['status', 'sleep ls', 'backup now']);
 
 describe('parity matrix (§17 R8)', () => {
   const paths = allCommandPaths();

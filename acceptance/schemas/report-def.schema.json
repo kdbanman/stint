@@ -1,0 +1,51 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/report-def.json",
+  "title": "tt report show --json",
+  "description": "A saved report definition (PRD §09 R08). The range is stored as either a relative preset (range_preset set, range_from_utc/range_to_utc null) or an absolute window (range_from_utc/range_to_utc set, range_preset null), discriminated by range_kind.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "range_kind",
+    "range_preset",
+    "range_from_utc",
+    "range_to_utc",
+    "group_by",
+    "billable_filter",
+    "client_id",
+    "project_id",
+    "tag",
+    "search",
+    "rounding",
+    "rounding_increment_min",
+    "created_utc"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": { "type": "integer" },
+    "name": { "type": "string", "minLength": 1 },
+    "range_kind": { "enum": ["preset", "absolute"] },
+    "range_preset": {
+      "oneOf": [
+        { "enum": ["today", "week", "last-week", "month", "last-month"] },
+        { "type": "null" }
+      ]
+    },
+    "range_from_utc": {
+      "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+    },
+    "range_to_utc": {
+      "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
+    },
+    "group_by": { "enum": ["client", "project", "day", "tag"] },
+    "billable_filter": { "enum": ["billable", "all", "non-billable"] },
+    "client_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+    "project_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
+    "tag": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+    "search": { "oneOf": [{ "type": "string" }, { "type": "null" }] },
+    "rounding": { "type": "boolean" },
+    "rounding_increment_min": { "type": "integer", "minimum": 0 },
+    "created_utc": { "type": "string", "format": "date-time" }
+  }
+}

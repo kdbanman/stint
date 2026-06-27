@@ -38,24 +38,54 @@ import {
   buildEntryList,
   describeOverlaps,
   joinClientProject,
-  type CheckinState,
+  LAST_SEEN_KEY,
   type EntryView,
   type EntryGroupBy,
   type WriteResult,
 } from '@stint/core';
-import { CHANNELS, type WriteAck, type ListEntriesQuery, type EntryListView } from './ipc.js';
+import {
+  CHANNELS,
+  type WriteAck,
+  type ListEntriesQuery,
+  type EntryListView,
+  type SavedReportInputView,
+  type FavoriteInputView,
+  type UpdateProgress,
+} from './ipc.js';
+import {
+  pinFavorite as pinFavoriteHelper,
+  listFavorites as listFavoritesHelper,
+  favoriteToView,
+} from './favorites.js';
+import { listBackups as listBackupsHelper } from './backupview.js';
 import { buildUiState } from './uistate.js';
 import { nextTimerAction } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
 import { startWithAttributes, type StartPayload } from './start.js';
 import {
   buildReportView,
-  resolveExportRange,
+  buildSavedReportView,
+  resolveExportDefinition,
   exportPayload,
   exportFileName,
+  savedReportToView,
+  savedReportInputFromView,
+  savedReportPatchFromView,
   type ReportViewRequest,
   type ExportRequest,
 } from './reportview.js';
+import {
+  currentVersion,
+  checkForUpdates,
+  fetchReleasesViaNet,
+  latestPublishedRelease,
+  normalizePlatform,
+  planGuidedInstall,
+  downloadUpdate,
+  revealInstaller,
+  type GithubRelease,
+} from './update.js';
+import { platform as osPlatform } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(__dirname, '..', 'renderer');
@@ -74,9 +104,6 @@ let lastSeenWrite = 0;
 // once by the next tick (then cleared), so the cadence reverts to the persisted
 // default. This is NOT the persisted `checkin_interval_min` setting.
 let pendingCheckinOverrideMin: number | undefined;
-
-const LAST_SEEN_KEY = 'last_seen_utc';
-const CHECKIN_KEY = 'checkin_state';
 
 // ----------------------------------------------------------------- tray icon
 
@@ -148,22 +175,22 @@ function broadcast(): void {
   }
 }
 
+/**
+ * §19 R04 — push a Software Update progress frame to the main window over the dedicated
+ * `update-progress` broadcast (mirroring the `changed` broadcast above). The Settings panel
+ * paints the live progress bar + the numbered guided steps from this. It carries NO database
+ * state — updates never touch the DB (§19 R04).
+ */
+function broadcastUpdateProgress(p: UpdateProgress): void {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('update-progress', p);
+}
+
 function refreshAll(): void {
   updateTray();
   broadcast();
 }
 
 // ------------------------------------------------------------------- check-in
-
-function loadCheckinState(): CheckinState | null {
-  const raw = store.getAppState(CHECKIN_KEY);
-  return raw ? (JSON.parse(raw) as CheckinState) : null;
-}
-
-function saveCheckinState(state: CheckinState | null): void {
-  if (state === null) store.deleteAppState(CHECKIN_KEY);
-  else store.setAppState(CHECKIN_KEY, JSON.stringify(state));
-}
 
 function tick(): void {
   const open = store.openEntry();
@@ -174,14 +201,20 @@ function tick(): void {
   maybeWriteLastSeen();
 
   if (!open) {
-    saveCheckinState(null);
+    // §20 R07 — store.stop() already cleared the schedule atomically with the close, so
+    // there is normally nothing here; this is a defensive belt-and-braces clear for a DB
+    // mutated out-of-band (e.g. a tt write that left no open entry but a stale schedule).
+    if (store.checkinState() !== null) store.setCheckinState(null, toUtc(new Date()));
     return;
   }
   const settings = store.settings();
-  let state = loadCheckinState();
+  // §20 R07 — the schedule is normally seeded atomically by store.start(); this lazy init is
+  // only a fallback for an open entry that predates that seeding (or an out-of-band write),
+  // and it persists the seed together with the heartbeat as one durable unit.
+  let state = store.checkinState();
   if (!state) {
     state = initCheckinState(open.startUtc, settings.firstCheckinMin);
-    saveCheckinState(state);
+    store.setCheckinState(state, toUtc(new Date()));
   }
   // A per-notification interval pick (PRD §10b R4) overrides the NEXT gap only. It was
   // set by a notification action since the last tick; consume it exactly once here and
@@ -193,7 +226,8 @@ function tick(): void {
   const res = evaluateCheckin(state, settings.checkinIntervalMin, new Date(), override);
   if (res.fire) {
     fireCheckin(open);
-    saveCheckinState(res.state);
+    // §20 R07 — persist the advanced schedule + the heartbeat as ONE durable unit.
+    store.setCheckinState(res.state, toUtc(new Date()));
   }
 }
 
@@ -226,7 +260,9 @@ function fireCheckin(open: EntryView): void {
 }
 
 function setLastSeen(): void {
-  store.setAppState(LAST_SEEN_KEY, toUtc(new Date()));
+  // §20 R07 — the heartbeat is a standalone state write; recordLastSeen owns its own short
+  // transaction (there is no entry write to ride here).
+  store.recordLastSeen(toUtc(new Date()));
   lastSeenWrite = Date.now();
 }
 
@@ -248,17 +284,15 @@ function updateTray(open: EntryView | null = store.openEntry()): void {
   }
 }
 
+/**
+ * §12 R01 (G8): the tray exposes NO dropdown of app actions. A single left-click opens
+ * the compact popover, which is the SOLE surface for Stop / Switch / Start + Open Stint.
+ * The right-click context menu is the minimal OS-convention Quit-only menu — no timer
+ * actions, nothing the popover already owns. The old 3-item Start/Stop + Open Stint
+ * dropdown is removed.
+ */
 function buildTrayMenu(): Menu {
-  const open = store.openEntry();
-  return Menu.buildFromTemplate([
-    open
-      ? { label: `Stop (${formatDuration(open.billableSeconds)})`, click: () => toggleTimer() }
-      : { label: 'Start / resume', click: () => toggleTimer() },
-    { type: 'separator' },
-    { label: 'Open Stint', click: () => showMainWindow() },
-    { type: 'separator' },
-    { label: 'Quit', click: () => app.quit() },
-  ]);
+  return Menu.buildFromTemplate([{ role: 'quit', label: 'Quit' }]);
 }
 
 function togglePopover(): void {
@@ -501,20 +535,85 @@ function registerIpc(): void {
       // returned shape is the core Report the report view paints verbatim.
       return buildReportView(store, p as ReportViewRequest, new Date());
     },
+    // §09 R08–R09: saved report definitions. Each delegates straight to @stint/core — the
+    // single source of truth — at parity with `tt report save|ls|show|rename|rm|run`. The
+    // mutators refresh all windows so an open Reports view repaints; the reads do not. The
+    // renderer never re-derives a range or a total: runReport returns the SAME core Report
+    // payload the ad-hoc `report` handler builds, resolved through core's resolveSavedRange.
+    saveReport: (p) => {
+      const def = store.saveReport(savedReportInputFromView(p as SavedReportInputView));
+      refreshAll();
+      return savedReportToView(def);
+    },
+    listReports: () => store.listReports().map(savedReportToView),
+    showReport: (p) => {
+      const def = store.getReport((p as { name: string }).name);
+      return def ? savedReportToView(def) : null;
+    },
+    renameReport: (p) => {
+      const { name, newName } = p as { name: string; newName: string };
+      const def = store.renameReport(name, newName);
+      refreshAll();
+      return savedReportToView(def);
+    },
+    editReport: (p) => {
+      const { name, patch } = p as { name: string; patch: Partial<SavedReportInputView> };
+      const def = store.editReport(name, savedReportPatchFromView(patch));
+      refreshAll();
+      return savedReportToView(def);
+    },
+    removeReport: (p) => {
+      store.removeReport((p as { name: string }).name);
+      refreshAll();
+    },
+    // §09 R09: run a saved report against current data. buildSavedReportView is a thin
+    // pass-through to store.runReport (resolving the stored RangeSpec through core), so the
+    // renderer paints the SAME core Report the ad-hoc `report` channel returns. Accepts a
+    // name or id ref so the Reports view can run a definition by whichever handle it holds.
+    runReport: (p) => buildSavedReportView(store, (p as { ref: string | number }).ref, new Date()),
+    // §05 R09: pinned timer favorites. Each delegates to @stint/core — the single source of
+    // truth — at parity with `tt fav add|ls|rename|rm`. The mutators refresh all windows so an
+    // open Timer view repaints its favorites rail; listFavorites is a read, no refresh. The
+    // pin/rename/unpin LOGIC (duplicate-name rejection, template capture, tag application) all
+    // lives in core; the helpers only resolve names + project to the renderer-safe view.
+    pinFavorite: (p) => {
+      const view = pinFavoriteHelper(store, p as FavoriteInputView);
+      refreshAll();
+      return view;
+    },
+    listFavorites: () => listFavoritesHelper(store),
+    renameFavorite: (p) => {
+      const { ref, name } = p as { ref: string | number; name: string };
+      const fav = store.renameFavorite(ref, name);
+      refreshAll();
+      return favoriteToView(fav);
+    },
+    unpinFavorite: (p) => {
+      store.unpinFavorite((p as { ref: string | number }).ref);
+      refreshAll();
+    },
+    // §05 R10: resume from a favorite — start a FRESH timer from the favorite's template. All
+    // logic is in core (store.startFromFavorite delegates to start: atomic stop-then-start, the
+    // ≤1-open invariant, the overlap warning); the favorite is never mutated. refreshAll repaints
+    // the Active-Timer card + favorites rail. Parity with `tt fav start` / `tt start --fav`.
+    startFavorite: (p): WriteAck => {
+      const res = store.startFromFavorite((p as { name: string }).name);
+      refreshAll();
+      return { warnings: res.warnings ?? [] };
+    },
     exportEntries: (p) => {
-      // §09 R6: the report view's Export CSV / Export JSON. The renderer cannot reach
-      // Node/fs, so the export round-trips through main. Resolve the same range the report
-      // used (preset via core's resolveRange, or the explicit custom from/to), list the
-      // raw entries (billable='all', no filter — exactly `tt export`), render the bytes via
-      // core's toCsv/toJsonEntries, and write them through the OS save dialog. No network.
+      // §09 R6 / R09: the report view's Export CSV / Export JSON. The renderer cannot reach
+      // Node/fs, so the export round-trips through main. When the request names a SAVED report
+      // (savedReportRef), export its definition's range via core's exportSavedReport (raw
+      // entries for the resolved window — byte-identical to `tt report run --csv|--json`);
+      // otherwise resolve the ad-hoc preset/custom range and export it (exactly `tt export`).
+      // Either way the bytes come from core's toCsv/toJsonEntries and write through the OS
+      // save dialog. No network.
       const req = p as ExportRequest;
       const now = new Date();
-      const range = resolveExportRange(req, store.settings().weekStart, now);
-      const entries = store.listEntries({
-        fromUtc: range.fromUtc,
-        toUtc: range.toUtc,
-        billable: 'all',
-      });
+      // One pure decision in core/reportview: saved-report ref → its own resolved range, else
+      // the ad-hoc preset/custom range — both yielding the RAW entries for the window.
+      const { range, entries } = resolveExportDefinition(req, store, now);
       const payload = exportPayload(entries, req.format, now);
       const options: Electron.SaveDialogSyncOptions = {
         title: req.format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
@@ -584,6 +683,17 @@ function registerIpc(): void {
       store.archiveTag((p as { id: number }).id);
       refreshAll();
     },
+    // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. Each
+    // delegates straight to @stint/core (store.listBackups / store.restoreFromBackup over the
+    // file-level backup module) at parity with `tt backup ls|restore`. listBackups is a read, no
+    // refresh; restoreBackup quarantines the current file, re-points the store at the chosen
+    // backup, and refreshes all windows so every open view repaints the restored truth.
+    listBackups: () => listBackupsHelper(store),
+    restoreBackup: (p) => {
+      const r = store.restoreFromBackup((p as { name: string }).name);
+      refreshAll();
+      return { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo };
+    },
     setSetting: (p) => {
       // §12 R11: the Settings view (and the report view's rounding controls) persist any §14
       // setting over this one channel — parity with `tt config set` (no new channel). A
@@ -612,11 +722,136 @@ function registerIpc(): void {
   }
 }
 
+/**
+ * §19 R03/R04 — the Software Update IPC surface. Deliberately registered OUTSIDE the parity-
+ * asserted CHANNELS loop (and bridged separately in preload under `window.stint.update`):
+ * in-app update is a GUI/OS-only capability with NO `tt` equivalent (a CLI install is updated
+ * by the package manager / installer), exactly like the tray and the global hotkey, so it is
+ * not a parity-matrix channel.
+ *
+ * EVERY handler is read-only with respect to the database — none calls `store` — so updates
+ * never touch the database (§19 R04 / §16 update-mid-timer). `update:check` + `update:download`
+ * perform the app's only outbound requests through update.ts (Electron `net`, never node:https /
+ * fetch — §17 R9); the downloaded artifact lands under the OS temp dir (`app.getPath('temp')`),
+ * NEVER beside the DB. On macOS the returned guided plan surfaces the one-time Gatekeeper beat
+ * (no Developer ID / notarization).
+ */
+function registerUpdateIpc(): void {
+  // The latest published release the most recent check found, kept so download/reveal operate
+  // on the same release without re-querying. The downloaded artifact path, kept so reveal can
+  // open it. Neither is database state.
+  let pendingRelease: GithubRelease | null = null;
+  let downloadedArtifactPath: string | null = null;
+
+  ipcMain.handle('update:getVersion', () => currentVersion());
+  ipcMain.handle('update:check', async () => {
+    const verdict = await checkForUpdates();
+    // Remember the release behind an available update so a subsequent download targets it.
+    if (verdict.status === 'update-available') {
+      try {
+        pendingRelease = latestPublishedRelease(await fetchReleasesViaNet());
+      } catch {
+        pendingRelease = null;
+      }
+    } else {
+      pendingRelease = null;
+    }
+    return verdict;
+  });
+
+  // R04 — kick off the artifact download for the pending release. Returns a started ack
+  // immediately; progress (and the terminal ready/error frame) is pushed over `update-progress`.
+  ipcMain.handle('update:download', async () => {
+    const platform = normalizePlatform(osPlatform());
+    const release = pendingRelease;
+    if (!release || !platform) {
+      const frame: UpdateProgress = {
+        phase: 'error',
+        percent: 0,
+        version: '',
+        steps: platform ? planGuidedInstall(platform) : [],
+        artifactPath: null,
+        message: 'No downloadable update is available. Check for updates first.',
+      };
+      broadcastUpdateProgress(frame);
+      return { started: false };
+    }
+    const version = release.tag_name.replace(/^v/, '');
+    const steps = planGuidedInstall(platform);
+    // Run the download out-of-band; stream progress frames to the renderer.
+    void (async () => {
+      try {
+        broadcastUpdateProgress({
+          phase: 'downloading',
+          percent: 0,
+          version,
+          steps,
+          artifactPath: null,
+          message: null,
+        });
+        const path = await downloadUpdate(release, (percent) => {
+          broadcastUpdateProgress({
+            phase: 'downloading',
+            percent,
+            version,
+            steps,
+            artifactPath: null,
+            message: null,
+          });
+        });
+        downloadedArtifactPath = path;
+        broadcastUpdateProgress({
+          phase: 'ready',
+          percent: 100,
+          version,
+          steps,
+          artifactPath: path,
+          message: null,
+        });
+      } catch (err) {
+        broadcastUpdateProgress({
+          phase: 'error',
+          percent: 0,
+          version,
+          steps,
+          artifactPath: null,
+          message: err instanceof Error ? err.message : 'The update download failed.',
+        });
+      }
+    })();
+    return { started: true };
+  });
+
+  // R04 — reveal the downloaded installer in Finder / the file manager and return the ordered,
+  // platform-specific guided-step plan (so the renderer can repaint the numbered steps).
+  ipcMain.handle('update:reveal', () => {
+    const platform = normalizePlatform(osPlatform());
+    const steps = platform ? planGuidedInstall(platform) : [];
+    if (downloadedArtifactPath) revealInstaller(downloadedArtifactPath);
+    return { steps, artifactPath: downloadedArtifactPath };
+  });
+}
+
 // -------------------------------------------------------------------- lifecycle
 
 function init(): void {
   const dbPath = resolveDbPath(process.env, app.getPath('userData'));
   store = Store.open({ path: dbPath });
+
+  // §20 R05 — if the database was corrupt on open, core quarantined it and restored the latest
+  // good backup before we ever wrote (nothing lost). Tell the user once, on launch — the
+  // Settings → Backups section also paints a "recovered" pill from this same lastRecovery.
+  const recovery = store.lastRecovery();
+  if (recovery) {
+    dialog.showMessageBox({
+      type: 'warning',
+      title: 'Stint recovered your data',
+      message: 'A corrupted database was detected and recovered from a backup.',
+      detail:
+        `Restored from ${recovery.recoveredFrom}. ` +
+        `The corrupt file was set aside at ${recovery.quarantinedTo}. Nothing was lost.`,
+    });
+  }
 
   // Launch-time reconciliation: a sleep missed while the app was closed (PRD §10a).
   const lastSeen = store.getAppState(LAST_SEEN_KEY);
@@ -624,6 +859,7 @@ function init(): void {
   setLastSeen();
 
   registerIpc();
+  registerUpdateIpc();
 
   tray = new Tray(trayIcon());
   tray.setContextMenu(buildTrayMenu());
