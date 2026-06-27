@@ -222,14 +222,22 @@ pending work. It must encode these stages in order:
    - all **changed/new GUI requirements** (every `Rec ▶` row);
    - all **code-change-adjacent requirements** demonstrable in the GUI.
    Recordings land under `acceptance/evidence/recordings/`, indexed by
-   requirement id, and surfaced in the PR body. For **inline autoplay**, the
-   `.webm` must be drag-dropped into GitHub's web editor (yields a
-   `user-attachments` URL) and embedded with
-   `<video src="<github-attachment-url>" autoplay loop muted controls></video>`
-   — GitHub's CSP only allows media from its attachment host, so committed
-   `raw.githubusercontent.com` URLs will NOT play inline. Without a manual
-   upload, commit the files and link each to its **blob view**
-   (`.../blob/<sha>/...`), which plays on click.
+   requirement id. **Deliver them as committed, inline-embedded GIFs** — this is
+   the only format that renders inline in a PR description without a manual
+   web upload (GitHub's CSP blocks inline `<video>` from repo/raw URLs; native
+   video controls would require drag-dropping the file into the web editor).
+   Recording production conventions (the workflow's Recordings stage carries the
+   exact ffmpeg/Playwright recipe):
+   - **GIF, ASCII-only filenames** slugged from the requirement id
+     (`§12 R15` → `12-r15.gif`) — non-ASCII/spaced names render unreliably.
+   - **Slowed to ~0.5× with a ~1.5 s hold on the final frame** so fast actions
+     are followable and each loop has a clear settle/restart beat.
+   - **Make the interaction visible** (inject a synthetic cursor + click pulse,
+     highlight the target element) so clicks are not invisible.
+   - **Commit** the GIFs (do NOT git-ignore them) and **embed each inline** in
+     the PR body as an image — `![<req id> — <caption>](<raw-url-at-commit-sha>)`
+     — pinned to the commit SHA, **each with a one-line description of what the
+     GIF shows**.
 7. **Evidence aggregation → one GitHub PR** — collect AC evidence, both review
    reports, and the recordings into a single PR.
 8. **Auto-swap, gated on all-green** — only when every requirement has passing AC
