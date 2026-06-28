@@ -253,8 +253,8 @@ pending work. It must encode these stages in order:
   + its script), per the work-list's DELETED rows.
 - Delete superseded prior-art workflows referenced in the work-list.
 - Delete **`requirements-transition.md`** itself (the mapping doc is consumed).
-- Ensure `README.md`, `CLAUDE.md`, `acceptance/COVERAGE.md`, and
-  `acceptance/parity-matrix.json` reference only the new docs and entities.
+- Ensure `README.md`, `CLAUDE.md`, `acceptance/criteria/COVERAGE.md`, and
+  `acceptance/criteria/parity-matrix.json` reference only the new docs and entities.
 
 ---
 

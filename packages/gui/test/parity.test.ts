@@ -20,7 +20,7 @@ import { CHANNELS } from '../src/ipc.js';
 import { buildProgram } from '../../cli/src/program.js';
 
 const matrix = JSON.parse(
-  readFileSync(fileURLToPath(new URL('../../../acceptance/parity-matrix.json', import.meta.url)), 'utf8'),
+  readFileSync(fileURLToPath(new URL('../../../acceptance/criteria/parity-matrix.json', import.meta.url)), 'utf8'),
 ) as { capabilities: { gui: string; tt: string[] }[] };
 
 /**

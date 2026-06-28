@@ -2,7 +2,7 @@
 
 This directory holds the evidence artifacts (screen recordings, command logs, and
 completion confirmations) for the MANUAL runbook procedures in
-`acceptance/manual/runbook.md` whose **live, OS-level** half cannot be driven in CI.
+`acceptance/criteria/manual/runbook.md` whose **live, OS-level** half cannot be driven in CI.
 
 Each procedure is split into the part a headless host CAN execute (captured
 deterministically in the checked-in evidence below) and the residual **live** part —

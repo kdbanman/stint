@@ -1895,7 +1895,7 @@ async function main() {
       'No .webm was produced for any recipe. The Playwright recordVideo path needs a ' +
         'Chromium build that can capture video (full headless Chromium + ffmpeg). ' +
         'Nothing was faked — re-run on a host with recording support, or capture the ' +
-        'recordings manually per acceptance/manual/runbook.md.',
+        'recordings manually per acceptance/criteria/manual/runbook.md.',
     );
     process.exit(1);
   }

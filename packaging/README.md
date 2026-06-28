@@ -64,7 +64,7 @@ installer chose, and `tt status` runs immediately against the shared DB.
 ## Verifying the install
 
 The single-artifact behavior is proven by the **CHECK INSTALL** procedure in
-`acceptance/manual/runbook.md` (the MANUAL AC for §19 R02): one install run must
+`acceptance/criteria/manual/runbook.md` (the MANUAL AC for §19 R02): one install run must
 leave **both** the GUI in Applications/the launcher **and** `tt` on `PATH`
 (`which tt` resolves; `tt status` runs without a separate Node), and uninstall
 must remove both.

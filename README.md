@@ -29,8 +29,11 @@ packages/
   cli/    tt — the command-line surface (commander), --json everywhere.
   gui/    Electron tray app + main window; renderer is an equal surface over IPC.
 features/      Gherkin specs, run against BOTH surfaces (parity).
-acceptance/    Coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbooks,
-               and generated evidence (verbatim CLI transcript + screenshots).
+acceptance/
+  criteria/    The acceptance criteria — coverage matrix, JSON schemas, JUDGE
+               rubric, MANUAL runbook, parity matrix (what must hold).
+  evidence/    The satisfaction evidence — generated proof those criteria hold
+               (verbatim CLI transcript, screenshots, recordings, judge report).
 scripts/       Evidence generator and the no-network backstop.
 ```
 
@@ -90,7 +93,7 @@ with flags in context, and a report builder with CSV/JSON export.
 
 No single notation verifies the whole PRD well, so Stint uses the five complementary
 methods from [`context/acceptance.html`](context/acceptance.html). The full map is
-[`acceptance/COVERAGE.md`](acceptance/COVERAGE.md).
+[`acceptance/criteria/COVERAGE.md`](acceptance/criteria/COVERAGE.md).
 
 | Method | Proves | Run |
 |--------|--------|-----|
@@ -98,7 +101,7 @@ methods from [`context/acceptance.html`](context/acceptance.html). The full map 
 | **PROP** (fast-check) | The money-affecting laws over thousands of inputs | `npm run test:prop` |
 | **GOLD** (snapshots + JSON-Schema) | The exact CLI/CSV/JSON contract | `npm run test:gold` |
 | **JUDGE** (Playwright + rubric) | Subjective GUI qualities over real screenshots | `npm run judge` |
-| **MANUAL** ([runbook](acceptance/manual/runbook.md)) | Real sleep/wake, cadence, no-network, tray/hotkey | by hand |
+| **MANUAL** ([runbook](acceptance/criteria/manual/runbook.md)) | Real sleep/wake, cadence, no-network, tray/hotkey | by hand |
 
 ```sh
 npm test                 # PROP · GOLD · BDD · integration · parity (one command)
@@ -109,7 +112,7 @@ npm run verify:no-network
 
 The BDD suite runs each `.feature` against `@stint/core` **and** the built `tt`
 binary, which is how the full-parity claim (§17 R8) is proven without a second copy
-of the spec. The `acceptance/parity-matrix.json` (asserted complete) maps every GUI
+of the spec. The `acceptance/criteria/parity-matrix.json` (asserted complete) maps every GUI
 capability to its `tt` command.
 
 ### Evidence in this repo
