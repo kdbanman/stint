@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Settings</title>
+<title>Stint — Software update</title>
 <style>
   :root{
     --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
@@ -61,50 +61,49 @@
   .btn.sm{height:30px;padding:0 11px;font-size:12px}
   .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
-  /* segmented */
-  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
-  .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
-  /* toggle */
-  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
-  .sw.on{background:var(--accent)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
   .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
-  textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
-  /* card / tag / pill */
+  /* card / pill */
   .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
   .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
   .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
   .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
-  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
-  .lead{color:var(--muted);font-size:13px;margin:4px 0 0;max-width:640px}
-  .lead code{font-family:var(--num);font-size:12px;background:var(--sunken);padding:1px 6px;border-radius:5px}
-  .sgrp{font-size:13px;font-weight:640;color:var(--ink);margin:26px 0 2px;padding-bottom:8px;border-bottom:1px solid var(--line-strong)}
-  .srow{display:grid;grid-template-columns:1fr 330px;align-items:center;gap:20px;padding:13px 2px}
-  .srow + .srow{border-top:1px solid var(--line)}
-  .sk{font-size:13px}
-  .sk small{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
-  .sc{justify-self:end;display:flex;align-items:center;gap:10px}
-  .kbd{font-family:var(--num);font-size:12px;border:1px solid var(--line-strong);border-radius:6px;padding:5px 10px;background:var(--sunken);box-shadow:0 1px 0 var(--line-strong)}
-  .vrow{display:flex;align-items:center;gap:10px}
+  /* settings rows + update flow */
+  .view{gap:0}
+  .sub{color:var(--muted);font-size:13px;margin:-8px 0 20px}
+  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:640;margin:8px 0 2px}
+  .srow{display:flex;align-items:flex-start;gap:18px;padding:16px 2px;border-bottom:1px solid var(--line)}
+  .srow .lhs{flex:1;min-width:0}
+  .srow .nm{font-weight:590;font-size:13.5px}
+  .srow .ds{color:var(--muted);font-size:12px;margin-top:3px}
+  .srow .rhs{display:flex;align-items:center;gap:12px;flex:none}
   .ver{font-family:var(--num);font-size:12.5px;color:var(--ink)}
-  .ok{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--run)}.ok .ic{width:14px;height:14px}
-  .ilink{display:inline-flex;align-items:center;gap:4px;color:var(--accent-ink);cursor:pointer}.ilink .ic{width:13px;height:13px}
-  .prog{display:flex;align-items:center;gap:10px}
-  .prog .bar{width:200px;height:7px;border-radius:4px;background:var(--sunken);overflow:hidden;border:1px solid var(--line)}
-  .prog .bar i{display:block;height:100%;width:62%;background:var(--accent)}
-  .prog .pct{font-size:12px;color:var(--muted)}
+  /* update banner */
+  .ubann{display:flex;align-items:center;gap:14px;padding:14px 16px;margin:6px 0 22px;border-radius:var(--r2);background:var(--accent-weak);border:1px solid #C8623E33}
+  .ubann .ic{color:var(--accent)}
+  .ubann .ut{flex:1}
+  .ubann .ut b{font-weight:640}
+  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:1px}
+  /* guided install card */
+  .guide{margin-top:22px;padding:20px 22px}
+  .guide-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .guide-h h3{font-size:15px;font-weight:640;margin:0}
+  .guide-h .ver{margin-left:2px;color:var(--muted)}
+  .guide-h .btn{margin-left:auto}
+  .steps{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .steps li{display:flex;gap:14px;padding:12px 4px;border-top:1px solid var(--line)}
+  .steps li .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--sunken);border:1px solid var(--line-strong);color:var(--muted);font-weight:640;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .steps li .stx{padding-top:1px}
+  .steps li .stx b{font-weight:590}
+  .steps li .stx .d{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .guide-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+  .guide-foot .ic{width:14px;height:14px;color:var(--faint)}
 </style>
 </head>
 <body>
@@ -114,27 +113,11 @@
 <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
 <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
 <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
-<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
-<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
-<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
-<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
-<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
-<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>
-<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
-<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
-<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
 <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
-<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
-<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
-<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
-<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
-<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
-<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
 <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
-<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
-<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
 </defs></svg>
 <div class="win">
   <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Settings</div></div>
@@ -144,37 +127,49 @@
   <a href="main.html"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
   <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
-  <a href="#" class="on"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <a href="settings.html" class="on"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  <div class="stat"><div class="k">Version</div><div class="v tnum">2026.6.24</div><a href="#">Update ready · 2026.7.1 <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 
-      <div class="vhead"><h2 class="vtitle">Settings</h2></div>
+      <div class="vhead"><h2 class="vtitle">Software update</h2></div>
+      <p class="sub">Stint checks GitHub Releases for new builds. macOS &amp; Linux only — updates replace the app, never the database.</p>
 
-      <div class="sgrp">Reporting</div>
-      <div class="srow"><div class="sk">Rounding</div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
-      <div class="srow"><div class="sk">Rounding increment</div><div class="sc"><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div></div>
-      <div class="srow"><div class="sk">Week start</div><div class="sc"><span class="seg"><button class="on">Monday</button><button>Sunday</button></span></div></div>
+      <div class="ubann">
+        <svg class="ic"><use href="#i-download"/></svg>
+        <div class="ut"><b>Version 2026.7.1 is ready to install.</b><span>Released June 27, 2026 · your data stays exactly where it is.</span></div>
+        <button class="btn primary"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install</button>
+      </div>
 
-      <div class="sgrp">Check-ins</div>
-      <div class="srow"><div class="sk">First check-in</div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
-      <div class="srow"><div class="sk">Check-in interval</div><div class="sc"><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div></div>
+      <div class="group">Version</div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Current version</div><div class="ds">Date-build versioning · macOS + Linux only.</div></div>
+        <div class="rhs"><span class="ver">2026.6.24</span><span class="pill accent">update available</span></div>
+      </div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Check for updates</div><div class="ds">Queries GitHub Releases. Last checked today at 9:12 AM.</div></div>
+        <div class="rhs"><button class="btn"><svg class="ic"><use href="#i-check"/></svg> Check now</button></div>
+      </div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Check automatically</div><div class="ds">Look for new releases on launch and once a day.</div></div>
+        <div class="rhs"><select class="field"><option>On launch + daily</option><option>On launch only</option><option>Never</option></select></div>
+      </div>
 
-      <div class="sgrp">System</div>
-      <div class="srow"><div class="sk">Global hotkey</div><div class="sc"><span class="kbd">Ctrl Alt T</span></div></div>
-      <div class="srow"><div class="sk">Accent colour</div><div class="sc"><span class="seg"><button class="on">System accent</button><button>Monochrome</button></span></div></div>
-      <div class="srow"><div class="sk">Date & number format</div><div class="sc"><select class="field"><option selected>System locale</option></select></div></div>
+      <div class="card guide">
+        <div class="guide-h">
+          <svg class="ic" style="color:var(--accent)"><use href="#i-download"/></svg>
+          <h3>Guided install</h3><span class="ver">2026.7.1</span>
+          <button class="btn primary"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install 2026.7.1</button>
+        </div>
+        <ol class="steps">
+          <li><span class="n">1</span><div class="stx"><b>Download the new version</b><div class="d">~64 MB · fetched to a temp folder, never beside your data.</div></div></li>
+          <li><span class="n">2</span><div class="stx"><b>Replace the app in Applications</b><div class="d">Stint reveals the installer in Finder for you.</div></div></li>
+          <li><span class="n">3</span><div class="stx"><b>Approve once at first launch</b><div class="d">System Settings → Privacy &amp; Security — one-time Gatekeeper clearance, no Developer ID needed.</div></div></li>
+        </ol>
+        <div class="guide-foot"><svg class="ic"><use href="#i-info"/></svg> Updates never touch the database — the artifact downloads to a temp folder, not beside your data.</div>
+      </div>
 
-      <div class="sgrp">Software update</div>
-      <div class="srow"><div class="sk">Current version</div><div class="sc"><span class="vrow"><span class="ver tnum">2026.6.27.2</span> <span class="pill accent">update available</span></span></div></div>
-      <div class="srow"><div class="sk">Installing 2026.6.27.3</div>
-        <div class="sc"><span class="prog"><span class="bar"><i></i></span><span class="pct tnum">62%</span></span></div></div>
-
-      <div class="sgrp">Backups</div>
-      <div class="srow"><div class="sk">Last backup</div><div class="sc"><span class="vrow"><span class="ver tnum">2026-06-27 08:59</span> <span class="ok"><svg class="ic"><use href="#i-check"/></svg> verified</span></span></div></div>
-      <div class="srow"><div class="sk">Keep</div><div class="sc"><select class="field"><option>last 3</option><option selected>last 5</option><option>last 10</option></select></div></div>
-      <div class="srow"><div class="sk">Restore from backup</div><div class="sc"><button class="btn sm"><svg class="ic"><use href="#i-restore"/></svg> Restore…</button></div></div>
     </div>
   </div>
 </div>
