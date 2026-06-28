@@ -11,8 +11,8 @@
  *
  * This is the cheap, deterministic, no-network guard that closes that gap: it resolves
  * the helper the SAME way electron-builder does (via the `app-builder-bin` module) and
- * asserts the binary exists and is executable for the current platform/arch. It runs on
- * every PR (the CI `verify` job) so a missing native helper fails fast and clearly,
+ * asserts the binary exists, is executable, AND actually runs for the current
+ * platform/arch. It runs on every PR (the CI `verify` job) so a missing native helper fails fast and clearly,
  * BEFORE merge, instead of surfacing only in the post-merge release pack. It is also the
  * post-`npm ci` verify step in the release `pack` job, where a failure triggers a
  * cache-clean reinstall repair (see .github/workflows/release.yml).
@@ -21,12 +21,20 @@
  */
 import { accessSync, constants, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { spawnSync } from 'node:child_process';
 
 const require = createRequire(import.meta.url);
 
 /**
  * Resolve electron-builder's native `app-builder` helper path and confirm it is a real,
- * executable file. Returns a list of human-readable problems (empty when healthy).
+ * executable file that ACTUALLY RUNS. Returns a list of human-readable problems (empty
+ * when healthy).
+ *
+ * Statting the file is not enough: a present, +x binary can still fail electron-builder's
+ * `spawn(appBuilder)` with ENOENT (e.g. a broken prerelease binary, or a static binary the
+ * runner's kernel/loader rejects). A stat-only guard false-passes in exactly that case. So
+ * the authoritative check spawns the helper the same way electron-builder does and confirms
+ * it executes.
  */
 export function checkPackagingToolchain() {
   const problems = [];
@@ -75,6 +83,26 @@ export function checkPackagingToolchain() {
     }
   }
 
+  // The AUTHORITATIVE check: actually run the helper, exactly as electron-builder spawns it.
+  // `app-builder --version` is a cheap, offline, side-effect-free invocation. A spawn error
+  // here (ENOENT/EACCES) IS the failure electron-builder hits during "installing production
+  // dependencies"; statting the file would have missed it.
+  const run = spawnSync(appBuilderPath, ['--version'], { timeout: 20_000, encoding: 'utf8' });
+  if (run.error) {
+    problems.push(
+      `app-builder helper at ${appBuilderPath} is present but WILL NOT EXECUTE: ${run.error.code ?? run.error.message} ` +
+        `(spawn ${run.error.code ?? 'error'}). This is the exact "spawn … app-builder ENOENT" electron-builder dies on. ` +
+        `A clean reinstall (\`npm cache clean --force && npm ci\`) restores it if the install was bad; if a fresh install ` +
+        `still cannot run it, the app-builder-bin binary itself is broken on this runner (replace/pin app-builder-bin).`,
+    );
+  } else if (run.signal) {
+    problems.push(`app-builder helper at ${appBuilderPath} was killed by signal ${run.signal} (timeout?)`);
+  } else if (run.status !== 0) {
+    problems.push(
+      `app-builder helper at ${appBuilderPath} ran but exited ${run.status}: ${(run.stderr ?? '').trim().slice(0, 200)}`,
+    );
+  }
+
   return problems;
 }
 
@@ -87,5 +115,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
   const { appBuilderPath } = require('app-builder-bin');
-  console.log(`packaging-toolchain check passed: app-builder helper present at ${appBuilderPath}`);
+  const r = spawnSync(appBuilderPath, ['--version'], { encoding: 'utf8' });
+  const ver = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim() || 'ok';
+  console.log(`packaging-toolchain check passed: app-builder runs (${ver}) at ${appBuilderPath}`);
 }
