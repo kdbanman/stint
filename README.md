@@ -74,15 +74,35 @@ without coordinating — they read and write the same row.
 
 ### Layout
 
+The repo is two halves, and the split is the whole point. The first is the
+**specification** — the product and process requirements, plus the acceptance
+criteria that say what must hold. The second is the **rendering** — the
+implementation and the generated evidence that those criteria do hold. The
+rendering is produced from the specification; the
+[ghost-distribution goal](#a-goal-ghost-distribution) below is exactly the claim
+that the second half can be regenerated from the first.
+
+**The specification** — the source, the artifact worth keeping:
+
+```
+context/       The spec — concept, PRD, glossary, acceptance strategy, process.
+features/      Gherkin acceptance criteria, run against BOTH surfaces (parity).
+acceptance/
+  criteria/    What must hold — coverage matrix, schemas, JUDGE rubric, MANUAL runbook, parity matrix.
+CLAUDE.md      Repo guide and working instructions.
+.claude/       Requirements-change machinery — skills and workflows.
+README.md      This front door.
+```
+
+**The rendering** — generated from the specification above:
+
 ```
 packages/
   core/   @stint/core — schema, state transitions, invariants, reporting, rounding.
   cli/    tt — the command line (commander), --json everywhere.
   gui/    Electron tray app + window; renderer is an equal surface over IPC.
-features/      Gherkin specs, run against BOTH surfaces (parity).
 acceptance/
-  criteria/    What must hold — coverage matrix, schemas, JUDGE rubric, MANUAL runbook, parity matrix.
-  evidence/    Generated proof it holds — CLI transcript, screenshots, recordings, judge report.
+  evidence/    Generated proof the criteria hold — CLI transcript, screenshots, recordings, judge report.
 scripts/       Evidence generator and the no-network backstop.
 ```
 
@@ -102,8 +122,9 @@ npm run evidence         # regenerates acceptance/evidence/cli-transcript.md
 npm run verify:no-network
 ```
 
-No single notation covers the whole PRD, so acceptance uses five complementary
-methods (full map in [`acceptance/criteria/COVERAGE.md`](acceptance/criteria/COVERAGE.md)):
+No single verification system or notation covers the whole PRD, so acceptance
+uses five complementary methods (full map in
+[`acceptance/criteria/COVERAGE.md`](acceptance/criteria/COVERAGE.md)):
 
 | Method | Proves | Run |
 |--------|--------|-----|
