@@ -107,7 +107,7 @@
     <p>The hardest part of "the terminal and the window both control the live timer" sounds like a synchronization problem. It isn't, once you see it the right way.</p>
     <p class="pull">There is no timer object ticking somewhere. A <strong>running timer is simply the one time entry whose end time is still empty.</strong> "Running" is a row, not a process.</p>
     <p>Everything follows from that. Elapsed time is never stored or incremented — it's <em>derived</em>, <code>now − start</code>, by whoever happens to be looking. The tray counting up each second is pure display; close the lid for an hour and reopen it and the number is simply correct, because it was never being kept anywhere to drift. And because the live timer is just data in the shared file, the terminal and the window aren't two systems that must agree — they're two views of one truth. Start a timer with <code>tt start</code> and the tray reflects it almost instantly; stop it from the tray and <code>tt status</code> sees it stopped. Neither is in charge. Neither needs the other running.</p>
-    <p>That single reframing is the backbone of the whole product. It's why the CLI can have full parity with the GUI without a second copy of the logic, and why "both first-class citizens" is structural rather than a promise.</p>
+    <p>That single reframing is the backbone of the whole product. It's why the CLI can have full parity with the GUI without a second copy of the logic, and why "both first-class citizens" is structural rather than a promise. The architecture that follows from it — one core, one file, two surfaces — is laid out in <a href="architecture.html">architecture.html</a>.</p>
   </section>
 
   <section>
