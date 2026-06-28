@@ -81,3 +81,18 @@ Run it all: `npm run build && npm test && npm run judge && npm run evidence`.
   generous latency budget, observed not guaranteed under arbitrary load.
 - **JUDGE is advisory on look-and-feel.** Scored by rubric and spot-checked; it gates
   presentation but never a billable number.
+
+## Recently added requirement clauses
+
+Intent-level clauses added to the PRD whose precise contracts live here (two-tier:
+the requirement states the intent; the pin is the criterion below).
+
+| PRD | Clause | Method | Status |
+|-----|--------|--------|--------|
+| §04 | Renderer reaches data only through the core (no direct DB / filesystem / network) | **GOLD** (static renderer guard) | **gap** — the renderer wiring is tested; the isolation posture itself is not yet asserted (#35) |
+| §05 | Favorite names unique (case-insensitive); unknown-favorite ops fail safely | **GOLD** · BDD | covered — `core/test/gold/contracts.test.ts` (favorite duplicate-name / unknown-ref rejection), `features/favorites.feature` |
+| §07 | Reference-data names unique (case-insensitive); lists exclude archived by default | **GOLD** · BDD | covered — duplicate-name rejection in `core/test/gold/contracts.test.ts`; archive-default in `features/overlap_and_editing.feature` |
+| §14 | Settings validate against allowed values; retention 0 = keep all (negative ⇒ 0) | **GOLD** · PROP | validation covered (`core/test/gold/contracts.test.ts`, `settings.ts` descriptors); **retention-0 semantics gap** (#35) |
+| §20 R08 | Additive, idempotent migrations; no down-migration; existing rows preserved | **GOLD** | version-stamp covered (`SCHEMA_VERSION === 3`, fresh-DB `user_version`); **idempotence / old-DB-preservation gap** (#35) |
+
+The three gaps above are real requirements that currently lack a verifying test; they are tracked in issue #35 rather than left implied here.
