@@ -4,7 +4,7 @@ description: >-
   Drive a controlled requirements change for Stint. Use whenever the user wants
   to change, add, modify, or remove product requirements — new features, dropped
   features, schema/data-model changes, CLI/GUI behavior, packaging, anything that
-  alters prd.html / concept.html / glossary.html / acceptance.html. The user
+  alters context/prd.html / context/concept.html / context/glossary.html / context/acceptance.html. The user
   LISTS the changes they want; this skill grills the design, then authors the
   full transition artifact set (renamed *-old.html docs, new docs, a
   requirements-transition.md work-list, mockups, and the transition workflow) and
@@ -39,8 +39,8 @@ Read first for house style and the target shape:
 
 1. Capture the user's raw list of requested changes verbatim. Do not start
    editing anything.
-2. Skim the current docs that the changes touch (`prd.html`, `concept.html`,
-   `glossary.html`, `acceptance.html`) and the mockups in `mockups/` so your
+2. Skim the current docs that the changes touch (`context/prd.html`, `context/concept.html`,
+   `context/glossary.html`, `context/acceptance.html`) and the mockups in `mockups/` so your
    questions are grounded in what exists. **Consult the codebase directly for
    anything code can answer** (current schema, current CLI surface, current GUI
    views) instead of asking the user.
@@ -99,21 +99,21 @@ workflow; do not touch `packages/`.
 ### 2a. Rename affected legacy docs
 
 For every requirement doc the change touches, rename it to `*-old.html` (e.g.
-`prd.html` → `prd-old.html`). The old and new docs **coexist** until the
+`context/prd.html` → `context/prd-old.html`). The old and new docs **coexist** until the
 workflow's swap stage. Only rename docs that actually change.
 
 ### 2b. Author the new docs
 
-Author the new `prd.html` / `concept.html` / `glossary.html` / `acceptance.html`
+Author the new `context/prd.html` / `context/concept.html` / `context/glossary.html` / `context/acceptance.html`
 in the legacy house style, reflecting every signed-off decision:
 
-- `prd.html` — full requirements including new sections and the `core` badges
+- `context/prd.html` — full requirements including new sections and the `core` badges
   (Step 3). Renumber within each section as needed; the transition doc's
   **Change** column stays authoritative for intent.
-- `concept.html` — the why, updated for dropped/added framing.
-- `glossary.html` — canonical terms for any new concept (one term per concept,
+- `context/concept.html` — the why, updated for dropped/added framing.
+- `context/glossary.html` — canonical terms for any new concept (one term per concept,
   list rejected synonyms).
-- `acceptance.html` — the AC strategy and PRD-to-method coverage map, updated for
+- `context/acceptance.html` — the AC strategy and PRD-to-method coverage map, updated for
   the new/changed requirements.
 
 ### 2c. Author `requirements-transition.md` (the work-list)
@@ -172,7 +172,7 @@ Apply the **core-requirement definition** and badge accordingly.
 Apply it like this:
 
 1. **Relabel existing requirements** that meet the definition with a `core`
-   badge in the new `prd.html` (badge only, no behavior change) and list them in
+   badge in the new `context/prd.html` (badge only, no behavior change) and list them in
    §C of the work-list.
 2. **Add `core` badges** to new requirements that meet the definition.
 3. **Fill integrity/loss gaps.** Where the change opens a data-integrity or
@@ -247,8 +247,8 @@ pending work. It must encode these stages in order:
 
 ### Swap / cleanup list (the workflow's final stage, gated on all-green)
 
-- Delete the `*-old.html` files (`prd-old.html`, `concept-old.html`,
-  `glossary-old.html`, `acceptance-old.html` — whichever were created).
+- Delete the `*-old.html` files (`context/prd-old.html`, `context/concept-old.html`,
+  `context/glossary-old.html`, `context/acceptance-old.html` — whichever were created).
 - Delete any GUI files folded into another view (e.g. a retired standalone page
   + its script), per the work-list's DELETED rows.
 - Delete superseded prior-art workflows referenced in the work-list.

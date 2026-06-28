@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Process &amp; Verification Requirements</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  h3 .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:middle}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  ol.req{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:r}
+  ol.req li{position:relative;padding-left:34px;margin-bottom:11px;counter-increment:r;color:var(--ink-soft)}
+  ol.req li::before{content:"R" counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  pre{background:#fbfbfa;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-soft);padding:16px 18px;margin:16px 0;overflow-x:auto;white-space:pre}
+  pre .k{color:var(--ink);font-weight:600}
+  pre .c{color:var(--faint)}
+  pre .g{color:var(--ok);font-weight:600}
+  /* method code pill */
+  .mc{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;color:var(--ink);white-space:nowrap;background:#fbfbfa}
+  td .mc{margin-right:4px}
+  /* core badge */
+  .core{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border:1px solid var(--ink);border-radius:3px;padding:1px 4px;color:var(--paper);background:var(--ink);white-space:nowrap}
+  td .core{margin-left:4px}
+  /* not-AC marker for the screen-recording band */
+  .band{border:1px dashed var(--rule-strong);border-radius:6px;background:#fbfbfa;padding:20px 24px;margin:18px 0}
+  .band .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:8px}
+  /* scorecard bar */
+  .bar{display:flex;height:9px;border-radius:3px;overflow:hidden;border:1px solid var(--rule-strong);background:#fbfbfa;margin:3px 0 1px}
+  .bar i{display:block;height:100%}
+  .bar .auto{background:var(--ink)}
+  .bar .semi{background:var(--muted)}
+  .bar .man{background:var(--faint)}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:11px;color:var(--muted);margin:8px 0 0}
+  .legend span{display:flex;align-items:center;gap:6px}
+  .legend i{width:11px;height:11px;border-radius:2px;display:inline-block}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+    td.m{white-space:normal}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">how it's built · tt v1</div>
+    </div>
+    <div class="mast-meta">Process &amp; Verification Requirements · v1 (seed) · properties the apparatus must satisfy</div>
+  </header>
+
+  <p class="lede">The application requirements in <a href="prd.html">prd.html</a> say what Stint does for its user. This says what the <em>process that proves Stint</em> must do — the properties the build, CI, and acceptance apparatus must satisfy. These are <strong>SDLC requirements</strong>, a different kind of claim from the application requirements, and until now they had no home.</p>
+
+  <p>Read with <a href="acceptance.html">acceptance.html</a> (the AC strategy — which notation proves each requirement) and <a href="prd.html">prd.html</a> (the what). Where acceptance.html routes a requirement to a verification method, this governs how the apparatus running those methods must <em>behave</em>. This is a <strong>seed</strong>: a first capture of principles that were institutional knowledge scattered across test comments, CI YAML, and the <code>.claude/</code> machinery. Completing it — a full process glossary, the automatic-vs-manual inventory, release/branch governance, and the requirements-change process itself — is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue #19</a>.</p>
+
+  <div class="note"><span class="lbl">These are requirements on the apparatus, not the application</span>Nothing here changes what Stint does for a user. Each principle constrains how we <em>prove and protect</em> the software; a violation is a process bug — a false guarantee, a blind spot in the gate, a guard that can rot unseen — not a product bug. They are orthogonal to the five AC methods: a GOLD test can be perfectly correct and still violate one of these (run too late, or be unprotected).</div>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>Application vs process requirements</a></li>
+      <li><a href="#s2"><span class="tn">02</span>The principles</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Relation to the five AC methods</a></li>
+      <li><a href="#s4"><span class="tn">04</span>What's specified — and what isn't yet</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Where the project's requirements &amp; context live</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> Why a separate doc</div>
+    <h2>Application requirements and process requirements are different kinds of claim</h2>
+    <p>The four canonical docs — <a href="concept.html">concept.html</a>, <a href="prd.html">prd.html</a>, <a href="glossary.html">glossary.html</a>, <a href="acceptance.html">acceptance.html</a> — are all about the <em>application</em>: the why, the what, the words, and how we'll know it's true. None of them is a home for requirements on the <em>engineering process itself</em>. So principles like "every packaging guard self-heals" had nowhere to live and ended up as comments in test files and workflow YAML. This doc is that home.</p>
+    <table>
+      <thead><tr><th>Application requirement</th><th>Process / SDLC requirement</th></tr></thead>
+      <tbody>
+        <tr><td data-l="application">What the product does for its user. Lives in <code>prd.html</code> (§/R), proven per <code>acceptance.html</code>.</td><td data-l="process">How we build, verify, and release it. Lives here. A property the apparatus must hold.</td></tr>
+        <tr><td data-l="application">"At most one timer is open at a time" (§04).</td><td data-l="process">"A check that gates release runs on the PR, not only post-merge."</td></tr>
+        <tr><td data-l="application">"<code>tt status --json</code> matches its schema" (§11).</td><td data-l="process">"Every manual check earns a cheap automated mirror."</td></tr>
+        <tr><td data-l="application">A bug here is wrong behavior the user can see.</td><td data-l="process">A bug here is a false green — the gate said yes when it shouldn't have.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> The principles</div>
+    <h2>The verification apparatus is itself a system with requirements</h2>
+    <p>Each principle below is stated, given its reason, and tied to the concrete episode that surfaced it (mostly the release-packaging break: the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while build/test CI stayed green, because nothing on the PR path exercised packaging). Together they cover the apparatus's own properties: coverage, timing, completeness of mirror, resilience, self-protection, and honesty.</p>
+    <ol class="req">
+      <li><strong>Green must be meaningful.</strong> A passing check must actually cover what its presence implies; a blind spot in the gate is a false guarantee, worse than no check because it reassures. <em>Seen in:</em> packaging was broken for weeks while CI was green — the signal silently excluded packaging.</li>
+      <li><strong>Verify before the gate, not after it.</strong> A check that runs only <em>after</em> the merge it is meant to protect cannot prevent a regression; it only discovers it later. Every concern that gates release earns a check on the path that gates it — the PR. <em>Seen in:</em> the real pack ran only post-merge (<code>release.yml</code>), so the break landed on <code>main</code> repeatedly unseen; the fix added a PR-time <code>pack-smoke</code> job.</li>
+      <li><strong>Every manual check earns an automated mirror (a "safety valve").</strong> A human-run runbook step should have a cheap automated guard over its invariant, so a regression fails CI rather than waiting for the next manual pass. The mirror need not be the full check — a static config assertion or a fast smoke is enough to catch the common regression. <em>Seen in:</em> <code>build-matrix.test.ts</code> mirrors the "no Windows" runbook invariant; <code>verify:packaging</code> + <code>pack-smoke</code> mirror "the artifacts really build."</li>
+      <li><strong>Guards self-heal where the failure is known and recoverable; otherwise they fail loud and early.</strong> A guard facing a known-recoverable fault (a poisoned cache) should recover it; one that cannot should fail at the boundary with a specific, actionable message — not a cryptic failure deep inside a downstream tool. <em>Seen in:</em> the packaging guard reinstalls when the native helper is missing, and otherwise reports exactly which binary is absent instead of electron-builder's bare <code>ENOENT</code>.</li>
+      <li><strong>Protect the guard (meta-verification).</strong> A guard is code: it can be deleted, disabled, or quietly rot. Assert that it stays wired, so removing the guard is itself a caught regression. <em>Seen in:</em> <code>build-matrix.test.ts</code> asserts the <code>pack-smoke</code> job and the <code>verify:packaging</code> guard remain present in CI.</li>
+      <li><strong>Fix robustly under diagnostic uncertainty, and record the residue.</strong> When a failure's exact mechanism can't be reproduced, prefer a fix robust to the <em>cause</em> over one that bets on a single mechanism — and write down what stays uncertain rather than implying certainty. <em>Seen in:</em> the packaging fix dropped the suspect cache and added self-heal without claiming to have proven the npm mechanism, and the PR recorded the residual uncertainty. This is the build-system echo of acceptance.html's "honest residue / residual risk we accept."</li>
+    </ol>
+    <div class="note"><span class="lbl">The thread</span>Coverage (1), timing (2), completeness of the manual→automated mirror (3), resilience (4), self-protection (5), and honesty (6) are the same demand applied to the apparatus that we already apply to the product: that a guarantee mean what it says.</div>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Relation to the AC methods</div>
+    <h2>The methods prove the product; these principles govern the apparatus</h2>
+    <p>acceptance.html defines five methods — <span class="mc">BDD</span> · <span class="mc">PROP</span> · <span class="mc">GOLD</span> · <span class="mc">JUDGE</span> · <span class="mc">MANUAL</span> — and a decision rule routing each application requirement to the method that fits. That rule answers <em>which notation proves this requirement</em>. The principles here answer a different question: <em>once a guard exists, how must it behave</em> — when it runs (2), whether its green is meaningful (1), whether a manual check has an automated twin (3), how it fails or heals (4), whether it is itself protected (5), and how honestly its limits are recorded (6). The two compose: route a requirement to a method via acceptance.html §03, then make the resulting guard satisfy this doc.</p>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Honest residue</div>
+    <h2>This is a seed, not the complete SDLC spec</h2>
+    <p>This first capture is deliberately narrow — the verification principles above and the map below. The rest of the project's SDLC is still a combination of institutional knowledge, scattered comments, and GitHub systems. Consolidating it is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue #19</a>; explicitly <strong>not yet specified here</strong>, and pending that pass:</p>
+    <ul class="d">
+      <li>A full <strong>process glossary</strong> — the SDLC twin of glossary.html (gate, guard, safety valve, backstop, evidence, surface, parity, runbook, smoke, self-heal…), one canonical term per concept.</li>
+      <li>The <strong>automatic-vs-manual inventory</strong> — exactly what CI enforces vs what a human must run, and where the boundary sits.</li>
+      <li><strong>Branch / PR / release governance</strong> — naming, ready-not-draft PRs, publish-on-merge (§19 R05), versioning (§19 R06), the merge gate.</li>
+      <li>The <strong>requirements-change process itself</strong> — the <code>change-requirements</code> skill + <code>requirements-transition</code> workflow and the old→new swap (§Z), and how <em>this</em> doc is changed vs prd.html.</li>
+      <li>The meta-decision of <strong>what must be specified vs what can stay convention</strong>, recorded so the apparatus is neither under- nor over-specified.</li>
+    </ul>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> The map</div>
+    <h2>Where the project's requirements &amp; context live</h2>
+    <p>Until issue #19 produces the full index, this is the current map of every doc and system that specifies the project. <code>CLAUDE.md</code>'s Files table is the human front door pointing here.</p>
+    <table>
+      <thead><tr><th>Location</th><th>What it specifies</th></tr></thead>
+      <tbody>
+        <tr><td data-l="location" class="m">context/concept.html</td><td data-l="specifies">The why — product concept and non-goals.</td></tr>
+        <tr><td data-l="location" class="m">context/prd.html</td><td data-l="specifies">The what — application requirements (§/R), the durability/packaging story.</td></tr>
+        <tr><td data-l="location" class="m">context/glossary.html</td><td data-l="specifies">The words — application domain language (one term per concept).</td></tr>
+        <tr><td data-l="location" class="m">context/acceptance.html</td><td data-l="specifies">How we'll know — the five AC methods and the PRD→method routing.</td></tr>
+        <tr><td data-l="location" class="m">context/process.html</td><td data-l="specifies">How it's built &amp; verified — SDLC/process requirements (this doc).</td></tr>
+        <tr><td data-l="location" class="m">acceptance/COVERAGE.md</td><td data-l="specifies">The PRD→proof index — every §/R mapped to the tests that prove it.</td></tr>
+        <tr><td data-l="location" class="m">acceptance/{parity-matrix.json, manual/runbook.md, schemas/, judge-rubric.md}</td><td data-l="specifies">The AC artifacts — parity set, MANUAL runbooks, JSON schemas, JUDGE rubric.</td></tr>
+        <tr><td data-l="location" class="m">features/</td><td data-l="specifies">Gherkin specs run against both surfaces (parity).</td></tr>
+        <tr><td data-l="location" class="m">.claude/skills/, .claude/workflows/</td><td data-l="specifies">The requirements-change machinery that governs how the docs above change.</td></tr>
+        <tr><td data-l="location" class="m">.github/workflows/{ci,release}.yml, scripts/</td><td data-l="specifies">The enforcement apparatus these principles constrain.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="foot">
+    <span>stint · process &amp; verification requirements</span>
+    <span>v1 · seed · see issue #19</span>
+  </div>
+
+</main>
+</body>
+</html>
