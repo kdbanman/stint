@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Time-range picker (mockup)</title>
+<title>Stint — Design system (Calm · Warm Paper)</title>
 <style>
   :root{
     --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
@@ -88,50 +88,34 @@
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
-  body{display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:48px 16px}
-  
-  .popover{width:680px;max-width:100%;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden;border:1px solid #DDD4C3}
-  .head{padding:16px 22px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;justify-content:space-between;gap:14px}
-  .head h2{font-size:15px;margin:0;font-weight:640}
-  .head .hint{font-size:11.5px;color:var(--muted)}
-  .textfields{display:flex;gap:16px;padding:16px 22px;border-bottom:1px solid var(--line);background:var(--sunken)}
-  .tf{flex:1}
-  .tf .inwrap{position:relative}
-  .tf .field{padding-right:32px}
-  .tf .field.foc{border-color:var(--accent);box-shadow:var(--ring)}
-  .tf .cal{position:absolute;right:9px;top:9px;color:var(--muted)}.tf .cal .ic{width:16px;height:16px}
-  .pbody{display:grid;grid-template-columns:248px 1fr}
-  .cal-pane{border-right:1px solid var(--line);padding:18px}
-  .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .cal-hd .m{font-size:13px;font-weight:640}
-  .cal-hd .nav2{display:flex;gap:6px}
-  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
-  .cal-hd .nav2 .ic{width:14px;height:14px}
-  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-  .grid .dow{font-size:10px;color:var(--faint);text-align:center;padding:3px 0;text-transform:uppercase}
-  .grid .d{text-align:center;padding:7px 0;font-size:12.5px;border-radius:7px;cursor:pointer;color:var(--ink)}
-  .grid .d.mut{color:var(--faint)}
-  .grid .d:hover{background:var(--sunken)}
-  .grid .d.sel{background:var(--accent);color:#fff;font-weight:640}
-  .cal-foot{margin-top:14px;font-size:11.5px;color:var(--muted);line-height:1.5}
-  .day-pane{padding:16px 20px 16px 8px}
-  .day-lbl{font-size:12px;color:var(--muted);margin:0 0 10px 52px}
-  .track{position:relative;height:340px;border-left:1px solid var(--line);margin-left:52px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 41px,var(--line) 41px,var(--line) 42px)}
-  .hour{position:absolute;left:-52px;width:46px;text-align:right;font-size:10.5px;color:var(--faint);transform:translateY(-6px)}
-  .block{position:absolute;left:8px;right:16px;border-radius:7px}
-  .block.other{background:var(--sunken);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:5px 9px;overflow:hidden}
-  .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
-  .block.me .lab-top,.block.me .lab-bot{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 7px;border-radius:6px;z-index:6;box-shadow:0 1px 2px rgba(74,52,24,.12)}
-  .block.me .lab-top{top:-11px}.block.me .lab-bot{bottom:-11px}
-  .block.me .resize{position:absolute;left:0;right:0;bottom:-2px;height:14px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;color:var(--accent);z-index:6}
-  .block.me .resize .ic{width:18px;height:18px;transform:rotate(90deg)}
-  .overlap{position:absolute;left:8px;right:16px;background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 7px,#f1e3bc 7px,#f1e3bc 14px);border:1px solid var(--warn-line);border-radius:6px;z-index:4;pointer-events:none}
-  .overlap .otag{position:absolute;right:7px;top:3px;font-size:10px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:5px;padding:0 6px}
-  .phint{font-size:11.5px;color:var(--muted);margin:14px 0 0 52px;display:flex;align-items:center;gap:9px}
-  .phint .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
-  .foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
-  .foot .overnight{font-size:11.5px;color:var(--muted)}
-  .foot .right{display:flex;gap:10px}
+  body{padding:0}
+  .doc{max-width:1040px;margin:0 auto 64px;padding:0 8px}
+  h1{font-size:24px;font-weight:680;margin:34px 0 2px;letter-spacing:-.01em}
+  .lead{color:var(--muted);font-size:14px;margin:6px 0 24px;max-width:740px}
+  h2{font-size:15px;font-weight:640;margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);padding:18px 20px;box-shadow:var(--sh-card)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.two{grid-template-columns:1fr}}
+  .rule{font-size:12.5px;color:var(--muted);margin:0}
+  .rule + .rule{margin-top:12px}
+  .rule b{color:var(--ink);font-weight:590}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .sw-c{border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;font-size:11.5px;background:var(--paper)}
+  .sw-c .chip{height:56px}
+  .sw-c .cap2{padding:8px 10px}
+  .sw-c .cap2 b{display:block;color:var(--ink);font-weight:590;font-size:12px}
+  .sw-c .cap2 span{color:var(--faint);font-family:var(--num)}
+  .type-row{display:flex;align-items:baseline;gap:18px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .type-row:last-child{border-bottom:0}
+  .type-row .role{width:160px;flex:none;color:var(--muted);font-size:12px}
+  .type-row .spec{margin-left:auto;color:var(--faint);font-family:var(--num);font-size:11.5px}
+  .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px}
+  .icons .i{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:var(--r1);color:var(--ink)}
+  .icons .i:hover{background:var(--hover)}
+  .icons .i .ic{width:20px;height:20px}
+  .icons .i span{font-size:10.5px;color:var(--faint);font-family:var(--num)}
+  .demos{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .prov{margin-top:14px}
 </style>
 </head>
 <body>
@@ -191,45 +175,83 @@
 <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
 <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
 </defs></svg>
-<div>
+<div class="doc">
+  <h1>Stint “Calm” · Warm Paper</h1>
+  <p class="lead">One shared language for every surface — sidebar, Timer, Entries, Reports, Settings, the entry editor and the time-range picker. Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — on a warm ivory canvas with a single clay accent.</p>
 
-  <div class="popover">
-    <div class="head"><h2>Pick start &amp; stop</h2><span class="hint">Text stays authoritative — the canvas just writes these fields.</span></div>
-    <div class="textfields">
-      <div class="tf"><label class="lab">Start</label><div class="inwrap"><input class="field tnum foc" value="2026-06-27 13:00"><span class="cal"><svg class="ic"><use href="#i-cal"/></svg></span></div></div>
-      <div class="tf"><label class="lab">Stop</label><div class="inwrap"><input class="field tnum" value="2026-06-27 15:30"><span class="cal"><svg class="ic"><use href="#i-cal"/></svg></span></div></div>
+  <h2>Principles</h2>
+  <div class="two">
+    <div class="panel">
+      <p class="rule"><b>One rationed accent.</b> The canvas is a warm monochrome. The clay accent (#C8623E) appears only on the single primary action per view, the active nav item, and focus rings — never decoratively.</p>
+      <p class="rule"><b>Soft, layered depth.</b> Content cards rest with a gentle shadow; modals and popovers float higher. No nested cards, no decorative tinted or dashed boxes.</p>
+      <p class="rule"><b>Quiet by default.</b> No baked-in spec annotations, no in-app note-strips, no PRD §-refs. Helper text earns its place or moves into an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance.</p>
     </div>
-    <div class="pbody">
-      <div class="cal-pane">
-        <div class="cal-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-        <div class="grid">
-          <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-          <span class="d mut">1</span><span class="d mut">2</span><span class="d mut">3</span><span class="d mut">4</span><span class="d mut">5</span><span class="d mut">6</span><span class="d mut">7</span><span class="d ">8</span><span class="d ">9</span><span class="d ">10</span><span class="d ">11</span><span class="d ">12</span><span class="d ">13</span><span class="d ">14</span><span class="d ">15</span><span class="d ">16</span><span class="d ">17</span><span class="d ">18</span><span class="d ">19</span><span class="d ">20</span><span class="d ">21</span><span class="d ">22</span><span class="d ">23</span><span class="d ">24</span><span class="d ">25</span><span class="d ">26</span><span class="d sel">27</span><span class="d ">28</span><span class="d ">29</span><span class="d ">30</span><span class="d mut">1</span><span class="d mut">2</span><span class="d mut">3</span><span class="d mut">4</span><span class="d mut">5</span>
-        </div>
-        <div class="cal-foot">Pick a day, then drag the block to set start &amp; stop.</div>
-      </div>
-      <div class="day-pane">
-        <div class="day-lbl">Saturday, June 27</div>
-        <div class="track">
-          <span class="hour tnum" style="top:0px">12:00</span><span class="hour tnum" style="top:42px">13:00</span><span class="hour tnum" style="top:84px">14:00</span><span class="hour tnum" style="top:126px">15:00</span><span class="hour tnum" style="top:168px">16:00</span><span class="hour tnum" style="top:210px">17:00</span><span class="hour tnum" style="top:252px">18:00</span><span class="hour tnum" style="top:294px">19:00</span>
-          <div class="block other" style="top:8px;height:30px">10–12 · standup &amp; review</div>
-          <div class="block other" style="top:126px;height:46px">Market research · 15:00–16:00</div>
-          <div class="block me" style="top:42px;height:105px">
-            <span class="lab-top tnum">13:00</span>
-            <span class="resize" title="Drag to resize"><svg class="ic"><use href="#i-grip"/></svg></span>
-            <span class="lab-bot tnum">15:30</span>
-          </div>
-          <div class="overlap" style="top:126px;height:21px"><span class="otag">overlap 30m</span></div>
-        </div>
-        <div class="phint"><span class="snap">5-min snap</span> Drag the block to move · drag its bottom edge to set the stop.</div>
-      </div>
-    </div>
-    <div class="foot">
-      <span class="overnight">Overnight spans (stop next day) — type the dates directly.</span>
-      <span class="right"><button class="btn">Cancel</button><button class="btn primary">Apply range</button></span>
+    <div class="panel">
+      <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
+      <p class="rule"><b>4px grid, generous air.</b> Every pad, gap, and height is a multiple of 4, with roomy margins. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
+      <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
     </div>
   </div>
-<div class="prov" style="margin-top:18px">Calm-system prototype · design intent for PRD §12 R15 (visual time-range picker) + §06 R04 (overlap warn-only) · text entry stays authoritative everywhere · where this and the PRD disagree, the PRD wins</div>
+
+  <h2>Colour tokens</h2>
+  <div class="swatches">
+    <div class="sw-c"><div class="chip" style="background:#FFFDFA"></div><div class="cap2"><b>paper</b><span>#FFFDFA</span></div></div><div class="sw-c"><div class="chip" style="background:#EDE6DA"></div><div class="cap2"><b>canvas</b><span>#EDE6DA</span></div></div><div class="sw-c"><div class="chip" style="background:#F7F2EA"></div><div class="cap2"><b>sidebar</b><span>#F7F2EA</span></div></div><div class="sw-c"><div class="chip" style="background:#F0E8DB"></div><div class="cap2"><b>hover</b><span>#F0E8DB</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#23201B"></div><div class="cap2"><b>ink</b><span>#23201B</span></div></div><div class="sw-c"><div class="chip" style="background:#6F685C"></div><div class="cap2"><b>muted</b><span>#6F685C</span></div></div><div class="sw-c"><div class="chip" style="background:#C8623E"></div><div class="cap2"><b>accent</b><span>#C8623E</span></div></div><div class="sw-c"><div class="chip" style="background:#F7ECE3"></div><div class="cap2"><b>accent-weak</b><span>#F7ECE3</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#5E8C5A"></div><div class="cap2"><b>running</b><span>#5E8C5A</span></div></div><div class="sw-c"><div class="chip" style="background:#F8EFD8"></div><div class="cap2"><b>warn</b><span>#F8EFD8</span></div></div><div class="sw-c"><div class="chip" style="background:#B23B2B"></div><div class="cap2"><b>danger</b><span>#B23B2B</span></div></div><div class="sw-c"><div class="chip" style="background:#DDD4C3"></div><div class="cap2"><b>line</b><span>#DDD4C3</span></div></div>
+  </div>
+
+  <h2>Type ramp</h2>
+  <div class="panel" style="padding:6px 20px">
+    <div class="type-row"><span class="role">Display / clock</span><span class="tnum" style="font-size:28px;font-weight:680">01:23:45</span><span class="spec">28–46px · 680 · tnum</span></div>
+    <div class="type-row"><span class="role">Title</span><span style="font-size:18px;font-weight:640">View &amp; panel titles</span><span class="spec">17–18px · 640</span></div>
+    <div class="type-row"><span class="role">Body strong</span><span style="font-size:13px;font-weight:590">Labels &amp; list primary</span><span class="spec">13px · 590</span></div>
+    <div class="type-row"><span class="role">Body</span><span style="font-size:13px">Default interface text</span><span class="spec">13px · 450</span></div>
+    <div class="type-row"><span class="role">Caption</span><span style="font-size:12px;color:var(--muted)">Secondary &amp; meta</span><span class="spec">12px · muted</span></div>
+  </div>
+
+  <h2>Icons — one line family</h2>
+  <div class="panel">
+    <div class="icons">
+      <div class="i"><svg class="ic"><use href="#i-clock"/></svg><span>clock</span></div><div class="i"><svg class="ic"><use href="#i-list"/></svg><span>list</span></div><div class="i"><svg class="ic"><use href="#i-users"/></svg><span>clients</span></div><div class="i"><svg class="ic"><use href="#i-chart"/></svg><span>reports</span></div><div class="i"><svg class="ic"><use href="#i-settings"/></svg><span>settings</span></div><div class="i"><svg class="ic"><use href="#i-search"/></svg><span>search</span></div><div class="i"><svg class="ic"><use href="#i-play"/></svg><span>play</span></div><div class="i"><svg class="ic"><use href="#i-stop"/></svg><span>stop</span></div><div class="i"><svg class="ic"><use href="#i-swap"/></svg><span>switch</span></div><div class="i"><svg class="ic"><use href="#i-plus"/></svg><span>add</span></div><div class="i"><svg class="ic"><use href="#i-star"/></svg><span>favorite</span></div><div class="i"><svg class="ic"><use href="#i-cal"/></svg><span>calendar</span></div><div class="i"><svg class="ic"><use href="#i-flag"/></svg><span>flag</span></div><div class="i"><svg class="ic"><use href="#i-moon"/></svg><span>sleep</span></div><div class="i"><svg class="ic"><use href="#i-edit"/></svg><span>edit</span></div><div class="i"><svg class="ic"><use href="#i-dots"/></svg><span>more</span></div><div class="i"><svg class="ic"><use href="#i-download"/></svg><span>update</span></div><div class="i"><svg class="ic"><use href="#i-restore"/></svg><span>restore</span></div><div class="i"><svg class="ic"><use href="#i-info"/></svg><span>info</span></div><div class="i"><svg class="ic"><use href="#i-check"/></svg><span>check</span></div>
+    </div>
+    <p class="rule" style="margin-top:12px">Replaces every emoji in the old mockups (📌 🌙 ⚑ ▦ ⬇ ▲▼ ⋮⋮). 1.6px stroke, <span class="tnum">currentColor</span>, so icons inherit text colour and only turn accent when their item is active.</p>
+  </div>
+
+  <h2>Controls</h2>
+  <div class="two">
+    <div class="panel">
+      <div class="demos">
+        <button class="btn primary"><svg class="ic"><use href="#i-play"/></svg> Primary</button>
+        <button class="btn">Secondary</button>
+        <button class="btn ghost"><svg class="ic"><use href="#i-dots"/></svg> Ghost</button>
+        <button class="btn danger">Danger</button>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Buttons.</b> Exactly one filled primary per view. Everything else is secondary, ghost, or danger — so the eye always lands on one action.</p>
+    </div>
+    <div class="panel">
+      <div class="demos">
+        <span class="seg"><button class="on">Day</button><button>Client</button><button>Project</button><button>Tag</button></span>
+        <span class="toggle"><span class="sw on"><i></i></span> Toggle</span>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Selection ≠ accent.</b> A chosen segment is a raised chip (surface lift), not a colour. Accent stays a signal, not a highlighter.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel">
+      <div class="demos" style="gap:8px">
+        <span class="tag">research</span><span class="tag">admin</span>
+        <span class="pill run"><span class="dot run"></span> running</span>
+        <span class="pill warn">overlap 15m</span>
+        <span class="pill accent">update ready</span>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Tags &amp; status pills</b> are the only pill-shaped elements. Status colour is semantic (run / warn / accent), never decorative.</p>
+    </div>
+    <div class="panel">
+      <div style="max-width:280px"><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
+      <p class="rule" style="margin-top:14px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
+    </div>
+  </div>
 </div>
+<div class="prov">Stint “Calm · Warm Paper” design system · shared by every mockup in this folder · design intent for issue&nbsp;#29 — where this and the PRD disagree, the PRD wins</div>
 </body>
 </html>

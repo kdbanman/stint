@@ -3,219 +3,227 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Entries (mockup)</title>
-<!--
-  Slightly-noisy UI prototype for the Stint main window — Entries view.
-  Standalone, dependency-free; design intent for PRD §12 (R03–R09, R13).
-  Reflects the transition: sidebar present in every view & fixed width on
-  resize (§12 R03/G7); one clickability convention (§15/G10 — clickable text
-  carries the neutral button background, accent reserved for the single primary
-  action); the "This week" summary opens the in-sidebar Reports view (§12 R08/G7);
-  tray single-click = compact popover, no dropdown menu (§12 R01/G8).
-  This shows MORE than ships today and uses illustrative sample data.
-  Where this and the PRD disagree, the PRD wins. Keep this in sync with §12.
--->
+<title>Stint — Entries</title>
 <style>
   :root{
-    --paper:#ffffff;--wash:#f4f4f6;--ink:#15151a;--ink-soft:#3c3c43;
-    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d8d8d4;
-    --nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
-    --ok:#2c9b5a;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;--warn-ink:#7a5a00;
-    --sleep-bg:#eef0f4;--sleep-bd:#d8dbe3;--flag:#2f6df0;
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
-    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
-  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
-  /* title bar */
-  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:14px}
-  .lights i{width:12px;height:12px;border-radius:50%;display:block}
-  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
-  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600;pointer-events:none}
-  /* shell */
-  .shell{display:flex;min-height:560px}
-  /* sidebar present in every view; flex:none keeps it a FIXED width on resize (§12 R03/G7) */
-  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
-  .nav .wk{margin-top:14px;padding:10px;border-top:1px solid var(--rule)}
-  .nav .wk .wlbl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);margin-bottom:6px}
-  /* clickable text → neutral button background (§15/G10) */
-  .nav .wk a{display:block;background:var(--wash);border:1px solid var(--rule);border-radius:7px;padding:7px 9px;font-size:12.5px;color:var(--ink-soft);text-decoration:none}
-  .nav .wk a:hover{background:#ededf0}
-  .nav .wk a b{display:block;color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums;margin-top:2px}
-  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;font-size:14px;margin-bottom:2px}
-  .nav a .ic{width:18px;text-align:center;opacity:.7}
-  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}
-  .nav a.active .ic{opacity:1}
-  .nav a:hover:not(.active){background:#eeeef1}
-  .main{flex:1;padding:18px 22px 0;overflow:hidden;position:relative}
-  /* active timer card */
-  .timer-card{border:1px solid var(--rule);border-radius:10px;padding:16px 18px;display:flex;gap:26px;align-items:center;margin-bottom:18px;background:#fff}
-  .timer-card .lbl{font-size:12px;color:var(--muted);margin-bottom:4px}
-  .clock{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-size:40px;font-weight:680;letter-spacing:-.01em;line-height:1}
-  .runrow{display:flex;align-items:center;gap:9px;margin-top:8px}
-  .dot{width:9px;height:9px;border-radius:2px;display:inline-block}
-  .dot.run{background:var(--ok)}
-  .runrow .state{font-size:13px;color:var(--ink-soft)}
-  .ctx{flex:1}
-  .ctx .desc{font-size:15px;font-weight:600;margin-bottom:5px}
-  .ctx .meta{font-size:13px;color:var(--muted)}
-  .ctx .meta b{color:var(--ink-soft);font-weight:600}
-  .chips{margin-top:8px;display:flex;gap:6px;flex-wrap:wrap}
-  .chip{font-size:11px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:1px 9px}
-  .btns{display:flex;gap:9px;flex:none}
-  button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 14px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
-  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-  /* toolbar */
-  .toolbar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding-bottom:12px;border-bottom:1px solid var(--rule);margin-bottom:4px}
-  .seg-lbl{font-size:13px;color:var(--muted);margin-right:2px}
-  .seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden}
-  .seg span{padding:5px 11px;font-size:13px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
-  .seg span:last-child{border-right:0}
-  .seg span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
-  .search{margin-left:auto;display:flex;align-items:center;gap:7px;border:1px solid var(--rule-strong);border-radius:7px;padding:5px 10px;color:var(--faint);min-width:190px}
-  .search input{border:0;outline:0;font-family:inherit;font-size:13px;flex:1;color:var(--ink)}
-  /* entries */
-  .scroll{overflow:auto;max-height:300px;margin:0 -22px;padding:6px 22px 70px}
-  .day-h{font-size:15px;font-weight:680;margin:16px 0 6px}
-  .day-h .loc{font-weight:400;color:var(--faint);font-size:12px}
-  .entry{display:grid;grid-template-columns:18px 132px 64px 1fr auto;align-items:center;gap:12px;padding:9px 6px;border-bottom:1px solid var(--rule)}
-  .entry .sdot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
-  .entry .sdot.idle{background:var(--faint)}
-  .entry .sdot.sleep{background:transparent;font-size:13px;line-height:1}
-  .entry .span{font-variant-numeric:tabular-nums;color:var(--ink-soft);font-size:13.5px}
-  .entry .len{font-variant-numeric:tabular-nums;color:var(--muted);font-size:13px}
-  .entry .what{color:var(--ink);display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .entry .where{color:var(--muted)}
-  .tag{font-size:11px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:4px;padding:0 6px}
-  .right{display:flex;align-items:center;gap:10px;justify-self:end}
-  .bill{font-variant-numeric:tabular-nums;font-size:13px;display:flex;gap:6px;align-items:center}
-  .strike{color:var(--faint);text-decoration:line-through}
-  .flagpin{color:var(--flag)}
-  .kebab{color:var(--ink-soft);cursor:pointer;font-size:15px;background:var(--wash);border:1px solid var(--rule);border-radius:6px;padding:1px 7px}
-  .kebab:hover{background:#ededf0}
-  .banner{margin:2px 0 2px 30px;border-radius:6px;padding:4px 12px;font-size:12.5px}
-  .banner.overlap{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn-ink)}
-  .banner.sleep{background:var(--sleep-bg);border:1px solid var(--sleep-bd);color:var(--ink-soft)}
-  /* clickable text affordance carries the neutral button background, NOT accent (§15/G10) */
-  .sublink{display:inline-block;margin:2px 0 4px 168px;font-size:12px;color:var(--ink-soft);background:var(--wash);border:1px solid var(--rule);border-radius:6px;padding:3px 9px;cursor:pointer}
-  .sublink:hover{background:#ededf0}
-  /* FAB */
-  .fab{position:absolute;right:22px;bottom:18px;background:#fff;border:1px solid var(--rule-strong);border-radius:9px;box-shadow:0 4px 14px rgba(0,0,0,.12);padding:10px 15px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px}
-  .fab .plus{color:var(--ink-soft);font-size:16px}
-  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A99F8E;padding:4px 14px}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  .nav .stat a:hover{background:none;text-decoration:underline}
+  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .btn.danger:hover{background:var(--danger-weak)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  /* segmented */
+  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  /* toggle */
+  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  /* fields */
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  textarea.field{resize:vertical;min-height:42px}
+  select.field{width:auto;min-width:150px}
+  /* card / tag / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  .strip{display:flex;align-items:center;gap:20px;padding:16px 20px;margin-bottom:20px}
+  .strip .clock{font-size:30px;font-weight:680;letter-spacing:-.01em;line-height:1}
+  .strip .run-row{display:flex;align-items:center;gap:7px;margin-top:7px;font-size:11.5px;color:var(--run)}
+  .strip .ctx{min-width:0}
+  .strip .ctx .d{font-weight:590;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .strip .ctx .m{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .strip .tags{display:flex;gap:6px}
+  .strip .act{margin-left:auto;display:flex;gap:9px}
+  .toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:4px}
+  .toolbar .gl{font-size:12px;color:var(--muted)}
+  .srch{margin-left:auto;display:flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-radius:var(--r1);padding:0 11px;height:32px;min-width:220px;color:var(--faint);background:var(--paper)}
+  .srch input{border:0;outline:0;font:inherit;font-size:12.5px;flex:1;color:var(--ink);background:none}
+  .srch .ic{width:15px;height:15px}
+  .scroll{margin:10px -28px 0;padding:0 28px 14px}
+  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13.5px;padding:16px 6px 9px;border-bottom:1px solid var(--line)}
+  .day-h .dsum{font-weight:400;color:var(--faint);font-size:12px}
+  .row{display:grid;grid-template-columns:18px 122px 60px 1fr auto;align-items:center;gap:16px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  .row:hover{background:var(--sunken)}
+  .row .st{width:16px;height:16px}.row .st.run{color:var(--run)}.row .st.idle{color:var(--faint)}.row .st.sleep{color:var(--muted)}
+  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
+  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12.5px}
+  .row .what{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
+  .row .what .where{color:var(--muted)}
+  .row .rt{display:flex;align-items:center;gap:12px;justify-self:end}
+  .bill{text-align:right;line-height:1.3}.bill b{font-variant-numeric:tabular-nums;font-weight:590}
+  .bill .was{display:block;font-size:11px;color:var(--faint);text-decoration:line-through}
+  .note{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);padding:2px 6px 9px;margin-left:232px}
+  .note.warn{color:var(--warn-ink)}.note .ic{width:13px;height:13px}
+  .note .act-link{margin-left:6px;color:var(--accent-ink);cursor:pointer}
 </style>
 </head>
 <body>
-  <div class="window">
-    <div class="titlebar">
-      <div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div>
-      <div class="title">Stint — Entries</div>
-    </div>
-    <div class="shell">
-      <nav class="nav">
-        <a href="timer.html"><span class="ic">◷</span> Timer</a>
-        <a href="#" class="active"><span class="ic">▤</span> Entries</a>
-        <a href="#"><span class="ic">◎</span> Clients</a>
-        <a href="reports.html"><span class="ic">▥</span> Reports</a>
-        <a href="settings.html"><span class="ic">⚙</span> Settings</a>
-        <!-- "This week" summary opens the in-sidebar Reports view (§12 R08/G7), not a separate page -->
-        <div class="wk">
-          <div class="wlbl">This week</div>
-          <a href="reports.html" title="Opens the Reports view">21h 35m billable<b>→ open Reports</b></a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+</defs></svg>
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Entries</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="#"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+</nav>
+    <div class="view">
+
+      <div class="strip card">
+        <div>
+          <div class="clock tnum">01:23:45</div>
+          <div class="run-row"><span class="dot run"></span> running · since 09:00</div>
         </div>
-      </nav>
-      <div class="main">
-
-        <!-- Active timer card -->
-        <div class="timer-card">
-          <div>
-            <div class="lbl">Active Timer</div>
-            <div class="clock">01:23:45</div>
-            <div class="runrow"><span class="dot run"></span><span class="state"><b>running</b></span></div>
-          </div>
-          <div class="ctx">
-            <div class="desc">Drafting proposals</div>
-            <div class="meta">Client: <b>Globex Corp</b> &nbsp;&nbsp; Project: <b>Q3 Strategy</b></div>
-            <div class="chips"><span class="chip">admin</span><span class="chip">proposal</span></div>
-          </div>
-          <div class="btns">
-            <button class="primary">Stop Timer</button>
-            <button>Switch</button>
-          </div>
+        <div class="ctx">
+          <div class="d">Drafting proposals</div>
+          <div class="m">Globex Corp · Q3 Strategy</div>
         </div>
-
-        <!-- Toolbar: group-by, range presets, search -->
-        <div class="toolbar">
-          <span class="seg-lbl">Group by</span>
-          <span class="seg"><span class="on">Day</span><span>Client</span><span>Project</span><span>Tag</span></span>
-          <span class="seg-lbl">Preset</span>
-          <span class="seg"><span class="on">Today</span><span>Week</span><span>Last Week</span><span>Custom range</span></span>
-          <span class="search"><span>⌕</span><input placeholder="Search descriptions, clients, tags…"></span>
+        <div class="tags"><span class="tag">admin</span><span class="tag">proposal</span></div>
+        <div class="act">
+          <button class="btn primary"><svg class="ic"><use href="#i-stop"/></svg> Stop</button>
+          <button class="btn"><svg class="ic"><use href="#i-swap"/></svg> Switch</button>
         </div>
+      </div>
 
-        <!-- Entry list -->
-        <div class="scroll">
+      <div class="vhead">
+        <h2 class="vtitle">Entries</h2>
+        <button class="btn"><svg class="ic"><use href="#i-plus"/></svg> Add entry</button>
+      </div>
 
-          <div class="day-h">Tuesday, June 23, 2026 <span class="loc">(formatted by system locale)</span></div>
+      <div class="toolbar">
+        <span class="gl">Group by</span>
+        <span class="seg"><button class="on">Day</button><button>Client</button><button>Project</button><button>Tag</button></span>
+        <span class="seg"><button class="on">Today</button><button>Week</button><button>Last week</button><button>Custom…</button></span>
+        <span class="srch"><svg class="ic"><use href="#i-search"/></svg><input placeholder="Search entries"></span>
+      </div>
 
-          <div class="entry">
-            <span class="sdot"></span>
-            <span class="span">09:00 — 12:15</span>
-            <span class="len">3h 15m</span>
-            <span class="what">Client call: Project Alpha <span class="where">(Globex Corp)</span> <span class="tag">meeting</span><span class="tag">client</span></span>
-            <span class="right"><span class="kebab">⋮</span></span>
-          </div>
-          <div class="banner overlap">Overlap: 15m with previous entry</div>
-          <div class="entry">
-            <span class="sdot idle"></span>
-            <span class="span">13:00 — 15:45</span>
-            <span class="len">2h 45m</span>
-            <span class="what">Researching market trends <span class="tag">research</span></span>
-            <span class="right"><span class="kebab">⋮</span></span>
-          </div>
-
-          <div class="day-h">Monday, June 22, 2026</div>
-
-          <div class="banner sleep">Flag: Slept through. 1 SleepSpan recorded</div>
-          <div class="entry">
-            <span class="sdot sleep">🌙</span>
-            <span class="span">10:30 — 16:15</span>
-            <span class="len">5h 45m</span>
-            <span class="what">Deep work on core algorithm <span class="tag">coding</span><span class="tag">product</span></span>
-            <span class="right"><span class="bill"><span class="strike">5h 45m</span> 5h 00m billable <span class="flagpin">⚑</span></span><span class="kebab">⋮</span></span>
-          </div>
-          <span class="sublink">[Subtract Slept Time: 45m]</span>
-
-          <div class="entry">
-            <span class="sdot"></span>
-            <span class="span">12:00 — 13:15</span>
-            <span class="len">3h 25m</span>
-            <span class="what">Deep work: Project Alpha <span class="where">(Globex Corp)</span></span>
-            <span class="right"><span class="kebab">⋮</span></span>
-          </div>
-          <div class="entry">
-            <span class="sdot idle"></span>
-            <span class="span">13:00 — 15:45</span>
-            <span class="len">2h 45m</span>
-            <span class="what">Researching market trends <span class="tag">research</span></span>
-            <span class="right"><span class="kebab">⋮</span></span>
-          </div>
-          <div class="entry">
-            <span class="sdot"></span>
-            <span class="span">09:00 — 12:15</span>
-            <span class="len">3h 15m</span>
-            <span class="what">Client call: Project Alpha <span class="where">(Globex Corp)</span></span>
-            <span class="right"><span class="kebab">⋮</span></span>
-          </div>
-
+      <div class="scroll">
+        <div class="day-h">Tuesday, June 23 <span class="dsum">· 6h 00m</span></div>
+        <div class="row">
+          <svg class="ic st run"><use href="#i-clock"/></svg><span class="tr">09:00 – 12:15</span><span class="du tnum">3h 15m</span>
+          <span class="what">Client call: Project Alpha <span class="where">Globex Corp</span> <span class="tag">meeting</span><span class="tag">client</span></span>
+          <span class="rt"><span class="bill"><b class="tnum">3h 15m</b></span><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></span>
         </div>
-
-        <a href="edit-entry.html" class="fab" style="text-decoration:none;color:var(--ink)"><span class="plus">+</span> Add Entry Manually</a>
+        <div class="note warn"><svg class="ic"><use href="#i-flag"/></svg> Overlaps previous entry by 15m · allowed, flagged in reports</div>
+        <div class="row">
+          <svg class="ic st idle"><use href="#i-clock"/></svg><span class="tr">13:00 – 15:45</span><span class="du tnum">2h 45m</span>
+          <span class="what">Researching market trends <span class="tag">research</span></span>
+          <span class="rt"><span class="bill"><b class="tnum">2h 45m</b></span><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></span>
+        </div>
+        <div class="day-h">Monday, June 22 <span class="dsum">· 9h 25m</span></div>
+        <div class="row">
+          <svg class="ic st sleep"><use href="#i-moon"/></svg><span class="tr">10:30 – 16:15</span><span class="du tnum">5h 45m</span>
+          <span class="what">Deep work on core algorithm <span class="tag">coding</span><span class="tag">product</span></span>
+          <span class="rt"><span class="bill"><b class="tnum">5h 00m</b> billable<span class="was tnum">was 5h 45m</span></span><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></span>
+        </div>
+        <div class="note"><svg class="ic"><use href="#i-moon"/></svg> Slept through · sleep adjustment −45m <span class="act-link">Review</span></div>
+        <div class="row">
+          <svg class="ic st idle"><use href="#i-clock"/></svg><span class="tr">12:00 – 13:15</span><span class="du tnum">1h 15m</span>
+          <span class="what">Deep work: Project Alpha <span class="where">Globex Corp</span></span>
+          <span class="rt"><span class="bill"><b class="tnum">1h 15m</b></span><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></span>
+        </div>
+        <div class="row">
+          <svg class="ic st idle"><use href="#i-clock"/></svg><span class="tr">09:00 – 12:15</span><span class="du tnum">3h 15m</span>
+          <span class="what">Client call: Project Alpha <span class="where">Globex Corp</span></span>
+          <span class="rt"><span class="bill"><b class="tnum">3h 15m</b></span><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></span>
+        </div>
       </div>
     </div>
-    <div class="note-strip">Tray: a single left-click opens the compact popover (Stop / Switch / Start + Open Stint) — no dropdown menu (§12 R01/G8). · Manual add opens the entry form with the visual time-range picker (§12 R15). · Slightly-noisy UI prototype · not a screenshot of the current build</div>
   </div>
+</div>
+<div class="prov">Calm-system prototype · design intent for PRD §12 (Entries view) · a single tray left-click opens the compact popover · where this and the PRD disagree, the PRD wins</div>
 </body>
 </html>
