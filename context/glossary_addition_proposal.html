@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Domain Language · Proposed Additions (Issue #27)</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --propbg:#fff8e6;--propline:#c9a227;--propink:#6b5410;
+    --gap:#9a2f2f;--partial:#8a6d1a;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* proposal banner */
+  .banner{border:1px solid var(--propline);background:var(--propbg);border-radius:6px;padding:18px 22px;margin:0 0 30px}
+  .banner .tag{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--propink);font-weight:700;display:block;margin-bottom:8px}
+  .banner p{margin:0 0 8px;color:var(--propink)}
+  .banner p:last-child{margin:0}
+  .banner strong{color:#4a3a08;font-weight:680}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td.term{font-family:var(--mono);font-size:13px;color:var(--ink);white-space:nowrap;font-weight:600}
+  td.avoid{font-family:var(--mono);font-size:12px;color:var(--muted)}
+  td.avoid s{text-decoration-color:var(--rule-strong)}
+  /* proposed-requirement list */
+  .req{list-style:none;margin:18px 0;padding:0}
+  .req>li{border:1px solid var(--rule);border-radius:6px;padding:16px 20px;margin:0 0 14px;background:#fbfbfa}
+  .req .rhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+  .req .rid{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink);letter-spacing:.02em}
+  .req .rtitle{font-weight:620;color:var(--ink);font-size:15px}
+  .req .rtext{margin:0 0 10px;color:var(--ink)}
+  .req .meta{font-size:13.5px;color:var(--ink-soft);margin:0 0 6px}
+  .req .meta:last-child{margin:0}
+  .req .meta .k{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-right:7px}
+  .badge{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;font-weight:700;padding:2px 7px;border-radius:10px;white-space:nowrap}
+  .badge.new{background:#eef4ee;color:#2f6b3a;border:1px solid #cfe3d2}
+  .badge.gap{background:#f7ecec;color:var(--gap);border:1px solid #e6cccc}
+  .badge.partial{background:#f6f0dc;color:var(--partial);border:1px solid #e6dab0}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+    td.term{white-space:normal}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">proposed&nbsp;additions &nbsp;·&nbsp; issue&nbsp;#27</div>
+    </div>
+    <div class="mast-meta">Domain Language · Proposed Additions · Adversarial Audit · NOT yet adopted</div>
+  </header>
+
+  <div class="banner">
+    <span class="tag">⚠ Proposal — additions only — not yet adopted</span>
+    <p>This page proposes <strong>additions</strong> to <a href="glossary.html">glossary.html</a> surfaced by an <strong>adversarial implementation-vs-spec audit</strong> (issue&nbsp;#27). Each item is an <strong>implicit requirement found in the implementation</strong> that the canonical spec does not (or does not fully) pin down.</p>
+    <p>It is a <strong>sibling page, not a replacement</strong>: nothing here amends the glossary until reviewed and merged in. Definitions below are written in the glossary's voice so they can drop straight into their target sections once adopted. Each carries an audit <strong>status</strong> — <span class="badge gap">gap</span> (unspecified) or <span class="badge partial">partial</span> (intent specified, exact contract not pinned) — plus the concrete code/test evidence and any existing citation.</p>
+  </div>
+
+  <p class="lede">Four proposed entries: empty-dimension group labels and the tag fan-out rule, the canonical stored values for settings defaults, and the tag-identity normalization contract that both surfaces must share.</p>
+
+  <nav class="toc">
+    <h4>Proposed additions</h4>
+    <ol>
+      <li><a href="#p1"><span class="tn">P1</span>Grouping &amp; group keys</a></li>
+      <li><a href="#p2"><span class="tn">P2</span>Tag identity &amp; normalization</a></li>
+      <li><a href="#p3"><span class="tn">P3</span>Settings defaults — stored values</a></li>
+      <li><a href="#p4"><span class="tn">P4</span>Status legend &amp; provenance</a></li>
+    </ol>
+  </nav>
+
+  <section id="p1">
+    <div class="eyebrow"><span class="n">P1</span> Grouping &amp; group keys</div>
+    <h2>The labels reports group under — and how tags fan out</h2>
+    <p>Targets <strong>§03 Time &amp; duration</strong> / the reporting vocabulary. Grouping dimensions are specified in <code>prd.html</code> §09 R2 (client → project → entries; also by day or by tag) and clientless time is a documented concept (§03), but the <em>literal placeholder labels</em> and the <em>tag fan-out counting rule</em> are fixed only in code. Both are user-visible (the strings) and affect totals (the fan-out).</p>
+    <ul class="req">
+      <li>
+        <div class="rhead">
+          <span class="rid">G&nbsp;R01</span>
+          <span class="rtitle">Empty-dimension group labels</span>
+          <span class="badge new">New</span>
+          <span class="badge gap">Gap · unspecified</span>
+        </div>
+        <p class="rtext">When a report groups by a dimension an entry lacks, the entry falls under a canonical placeholder group whose label is exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — parenthesized, lower-case, the literal strings above. Both surfaces render the same label.</p>
+        <p class="meta"><span class="k">Why</span>Reports bucket clientless / projectless / untagged entries under fixed strings, but the exact labels live only in the implementation; they are user-facing and must match across the CLI and GUI.</p>
+        <p class="meta"><span class="k">Status</span>Gap — unspecified. The dimensions and clientless time are documented; the placeholder <em>strings</em> are nowhere in the corpus.</p>
+        <p class="meta"><span class="k">Citation</span><code>prd.html</code> §09 R2 (grouping: default client → project → entries; also by day or by tag); §03 (clientless time).</p>
+        <p class="meta"><span class="k">AC</span>GOLD: placeholder strings match exactly for a clientless, projectless, and untagged entry under each group-by.</p>
+      </li>
+      <li>
+        <div class="rhead">
+          <span class="rid">G&nbsp;R02</span>
+          <span class="rtitle">Tag fan-out &amp; grouping-invariant grand total</span>
+          <span class="badge new">New</span>
+          <span class="badge gap">Gap · unspecified</span>
+        </div>
+        <p class="rtext">When grouping by tag, an entry appears <strong>once under each of its tags</strong>; an entry with no tags appears once under <code>(untagged)</code>. This fan-out means the same entry is counted in multiple tag groups, so per-tag-group subtotals may sum to more than the worked time — yet the report's <strong>grand total stays grouping-invariant</strong> (identical across every group-by, fan-out notwithstanding).</p>
+        <p class="meta"><span class="k">Why</span>Tag grouping fans a multi-tag entry into every matching group, while the grand total is computed over distinct entries. The counting rule is user-visible (subtotals vs. grand total) and is currently code-only.</p>
+        <p class="meta"><span class="k">Status</span>Gap — unspecified. The tag dimension is specified; the fan-out counting rule and the invariance of the grand total are not.</p>
+        <p class="meta"><span class="k">Citation</span><code>prd.html</code> §09 R2 (grouping by tag).</p>
+        <p class="meta"><span class="k">AC</span>GOLD: a multi-tag entry contributes to each of its tag groups; an untagged entry lands once in <code>(untagged)</code>; the grand total is unchanged across group-by.</p>
+      </li>
+    </ul>
+    <div class="note"><span class="lbl">Proposed glossary insertion</span>Add a <strong>Group key</strong> entry to §03 (or a short "Grouping" subsection): the labels above are canonical, and the tag fan-out rule is part of the term's definition so neither surface invents its own strings or double-counts the grand total.</div>
+  </section>
+
+  <section id="p2">
+    <div class="eyebrow"><span class="n">P2</span> Tag identity &amp; normalization</div>
+    <h2>When two spellings are the same tag</h2>
+    <p>Targets the <strong>§01 Tag entry</strong> (and Entry ↔ Tag in §07). The glossary describes tags as flat, reusable, created-on-the-fly labels and the JUDGE TAG_CHIPS rubric pins that tag edits send <em>minimal</em> <code>addTags</code>/<code>removeTags</code> — but the deeper <strong>identity normalization contract</strong> (the rule both surfaces must apply through Core) is nowhere defined. Two proposed clauses, one defining identity and one defining the diff that follows from it.</p>
+    <ul class="req">
+      <li>
+        <div class="rhead">
+          <span class="rid">T&nbsp;R01</span>
+          <span class="rtitle">Tag identity is case-insensitive and trimmed</span>
+          <span class="badge new">New</span>
+          <span class="badge gap">Gap · unspecified</span>
+        </div>
+        <p class="rtext">A tag's identity is its name <strong>matched case-insensitively and whitespace-trimmed</strong>. The <strong>first-seen spelling is preserved</strong>; empty/whitespace-only names are dropped. Applying an existing tag to an entry in a different case or with surrounding whitespace is the <strong>same tag — a no-op</strong> (no recase, no duplicate). Both surfaces normalize identically because they go through Core.</p>
+        <p class="meta"><span class="k">Why</span>Tag matching folds case and trims whitespace, dedupes keeping the first spelling, and treats a recase as a no-op; re-typing <code>meeting</code> over <code>Meeting</code> must not fork the tag or rename it. This identity rule is the data-model contract the GUI diff mirrors and is undefined in the spec.</p>
+        <p class="meta"><span class="k">Status</span>Gap — unspecified. The glossary says tags are flat/reusable/created-on-the-fly but states no case/trim/dedupe identity rule.</p>
+        <p class="meta"><span class="k">Citation</span>None (genuine gap). Related: <code>glossary.html</code> §01 Tag; §07 Entry ↔ Tag many-to-many.</p>
+        <p class="meta"><span class="k">AC</span>PROP/GOLD: applying <code>Meeting</code> then <code>meeting&nbsp;</code> yields one tag keeping the original spelling, across Core and both surfaces.</p>
+      </li>
+      <li>
+        <div class="rhead">
+          <span class="rid">T&nbsp;R02</span>
+          <span class="rtitle">Minimal tag diff follows from identity</span>
+          <span class="badge new">New</span>
+          <span class="badge partial">Partial · pin the rule</span>
+        </div>
+        <p class="rtext">Editing an entry's tags diffs original against edited <strong>under the T&nbsp;R01 identity</strong>: empties dropped, duplicates collapsed to one (first-seen spelling), comparison case-insensitive and trimmed, a tag present on both sides (in any case) left untouched — producing the <strong>minimal</strong> <code>addTags</code>/<code>removeTags</code> the edit IPC carries.</p>
+        <p class="meta"><span class="k">Why</span>That the edit sends <em>minimal</em> add/remove is already specified; what is unpinned is the normalization the diff rests on (case-fold, trim, drop-empty, dedupe-first-spelling, both-sides-untouched-regardless-of-case). Both surfaces must apply the same normalization through Core.</p>
+        <p class="meta"><span class="k">Status</span>Partial — the minimal-diff outcome is specified; the normalization contract underneath it is not.</p>
+        <p class="meta"><span class="k">Citation</span><code>prd.html</code> §07 R02 (tags flat, reusable, created on the fly); <code>glossary.html</code> §07 Entry ↔ Tag; <code>acceptance/criteria/judge-rubric.md</code> TAG_CHIPS ("minimal addTags/removeTags").</p>
+        <p class="meta"><span class="k">AC</span>PROP/GOLD: the tag-diff over an original and an edited set yields minimal add/remove and is case-insensitive, trimmed, and dedupe-first-spelling.</p>
+      </li>
+    </ul>
+    <div class="note"><span class="lbl">Proposed glossary insertion</span>Extend the §01 <strong>Tag</strong> definition with the identity sentence (T&nbsp;R01) and add a short cross-reference so the §07 Entry ↔ Tag row and any edit-flow copy point at the same normalization rule.</div>
+  </section>
+
+  <section id="p3">
+    <div class="eyebrow"><span class="n">P3</span> Settings defaults — stored values</div>
+    <h2>The persisted form of each default, not just its intent</h2>
+    <p>Targets <strong>§14 Settings</strong> (or a settings glossary). The <em>intent</em> of every default is already pinned in the §14 table and §12 R02. What is partial is only the <strong>encoding of the stored value</strong> — the exact enum/literal the snapshot persists — so the on-disk representation is unambiguous and the <code>DEFAULT_SETTINGS</code> snapshot has something canonical to assert against.</p>
+    <ul class="req">
+      <li>
+        <div class="rhead">
+          <span class="rid">S&nbsp;R01</span>
+          <span class="rtitle">Canonical stored default values</span>
+          <span class="badge new">New</span>
+          <span class="badge partial">Partial · pin stored form</span>
+        </div>
+        <p class="rtext">Each setting's persisted default value is fixed alongside its human-facing default:</p>
+        <table>
+          <thead><tr><th>Setting</th><th>Stored default</th><th>Human-facing default (§14)</th></tr></thead>
+          <tbody>
+            <tr><td class="term" data-l="Setting">hotkey</td><td data-l="Stored"><code>CommandOrControl+Alt+T</code></td><td data-l="Default">Global hotkey Ctrl+Alt+T (Electron accelerator form)</td></tr>
+            <tr><td class="term" data-l="Setting">accent</td><td data-l="Stored"><code>system</code></td><td data-l="Default">System accent, primary action only</td></tr>
+            <tr><td class="term" data-l="Setting">date_format</td><td data-l="Stored"><code>system</code></td><td data-l="Default">System locale</td></tr>
+            <tr><td class="term" data-l="Setting">week_start</td><td data-l="Stored"><code>monday</code> (lower-case token)</td><td data-l="Default">Week starts Monday</td></tr>
+            <tr><td class="term" data-l="Setting">rounding</td><td data-l="Stored"><code>false</code> / <code>0</code></td><td data-l="Default">Rounding off</td></tr>
+          </tbody>
+        </table>
+        <p class="meta"><span class="k">Why</span>The defaults snapshot persists exact literals (e.g. <code>week_start='monday'</code>, not <code>'Monday'</code>; <code>accent='system'</code>; <code>rounding=false</code>). The spec states the human-facing default but not the stored token, leaving the persisted representation underspecified.</p>
+        <p class="meta"><span class="k">Status</span>Partial — substantive defaults are specified; only the stored enum/literal encoding is unpinned.</p>
+        <p class="meta"><span class="k">Citation</span><code>prd.html</code> §14 Settings table (rounding off; week start Monday; global hotkey Ctrl+Alt+T; accent "system accent, primary action only"; date/number "system locale"); §12 R02 (registered as <code>CommandOrControl+Alt+T</code>); §15.</p>
+        <p class="meta"><span class="k">AC</span>GOLD: the <code>DEFAULT_SETTINGS</code> snapshot asserts each stored default value matches the §14 table.</p>
+      </li>
+    </ul>
+    <div class="note"><span class="lbl">Proposed glossary insertion</span>This is fundamentally a §14 (PRD) pin; it is recorded here so the glossary's <strong>Setting</strong> entry (§01) can reference the canonical stored tokens. The adopting edit may live in the PRD §14 table with the glossary Setting entry cross-linking it.</div>
+  </section>
+
+  <section id="p4">
+    <div class="eyebrow"><span class="n">P4</span> Status legend &amp; provenance</div>
+    <h2>How to read these proposals</h2>
+    <p>The audit classifies each proposed addition so reviewers can triage adoption.</p>
+    <table>
+      <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td class="term" data-l="Status"><span class="badge gap">gap</span></td><td data-l="Meaning"><strong>Unspecified.</strong> The behavior exists only in the implementation; the corpus says nothing that pins it. Adoption introduces genuinely new spec text.</td></tr>
+        <tr><td class="term" data-l="Status"><span class="badge partial">partial</span></td><td data-l="Meaning"><strong>Intent specified, contract not pinned.</strong> The spec states the human-facing behavior or outcome, but the exact stored value / normalization rule the implementation relies on is undefined. Adoption tightens existing text.</td></tr>
+      </tbody>
+    </table>
+    <div class="note"><span class="lbl">Provenance</span>Surfaced by the issue&nbsp;#27 adversarial implementation-vs-spec audit. <code>packages/</code> is evidence, not a source of truth: every item above names the implicit behavior plus the concrete code/test evidence and any existing citation, but the canonical requirement only takes effect once this proposal is reviewed and merged into <a href="glossary.html">glossary.html</a> (and, for §14 stored values, the PRD). Until then, nothing here is adopted.</div>
+  </section>
+
+  <div class="foot">
+    <span>stint — domain language · proposed additions</span>
+    <span>issue #27 · adversarial audit · NOT yet adopted</span>
+  </div>
+
+</main>
+</body>
+</html>

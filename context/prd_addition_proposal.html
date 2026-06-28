@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Proposed Requirement Additions (audit #27)</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* PROPOSAL banner */
+  .banner{border:1px solid #ecd9a8;background:#fbf3e2;border-radius:6px;padding:18px 22px;margin:26px 0 8px;color:#5c451a}
+  .banner .blbl{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#8a5a00;font-weight:700;display:block;margin-bottom:8px}
+  .banner p{color:#5c451a;margin:0 0 8px}
+  .banner p:last-child{margin-bottom:0}
+  .banner strong{color:#3f2f10}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  h3 .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:middle}
+  /* audit-status badges */
+  .st{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;padding:1px 6px 0;border-radius:9px;margin-left:7px;vertical-align:middle;white-space:nowrap;border:1px solid;line-height:1.7}
+  .st-gap{color:#9a3b2c;background:#fbece9;border-color:#f0cabf}
+  .st-partial{color:#8a5a00;background:#fbf3e2;border-color:#ecd9a8}
+  td .st{margin-left:0}
+  .legend{display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin:14px 0 4px;font-size:13px;color:var(--muted)}
+  .legend .item{display:flex;align-items:center;gap:7px}
+  .new{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#3b5b9a;background:#eaeffb;border:1px solid #c4d0f4;border-radius:9px;padding:1px 6px 0;margin-left:7px;vertical-align:middle;line-height:1.7}
+  .core{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:#1f3b5a;background:#e0eef8;border:1px solid #a8d4f4;border-radius:9px;padding:1px 6px 0;margin-left:7px;vertical-align:middle;line-height:1.7}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  /* proposed-requirement list: P-numbered to distinguish from adopted Rxx */
+  ol.req{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:r}
+  ol.req li{position:relative;padding-left:40px;margin-bottom:20px;counter-increment:r;color:var(--ink-soft)}
+  ol.req li::before{content:"P" counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+  .why{border-left:2px solid var(--rule-strong);padding:2px 0 2px 16px;margin:8px 0 0;font-size:14px;color:var(--muted)}
+  .why .wl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-right:7px}
+  .cite{font-family:var(--mono);font-size:12px;color:var(--faint);margin-top:5px}
+  .cite .wl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);font-weight:700;margin-right:7px}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">00:00:00&nbsp; <b>■ proposal</b> &nbsp;·&nbsp; audit #27</div>
+    </div>
+    <div class="mast-meta">Proposed Requirement Additions · companion to §-numbered PRD · not yet adopted</div>
+  </header>
+
+  <p class="lede">Proposed <strong>additions</strong> to <a href="prd.html">context/prd.html</a> surfaced by the adversarial implementation-vs-spec audit (issue&nbsp;#27). Each item below is an <em>implicit</em> requirement the shipping code and tests already honor that the PRD does not pin down. This page does not replace the PRD; it stages requirements for review.</p>
+
+  <div class="banner">
+    <span class="blbl">⚠ Proposal — not adopted</span>
+    <p>This document is the synthesizer output of the issue&nbsp;#27 <strong>adversarial requirements audit</strong>: a pass that read the implementation against the spec and collected behaviors the code commits to but the PRD leaves unstated or under-specified. Everything here is <strong>a proposal of additions</strong>, written in the PRD's voice for easy lift-in, and is <strong>NOT part of the adopted requirements</strong> until it has been reviewed and merged into <code>context/prd.html</code> through the normal requirements-change process.</p>
+    <p>Items are numbered <code>Pxx</code> (not <code>Rxx</code>) precisely so a proposed addition is never mistaken for an adopted requirement. Each proposal cites the implicit behavior, the audit status, and — where the gap is only <em>partial</em> — the existing PRD/criteria text it tightens.</p>
+  </div>
+
+  <div class="note">
+    <span class="lbl">How to read each item</span>
+    Every proposal carries a one-line <strong>proposed requirement</strong>, a <strong>Why</strong> (the implicit behavior plus the concrete code/test evidence), an <strong>audit status</strong>, and — for partials — the <strong>existing citation</strong> it refines. Badges mirror the PRD: <span class="new">new</span> marks a wholly new contract, <span class="core">core</span> marks an addition that bears on data integrity, loss-protection, or core data entry (§03).
+    <div class="legend">
+      <span class="item"><span class="st st-gap">gap</span> unspecified — nowhere in the corpus</span>
+      <span class="item"><span class="st st-partial">partial</span> touched by the spec; the load-bearing detail is unpinned</span>
+      <span class="item"><span class="core">core</span> data integrity / loss-protection / core entry</span>
+    </div>
+  </div>
+
+  <nav class="toc">
+    <h4>Proposed additions, by target section</h4>
+    <ol>
+      <li><a href="#p5"><span class="tn">05</span>Timer, switch &amp; favorites</a></li>
+      <li><a href="#p6"><span class="tn">06</span>Editing: split, merge, overlap</a></li>
+      <li><a href="#p7"><span class="tn">07</span>Reference data: names, tags, archive</a></li>
+      <li><a href="#p9"><span class="tn">09</span>Reports, search &amp; export</a></li>
+      <li><a href="#p10"><span class="tn">10</span>Running-timer hygiene: sleep &amp; check-ins</a></li>
+      <li><a href="#p11"><span class="tn">11</span>CLI contract</a></li>
+      <li><a href="#p12"><span class="tn">12</span>GUI behavior</a></li>
+      <li><a href="#p13"><span class="tn">13</span>Storage, schema &amp; settings keys</a></li>
+      <li><a href="#p14"><span class="tn">14</span>Settings: defaults, validation, vocab</a></li>
+      <li><a href="#p16"><span class="tn">16</span>Time, duration &amp; clock arithmetic</a></li>
+      <li><a href="#p19"><span class="tn">19</span>Packaging, versioning &amp; updates</a></li>
+      <li><a href="#p20"><span class="tn">20</span>Durability: pragmas, backup, recovery</a></li>
+    </ol>
+  </nav>
+
+  <!-- ============================ §05 ============================ -->
+  <section id="p5">
+    <div class="eyebrow"><span class="n">05</span> Timer, switch &amp; favorites — proposed additions</div>
+    <h2>Pinning the resolution rules behind start, switch &amp; resume</h2>
+    <ol class="req">
+
+      <li><strong>Switch instant &amp; carry-forward default.</strong> <span class="new">new</span> <span class="core">core</span> A switch closes the open entry with <code>end</code> equal to the switch instant and opens a new, distinct entry whose <code>start</code> equals that same instant — no gap, no overlap, exactly one open entry. By default the new entry <strong>carries forward</strong> client and project unless explicitly cleared or overridden. There is no end-of-day / 23:59 clamp: switching and resuming (including from a favorite) always close any open entry at <code>now</code>, consistent with start-while-running.
+        <div class="why"><span class="wl">Why</span> §05 R08 specifies switch is atomic stop-then-start with client/project "optionally carrying forward or clearing," but never picks the unoverridden default nor states <code>old.end == new.start == switch instant</code> with a distinct new id. The audit also found a resume-from-favorite path that closes a still-open entry at a 23:59 day boundary rather than at <code>now</code> — which contradicts the §04 R04 / §16 "close any open entry (end = now)" rule and must be ruled out explicitly.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the 23:59-clamp behavior is <span class="st st-gap">gap</span> (and spec-conflicting) &nbsp;<span class="wl">Cites</span> §05 R08 · §04 R04 · §16 "Start while a timer runs"</div>
+      </li>
+
+      <li><strong>Favorite name uniqueness, explicit-attribute capture &amp; not-found errors.</strong> <span class="new">new</span> Favorite names are unique case-insensitively; creating a name that already exists (case-insensitively) is rejected with a defined error, never a silent overwrite. A favorite may be captured from a closed entry, the running entry, or explicit attributes. Operations naming an unknown favorite (rename, unpin, resume) fail with a defined not-found error and make no change. Whether uniqueness is DB- or store-enforced is stated (the §13 <code>favorite</code> sketch carries no <code>UNIQUE</code>, so it is store-enforced).
+        <div class="why"><span class="wl">Why</span> §05 R09/R10 pin capture-from-entry/running-timer, resume-creates-a-fresh-entry, and favorite-never-mutated, but — unlike the <code>report</code> table — the §13 <code>favorite</code> name is not <code>UNIQUE COLLATE NOCASE</code>; the store guards uniqueness in code, resolves names case-insensitively, and rejects duplicates / unknown names with messages ("already exists", "no favorite named …") none of which the spec pins.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §05 R09–R10 · §03 Favorite entity · §13 favorite/favorite_tag schema</div>
+      </li>
+
+      <li><strong>Resume-from-favorite override layering.</strong> <span class="new">new</span> On <code>tt start --fav</code> / one-click resume, each unset flag inherits the template's value; <code>--desc</code> overrides description; <code>--client</code>/<code>--project</code> override the client/project pair <strong>together</strong>; <code>--bill</code>/<code>--no-bill</code> overrides billable; supplying one or more <code>--tag</code> <strong>replaces</strong> the template's tag set (not a merge); <code>--at</code> overrides the start time. The favorite row is never modified.
+        <div class="why"><span class="wl">Why</span> §11 says resume "with explicit-flag overrides" without defining the per-field merge rules — in particular that tags replace rather than merge, that client/project are coupled, and that an unset flag inherits.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §05 R10 · §11 <code>tt fav start</code> / <code>tt start --fav</code></div>
+      </li>
+
+      <li><strong>Resume tie-break / "most recent."</strong> <span class="new">new</span> "Most recent entry" (for plain resume) resolves to the entry with the latest <code>start</code>, with <code>id</code> as the descending tie-breaker.
+        <div class="why"><span class="wl">Why</span> §05 R04 says "most recent entry" but never defines it; the store uses <code>ORDER BY start_utc DESC, id DESC LIMIT 1</code>, a contract callers and tests rely on.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §05 R04</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §06 ============================ -->
+  <section id="p6">
+    <div class="eyebrow"><span class="n">06</span> Editing — proposed additions</div>
+    <h2>Boundary inequalities, merge composition &amp; overlap shape</h2>
+    <ol class="req">
+
+      <li><strong>Edit/add/split/stop boundary rules.</strong> <span class="new">new</span> <span class="core">core</span> Pin the boundary inequalities: a stop must be at or after <code>start</code>; a manual add requires <code>to</code> strictly after <code>from</code>; an edit's resulting <code>end</code> must be after its <code>start</code>; a split point must be <strong>strictly inside</strong> the span (an open entry's end treated as <code>now</code>). Violations are rejected with a clear error.
+        <div class="why"><span class="wl">Why</span> §06 R02 says split happens "within its span" and §16 lists the edit cases, but the strict-vs-non-strict boundary at each operation (equal start/stop, <code>to==from</code>, split at exact start/end) is decided only in code.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §05 R02/R05 · §06 R02 · §16</div>
+      </li>
+
+      <li><strong>Merge composition.</strong> <span class="new">new</span> <span class="core">core</span> A merge spans the earliest <code>start</code> to the latest <code>end</code>, but <strong>the merged entry is open iff any source is open</strong> — an open source's implicit "now" end never competes as the latest end; openness wins outright and the latest-end computation is skipped. Descriptions are concatenated in entry order with <code>' / '</code> and de-duplicated; tags are set-unioned; <code>excluded_seconds</code> are <strong>summed</strong> across sources; the first entry's client/project/billable win unless overridden (CLI uses the first entry's billable, with no override flag).
+        <div class="why"><span class="wl">Why</span> §06 R03 specifies first-entry-wins, tag union, description concatenation and the override flags, but the audit found four unpinned, load-bearing specifics the code commits to: the open-iff-any-open result (which the "earliest start to latest end" prose actively contradicts for an open source), the <code>' / '</code> separator with de-dup, the summing of <code>excluded_seconds</code>, and CLI billable resolution.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §06 R03 · §16 "Merge entries with differing attributes"</div>
+      </li>
+
+      <li><strong>Split attribute inheritance — excluded sleep not redistributed.</strong> <span class="new">new</span> <span class="core">core</span> A split copies client, project, billable, description, and tags onto both halves; <code>excluded_seconds</code> is left intact on the original (first) half and reset to <code>0</code> on the new (second) half — sleep exclusion is not divided across the cut.
+        <div class="why"><span class="wl">Why</span> §06 R02 pins client/project/tags/billable inheritance but is silent on <code>excluded_seconds</code>; the billing consequence of splitting a sleep-subtracted entry (the first half keeps all the exclusion) is a deliberate but unstated choice.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §06 R02</div>
+      </li>
+
+      <li><strong>Overlap semantics &amp; warning shape.</strong> <span class="new">new</span> <span class="core">core</span> Overlap is computed on half-open intervals <code>[start, end)</code>: two spans overlap iff <code>aStart &lt; bEnd</code> and <code>bStart &lt; aEnd</code>, so entries that merely touch at an endpoint do <strong>not</strong> overlap; an open entry's end is treated as <code>now</code>. Every entry write returns a non-blocking warning of kind <code>'overlap'</code> carrying the count and ids of overlapped entries; the operation still succeeds (exit 0, normal stdout, the note on stderr). The per-entry banner reports only the single <strong>worst</strong> overlap (largest overlapping seconds; ties to the earliest-encountered neighbour), labelled <em>previous</em> when the neighbour starts strictly before and <em>next</em> otherwise; reported overlap seconds are symmetric and never exceed either entry's own duration.
+        <div class="why"><span class="wl">Why</span> §06 R04 / §12 R09 pin warned-not-blocked and the "Overlap: Nm with previous/next entry" banner, but not the half-open boundary (touching ≠ overlap — a common back-to-back backfill case), the structured warning shape (<code>kind:'overlap'</code>, <code>overlappedEntryIds</code>, open=now), the worst-neighbour selection + first-seen tie-break, the strict-before/at-or-after relation rule, or that the warning leaves exit code 0.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §06 R04 · §12 R09 · §16 · glossary "Overlap"</div>
+      </li>
+
+      <li><strong>Overlap detection respects the billable filter.</strong> <span class="new">new</span> Overlap detection considers all entries in the selected range, including those excluded by the active billable filter, so a billable entry overlapping a non-billable one is still flagged; the reported overlap set, however, lists only entries that survive the active filter.
+        <div class="why"><span class="wl">Why</span> §06 R04 / §09 R05 establish overlap flagging and the billable-only default, but never address the interaction — that detection runs over the full set before the filter while reporting is restricted to the kept set.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §06 R04 · §08 R03 · §09 R05</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §07 ============================ -->
+  <section id="p7">
+    <div class="eyebrow"><span class="n">07</span> Reference data — proposed additions</div>
+    <h2>Case-insensitive names, tag normalization &amp; archive surface</h2>
+    <ol class="req">
+
+      <li><strong>Case-insensitive name uniqueness &amp; resolution.</strong> <span class="new">new</span> Names of clients, projects, tags, favorites, and saved reports are unique and resolved case-insensitively; creating a name that already exists (case-insensitively) is an error, never a silent overwrite; renaming an entity to its own current name is a no-op. State which constraints are DB-enforced versus store-enforced (favorite uniqueness is store-enforced; <code>report.name</code> is DB-enforced <code>UNIQUE COLLATE NOCASE</code>).
+        <div class="why"><span class="wl">Why</span> Only <code>report.name</code> is pinned <code>UNIQUE COLLATE NOCASE</code> (§13). For clients/projects/tags/favorites the case-insensitive uniqueness, case-insensitive lookup, and duplicate-create-errors rules live only in code.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §07 R01 · §13 report schema</div>
+      </li>
+
+      <li><strong>Tag normalization, on-the-fly creation &amp; idempotent re-apply.</strong> <span class="new">new</span> Tag names are trimmed on input; empty or whitespace-only names are ignored; comma-separated input splits into discrete tags; tags are matched case-insensitively so a given name yields exactly one tag row (find-or-create on first apply); re-applying a tag already on an entry/favorite is idempotent (the join uses <code>INSERT OR IGNORE</code>). An entry's tags read back in a stable ascending (alphabetical) order.
+        <div class="why"><span class="wl">Why</span> §07 R02 pins "created on the fly when first applied" and reusability, but trimming, empty-skip, comma-split, case-insensitive dedupe (one name → one row), idempotent re-apply, and the ascending read-back order (which export/grouping depend on) are code-only.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §07 R02 · §03 "Flat, reusable, cross-cutting"</div>
+      </li>
+
+      <li><strong>Project–client authority at resolution time.</strong> <span class="new">new</span> A supplied <code>projectId</code>'s <code>client_id</code> is authoritative and overrides any supplied <code>clientId</code>. A project referenced by name with no client must already exist; if it does not, the operation errors and directs the user to name a client so the project can be created under one.
+        <div class="why"><span class="wl">Why</span> The "project's client is authoritative" rule is pinned (§03 invariant), but the resolution-time behavior and error for a name-only, not-yet-existing project ("project \"X\" not found; name a client to create it under one") is an unstated implementation contract.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §03 invariants · §07 R01 · glossary</div>
+      </li>
+
+      <li><strong>Archive list surface &amp; rename propagation.</strong> <span class="new">new</span> Listing clients/projects/tags returns only non-archived rows by default; an <code>includeArchived</code> option additionally returns archived rows marked <code>archived</code>. Archived rows are never deleted and remain usable in history. Renaming a client/project/tag is immediately reflected wherever that entity's name shows on existing entries.
+        <div class="why"><span class="wl">Why</span> §07 / §03 pin archive-not-delete and "hidden from pickers, selectable in history," but not the default-excludes-archived list API, the <code>includeArchived</code> escape, or that a rename propagates to existing entry labels (denormalized vs joined-at-read is left open).</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §07 · §03 entity rows</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §09 ============================ -->
+  <section id="p9">
+    <div class="eyebrow"><span class="n">09</span> Reports, search &amp; export — proposed additions</div>
+    <h2>Ordering, rounding reconciliation, range bounds, search &amp; export rules</h2>
+    <ol class="req">
+
+      <li><strong>Group and list ordering.</strong> <span class="new">new</span> Define stable orderings: entries list by <code>start</code> ascending (<code>id</code> tie-breaker); clients/projects/tags/favorites/saved reports list ascending by name, case-insensitively (<code>COLLATE NOCASE</code>); sleep spans by sleep time. For grouped views, day groups render <strong>newest-day-first</strong> while client/project/tag groups render <strong>ascending</strong> by name; the empty buckets are labelled exactly <code>(no client)</code> / <code>(no project)</code> / <code>(untagged)</code> and sort first; group keys for day grouping are the local-date <code>YYYY-MM-DD</code> token.
+        <div class="why"><span class="wl">Why</span> §09 R02 names the grouping dimensions but pins no ordering. The code commits to an asymmetric rule (days descending, names ascending), specific placeholder strings, empty-buckets-first, and a local-date day key — all user-visible contracts feature files assert via "groups exactly …" but the spec is silent on.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> (name/day ordering, labels) · partial on day-key locale &nbsp;<span class="wl">Cites</span> §09 R02 · §11 list/report</div>
+      </li>
+
+      <li><strong>Tag-grouping fan-out &amp; grand-total invariance.</strong> <span class="new">new</span> When grouping by tag, a multi-tag entry appears under <strong>each</strong> of its tags (and once under <code>(untagged)</code> if it has none); per-tag line totals may therefore sum to more than the grand total, which remains the de-duplicated sum of distinct entries and is identical under every grouping.
+        <div class="why"><span class="wl">Why</span> The §09 R02 note asserts grouping-invariance of the grand total, but the fan-out consequence (double-counting per-tag lines vs an invariant total) is implied by many-to-many tags yet never stated — exactly the surprising rule a re-implementer would get wrong.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R02 · §03 Tag many-to-many</div>
+      </li>
+
+      <li><strong>Rounding direction, ties &amp; grand-total reconciliation.</strong> <span class="new">new</span> Each grouped line rounds independently to the increment, to the <strong>nearest</strong> (not always-up), with exact half-way values rounding up (round-half-up). A parent/grand rounded total is the <strong>sum of its children's rounded values</strong> (round-then-sum), not the rounding of the aggregate exact total, so a parent's displayed total equals the sum of the lines shown under it. Stored time is never mutated.
+        <div class="why"><span class="wl">Why</span> §09 R04 pins nearest-not-always-up, the {6,10,15,30} set, line-not-row, and display-only. Unpinned and money-affecting: the half-way tie rule, and whether <code>grand_rounded_seconds</code> is <code>round(Σ)</code> or <code>Σ round</code> — the report schema carries both grand and per-line rounded fields without constraining the relationship.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R04 · <code>report.schema.json</code></div>
+      </li>
+
+      <li><strong>Unreviewed-sleep flag predicate &amp; report ids.</strong> <span class="new">new</span> A slept-through entry is "unreviewed" (and so flagged in reports) precisely when its <code>excluded_seconds</code> is <strong>strictly less</strong> than the entry's total slept seconds (the sum of its SleepSpans, each clamped ≥ 0); once excluded covers all slept time the entry is reviewed. The report's <code>unreviewed_sleep_entry_ids</code> is the set of such entries within range.
+        <div class="why"><span class="wl">Why</span> §09 R05 / §17 surface "unreviewed sleep-flagged entries," but the exact predicate (slept-through AND <code>excluded &lt; total slept</code>, strictly-less) and the report-schema array's membership rule are only implicit; a re-implementer could use <code>excluded == 0</code> instead.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R05 · §17 R7 · glossary "subtract"</div>
+      </li>
+
+      <li><strong>Range preset resolution — local-anchored, half-open.</strong> <span class="new">new</span> The five presets resolve against the user's <strong>local</strong> calendar as half-open <code>[from, to)</code> windows anchored at local midnight, then serialized to UTC: <em>today</em> = <code>[midnight, +1 day)</code>; <em>this week</em> = <code>[week-start-of-this-week, +7 days)</code> honoring the Week-start setting; <em>last week</em> the preceding 7-day window; <em>this month</em> = <code>[first-of-month, first-of-next-month)</code>; <em>last month</em> the preceding month. <code>to</code> is always exclusive; the resolved UTC bounds shift with the local offset and DST, and an entry's membership is decided by its local-calendar position.
+        <div class="why"><span class="wl">Why</span> §09 R01 + the report-def schema enumerate the presets and §14 sets Week-start, but half-openness, local-midnight anchoring, the exact arithmetic, and the offset/DST consequence are code-only — and decide which entries fall in each preset.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R01 · §14 Week start · <code>report-def.schema.json</code> · §04 R06</div>
+      </li>
+
+      <li><strong>Local-zone day/week bucketing.</strong> <span class="new">new</span> Day and week grouping (and all preset resolution) are computed in the user's local time zone — a "day" is a local calendar day, an entry is bucketed by the local date of its <code>start</code> — while stored timestamps and exported/custom range bounds remain UTC.
+        <div class="why"><span class="wl">Why</span> §04 R06 pins UTC storage + local display + DST-safe durations, but never says which time zone defines a "day" for grouping. The code buckets by local date; near midnight this changes which calendar day an entry lands under.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §04 R06 · §16 DST rule · §13</div>
+      </li>
+
+      <li><strong>Free-text search match rule.</strong> <span class="new">new</span> Search is a case-insensitive <strong>substring</strong> match of the query against the entry's description, client name, project name, and any tag name (a hit in any field includes the entry, matched as equal fields); an empty or whitespace-only query applies no narrowing and matches all entries in the active range/filters; search composes (AND) with the active range and billable filter.
+        <div class="why"><span class="wl">Why</span> §09 R07 pins the searched fields, case-insensitivity, and AND-composition, but not substring-vs-prefix/token, the blank-matches-all rule, or whether the "secondarily" wording denotes a real ranking (the code treats the fields equally). Project must be matched as a field, not only via a rendered "Client / Project" label, identically across the live view, the IPC path, and <code>tt --search</code>.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R07 · §12 R09 · parity-matrix</div>
+      </li>
+
+      <li><strong>Export is raw, billable=all, unaffected by report filters.</strong> <span class="new">new</span> Export emits every entry in the range regardless of billable/client/project/tag report filters (each row carries its own <code>billable</code> flag); the exported <code>overlapped</code> flag is computed over <strong>exactly the exported set</strong> (open entry's end = now), so it depends on the export's own selection. CSV uses a fixed header matching the column list with ISO-8601 UTC timestamps; JSON is pretty-printed (2-space) with a trailing newline; the GUI export is byte-identical to <code>tt export</code> for the same range. Default range when none is given is the current week; the default filename is <code>stint-export-&lt;YYYY-MM-DD&gt;.&lt;ext&gt;</code> keyed off the range start.
+        <div class="why"><span class="wl">Why</span> §09 R06 pins the column set and "byte-identical GUI vs tt" only in implementation notes; the deliberate raw / billable=all / no-narrowing rule, the export-set scoping of <code>overlapped</code>, CSV quoting + date encoding, JSON indent/newline, the default range, and the filename pattern are unstated.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R06 · §11 <code>tt export</code> · <code>export-entry.schema.json</code> · parity-matrix</div>
+      </li>
+
+      <li><strong>Saved-report reference, errors &amp; export semantics.</strong> <span class="new">new</span> A saved report may be referenced by name or numeric id; an unknown name produces a defined error ("no saved report named …"). Exporting from a saved report emits the raw entries for the resolved range (<code>billable='all'</code>, no client/project/tag/search narrowing) — byte-identical to <code>tt export</code> over that window — whereas the grouped/human and report-result views honor the definition's filters and rounding. On <code>report save</code> with no <code>--round</code>, rounding is stored <strong>off</strong> (a saved definition is self-contained), unlike an ad-hoc <code>report</code> which inherits the settings rounding; <code>report edit</code> patches rounding only when <code>--round</code>/<code>--no-round</code> is supplied (<code>--no-round</code> exists only on edit).
+        <div class="why"><span class="wl">Why</span> §09 R08–R09 establish saved reports and "export from a saved report," but name-or-id resolution, the unknown-name error, the surprising raw/unfiltered CSV export (vs the filtered human view), and the three divergent rounding-resolution paths (ad-hoc inherits / save off / edit untouched) are code-only.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the three rounding paths are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §09 R08–R09 · §13 report schema · §11</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §10 ============================ -->
+  <section id="p10">
+    <div class="eyebrow"><span class="n">10</span> Running-timer hygiene — proposed additions</div>
+    <h2>Sleep reconciliation, subtract toggle &amp; check-in cadence</h2>
+    <ol class="req">
+
+      <li><strong>Gap-reconciliation threshold &amp; clamp.</strong> <span class="new">new</span> On-launch gap reconciliation takes <code>(lastSeenUtc, nowUtc)</code> and records a <code>source='gap'</code> SleepSpan on the open entry only when the wall-clock gap (last-seen → now) <strong>strictly exceeds 90 seconds</strong> AND an entry is open; otherwise it makes no change (no span, <code>excluded_seconds</code> untouched), returning a null/no-op for both the sub-threshold and nothing-open cases. The recorded span is clamped so it never starts before the open entry's <code>start</code>.
+        <div class="why"><span class="wl">Why</span> §10 specifies the reconciliation mechanism and its gating on an open entry but deliberately hedges the magnitude ("a gap large enough to imply the machine slept"). The 90-second threshold, the clamp to the entry start, and the null-vs-empty-span contract are undocumented constants in code.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · threshold value is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §10 item 3 · glossary "Reconcile" · Appendix A</div>
+      </li>
+
+      <li><strong>Subtract-sleep is a value-equality toggle.</strong> <span class="new">new</span> Subtract-sleep decides it is "already applied" by value equality — <code>excluded_seconds</code> exactly equals the current summed slept seconds (no separate applied flag). Re-running restores <code>excluded_seconds</code> to <code>0</code>; if sleep spans change between presses the new total re-applies; an <code>excluded_seconds</code> set by another mechanism that happens to equal the slept sum will toggle off. Stored <code>start</code>/<code>end</code> are never altered. The spec should state whether this value-equality reversibility is the intended contract or whether an explicit applied-state should be tracked.
+        <div class="why"><span class="wl">Why</span> §10 / §17 R04 pin "precisely and reversibly," but the mechanism (value equality against the slept sum, no recorded applied-state) and its two ambiguous edges (foreign equal value toggles off; baseline moves when spans change) are real correctness questions for a billing action the spec leaves to code.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §10 item 5 · §17 R04 · glossary "Subtract"</div>
+      </li>
+
+      <li><strong>Check-in realignment &amp; collapsed backlog.</strong> <span class="new">new</span> On relaunch or wake the next check-in is the first interval-aligned instant strictly after <code>now</code> (so the next due time lies in <code>(now, now+interval]</code>), and exactly one check-in fires for any number of missed slots. The number of collapsed missed slots is reported as <code>collapsedBacklog</code> = the count of nominal-grid slots falling strictly between the previously-due slot and the fire instant (0 on-time, 1 for one ignored slot, N for a sleep spanning N slots). The nominal grid is enumerated on a half-open <code>[from, to)</code> window (a slot landing exactly on <code>to</code> is excluded).
+        <div class="why"><span class="wl">Why</span> §10 pins "fires once, then realign from wake — no backlog," but not the realignment formula, the observable <code>collapsedBacklog</code> field/semantics (and its off-by-one), or the half-open grid-enumeration boundary.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the field name &amp; grid bounds are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §10b R06 · §16 "Check-in due while app closed"</div>
+      </li>
+
+      <li><strong>Custom-pick anchoring &amp; backlog interaction.</strong> <span class="new">new</span> A custom interval pick of <code>M</code> minutes at fire-instant <code>T</code> sets the next due time to exactly <code>T+M</code> (anchored at the fire instant, re-basing the grid), and the following default due is <code>T+M+defaultInterval</code> — it does not re-snap to the original nominal grid. When a single evaluation both collapses a backlog and receives a custom pick, the custom pick wins and re-bases the grid; the spec should pin whether <code>collapsedBacklog</code> is then the slots actually missed or zeroed.
+        <div class="why"><span class="wl">Why</span> §10 pins "a custom pick applies to the next gap only, then reverts to the default," but not the fire-instant anchoring (<code>T+M</code>, then <code>T+M+default</code>) versus re-snapping to the original grid, nor the combined backlog-collapse-plus-custom-pick seam.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the combined seam is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §10 "custom pick applies to the next gap only"</div>
+      </li>
+
+      <li><strong>Check-in scheduler totality.</strong> <span class="new">new</span> The check-in interval must be a positive integer; a non-positive or unparseable stored interval is rejected/clamped to the default on read. The pure scheduler must be total: given any interval value (including zero or negative), evaluating the schedule terminates and fires at most once, never looping. Settings validation is the primary guard; the evaluator is a defensive backstop.
+        <div class="why"><span class="wl">Why</span> The spec mandates the cadence defaults and treats the interval as a validated positive setting (§10b, §14), but is silent on the behavior of the pure evaluator handed a non-positive interval — termination / at-most-once-fire is a purely defensive code choice with no requirement behind it.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §10b · §14</div>
+      </li>
+
+      <li><strong>app_state canonical keys &amp; idle-clears-schedule.</strong> <span class="new">new</span> <span class="core">core</span> Fix the canonical <code>app_state</code> key names — <code>checkin_state</code> (the check-in schedule) and <code>last_seen_utc</code> (the heartbeat) — as core-owned constants no surface duplicates. Any transition to an idle DB (notably <code>stop()</code>) deletes the schedule row in the <strong>same transaction</strong> as the entry close; an open entry implies a schedule present and anchored at its <code>start</code>, an idle DB implies no schedule. A persisted schedule with no open entry is an invariant violation, holding across reopen.
+        <div class="why"><span class="wl">Why</span> §20 R07 pins the same-transaction co-commit, and the §13 sketch describes the table's contents in prose, but not the literal key strings (a cross-module contract a typo breaks) nor the stronger idle ⇒ schedule-absent direction (R07's "co-committed" wording covers writing, not the deletion on stop).</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R07 · §13 app_state · §10b R06</div>
+      </li>
+
+      <li><strong>Heartbeat cadence, reconciliation bound &amp; clean-quit final write.</strong> <span class="new">new</span> While a timer runs the last-seen heartbeat is persisted at most once per fixed cadence (e.g. 30s), bounding the maximum error in gap-reconciled sleep bounds to that cadence even on a hard kill. On a clean quit the app writes a final last-seen so the next launch's reconciliation has a tight bound; if that write or the store close fails, the bound falls back to the throttled cadence and the failure is logged, never silently dropping recoverable sleep.
+        <div class="why"><span class="wl">Why</span> §04 / §12 R03 pin the 1-second display tick and §20 R07 pins last-seen durability, but the heartbeat write cadence (30s), the resulting reconciliation-precision bound, and the clean-quit-vs-kill distinction (final write on quit) are unstated tuning the precision rests on.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the clean-quit write is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §04 · §12 R03 · §20 R07 · §10a item 3</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §11 ============================ -->
+  <section id="p11">
+    <div class="eyebrow"><span class="n">11</span> CLI contract — proposed additions</div>
+    <h2>Exit codes, env vars, output strings &amp; flag resolution</h2>
+    <ol class="req">
+
+      <li><strong>Exit-code taxonomy.</strong> <span class="new">new</span> Pin the scripting contract: <code>0</code> for success (and for <code>--help</code>/<code>--version</code> display); a single non-zero code (<code>2</code>) for all anticipated failures — domain/store errors, usage errors, and time-parse errors (and a <code>CommanderError</code> without its own code); a distinct code (<code>1</code>) reserved for unexpected/uncaught errors. A refused destructive action (<code>rm</code>/<code>backup restore</code> without <code>--force</code>) exits non-zero.
+        <div class="why"><span class="wl">Why</span> §11 pins only "0 success, non-zero on error" and that exit codes are GOLD-asserted. The fine partition (2 for domain/usage/parse vs 1 for unexpected) that a branching script relies on lives only in <code>bin.ts</code>.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §11 · acceptance §08</div>
+      </li>
+
+      <li><strong>Environment surface.</strong> <span class="new">new</span> Enumerate <code>tt</code>'s env vars: <code>TT_DB</code> (DB path override, already specified); <code>TT_NOW</code> (pins the clock to a given ISO instant; ignored when blank/unparseable, falling back to the real clock); <code>TT_BUSY_TIMEOUT_MS</code> (overrides the SQLite write-lock busy timeout; <strong>default 5000ms</strong>; ignored unless a finite value ≥ 0).
+        <div class="why"><span class="wl">Why</span> Only <code>TT_DB</code> is specified. <code>TT_NOW</code> (a clock seam for scripting/tests) and <code>TT_BUSY_TIMEOUT_MS</code> are absent from the corpus, as is the concrete 5000ms default — "a busy timeout" is described only qualitatively.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · <code>TT_NOW</code> / <code>TT_BUSY_TIMEOUT_MS</code> are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §13 <code>TT_DB</code> · §11/§15 "busy timeout"</div>
+      </li>
+
+      <li><strong>Stable output lines &amp; refusal text.</strong> <span class="new">new</span> Pin the human/machine output lines for add/split/merge ("added entry &lt;id&gt;", "into &lt;a&gt; and &lt;b&gt;", "merged into entry &lt;id&gt;") and the <code>rm</code>/<code>backup restore</code> refusal text (a clear message naming the target and instructing <code>--force</code>); domain warnings (e.g. overlap) are written to stderr with a stable <code>warning: </code> prefix while the command succeeds (exit 0) and emits its normal stdout. Human-table timestamps render as short ISO to second precision (millis stripped); a null/open timestamp renders as an em-dash <code>—</code>; the FLAGS column shows comma-joined <code>overlap</code>/<code>slept</code> tokens (overlap recomputed over the displayed set).
+        <div class="why"><span class="wl">Why</span> §11 pins the confirm-gate and the warned-not-blocked policy, but the exact success/refusal/warning strings, the <code>warning: </code> prefix and its generalization to all domain warnings, the human-table timestamp format, the <code>—</code> null render, and the FLAGS tokens are code/golden-only contracts pipelines depend on.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §11 · §06 R04 · §10 · §16</div>
+      </li>
+
+      <li><strong>stderr hygiene.</strong> <span class="new">new</span> <code>tt</code> keeps stderr free of runtime noise that would corrupt the scripting/golden contract: the <code>node:sqlite</code> <code>ExperimentalWarning</code> (§15) is suppressed while all other Node warnings pass through unchanged (same text, formatting, once-per-warning dedup), without depending on warning-listener attachment order.
+        <div class="why"><span class="wl">Why</span> Nothing in the corpus mentions the <code>ExperimentalWarning</code> suppression; golden-comparable stderr (acceptance §08) implies a clean stderr, but the specific suppress-exactly-the-SQLite-warning-pass-everything-else contract is unstated.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §15 "stability-experimental module"</div>
+      </li>
+
+      <li><strong>Filter, range &amp; grouping defaults per command.</strong> <span class="new">new</span> State the no-flag defaults and their deliberate asymmetry: <code>tt list</code> with no range shows all entries (unbounded) and is ungrouped/flat; <code>tt report</code>/<code>tt export</code> with no range default to the current week, and <code>report</code>/<code>report save</code> default to group-by-client; <code>tt report save</code> with no range stores the <code>week</code> preset. A <code>--client</code>/<code>--project</code>/<code>--tag</code> filter naming a non-existent entity narrows to <strong>empty</strong> (zero entries), never erroring or silently dropping the filter. Billable-filter precedence is uniform across commands: <code>--non-billable</code> &gt; <code>--all</code> &gt; default billable-only, and the same flag set is exposed by ad-hoc <code>report</code>, <code>report save</code>, and <code>report edit</code>.
+        <div class="why"><span class="wl">Why</span> §09/§11 list the flags and the billable-only default, but the per-command range/grouping default asymmetry, the unknown-name-narrows-to-empty rule, and a uniform billable-filter precedence (the audit found two opposite resolutions by subcommand and an extra flag only on <code>report edit</code>) are unspecified.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · unknown-filter &amp; per-command asymmetry are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §08 R03 · §09 R01/R02 · §11</div>
+      </li>
+
+      <li><strong>Entity-reference resolution &amp; aliases.</strong> <span class="new">new</span> For manage subcommands a purely numeric <code>&lt;ref&gt;</code> is treated as the entity's id; any other string is matched against its name; a name with no match fails with a clear "no match" error and non-zero exit (note the rare consequence for entities named entirely with digits). Enumerate command aliases / default subcommands: <code>switch</code> as the verb for the atomic stop-then-start; <code>ls</code> as an alias for <code>list</code>; bare <code>tt sleep</code> and bare <code>tt config</code> default to their <code>ls</code> subcommand. Because <code>tt report</code> is both an ad-hoc query and a parent of saved-report subcommands sharing option names, option parsing binds flags to the correct level (<code>report ls --json</code> vs <code>report --week --json</code>).
+        <div class="why"><span class="wl">Why</span> The id-vs-name disambiguation, the no-match error, the <code>ls</code> alias, the default-subcommand behavior, and the positional-options requirement behind the dual-natured <code>report</code> are silent cross-command conventions living only in code.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · entity-ref convention is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §05 R08 · §07 · §11</div>
+      </li>
+
+      <li><strong>config set / config ls contract.</strong> <span class="new">new</span> <code>tt config ls</code> lists every setting by its canonical snake_case key in a stable row order; <code>tt config set &lt;key&gt; &lt;value&gt;</code> confirms with the normalized, persisted value (not the raw token, e.g. <code>TRUE</code>→<code>true</code>), validates against each setting's domain, and rejects an unknown key, unparseable value, or domain-invalid value with a documented message on stderr and a non-zero exit, leaving the stored value unchanged on rejection.
+        <div class="why"><span class="wl">Why</span> §14 lists defaults but not the CLI key labels, the row order, the success-path echo of the <em>normalized</em> value, or the rejection messages / exit / value-unchanged-on-reject behavior.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · echo-normalized &amp; messages are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §11 <code>tt config</code> · §14</div>
+      </li>
+
+      <li><strong>Unknown-named-entity &amp; export-output contracts.</strong> <span class="new">new</span> A command referencing a non-existent named entity (favorite, saved report, client, project) fails with a clear stderr message naming the missing entity, makes no change (no entry opened or closed; no partial start), and exits non-zero. <code>tt export -o &lt;file&gt;</code> writes the raw-entry payload (with trailing newline; JSON pretty-printed 2-space) and prints "wrote &lt;n&gt; entries to &lt;file&gt;"; <code>tt report run &lt;name&gt; --csv</code> is byte-identical to <code>tt export</code> over the report's resolved window.
+        <div class="why"><span class="wl">Why</span> §11's "non-zero on error" and atomic transitions cover the spirit, but no requirement pins the not-found error/exit/no-side-effect for unknown named entities, nor the <code>-o</code> success message + file formatting, nor the saved-report CSV byte-parity with <code>tt export</code>.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §11 · §09 R06/R09 · §17 R2</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §12 ============================ -->
+  <section id="p12">
+    <div class="eyebrow"><span class="n">12</span> GUI behavior — proposed additions</div>
+    <h2>Toggle, popover, live view, picker, security &amp; recovery surfacing</h2>
+    <ol class="req">
+
+      <li><strong>Timer toggle three-way rule.</strong> <span class="new">new</span> <span class="core">core</span> The single toggle action: if an entry is open → stop; else if any prior entry exists → resume the last; else start a fresh empty timer. The first-run (empty database) case starts a fresh timer rather than erroring on resume-of-nothing.
+        <div class="why"><span class="wl">Why</span> §12 R02 pins "stops if running, resumes the last entry if idle" but assumes a last entry exists; the empty-history third branch (start fresh) is silent.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §12 R02 · §17 R01</div>
+      </li>
+
+      <li><strong>Popover &amp; window behavior.</strong> <span class="new">new</span> The popover is a frameless, non-resizable, taskbar-hidden window anchored horizontally centered beneath the tray/menu-bar icon and flush under it, and it auto-dismisses on blur (click-away-to-close, no explicit close button). The main window opens at a sensible default size (exact pixel dimensions are an implementation choice). The tray title shows the live count-up while running and is empty when idle, with a defined tooltip (running/idle/description).
+        <div class="why"><span class="wl">Why</span> §12 R01 pins the popover contents and the live count-up, but not the anchor, the dismiss-on-blur affordance (intended behavior, not pixel tuning), or the tray title/tooltip strings.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · sizing is <span class="st st-gap">gap</span> (and left to implementation) &nbsp;<span class="wl">Cites</span> §12 R01/R03 · §15</div>
+      </li>
+
+      <li><strong>GUI search reaches all history (parity).</strong> <span class="new">new</span> The main-window free-text search matches across the entire history by default, identical in reach to <code>tt list/report --search</code>, so no entry <code>tt</code> would surface is hidden from the GUI. If a default day-grouped display window bounds the list, search escapes that window (the result widens to the matched range, or the user is told matches exist beyond it); state the normative default window, if any, and how the bound is surfaced. Search filters live on every keystroke (no debounce) and composes with the active range/group-by/filters; clearing restores the prior view.
+        <div class="why"><span class="wl">Why</span> §09 R07 asserts cross-surface search parity but carries no date bound; whether the main-window search reaches all history or is capped (with older matches reachable only via a picker) is an unaddressed parity choice a 60-day-style cap would silently break.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §09 R07 · §12 R09 · parity-matrix</div>
+      </li>
+
+      <li><strong>Live Entries view derivation.</strong> <span class="new">new</span> The Entries view shows both a worked total (sum of all visible rows' <code>billableSeconds</code>) and a billable-only report total (equal to <code>tt report</code> for the same selection); day groups render newest-day-first; the clientless bucket uses a consistent label (e.g. <code>(no client)</code>); live edits to the running entry commit on a short debounce and a field is not re-seeded from upstream state while it holds focus.
+        <div class="why"><span class="wl">Why</span> §12 R09 / §17 R11 pin live group-by and live totals, but not the within-group ordering, the clientless label, the two-distinct-totals distinction, or the live-edit debounce + focus-guard timing.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §12 R09/R14 · §17 R11 · §05 R06</div>
+      </li>
+
+      <li><strong>Visual time-range picker defaults &amp; week-start.</strong> <span class="new">new</span> When opened with no bound value and no prior stop to anchor on, the picker seeds a default one-hour window ending at <code>now</code>; with a start but no stop, the default stop is the later of <code>start+30min</code> and <code>now</code>. The picker's month calendar follows the Week-start setting (§14) for column order — consistent with reporting — or, if a fixed layout is intended, is explicitly stated as always Monday-first; pick one. A seeded overnight span is resolved within a single day on drag while overnight stops are (re)entered via the authoritative text fields.
+        <div class="why"><span class="wl">Why</span> §12 R15 pins the 5-min snap, drag affordances, "default span = existing else last-stop → now," and overnight-via-text, but not the no-prior-stop 1-hour fallback, the <code>+30min</code> default stop, the calendar's week-start (a real inconsistency for a Sunday-week-start user), or the drag-resolves-overnight behavior. The picker's minute-to-pixel geometry is explicitly an implementation detail.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · calendar week-start is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §12 R15 · §14 Week start</div>
+      </li>
+
+      <li><strong>Check-in notification copy, choices &amp; fallback.</strong> <span class="new">new</span> Promote the interval choice set into the requirement: the notification offers Stop, Keep going, and a fixed set of next-gap interval choices (15/30/60/120 min), a pick rescheduling only the next check-in (then reverting to default). Pin the title/body wording template, and state which duration the body's "so far" figure reports (the raw count-up, matching the tray, or billable — pick one and note the divergence for slept-through timers). When the platform reports notifications unsupported, the check-in is silently skipped; the timer and cadence are unaffected.
+        <div class="why"><span class="wl">Why</span> §10b R4 pins Stop + Keep going + a next-gap-only override, and the body's description/client context, but the concrete choice set + ordering live in an implementation note, and the exact title/body, the raw-vs-billable "so far" figure, and the notifications-unsupported no-op are unpinned.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the "so far" figure &amp; unsupported fallback are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §10b items 3–4 · §15</div>
+      </li>
+
+      <li><strong>Hotkey live re-bind &amp; capture grammar.</strong> <span class="new">new</span> The Settings hotkey field captures a keystroke and converts it to an Electron accelerator (Ctrl/Cmd → <code>CommandOrControl</code>, plus Alt/Shift, key uppercased); a bare modifier is ignored and at least one modifier plus a key is required before the hotkey is saved. Changing the setting re-registers the OS shortcut live (no relaunch). When a chosen accelerator is malformed or already taken, the app never crashes and lands in a defined state (warned or reverted), with the prior binding handling specified.
+        <div class="why"><span class="wl">Why</span> §12 R02/R11 pin the default accelerator and live re-registration, but not the capture grammar (mapping, uppercasing, bare-modifier ignore, at-least-one-modifier) or the malformed/occupied failure behavior (the current swallow saves the setting with no working hotkey and no feedback).</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §12 R02/R11 · §14</div>
+      </li>
+
+      <li><strong>Recovery surfacing, lifetime &amp; acknowledgement.</strong> <span class="new">new</span> <span class="core">core</span> After a recovering launch the GUI surfaces the recovery once — a one-time dialog naming the quarantined file and the backup restored from, plus a Settings recovery notice — with a defined lifetime: the notice persists (and an un-acknowledged notice survives across launches) until the user acknowledges/dismisses it, and once acknowledged it does not re-show on every <code>getState</code> or relaunch.
+        <div class="why"><span class="wl">Why</span> §20 R05 mandates "informing the user" and the runbook describes a recovery dialog/notice, but the notice's lifetime and acknowledgement (one-shot vs sticky pill, dismiss persisted, survives across launches) are unaddressed.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R05 · §16</div>
+      </li>
+
+      <li><strong>Renderer security posture &amp; lifecycle.</strong> <span class="new">new</span> <span class="core">core</span> Every <code>BrowserWindow</code> uses <code>contextIsolation: true</code> with renderer access to Node/the DB only through a typed preload bridge (no <code>nodeIntegration</code>); state the project's stance on <code>sandbox</code>; no network except the user-initiated update check/download (§17 R09). The app stays running in the tray when all windows are closed and quits only via Quit; on quit it unregisters shortcuts, closes the watcher, writes a final last-seen, and closes the store.
+        <div class="why"><span class="wl">Why</span> The no-network invariant is strong (§17 R09), but the concrete <code>webPreferences</code> security posture (and whether <code>sandbox:false</code> is acceptable) is an unreviewed code default; the window-all-closed-does-not-quit behavior and the ordered will-quit teardown (incl. the final last-seen write that bounds the next reconciliation) are unspecified.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · sandbox posture &amp; quit teardown are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §15 · §17 R09 · §04 · §10a · §20 R07</div>
+      </li>
+
+      <li><strong>In-window destructive-confirm scope &amp; no native dialogs.</strong> <span class="new">new</span> <span class="core">core</span> The two-step in-window confirm gate (§12 R13) applies to <strong>all</strong> destructive actions reachable in the window — explicitly including favorite unpin and saved-report delete — so nothing is destroyed on a single stray click. All renderer text-entry, naming (favorite/report create &amp; rename), confirmation, and the §06 R03 merge-conflict prompt use in-window controls; native browser dialogs (<code>window.prompt</code>/<code>confirm</code>/<code>alert</code>) are not used in the renderer.
+        <div class="why"><span class="wl">Why</span> §12 R13 establishes the two-step confirm but enumerates only entry-delete and client/project-archive; favorite unpin and saved-report delete are equally destructive yet unnamed, and the audit found native <code>window.prompt</code>/<code>confirm</code> used for report naming/delete — contrary to the in-window, no-native-menus discipline.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §12 R01/R13 · §06 R01/R03 · §05 R09 · §09 R08</div>
+      </li>
+
+      <li><strong>Settings backups list &amp; size humanizer.</strong> <span class="new">new</span> The Settings backups list is ordered newest-first (so "restore latest" unambiguously resolves to the first row), and backup sizes render in human-readable units (B/KB/MB, one decimal at KB+).
+        <div class="why"><span class="wl">Why</span> §20 R04/R05 pin the backups list, "Last backup" status, and "restore from the latest good backup," but not that the list is newest-first as a contract, that "restore latest" is the first row, or the size formatting.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §12 R12 · §20 R04/R05 · <code>backup.schema.json</code></div>
+      </li>
+
+      <li><strong>Accent discipline via a single token.</strong> <span class="new">new</span> The accent is delivered through a single themeable token applied only to each view's single primary action and the running state; the monochrome accent-usage mode (§14) neutralizes accent app-wide by remapping that token, and no control bakes in a literal accent color that escapes it.
+        <div class="why"><span class="wl">Why</span> §15/§14 pin accent-on-primary-only and the monochrome mode, but not that it must be a single CSS token (so monochrome can neutralize it) and that no rule hardcodes the seed hex outside the token root.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §15 · §14 accent usage</div>
+      </li>
+
+      <li><strong>Manual-add form defaults &amp; overlap banner.</strong> <span class="new">new</span> The manual-add form pre-fills <code>from</code>/<code>to</code> with a default one-hour window ending at <code>now</code>; an overlap on save is warned-but-saved via the non-blocking inline banner (<code>role=status</code>, <code>aria-live=polite</code>, allowed-but-flagged wording) naming the count of overlapped entries (pluralized); a hard core-validation rejection blocks and shows inline.
+        <div class="why"><span class="wl">Why</span> §06 R04 and the JUDGE rubrics pin the warn-not-block banner and its a11y attributes, but the add-form's standalone 1-hour default window and the exact pluralized count copy are unstated.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §06 R04 · §05 R05 · §12 R07</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §13 ============================ -->
+  <section id="p13">
+    <div class="eyebrow"><span class="n">13</span> Storage, schema &amp; settings keys — proposed additions</div>
+    <h2>Migration contract, the open-entry backstop &amp; the key/value vocabulary</h2>
+    <ol class="req">
+
+      <li><strong>Schema version stamp &amp; migration contract.</strong> <span class="new">new</span> <span class="core">core</span> The schema version is persisted as <code>PRAGMA user_version</code>; a fresh DB is stamped with the current <code>SCHEMA_VERSION</code> (3) and migrations advance it. Migrations are <strong>additive-only and idempotent</strong>: opening a DB at or above the current version runs no DDL and mutates no row; opening a behind DB applies the additive <code>IF NOT EXISTS</code> DDL and stamps the version forward, leaving all pre-existing rows byte-identical. There are no down-migrations and no per-version step ladder; a new version must never require a destructive or non-additive fix-up of existing rows.
+        <div class="why"><span class="wl">Why</span> §13 names <code>SCHEMA_VERSION 3</code>, what v3 adds, and "the v2→v3 bump is additive," but the general migration <em>policy</em> a future engineer must honor (single <code>user_version</code> stamp, always additive+idempotent, no down-migrations, re-running <code>IF NOT EXISTS</code> DDL is the upgrade path) is stated only for the one v2→v3 case.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §13 status note · §20 R02 "v2→v3 bump is additive"</div>
+      </li>
+
+      <li><strong>At-most-one-open backstop, triggers &amp; error text.</strong> <span class="new">new</span> <span class="core">core</span> The at-most-one-open invariant must hold even against hand-written SQL that bypasses the core path — the partial unique index <code>one_open_entry_idx</code> on the constant <code>(1) WHERE end_utc IS NULL</code> is the backstop. State whether the <code>one_open_entry_insert/update</code> triggers are additionally required and whether the abort message ("an entry is already open") and the unique-constraint string (<code>UNIQUE constraint failed: index 'one_open_entry_idx'</code>) are stable user-facing contracts or implementation detail.
+        <div class="why"><span class="wl">Why</span> §20 R02 / §17 R02 require "core transactions AND a partial unique index"; the triggers read as an implementation extra (three mechanisms, not two) and the surfaced error/abort text is pinned nowhere even though the index <em>name</em> is GOLD-pinned.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §03 invariants · §20 R02 · §13 status note</div>
+      </li>
+
+      <li><strong>Canonical setting/app_state keys &amp; value encoding.</strong> <span class="new">new</span> Enumerate the canonical stored setting keys (the names <code>tt config ls/set</code> accept and display) — e.g. <code>rounding</code>, <code>rounding_increment_min</code>, <code>week_start</code>, <code>first_checkin_min</code>, <code>checkin_interval_min</code>, <code>global_hotkey</code>, <code>accent</code>, <code>date_format</code>, <code>backup_retention</code> — and the <code>app_state</code> keys (<code>checkin_state</code>, <code>last_seen_utc</code>). The key set is a stable contract (renaming a key would orphan a user's stored value). Both <code>setting.value</code> and <code>app_state.value</code> are <code>TEXT NOT NULL</code>, stored as strings (booleans as <code>'true'</code>/<code>'false'</code>, numbers as decimal strings); clearing a key <strong>deletes the row</strong> rather than storing NULL, so "absent" always means row-absent and a read of a missing key falls back to the documented default.
+        <div class="why"><span class="wl">Why</span> §13's <code>setting</code>/<code>app_state</code> sketches are key/value stores but the exact key strings (an on-disk/CLI interface) are nowhere specified, and the sketch omits <code>NOT NULL</code> on <code>value</code> — under-constraining the "missing row == default" read model the readers rely on. The String(value) encoding and clear-by-DELETE rule are code-only.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> (keys, NOT NULL, encoding) &nbsp;<span class="wl">Cites</span> §13 setting/app_state sketch · §11 <code>tt config</code> · §14</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §14 ============================ -->
+  <section id="p14">
+    <div class="eyebrow"><span class="n">14</span> Settings — proposed additions</div>
+    <h2>Validation, read-strictness, value vocabularies &amp; edge values</h2>
+    <ol class="req">
+
+      <li><strong>Validation rules &amp; read-strictness.</strong> <span class="new">new</span> Add validation: the rounding increment must be one of {6,10,15,30}; check-in first/interval minutes must be positive integers; backup retention must be an integer ≥ 0 (0 disables pruning; negative treated as 0). Reads are as strict as writes — an out-of-range or unparseable stored value falls back to the documented default on read rather than surfacing the bad value or erroring.
+        <div class="why"><span class="wl">Why</span> §14 pins the default values and §09 R04 the allowed increments, but the validation rules and crucially the read-side fallback-to-default policy (a corrupt stored value silently returns the default) are deliberate, observable policies absent from §14.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §14 table · §09 R04</div>
+      </li>
+
+      <li><strong>Allowed-value vocabularies (not just defaults).</strong> <span class="new">new</span> Enumerate the allowed values for each picker, not only the defaults: first check-in {30, 60, 90} min; check-in interval {15, 30, 60} min; rounding increment {6, 10, 15, 30} min; accent usage {<code>system</code>, <code>monochrome</code>} (default <code>system</code>); date/number format {<code>system</code>, <code>iso</code>} (default <code>system</code>); week start {<code>monday</code>, <code>sunday</code>} (default <code>monday</code>). Boolean settings (e.g. <code>rounding</code>) are stored/read as the canonical strings <code>'true'</code>/<code>'false'</code> with documented input aliases (e.g. <code>on</code>→<code>true</code>).
+        <div class="why"><span class="wl">Why</span> §14 gives prose defaults but no value vocabularies — the <code>accent</code> {system,monochrome}, <code>date_format</code> {system,iso}, first-check-in {30,60,90}, and interval {15,30,60} token sets that both surfaces must agree on for parity live only in code/feature files.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · accent/date_format/interval value sets are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §14 · §09 R04 · §12 R08</div>
+      </li>
+
+      <li><strong><code>iso</code> date/number-format semantics.</strong> <span class="new">new</span> Define each <code>date_format</code> value's output: for <code>iso</code>, a time-of-day renders as zero-padded 24-hour <strong>local</strong> wall-clock <code>HH:MM</code> (no seconds), a date as <code>YYYY-MM-DD</code>, a datetime as <code>YYYY-MM-DD HH:MM</code>, all from the instant's local time; <code>system</code> defers to the OS locale string. Clarify whether the "number" half of the setting governs decimal separator / digit grouping of report hour totals (e.g. <code>2.00h</code>) or rename the setting to drop the vestigial "number" label.
+        <div class="why"><span class="wl">Why</span> §14 names a single "Date/number format" setting defaulting to "system locale" and never enumerates an <code>iso</code> value, defines its output, or says what the "number" dimension does — the shipped <code>iso</code> (24-hour, bare local HH:MM) output and the unimplemented number half are pure code choices.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> (iso output) · partial (the "number" label) &nbsp;<span class="wl">Cites</span> §14 line 421 · §18 · §09</div>
+      </li>
+
+      <li><strong>Backup retention 0-semantics.</strong> <span class="new">new</span> <span class="core">core</span> Backup retention keeps the newest N backups (default 5). A retention of 0 is the documented "keep all" value — pruning is disabled and no backup is deleted; negative values are treated as 0.
+        <div class="why"><span class="wl">Why</span> §20 R04 / §14 pin "keep last N (default 5)," but the convention that 0 means keep-all/disable (vs keep-zero) is an unpinned edge-value choice.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R04 · §14</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §16 ============================ -->
+  <section id="p16">
+    <div class="eyebrow"><span class="n">16</span> Time, duration &amp; clock arithmetic — proposed additions</div>
+    <h2>Stored precision, parse grammar, rounding direction &amp; clamps</h2>
+    <ol class="req">
+
+      <li><strong>Stored timestamp precision.</strong> <span class="new">new</span> <span class="core">core</span> Stored <code>start_utc</code>/<code>end_utc</code> are ISO-8601 UTC strings truncated to whole seconds; sub-second precision is dropped on write. Derived durations are computed and reported in whole seconds.
+        <div class="why"><span class="wl">Why</span> The glossary's "to the second" and integer-second duration schema fields imply second precision, but the on-disk rule that milliseconds are explicitly truncated on write (vs a display nicety), and truncation-vs-rounding of sub-second, is not stated as a normative data contract.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> glossary "UTC, to the second" · §13 schema · <code>export-entry.schema.json</code></div>
+      </li>
+
+      <li><strong>Time-argument parse grammar &amp; zone interpretation.</strong> <span class="new">new</span> Enumerate the accepted time-argument grammar: <code>now</code>; relative offsets with h/m/s units (e.g. <code>-1h30m</code>, <code>+5m</code>); <code>HH:MM</code> interpreted as today in the local zone with seconds and sub-seconds set to zero; ISO-8601 without an offset interpreted in the local zone; ISO-8601 with an explicit offset taken as written. Any other input is rejected with a clear error. An <code>HH:MM</code> (or the HH:MM portion of a local-ISO form) whose hour is not 0–23 or minute not 0–59 is rejected with a <code>TimeParseError</code> — clock times never roll an out-of-range field forward into another day.
+        <div class="why"><span class="wl">Why</span> §11 gives examples (<code>14:30</code>, <code>2026-06-24T14:30</code>, <code>-90m</code>) but never enumerates the grammar, mentions <code>now</code>/seconds units, states the local-vs-UTC interpretation rules, says <code>HH:MM</code> zeroes seconds, or rejects nonsense — and the code silently rolls <code>25:00</code> into the next day (no range guard), a money-affecting typo path.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · seconds-zeroing &amp; range-validation are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §11 time arguments</div>
+      </li>
+
+      <li><strong>Duration math rounds to nearest; clamps non-negative.</strong> <span class="new">new</span> <span class="core">core</span> All derived durations (the raw-span <code>secondsBetween</code> primitive and live <code>elapsedSeconds</code>) round sub-second remainders to the <strong>nearest</strong> whole second (round-half-up) — a 1500ms span yields 2s, 1499ms yields 1s — distinct from the §09 display-rounding increment. Derived elapsed and billable duration are clamped non-negative: <code>elapsed = max(0, round((now − start)/1000))</code> (and 0 for unparseable timestamps), <code>billable = max(0, raw − excluded)</code>; elapsed is an integer second count.
+        <div class="why"><span class="wl">Why</span> §20 R06 shows <code>round()</code> for live elapsed in an impl-note (not a requirement) and never covers the signed stored-span <code>secondsBetween</code>; the round-vs-floor mode (a ~1s-per-entry systematic bias), the clamp on billable when <code>excluded &gt; raw</code>, and the unparseable→0 behavior are unpinned.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §03 invariant · §04 R03 · §20 R06</div>
+      </li>
+
+      <li><strong>Monotonic clamp is live-elapsed-only.</strong> <span class="new">new</span> <span class="core">core</span> The monotonic <code>max(0, …)</code> clamp applies to the <strong>live</strong> derived elapsed of the open entry. A closed entry's duration uses the stored <code>end − start</code> span; the live clamp is deliberately not reused there, so a stored <code>end</code> earlier than <code>start</code> surfaces as a detectable corrupt row rather than being silently zeroed.
+        <div class="why"><span class="wl">Why</span> §20 R06 specifies the never-negative clamp generally ("duration arithmetic"), but the deliberate asymmetry — clamp scoped to live elapsed, closed spans kept un-clamped so corruption stays visible — is a code-only decision.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R06 · §04 R03 · glossary "derived elapsed"</div>
+      </li>
+
+      <li><strong>Composed client/project label &amp; duration render format.</strong> <span class="new">new</span> An entry's client/project label is composed as <code>Client / Project</code> (space-slash-space) when both are present, the single present name when only one is, and null when neither is; each surface renders the null case in its own idiom (CLI <code>—</code>, GUI blank). Durations render as <code>HH:MM:SS</code> with hours unbounded and minutes/seconds zero-padded (negative durations prefixed <code>-</code>); report hour totals, where shown as decimal hours, render to exactly two decimal places. Display follows the system locale (per §14), while the internal day-grouping key is always the locale-independent <code>YYYY-MM-DD</code> computed in the local zone; specify the fallback locale and 12/24-hour stance when no system locale is available.
+        <div class="why"><span class="wl">Why</span> §03/§12 establish the client→project hierarchy and §14 the system-locale display, but the <code>' / '</code> label composition + null placeholders, the <code>HH:MM:SS</code> / two-decimal render formats, and the distinction between display locale and the fixed <code>YYYY-MM-DD</code> grouping key (plus the no-locale fallback) are shared display contracts living only in code.</div>
+        <div class="cite"><span class="wl">Status</span> gap <span class="st st-gap">gap</span> (label, formats, fallback) · partial (locale split) &nbsp;<span class="wl">Cites</span> §03 · §04 R06 · §12 · §14</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §19 ============================ -->
+  <section id="p19">
+    <div class="eyebrow"><span class="n">19</span> Packaging, versioning &amp; updates — proposed additions</div>
+    <h2>Version grammar, the build pipeline, installer placement &amp; the updater</h2>
+    <ol class="req">
+
+      <li><strong>Version grammar, suffix threshold &amp; resolution.</strong> <span class="new">new</span> The version is <code>YYYY.M.D[.N]</code> with month/day not zero-padded, computed from the current UTC date; the same-day counter <code>N</code> starts at 2 (the first release on a date carries no suffix; bare <code>.0</code>/<code>.1</code> are invalid). A single shared <code>APP_VERSION</code> is the one source of truth both surfaces read; an optional leading <code>v</code> on a release tag is tolerated, a missing build suffix compares as <code>.0</code>, and any unparseable/dev tag sorts oldest. Document the version env override (name and precedence) and the offline dev sentinel value (<code>0.0.0-dev</code>) used when unstamped; only non-draft, non-prerelease, parseable releases are update-eligible. A semver like <code>1.0.0</code> is rejected.
+        <div class="why"><span class="wl">Why</span> §19 R06 + the version schema pin the not-zero-padded grammar, the shared version, the dev sentinel, and reject <code>1.0.0</code>; unpinned: the suffix threshold (first build has no suffix; <code>.N</code> begins at 2), the leading-<code>v</code> tolerance, the missing-suffix-compares-as-<code>.0</code> tie-break, and the env-override name/precedence (the schema even accepts <code>.0</code>/<code>.1</code>).</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §19 R03/R06 · <code>version.schema.json</code></div>
+      </li>
+
+      <li><strong>Build pipeline: counter glob, tag/title, two-layer suffix.</strong> <span class="new">new</span> The same-day counter <code>N</code> = 1 + the number of existing git tags matching the canonical v-prefixed release-tag glob (<code>vYYYY.M.D</code> and <code>vYYYY.M.D.*</code>) for today's UTC date, and every workflow/script that computes <code>N</code> (release publish, CI verify, pack-smoke) counts over this identical glob (<code>N=1</code> emits no suffix; a bare non-v-prefixed glob is a defect). The published Release is at tag <code>vYYYY.M.D[.N]</code>, titled <code>Stint &lt;version&gt;</code>, with notes from a fixed template, <code>--target</code> the merge SHA, and is published (not draft/prerelease). The build-time protocol: CI computes <code>STINT_BUILD_N</code> (integer = 1 + today's count) and passes it to the stamper, which emits no suffix when it is absent or 1 and <code>.N</code> when ≥ 2.
+        <div class="why"><span class="wl">Why</span> §19 R05/R06 pin the counting semantics, the <code>vYYYY.M.D[.N]</code> tag, published-not-draft, and the <code>STINT_BUILD_N</code> env var, but not that the count glob must be identical (and v-prefixed) across all workflows (the audit found CI and release counting different patterns), the Release title/notes template, the <code>--target</code> SHA, or the precise integer-contract + <code>N≥2</code> threshold ownership.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the title/notes template is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §19 R05/R06 · runbook CHECK PUBLISH-ON-MERGE</div>
+      </li>
+
+      <li><strong>Artifact filename, set &amp; installer placement.</strong> <span class="new">new</span> Packaged artifacts are named <code>${productName}-${version}.${ext}</code> (<code>Stint-&lt;version&gt;.dmg</code>/<code>.AppImage</code>/<code>.deb</code>), derived from <code>productName</code> (never the scoped <code>@stint/gui</code> name, whose <code>/</code> breaks the <code>.deb</code> path) — the installer scripts depend on this exact form. Decide explicitly whether Linux ships AppImage only, <code>.deb</code> only, or both. On Linux the installer must place <code>packages/cli/dist/bin.js</code> (and its deps) at a path <code>tt-launcher.sh</code> searches (e.g. <code>/opt/stint/resources/app/…</code>) so that after one install <code>tt status</code> succeeds; an opaque AppImage copy whose interior the launcher cannot reach does not satisfy R02.
+        <div class="why"><span class="wl">Why</span> §19 R01/R02 pin the artifact types and the one-step PATH symlink, and the runbook hard-codes <code>Stint-&lt;version&gt;.&lt;ext&gt;</code> as installer input, but the filename template (and the productName-not-scoped-name rule), the AppImage-vs-.deb "or"/"and" question, and the installer-must-meet-the-launcher-search-path seam are unstated.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the filename template is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §19 R01/R02 · runbook CHECK INSTALL · <code>tt-launcher.sh</code></div>
+      </li>
+
+      <li><strong><code>tt</code> launcher resolution &amp; runtime floor.</strong> <span class="new">new</span> The launcher resolves <code>bin.js</code> from a defined ordered set of install locations (first match wins), prefers the Electron-bundled Node (<code>ELECTRON_RUN_AS_NODE=1</code>) and falls back to a system Node only if it meets the runtime floor (Node ≥ 22.5, for <code>node:sqlite</code>; Electron ≥ 35 with bundled Node ≥ 22.5). When neither the runtime nor <code>bin.js</code> can be resolved, <code>tt</code> exits with a defined non-zero code (e.g. 127) and an actionable message naming what was missing; specify whether the launcher must verify a system Node's version before exec'ing it rather than failing cryptically.
+        <div class="why"><span class="wl">Why</span> COVERAGE pins the canonical <code>bin.js</code> path and the bundled-Node-first policy, but the ordered candidate-location search, the 127 exit + not-found message, and the 22.5 floor (and whether the launcher actively verifies it) are absent from the context/criteria docs.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the exit code &amp; location list are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §19 R02 · COVERAGE §19 R02</div>
+      </li>
+
+      <li><strong>Updater HTTP contract &amp; artifact selection.</strong> <span class="new">new</span> Update requests go to the GitHub Releases API for the distribution repo via Electron's <code>net</code> only (never <code>node:https</code>/<code>fetch</code>), with the required headers (User-Agent, Accept <code>application/vnd.github+json</code>); any non-2xx / non-array / parse failure surfaces as a graceful "error," never a crash. The updater accepts only macOS (<code>.pkg</code> &gt; <code>.dmg</code>) and Linux (<code>.AppImage</code> &gt; <code>.deb</code>) artifacts, matched case-insensitively by suffix preference; either a release ships at most one asset per platform-extension (a stated release invariant) or, when per-arch assets ship, the updater selects the asset matching the running CPU architecture (arm64 vs x64) with a defined fallback.
+        <div class="why"><span class="wl">Why</span> §19 R03 pins Electron-net, graceful-error, and drafts/prereleases-skipped, but not the endpoint repo, the required headers, the per-platform suffix preference order + case-insensitive matching, or the per-architecture tie-break (which can otherwise download the wrong-arch installer).</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · headers &amp; arch tie-break are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §19 R01/R03 · §17 R09</div>
+      </li>
+
+      <li><strong>Update download integrity, progress &amp; guided install.</strong> <span class="new">new</span> The downloaded artifact is staged outside the database directory (the OS temp dir, never beside the DB), verified against the release asset's declared size (and/or a published checksum) before install — a mismatch rejects the download as corrupt — with progress surfaced as a clamped integer floor percent <code>[0,100]</code>. When neither content-length nor the declared size is known, the updater surfaces an explicitly indeterminate-progress state and either declines without an integrity guard or applies an alternative check; it must not show a frozen 0% bar while silently skipping the only corruption check. The guided install presents per-platform replace-the-app steps (the macOS one-time-Gatekeeper / no-Developer-ID note; the Linux make-executable / install-<code>.deb</code> step) and reveals the installer in the OS file manager as a best-effort affordance whose failure is tolerated (the step text still names the file path). On macOS, when both a <code>.pkg</code> and <code>.dmg</code> are published the updater installs the <code>.pkg</code>.
+        <div class="why"><span class="wl">Why</span> §19 R04 (todo) names download + guided install + "never touches the DB," but temp-dir staging, size/checksum verification, the unknown-size case, the <code>[0,100]</code> progress clamp, the exact guided-install step content, the reveal-is-non-fatal affordance, and the <code>.pkg</code>-over-<code>.dmg</code> install preference are unspecified.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · integrity/progress/unknown-size are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §19 R02/R04 · §16 · runbook CHECK INSTALL &amp; UPDATE</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <!-- ============================ §20 ============================ -->
+  <section id="p20">
+    <div class="eyebrow"><span class="n">20</span> Data durability &amp; integrity hardening — proposed additions</div>
+    <h2>The open-time pragma protocol, the recovery gate &amp; the backup contract</h2>
+    <ol class="req">
+
+      <li><strong>Open-time pragma protocol &amp; in-memory carve-out.</strong> <span class="new">new</span> <span class="core">core</span> Pin in R01: the chosen <code>synchronous</code> level (FULL, with rationale) and the default busy-timeout value (5000ms); that on a file-backed open the pragmas are <strong>set in a fixed dependency order then read back</strong>, retried once as a full set, and the open <strong>refused via a distinct <code>DbOpenError</code></strong> before migration / any write if they don't verify; and the in-memory carve-out — <code>:memory:</code> keeps <code>foreign_keys</code> + <code>busy_timeout</code> but skips WAL/synchronous.
+        <div class="why"><span class="wl">Why</span> R01 pins the pragma set and "correct-or-refuse before any write," but explicitly allows NORMAL-under-WAL (so FULL is a free choice), leaves the busy-timeout default unstated ("a busy timeout"), and the set-read-back-retry-once protocol, the dependency order, and the <code>:memory:</code> carve-out are implementation detail.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R01 · §04 R02 · §13</div>
+      </li>
+
+      <li><strong>Corruption taxonomy for the recovery gate.</strong> <span class="new">new</span> <span class="core">core</span> The startup check is <code>PRAGMA quick_check</code> specifically (faster than <code>integrity_check</code>, with the accepted trade-off that it skips the exhaustive UNIQUE/row-count pass). The DB is healthy <strong>only</strong> when <code>quick_check</code> returns exactly one row equal to the literal <code>'ok'</code>; any other row, any non-<code>ok</code> message, or a throw while running the pragma is a failed check. Define what counts as corruption for recovery: a failed integrity check <strong>and</strong> any other open-time throw (e.g. an unreadable/clobbered header) are treated as corruption (recover); a pragma/configuration refusal (<code>DbOpenError</code>) is <strong>not</strong> corruption and propagates without quarantine. Recovery never falls back to a fresh empty DB.
+        <div class="why"><span class="wl">Why</span> R03/R05 pin quick_check, no-write-on-failure, quarantine + restore, and never-empty-start, and the runbook commits to quick_check, but the OK oracle (exactly one <code>'ok'</code> row; a pragma throw is failure), the trade-off note, and the taxonomy distinguishing arbitrary open-time throws (corruption) from pragma refusals (propagate) are unstated. R03's "<code>quick_check / integrity_check</code>" slash should be tightened to the runbook's commitment.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R03/R05 · §16 · runbook</div>
+      </li>
+
+      <li><strong>Backup is conditional, self-contained &amp; best-effort.</strong> <span class="new">new</span> <span class="core">core</span> "Changed since the last backup" is determined by a full-content fingerprint (a content hash, e.g. SHA-256) of the <strong>checkpointed</strong> main file compared against the latest backup — never file size or mtime (under WAL a same-size in-place rewrite must still trigger a backup). Equal fingerprints skip the copy (<code>backupNow</code>/launch return null). A backup is a single self-contained file: the WAL is checkpointed into the main file before the copy and no WAL/SHM companion is written beside the <code>.bak</code>, so any one backup file is independently restorable; a failed/empty checkpoint does not abort the copy. Launch backups are <strong>best-effort</strong> — a failure is logged but never blocks opening the DB — and a no-op for an unchanged DB, an in-memory DB (<code>:memory:</code>), or a <code>dbPath</code> whose file does not yet exist (neither throwing nor creating a stray file).
+        <div class="why"><span class="wl">Why</span> R04 pins "if the DB changed, write a copy; keep last N; checkpoint-then-copy," but the change-detection metric (content hash, not size/mtime), the single-self-contained-file restorability property, the best-effort (failure-never-blocks-open) rule, the <code>null</code>-when-unchanged/in-memory/missing-file returns, and the no-stray-file guards are unstated.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the change metric &amp; best-effort rule are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §20 R04 · §16 · <code>backup.schema.json</code></div>
+      </li>
+
+      <li><strong>Backup naming &amp; name-order authority.</strong> <span class="new">new</span> <span class="core">core</span> Backups are named <code>&lt;dbFilename&gt;.bak-&lt;YYYYMMDDTHHMMSSZ&gt;</code> where the stamp is the UTC instant in fixed-width zero-padded form (no separators, no millis). Because the stamp is fixed width, lexicographic name order equals chronological order; "latest backup" selection and retention pruning order backups by this <strong>in-name timestamp</strong> (not file mtime, which serves only as a same-second tiebreaker — most-recently-written wins, or state that same-second collisions are impossible by construction). The Settings/CLI list is newest-first.
+        <div class="why"><span class="wl">Why</span> The filename grammar and "newest-first" are pinned (<code>backup.schema.json</code>, runbook), but the load-bearing invariant — ordering is computed from the in-name stamp (lexicographic == chronological), not mtime, and the fixed-width padding is what guarantees it (the schema's separate <code>created_utc</code> could be misread as the sort key) — plus the same-second tiebreaker are the genuine gap.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> &nbsp;<span class="wl">Cites</span> §20 R04 · <code>backup.schema.json</code> · runbook</div>
+      </li>
+
+      <li><strong>Quarantine sibling naming &amp; companion grouping.</strong> <span class="new">new</span> <span class="core">core</span> The corruption path quarantines the bad file as <code>&lt;dbPath&gt;.corrupted-&lt;YYYYMMDDTHHMMSSZ&gt;</code> and a user-initiated restore displaces the live file as <code>&lt;dbPath&gt;.replaced-&lt;YYYYMMDDTHHMMSSZ&gt;</code> — the UTC timestamp suffix avoiding collisions across repeated events so no prior quarantine is overwritten. In both paths the WAL/SHM siblings are moved alongside the main file under the same grouping (or removed if unmovable), and original bytes are never destroyed. (Reconcile the §16/§20 prose, which says bare <code>.corrupted</code>, with this timestamped form.)
+        <div class="why"><span class="wl">Why</span> The criteria layer already pins both <code>.corrupted-&lt;ts&gt;</code> and <code>.replaced-&lt;ts&gt;</code> with the suffix (contradicting the PRD's bare <code>.corrupted</code>), but that the WAL/SHM companions travel with the main file under the same suffix (or are removed) is unspecified everywhere, and the PRD prose needs reconciling to the timestamped form.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · companion grouping is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §16 · §20 R05 · runbook</div>
+      </li>
+
+      <li><strong>Recovery edges: no-backup, refused-open immutability &amp; named-restore errors.</strong> <span class="new">new</span> <span class="core">core</span> If no good backup exists, recovery fails loudly (a <code>RecoveryError</code>) and leaves the corrupt file untouched — never an empty start. On a refused integrity-failed open with no recovery available, the corrupt file is left <strong>byte-for-byte unchanged</strong> (no data write, truncate, journal creation, or metadata touch), observably both "open refused" and "file untouched." A user-initiated restore naming a backup that does not exist beside the DB fails with a <code>RecoveryError</code>, performs no quarantine and no copy, and leaves the live database byte-for-byte unchanged; the error names the missing backup, identically on both surfaces.
+        <div class="why"><span class="wl">Why</span> R05 specifies quarantine + restore-from-latest + never-silently-lose-data, but the no-backup-then-RecoveryError-and-leave-the-file behavior is only in impl prose; the stronger byte-for-byte immutability of a refused open (vs merely "no write") and the entire <em>manual</em> restore-of-an-unknown-name failure path (the spec describes restore success only) are gaps.</div>
+        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · named-restore error is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §20 R03/R05 · §11 backup restore · §16 · §17 R12</div>
+      </li>
+
+    </ol>
+  </section>
+
+  <div class="foot">
+    <span>stint — proposed requirement additions · audit #27</span>
+    <span>PROPOSAL · not adopted · companion to context/prd.html</span>
+  </div>
+
+</main>
+</body>
+</html>

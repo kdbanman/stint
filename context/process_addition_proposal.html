@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Process &amp; Verification Requirements · Proposed Additions (issue #27)</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* PROPOSAL banner */
+  .banner{border:1px solid var(--ink);border-left:4px solid var(--ink);border-radius:6px;background:#fbfbfa;padding:18px 22px;margin:0 0 30px}
+  .banner .tagline{font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--paper);background:var(--ink);border-radius:3px;padding:2px 7px;font-weight:700;display:inline-block;margin-bottom:10px}
+  .banner p{margin:0;color:var(--ink);font-size:14.5px;line-height:1.55}
+  .banner p + p{margin-top:9px}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  h3 .tag{font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;margin-left:8px;vertical-align:middle}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  ol.req{margin:0 0 14px;padding-left:0;list-style:none;counter-reset:r}
+  ol.req li{position:relative;padding-left:34px;margin-bottom:24px;counter-increment:r;color:var(--ink-soft)}
+  ol.req li::before{content:"P" counter(r,decimal-leading-zero);position:absolute;left:0;top:1px;font-family:var(--mono);font-size:11px;color:var(--muted);font-weight:600}
+  ol.req li .rq{display:block;margin-bottom:7px}
+  /* per-requirement annotation rows */
+  .ann{margin:6px 0 0;padding:0;list-style:none;font-size:13.5px}
+  .ann li{position:static;padding:0;margin:0 0 4px;counter-increment:none}
+  .ann li::before{content:none}
+  .ann .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700;display:inline-block;min-width:78px;vertical-align:top}
+  .ann .v{color:var(--ink-soft)}
+  /* status badges */
+  .st{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:3px;padding:1px 5px;white-space:nowrap;vertical-align:middle}
+  .st.gap{color:var(--paper);background:var(--ink);border:1px solid var(--ink)}
+  .st.partial{color:var(--ink);background:#fbfbfa;border:1px solid var(--rule-strong)}
+  .st.new{color:var(--paper);background:var(--muted);border:1px solid var(--muted);margin-left:6px}
+  /* method code pill */
+  .mc{font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--rule-strong);border-radius:3px;padding:1px 5px;color:var(--ink);white-space:nowrap;background:#fbfbfa}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  pre{background:#fbfbfa;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12.5px;line-height:1.7;color:var(--ink-soft);padding:16px 18px;margin:16px 0;overflow-x:auto;white-space:pre}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+    td.m{white-space:normal}
+    .ann .k{min-width:0;display:block;margin-bottom:1px}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">how it's built · <b>PROPOSAL</b> · tt v1</div>
+    </div>
+    <div class="mast-meta">Process &amp; Verification Requirements · Proposed Additions · issue #27</div>
+  </header>
+
+  <div class="banner">
+    <span class="tagline">Proposal — not adopted</span>
+    <p>This page <strong>proposes additions</strong> to <a href="process.html">process.html</a>. It is the synthesizer output of issue&nbsp;<a href="https://github.com/kdbanman/stint/issues/27">#27</a>'s <strong>adversarial implementation-vs-spec audit</strong>: each item below is an <em>implicit</em> requirement the implementation already relies on (with concrete code/test evidence) that the process spec does not — or does not fully — pin down.</p>
+    <p>It is <strong>not a replacement</strong> for process.html and is <strong>not yet adopted</strong>. Nothing here is normative until reviewed and merged into the canonical doc. Numbering uses a provisional <code>P</code>-prefix to keep it visibly distinct from the live <code>R</code>-requirements.</p>
+  </div>
+
+  <p class="lede">The audit surfaced <strong>eleven</strong> process-level gaps — concerns where a guard's own source is the sole definition of a release-gating invariant, and a spec reader cannot derive what is being enforced. They group into four areas: the no-network backstop, packaging &amp; CI composition, versioning, and the install launcher.</p>
+
+  <p>Each proposed addition is given in this doc's voice: the requirement text, a short <strong>Why</strong> (the implicit behavior plus the code/test evidence that proves the implementation depends on it), the audit <strong>status</strong> (<span class="st gap">gap</span> unspecified vs <span class="st partial">partial</span> stated-but-underpinned), the existing <strong>citation</strong> where partial, and the proposed <strong>AC</strong>. Status semantics match the principles in <a href="process.html#s2">process.html §02</a>: an underpinned guard is a candidate <em>false green</em> — "green is meaningful" only if the spec, not just the scanner, says what green covers.</p>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>The no-network backstop</a></li>
+      <li><a href="#s2"><span class="tn">02</span>Packaging &amp; CI composition</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Version source-of-truth stamping</a></li>
+      <li><a href="#s4"><span class="tn">04</span>The tt launcher contract</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Disposition summary</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> Proposed additions</div>
+    <h2>The no-network backstop</h2>
+    <p>The application requirement — <em>"no network connections, beyond the explicit, user-initiated update check/download"</em> (<a href="prd.html">prd.html</a> §17 R09, §02 non-goals, §13 "No network, ever.") — is well specified. What process.html does <em>not</em> pin is the <strong>verification contract</strong>: that the guarantee is enforced by an automated scan, what that scan covers, and what closed sets it asserts against. Today <code>scripts/check-no-network.mjs</code> is the sole authority for all four. That is exactly the blind-spot risk "green is meaningful" forbids: an unscanned directory passes silently.</p>
+    <ol class="req">
+
+      <li>
+        <span class="rq"><strong>An automated no-network scan gates every shipped source file.</strong> A CI-enforced scan MUST assert that no shipped source — including renderer assets that ship <em>outside</em> <code>packages/*/src</code> (e.g. <code>renderer/app.js</code>, <code>renderer/popover.js</code>, <code>renderer/util.js</code>) — imports a networking module or issues an outbound API call. The single user-initiated update-check/download path is the only permitted exception. The scan's file set MUST be derivable from the workspace, so a new shipped directory cannot escape coverage.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The renderer files ship but live outside <code>src</code>; only an explicit scan of that directory keeps them honest. The offline guarantee is repeatedly specified but the <em>scan</em> enforcing it, and its coverage of the out-of-<code>src</code> renderer, is a process detail absent from the seed.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — guarantee specified, scan + its renderer scope not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="prd.html">prd.html</a> §17 R09; §02 non-goals; §13; <a href="process.html">process.html</a> (verification apparatus).</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> the scan's file set explicitly includes the renderer files outside <code>src</code> and fails if any shipped file references a network primitive.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>The renderer ships as offline-only DOM scripts.</strong> Renderer code MUST contain no browser request API — <code>fetch</code>, <code>XMLHttpRequest</code>, <code>WebSocket</code>, <code>EventSource</code>, <code>navigator.sendBeacon</code> — and MUST load as classic <code>file://</code> scripts with no network-module imports (no ES-module fetch over the wire), so §17 R09's offline guarantee is enforceable per-commit rather than by inspection.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">"Renderer makes no network calls" follows from §17 R09, but the exact forbidden-API enumeration and the classic-script/no-ES-module loading model are renderer constraints the static guard imposes — not stated in the spec.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — offline intent specified, forbidden-API set + loading model not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="prd.html">prd.html</a> §17 R09; §02 non-goals; §19 R03 ("Electron's built-in <code>net</code>, never <code>node:https</code> / <code>fetch</code>").</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> a per-commit static guard greps renderer sources for the forbidden request APIs and module imports and fails on any hit.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>The shipped production-dependency allowlist is a closed no-network invariant.</strong> The shipped production dependencies MUST be exactly <code>@stint/core</code>, <code>commander</code>, and <code>electron</code>. Introducing any other production dependency is an offline/no-network violation requiring explicit review, because each added prod dep is unaudited outbound-request surface.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The single-allowed-outbound carve-out is specified, and <code>commander</code> / <code>electron</code> are mentioned, but nowhere does the spec state the <em>closed</em> three-dep set or that any other prod dep is a violation. That set lives only in <code>check-no-network.mjs</code>.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — carve-out specified, the closed allowlist not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="prd.html">prd.html</a> §17 R09, §19 R03/R04; <code>COVERAGE.md</code> §19 R03/R04 rows; §13; runbook "CHECK NO NETWORK".</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> <code>no-network.test.ts</code> asserts the prod-dep set equals the spec-stated allowlist, failing on any addition.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>The no-network scan's surface and forbidden set are specified, not scanner-defined.</strong> process.html MUST state the scan contract that operationalizes §17 R09: the <strong>directories scanned</strong> (all <code>packages/*/src</code> plus the GUI renderer dir, since it ships); the <strong>file extensions</strong> (<code>.ts</code>, <code>.js</code>, <code>.mjs</code>, <code>.cjs</code>, <code>.html</code>, excluding <code>*.test.ts</code>); and the <strong>forbidden enumeration</strong> — networking modules (<code>node:http(s)</code>, <code>node:http2</code>, <code>node:net</code>, <code>node:dgram</code>, <code>node:tls</code>, <code>node:dns</code>; <code>axios</code>, <code>node-fetch</code>, <code>undici</code>, <code>got</code>, <code>ws</code>, <code>socket.io</code>, <code>request</code>), tokens (<code>XMLHttpRequest</code>, <code>WebSocket</code>, <code>EventSource</code>, <code>navigator.sendBeacon</code>), and bare global <code>fetch()</code>. An omitted directory or a new networking API must itself be a caught regression.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The spec states the goal and that a backstop scans for "any networking import," but never enumerates the concrete surface (which dirs — notably the out-of-<code>src</code> renderer — which extensions, the <code>*.test.ts</code> exclusion) nor the forbidden module/token list or bare-<code>fetch</code> detection. A spec reader cannot derive what "no network" concretely forbids; the scanner is the sole definition.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st gap">gap</span> — scan surface &amp; forbidden set unspecified.</span></li>
+          <li><span class="k">Citation</span> <span class="v">none enumerating it (§17 R09 states only "makes no network connections"; runbook "CHECK NO NETWORK" says it scans "the shipped source and production dependency tree for any networking import" without enumeration).</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> a meta-assertion that <code>check-no-network.mjs</code>'s scanned-dir list includes every shipped source dir (compared against the workspace package list), so a new package or renderer dir cannot silently escape the scan.</span></li>
+        </ul>
+      </li>
+
+    </ol>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> Proposed additions</div>
+    <h2>Packaging &amp; CI composition</h2>
+    <p>process.html's principles (§02) were motivated by the app-builder <code>ENOENT</code> packaging incident, and pin that a release-gating concern must have a PR-path check that stays wired. What remain unpinned are the <strong>operational specifics</strong> of the packaging guard, the <strong>shape</strong> of the CI pipeline it sits in, and — most sharply — whether the CI evidence-regeneration step actually <em>asserts</em> anything. The first two are acknowledged residue (§03, deferred to #19); the third is a principle-violating blind spot.</p>
+    <ol class="req">
+
+      <li>
+        <span class="rq"><strong>The packaging-toolchain guard proves the helper runs, then self-heals or fails loud.</strong> Before packaging, CI MUST verify that electron-builder's <code>app-builder</code> helper exists, is executable, and <em>actually runs</em> (invoke <code>--version</code> under a bounded timeout, e.g. 20s) — a spawn-and-run check, not a stat. On a known-recoverable failure it MUST perform a defined reinstall (clear the npm cache, remove <code>node_modules</code>, <code>npm ci</code>) and re-verify, else fail at the boundary naming the absent binary. The chosen packaging fix <code>npmRebuild: false</code> MUST be recorded with its rationale.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The principles behind the guard are specified; the concrete operational values — the 20s timeout, the spawn-and-run (vs stat-only) policy, the cache-clean / <code>rm -rf node_modules</code> / <code>npm ci</code> repair recipe, and <code>npmRebuild:false</code> — live only in <code>scripts/check-packaging.mjs</code>. process.html is a seed, so these are acknowledged residue.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — principles specified, operational contract not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="process.html#s2">process.html §02</a> ("Self-heal or fail loud", "Verify before the gate", "Green is meaningful"); <code>COVERAGE.md</code> §19 R01 row; runbook "CHECK BUILD MATRIX".</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> extend <code>build-matrix.test.ts</code> to assert <code>check-packaging.mjs</code> <em>spawns</em> the helper (not only stats it) and that the repair path exists.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>The CI gate set and ordering are specified.</strong> The PR-path <strong>verify</strong> job MUST run, in order: <code>npm ci</code> → version stamp → build → lint → typecheck → full test → no-network backstop → packaging guard → regenerate acceptance evidence, on a pinned runner (node 22, <code>ubuntu-latest</code>). The pipeline MUST also include a separate <strong>pack-smoke</strong> job (Linux <code>electron-builder --dir</code>, asserting the packaged payload — <code>app.asar</code> or <code>resources/app/package.json</code>) and a headless <strong>judge</strong> job (Playwright/Chromium under <code>xvfb</code>). A dropped gate must be a caught regression.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">Individual gates are pinned (packaging guard + pack-smoke; <code>version:stamp</code> before build; the no-network backstop; the headless judge), but the full <em>ordered</em> step list, that evidence is regenerated <em>in CI</em>, the node-22 / <code>ubuntu-latest</code> pin, and the pack-smoke payload assertion are not. process.html §03 explicitly defers the automatic-vs-manual inventory to #19.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — individual gates pinned, composition not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="process.html#s2">process.html §02</a> &amp; <a href="process.html#s3">§03</a> residue; <code>COVERAGE.md</code> §19 R01 row; §17 R09 GOLD <code>verify:no-network</code>; <a href="acceptance.html">acceptance.html</a> §02/§09 (judge under xvfb).</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> extend <code>build-matrix.test.ts</code> (or a new ci-shape test) to assert <code>ci.yml</code>'s verify job contains the required ordered steps and that the judge + pack-smoke jobs exist with their headless/xvfb configuration.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>CI evidence regeneration must assert no drift.</strong> Any CI step that regenerates checked-in acceptance evidence MUST assert the regenerated output is byte-identical to the committed evidence (e.g. <code>git diff --exit-code</code>) and fail on drift. A regeneration that does not compare is a false-green no-op gate ("Green is meaningful"). This in turn requires the evidence generators to be <strong>deterministic</strong> (pinned clock and inputs).</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">CI regenerates evidence on every run but never asserts it is unchanged, so the regeneration proves nothing — a blind spot the "Green is meaningful" and "Protect the guard" principles squarely forbid. The concrete no-drift requirement is written nowhere; this sits in the acknowledged §03 residue but has a clear principled basis.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st gap">gap</span> — no doc states a CI evidence drift-gate.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="process.html#s2">process.html §02</a> ("Green is meaningful", "Protect the guard"); <a href="process.html#s3">§03</a>; acceptance criteria describe evidence as "regenerated by the suites" but pin no no-drift check.</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> a meta-check asserting <code>npm run evidence</code> is followed by a non-empty drift assertion, plus a deliberately stale-evidence fixture that must fail CI, proving the gate bites.</span></li>
+        </ul>
+      </li>
+
+    </ol>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Proposed addition</div>
+    <h2>Version source-of-truth stamping</h2>
+    <p>The single-source-of-truth design (<a href="prd.html">prd.html</a> §19 R06) and the <code>STINT_VERSION</code> runtime override are specified. What is not pinned is the <strong>rewrite contract</strong> the stamper depends on — the exact source-line shape, that it rewrites only the fallback literal, fails loudly on a missing pattern, preserves the override, and is idempotent.</p>
+    <ol class="req">
+
+      <li>
+        <span class="rq"><strong>The version-stamping rewrite contract is pinned.</strong> <code>APP_VERSION</code> in <code>packages/core/src/version.ts</code> MUST be <code>process.env.STINT_VERSION ?? &lt;stamped literal&gt;</code>. <code>scripts/stamp-version.mjs</code> MUST rewrite <em>only</em> the fallback literal, MUST throw (fail loudly) if the expected <code>APP_VERSION</code> assignment pattern is absent, MUST preserve the <code>STINT_VERSION</code> env override intact, and MUST be idempotent (a second run is a no-op). <code>STINT_VERSION</code> is a supported runtime override.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The spec pins behavior (both surfaces read one stamped version, override honored) but not the implementation mechanics: the precise <code>?? &lt;literal&gt;</code> source shape the stamper keys off, that it rewrites only the literal, throws on a missing pattern, and is idempotent. Those are <code>stamp-version.mjs</code> internals.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — design + override specified, rewrite contract not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="prd.html">prd.html</a> §19 R06; <code>COVERAGE.md</code> §19 R06 row ("APP_VERSION equals the <code>STINT_VERSION</code> override when set…"); runbook ("overridable at runtime via <code>STINT_VERSION</code>").</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> a test that runs <code>stamp-version.mjs</code> twice and asserts the second run is a no-op (idempotent), and that it throws when <code>version.ts</code> lacks the expected <code>APP_VERSION</code> assignment.</span></li>
+        </ul>
+      </li>
+
+    </ol>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Proposed additions</div>
+    <h2>The tt launcher contract</h2>
+    <p>The Node&nbsp;≥&nbsp;22.5 floor (required for <code>node:sqlite</code>) and the bundled-Node happy path are specified, and process.html's "Self-heal or fail loud" principle is normative. What is not written for the launcher is its <strong>failure contract</strong>: that a system-node fallback must vouch for the floor before <code>exec</code>, and that each failure mode emits a distinct, actionable message with a defined exit code. Exec'ing a Node 20 that crashes deep inside <code>node:sqlite</code> is precisely the "cryptic downstream error" the principle forbids.</p>
+    <ol class="req">
+
+      <li>
+        <span class="rq"><strong>The launcher's system-node fallback enforces the version floor.</strong> When falling back to a system <code>node</code>, the <code>tt</code> launcher MUST verify that node satisfies the Node&nbsp;≥&nbsp;22.5 floor before <code>exec</code>'ing it, and otherwise refuse with the actionable not-found message. Exec'ing an older node that then fails inside <code>node:sqlite</code> is a "fail loud" violation. The launcher must never <code>exec</code> a runtime it cannot vouch for.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The floor and the fail-loud principle exist; the specific obligation that the fallback verify the floor (rather than <code>exec</code> blindly) is derivable from a normative principle but not written for the launcher. A system-node fallback is itself outside the spec'd bundled-Node happy path.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st partial">partial</span> — floor + principle specified, fallback obligation not.</span></li>
+          <li><span class="k">Citation</span> <span class="v"><a href="prd.html">prd.html</a> §15 (bundled Node ≥ 22.5 for <code>node:sqlite</code>); runbook "CHECK INSTALL"; <a href="process.html#s2">process.html §02</a> "Self-heal or fail loud".</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">MANUAL</span> runbook step under CHECK INSTALL: with only a Node&nbsp;&lt;&nbsp;22.5 on PATH and the bundled runtime removed, run <code>tt</code> and assert it refuses with the actionable "≥ 22.5" message rather than crashing inside <code>node:sqlite</code>. Optionally a <span class="mc">GOLD</span> shell-lint asserting the fallback contains a version gate.</span></li>
+        </ul>
+      </li>
+
+      <li>
+        <span class="rq"><strong>The launcher's two failure modes emit distinct actionable messages.</strong> The <code>tt</code> launcher's two failure modes — CLI entrypoint not found in any bundle, and no eligible runtime found — MUST each exit non-zero with a specific, actionable stderr message naming the missing thing and its remedy (reinstall / install Node&nbsp;≥&nbsp;22.5). The spec MUST state whether the two modes use distinct exit codes for diagnosability or may share <code>127</code>.</span>
+        <ul class="ann">
+          <li><span class="k">Why</span> <span class="v">The success contract is pinned, but neither failure mode's exit code (currently <code>127</code> for both) nor its stderr wording is specified anywhere in <code>context/</code> or <code>criteria/</code>. Sharing <code>127</code> across both modes — and using it for "runtime found but bin missing" — is a deliberate-but-undocumented decision; a tester cannot assert the failure contract from the spec.</span></li>
+          <li><span class="k">Status</span> <span class="v"><span class="st gap">gap</span> — failure exit codes &amp; messages unspecified.</span></li>
+          <li><span class="k">Citation</span> <span class="v">none (no <code>context/</code> or <code>criteria/</code> doc names exit <code>127</code> or either message; runbook "CHECK INSTALL" asserts only the success path).</span></li>
+          <li><span class="k">Proposed AC</span> <span class="v"><span class="mc">GOLD</span> shell-lint or <span class="mc">MANUAL</span> step asserting each failure path emits its distinct actionable message and the agreed exit code(s), so a reworded/swapped message or changed code is a caught regression.</span></li>
+        </ul>
+      </li>
+
+    </ol>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Disposition</div>
+    <h2>Disposition summary</h2>
+    <p>The eleven proposed additions at a glance. <span class="st gap">gap</span> = unspecified; <span class="st partial">partial</span> = stated in intent but underpinned at the process level. All are candidates for adoption into <a href="process.html">process.html</a> (some routed to the #19 SDLC spec).</p>
+    <table>
+      <thead><tr><th>P#</th><th>Area</th><th>Status</th><th>AC method</th></tr></thead>
+      <tbody>
+        <tr><td data-l="P#" class="m">P01</td><td data-l="area">No-network scan covers out-of-<code>src</code> renderer</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P02</td><td data-l="area">Renderer offline-only (forbidden request APIs + loading model)</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P03</td><td data-l="area">Closed prod-dependency allowlist</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P04</td><td data-l="area">No-network scan surface &amp; forbidden set</td><td data-l="status"><span class="st gap">gap</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P05</td><td data-l="area">Packaging guard: run-the-helper, self-heal, <code>npmRebuild:false</code></td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P06</td><td data-l="area">CI verify gate set, ordering &amp; runner pins</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P07</td><td data-l="area">CI evidence regeneration asserts no drift</td><td data-l="status"><span class="st gap">gap</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P08</td><td data-l="area">Version-stamping rewrite contract</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+        <tr><td data-l="P#" class="m">P09</td><td data-l="area">Launcher fallback enforces ≥ 22.5 floor</td><td data-l="status"><span class="st partial">partial</span></td><td data-l="ac method"><span class="mc">MANUAL</span></td></tr>
+        <tr><td data-l="P#" class="m">P10</td><td data-l="area">Launcher dual failure messages &amp; exit codes</td><td data-l="status"><span class="st gap">gap</span></td><td data-l="ac method"><span class="mc">GOLD</span></td></tr>
+      </tbody>
+    </table>
+    <div class="note">
+      <span class="lbl">Note · count</span>
+      The summary lists ten rows because P01 and the renderer-scope facet share one no-network scan addition; the eleventh audited gap (renderer offline loading model) is folded into P02. The audit confirmed <strong>eleven</strong> distinct implicit requirements; this proposal authors them as <strong>ten</strong> numbered additions after merging the two no-network duplicates that resolve to the same scan contract.
+    </div>
+  </section>
+
+  <div class="foot">
+    <span>stint · process &amp; verification — proposed additions</span>
+    <span>PROPOSAL · not adopted · issue #27</span>
+  </div>
+
+</main>
+</body>
+</html>
