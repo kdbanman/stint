@@ -3,134 +3,184 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Settings (mockup)</title>
-<!--
-  Slightly-noisy UI prototype for the Stint settings view.
-  Design intent for PRD §14, §12 R11, §19 R03/R04/R06 (Software Update),
-  §20 R04/R05 (Backups & recovery), §17 R12/R13. Keep in sync with the PRD.
--->
+<title>Stint — Settings</title>
 <style>
   :root{
-    --paper:#fff;--ink:#15151a;--ink-soft:#3c3c43;--muted:#737380;--faint:#a6a6b0;
-    --rule:#e6e6e3;--rule-strong:#d8d8d4;--nav:#f7f7f8;--accent:#2f6df0;--accent-soft:#eaf0fe;
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
-    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:#dcdce0;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased}
-  .window{max-width:1024px;margin:28px auto;background:var(--paper);border-radius:11px;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.28);border:1px solid #c9c9cf}
-  .titlebar{height:38px;display:flex;align-items:center;background:#ececef;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:14px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
-  .lights .r{background:#ff5f57}.lights .y{background:#febc2e}.lights .g{background:#28c840}
-  .titlebar .title{position:absolute;left:0;right:0;text-align:center;font-size:13px;color:var(--ink-soft);font-weight:600}
-  .shell{display:flex;min-height:560px}
-  .nav{width:168px;background:var(--nav);border-right:1px solid var(--rule);padding:14px 10px;flex:none}
-  .nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;color:var(--ink-soft);text-decoration:none;margin-bottom:2px}
-  .nav a .ic{width:18px;text-align:center;opacity:.7}
-  .nav a.active{background:var(--accent-soft);color:var(--accent);font-weight:600}.nav a.active .ic{opacity:1}
-  .nav a:hover:not(.active){background:#eeeef1}
-  .main{flex:1;padding:22px 26px}
-  h2{font-size:18px;margin:0 0 4px;font-weight:680}
-  .sub{color:var(--muted);font-size:13px;margin:0 0 18px}
-  .grp{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);margin:20px 0 6px}
-  .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:16px;padding:12px 0;border-bottom:1px solid var(--rule)}
-  .row .k{font-size:14px;color:var(--ink)}
-  .row .k small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
-  .field{border:1px solid var(--rule-strong);border-radius:7px;padding:6px 10px;font-size:13px;color:var(--ink);background:#fff;min-width:150px}
-  .seg{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden}
-  .seg span{padding:5px 11px;font-size:13px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
-  .seg span:last-child{border-right:0}.seg span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
-  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:13px;color:var(--ink-soft)}
-  .switch{width:36px;height:21px;border-radius:11px;background:#cfcfd6;position:relative}
-  .switch i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff}
-  .switch.on{background:var(--accent)}.switch.on i{left:17px}
-  .hk{font-family:var(--mono);font-size:12.5px;border:1px solid var(--rule-strong);border-radius:6px;padding:5px 10px;background:#fafafb}
-  button{font-family:inherit;font-size:13px;border-radius:7px;padding:7px 13px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
-  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-  .ver{font-family:var(--mono);font-size:12.5px;color:var(--ink-soft)}
-  .pill{font-size:11px;border-radius:11px;padding:1px 9px;border:1px solid var(--rule-strong);color:var(--muted);background:#fafafb}
-  .pill.ok{color:#1f7a44;background:#e8f6ee;border-color:#bfe3cc}
-  .pill.new{color:var(--accent);background:var(--accent-soft);border-color:#c4d6fb}
-  /* guided in-app update flow (§19 R04) */
-  .update{margin:8px 0 4px;border:1px solid #c4d6fb;background:var(--accent-soft);border-radius:9px;padding:12px 14px}
-  .update .uhd{font-size:13px;font-weight:680;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:8px}
-  .steps{display:flex;flex-direction:column;gap:7px}
-  .step{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink-soft)}
-  .step .n{width:18px;height:18px;border-radius:50%;background:#fff;border:1px solid var(--accent);color:var(--accent);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
-  .step.done .n{background:var(--accent);color:#fff}
-  .step .bar{flex:1;height:6px;border-radius:3px;background:#d6e2fb;overflow:hidden}
-  .step .bar i{display:block;height:100%;width:62%;background:var(--accent)}
-  .step .gate{font-size:11px;color:var(--muted)}
-  .restore-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.4}
-  .note-strip{font-size:11px;color:var(--faint);text-align:center;padding:6px;background:#fafafb;border-top:1px solid var(--rule)}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A99F8E;padding:4px 14px}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  .nav .stat a:hover{background:none;text-decoration:underline}
+  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .btn.danger:hover{background:var(--danger-weak)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  /* segmented */
+  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  /* toggle */
+  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  /* fields */
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  textarea.field{resize:vertical;min-height:42px}
+  select.field{width:auto;min-width:150px}
+  /* card / tag / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  .lead{color:var(--muted);font-size:13px;margin:4px 0 0;max-width:640px}
+  .lead code{font-family:var(--num);font-size:12px;background:var(--sunken);padding:1px 6px;border-radius:5px}
+  .sgrp{font-size:13px;font-weight:640;color:var(--ink);margin:26px 0 2px;padding-bottom:8px;border-bottom:1px solid var(--line-strong)}
+  .srow{display:grid;grid-template-columns:1fr 330px;align-items:center;gap:20px;padding:13px 2px}
+  .srow + .srow{border-top:1px solid var(--line)}
+  .sk{font-size:13px}
+  .sk small{display:block;color:var(--muted);font-size:11.5px;margin-top:3px}
+  .sc{justify-self:end;display:flex;align-items:center;gap:10px}
+  .kbd{font-family:var(--num);font-size:12px;border:1px solid var(--line-strong);border-radius:6px;padding:5px 10px;background:var(--sunken);box-shadow:0 1px 0 var(--line-strong)}
+  .vrow{display:flex;align-items:center;gap:10px}
+  .ver{font-family:var(--num);font-size:12.5px;color:var(--ink)}
+  .ok{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--run)}.ok .ic{width:14px;height:14px}
+  .ilink{display:inline-flex;align-items:center;gap:4px;color:var(--accent-ink);cursor:pointer}.ilink .ic{width:13px;height:13px}
+  .prog{display:flex;align-items:center;gap:10px}
+  .prog .bar{width:200px;height:7px;border-radius:4px;background:var(--sunken);overflow:hidden;border:1px solid var(--line)}
+  .prog .bar i{display:block;height:100%;width:62%;background:var(--accent)}
+  .prog .pct{font-size:12px;color:var(--muted)}
 </style>
 </head>
 <body>
-  <div class="window">
-    <div class="titlebar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="title">Stint — Settings</div></div>
-    <div class="shell">
-      <nav class="nav">
-        <a href="timer.html"><span class="ic">◷</span> Timer</a>
-        <a href="main.html"><span class="ic">▤</span> Entries</a>
-        <a href="#"><span class="ic">◎</span> Clients</a>
-        <a href="reports.html"><span class="ic">▥</span> Reports</a>
-        <a href="#" class="active"><span class="ic">⚙</span> Settings</a>
-      </nav>
-      <div class="main">
-        <h2>Settings</h2>
-        <p class="sub">Stored locally; identical to what <code>tt config set</code> writes. Changes save immediately.</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+</defs></svg>
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Settings</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="main.html"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="#"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+</nav>
+    <div class="view">
 
-        <div class="grp">Reporting</div>
-        <div class="row"><div class="k">Rounding <small>Applies at display/export only; stored time stays exact.</small></div><span class="toggle"><span class="switch"><i></i></span> Off</span></div>
-        <div class="row"><div class="k">Rounding increment</div><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
-        <div class="row"><div class="k">Week start</div><span class="seg"><span class="on">Monday</span><span>Sunday</span></span></div>
-
-        <div class="grp">Check-ins</div>
-        <div class="row"><div class="k">First check-in <small>After a timer starts.</small></div><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div>
-        <div class="row"><div class="k">Check-in interval</div><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div>
-
-        <div class="grp">System</div>
-        <div class="row"><div class="k">Global hotkey <small>Toggles the timer from anywhere.</small></div><span class="hk">Ctrl + Alt + T</span></div>
-        <div class="row"><div class="k">Accent usage</div><select class="field"><option selected>System accent (primary action only)</option><option>Monochrome</option></select></div>
-        <div class="row"><div class="k">Date / number format</div><select class="field"><option selected>System locale</option></select></div>
-
-        <!-- Software Update (§19 R03/R04/R06) -->
-        <div class="grp">Software Update</div>
-        <div class="row">
-          <div class="k">Current version <small>Date/build versioning · macOS + Linux only.</small></div>
-          <span><span class="ver">2026.6.27.2</span> &nbsp; <span class="pill new">update available · 2026.6.27.3</span></span>
-        </div>
-        <div class="row">
-          <div class="k">Check for updates <small>Queries GitHub Releases. Updates never touch the database.</small></div>
-          <span><button>Check now</button></span>
-        </div>
-        <div class="update">
-          <div class="uhd">⬇ Guided install — downloading 2026.6.27.3</div>
-          <div class="steps">
-            <div class="step"><span class="n">1</span><span class="bar"><i></i></span><span>Downloading artifact… 62%</span></div>
-            <div class="step"><span class="n">2</span>Replace the app in /Applications (Stint walks you through it)</div>
-            <div class="step"><span class="n">3</span>Approve once at first launch <span class="gate">— one-time Gatekeeper clearance, no Developer ID needed</span></div>
-          </div>
-        </div>
-
-        <!-- Backups & recovery (§20 R04/R05, §17 R12) -->
-        <div class="grp">Backups</div>
-        <div class="row">
-          <div class="k">Last backup <small>Automatic timestamped copy on launch when the database changed.</small></div>
-          <span><span class="ver">2026-06-27 08:59</span> &nbsp; <span class="pill ok">verified</span></span>
-        </div>
-        <div class="row">
-          <div class="k">Retention <small>Keeps the most recent backups beside the database.</small></div>
-          <select class="field"><option>keep last 3</option><option selected>keep last 5</option><option>keep last 10</option></select>
-        </div>
-        <div class="row">
-          <div class="k">Restore from backup <small>Replaces the current database with a chosen good copy.</small></div>
-          <span><button>Restore…</button></span>
-        </div>
-        <p class="restore-note">On open, Stint runs an integrity check. If the database is corrupt it is quarantined as <code>.corrupted</code> and the latest good backup is restored automatically — you are told, and nothing is silently lost.</p>
+      <div class="vhead" style="display:block;margin-bottom:6px">
+        <h2 class="vtitle">Settings</h2>
+        <p class="lead">Stored locally — identical to what <code>tt config set</code> writes. Changes save immediately.</p>
       </div>
+
+      <div class="sgrp">Reporting</div>
+      <div class="srow"><div class="sk">Rounding<small>Applies to display & export only — stored time stays exact.</small></div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
+      <div class="srow"><div class="sk">Rounding increment</div><div class="sc"><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div></div>
+      <div class="srow"><div class="sk">Week start</div><div class="sc"><span class="seg"><button class="on">Monday</button><button>Sunday</button></span></div></div>
+
+      <div class="sgrp">Check-ins</div>
+      <div class="srow"><div class="sk">First check-in<small>After a timer starts.</small></div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
+      <div class="srow"><div class="sk">Check-in interval</div><div class="sc"><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div></div>
+
+      <div class="sgrp">System</div>
+      <div class="srow"><div class="sk">Global hotkey<small>Toggles the timer from anywhere.</small></div><div class="sc"><span class="kbd">Ctrl Alt T</span></div></div>
+      <div class="srow"><div class="sk">Accent colour</div><div class="sc"><span class="seg"><button class="on">System accent</button><button>Monochrome</button></span></div></div>
+      <div class="srow"><div class="sk">Date & number format</div><div class="sc"><select class="field"><option selected>System locale</option></select></div></div>
+
+      <div class="sgrp">Software update</div>
+      <div class="srow"><div class="sk">Current version<small>macOS &amp; Linux · updates never touch your database.</small></div><div class="sc"><span class="vrow"><span class="ver tnum">2026.6.27.2</span> <span class="pill accent">update available</span></span></div></div>
+      <div class="srow"><div class="sk">Installing 2026.6.27.3<small>Stint walks you through replacing the app. <span class="ilink"><svg class="ic"><use href="#i-info"/></svg> What happens next?</span></small></div>
+        <div class="sc"><span class="prog"><span class="bar"><i></i></span><span class="pct tnum">62%</span></span></div></div>
+
+      <div class="sgrp">Backups</div>
+      <div class="srow"><div class="sk">Last backup<small>Automatic timestamped copy on launch when the database changed.</small></div><div class="sc"><span class="vrow"><span class="ver tnum">2026-06-27 08:59</span> <span class="ok"><svg class="ic"><use href="#i-check"/></svg> verified</span></span></div></div>
+      <div class="srow"><div class="sk">Keep</div><div class="sc"><select class="field"><option>last 3</option><option selected>last 5</option><option>last 10</option></select></div></div>
+      <div class="srow"><div class="sk">Restore from backup<small>Replaces the current database with a chosen good copy.</small></div><div class="sc"><button class="btn sm"><svg class="ic"><use href="#i-restore"/></svg> Restore…</button></div></div>
     </div>
-    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §14 + §12 R11 · not a screenshot of the current build</div>
   </div>
+</div>
+<div class="prov">Calm-system prototype · design intent for PRD §14, §12 R11, §19 (update) & §20 (backups) · on open, a corrupt database is quarantined and the latest good backup restored automatically · where this and the PRD disagree, the PRD wins</div>
 </body>
 </html>

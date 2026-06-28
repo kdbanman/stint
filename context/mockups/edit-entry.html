@@ -3,107 +3,205 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Edit / Add entry (mockup)</title>
-<!--
-  Slightly-noisy UI prototype for the inline entry editor / manual-add form.
-  Design intent for PRD §05 R05/R06, §06 R04, §12 R05–R07, §12 R13, and §12 R15
-  (the visual time-range picker wires into the Start/End fields; text entry
-  remains and stays authoritative; Delete confirms IN-WINDOW — a two-step gate,
-  never an OS dialog — per §12 R13). Keep in sync with the PRD.
--->
+<title>Stint — Edit entry (mockup)</title>
 <style>
   :root{
-    --paper:#fff;--ink:#15151a;--ink-soft:#3c3c43;--muted:#737380;--faint:#a6a6b0;
-    --rule:#e6e6e3;--rule-strong:#d8d8d4;--accent:#2f6df0;--accent-soft:#eaf0fe;
-    --warn:#7a5a00;--warn-bg:#fdf3d3;--warn-bd:#ecd8a0;
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
   }
   *{box-sizing:border-box}
-  body{margin:0;background:#cfcfd6;font-family:var(--sans);color:var(--ink);font-size:14px;-webkit-font-smoothing:antialiased;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:40px 16px}
-  /* shown as a modal dialog floating over a dimmed window */
-  .dialog{width:520px;background:var(--paper);border-radius:11px;box-shadow:0 24px 70px rgba(0,0,0,.34);overflow:hidden;border:1px solid #c4c4cb}
-  .head{padding:16px 22px;border-bottom:1px solid var(--rule);display:flex;align-items:center;justify-content:space-between}
-  .head h2{font-size:16px;margin:0;font-weight:680}
-  .head .tabs{display:inline-flex;border:1px solid var(--rule-strong);border-radius:7px;overflow:hidden;font-size:12.5px}
-  .head .tabs span{padding:4px 11px;color:var(--ink-soft);border-right:1px solid var(--rule);cursor:pointer}
-  .head .tabs span:last-child{border-right:0}.head .tabs span.on{background:var(--accent-soft);color:var(--accent);font-weight:600}
-  .body{padding:18px 22px}
-  .f{margin-bottom:14px}
-  .f label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}
-  .f input,.f select,.f textarea{width:100%;font-family:inherit;font-size:14px;border:1px solid var(--rule-strong);border-radius:7px;padding:8px 10px;color:var(--ink);background:#fff}
-  .f textarea{resize:vertical;min-height:38px}
-  /* time field with a calendar icon that opens the visual time-range picker (§12 R15) */
-  .timefield{position:relative}
-  .timefield input{padding-right:34px;font-family:var(--mono);font-size:13px}
-  .timefield .cal{position:absolute;right:8px;bottom:8px;cursor:pointer;color:var(--accent);font-size:15px}
-  .pickhint{font-size:11.5px;color:var(--muted);margin:-8px 0 14px;display:flex;gap:6px;align-items:center}
-  .pickhint a{color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:6px;padding:2px 8px;text-decoration:none}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A99F8E;padding:4px 14px}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  .nav .stat a:hover{background:none;text-decoration:underline}
+  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .btn.danger:hover{background:var(--danger-weak)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  /* segmented */
+  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button:hover{color:var(--ink)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  /* toggle */
+  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  /* fields */
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  textarea.field{resize:vertical;min-height:42px}
+  select.field{width:auto;min-width:150px}
+  /* card / tag / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  body{display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:48px 16px}
+  
+  .dialog{width:560px;max-width:100%;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden;border:1px solid #DDD4C3}
+  .head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+  .head h2{font-size:16px;margin:0;font-weight:640}
+  .dbody{padding:20px 22px}
+  .grp-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600;margin:0 0 12px}
+  .dbody .grp-lbl:nth-of-type(2){margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+  .f{margin-bottom:14px}.fw{width:100%}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--rule-strong);border-radius:7px;padding:6px 8px;min-height:38px}
-  .chip{font-size:12px;color:var(--ink-soft);background:#f1f1f3;border:1px solid var(--rule);border-radius:11px;padding:2px 9px;display:flex;gap:6px;align-items:center}
-  .chip b{color:var(--faint);cursor:pointer;font-weight:400}
-  .chips input{border:0;outline:0;flex:1;min-width:80px;font-size:13px}
-  .toggle{display:inline-flex;align-items:center;gap:9px;font-size:14px;color:var(--ink-soft)}
-  .switch{width:36px;height:21px;border-radius:11px;background:var(--accent);position:relative}
-  .switch i{position:absolute;top:2px;left:17px;width:17px;height:17px;border-radius:50%;background:#fff}
-  .warn{background:var(--warn-bg);border:1px solid var(--warn-bd);color:var(--warn);font-size:12.5px;border-radius:7px;padding:8px 11px;margin:4px 0 14px}
-  .actions-extra{display:flex;gap:8px;font-size:12.5px;color:var(--accent);margin-top:4px}
-  .actions-extra span{cursor:pointer}
-  .foot{padding:14px 22px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:#fafafb}
-  .foot .danger{color:#a8362a;font-size:13px;cursor:pointer}
-  /* in-window two-step confirm gate (§12 R13) — no OS dialog; the modal stays in-window */
-  .foot .confirm{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink-soft)}
-  .foot .confirm button.confirm-delete{color:#a8362a;border-color:#e3b4ae;padding:5px 11px;font-weight:600}
-  .foot .confirm button.cancel-delete{padding:5px 11px}
-  .foot .right{display:flex;gap:10px}
-  button{font-family:inherit;font-size:13px;border-radius:7px;padding:8px 16px;border:1px solid var(--rule-strong);background:#fff;color:var(--ink);cursor:pointer}
-  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
-  .note-strip{font-size:11px;color:#8a8a93;text-align:center;margin-top:14px}
+  .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--line-strong);border-radius:var(--r1);padding:6px 9px;min-height:38px;background:var(--paper)}
+  .tagchips input{border:0;outline:0;flex:1;min-width:80px;font:inherit;font-size:12.5px;background:none}
+  .timefield{position:relative}
+  .timefield .field{padding-right:34px}
+  .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted)}
+  .timefield .cal .ic{width:16px;height:16px}
+  .note{display:flex;align-items:center;gap:8px;font-size:12px;border-radius:var(--r1);padding:8px 11px;margin-bottom:14px;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink)}
+  .note .ic{width:14px;height:14px}
+  .adv{display:flex;gap:18px;font-size:12.5px}
+  .adv a{display:inline-flex;align-items:center;gap:6px;color:var(--muted);cursor:pointer}
+  .adv a:hover{color:var(--ink)}.adv a .ic{width:14px;height:14px}
+  .foot{padding:15px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
+  .gate{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink)}
+  .gate .ic{width:14px;height:14px;color:var(--danger)}
+  .gate b{font-weight:590}
 </style>
 </head>
 <body>
-  <div>
-    <div class="dialog">
-      <div class="head">
-        <h2>Edit entry</h2>
-        <span class="tabs"><span class="on">Edit</span><span>Add manually</span></span>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+</defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+</defs></svg>
+<div>
+
+  <div class="dialog">
+    <div class="head"><h2>Edit entry</h2><button class="iconbtn"><svg class="ic"><use href="#i-x"/></svg></button></div>
+    <div class="dbody">
+      <div class="grp-lbl">Work</div>
+      <div class="f"><label class="lab">Description</label><textarea class="field">Deep work on core algorithm</textarea></div>
+      <div class="two">
+        <div class="f"><label class="lab">Client</label><select class="field fw"><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option></select></div>
+        <div class="f"><label class="lab">Project</label><select class="field fw"><option>Q3 Strategy</option><option>Project Alpha</option></select></div>
       </div>
-      <div class="body">
-        <div class="f">
-          <label>Description</label>
-          <textarea>Deep work on core algorithm</textarea>
-        </div>
-        <div class="two">
-          <div class="f"><label>Client</label><select><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option><option>+ New client…</option></select></div>
-          <div class="f"><label>Project</label><select><option>Q3 Strategy</option><option>Project Alpha</option><option>+ New project…</option></select></div>
-        </div>
-        <div class="two">
-          <div class="f timefield"><label>Start</label><input value="2026-06-22 10:30"><a class="cal" href="time-range-picker.html" title="Open time-range picker">▦</a></div>
-          <div class="f timefield"><label>End</label><input value="2026-06-22 16:15"><a class="cal" href="time-range-picker.html" title="Open time-range picker">▦</a></div>
-        </div>
-        <div class="pickhint">Type the times, or <a href="time-range-picker.html">▦ open the visual picker</a> to drag start &amp; stop. Text stays authoritative · overnight spans use text entry.</div>
-        <div class="warn">⚠ Overlaps “Researching market trends” (13:00–15:45) by 2h 45m. Allowed — will be flagged in reports.</div>
-        <div class="f">
-          <label>Tags</label>
-          <div class="chips"><span class="chip">coding <b>×</b></span><span class="chip">product <b>×</b></span><input placeholder="add a tag…"></div>
-        </div>
-        <div class="f">
-          <span class="toggle"><span class="switch"><i></i></span> Billable</span>
-          <div class="actions-extra"><span>Split at instant…</span><span>·</span><span>Merge with adjacent…</span></div>
-        </div>
+      <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">coding <b>×</b></span><span class="tag">product <b>×</b></span><input placeholder="add a tag…"></div></div>
+      <div class="f"><span class="toggle"><span class="sw on"><i></i></span> Billable</span></div>
+
+      <div class="grp-lbl">Time</div>
+      <div class="two">
+        <div class="f timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-22 10:30"><a class="cal" href="time-range-picker.html" title="Open time-range picker"><svg class="ic"><use href="#i-cal"/></svg></a></div>
+        <div class="f timefield"><label class="lab">End</label><input class="field tnum" value="2026-06-22 16:15"><a class="cal" href="time-range-picker.html" title="Open time-range picker"><svg class="ic"><use href="#i-cal"/></svg></a></div>
       </div>
-      <div class="foot">
-        <!-- §06 R1 / §12 R13: delete is GATED, never one-click. The first Delete click only
-             ARMS the in-window confirm below (a stray click never destroys); the bare "Delete
-             entry" affordance is hidden here to depict the armed loss-protection state. -->
-        <span class="danger" hidden>Delete entry</span>
-        <!-- armed state (after the first Delete click; in-window, never an OS dialog) — this is
-             the loss-protection: the destructive remove fires only from "Confirm delete?". -->
-        <span class="confirm">Confirm delete? <button class="confirm-delete">Delete</button><button class="cancel-delete">Cancel</button></span>
-        <span class="right"><button>Cancel</button><button class="primary">Save</button></span>
-      </div>
+      <div class="note warn"><svg class="ic"><use href="#i-flag"/></svg> Overlaps “Researching market trends” (13:00–15:45) by 2h 45m · allowed, flagged in reports</div>
+      <div class="adv"><a><svg class="ic"><use href="#i-edit"/></svg> Split at instant…</a><a><svg class="ic"><use href="#i-swap"/></svg> Merge with adjacent…</a></div>
     </div>
-    <div class="note-strip">Slightly-noisy UI prototype · design intent for PRD §05/§06 + §12 R5–R7 · not a screenshot of the current build</div>
+    <div class="foot">
+      <!-- armed two-step in-window delete gate (§12 R13): no second "Cancel"; the
+           outer Cancel is replaced by the gate, the only commit on the right is Save -->
+      <div class="gate"><svg class="ic"><use href="#i-flag"/></svg> <b>Delete this entry?</b> <button class="btn danger sm">Delete</button><button class="btn ghost sm">Keep</button></div>
+      <button class="btn primary">Save</button>
+    </div>
   </div>
+<div class="prov" style="margin-top:18px">Calm-system prototype · design intent for PRD §05/§06 + §12 R5–R7, R13 · the delete gate is in-window (never an OS dialog) and shown here in its armed state · where this and the PRD disagree, the PRD wins</div>
+</div>
 </body>
 </html>
