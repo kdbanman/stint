@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Sleep review</title>
+<style>
+  :root{
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  /* toggle */
+  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  /* card / tag / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  /* sleep review */
+  .back{display:inline-flex;align-items:center;gap:8px;color:var(--muted);text-decoration:none;font-size:12.5px;font-weight:560;margin-bottom:14px}
+  .back:hover{color:var(--ink)}.back .ic{width:15px;height:15px}
+  .panel{padding:0;overflow:hidden}
+  .p-head{display:flex;align-items:flex-start;gap:14px;padding:20px 22px;border-bottom:1px solid var(--line)}
+  .p-head .moon{width:38px;height:38px;border-radius:var(--r1);background:var(--sunken);border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--muted)}
+  .p-head .hi{flex:1;min-width:0}
+  .p-head .d{font-size:15px;font-weight:640}
+  .p-head .m{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .p-head .flags{display:flex;gap:7px;margin-top:9px}
+  /* span timeline */
+  .sec{padding:18px 22px;border-bottom:1px solid var(--line)}
+  .sec .h{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:640;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .sec .h .pill{margin-left:auto;text-transform:none;letter-spacing:0}
+  .span{display:grid;grid-template-columns:18px 1fr auto;align-items:center;gap:14px;padding:11px 4px;border-top:1px solid var(--line)}
+  .span:first-of-type{border-top:0}
+  .span .mk{width:10px;height:10px;border-radius:50%;background:var(--warn-bg);border:2px solid var(--warn-line)}
+  .span .when{font-family:var(--num);font-size:12.5px}
+  .span .src{color:var(--faint);font-size:11.5px;margin-top:2px}
+  .span .len{font-variant-numeric:tabular-nums;font-weight:590;font-size:12.5px;color:var(--warn-ink)}
+  /* impact summary */
+  .impact{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0}
+  .impact .cell{padding:16px 22px;border-right:1px solid var(--line)}
+  .impact .cell:last-child{border-right:0}
+  .impact .k{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:640}
+  .impact .v{font-size:20px;font-weight:680;margin-top:6px;font-variant-numeric:tabular-nums}
+  .impact .v small{font-size:12px;font-weight:500;color:var(--faint);text-decoration:line-through;margin-left:8px}
+  .impact .v.excl{color:var(--warn-ink)}
+  .p-foot{display:flex;align-items:center;gap:14px;padding:16px 22px;background:var(--sunken)}
+  .p-foot .toggle{font-weight:560}
+  .p-foot .note{flex:1;color:var(--muted);font-size:12px;display:flex;align-items:center;gap:8px}
+  .p-foot .note .ic{width:14px;height:14px;color:var(--faint)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+</defs></svg>
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Entries</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="main.html" class="on"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div></div>
+</nav>
+    <div class="view">
+
+      <a href="main.html" class="back"><svg class="ic"><use href="#i-left"/></svg> Back to Entries</a>
+      <div class="vhead"><h2 class="vtitle">Sleep review</h2></div>
+
+      <div class="card panel">
+        <div class="p-head">
+          <div class="moon"><svg class="ic" style="width:20px;height:20px"><use href="#i-moon"/></svg></div>
+          <div class="hi">
+            <div class="d">deep work</div>
+            <div class="m">Client B · 13:00 – 17:00 · raw 4h 00m</div>
+            <div class="flags"><span class="pill warn">slept through</span><span class="tag">deep</span></div>
+          </div>
+        </div>
+
+        <div class="sec">
+          <div class="h">Detected sleep spans <span class="pill">source · powerMonitor</span></div>
+          <div class="span">
+            <span class="mk"></span>
+            <div><div class="when">14:02:15 → 14:08:45</div><div class="src">suspend → resume · second-accurate</div></div>
+            <span class="len tnum">6m 30s</span>
+          </div>
+          <div class="span">
+            <span class="mk"></span>
+            <div><div class="when">15:40:00 → 16:33:30</div><div class="src">suspend → resume · second-accurate</div></div>
+            <span class="len tnum">53m 30s</span>
+          </div>
+        </div>
+
+        <div class="sec impact">
+          <div class="cell"><div class="k">Raw duration</div><div class="v tnum">4h 00m</div></div>
+          <div class="cell"><div class="k">Slept (excluded)</div><div class="v excl tnum">−1h 00m</div></div>
+          <div class="cell"><div class="k">Billable</div><div class="v tnum">3h 00m <small>4h 00m</small></div></div>
+        </div>
+
+        <div class="p-foot">
+          <span class="toggle"><span class="sw on"><i></i></span> Subtract slept time from billable</span>
+          <span class="note"><svg class="ic"><use href="#i-info"/></svg> Reversible — raw time is never changed, only what counts as billable.</span>
+          <button class="btn"><svg class="ic"><use href="#i-restore"/></svg> Restore all</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

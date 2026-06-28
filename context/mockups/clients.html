@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Reports</title>
+<title>Stint — Clients</title>
 <style>
   :root{
     --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
@@ -88,35 +88,29 @@
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
-  .defs{overflow:hidden;margin-bottom:8px}
-  .def{display:flex;align-items:center;gap:16px;padding:14px 16px;border-bottom:1px solid var(--line)}
-  .def:last-child{border-bottom:0}
-  .def.sel{background:var(--sunken)}
-  .def .di{flex:1;min-width:0}
-  .def .dn{font-size:13.5px;font-weight:590}
-  .def .ds{font-size:12px;color:var(--muted);margin-top:4px}
-  .def .ds b{color:var(--ink);font-weight:590}
-  .def .da{display:flex;align-items:center;gap:7px;flex:none}
-  .editor{border-bottom:1px solid var(--line);background:#FBF7F0;padding:16px 18px 18px}
-  .editor .en{margin-bottom:14px}
-  .ctrl{display:grid;grid-template-columns:92px 1fr;gap:13px 16px;align-items:center}
-  .ctrl .cl{font-size:12px;color:var(--muted);text-align:right}
-  .ctrl .cr{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-  .efoot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
-  .efoot .left{margin-right:auto}
-  .runhd{display:flex;align-items:baseline;justify-content:space-between;margin:26px 0 10px}
-  .runhd .rt{font-size:14px;font-weight:640}
-  .runhd .rc{font-size:12px;color:var(--muted)}
-  .summary{overflow:hidden}
-  table{width:100%;border-collapse:collapse;font-size:13px}
-  td,th{text-align:left;padding:11px 16px;border-bottom:1px solid var(--line)}
-  th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);font-weight:590;background:var(--sunken)}
-  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
-  .grp td{font-weight:590}
-  .subr td{color:var(--muted);padding-left:32px}
-  .subr td .pill{margin-left:8px}
-  .tot td{font-weight:680;border-top:1px solid var(--line-strong);border-bottom:0;background:var(--sunken)}
-  .export{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+  /* clients view */
+  .view{gap:22px}
+  .sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .sec-h h3{font-size:14px;font-weight:640;margin:0}
+  .sec-h .cap{margin-left:10px;font-weight:400}
+  .clist{display:flex;flex-direction:column;gap:12px}
+  .cl{padding:4px 6px 6px}
+  .cl-row{display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:var(--r1)}
+  .cl-row:hover{background:var(--sunken)}
+  .cl-row .nm{font-weight:590;font-size:13.5px}
+  .cl-row.client .nm{font-size:14px;font-weight:640}
+  .cl-row .acts{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .cl-row .count{color:var(--faint);font-size:11.5px;margin-left:2px}
+  .proj{position:relative;margin-left:18px;padding-left:18px;border-left:2px solid var(--line-strong)}
+  .proj .cl-row{padding:9px 12px}
+  .proj .cl-row .nm{font-weight:500;color:var(--ink)}
+  .cl.arch .cl-row.client .nm{color:var(--muted)}
+  .empty{color:var(--faint);font-size:12px;padding:8px 12px}
+  .taglist{display:flex;flex-direction:column}
+  .tg-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--r1)}
+  .tg-row:hover{background:var(--sunken)}
+  .tg-row + .tg-row{border-top:1px solid var(--line)}
+  .tg-row .acts{margin-left:auto;display:flex;gap:6px;align-items:center}
 </style>
 </head>
 <body>
@@ -149,13 +143,13 @@
 <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
 </defs></svg>
 <div class="win">
-  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Reports</div></div>
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Clients</div></div>
   <div class="shell">
     <nav class="nav">
   <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
   <a href="main.html"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
-  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
-  <a href="#" class="on"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
   <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
@@ -163,68 +157,79 @@
     <div class="view">
 
       <div class="vhead">
-        <h2 class="vtitle">Saved reports</h2>
-        <button class="btn"><svg class="ic"><use href="#i-plus"/></svg> New report</button>
+        <h2 class="vtitle">Clients</h2>
+        <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg> Add client</button>
       </div>
 
-      <div class="defs card">
-        <div class="def">
-          <div class="di"><div class="dn">Weekly billables — Globex</div>
-            <div class="ds"><b>This week</b> · by project · Globex Corp · billable only · no rounding</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
-        </div>
-        <div class="def sel">
-          <div class="di"><div class="dn">Monthly — all clients by client</div>
-            <div class="ds"><b>Last month</b> · by client · all clients · all entries · round 15 min</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm" style="color:var(--accent-ink)">Editing…</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
-        </div>
-        <div class="editor">
-          <div class="en"><label class="lab">Report name</label><input class="field" value="Monthly — all clients by client" style="max-width:380px"></div>
-          <div class="ctrl">
-            <span class="cl">Range</span>
-            <div class="cr"><select class="field"><option>Today</option><option>This week</option><option>Last week</option><option>This month</option><option selected>Last month</option><option>Custom…</option></select></div>
-            <span class="cl">Group by</span>
-            <div class="cr"><span class="seg"><button class="on">Client</button><button>Project</button><button>Day</button><button>Tag</button></span></div>
-            <span class="cl">Filters</span>
-            <div class="cr">
-              <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
-              <select class="field"><option>All projects</option></select>
-              <select class="field"><option>All tags</option></select>
-              <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
+      <div>
+        <div class="sec-h"><h3>Clients &amp; projects <span class="cap">Rename or archive; archived items hide from pickers but keep their history.</span></h3></div>
+        <div class="clist">
+
+          <div class="card cl">
+            <div class="cl-row client">
+              <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
+              <span class="nm">Acme</span><span class="count">2 projects · 14h 20m</span>
+              <span class="acts">
+                <button class="btn sm ghost"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
+                <button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button>
+                <button class="btn sm ghost">Archive</button>
+              </span>
             </div>
-            <span class="cl">Rounding</span>
-            <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
-              <select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
+            <div class="proj">
+              <div class="cl-row"><span class="nm">API</span><span class="count">9h 00m</span>
+                <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+              </div>
+              <div class="cl-row"><span class="nm">Web</span><span class="count">5h 20m</span>
+                <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+              </div>
+            </div>
           </div>
-          <div class="efoot">
-            <button class="btn danger sm left">Delete</button>
-            <button class="btn sm">Cancel</button>
-            <button class="btn primary sm">Save definition</button>
+
+          <div class="card cl">
+            <div class="cl-row client">
+              <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
+              <span class="nm">Globex</span><span class="count">1 project · 6h 15m</span>
+              <span class="acts">
+                <button class="btn sm ghost"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
+                <button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button>
+                <button class="btn sm ghost">Archive</button>
+              </span>
+            </div>
+            <div class="proj">
+              <div class="cl-row"><span class="nm">Onboarding</span><span class="count">6h 15m</span>
+                <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="def">
-          <div class="di"><div class="dn">Tax quarter — non-billable audit</div>
-            <div class="ds"><b>Apr 1 – Jun 30</b> · by tag · non-billable · no rounding</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+
+          <div class="card cl arch">
+            <div class="cl-row client">
+              <svg class="ic" style="color:var(--faint)"><use href="#i-users"/></svg>
+              <span class="nm">Initech</span><span class="pill">archived</span>
+              <span class="acts">
+                <button class="btn sm ghost"><svg class="ic"><use href="#i-restore"/></svg> Restore</button>
+              </span>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      <div class="runhd"><span class="rt">Monthly — all clients by client</span><span class="rc tnum">May 2026 · round 15 min</span></div>
-      <div class="summary card">
-        <table>
-          <thead><tr><th>Client</th><th class="num">Hours</th></tr></thead>
-          <tbody>
-            <tr class="grp"><td>Globex Corp</td><td class="num">52h 30m</td></tr>
-            <tr class="subr"><td>Q3 Strategy</td><td class="num">31h 00m</td></tr>
-            <tr class="subr"><td>Project Alpha <span class="pill warn">overlap 15m</span></td><td class="num">21h 30m</td></tr>
-            <tr class="grp"><td>Initech</td><td class="num">26h 45m</td></tr>
-            <tr class="subr"><td>Market research <span class="pill warn">unreviewed sleep</span></td><td class="num">26h 45m</td></tr>
-            <tr class="grp"><td>— internal —</td><td class="num">7h 00m</td></tr>
-            <tr class="tot"><td>Total</td><td class="num">86h 15m</td></tr>
-          </tbody>
-        </table>
+      <div>
+        <div class="sec-h"><h3>Tags</h3><button class="btn sm"><svg class="ic"><use href="#i-plus"/></svg> Add tag</button></div>
+        <div class="card taglist">
+          <div class="tg-row"><span class="tag">deep</span><span class="count">18 entries</span>
+            <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+          </div>
+          <div class="tg-row"><span class="tag">urgent</span><span class="count">7 entries</span>
+            <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+          </div>
+          <div class="tg-row"><span class="tag">admin</span><span class="count">5 entries</span>
+            <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-edit"/></svg> Rename</button><button class="btn sm ghost">Archive</button></span>
+          </div>
+        </div>
       </div>
-      <div class="export"><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> JSON</button></div>
+
     </div>
   </div>
 </div>

@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Merge entries</title>
+<style>
+  :root{
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3;position:relative}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  /* card / tag / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  /* faded entries backdrop */
+  .scroll{filter:saturate(.96)}
+  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13.5px;padding:6px 6px 9px;border-bottom:1px solid var(--line)}
+  .day-h .dsum{font-weight:400;color:var(--faint);font-size:12px}
+  .row{display:grid;grid-template-columns:18px 120px 1fr auto;align-items:center;gap:16px;padding:11px 6px;border-bottom:1px solid var(--line)}
+  .row.sel{background:var(--accent-weak);box-shadow:inset 2px 0 0 var(--accent)}
+  .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--accent);background:var(--accent);display:flex;align-items:center;justify-content:center}
+  .row .ck .ic{width:12px;height:12px;color:#fff}
+  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
+  .row .what{display:flex;align-items:center;gap:10px;min-width:0}
+  .row .what .where{color:var(--muted)}
+  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12.5px;justify-self:end}
+  .selbar{display:flex;align-items:center;gap:12px;padding:12px 14px;margin-bottom:14px;border-radius:var(--r1);background:var(--sunken);border:1px solid var(--line)}
+  .selbar .cap{flex:1}
+  /* modal */
+  .scrim{position:absolute;inset:0;background:rgba(40,30,14,.34);display:flex;align-items:center;justify-content:center;padding:18px}
+  .modal{width:480px;max-width:100%;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden}
+  .m-head{padding:20px 22px 14px;border-bottom:1px solid var(--line)}
+  .m-head h3{margin:0;font-size:16px;font-weight:640}
+  .m-head p{margin:6px 0 0;color:var(--muted);font-size:12.5px}
+  .m-body{padding:18px 22px}
+  /* source preview */
+  .srcs{display:flex;gap:10px;margin-bottom:18px}
+  .src{flex:1;border:1px solid var(--line);border-radius:var(--r1);padding:10px 12px;background:var(--sunken)}
+  .src .lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);font-weight:640}
+  .src .d{font-weight:590;margin-top:5px}
+  .src .t{font-family:var(--num);font-size:12px;color:var(--muted);margin-top:3px}
+  .merge-arrow{display:flex;align-items:center;color:var(--faint)}
+  /* conflict resolution */
+  .ftitle{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);font-weight:640;margin:6px 0 10px}
+  .conf{padding:12px 0;border-top:1px solid var(--line)}
+  .conf .q{font-weight:590;margin-bottom:9px}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .opt{display:flex;align-items:center;gap:9px;border:1px solid var(--line-strong);border-radius:var(--r1);padding:9px 11px;cursor:pointer;background:var(--paper)}
+  .opt:hover{background:var(--hover)}
+  .opt.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:var(--accent-weak)}
+  .rad{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-strong);flex:none;position:relative}
+  .opt.on .rad{border-color:var(--accent)}
+  .opt.on .rad::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent)}
+  .opt .ot b{font-weight:590;font-size:12.5px}
+  .opt .ot span{display:block;color:var(--muted);font-size:11px}
+  .agree{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line);color:var(--muted);font-size:12.5px}
+  .agree .ic{width:15px;height:15px;color:var(--run)}
+  .agree b{color:var(--ink);font-weight:590}
+  .agree .val{margin-left:auto;font-family:var(--num);font-size:12px}
+  .m-foot{display:flex;align-items:center;gap:10px;padding:14px 22px;border-top:1px solid var(--line);background:var(--sunken)}
+  .m-foot .cap{flex:1}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</defs></svg>
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Entries</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div></div>
+</nav>
+    <div class="view">
+      <div class="vhead"><h2 class="vtitle">Entries</h2></div>
+
+      <div class="selbar">
+        <span class="pill accent">2 selected</span>
+        <span class="cap">Adjacent entries on the same day — combine them into one.</span>
+        <button class="btn sm"><svg class="ic"><use href="#i-swap"/></svg> Merge 2 entries</button>
+      </div>
+
+      <div class="scroll">
+        <div class="day-h">Wednesday, June 24 <span class="dsum">· 2h 00m</span></div>
+        <div class="row sel">
+          <span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="tr">09:00 – 10:00</span>
+          <span class="what">api work <span class="where">Client A · API</span></span><span class="du tnum">1h 00m</span>
+        </div>
+        <div class="row sel">
+          <span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="tr">10:00 – 11:00</span>
+          <span class="what">internal sync <span class="where">Client B</span></span><span class="du tnum">1h 00m</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scrim">
+    <div class="modal">
+      <div class="m-head">
+        <h3>Merge 2 entries</h3>
+        <p>One entry will span 09:00 – 11:00 (2h 00m). These fields disagree — choose what the merged entry keeps.</p>
+      </div>
+      <div class="m-body">
+        <div class="srcs">
+          <div class="src"><div class="lbl">Entry A</div><div class="d">api work</div><div class="t">09:00 – 10:00 · 1h 00m</div></div>
+          <div class="merge-arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+          <div class="src"><div class="lbl">Entry B</div><div class="d">internal sync</div><div class="t">10:00 – 11:00 · 1h 00m</div></div>
+        </div>
+
+        <div class="ftitle">Resolve conflicts</div>
+
+        <div class="conf">
+          <div class="q">Client / project</div>
+          <div class="opts">
+            <label class="opt on"><span class="rad"></span><span class="ot"><b>Client A · API</b><span>from “api work”</span></span></label>
+            <label class="opt"><span class="rad"></span><span class="ot"><b>Client B</b><span>from “internal sync”</span></span></label>
+          </div>
+        </div>
+
+        <div class="conf">
+          <div class="q">Billable</div>
+          <div class="opts">
+            <label class="opt on"><span class="rad"></span><span class="ot"><b>Billable</b><span>from Entry A</span></span></label>
+            <label class="opt"><span class="rad"></span><span class="ot"><b>Non-billable</b><span>from Entry B</span></span></label>
+          </div>
+        </div>
+
+        <div class="agree"><svg class="ic"><use href="#i-check"/></svg> <b>Description</b> — keeps the earlier entry <span class="val">api work</span></div>
+        <div class="agree"><svg class="ic"><use href="#i-check"/></svg> <b>Tags</b> — both kept, no conflict <span class="val">deep · sync</span></div>
+        <div class="agree"><svg class="ic"><use href="#i-check"/></svg> <b>Span</b> — derived from the outer bounds <span class="val">09:00 – 11:00</span></div>
+      </div>
+      <div class="m-foot">
+        <span class="cap">Merging is reversible — the two source entries are kept until you confirm.</span>
+        <button class="btn">Cancel</button>
+        <button class="btn primary"><svg class="ic"><use href="#i-swap"/></svg> Merge</button>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
