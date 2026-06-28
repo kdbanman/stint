@@ -40,7 +40,7 @@ Read first for house style and the target shape:
 1. Capture the user's raw list of requested changes verbatim. Do not start
    editing anything.
 2. Skim the current docs that the changes touch (`context/prd.html`, `context/concept.html`,
-   `context/glossary.html`, `context/acceptance.html`) and the mockups in `mockups/` so your
+   `context/glossary.html`, `context/acceptance.html`) and the mockups in `context/mockups/` so your
    questions are grounded in what exists. **Consult the codebase directly for
    anything code can answer** (current schema, current CLI surface, current GUI
    views) instead of asking the user.
@@ -145,7 +145,7 @@ it applies, its surfaces, its files, its mockup(s), and its AC method(s).
 > **Mockup-coverage rule: every NEW or MODIFIED GUI requirement must be
 > represented in at least one mockup.** No exceptions.
 
-- Create or update standalone, dependency-free HTML mockups in `mockups/` for
+- Create or update standalone, dependency-free HTML mockups in `context/mockups/` for
   every new/changed GUI requirement.
 - Each such requirement's **Mockup** column in the work-list must name ≥1
   existing mockup file.

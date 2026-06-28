@@ -98,7 +98,7 @@ header.mast {
 
 /* §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. A quiet bordered
    block holding the live count-up, the running/idle state, the entry's description +
-   client/project, its attributes, and the Stop + Switch actions. Mirrors mockups/main.html's
+   client/project, its attributes, and the Stop + Switch actions. Mirrors context/mockups/main.html's
    .timer-card. Accent discipline (§15): the system accent appears ONLY on the running clock
    and the running-state indicator (`.timer-card.running .clock/.state`) and the primary Stop
    button (button.primary). Everything else — the idle clock, the label, the description,
@@ -157,7 +157,7 @@ header.mast {
    sanctioned running-context accent the running card uses (§15 ACCENT_DISCIPLINE allows it
    inside the running timer surface); every CONTROL inside stays monochrome (the inputs carry
    the neutral wash/rule chrome, no accent fill), so the single primary action (Stop) keeps the
-   accent. Hidden while idle. Mirrors mockups/timer.html's .liveedit. */
+   accent. Hidden while idle. Mirrors context/mockups/timer.html's .liveedit. */
 .liveedit {
   margin-top: 14px;
   padding: 12px 16px;
@@ -346,7 +346,7 @@ s {
   padding: 10px 0 0;
 }
 /* §15 R-clickability / G10: these tab links are clickable text, so they carry the neutral
-   button background (a var(--wash) fill + a var(--rule) border) — mirroring mockups/main.html
+   button background (a var(--wash) fill + a var(--rule) border) — mirroring context/mockups/main.html
    `.nav .wk a` — rather than reading as bare prose. The active link keeps its weight/ink +
    bottom-rule marker (never the accent — §15 accent discipline). */
 .nav .nav-link {
@@ -1643,7 +1643,7 @@ body.popover { background: var(--paper); }
 
 /* ---- settings view (§12 R11, §14) -------------------------------------- */
 /* The in-window Settings panel: editable controls for every §14 setting, modeled on
-   mockups/settings.html. Strictly monochrome — the active segment is inked (not accented),
+   context/mockups/settings.html. Strictly monochrome — the active segment is inked (not accented),
    the toggle's ON state uses the accent variable ONLY through the same primary-action
    discipline (a single sanctioned fill), so the §15 ACCENT_DISCIPLINE scan stays green.
    Reuses the existing tokens (--rule, --wash, --ink, --muted) the report controls use. */

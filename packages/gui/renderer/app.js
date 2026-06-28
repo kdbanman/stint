@@ -702,7 +702,7 @@ function openSplitForm(btn, e) {
 // (Save / Enter on empty / blur) the editor diffs the resulting chip set against the
 // entry's current tags via the pure window.SU.tagDiff and sends the minimal
 // { addTags, removeTags } over the same `edit` IPC tt uses — the renderer holds no tag
-// logic, only this gathered chip set. Mirrors mockups/edit-entry.html's chip UI.
+// logic, only this gathered chip set. Mirrors context/mockups/edit-entry.html's chip UI.
 function openTagEditor(btn, e) {
   const original = (e.tags ?? []).slice();
   // The live working set the editor mutates; commit diffs THIS against `original`.
