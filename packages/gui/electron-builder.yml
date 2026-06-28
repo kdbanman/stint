@@ -11,6 +11,15 @@
 appId: com.stint.app
 productName: Stint
 
+# Do NOT let electron-builder install/rebuild production dependencies. In an npm-workspaces
+# monorepo that step deletes the hoisted app-builder-bin from the root node_modules and then
+# fails its own next step with `spawn … app-builder ENOENT` (electron-userland/electron-builder
+# #7103) — the failure that reddened every release pack. It is also pure waste here: Stint has
+# ZERO native modules (persistence is the built-in `node:sqlite`; @stint/core has no deps), and
+# the two bundled prod trees (@stint/core, commander) are placed by the explicit `files:` glob
+# below, not by electron-builder's dependency manager. Nothing to rebuild, so nothing is lost.
+npmRebuild: false
+
 # Artifact filenames key off productName, NOT the npm package name: the package is
 # the scoped "@stint/gui", whose "/" yields an invalid .deb path (electron-builder
 # tries to write dist-pack/@stint/gui_<v>_<arch>.deb — a directory that does not

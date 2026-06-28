@@ -838,6 +838,17 @@ Run it either by triggering the workflow (`.github/workflows/release.yml` via th
 workflow** / `workflow_dispatch` button, or a push to `main`) and inspecting its artifacts, or
 locally per platform with `npm ci && npm run build && npm --workspace @stint/gui run pack`.
 
+> **Automated PR-time backstop (since the `app-builder` ENOENT release-pack regression).**
+> The full two-platform artifacts only build POST-merge (release.yml), so packaging breakage
+> used to reach `main` unseen. Two checks now run on every PR (`.github/workflows/ci.yml`):
+> the cheap `npm run verify:packaging` toolchain guard (`scripts/check-packaging.mjs` — asserts
+> electron-builder's native `app-builder-bin` helper is installed/executable, the exact thing
+> whose absence threw `spawn … app-builder ENOENT`), and the **`pack-smoke`** job, which drives
+> `electron-builder --linux dir` (`npm --workspace @stint/gui run pack:smoke`) to a real packed
+> Linux app and asserts it appears under `packages/gui/dist-pack/`. A packaging regression now
+> fails the PR. The manual launch checks (steps 2–5) and the full AppImage/`.deb`/`.dmg` build
+> remain the merge-time/release reality this smoke does not replace.
+
 1. **No Windows in the configuration.** Inspect the two source files. (This step is also
    the **automated CI safety valve** `packages/gui/test/build-matrix.test.ts` — a GOLD-style
    static config guard that **fails CI** if a `win` block or a `windows-latest` matrix entry

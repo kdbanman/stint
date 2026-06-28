@@ -27,6 +27,7 @@
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
     "verify:no-network": "node scripts/check-no-network.mjs",
+    "verify:packaging": "node scripts/check-packaging.mjs",
     "prejudge": "npm run build",
     "judge": "node packages/gui/judge/run-judge.mjs",
     "prerecord": "npm run build",
