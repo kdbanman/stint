@@ -282,7 +282,7 @@ recording required: ${w.rec ? 'YES (▶)' : 'no'}).
 
 Read the relevant source, the inline spec in requirements-transition.md, and the mockup(s) before
 planning. Return the EXACT, COMPLETE set of files you will create/edit/delete (code AND tests AND
-schema/rubric/runbook/parity/coverage/mockup/prd.html section) — this list schedules non-conflicting
+schema/rubric/runbook/parity/coverage/mockup/context/prd.html section) — this list schedules non-conflicting
 parallel work, so precision matters. Provide concrete steps (for a NEW table: schema/migration FIRST,
 then core query, then CLI, then GUI). Provide an acPlan covering EVERY AC method in this requirement's
 AC column, each with the precise assertion. State the evidence regen step (evidence/judge/both/none).
@@ -404,8 +404,8 @@ what this wave added, WITHOUT weakening any assertion. Then stop.`,
   if (!green) log(`⚠ Wave ${w + 1} still red after repair attempts — carrying failures into the Verify phase.`);
 }
 
-// Doc-only rows (the concept rewrite, prd.html badge/section text, mockup sync) — these touch
-// only docs/HTML and the prd.html section text, so run them together after code lands.
+// Doc-only rows (the concept rewrite, context/prd.html badge/section text, mockup sync) — these touch
+// only docs/HTML and the context/prd.html section text, so run them together after code lands.
 if (docOnly.length) {
   log(`Doc wave: ${docOnly.map((d) => d.reqId).join(', ')}`);
   await parallel(
@@ -414,7 +414,7 @@ if (docOnly.length) {
         `${REPO}
 
 Apply the documentation change for ${d.reqId} — ${d.summary} (files hint: ${(d.files || []).join(', ') || 'docs'}).
-Edit the new docs (prd.html / concept.html / glossary.html / acceptance.html) and any mockup named,
+Edit the new docs (context/prd.html / context/concept.html / context/glossary.html / context/acceptance.html) and any mockup named,
 rendering the inline spec from requirements-transition.md in the legacy house style: add the \`core\`
 badge where ● is marked, drop every Windows/%APPDATA% mention, and cross-reference §20 hardening where
 the mapping says to. Keep mockups in sync with the PRD (PRD §18). Do NOT touch the *-old.html files
@@ -814,7 +814,7 @@ if (!swapGate) {
 Every requirement now has passing AC evidence and both reviews are clean. Perform the §Z old→new SWAP
 on the CURRENT PR branch (commit; do NOT merge — the human gate is the PR merge), then push so it lands
 on the open PR. Read requirements-transition.md §Z for the authoritative list, then:
-  - DELETE prd-old.html, concept-old.html, glossary-old.html, acceptance-old.html.
+  - DELETE context/prd-old.html, context/concept-old.html, context/glossary-old.html, context/acceptance-old.html.
   - DELETE packages/gui/renderer/report.html and packages/gui/renderer/report.js (folded into the
     in-sidebar Reports view); remove any remaining references/wiring to them.
   - DELETE .claude/workflows/stint-prd-coverage.js (legacy, superseded — used only as prior art).

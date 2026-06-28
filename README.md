@@ -5,9 +5,10 @@ Electron **tray app** and a **`tt` CLI** are equal surfaces over one local SQLit
 database, built as a TypeScript monorepo around a shared `@stint/core` package. It
 runs entirely offline; the unit is time, and no money lives in the app.
 
-> The design lives in the styled HTML docs at the repo root — read order:
-> [`concept.html`](concept.html) → [`prd.html`](prd.html) →
-> [`glossary.html`](glossary.html) → [`acceptance.html`](acceptance.html). This
+> The design lives in the styled HTML docs under [`context/`](context/) — read
+> order: [`concept.html`](context/concept.html) → [`prd.html`](context/prd.html) →
+> [`glossary.html`](context/glossary.html) → [`acceptance.html`](context/acceptance.html),
+> then [`process.html`](context/process.html) for how it's built &amp; verified. This
 > README is the implementation's front door.
 
 ## The keystone idea
@@ -88,7 +89,7 @@ with flags in context, and a report builder with CSV/JSON export.
 ## Testing & acceptance
 
 No single notation verifies the whole PRD well, so Stint uses the five complementary
-methods from `acceptance.html`. The full map is
+methods from [`context/acceptance.html`](context/acceptance.html). The full map is
 [`acceptance/COVERAGE.md`](acceptance/COVERAGE.md).
 
 | Method | Proves | Run |
