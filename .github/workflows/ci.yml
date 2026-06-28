@@ -37,8 +37,73 @@ jobs:
         run: npm test
       - name: No-network backstop (§17 R9)
         run: npm run verify:no-network
+      # §19 R01 — cheap, deterministic guard that electron-builder's native helper
+      # (app-builder-bin) is installed AND runnable, so a broken toolchain fails on the PR
+      # instead of only in the post-merge release pack. A reinstall self-heals a genuinely
+      # missing/corrupt install. The end-to-end proof is the pack-smoke job.
+      - name: Packaging toolchain guard (§19 R01)
+        run: |
+          npm run verify:packaging || {
+            echo "::warning::app-builder helper missing after npm ci — repairing (clean cache + reinstall)"
+            npm cache clean --force
+            rm -rf node_modules
+            npm ci
+            npm run verify:packaging
+          }
       - name: Regenerate acceptance evidence
         run: npm run evidence
+
+  # §19 R01 — packaging SMOKE on every PR. The release matrix (release.yml) only runs
+  # post-merge, so a broken `pack` (e.g. the app-builder ENOENT) used to land on main
+  # unseen. This job actually drives electron-builder for Linux to a packed app
+  # directory (`--dir`: fast — no AppImage/.deb compression, but it exercises the SAME
+  # native helper + electron download + `files:` glob that the real pack does), so a
+  # packaging regression fails the PR. The full AppImage/.deb artifacts + publish stay in
+  # release.yml.
+  pack-smoke:
+    name: pack-smoke · Linux (§19 R01)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify packaging toolchain (app-builder-bin)
+        run: |
+          node scripts/check-packaging.mjs || {
+            echo "::warning::app-builder helper missing after npm ci — repairing (clean cache + reinstall)"
+            npm cache clean --force
+            rm -rf node_modules
+            npm ci
+            node scripts/check-packaging.mjs
+          }
+      - name: Stamp version (§19 R06)
+        run: |
+          today="$(date -u +%Y.%-m.%-d)"
+          n="$(( $(git tag -l "${today}*" | wc -l) + 1 ))"
+          STINT_BUILD_N="$n" npm run version:stamp
+      - name: Build (core + cli + gui main)
+        run: npm run build
+      - name: Pack GUI (Linux, unpacked dir — smoke)
+        run: npm --workspace @stint/gui run pack:smoke
+      - name: Assert a packed Linux app was produced
+        run: |
+          root=packages/gui/dist-pack/linux-unpacked
+          if [ ! -d "$root" ]; then
+            echo "no linux-unpacked dir under packages/gui/dist-pack/ — electron-builder --dir produced nothing"
+            ls -R packages/gui/dist-pack 2>/dev/null || true
+            exit 1
+          fi
+          # The app payload is asar-packed by default (resources/app.asar); tolerate a
+          # non-asar build (resources/app/package.json) too. Either proves pack ran through.
+          if [ ! -e "$root/resources/app.asar" ] && [ ! -e "$root/resources/app/package.json" ]; then
+            echo "linux-unpacked produced but the app payload (resources/app.asar or resources/app/) is missing"
+            ls -R "$root/resources" 2>/dev/null || true
+            exit 1
+          fi
+          echo "packed Linux app present: $root"
 
   judge:
     name: JUDGE · GUI presentation (Chromium, headless)

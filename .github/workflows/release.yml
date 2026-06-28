@@ -73,6 +73,21 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Regression backstop: confirm electron-builder's native helper (app-builder-bin) is
+      # present AND runnable before packaging, so a broken toolchain fails here with a clear
+      # message instead of a cryptic ENOENT deep in `pack`. The packaging fix itself is
+      # `npmRebuild: false` in electron-builder.yml (it stopped electron-builder deleting the
+      # helper during its workspace dep-install); this guards against future regressions, and
+      # a reinstall self-heals a genuinely missing/corrupt install.
+      - name: Verify packaging toolchain (app-builder-bin)
+        run: |
+          node scripts/check-packaging.mjs || {
+            echo "::warning::app-builder helper missing after npm ci — repairing (clean cache + reinstall)"
+            npm cache clean --force
+            rm -rf node_modules
+            npm ci
+            node scripts/check-packaging.mjs
+          }
       # §19 R06 — stamp the SAME computed version into @stint/core before the build,
       # so the packaged artifacts report exactly the release tag (and what the app /
       # `tt` show — the §19 R06 cross-check in CHECK PUBLISH-ON-MERGE).
