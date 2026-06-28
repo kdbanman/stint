@@ -100,99 +100,88 @@
       <div class="wordmark">stint</div>
       <div class="clock">how it's built · tt v1</div>
     </div>
-    <div class="mast-meta">Process &amp; Verification Requirements · v1 (seed) · properties the apparatus must satisfy</div>
+    <div class="mast-meta">Process &amp; Verification Requirements · v1 (seed)</div>
   </header>
 
-  <p class="lede">The application requirements in <a href="prd.html">prd.html</a> say what Stint does for its user. This says what the <em>process that proves Stint</em> must do — the properties the build, CI, and acceptance apparatus must satisfy. These are <strong>SDLC requirements</strong>, a different kind of claim from the application requirements, and until now they had no home.</p>
+  <p class="lede"><a href="prd.html">prd.html</a> specifies the product; this specifies the apparatus that proves it. These are <strong>SDLC requirements</strong> — properties the build, CI, and acceptance system must hold — a different kind of claim from the application requirements, and until now without a home.</p>
 
-  <p>Read with <a href="acceptance.html">acceptance.html</a> (the AC strategy — which notation proves each requirement) and <a href="prd.html">prd.html</a> (the what). Where acceptance.html routes a requirement to a verification method, this governs how the apparatus running those methods must <em>behave</em>. This is a <strong>seed</strong>: a first capture of principles that were institutional knowledge scattered across test comments, CI YAML, and the <code>.claude/</code> machinery. Completing it — a full process glossary, the automatic-vs-manual inventory, release/branch governance, and the requirements-change process itself — is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue #19</a>.</p>
-
-  <div class="note"><span class="lbl">These are requirements on the apparatus, not the application</span>Nothing here changes what Stint does for a user. Each principle constrains how we <em>prove and protect</em> the software; a violation is a process bug — a false guarantee, a blind spot in the gate, a guard that can rot unseen — not a product bug. They are orthogonal to the five AC methods: a GOLD test can be perfectly correct and still violate one of these (run too late, or be unprotected).</div>
+  <p>Read with <a href="acceptance.html">acceptance.html</a>, which routes each requirement to the method that proves it. That decides <em>which</em> notation; this constrains how the resulting guard must <em>behave</em>. A violation is a false green, not a user-visible bug, and is orthogonal to the five AC methods: a correct GOLD test can still violate these by running too late or being unprotected. This is a <strong>seed</strong> — the full SDLC spec (process glossary, automatic-vs-manual inventory, release governance, the requirements-change process) is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>.</p>
 
   <nav class="toc">
     <h4>Contents</h4>
     <ol>
-      <li><a href="#s1"><span class="tn">01</span>Application vs process requirements</a></li>
+      <li><a href="#s1"><span class="tn">01</span>Two kinds of requirement</a></li>
       <li><a href="#s2"><span class="tn">02</span>The principles</a></li>
-      <li><a href="#s3"><span class="tn">03</span>Relation to the five AC methods</a></li>
-      <li><a href="#s4"><span class="tn">04</span>What's specified — and what isn't yet</a></li>
-      <li><a href="#s5"><span class="tn">05</span>Where the project's requirements &amp; context live</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Not yet specified</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Where requirements live</a></li>
     </ol>
   </nav>
 
   <section id="s1">
-    <div class="eyebrow"><span class="n">01</span> Why a separate doc</div>
-    <h2>Application requirements and process requirements are different kinds of claim</h2>
-    <p>The four canonical docs — <a href="concept.html">concept.html</a>, <a href="prd.html">prd.html</a>, <a href="glossary.html">glossary.html</a>, <a href="acceptance.html">acceptance.html</a> — are all about the <em>application</em>: the why, the what, the words, and how we'll know it's true. None of them is a home for requirements on the <em>engineering process itself</em>. So principles like "every packaging guard self-heals" had nowhere to live and ended up as comments in test files and workflow YAML. This doc is that home.</p>
+    <div class="eyebrow"><span class="n">01</span> Scope</div>
+    <h2>Two kinds of requirement</h2>
+    <p>The four spec docs (<a href="concept.html">concept</a>, <a href="prd.html">prd</a>, <a href="glossary.html">glossary</a>, <a href="acceptance.html">acceptance</a>) describe the application. This describes the process. The split:</p>
     <table>
-      <thead><tr><th>Application requirement</th><th>Process / SDLC requirement</th></tr></thead>
+      <thead><tr><th>Application requirement</th><th>Process requirement</th></tr></thead>
       <tbody>
-        <tr><td data-l="application">What the product does for its user. Lives in <code>prd.html</code> (§/R), proven per <code>acceptance.html</code>.</td><td data-l="process">How we build, verify, and release it. Lives here. A property the apparatus must hold.</td></tr>
-        <tr><td data-l="application">"At most one timer is open at a time" (§04).</td><td data-l="process">"A check that gates release runs on the PR, not only post-merge."</td></tr>
-        <tr><td data-l="application">"<code>tt status --json</code> matches its schema" (§11).</td><td data-l="process">"Every manual check earns a cheap automated mirror."</td></tr>
-        <tr><td data-l="application">A bug here is wrong behavior the user can see.</td><td data-l="process">A bug here is a false green — the gate said yes when it shouldn't have.</td></tr>
+        <tr><td data-l="application">What the product does. Lives in <code>prd.html</code>, proven per <code>acceptance.html</code>.</td><td data-l="process">How it is built, verified, released. Lives here.</td></tr>
+        <tr><td data-l="application">"At most one timer is open" (§04).</td><td data-l="process">"A release-gating check runs on the PR, not post-merge."</td></tr>
+        <tr><td data-l="application">A defect is wrong behavior the user sees.</td><td data-l="process">A defect is a false green — the gate passed when it shouldn't.</td></tr>
       </tbody>
     </table>
   </section>
 
   <section id="s2">
-    <div class="eyebrow"><span class="n">02</span> The principles</div>
-    <h2>The verification apparatus is itself a system with requirements</h2>
-    <p>Each principle below is stated, given its reason, and tied to the concrete episode that surfaced it (mostly the release-packaging break: the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while build/test CI stayed green, because nothing on the PR path exercised packaging). Together they cover the apparatus's own properties: coverage, timing, completeness of mirror, resilience, self-protection, and honesty.</p>
+    <div class="eyebrow"><span class="n">02</span> Requirements</div>
+    <h2>The principles</h2>
+    <p>Each is normative. The reference names the concern that motivated it; most surfaced from the release-packaging failure (the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while CI stayed green).</p>
     <ol class="req">
-      <li><strong>Green must be meaningful.</strong> A passing check must actually cover what its presence implies; a blind spot in the gate is a false guarantee, worse than no check because it reassures. <em>Seen in:</em> packaging was broken for weeks while CI was green — the signal silently excluded packaging.</li>
-      <li><strong>Verify before the gate, not after it.</strong> A check that runs only <em>after</em> the merge it is meant to protect cannot prevent a regression; it only discovers it later. Every concern that gates release earns a check on the path that gates it — the PR. <em>Seen in:</em> the real pack ran only post-merge (<code>release.yml</code>), so the break landed on <code>main</code> repeatedly unseen; the fix added a PR-time <code>pack-smoke</code> job.</li>
-      <li><strong>Every manual check earns an automated mirror (a "safety valve").</strong> A human-run runbook step should have a cheap automated guard over its invariant, so a regression fails CI rather than waiting for the next manual pass. The mirror need not be the full check — a static config assertion or a fast smoke is enough to catch the common regression. <em>Seen in:</em> <code>build-matrix.test.ts</code> mirrors the "no Windows" runbook invariant; <code>verify:packaging</code> + <code>pack-smoke</code> mirror "the artifacts really build."</li>
-      <li><strong>Guards self-heal where the failure is known and recoverable; otherwise they fail loud and early.</strong> A guard facing a known-recoverable fault (a poisoned cache) should recover it; one that cannot should fail at the boundary with a specific, actionable message — not a cryptic failure deep inside a downstream tool. <em>Seen in:</em> the packaging guard reinstalls when the native helper is missing, and otherwise reports exactly which binary is absent instead of electron-builder's bare <code>ENOENT</code>.</li>
-      <li><strong>Protect the guard (meta-verification).</strong> A guard is code: it can be deleted, disabled, or quietly rot. Assert that it stays wired, so removing the guard is itself a caught regression. <em>Seen in:</em> <code>build-matrix.test.ts</code> asserts the <code>pack-smoke</code> job and the <code>verify:packaging</code> guard remain present in CI.</li>
-      <li><strong>Fix robustly under diagnostic uncertainty, and record the residue.</strong> When a failure's exact mechanism can't be reproduced, prefer a fix robust to the <em>cause</em> over one that bets on a single mechanism — and write down what stays uncertain rather than implying certainty. <em>Seen in:</em> the packaging fix dropped the suspect cache and added self-heal without claiming to have proven the npm mechanism, and the PR recorded the residual uncertainty. This is the build-system echo of acceptance.html's "honest residue / residual risk we accept."</li>
+      <li><strong>Green is meaningful.</strong> A passing check must cover every concern its presence implies; a gate with a blind spot is a false guarantee, worse than none because it reassures. <em>(§19 R01: packaging was broken while CI was green — no check exercised it.)</em></li>
+      <li><strong>Verify before the gate.</strong> A check that runs only after the merge it protects cannot prevent a regression, only discover it. Every release-gating concern has a check on the PR path. <em>(§19 R01: the real pack ran post-merge only.)</em></li>
+      <li><strong>Mirror every manual check.</strong> Each MANUAL runbook step has a cheap automated guard over its invariant — a static assertion or a smoke run — so the common regression fails CI, not the next manual pass. <em>(<code>build-matrix.test.ts</code>; the <code>pack-smoke</code> job.)</em></li>
+      <li><strong>Self-heal or fail loud.</strong> A guard recovers a known-recoverable fault; otherwise it fails at the boundary with a specific, actionable message, never a cryptic downstream error. <em>(packaging guard reinstalls a missing native helper, else names the absent binary.)</em></li>
+      <li><strong>Protect the guard.</strong> A guard is code: it can be deleted, disabled, or rot. Assert that it stays wired, so removing it is itself a caught regression. <em>(<code>build-matrix.test.ts</code> asserts <code>pack-smoke</code> + <code>verify:packaging</code> remain.)</em></li>
+      <li><strong>Fix to the cause; record the residue.</strong> When a failure's mechanism is unproven, prefer a fix robust to the cause over one betting on a single mechanism, and document what stays uncertain rather than implying certainty.</li>
     </ol>
-    <div class="note"><span class="lbl">The thread</span>Coverage (1), timing (2), completeness of the manual→automated mirror (3), resilience (4), self-protection (5), and honesty (6) are the same demand applied to the apparatus that we already apply to the product: that a guarantee mean what it says.</div>
   </section>
 
   <section id="s3">
-    <div class="eyebrow"><span class="n">03</span> Relation to the AC methods</div>
-    <h2>The methods prove the product; these principles govern the apparatus</h2>
-    <p>acceptance.html defines five methods — <span class="mc">BDD</span> · <span class="mc">PROP</span> · <span class="mc">GOLD</span> · <span class="mc">JUDGE</span> · <span class="mc">MANUAL</span> — and a decision rule routing each application requirement to the method that fits. That rule answers <em>which notation proves this requirement</em>. The principles here answer a different question: <em>once a guard exists, how must it behave</em> — when it runs (2), whether its green is meaningful (1), whether a manual check has an automated twin (3), how it fails or heals (4), whether it is itself protected (5), and how honestly its limits are recorded (6). The two compose: route a requirement to a method via acceptance.html §03, then make the resulting guard satisfy this doc.</p>
-  </section>
-
-  <section id="s4">
-    <div class="eyebrow"><span class="n">04</span> Honest residue</div>
-    <h2>This is a seed, not the complete SDLC spec</h2>
-    <p>This first capture is deliberately narrow — the verification principles above and the map below. The rest of the project's SDLC is still a combination of institutional knowledge, scattered comments, and GitHub systems. Consolidating it is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue #19</a>; explicitly <strong>not yet specified here</strong>, and pending that pass:</p>
+    <div class="eyebrow"><span class="n">03</span> Residue</div>
+    <h2>Not yet specified</h2>
+    <p>This is a seed. The rest of the SDLC remains institutional knowledge, scattered comments, and GitHub config; consolidating it is <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. Pending:</p>
     <ul class="d">
-      <li>A full <strong>process glossary</strong> — the SDLC twin of glossary.html (gate, guard, safety valve, backstop, evidence, surface, parity, runbook, smoke, self-heal…), one canonical term per concept.</li>
-      <li>The <strong>automatic-vs-manual inventory</strong> — exactly what CI enforces vs what a human must run, and where the boundary sits.</li>
-      <li><strong>Branch / PR / release governance</strong> — naming, ready-not-draft PRs, publish-on-merge (§19 R05), versioning (§19 R06), the merge gate.</li>
-      <li>The <strong>requirements-change process itself</strong> — the <code>change-requirements</code> skill + <code>requirements-transition</code> workflow and the old→new swap (§Z), and how <em>this</em> doc is changed vs prd.html.</li>
-      <li>The meta-decision of <strong>what must be specified vs what can stay convention</strong>, recorded so the apparatus is neither under- nor over-specified.</li>
+      <li>A <strong>process glossary</strong> — the SDLC twin of glossary.html (gate, guard, safety valve, backstop, evidence, surface, parity, smoke, self-heal…).</li>
+      <li>The <strong>automatic-vs-manual inventory</strong> — what CI enforces vs what a human must run, and the boundary.</li>
+      <li><strong>Branch / PR / release governance</strong> — naming, ready-not-draft PRs, publish-on-merge (§19 R05), versioning (§19 R06).</li>
+      <li>The <strong>requirements-change process</strong> — the <code>change-requirements</code> skill, the <code>requirements-transition</code> workflow, the old→new swap (§Z); and how this doc is changed vs prd.html.</li>
+      <li>What <strong>must be specified vs left to convention</strong>, recorded.</li>
     </ul>
   </section>
 
-  <section id="s5">
-    <div class="eyebrow"><span class="n">05</span> The map</div>
-    <h2>Where the project's requirements &amp; context live</h2>
-    <p>Until issue #19 produces the full index, this is the current map of every doc and system that specifies the project. <code>CLAUDE.md</code>'s Files table is the human front door pointing here.</p>
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Map</div>
+    <h2>Where requirements &amp; context live</h2>
+    <p>The current index, pending #19. <code>CLAUDE.md</code>'s Files table is the front door.</p>
     <table>
-      <thead><tr><th>Location</th><th>What it specifies</th></tr></thead>
+      <thead><tr><th>Location</th><th>Specifies</th></tr></thead>
       <tbody>
-        <tr><td data-l="location" class="m">context/concept.html</td><td data-l="specifies">The why — product concept and non-goals.</td></tr>
-        <tr><td data-l="location" class="m">context/prd.html</td><td data-l="specifies">The what — application requirements (§/R), the durability/packaging story.</td></tr>
-        <tr><td data-l="location" class="m">context/glossary.html</td><td data-l="specifies">The words — application domain language (one term per concept).</td></tr>
-        <tr><td data-l="location" class="m">context/acceptance.html</td><td data-l="specifies">How we'll know — the five AC methods and the PRD→method routing.</td></tr>
-        <tr><td data-l="location" class="m">context/process.html</td><td data-l="specifies">How it's built &amp; verified — SDLC/process requirements (this doc).</td></tr>
-        <tr><td data-l="location" class="m">acceptance/COVERAGE.md</td><td data-l="specifies">The PRD→proof index — every §/R mapped to the tests that prove it.</td></tr>
-        <tr><td data-l="location" class="m">acceptance/{parity-matrix.json, manual/runbook.md, schemas/, judge-rubric.md}</td><td data-l="specifies">The AC artifacts — parity set, MANUAL runbooks, JSON schemas, JUDGE rubric.</td></tr>
-        <tr><td data-l="location" class="m">features/</td><td data-l="specifies">Gherkin specs run against both surfaces (parity).</td></tr>
-        <tr><td data-l="location" class="m">.claude/skills/, .claude/workflows/</td><td data-l="specifies">The requirements-change machinery that governs how the docs above change.</td></tr>
-        <tr><td data-l="location" class="m">.github/workflows/{ci,release}.yml, scripts/</td><td data-l="specifies">The enforcement apparatus these principles constrain.</td></tr>
+        <tr><td data-l="location" class="m">context/concept.html</td><td data-l="specifies">The why — concept, non-goals.</td></tr>
+        <tr><td data-l="location" class="m">context/prd.html</td><td data-l="specifies">The what — application requirements (§/R).</td></tr>
+        <tr><td data-l="location" class="m">context/glossary.html</td><td data-l="specifies">The words — application domain language.</td></tr>
+        <tr><td data-l="location" class="m">context/acceptance.html</td><td data-l="specifies">How we'll know — AC methods, PRD→method routing.</td></tr>
+        <tr><td data-l="location" class="m">context/process.html</td><td data-l="specifies">How it's built &amp; verified — this doc.</td></tr>
+        <tr><td data-l="location" class="m">acceptance/COVERAGE.md</td><td data-l="specifies">PRD→proof index — every §/R mapped to its tests.</td></tr>
+        <tr><td data-l="location" class="m">acceptance/{parity-matrix.json, manual/runbook.md, schemas/, judge-rubric.md}</td><td data-l="specifies">AC artifacts — parity, MANUAL runbooks, schemas, JUDGE rubric.</td></tr>
+        <tr><td data-l="location" class="m">features/</td><td data-l="specifies">Gherkin specs, run against both surfaces.</td></tr>
+        <tr><td data-l="location" class="m">.claude/skills/, .claude/workflows/</td><td data-l="specifies">The requirements-change machinery.</td></tr>
+        <tr><td data-l="location" class="m">.github/workflows/, scripts/</td><td data-l="specifies">The enforcement apparatus these principles constrain.</td></tr>
       </tbody>
     </table>
   </section>
 
   <div class="foot">
     <span>stint · process &amp; verification requirements</span>
-    <span>v1 · seed · see issue #19</span>
+    <span>v1 · seed · issue #19</span>
   </div>
 
 </main>
