@@ -12,8 +12,8 @@ export const meta = {
     { title: 'Verify', detail: 'Run/extend executable AC (BDD/PROP/GOLD/JUDGE/MANUAL) per the mapping; regenerate evidence' },
     { title: 'Review', detail: 'TWO separate passes: (a) adversarial AC-evidence-sufficiency critic, (b) code-quality & architecture review (deletion test, shallow modules, leaky seams)' },
     { title: 'Improve', detail: 'Apply both reviews’ feedback in a bounded loop-until-dry; must not regress AC' },
-    { title: 'Recordings', detail: 'QA screen recordings (LAST): core-flow GUI, all Rec ▶ rows, code-change-adjacent reqs; saved under acceptance/evidence/recordings/ indexed by req id' },
-    { title: 'PR', detail: 'Regenerate all evidence, commit on the working branch, open ONE ready-for-review PR with recordings linked and a per-requirement status checklist' },
+    { title: 'Recordings', detail: 'QA screen recordings (LAST): core-flow GUI, all Rec ▶ rows, code-change-adjacent reqs; ASCII-named, slowed (~0.5x) GIFs with an end-frame hold and visible cursor/click, committed under acceptance/evidence/recordings/ indexed by req id' },
+    { title: 'PR', detail: 'Regenerate all evidence, commit on the working branch, open ONE ready-for-review PR with recordings embedded inline as GIF images (each with a caption) and a per-requirement status checklist' },
     { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete *-old.html / report.html / report.js / legacy workflow / this mapping, promote new docs, fix references (§Z)' },
   ],
 };
@@ -167,8 +167,8 @@ const RECORDING = {
   properties: {
     reqId: { type: 'string' },
     captured: { type: 'boolean', description: 'False if the harness lacks the capability — note it, never fake it.' },
-    path: { type: 'string', description: 'acceptance/evidence/recordings/<reqId>.webm (or "" if not captured).' },
-    shows: { type: 'string', description: 'What the video demonstrates (the requirement being exercised).' },
+    path: { type: 'string', description: 'Committed GIF at acceptance/evidence/recordings/<ascii-slug>.gif (ASCII only, e.g. 12-r15.gif), or "" if not captured.' },
+    shows: { type: 'string', description: 'One-line description of what the GIF demonstrates — used verbatim as the inline caption in the PR body.' },
     notes: { type: 'string', description: 'If captured=false, the missing capability and what a human must do instead.' },
   },
 };
@@ -672,19 +672,33 @@ if (!recTargets.length) {
 
 let recordings = [];
 if (recTargets.length) {
-  // One harness-extension agent first establishes a video-capable driver, then per-req captures
-  // run in parallel writing to distinct files (acceptance/evidence/recordings/<reqId>.webm).
+  // One harness-extension agent first establishes a recording driver, then per-req captures run in
+  // parallel writing to distinct committed GIFs (acceptance/evidence/recordings/<ascii-slug>.gif).
   await agent(
     `${REPO}
 
 Set up screen-RECORDING capability by reusing the existing JUDGE harness (packages/gui/judge/
 run-judge.mjs + fixtures.mjs, Playwright + pinned clock). Add a recording entry point (e.g.
-packages/gui/judge/record.mjs) that launches the SAME renderer/window setup but with Playwright
-\`recordVideo\` enabled, driving a named fixture state and saving a .webm to
-acceptance/evidence/recordings/<reqId>.webm. Create the recordings/ directory. Do NOT change any
-existing judge behavior or rubric. If the headless Chromium build here cannot record video, do not
-fake anything — instead make the entry point clearly report the missing capability so per-req agents
-can surface it. Build if needed.`,
+packages/gui/judge/record.mjs) that launches the SAME renderer/window setup with Playwright
+\`recordVideo\` enabled, drives a named fixture state, and captures a video. Do NOT change any
+existing judge behavior or rubric.
+
+MAKE INTERACTIONS VISIBLE (clicks must not happen invisibly). Via \`page.addInitScript\`, inject:
+(a) a synthetic cursor element that follows \`mousemove\`; (b) a click pulse/ripple on \`pointerdown\`;
+(c) a brief outline/highlight on the element about to be interacted with. Drive the pointer with
+\`page.mouse.move\` in small steps so the cursor visibly travels, and pause ~300-500ms before/after
+each click. Optionally show a small caption banner naming the current step.
+
+Then CONVERT each capture to a COMMITTED, ASCII-named animated GIF — slowed to ~0.5x with a ~1.5s
+hold on the final frame (so fast actions are followable and each loop has a clear settle beat) —
+using a two-pass palette for quality:
+  ffmpeg -y -i in.webm -vf "setpts=2.0*PTS,fps=15,scale=iw:-1:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,palettegen=stats_mode=diff" pal.png
+  ffmpeg -y -i in.webm -i pal.png -filter_complex "setpts=2.0*PTS,fps=15,scale=iw:-1:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5[v];[v][1:v]paletteuse=dither=sierra2_4a" "acceptance/evidence/recordings/<ascii-slug>.gif"
+Use ASCII-only filenames slugged from the requirement id (e.g. "§12 R15" → "12-r15.gif"). Create the
+recordings/ directory. The GIFs MUST be COMMITTED (do NOT git-ignore them) — they are embedded inline
+in the PR as images. If \`ffmpeg\` is missing, install it (apt-get) or report the gap. If the headless
+Chromium build here cannot record video, do not fake anything — make the entry point clearly report
+the missing capability so per-req agents can surface it. Build if needed.`,
     { label: 'rec:setup', phase: 'Recordings' }
   );
 
@@ -697,12 +711,15 @@ can surface it. Build if needed.`,
 
 Capture the screen-recording QA evidence for GUI requirement ${id} — ${wreq.summary || ''}.
 ${p && p.recordingPlan && p.recordingPlan !== 'none' ? `Recording plan: ${p.recordingPlan}` : 'Drive the GUI flow that exercises this requirement end to end (the fixture state that shows it working).'}
-Use the recording entry point from rec:setup (Playwright recordVideo over the real renderer, pinned
-clock). Save to acceptance/evidence/recordings/${id}.webm. The video must SHOW the requirement being
+Use the recording entry point from rec:setup (with the visible synthetic cursor + click-pulse +
+element highlight). Save a slowed, ASCII-named GIF to acceptance/evidence/recordings/<ascii-slug>.gif
+(slug the requirement id, e.g. "§12 R15" → "12-r15.gif"). The GIF must SHOW the requirement being
 exercised (e.g. start/stop/add for §05; favorites rail resume for §05 R09/R10; saved-report run/export
-for §12 R08; range-picker drag for §12 R15; backup/restore for §20; update check/download for §19).
-Return captured=true with the path and what it shows. If the harness cannot record video here, return
-captured=false and NOTE the missing capability and what a human must do — never fabricate a file.`,
+for §12 R08; range-picker drag for §12 R15; backup/restore for §20; update check/download for §19) AND
+make each interaction visible (cursor travel + click pulse on every action). Return captured=true, the
+committed GIF path, and \`shows\` = a concise one-line description of what the GIF demonstrates (this is
+used verbatim as the PR caption). If the harness cannot record/convert here, return captured=false and
+NOTE the missing capability and what a human must do — never fabricate a file.`,
         { label: `rec:${id}`, phase: 'Recordings', schema: RECORDING }
       );
     })
@@ -753,10 +770,12 @@ branch directly; commit on the working branch and open the PR FROM it INTO the d
    - a one-paragraph summary of the transition;
    - a PER-REQUIREMENT STATUS CHECKLIST (use this exact data):
 ${checklistData.map((c) => `     - [${c.status === 'done' ? 'x' : ' '}] ${c.reqId} — ${c.status}${c.note ? ` (${c.note})` : ''}`).join('\n')}
-   - a "QA screen recordings" section LINKING each recording under acceptance/evidence/recordings/
-     (binaries are git-ignored/large — link by path/relative URL and note any that report a missing
-     capability rather than a file):
-${recordings.length ? recordings.map((r) => `     - ${r.reqId}: ${r.captured ? r.path : 'NOT CAPTURED — ' + r.notes}`).join('\n') : '     - (none in scope)'}
+   - a "QA screen recordings" section that EMBEDS each captured GIF INLINE as an image (GIFs are
+     committed, NOT git-ignored). After you commit and push, capture the resulting commit SHA, then for
+     each captured recording write its one-line caption followed by an image pinned to that SHA:
+     \`![<reqId> — <shows>](https://github.com/<owner>/<repo>/raw/<sha>/<path>)\`. List any NOT CAPTURED
+     with the reason instead of a file (never fabricate one). Recording data (reqId | path | shows | status):
+${recordings.length ? recordings.map((r) => `     - ${r.reqId} | ${r.captured ? `${r.path} | ${r.shows || ''}` : `NOT CAPTURED — ${r.notes || ''}`}`).join('\n') : '     - (none in scope)'}
    - an "Evidence" section noting build=${finalSuite.build}, tests=${finalSuite.testPassed},
      judge=${finalSuite.judge}, evidence=${finalSuite.evidence}, no-network=${finalSuite.noNetwork},
      and the Markdown PR-body footer required by the repo conventions.
