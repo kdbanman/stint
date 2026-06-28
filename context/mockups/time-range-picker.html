@@ -124,7 +124,7 @@
   /* time labels live at track level (not inside the block) so they always sit
      above the block's own stacking context and the overlap band — nothing hides them */
   .tlabel{position:absolute;left:8px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
-  .overlap{position:absolute;left:8px;right:16px;background:var(--warn-bg);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:8px}
+  .overlap{position:absolute;left:8px;right:16px;background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 7px,#f1e3bc 7px,#f1e3bc 14px);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:8px}
   .overlap .otag{font-size:10.5px;color:var(--warn-ink);background:var(--paper);border:1px solid var(--warn-line);border-radius:999px;padding:1px 9px}
   .phint{font-size:11.5px;color:var(--muted);margin:14px 0 0 52px;display:flex;align-items:center;gap:9px}
   .phint .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
