@@ -2388,7 +2388,7 @@ async function main() {
 
   // DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
   // counted as an automated pass; the screenshots are the evidence a human/LLM
-  // scores against acceptance/judge-rubric.md.
+  // scores against acceptance/criteria/judge-rubric.md.
   record(
     'DESKTOP_FEEL',
     null,

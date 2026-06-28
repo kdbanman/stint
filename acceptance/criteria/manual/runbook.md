@@ -1377,7 +1377,7 @@ release** artifact, with `tt` available in a terminal on the same database (find
    steps to replace the installed app in place; do **not** touch the data directory during the swap.
    - [ ] The flow **downloads the artifact** and presents the numbered **replace-the-app** guidance,
          including the **one-time Gatekeeper / first-launch approval** note (the guided-install step
-         list depicted in `mockups/settings.html` — design intent for §19 R04).
+         list depicted in `context/mockups/settings.html` — design intent for §19 R04).
 6. Relaunch the updated app and re-read the version on **both** surfaces.
    - [ ] **Settings → Software Update → Current version** and `tt --version` now show the **new**
          `YYYY.M.D[.N]` version (the one from step 3), still **identical** across the two surfaces.

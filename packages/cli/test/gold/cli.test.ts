@@ -19,7 +19,7 @@ const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
 const BIN = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const schema = (name: string) =>
   JSON.parse(
-    readFileSync(fileURLToPath(new URL(`../../../../acceptance/schemas/${name}`, import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL(`../../../../acceptance/criteria/schemas/${name}`, import.meta.url)), 'utf8'),
   );
 /** A fresh validator each call (Ajv refuses to register a $id twice). */
 const validator = (name: string) =>
@@ -600,7 +600,7 @@ describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
   // asserts each of those four rows carries <span class="core">core</span> in its
   // "Does" cell, and that no other §11 row does. It fails iff a badge is dropped or
   // wrongly added.
-  const prd = readFileSync(fileURLToPath(new URL('../../../../prd.html', import.meta.url)), 'utf8');
+  const prd = readFileSync(fileURLToPath(new URL('../../../../context/prd.html', import.meta.url)), 'utf8');
   const section = (() => {
     const m = prd.match(/<section id="s11">([\s\S]*?)<\/section>/);
     if (!m) throw new Error('§11 <section id="s11"> not found in prd.html');

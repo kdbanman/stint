@@ -6,7 +6,7 @@
  * buttons: Stop, Keep going, then one button per interval choice. This pins the pure
  * selection logic — the action layout and the index→choice map — that `main.ts` wires
  * into the real Notification. The end-to-end OS-notification firing (the part that needs
- * a real desktop) is covered by MANUAL (`acceptance/manual/runbook.md`).
+ * a real desktop) is covered by MANUAL (`acceptance/criteria/manual/runbook.md`).
  *
  * `evaluateCheckin(state, interval, now, overrideNextMin)` — the core that consumes the
  * picked minutes for the next gap only, then reverts — is PROP-proven in
