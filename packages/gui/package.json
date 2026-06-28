@@ -8,7 +8,8 @@
   "scripts": {
     "build": "tsc --build tsconfig.main.json",
     "start": "electron .",
-    "pack": "electron-builder --mac --linux --config electron-builder.yml"
+    "pack": "electron-builder --mac --linux --config electron-builder.yml",
+    "pack:smoke": "electron-builder --linux dir --config electron-builder.yml"
   },
   "dependencies": {
     "@stint/core": "1.0.0"

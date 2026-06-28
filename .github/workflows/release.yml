@@ -71,8 +71,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          # NO `cache: npm` on the packaging jobs: electron-builder spawns a precompiled
+          # native helper (app-builder-bin's ~18MB `app-builder` binary), and a restored
+          # npm cache was leaving it absent — the `spawn … app-builder ENOENT` that turned
+          # every release pack red. Packaging runs only on merge-to-main (infrequent), so a
+          # clean registry install is the right trade for a reliable native toolchain.
       - run: npm ci
+      # Fail fast with a CLEAR message if the native packaging helper did not land, and
+      # self-heal the one cause we have seen (a poisoned cache entry) with a clean reinstall,
+      # instead of letting electron-builder die deep in `pack` with a cryptic ENOENT.
+      - name: Verify packaging toolchain (app-builder-bin)
+        run: |
+          node scripts/check-packaging.mjs || {
+            echo "::warning::app-builder helper missing after npm ci — repairing (clean cache + reinstall)"
+            npm cache clean --force
+            rm -rf node_modules
+            npm ci
+            node scripts/check-packaging.mjs
+          }
       # §19 R06 — stamp the SAME computed version into @stint/core before the build,
       # so the packaged artifacts report exactly the release tag (and what the app /
       # `tt` show — the §19 R06 cross-check in CHECK PUBLISH-ON-MERGE).

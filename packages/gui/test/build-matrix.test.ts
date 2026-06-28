@@ -42,6 +42,9 @@ const builderActive = stripComments(builderYml);
 const releaseActive = stripComments(releaseYml);
 const ciActive = stripComments(ciYml);
 
+// The GUI package manifest — the `pack` / `pack:smoke` scripts the workflows drive.
+const guiPkg = JSON.parse(read('../package.json')) as { scripts?: Record<string, string> };
+
 // The active `files:` list items (lines after the `files:` key, before the next
 // top-level key), with leading list/`from:` markers stripped to bare globs/paths.
 // Used by the §19 R02 guard to assert the single-installer trees are bundled.
@@ -224,5 +227,54 @@ describe('GOLD — publish-on-merge workflow is wired to publish a Release (§19
     expect(publishBody).not.toMatch(/gh\s+release\s+create[\s\S]*?--draft\b/);
     expect(publishBody).not.toMatch(/gh\s+release\s+create[\s\S]*?--prerelease\b/);
     expect(publishBody).toMatch(/isDraft/);
+  });
+});
+
+/**
+ * GOLD — PR-time packaging-smoke guard (PRD §19 R01; runbook "CHECK BUILD MATRIX").
+ *
+ * §19 R01's real artifacts are built by release.yml, which only runs POST-merge — so a
+ * broken packaging toolchain (e.g. the `app-builder-bin` native helper missing, the
+ * `spawn … app-builder ENOENT` that turned every release pack red) used to reach `main`
+ * before anyone saw it: build/test CI was green because nothing on the PR path ever
+ * exercised packaging. The hardening closes that gap with two PR-time checks — a cheap
+ * `verify:packaging` toolchain guard in the `verify` job and a `pack-smoke` job that
+ * actually drives electron-builder to a packed Linux app — so a packaging regression
+ * fails the PR, not the next release.
+ *
+ * This guard is the executable mirror of that wiring: it FAILS the moment the smoke is
+ * removed or defanged (the script deleted, the guard step dropped, or the smoke job
+ * stripped of its actual pack), the same self-protecting role the R01/R02/R05 guards
+ * above play for the rest of the §19 config. Static inspection only — no build/network.
+ */
+describe('GOLD — packaging is smoke-tested on PRs, not just at release (§19 R01)', () => {
+  it('the GUI declares a linux-only `pack:smoke` script (no mac/windows in the smoke)', () => {
+    const smoke = guiPkg.scripts?.['pack:smoke'] ?? '';
+    expect(smoke).toMatch(/electron-builder\b/);
+    expect(smoke).toMatch(/--linux\b/);
+    // The smoke is Linux-only (the ubuntu PR runner); mac/windows targets must not creep in.
+    expect(smoke).not.toMatch(/--mac\b/);
+    expect(smoke).not.toMatch(/--win\b|--windows\b/);
+  });
+
+  it('the CI verify job runs the cheap packaging-toolchain guard before merge', () => {
+    expect(ciActive).toMatch(/verify:packaging/);
+  });
+
+  it('CI declares a pack-smoke job that actually packs the Linux app', () => {
+    expect(ciActive).toMatch(/^\s{2}pack-smoke\s*:/m);
+    // Isolate the pack-smoke job body (from its key to the next top-level job key or EOF)
+    // so the assertions key off that job, not the whole file.
+    const smokeBody = (() => {
+      // From the `pack-smoke:` key to the next top-level (2-space) job key.
+      const m = ciActive.match(/^\s{2}pack-smoke\s*:\n([\s\S]*?)(?=\n\s{2}\S)/m);
+      return m ? (m[1] ?? '') : '';
+    })();
+    expect(smokeBody).not.toBe('');
+    // It runs on ubuntu and drives the real packaging script (not just a config check).
+    expect(smokeBody).toMatch(/runs-on\s*:\s*ubuntu-latest/);
+    expect(smokeBody).toMatch(/pack:smoke/);
+    // And it asserts an artifact was produced, so an empty/failed pack can't pass silently.
+    expect(smokeBody).toMatch(/dist-pack/);
   });
 });
