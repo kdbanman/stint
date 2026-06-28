@@ -30,8 +30,8 @@ Read first for house style and the target shape:
   section-by-section new/modified/deleted tables, §19/§20 new sections, §W
   screen-recording scope, §R two reviews, §Z swap/cleanup). Your job is to
   reliably produce a doc of this shape plus the new docs and mockups.
-- `.claude/workflows/stint-prd-coverage.js` — prior-art workflow; mirror its
-  `meta`/phases/schema style when authoring the new workflow.
+- `.claude/workflows/requirements-transition.js` — the existing transition
+  workflow; mirror its `meta`/phases/schema style when re-authoring it.
 
 ---
 
@@ -192,7 +192,8 @@ recording in QA evidence (Step 4 §W).
 ## Step 4 — Author the transition workflow
 
 Author `.claude/workflows/requirements-transition.js` (mirror the `meta` +
-phases + JSON-schema style of `stint-prd-coverage.js`). **Author it; do not run
+phases + JSON-schema style of the existing `requirements-transition.js` if one
+is present). **Author it; do not run
 it.** The workflow consumes `requirements-transition.md` and carries out all
 pending work. It must encode these stages in order:
 
