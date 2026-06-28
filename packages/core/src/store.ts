@@ -638,9 +638,7 @@ export class Store {
    */
   saveReport(input: SavedReportInput): SavedReport {
     return this.tx(() => {
-      if (this.findReportByName(input.name)) {
-        throw new StoreError(`a saved report named "${input.name}" already exists`);
-      }
+      this.assertNameFree('report', input.name, 'saved report');
       const createdUtc = toUtc(this.now());
       const spec = input.rangeSpec;
       const id = Number(
@@ -675,9 +673,7 @@ export class Store {
 
   /** List all saved report definitions, name-ordered (PRD §09 R08). */
   listReports(): SavedReport[] {
-    return (this.db.prepare('SELECT * FROM report ORDER BY name COLLATE NOCASE').all() as unknown as ReportRow[]).map(
-      (r) => this.toSavedReport(r),
-    );
+    return this.listByName<ReportRow>('report').map((r) => this.toSavedReport(r));
   }
 
   /** A saved report by name (case-insensitive), or null. */
@@ -690,10 +686,7 @@ export class Store {
   renameReport(name: string, newName: string): SavedReport {
     return this.tx(() => {
       const row = this.requireReport(name);
-      const clash = this.findReportByName(newName);
-      if (clash && clash.id !== row.id) {
-        throw new StoreError(`a saved report named "${newName}" already exists`);
-      }
+      this.assertRenameFree('report', newName, row.id, 'saved report');
       this.db.prepare('UPDATE report SET name = ? WHERE id = ?').run(newName, row.id);
       return this.reportDefById(row.id);
     });
@@ -878,9 +871,7 @@ export class Store {
    */
   pinFavorite(t: FavoriteTemplate): Favorite {
     return this.tx(() => {
-      if (this.findFavoriteRowByName(t.name)) {
-        throw new StoreError(`a favorite named "${t.name}" already exists`);
-      }
+      this.assertNameFree('favorite', t.name, 'favorite');
       let description: string | null;
       let clientId: number | null;
       let projectId: number | null;
@@ -927,9 +918,7 @@ export class Store {
 
   /** List all favorites, name-ordered, with tags joined (PRD §05 R09). */
   listFavorites(): Favorite[] {
-    return (
-      this.db.prepare('SELECT * FROM favorite ORDER BY name COLLATE NOCASE').all() as unknown as FavoriteRow[]
-    ).map((r) => this.toFavorite(r));
+    return this.listByName<FavoriteRow>('favorite').map((r) => this.toFavorite(r));
   }
 
   /** A favorite by name (case-insensitive), or null. */
@@ -942,10 +931,7 @@ export class Store {
   renameFavorite(ref: string | number, newName: string): Favorite {
     return this.tx(() => {
       const row = this.requireFavoriteRow(ref);
-      const clash = this.findFavoriteRowByName(newName);
-      if (clash && clash.id !== row.id) {
-        throw new StoreError(`a favorite named "${newName}" already exists`);
-      }
+      this.assertRenameFree('favorite', newName, row.id, 'favorite');
       this.db.prepare('UPDATE favorite SET name = ? WHERE id = ?').run(newName, row.id);
       return this.favoriteById(row.id);
     });
@@ -1377,6 +1363,42 @@ export class Store {
   /** Resolve a numeric-id row from a named-entity table (favorite, report) by primary key. */
   private findByIdRow<R>(table: 'favorite' | 'report', id: number): R | undefined {
     return this.db.prepare(`SELECT * FROM ${table} WHERE id = ?`).get(id) as R | undefined;
+  }
+
+  /** List a named-entity table (favorite, report) name-ordered, case-insensitively — the one
+   * ordered fetch both groups share, so neither can drift on ordering. */
+  private listByName<R>(table: 'favorite' | 'report'): R[] {
+    return this.db
+      .prepare(`SELECT * FROM ${table} ORDER BY name COLLATE NOCASE`)
+      .all() as unknown as R[];
+  }
+
+  /**
+   * Guard the case-insensitive name uniqueness every named entity (favorite, report) shares on
+   * CREATE: throw a StoreError if `name` is already taken. `label` is the noun for the message
+   * ("favorite" / "saved report"). One guard so the two groups can't drift on how a duplicate
+   * is detected or worded — a duplicate is always an error, never a silent overwrite.
+   */
+  private assertNameFree(table: 'favorite' | 'report', name: string, label: string): void {
+    if (this.findByNameCI(table, name)) {
+      throw new StoreError(`a ${label} named "${name}" already exists`);
+    }
+  }
+
+  /**
+   * The RENAME twin of assertNameFree: throw if `newName` is held by a DIFFERENT row than
+   * `currentId` (renaming an entity to its own current name is a no-op, not a clash).
+   */
+  private assertRenameFree(
+    table: 'favorite' | 'report',
+    newName: string,
+    currentId: number,
+    label: string,
+  ): void {
+    const clash = this.findByNameCI<{ id: number }>(table, newName);
+    if (clash && clash.id !== currentId) {
+      throw new StoreError(`a ${label} named "${newName}" already exists`);
+    }
   }
 
   private requireEntry(id: number): EntryRow {
