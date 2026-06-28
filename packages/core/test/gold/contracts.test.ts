@@ -42,7 +42,7 @@ const ajv = addFormats(new Ajv({ allErrors: true }));
 const schema = (name: string) =>
   JSON.parse(
     readFileSync(
-      fileURLToPath(new URL(`../../../../acceptance/schemas/${name}`, import.meta.url)),
+      fileURLToPath(new URL(`../../../../acceptance/criteria/schemas/${name}`, import.meta.url)),
       'utf8',
     ),
   );

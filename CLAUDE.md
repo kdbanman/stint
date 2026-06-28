@@ -8,7 +8,7 @@ package.
 The repo holds both the **design documents** (the styled HTML below) and the
 **implementation** under `packages/` (`core`, `cli`, `gui`), with the
 acceptance-criteria apparatus under `acceptance/`, `features/`, and `scripts/`.
-See `README.md` for the implementation front door and `acceptance/COVERAGE.md`
+See `README.md` for the implementation front door and `acceptance/criteria/COVERAGE.md`
 for the full PRD-to-test map. Key commands: `npm run build`, `npm test`,
 `npm run judge`, `npm run evidence`, `npm run verify:no-network`.
 
@@ -45,7 +45,7 @@ place of `<branch>`.
 | `context/mockups/` | **The look.** Standalone, dependency-free HTML mockups of the GUI views (`main`, `reports`, `edit-entry`, `settings`) — design intent for `context/prd.html` §12/§18. "Slightly noisy": they show more than ships today. Keep in sync with the PRD when GUI requirements change (PRD §18). |
 | `README.md` | Implementation front door: layout, quick start, `tt` tour, GUI, and how to run the five AC method suites. |
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
-| `acceptance/` | Coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbooks, parity matrix, and generated evidence. |
+| `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — CLI transcript, screenshots, recordings, judge report). |
 | `features/` | Gherkin specs run against both surfaces (parity). |
 | `LICENSE` | MIT license. |
 

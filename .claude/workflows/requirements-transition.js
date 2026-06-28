@@ -202,13 +202,13 @@ Conventions you MUST follow (do not invent new structure):
   runs TWICE (core + tt) via run.test.ts — write surface-neutral steps.
 - PROP: packages/core/test/prop/*.test.ts (fast-check) for money/integrity invariants.
 - GOLD: packages/cli/test/gold/cli.test.ts and packages/core/test/gold/contracts.test.ts;
-  JSON Schemas in acceptance/schemas/<command>.schema.json (Draft 7).
-- JUDGE: acceptance/judge-rubric.md + packages/gui/judge/run-judge.mjs (Playwright, pinned
+  JSON Schemas in acceptance/criteria/schemas/<command>.schema.json (Draft 7).
+- JUDGE: acceptance/criteria/judge-rubric.md + packages/gui/judge/run-judge.mjs (Playwright, pinned
   clock JUDGE_NOW) + fixtures in packages/gui/judge/fixtures.mjs.
-- MANUAL: append a "CHECK <TITLE>" procedure to acceptance/manual/runbook.md.
+- MANUAL: append a "CHECK <TITLE>" procedure to acceptance/criteria/manual/runbook.md.
 - Parity: every new GUI IPC channel in packages/gui/src/ipc.ts CHANNELS gets a row in
-  acceptance/parity-matrix.json (asserted by packages/gui/test/parity.test.ts).
-- Coverage index: acceptance/COVERAGE.md is hand-maintained — add/refresh the PRD row.
+  acceptance/criteria/parity-matrix.json (asserted by packages/gui/test/parity.test.ts).
+- Coverage index: acceptance/criteria/COVERAGE.md is hand-maintained — add/refresh the PRD row.
 - New core entities (favorite, report) need a schema/migration in packages/core, then CLI
   (tt fav …, tt report save|ls|show|rm|run) and GUI (Timer favorites rail, Reports view).
 Commands: npm run build · npm test · npm run test:bdd|test:prop|test:gold · npm run judge
@@ -221,8 +221,8 @@ phase('Inventory');
 const inv = await agent(
   `${REPO}
 
-Read requirements-transition.md IN FULL (it is the work-list), plus acceptance/COVERAGE.md and
-acceptance/parity-matrix.json for the current state. Parse EVERY requirement row in the §2
+Read requirements-transition.md IN FULL (it is the work-list), plus acceptance/criteria/COVERAGE.md and
+acceptance/criteria/parity-matrix.json for the current state. Parse EVERY requirement row in the §2
 section-by-section tables, the §19 packaging table, and the §20 hardening table — including the
 docs-only "concept" row and the DELETED "§12 R-report.html" row. For each requirement capture:
 reqId, section, change (NEW/MODIFIED/DELETED), core (● → true), surfaces, the Files column
@@ -367,7 +367,7 @@ Plan:
 Put real behavior in @stint/core where logic belongs; keep CLI/GUI thin and at PARITY. For a new
 table (favorite/report) write the schema/migration and core query first, then wire CLI and GUI over
 the SAME core API. Add any new GUI IPC channel to packages/gui/src/ipc.ts CHANNELS and a row in
-acceptance/parity-matrix.json. Write the BDD/PROP/GOLD/JUDGE-fixture/MANUAL artifacts named in the
+acceptance/criteria/parity-matrix.json. Write the BDD/PROP/GOLD/JUDGE-fixture/MANUAL artifacts named in the
 plan as you go. Match surrounding style and the conventions above.
 
 Do NOT run \`npm run build\` or \`npm test\` (a verify agent runs them for the whole wave to avoid
@@ -435,7 +435,7 @@ await parallel([
   () => agent(
     `${REPO}
 
-Update acceptance/parity-matrix.json so EVERY GUI IPC channel now in packages/gui/src/ipc.ts CHANNELS
+Update acceptance/criteria/parity-matrix.json so EVERY GUI IPC channel now in packages/gui/src/ipc.ts CHANNELS
 (including the new favorite and saved-report channels) has a row mapping it to its tt command path(s)
 — §17 R14 parity for the new entities. Confirm packages/gui/test/parity.test.ts still asserts
 completeness; extend it only if the channel-extraction shape changed. Run \`npm run test:gold\` and
@@ -449,7 +449,7 @@ Extend the JUDGE apparatus for the new/changed GUI surfaces: the full Timer view
 rail (§12 R14, §05 R09/R10), the in-sidebar Reports view = saved reports (§12 R08), the visual
 time-range picker (§12 R15), the always-present fixed-width sidebar shell (§12 R03), the single-click
 popover / removed dropdown (§12 R01), and the one-clickability convention (§15). Add rubric items to
-acceptance/judge-rubric.md (machine-checkable → deterministic Playwright assertion in
+acceptance/criteria/judge-rubric.md (machine-checkable → deterministic Playwright assertion in
 packages/gui/judge/run-judge.mjs; subjective → screenshot-only pass:null). Add fixtures to
 packages/gui/judge/fixtures.mjs (keep the pinned clock JUDGE_NOW). Do NOT run the judge harness yet.
 Keep existing items intact.`,
@@ -458,7 +458,7 @@ Keep existing items intact.`,
   () => agent(
     `${REPO}
 
-Append MANUAL "CHECK <TITLE>" procedures to acceptance/manual/runbook.md for the OS-reality items this
+Append MANUAL "CHECK <TITLE>" procedures to acceptance/criteria/manual/runbook.md for the OS-reality items this
 transition introduced: §16 update-mid-timer / backup-on-launch / corruption-recovery; §17 R12 backups
 & recovery; §17 R13 install & update; §19 R01–R06 (build matrix, single installer, in-app update
 check/download, publish-on-merge, date/build versioning); §20 R03/R05 integrity-check & corruption
@@ -819,7 +819,7 @@ on the open PR. Read requirements-transition.md §Z for the authoritative list, 
     in-sidebar Reports view); remove any remaining references/wiring to them.
   - DELETE .claude/workflows/stint-prd-coverage.js (legacy, superseded — used only as prior art).
   - DELETE requirements-transition.md (this mapping).
-  - Ensure README.md, CLAUDE.md, acceptance/COVERAGE.md, and acceptance/parity-matrix.json reference
+  - Ensure README.md, CLAUDE.md, acceptance/criteria/COVERAGE.md, and acceptance/criteria/parity-matrix.json reference
     ONLY the new docs and the new entities (favorite, saved report); fix any dangling links to the
     deleted files.
 Then run \`npm run build && npm test && npm run verify:no-network\` once more to confirm nothing

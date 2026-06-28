@@ -3,7 +3,7 @@ Feature: GUI ↔ tt parity (§17 R8)
   # surface exposes, the other reaches, behaving identically. The full-parity claim is proved
   # by RUNNING the SAME spec twice — once over @stint/core (CoreWorld) and once over the tt
   # executable (CliWorld) via run.test.ts — so a scenario that passes on both surfaces IS the
-  # parity proof for that capability. The acceptance/parity-matrix.json + gui/test/parity.test.ts
+  # parity proof for that capability. The acceptance/criteria/parity-matrix.json + gui/test/parity.test.ts
   # bind the GUI's IPC channels to existing tt commands (the static coverage claim); THIS file
   # exercises the behaviour those channels invoke across the capability classes the §12 views
   # add (manual add, field edit, client/project create-rename-archive, setting change+read-back,

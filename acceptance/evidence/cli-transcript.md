@@ -173,7 +173,7 @@ ID  NAME      ARCHIVED
 
 Reference-data management is a CLI surface too.
 
-The full GUI↔CLI capability matrix is `acceptance/parity-matrix.json`, asserted complete by
+The full GUI↔CLI capability matrix is `acceptance/criteria/parity-matrix.json`, asserted complete by
 `packages/gui/test/parity.test.ts` (each GUI IPC channel maps to a real `tt` command).
 
 ## R9 — no network connections

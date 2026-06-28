@@ -19,7 +19,7 @@ const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
 const BIN = fileURLToPath(new URL('../../dist/bin.js', import.meta.url));
 const schema = (name: string) =>
   JSON.parse(
-    readFileSync(fileURLToPath(new URL(`../../../../acceptance/schemas/${name}`, import.meta.url)), 'utf8'),
+    readFileSync(fileURLToPath(new URL(`../../../../acceptance/criteria/schemas/${name}`, import.meta.url)), 'utf8'),
   );
 /** A fresh validator each call (Ajv refuses to register a $id twice). */
 const validator = (name: string) =>
