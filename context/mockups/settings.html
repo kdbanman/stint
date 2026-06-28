@@ -150,37 +150,33 @@
 </nav>
     <div class="view">
 
-      <div class="vhead" style="display:block;margin-bottom:6px">
-        <h2 class="vtitle">Settings</h2>
-        <p class="lead">Stored locally — identical to what <code>tt config set</code> writes. Changes save immediately.</p>
-      </div>
+      <div class="vhead"><h2 class="vtitle">Settings</h2></div>
 
       <div class="sgrp">Reporting</div>
-      <div class="srow"><div class="sk">Rounding<small>Applies to display & export only — stored time stays exact.</small></div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
+      <div class="srow"><div class="sk">Rounding</div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
       <div class="srow"><div class="sk">Rounding increment</div><div class="sc"><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div></div>
       <div class="srow"><div class="sk">Week start</div><div class="sc"><span class="seg"><button class="on">Monday</button><button>Sunday</button></span></div></div>
 
       <div class="sgrp">Check-ins</div>
-      <div class="srow"><div class="sk">First check-in<small>After a timer starts.</small></div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
+      <div class="srow"><div class="sk">First check-in</div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
       <div class="srow"><div class="sk">Check-in interval</div><div class="sc"><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div></div>
 
       <div class="sgrp">System</div>
-      <div class="srow"><div class="sk">Global hotkey<small>Toggles the timer from anywhere.</small></div><div class="sc"><span class="kbd">Ctrl Alt T</span></div></div>
+      <div class="srow"><div class="sk">Global hotkey</div><div class="sc"><span class="kbd">Ctrl Alt T</span></div></div>
       <div class="srow"><div class="sk">Accent colour</div><div class="sc"><span class="seg"><button class="on">System accent</button><button>Monochrome</button></span></div></div>
       <div class="srow"><div class="sk">Date & number format</div><div class="sc"><select class="field"><option selected>System locale</option></select></div></div>
 
       <div class="sgrp">Software update</div>
-      <div class="srow"><div class="sk">Current version<small>macOS &amp; Linux · updates never touch your database.</small></div><div class="sc"><span class="vrow"><span class="ver tnum">2026.6.27.2</span> <span class="pill accent">update available</span></span></div></div>
-      <div class="srow"><div class="sk">Installing 2026.6.27.3<small>Stint walks you through replacing the app. <span class="ilink"><svg class="ic"><use href="#i-info"/></svg> What happens next?</span></small></div>
+      <div class="srow"><div class="sk">Current version</div><div class="sc"><span class="vrow"><span class="ver tnum">2026.6.27.2</span> <span class="pill accent">update available</span></span></div></div>
+      <div class="srow"><div class="sk">Installing 2026.6.27.3</div>
         <div class="sc"><span class="prog"><span class="bar"><i></i></span><span class="pct tnum">62%</span></span></div></div>
 
       <div class="sgrp">Backups</div>
-      <div class="srow"><div class="sk">Last backup<small>Automatic timestamped copy on launch when the database changed.</small></div><div class="sc"><span class="vrow"><span class="ver tnum">2026-06-27 08:59</span> <span class="ok"><svg class="ic"><use href="#i-check"/></svg> verified</span></span></div></div>
+      <div class="srow"><div class="sk">Last backup</div><div class="sc"><span class="vrow"><span class="ver tnum">2026-06-27 08:59</span> <span class="ok"><svg class="ic"><use href="#i-check"/></svg> verified</span></span></div></div>
       <div class="srow"><div class="sk">Keep</div><div class="sc"><select class="field"><option>last 3</option><option selected>last 5</option><option>last 10</option></select></div></div>
-      <div class="srow"><div class="sk">Restore from backup<small>Replaces the current database with a chosen good copy.</small></div><div class="sc"><button class="btn sm"><svg class="ic"><use href="#i-restore"/></svg> Restore…</button></div></div>
+      <div class="srow"><div class="sk">Restore from backup</div><div class="sc"><button class="btn sm"><svg class="ic"><use href="#i-restore"/></svg> Restore…</button></div></div>
     </div>
   </div>
 </div>
-<div class="prov">Calm-system prototype · design intent for PRD §14, §12 R11, §19 (update) & §20 (backups) · on open, a corrupt database is quarantined and the latest good backup restored automatically · where this and the PRD disagree, the PRD wins</div>
 </body>
 </html>
