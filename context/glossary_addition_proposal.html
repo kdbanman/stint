@@ -94,16 +94,16 @@
       <div class="wordmark">stint</div>
       <div class="clock">proposed&nbsp;additions &nbsp;·&nbsp; issue&nbsp;#27</div>
     </div>
-    <div class="mast-meta">Domain Language · Proposed Additions · Adversarial Audit · NOT yet adopted</div>
+    <div class="mast-meta">Domain Language · Audit Additions · ADOPTED into glossary.html · disposition record</div>
   </header>
 
   <div class="banner">
-    <span class="tag">⚠ Proposal — additions only — not yet adopted</span>
-    <p>This page proposes <strong>additions</strong> to <a href="glossary.html">glossary.html</a> surfaced by an <strong>adversarial implementation-vs-spec audit</strong> (issue&nbsp;#27). Each item is an <strong>implicit requirement found in the implementation</strong> that the canonical spec does not (or does not fully) pin down.</p>
-    <p>It is a <strong>sibling page, not a replacement</strong>: nothing here amends the glossary until reviewed and merged in. Definitions below are written in the glossary's voice so they can drop straight into their target sections once adopted. Each carries an audit <strong>status</strong> — <span class="badge gap">gap</span> (unspecified) or <span class="badge partial">partial</span> (intent specified, exact contract not pinned) — plus the concrete code/test evidence and any existing citation.</p>
+    <span class="tag">✓ Adopted — folded into glossary.html via the #27 grill</span>
+    <p>This page began as proposed <strong>additions</strong> to <a href="glossary.html">glossary.html</a> surfaced by the issue&nbsp;#27 audit. Following the requirements <strong>grill</strong>, the domain that emerged during implementation has now been <strong>adopted directly into the canonical glossary</strong>. This file is kept as the <strong>disposition record</strong> of what was added and why.</p>
+    <p>The grill reached well past the four items first proposed here. The canonical glossary now carries, in addition to the grouping and tag-identity contracts below: <strong>SleepSpan</strong> (with its <code>event</code>/<code>gap</code> source taxonomy), <strong>App state</strong> / <strong>Heartbeat</strong> / <strong>Check-in schedule</strong>, the <strong>quarantined</strong> and <strong>replaced</strong> recovery files, <strong>range preset</strong> / <strong>range spec</strong>, and the packaging terms <strong>tt launcher</strong> / <strong>offline guarantee</strong> / <strong>version stamp</strong> — plus sharpened <em>Tag</em>, <em>Reconcile</em>, and <em>Restore</em> entries. <strong>Switch</strong> was deliberately <em>not</em> added: it is a redundant alias of <em>Start</em>, slated for removal in issue&nbsp;#34.</p>
   </div>
 
-  <p class="lede">Four proposed entries: empty-dimension group labels and the tag fan-out rule, the canonical stored values for settings defaults, and the tag-identity normalization contract that both surfaces must share.</p>
+  <p class="lede">Disposition: <strong>G&nbsp;R01 / G&nbsp;R02</strong> (group keys &amp; tag fan-out) → adopted as <em>Group key</em>; <strong>T&nbsp;R01 / T&nbsp;R02</strong> (tag identity &amp; minimal diff) → folded into the <em>Tag</em> entry; <strong>S&nbsp;R01</strong> (settings' stored default <em>values</em>) → <em>redirected to the PRD §14 proposal</em>, where settings defaults/validation belong, rather than the glossary. The item detail below is retained as the audit record.</p>
 
   <nav class="toc">
     <h4>Proposed additions</h4>

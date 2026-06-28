@@ -121,7 +121,7 @@
   <nav class="toc">
     <h4>Proposed additions, by target section</h4>
     <ol>
-      <li><a href="#p5"><span class="tn">05</span>Timer, switch &amp; favorites</a></li>
+      <li><a href="#p5"><span class="tn">05</span>Timer &amp; favorites</a></li>
       <li><a href="#p6"><span class="tn">06</span>Editing: split, merge, overlap</a></li>
       <li><a href="#p7"><span class="tn">07</span>Reference data: names, tags, archive</a></li>
       <li><a href="#p9"><span class="tn">09</span>Reports, search &amp; export</a></li>
@@ -138,13 +138,13 @@
 
   <!-- ============================ §05 ============================ -->
   <section id="p5">
-    <div class="eyebrow"><span class="n">05</span> Timer, switch &amp; favorites — proposed additions</div>
-    <h2>Pinning the resolution rules behind start, switch &amp; resume</h2>
+    <div class="eyebrow"><span class="n">05</span> Timer &amp; favorites — proposed additions</div>
+    <h2>Pinning the resolution rules behind start &amp; resume</h2>
     <ol class="req">
 
-      <li><strong>Switch instant &amp; carry-forward default.</strong> <span class="new">new</span> <span class="core">core</span> A switch closes the open entry with <code>end</code> equal to the switch instant and opens a new, distinct entry whose <code>start</code> equals that same instant — no gap, no overlap, exactly one open entry. By default the new entry <strong>carries forward</strong> client and project unless explicitly cleared or overridden. There is no end-of-day / 23:59 clamp: switching and resuming (including from a favorite) always close any open entry at <code>now</code>, consistent with start-while-running.
-        <div class="why"><span class="wl">Why</span> §05 R08 specifies switch is atomic stop-then-start with client/project "optionally carrying forward or clearing," but never picks the unoverridden default nor states <code>old.end == new.start == switch instant</code> with a distinct new id. The audit also found a resume-from-favorite path that closes a still-open entry at a 23:59 day boundary rather than at <code>now</code> — which contradicts the §04 R04 / §16 "close any open entry (end = now)" rule and must be ruled out explicitly.</div>
-        <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · the 23:59-clamp behavior is <span class="st st-gap">gap</span> (and spec-conflicting) &nbsp;<span class="wl">Cites</span> §05 R08 · §04 R04 · §16 "Start while a timer runs"</div>
+      <li><strong>No end-of-day clamp on start / resume / favorite.</strong> <span class="new">new</span> <span class="core">core</span> Starting, resuming, or resuming-from-a-favorite always closes any currently open entry at <code>now</code> — there is no end-of-day / 23:59 clamp. The closing <code>end</code> equals the new entry's <code>start</code> (the same instant), so there is no gap, no overlap, and exactly one open entry.
+        <div class="why"><span class="wl">Why</span> The audit found a resume-from-favorite path that closes a still-open entry at a 23:59 day boundary rather than at <code>now</code> — which contradicts the §04 R04 / §16 "close any open entry (end = now)" rule and must be ruled out explicitly. <em>(The original draft also proposed a "switch instant &amp; carry-forward default"; Switch is a redundant alias of Start being removed entirely — issue&nbsp;#34 — so that part is dropped, not adopted.)</em></div>
+        <div class="cite"><span class="wl">Status</span> <span class="st st-gap">gap</span> · spec-conflicting &nbsp;<span class="wl">Cites</span> §04 R04 · §16 "Start while a timer runs"</div>
       </li>
 
       <li><strong>Favorite name uniqueness, explicit-attribute capture &amp; not-found errors.</strong> <span class="new">new</span> Favorite names are unique case-insensitively; creating a name that already exists (case-insensitively) is rejected with a defined error, never a silent overwrite. A favorite may be captured from a closed entry, the running entry, or explicit attributes. Operations naming an unknown favorite (rename, unpin, resume) fail with a defined not-found error and make no change. Whether uniqueness is DB- or store-enforced is stated (the §13 <code>favorite</code> sketch carries no <code>UNIQUE</code>, so it is store-enforced).
@@ -357,7 +357,7 @@
         <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · unknown-filter &amp; per-command asymmetry are <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §08 R03 · §09 R01/R02 · §11</div>
       </li>
 
-      <li><strong>Entity-reference resolution &amp; aliases.</strong> <span class="new">new</span> For manage subcommands a purely numeric <code>&lt;ref&gt;</code> is treated as the entity's id; any other string is matched against its name; a name with no match fails with a clear "no match" error and non-zero exit (note the rare consequence for entities named entirely with digits). Enumerate command aliases / default subcommands: <code>switch</code> as the verb for the atomic stop-then-start; <code>ls</code> as an alias for <code>list</code>; bare <code>tt sleep</code> and bare <code>tt config</code> default to their <code>ls</code> subcommand. Because <code>tt report</code> is both an ad-hoc query and a parent of saved-report subcommands sharing option names, option parsing binds flags to the correct level (<code>report ls --json</code> vs <code>report --week --json</code>).
+      <li><strong>Entity-reference resolution &amp; aliases.</strong> <span class="new">new</span> For manage subcommands a purely numeric <code>&lt;ref&gt;</code> is treated as the entity's id; any other string is matched against its name; a name with no match fails with a clear "no match" error and non-zero exit (note the rare consequence for entities named entirely with digits). Enumerate command aliases / default subcommands: <code>ls</code> as an alias for <code>list</code>; bare <code>tt sleep</code> and bare <code>tt config</code> default to their <code>ls</code> subcommand. Because <code>tt report</code> is both an ad-hoc query and a parent of saved-report subcommands sharing option names, option parsing binds flags to the correct level (<code>report ls --json</code> vs <code>report --week --json</code>).
         <div class="why"><span class="wl">Why</span> The id-vs-name disambiguation, the no-match error, the <code>ls</code> alias, the default-subcommand behavior, and the positional-options requirement behind the dual-natured <code>report</code> are silent cross-command conventions living only in code.</div>
         <div class="cite"><span class="wl">Status</span> partial <span class="st st-partial">partial</span> · entity-ref convention is <span class="st st-gap">gap</span> &nbsp;<span class="wl">Cites</span> §05 R08 · §07 · §11</div>
       </li>
