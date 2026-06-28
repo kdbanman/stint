@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint — Edit entry (mockup)</title>
+<title>Stint — Design system (Calm · Warm Paper)</title>
 <style>
   :root{
     --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
@@ -88,31 +88,34 @@
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
-  body{display:flex;align-items:flex-start;justify-content:center;min-height:100vh;padding:48px 16px}
-  
-  .dialog{width:560px;max-width:100%;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden;border:1px solid #DDD4C3}
-  .head{padding:18px 22px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
-  .head h2{font-size:16px;margin:0;font-weight:640}
-  .dbody{padding:20px 22px}
-  .grp-lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--faint);font-weight:600;margin:0 0 12px}
-  .dbody .grp-lbl:nth-of-type(2){margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
-  .f{margin-bottom:14px}.fw{width:100%}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;border:1px solid var(--line-strong);border-radius:var(--r1);padding:6px 9px;min-height:38px;background:var(--paper)}
-  .tagchips input{border:0;outline:0;flex:1;min-width:80px;font:inherit;font-size:12.5px;background:none}
-  .timefield{position:relative}
-  .timefield .field{padding-right:34px}
-  .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted)}
-  .timefield .cal .ic{width:16px;height:16px}
-  .note{display:flex;align-items:center;gap:8px;font-size:12px;border-radius:var(--r1);padding:8px 11px;margin-bottom:14px;background:var(--warn-bg);border:1px solid var(--warn-line);color:var(--warn-ink)}
-  .note .ic{width:14px;height:14px}
-  .adv{display:flex;gap:18px;font-size:12.5px}
-  .adv a{display:inline-flex;align-items:center;gap:6px;color:var(--muted);cursor:pointer}
-  .adv a:hover{color:var(--ink)}.adv a .ic{width:14px;height:14px}
-  .foot{padding:15px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
-  .gate{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink)}
-  .gate .ic{width:14px;height:14px;color:var(--danger)}
-  .gate b{font-weight:590}
+  body{padding:0}
+  .doc{max-width:1040px;margin:0 auto 64px;padding:0 8px}
+  h1{font-size:24px;font-weight:680;margin:34px 0 2px;letter-spacing:-.01em}
+  .lead{color:var(--muted);font-size:14px;margin:6px 0 24px;max-width:740px}
+  h2{font-size:15px;font-weight:640;margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);padding:18px 20px;box-shadow:var(--sh-card)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:720px){.two{grid-template-columns:1fr}}
+  .rule{font-size:12.5px;color:var(--muted);margin:0}
+  .rule + .rule{margin-top:12px}
+  .rule b{color:var(--ink);font-weight:590}
+  .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+  .sw-c{border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;font-size:11.5px;background:var(--paper)}
+  .sw-c .chip{height:56px}
+  .sw-c .cap2{padding:8px 10px}
+  .sw-c .cap2 b{display:block;color:var(--ink);font-weight:590;font-size:12px}
+  .sw-c .cap2 span{color:var(--faint);font-family:var(--num)}
+  .type-row{display:flex;align-items:baseline;gap:18px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .type-row:last-child{border-bottom:0}
+  .type-row .role{width:160px;flex:none;color:var(--muted);font-size:12px}
+  .type-row .spec{margin-left:auto;color:var(--faint);font-family:var(--num);font-size:11.5px}
+  .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px}
+  .icons .i{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:var(--r1);color:var(--ink)}
+  .icons .i:hover{background:var(--hover)}
+  .icons .i .ic{width:20px;height:20px}
+  .icons .i span{font-size:10.5px;color:var(--faint);font-family:var(--num)}
+  .demos{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  .prov{margin-top:14px}
 </style>
 </head>
 <body>
@@ -172,33 +175,82 @@
 <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
 <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
 </defs></svg>
+<div class="doc">
+  <h1>Stint “Calm” · Warm Paper</h1>
+  <p class="lead">One shared language for every surface — sidebar, Timer, Entries, Reports, Settings, the entry editor and the time-range picker. Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — on a warm ivory canvas with a single clay accent.</p>
 
-  <div class="dialog">
-    <div class="head"><h2>Edit entry</h2><button class="iconbtn"><svg class="ic"><use href="#i-x"/></svg></button></div>
-    <div class="dbody">
-      <div class="grp-lbl">Work</div>
-      <div class="f"><label class="lab">Description</label><textarea class="field">Deep work on core algorithm</textarea></div>
-      <div class="two">
-        <div class="f"><label class="lab">Client</label><select class="field fw"><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option></select></div>
-        <div class="f"><label class="lab">Project</label><select class="field fw"><option>Q3 Strategy</option><option>Project Alpha</option></select></div>
-      </div>
-      <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">coding <b>×</b></span><span class="tag">product <b>×</b></span><input placeholder="add a tag…"></div></div>
-      <div class="f"><span class="toggle"><span class="sw on"><i></i></span> Billable</span></div>
-
-      <div class="grp-lbl">Time</div>
-      <div class="two">
-        <div class="f timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-22 10:30"><a class="cal" href="time-range-picker.html" title="Open time-range picker"><svg class="ic"><use href="#i-cal"/></svg></a></div>
-        <div class="f timefield"><label class="lab">End</label><input class="field tnum" value="2026-06-22 16:15"><a class="cal" href="time-range-picker.html" title="Open time-range picker"><svg class="ic"><use href="#i-cal"/></svg></a></div>
-      </div>
-      <div class="note warn"><svg class="ic"><use href="#i-flag"/></svg> Overlaps “Researching market trends” by 2h 45m</div>
-      <div class="adv"><a><svg class="ic"><use href="#i-edit"/></svg> Split at instant…</a><a><svg class="ic"><use href="#i-swap"/></svg> Merge with adjacent…</a></div>
+  <h2>Principles</h2>
+  <div class="two">
+    <div class="panel">
+      <p class="rule"><b>One rationed accent.</b> The canvas is a warm monochrome. The clay accent (#C8623E) appears only on the single primary action per view, the active nav item, and focus rings — never decoratively.</p>
+      <p class="rule"><b>Soft, layered depth.</b> Content cards rest with a gentle shadow; modals and popovers float higher. No nested cards, no decorative tinted or dashed boxes.</p>
+      <p class="rule"><b>Quiet by default.</b> No baked-in spec annotations, no in-app note-strips, no PRD §-refs. Helper text earns its place or moves into an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance.</p>
     </div>
-    <div class="foot">
-      <!-- armed two-step in-window delete gate (§12 R13): no second "Cancel"; the
-           outer Cancel is replaced by the gate, the only commit on the right is Save -->
-      <div class="gate"><svg class="ic"><use href="#i-flag"/></svg> <b>Delete this entry?</b> <button class="btn danger sm">Delete</button><button class="btn ghost sm">Keep</button></div>
-      <button class="btn primary">Save</button>
+    <div class="panel">
+      <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
+      <p class="rule"><b>4px grid, generous air.</b> Every pad, gap, and height is a multiple of 4, with roomy margins. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
+      <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
     </div>
   </div>
+
+  <h2>Colour tokens</h2>
+  <div class="swatches">
+    <div class="sw-c"><div class="chip" style="background:#FFFDFA"></div><div class="cap2"><b>paper</b><span>#FFFDFA</span></div></div><div class="sw-c"><div class="chip" style="background:#EDE6DA"></div><div class="cap2"><b>canvas</b><span>#EDE6DA</span></div></div><div class="sw-c"><div class="chip" style="background:#F7F2EA"></div><div class="cap2"><b>sidebar</b><span>#F7F2EA</span></div></div><div class="sw-c"><div class="chip" style="background:#F0E8DB"></div><div class="cap2"><b>hover</b><span>#F0E8DB</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#23201B"></div><div class="cap2"><b>ink</b><span>#23201B</span></div></div><div class="sw-c"><div class="chip" style="background:#6F685C"></div><div class="cap2"><b>muted</b><span>#6F685C</span></div></div><div class="sw-c"><div class="chip" style="background:#C8623E"></div><div class="cap2"><b>accent</b><span>#C8623E</span></div></div><div class="sw-c"><div class="chip" style="background:#F7ECE3"></div><div class="cap2"><b>accent-weak</b><span>#F7ECE3</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#5E8C5A"></div><div class="cap2"><b>running</b><span>#5E8C5A</span></div></div><div class="sw-c"><div class="chip" style="background:#F8EFD8"></div><div class="cap2"><b>warn</b><span>#F8EFD8</span></div></div><div class="sw-c"><div class="chip" style="background:#B23B2B"></div><div class="cap2"><b>danger</b><span>#B23B2B</span></div></div><div class="sw-c"><div class="chip" style="background:#DDD4C3"></div><div class="cap2"><b>line</b><span>#DDD4C3</span></div></div>
+  </div>
+
+  <h2>Type ramp</h2>
+  <div class="panel" style="padding:6px 20px">
+    <div class="type-row"><span class="role">Display / clock</span><span class="tnum" style="font-size:28px;font-weight:680">01:23:45</span><span class="spec">28–46px · 680 · tnum</span></div>
+    <div class="type-row"><span class="role">Title</span><span style="font-size:18px;font-weight:640">View &amp; panel titles</span><span class="spec">17–18px · 640</span></div>
+    <div class="type-row"><span class="role">Body strong</span><span style="font-size:13px;font-weight:590">Labels &amp; list primary</span><span class="spec">13px · 590</span></div>
+    <div class="type-row"><span class="role">Body</span><span style="font-size:13px">Default interface text</span><span class="spec">13px · 450</span></div>
+    <div class="type-row"><span class="role">Caption</span><span style="font-size:12px;color:var(--muted)">Secondary &amp; meta</span><span class="spec">12px · muted</span></div>
+  </div>
+
+  <h2>Icons — one line family</h2>
+  <div class="panel">
+    <div class="icons">
+      <div class="i"><svg class="ic"><use href="#i-clock"/></svg><span>clock</span></div><div class="i"><svg class="ic"><use href="#i-list"/></svg><span>list</span></div><div class="i"><svg class="ic"><use href="#i-users"/></svg><span>clients</span></div><div class="i"><svg class="ic"><use href="#i-chart"/></svg><span>reports</span></div><div class="i"><svg class="ic"><use href="#i-settings"/></svg><span>settings</span></div><div class="i"><svg class="ic"><use href="#i-search"/></svg><span>search</span></div><div class="i"><svg class="ic"><use href="#i-play"/></svg><span>play</span></div><div class="i"><svg class="ic"><use href="#i-stop"/></svg><span>stop</span></div><div class="i"><svg class="ic"><use href="#i-swap"/></svg><span>switch</span></div><div class="i"><svg class="ic"><use href="#i-plus"/></svg><span>add</span></div><div class="i"><svg class="ic"><use href="#i-star"/></svg><span>favorite</span></div><div class="i"><svg class="ic"><use href="#i-cal"/></svg><span>calendar</span></div><div class="i"><svg class="ic"><use href="#i-flag"/></svg><span>flag</span></div><div class="i"><svg class="ic"><use href="#i-moon"/></svg><span>sleep</span></div><div class="i"><svg class="ic"><use href="#i-edit"/></svg><span>edit</span></div><div class="i"><svg class="ic"><use href="#i-dots"/></svg><span>more</span></div><div class="i"><svg class="ic"><use href="#i-download"/></svg><span>update</span></div><div class="i"><svg class="ic"><use href="#i-restore"/></svg><span>restore</span></div><div class="i"><svg class="ic"><use href="#i-info"/></svg><span>info</span></div><div class="i"><svg class="ic"><use href="#i-check"/></svg><span>check</span></div>
+    </div>
+    <p class="rule" style="margin-top:12px">Replaces every emoji in the old mockups (📌 🌙 ⚑ ▦ ⬇ ▲▼ ⋮⋮). 1.6px stroke, <span class="tnum">currentColor</span>, so icons inherit text colour and only turn accent when their item is active.</p>
+  </div>
+
+  <h2>Controls</h2>
+  <div class="two">
+    <div class="panel">
+      <div class="demos">
+        <button class="btn primary"><svg class="ic"><use href="#i-play"/></svg> Primary</button>
+        <button class="btn">Secondary</button>
+        <button class="btn ghost"><svg class="ic"><use href="#i-dots"/></svg> Ghost</button>
+        <button class="btn danger">Danger</button>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Buttons.</b> Exactly one filled primary per view. Everything else is secondary, ghost, or danger — so the eye always lands on one action.</p>
+    </div>
+    <div class="panel">
+      <div class="demos">
+        <span class="seg"><button class="on">Day</button><button>Client</button><button>Project</button><button>Tag</button></span>
+        <span class="toggle"><span class="sw on"><i></i></span> Toggle</span>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Selection ≠ accent.</b> A chosen segment is a raised chip (surface lift), not a colour. Accent stays a signal, not a highlighter.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel">
+      <div class="demos" style="gap:8px">
+        <span class="tag">research</span><span class="tag">admin</span>
+        <span class="pill run"><span class="dot run"></span> running</span>
+        <span class="pill warn">overlap 15m</span>
+        <span class="pill accent">update ready</span>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Tags &amp; status pills</b> are the only pill-shaped elements. Status colour is semantic (run / warn / accent), never decorative.</p>
+    </div>
+    <div class="panel">
+      <div style="max-width:280px"><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
+      <p class="rule" style="margin-top:14px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
+    </div>
+  </div>
+</div>
 </body>
 </html>
