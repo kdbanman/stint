@@ -38,10 +38,9 @@ jobs:
       - name: No-network backstop (§17 R9)
         run: npm run verify:no-network
       # §19 R01 — cheap, deterministic guard that electron-builder's native helper
-      # (app-builder-bin) actually installed, so a missing binary fails on the PR instead
-      # of only in the post-merge release pack. Self-heals the one cause we have seen (a
-      # poisoned cache entry) so it never blocks PRs spuriously; the reinstall only fires
-      # when the binary is genuinely absent. The end-to-end proof is the pack-smoke job.
+      # (app-builder-bin) is installed AND runnable, so a broken toolchain fails on the PR
+      # instead of only in the post-merge release pack. A reinstall self-heals a genuinely
+      # missing/corrupt install. The end-to-end proof is the pack-smoke job.
       - name: Packaging toolchain guard (§19 R01)
         run: |
           npm run verify:packaging || {
@@ -60,7 +59,7 @@ jobs:
   # directory (`--dir`: fast — no AppImage/.deb compression, but it exercises the SAME
   # native helper + electron download + `files:` glob that the real pack does), so a
   # packaging regression fails the PR. The full AppImage/.deb artifacts + publish stay in
-  # release.yml. No `cache: npm` — the packaging toolchain installs fresh (see release.yml).
+  # release.yml.
   pack-smoke:
     name: pack-smoke · Linux (§19 R01)
     runs-on: ubuntu-latest
@@ -69,6 +68,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm ci
       - name: Verify packaging toolchain (app-builder-bin)
         run: |
