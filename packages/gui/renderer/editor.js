@@ -42,7 +42,7 @@ window.SE = (function () {
 
   /**
    * openEditor(entry, clients[, opts]) — the §12 R6 entry editor modal. Builds a dialog
-   * mirroring mockups/edit-entry.html with every tt-editable field:
+   * mirroring context/mockups/edit-entry.html with every tt-editable field:
    *   description (textarea), client (select), project (select), start + end (datetime),
    *   tags (chip input), billable (toggle)
    * plus a "Split at instant…" control (calls window.stint.split) and a Delete (danger)
@@ -160,7 +160,7 @@ window.SE = (function () {
       void fillProjects(id, undefined);
     });
 
-    // --- Tags chip editor (mirrors mockups/edit-entry.html's chip UI) ----------------
+    // --- Tags chip editor (mirrors context/mockups/edit-entry.html's chip UI) ----------------
     // The entry's tags become removable chips; an "add a tag…" input appends a chip on
     // Enter/comma. On Save the chip set is diffed against the original via window.SU.tagDiff
     // into the minimal addTags/removeTags the edit patch carries (no tag logic here).

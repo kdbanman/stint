@@ -1,5 +1,5 @@
 // §12 R11 — the in-window Settings view. Editable controls for every §14 setting, modeled
-// on mockups/settings.html. Each control persists its value over the SAME setSetting IPC
+// on context/mockups/settings.html. Each control persists its value over the SAME setSetting IPC
 // `tt config set` uses (parity-covered — no new channel), then reloads, so an edit is
 // immediately the new truth on BOTH surfaces. Classic script (no ES modules) so it loads
 // over file:// in the packaged app; helpers come from window.SU (util.js, loaded first).

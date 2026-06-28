@@ -1,6 +1,6 @@
 /**
  * snake_case JSON serializers for `--json` output — the scripting contract
- * (PRD §11, validated against acceptance/schemas/*.json).
+ * (PRD §11, validated against acceptance/criteria/schemas/*.json).
  */
 import { type Report, type Status, type SavedReport, type Favorite, type BackupInfo } from '@stint/core';
 
@@ -49,7 +49,7 @@ export function reportJson(report: Report): unknown {
 
 /**
  * §09 R08 — the snake_case scripting shape of a saved report definition, validated
- * against acceptance/schemas/report-def.schema.json. The range is rendered as a
+ * against acceptance/criteria/schemas/report-def.schema.json. The range is rendered as a
  * discriminated object (range_kind preset|absolute) so the relative/absolute distinction
  * survives the JSON round-trip, exactly as it is stored.
  */
@@ -80,7 +80,7 @@ export function reportDefListJson(defs: SavedReport[]): unknown {
 
 /**
  * §05 R09 — the snake_case scripting shape of a favorite (a pinned timer template),
- * validated against acceptance/schemas/favorite.schema.json. Mirrors the entry/report
+ * validated against acceptance/criteria/schemas/favorite.schema.json. Mirrors the entry/report
  * scripting shapes: ids as `client_id`/`project_id` (null when unset), tags as a string array.
  */
 export function favoriteJson(fav: Favorite): unknown {
@@ -102,7 +102,7 @@ export function favoriteListJson(favs: Favorite[]): unknown {
 
 /**
  * §20 R04 / §17 R12 — the snake_case scripting shape of an automatic backup, validated against
- * acceptance/schemas/backup.schema.json. `tt backup ls --json` emits an array of these (the tt
+ * acceptance/criteria/schemas/backup.schema.json. `tt backup ls --json` emits an array of these (the tt
  * mirror of the GUI Settings → Backups list): the file name (the restore handle), its absolute
  * path, the UTC instant it was taken, and its size in bytes.
  */
