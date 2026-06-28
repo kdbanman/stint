@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Architecture</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  /* TOC */
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  pre{background:#fbfbfa;border:1px solid var(--rule);border-radius:6px;font-family:var(--mono);font-size:12.5px;line-height:1.55;color:var(--ink-soft);padding:18px 20px;margin:16px 0;overflow-x:auto;white-space:pre}
+  pre.dgm{line-height:1.35}
+  pre .k{color:var(--ink);font-weight:600}
+  pre .c{color:var(--faint)}
+  .cap{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:-6px 0 18px}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td.m{white-space:normal}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">one core · one file · two surfaces</div>
+    </div>
+    <div class="mast-meta">Architecture · v1 · macOS + Linux · @stint/core + tt + Electron</div>
+  </header>
+
+  <p class="lede">One shared core package, one SQLite file, two equal surfaces over it. This is the architecture companion to <a href="prd.html">prd.html</a> — it gathers the runtime architecture the PRD spreads across §04, §13, §15, §19, and §20 and adds the diagrams and the module map.</p>
+
+  <div class="note">
+    <span class="lbl">Scope principle</span>
+    This document records <strong>architecture, not implementation</strong>. A detail belongs here only if it <strong>spans more than one module</strong> or <strong>can't be recovered by reading a single source file</strong> — boundaries, cross-cutting invariants, and decisions that would need a rewrite to change. Function signatures, field-level schema, and line-by-line control flow stay in the code; normative requirements and their status stay in <a href="prd.html">prd.html</a>; vocabulary stays in <a href="glossary.html#s6">glossary.html §06</a>; build/CI/verification stays in <a href="process.html">process.html</a> and <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. When a detail is in doubt, cut it and link.
+  </div>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>The shape</a></li>
+      <li><a href="#s2"><span class="tn">02</span>The keystone</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Core module map</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Storage &amp; the write path</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Derived elapsed</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Change propagation</a></li>
+      <li><a href="#s7"><span class="tn">07</span>Durability &amp; integrity</a></li>
+      <li><a href="#s8"><span class="tn">08</span>The two surfaces</a></li>
+      <li><a href="#s9"><span class="tn">09</span>Platform &amp; stack</a></li>
+      <li><a href="#s10"><span class="tn">10</span>Packaging &amp; update</a></li>
+      <li><a href="#s11"><span class="tn">11</span>Build &amp; process</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> The shape</div>
+    <h2>One core, one file, two thin shells</h2>
+    <p>There are three kinds of part: the <strong>Core</strong>, the <strong>Database</strong>, and a <strong>surface</strong>. A surface — the Electron app or the <code>tt</code> CLI — imports <code>@stint/core</code> and reads/writes the SQLite file; neither is privileged. Surfaces hold presentation, OS integration, and argument parsing; the Core holds the schema, every transition, every invariant, reporting, rounding, and durability. Logic is never duplicated across surfaces.</p>
+    <pre class="dgm">  <span class="c">┌─────────────────────────┐        ┌─────────────────────────┐</span>
+  <span class="c">│   Electron GUI (gui)    │        │      tt  CLI  (cli)     │</span>
+  <span class="c">│  tray · window · IPC ·  │        │  commander · --json ·   │</span>
+  <span class="c">│  powerMonitor · hotkey  │        │  human tables           │</span>
+  <span class="c">└───────────┬─────────────┘        └────────────┬────────────┘</span>
+              <span class="c">└───────────────┬───────────────────┘  imports</span>
+                  <span class="c">┌─────────────▼─────────────┐</span>
+                  <span class="c">│      @stint/core          │</span>  <span class="k">the only place logic lives</span>
+                  <span class="c">└─────────────┬─────────────┘</span>
+                       <span class="c">│  node:sqlite · single writer</span>
+                  <span class="c">┌─────────────▼─────────────┐</span>
+                  <span class="c">│   timetracker.sqlite      │</span>  <span class="k">one file · WAL · source of truth</span>
+                  <span class="c">└───────────────────────────┘</span>
+        <span class="c">▲ both surfaces watch the file (fs.watch) and refresh on change</span></pre>
+    <p class="cap">Figure 1 — process &amp; dependency topology</p>
+    <p>Dependencies point inward only. <code>@stint/core</code> depends on no surface and no UI or CLI framework — Node built-ins alone. The CLI adds <code>commander</code>; the GUI adds Electron. That direction is why parity is structural, not a promise (<a href="prd.html#s4">§04 R01</a>, <a href="prd.html#s17">§17 R08</a>).</p>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> The keystone</div>
+    <h2>A running timer is an open row</h2>
+    <p>A running timer is the single <code>entry</code> row whose <code>end_utc</code> is <code>NULL</code> — a row state, not a process (<a href="concept.html">concept §02</a>). Three consequences shape the rest:</p>
+    <ul class="d">
+      <li><strong>Elapsed is derived, never stored.</strong> Whoever looks computes <code>now − start</code>; the count-up is display only (§05).</li>
+      <li><strong>Surfaces don't synchronize.</strong> They are two views of one row; state lives in the file, not in either process (§06).</li>
+      <li><strong>One invariant carries the weight:</strong> at most one open entry. Enforce it and start-while-running, cross-surface stop, and crash-mid-timer are all safe (§04).</li>
+    </ul>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Core module map</div>
+    <h2>What <code>@stint/core</code> owns</h2>
+    <p>One package, two layers: the <code>Store</code> — the transactional façade and the only writer — and a set of pure helpers the surfaces reuse so no rule (rounding, grouping, label-joining, time math) is re-derived in a renderer or formatter. Responsibilities by module:</p>
+    <table>
+      <thead><tr><th>Module</th><th>Owns</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Module">db</td><td data-l="Owns">Opens the DB; defines the schema; asserts the durability pragmas, the at-most-one-open index, and the triggers on every open; runs migrations.</td></tr>
+        <tr><td class="m" data-l="Module">store</td><td data-l="Owns">The only writer — atomic state transitions, favorites and saved-report CRUD, reporting and list reads, backup/recovery. The façade both surfaces call.</td></tr>
+        <tr><td class="m" data-l="Module">types</td><td data-l="Owns">The domain types — entry (open when its end is null), client, project, tag, favorite, sleep span, status.</td></tr>
+        <tr><td class="m" data-l="Module">time</td><td data-l="Owns">Time parsing/formatting and the duration primitives, including the never-negative elapsed guard.</td></tr>
+        <tr><td class="m" data-l="Module">report</td><td data-l="Owns">Grouping, display-only rounding, and the one overlap rule shared by write-time checks and report scans.</td></tr>
+        <tr><td class="m" data-l="Module">savedreport</td><td data-l="Owns">Saved report definitions and range resolution (relative preset or absolute bounds).</td></tr>
+        <tr><td class="m" data-l="Module">entrylist</td><td data-l="Owns">The Entries-view list model — filter, search, group.</td></tr>
+        <tr><td class="m" data-l="Module">export</td><td data-l="Owns">The CSV/JSON data-out path — one byte-exact contract both surfaces emit.</td></tr>
+        <tr><td class="m" data-l="Module">backup</td><td data-l="Owns">Filesystem durability — backup, retention, integrity check, quarantine and recovery.</td></tr>
+        <tr><td class="m" data-l="Module">checkin</td><td data-l="Owns">Check-in cadence logic and the canonical <code>app_state</code> keys.</td></tr>
+        <tr><td class="m" data-l="Module">settings</td><td data-l="Owns">The typed settings interface, defaults, and validation.</td></tr>
+        <tr><td class="m" data-l="Module">paths</td><td data-l="Owns">DB path resolution — <code>TT_DB</code>, else the per-OS app-data directory.</td></tr>
+        <tr><td class="m" data-l="Module">version</td><td data-l="Owns">The one app-version string both surfaces report, and its <code>YYYY.M.D[.N]</code> shape.</td></tr>
+        <tr><td class="m" data-l="Module">label</td><td data-l="Owns">The single client/project label-join rule.</td></tr>
+        <tr><td class="m" data-l="Module">index</td><td data-l="Owns">The public API barrel — the only import surface for <code>cli</code> and <code>gui</code>.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Storage &amp; the write path</div>
+    <h2>One file, one writer, atomic transitions</h2>
+    <p>The Database is a single SQLite file in <strong>WAL mode</strong> — concurrent readers, one writer — at the OS app-data path, overridable by <code>TT_DB</code>. Schema and pragmas are <a href="prd.html#s13">§13</a>; the hardening rules are <a href="prd.html#s20">§20</a>. Two things are architectural: the write path, and the invariant it protects.</p>
+    <h3>Atomic stop-then-start</h3>
+    <p>Starting a timer while one runs is one transaction, so it is safe regardless of which surface triggers it or how fast start/stop arrive (<a href="prd.html#s4">§04 R04</a>).</p>
+    <pre class="dgm">  <span class="k">start(...)</span>  <span class="c">// switch is the same transaction, surfaced as one action</span>
+    <span class="k">BEGIN IMMEDIATE</span>                            <span class="c">// take the write lock; busy-timeout lets surfaces cooperate</span>
+      <span class="c">close any open entry  (end_utc = now)</span>
+      <span class="c">insert the new open entry</span>
+      <span class="c">advance check-in schedule + last-seen</span>  <span class="c">// app_state, same tx (§20 R07)</span>
+    <span class="k">COMMIT</span>                                     <span class="c">// all-or-nothing; a crash mid-transition rolls back clean</span></pre>
+    <p class="cap">Figure 2 — the write path. Schedule state commits with the entry it describes.</p>
+    <h3>At most one open entry</h3>
+    <p>The core invariant is enforced <strong>twice</strong> — in the <code>Store</code>'s transaction and, independently, by a partial unique index at the storage layer — so a second open row is rejected even if the core path were bypassed. The index construction and its NULL-distinctness rationale are in <a href="prd.html#s20">§20 R02</a>.</p>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Derived elapsed</div>
+    <h2>Time is computed, not kept</h2>
+    <p>No process holds or increments a timer (<a href="prd.html#s4">§04 R03</a>). Open-entry elapsed is <code>now − start</code>, clamped to non-negative so a backward wall-clock jump never yields garbage (<a href="prd.html#s20">§20 R06</a>). Stored <code>start_utc</code>/<code>end_utc</code> are never mutated by rounding or sleep subtraction — both apply to derived duration only, and both reverse (<a href="prd.html#s17">§17 R04</a>). Times are stored UTC, rendered local, so durations are DST-safe (<a href="prd.html#s4">§04 R06</a>).</p>
+  </section>
+
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Change propagation</div>
+    <h2>The file is the bus</h2>
+    <p>There is no IPC <em>between</em> surfaces. Each watches the file (and its <code>-wal</code>) with <code>fs.watch</code> and refreshes its read model on change, so a write from one appears in the other within a heartbeat (<a href="prd.html#s4">§04 R05</a>). Correctness does not depend on it — the next read is authoritative because state lives only in the file — so it is explicitly not a core requirement. The GUI's internal renderer⇄main IPC (§08) is within one surface and is a separate mechanism.</p>
+  </section>
+
+  <section id="s7">
+    <div class="eyebrow"><span class="n">07</span> Durability &amp; integrity</div>
+    <h2>One anchor: DB open</h2>
+    <p>Every durability rule is <span class="core">core</span> and specified in <a href="prd.html#s20">§20</a>. They share one architectural property: all run at <strong>open, before any write</strong>, so a misconfigured or corrupt file never reaches normal operation.</p>
+    <pre class="dgm">  <span class="k">open</span>
+    1. <span class="c">assert pragmas</span>     WAL · foreign_keys · busy_timeout · synchronous=FULL   <span class="c">(§20 R01)</span>
+    2. <span class="c">integrity check</span>    on failure → quarantine .corrupted + restore backup    <span class="c">(§20 R03/R05)</span>
+    3. <span class="c">backup-on-launch</span>   if changed since last, timestamped copy + prune        <span class="c">(§20 R04)</span>
+    4. <span class="c">migrate</span>           to current schema version (additive)
+       <span class="c">→ only now are writes allowed</span></pre>
+    <p class="cap">Figure 3 — the open sequence</p>
+    <p>Recovery never loses data: the corrupt file is preserved as a <code>.corrupted</code> sibling and the latest good backup is copied into place. Backup/restore is reachable from both surfaces. Schedule state in <code>app_state</code> commits in the same transaction as the entry that changes it (§20 R07), so the two can't drift.</p>
+  </section>
+
+  <section id="s8">
+    <div class="eyebrow"><span class="n">08</span> The two surfaces</div>
+    <h2>Equal front doors, parity enforced</h2>
+    <p>Both surfaces are thin shells over the Core (<a href="prd.html#s11">§11</a> CLI, <a href="prd.html#s12">§12</a> GUI), and parity is the rule: every capability is reachable from both (<a href="prd.html#s17">§17 R08</a>).</p>
+    <p>The <strong>CLI</strong> is a <code>commander</code> program; each command calls a <code>Store</code> method, with human tables by default and <code>--json</code> on reads for scripting. The <strong>GUI</strong> is two Electron processes: the main process owns the <code>Store</code>, the OS integration (tray, hotkey, <code>powerMonitor</code> sleep detection, check-in notifications, file-watch refresh), and the IPC handlers; the renderer is sandboxed web tech that reaches the main process only through a context bridge.</p>
+    <pre class="dgm">  <span class="c">renderer</span>  <span class="c">→  window.stint.&lt;channel&gt;(payload)   — its only door out of the sandbox</span>
+  <span class="c">preload</span>   <span class="k">contextBridge</span>  <span class="c">→  ipcRenderer.invoke(channel, …)</span>
+  <span class="c">main</span>      <span class="k">ipcMain.handle(channel)</span>  <span class="c">→  Store method / pure helper</span>
+            <span class="c">└ broadcasts 'changed' → renderer refresh (fs.watch does the same cross-surface)</span></pre>
+    <p class="cap">Figure 4 — GUI internal IPC</p>
+    <p>The renderer-reachable channels form the <strong>parity matrix</strong>: each maps to an equivalent <code>tt</code> path in <code>acceptance/criteria/parity-matrix.json</code>, asserted in CI. Three capabilities have no CLI twin and sit outside the matrix — the tray, the global hotkey, and Software Update — so update rides a separate <code>update:*</code> IPC namespace rather than the parity channels.</p>
+  </section>
+
+  <section id="s9">
+    <div class="eyebrow"><span class="n">09</span> Platform &amp; stack</div>
+    <h2>macOS + Linux, no native build</h2>
+    <p>The normative list is <a href="prd.html#s15">§15</a>; the layers:</p>
+    <table>
+      <thead><tr><th>Layer</th><th>Built on</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="Layer">Core</td><td data-l="Built on">TypeScript; persistence via Node's built-in <code>node:sqlite</code> — no native build step.</td></tr>
+        <tr><td class="m" data-l="Layer">CLI</td><td data-l="Built on">Node executable <code>tt</code> on <code>commander</code>, importing the Core.</td></tr>
+        <tr><td class="m" data-l="Layer">GUI</td><td data-l="Built on">Electron — tray + popover and a main window; web-tech renderer; system theme and accent.</td></tr>
+        <tr><td class="m" data-l="Layer">OS</td><td data-l="Built on"><code>fs.watch</code>, <code>powerMonitor</code>, <code>globalShortcut</code>, <code>Notification</code> (see <a href="prd.html#a1">Appendix A</a>).</td></tr>
+      </tbody>
+    </table>
+    <p><code>node:sqlite</code> is the stack's sharpest dependency: it exists only on Node 22.5+ and must load in <strong>both</strong> runtimes — the system Node behind <code>tt</code> and Electron's bundled Node — and is stability-experimental, so it is pinned and confirmed against both.</p>
+  </section>
+
+  <section id="s10">
+    <div class="eyebrow"><span class="n">10</span> Packaging &amp; update</div>
+    <h2>Self-updating from GitHub Releases</h2>
+    <p>Specified in <a href="prd.html#s19">§19</a>. CI builds a macOS bundle and a Linux artifact — no Windows target — and every merge to <code>main</code> publishes a GitHub Release, so the public repo is the distribution backend. One installer per platform lands both the GUI and <code>tt</code> in one step; both report one shared <code>YYYY.M.D[.N]</code> version.</p>
+    <p>The in-app updater makes the app's only outbound request — a user-initiated query to the GitHub Releases API over Electron's <code>net</code>, sending no data (<a href="prd.html#s17">§17 R09</a>) — then guides the install. An update <strong>never touches the Database</strong>, which is why it lives entirely outside the Core and the parity matrix (<a href="prd.html#s16">§16</a>).</p>
+  </section>
+
+  <section id="s11">
+    <div class="eyebrow"><span class="n">11</span> Build &amp; process</div>
+    <h2>A separate concern</h2>
+    <p>How Stint is built, verified, and released is distinct from the runtime architecture above. It is seeded in <a href="process.html">process.html</a> (full SDLC spec in <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>). The acceptance apparatus that proves this architecture holds lives under <code>acceptance/</code> and <code>features/</code>; the PRD→proof map is <code>acceptance/criteria/COVERAGE.md</code>.</p>
+  </section>
+
+  <div class="foot">
+    <span>stint — architecture</span>
+    <span>v1 · one core · one file · two surfaces</span>
+  </div>
+
+</main>
+</body>
+</html>
