@@ -14,7 +14,7 @@
 // control is monochrome — the JUDGE ACCENT_DISCIPLINE probe sanctions `.stp .primary`
 // and `.stp-block.me` so the picker does not trip the accent scan.
 //
-// Mirrors mockups/time-range-picker.html: a month calendar (pick the day) + a single-day
+// Mirrors context/mockups/time-range-picker.html: a month calendar (pick the day) + a single-day
 // column with hour lines; the edited entry is a draggable accent rectangle (drag the BODY
 // moves start+stop together, drag the BOTTOM handle resizes the stop, both 5-min snap);
 // other entries render gray, overlap regions render yellow (warn-only, never blocks Apply).

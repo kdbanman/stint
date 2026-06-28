@@ -42,7 +42,7 @@ place of `<branch>`.
 | `context/glossary.html` | **The words.** Ubiquitous-language glossary — one canonical term per concept, rejected synonyms, key relationships, and resolved terminology ambiguities. |
 | `context/acceptance.html` | **The how-we'll-know.** Acceptance-criteria strategy: five complementary AC methods (BDD, property-based, golden/schema, LLM-judged, manual), a PRD-to-method coverage map, and one worked sample per method. |
 | `context/process.html` | **The how-it's-built.** Process & verification (SDLC) requirements — properties the build/CI/acceptance apparatus must satisfy, distinct from the application requirements. A seed; fuller spec tracked in issue #19. |
-| `mockups/` | **The look.** Standalone, dependency-free HTML mockups of the GUI views (`main`, `reports`, `edit-entry`, `settings`) — design intent for `context/prd.html` §12/§18. "Slightly noisy": they show more than ships today. Keep in sync with the PRD when GUI requirements change (PRD §18). |
+| `context/mockups/` | **The look.** Standalone, dependency-free HTML mockups of the GUI views (`main`, `reports`, `edit-entry`, `settings`) — design intent for `context/prd.html` §12/§18. "Slightly noisy": they show more than ships today. Keep in sync with the PRD when GUI requirements change (PRD §18). |
 | `README.md` | Implementation front door: layout, quick start, `tt` tour, GUI, and how to run the five AC method suites. |
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
 | `acceptance/` | Coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbooks, parity matrix, and generated evidence. |
