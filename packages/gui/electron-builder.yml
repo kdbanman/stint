@@ -11,6 +11,14 @@
 appId: com.stint.app
 productName: Stint
 
+# Artifact filenames key off productName, NOT the npm package name: the package is
+# the scoped "@stint/gui", whose "/" yields an invalid .deb path (electron-builder
+# tries to write dist-pack/@stint/gui_<v>_<arch>.deb — a directory that does not
+# exist) and aborts the Linux build. This gives clean, slash-free names for every
+# target — Stint-<version>.dmg / .AppImage / .deb — matching the AppImage filename
+# the packaging/ install scripts already expect (PRD §19 R02).
+artifactName: ${productName}-${version}.${ext}
+
 # Compiled main + preload (./dist) plus the renderer assets and the @stint/core
 # workspace dependency. `main` in package.json points at ./dist/main.js.
 directories:

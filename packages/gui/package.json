@@ -2,13 +2,19 @@
   "name": "@stint/gui",
   "version": "1.0.0",
   "description": "Stint GUI — an Electron tray app and main window over @stint/core, an equal surface to the tt CLI.",
+  "author": "Kirby Banman <kirby.banman@gmail.com>",
   "license": "MIT",
+  "homepage": "https://github.com/kdbanman/stint",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kdbanman/stint.git"
+  },
   "type": "module",
   "main": "./dist/main.js",
   "scripts": {
     "build": "tsc --build tsconfig.main.json",
     "start": "electron .",
-    "pack": "electron-builder --mac --linux --config electron-builder.yml",
+    "pack": "electron-builder --config electron-builder.yml",
     "pack:smoke": "electron-builder --linux dir --config electron-builder.yml"
   },
   "dependencies": {
@@ -16,7 +22,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.49.1",
-    "electron": "^42.5.0",
+    "electron": "42.5.0",
     "electron-builder": "^25.1.8"
   }
 }
