@@ -121,12 +121,11 @@
   .block{position:absolute;left:8px;right:16px;border-radius:7px}
   .block.other{background:var(--sunken);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:5px 9px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
-  .block.me .lab-top,.block.me .lab-bot{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 7px;border-radius:6px;z-index:6;box-shadow:0 1px 2px rgba(74,52,24,.12)}
-  .block.me .lab-top{top:-11px}.block.me .lab-bot{bottom:-11px}
-  .block.me .resize{position:absolute;left:0;right:0;bottom:-2px;height:14px;display:flex;align-items:center;justify-content:center;cursor:ns-resize;color:var(--accent);z-index:6}
-  .block.me .resize .ic{width:18px;height:18px;transform:rotate(90deg)}
-  .overlap{position:absolute;left:8px;right:16px;background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 7px,#f1e3bc 7px,#f1e3bc 14px);border:1px solid var(--warn-line);border-radius:6px;z-index:4;pointer-events:none}
-  .overlap .otag{position:absolute;right:7px;top:3px;font-size:10px;color:var(--warn-ink);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:5px;padding:0 6px}
+  /* time labels live at track level (not inside the block) so they always sit
+     above the block's own stacking context and the overlap band — nothing hides them */
+  .tlabel{position:absolute;left:8px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .overlap{position:absolute;left:8px;right:16px;background:var(--warn-bg);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:8px}
+  .overlap .otag{font-size:10.5px;color:var(--warn-ink);background:var(--paper);border:1px solid var(--warn-line);border-radius:999px;padding:1px 9px}
   .phint{font-size:11.5px;color:var(--muted);margin:14px 0 0 52px;display:flex;align-items:center;gap:9px}
   .phint .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
   .foot{padding:14px 22px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
@@ -212,12 +211,10 @@
           <span class="hour tnum" style="top:0px">12:00</span><span class="hour tnum" style="top:42px">13:00</span><span class="hour tnum" style="top:84px">14:00</span><span class="hour tnum" style="top:126px">15:00</span><span class="hour tnum" style="top:168px">16:00</span><span class="hour tnum" style="top:210px">17:00</span><span class="hour tnum" style="top:252px">18:00</span><span class="hour tnum" style="top:294px">19:00</span>
           <div class="block other" style="top:8px;height:30px">10–12 · standup &amp; review</div>
           <div class="block other" style="top:126px;height:46px">Market research · 15:00–16:00</div>
-          <div class="block me" style="top:42px;height:105px">
-            <span class="lab-top tnum">13:00</span>
-            <span class="resize" title="Drag to resize"><svg class="ic"><use href="#i-grip"/></svg></span>
-            <span class="lab-bot tnum">15:30</span>
-          </div>
+          <div class="block me" style="top:42px;height:105px"></div>
           <div class="overlap" style="top:126px;height:21px"><span class="otag">overlap 30m</span></div>
+          <span class="tlabel tnum" style="top:47px">13:00</span>
+          <span class="tlabel tnum" style="top:128px">15:30</span>
         </div>
       </div>
     </div>
