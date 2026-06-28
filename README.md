@@ -1,66 +1,34 @@
 # Stint
 
-A cross-platform desktop time tracker for one freelancer who bills by time. An
-Electron **tray app** and a **`tt` CLI** are equal surfaces over one local SQLite
-database, built as a TypeScript monorepo around a shared `@stint/core` package. It
-runs entirely offline; the unit is time, and no money lives in the app.
+A small, offline time tracker for one freelancer who bills by the hour. A tray
+app and a `tt` command line are equal ways into one local SQLite file. The unit
+is time; no money lives in the app.
 
-> The design lives in the styled HTML docs under [`context/`](context/) — read
-> order: [`concept.html`](context/concept.html) → [`prd.html`](context/prd.html) →
-> [`glossary.html`](context/glossary.html) → [`acceptance.html`](context/acceptance.html),
-> then [`process.html`](context/process.html) for how it's built &amp; verified. This
-> README is the implementation's front door.
+## Using Stint
 
-## The keystone idea
+### Install
 
-There is no timer object ticking somewhere. **A running timer is simply the one
-entry whose `end` is still null.** "Running" is a row state, not a process, and
-elapsed time is always *derived* (`now − start`), never stored or incremented. That
-single insight is what makes "the terminal and the window both control the live
-timer" a non-problem: both surfaces just read and write the same row through
-`@stint/core`.
+The easiest way in: download the latest Linux or macOS app from the
+[releases page](https://github.com/kdbanman/stint/releases). Every merge to
+`main` publishes a release, so it stays current.
 
-## Layout
-
-```
-packages/
-  core/   @stint/core — schema, every state transition, invariants, reporting,
-          rounding, the check-in cadence. The single source of truth.
-  cli/    tt — the command-line surface (commander), --json everywhere.
-  gui/    Electron tray app + main window; renderer is an equal surface over IPC.
-features/      Gherkin specs, run against BOTH surfaces (parity).
-acceptance/
-  criteria/    The acceptance criteria — coverage matrix, JSON schemas, JUDGE
-               rubric, MANUAL runbook, parity matrix (what must hold).
-  evidence/    The satisfaction evidence — generated proof those criteria hold
-               (verbatim CLI transcript, screenshots, recordings, judge report).
-scripts/       Evidence generator and the no-network backstop.
-```
-
-One core, one file, two thin shells (PRD §04): a single SQLite file in **WAL mode**;
-all reads and writes go through `@stint/core`; every write is one transaction under
-`BEGIN IMMEDIATE` with a busy timeout, so the CLI and the running app cooperate.
-
-## Requirements
-
-- **Node ≥ 22.5** — persistence is the built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html),
-  no native build step. The GUI needs an Electron whose bundled Node is ≥ 22.5
-  (Electron 35+); this repo pins Electron 42.
-
-## Quick start
+To build from source instead, you need **Node ≥ 22.5** — persistence is the
+built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html), so there's no
+native build step. The tray app needs Electron 35+ (its bundled Node must be
+≥ 22.5); this repo pins Electron 42.
 
 ```sh
 npm install
 npm run build
-node packages/cli/dist/bin.js status   # or: npm run tt -- status
+npm run tt -- status     # or: node packages/cli/dist/bin.js status
 ```
 
-The database resolves to `$TT_DB` if set, else the per-OS app-data directory
-(`~/.local/share/stint/timetracker.sqlite` on Linux, `~/Library/Application Support`
-on macOS, `%APPDATA%` on Windows). Both surfaces resolve the same path. Backup = copy
-the file; export = `tt export`. No network, ever.
+Your data is one SQLite file: `$TT_DB` if set, otherwise the per-OS app-data
+directory (`~/.local/share/stint/timetracker.sqlite` on Linux,
+`~/Library/Application Support` on macOS, `%APPDATA%` on Windows). Both surfaces
+use the same path. Backup is copying the file. No network, ever.
 
-### `tt` tour
+### The `tt` command line
 
 ```sh
 tt start "auth refactor" --client "Client A" --project API --tag deep
@@ -70,59 +38,116 @@ tt add "spec review" --from 13:00 --to 14:30 --client "Client A"
 tt list --week
 tt report --week --by client --round 15
 tt export --month --csv -o june.csv
-tt sleep ls                     # review slept-through entries
+tt sleep ls                     # entries the machine slept through
 tt sleep subtract 42            # exclude slept time (reversible)
-tt status --json                # scripting contract; --json on every read command
+tt status --json                # --json on every read command, for scripting
 ```
 
-Time arguments accept absolute (`14:30`, `2026-06-24T14:30`) and relative (`-90m`,
+Times accept absolute (`14:30`, `2026-06-24T14:30`) and relative (`-90m`,
 `-1h30m`) forms. Read commands exit `0`; refusals and errors exit non-zero.
 
-### GUI
+### The tray app
+
+```sh
+npm run gui     # needs an Electron binary (see Install)
+```
+
+A tray timer counts up; one click starts, stops, or switches. `Ctrl+Alt+T`
+toggles it from anywhere. The main window groups the day's entries, shows flags
+in context, and builds reports with CSV/JSON export. Anything the window does,
+`tt` does too.
+
+![The main window with a running timer and the day's entries](acceptance/evidence/screenshots/main-running.png)
+
+![The report builder grouping billable time by client, with overlap and sleep flags and CSV/JSON export](acceptance/evidence/screenshots/reports-summary.png)
+
+## Developing Stint
+
+One core, one file, two thin shells. A single SQLite file in WAL mode; all reads
+and writes go through `@stint/core`; each write is one `BEGIN IMMEDIATE`
+transaction with a busy timeout, so the CLI and the running app cooperate.
+
+The keystone idea: **a running timer is just the one entry whose `end` is null.**
+"Running" is a row state, not a process, and elapsed time is always derived
+(`now − start`), never stored. That's why both surfaces can drive the live timer
+without coordinating — they read and write the same row.
+
+### Layout
+
+The repo is two halves, and the split is the whole point. The first is the
+**specification** — the product and process requirements, plus the acceptance
+criteria that say what must hold. The second is the **rendering** — the
+implementation and the generated evidence that those criteria do hold. The
+rendering is produced from the specification; the
+[ghost-distribution goal](#a-goal-ghost-distribution) below is exactly the claim
+that the second half can be regenerated from the first.
+
+**The specification** — the source, the artifact worth keeping:
+
+```
+context/       The spec — concept, PRD, glossary, acceptance strategy, process.
+features/      Gherkin acceptance criteria, run against BOTH surfaces (parity).
+acceptance/
+  criteria/    What must hold — coverage matrix, schemas, JUDGE rubric, MANUAL runbook, parity matrix.
+CLAUDE.md      Repo guide and working instructions.
+.claude/       Requirements-change machinery — skills and workflows.
+README.md      This front door.
+```
+
+**The rendering** — generated from the specification above:
+
+```
+packages/
+  core/   @stint/core — schema, state transitions, invariants, reporting, rounding.
+  cli/    tt — the command line (commander), --json everywhere.
+  gui/    Electron tray app + window; renderer is an equal surface over IPC.
+acceptance/
+  evidence/    Generated proof the criteria hold — CLI transcript, screenshots, recordings, judge report.
+scripts/       Evidence generator and the no-network backstop.
+```
+
+The design lives in the styled HTML under [`context/`](context/) — read order:
+[`concept.html`](context/concept.html) → [`prd.html`](context/prd.html) →
+[`glossary.html`](context/glossary.html) →
+[`acceptance.html`](context/acceptance.html), then
+[`process.html`](context/process.html) for how it's built and verified.
+
+### Build & test
 
 ```sh
 npm run build
-npm run gui     # requires an Electron binary (see Requirements)
-```
-
-A tray/menu-bar timer counts up; one click stops, switches, or starts. A global
-hotkey (`Ctrl+Alt+T`) toggles from anywhere. The main window groups entries by day
-with flags in context, and a report builder with CSV/JSON export.
-
-## Testing & acceptance
-
-No single notation verifies the whole PRD well, so Stint uses the five complementary
-methods from [`context/acceptance.html`](context/acceptance.html). The full map is
-[`acceptance/criteria/COVERAGE.md`](acceptance/criteria/COVERAGE.md).
-
-| Method | Proves | Run |
-|--------|--------|-----|
-| **BDD** (Gherkin) | User flows, in ubiquitous language, against **both** surfaces | `npm run test:bdd` |
-| **PROP** (fast-check) | The money-affecting laws over thousands of inputs | `npm run test:prop` |
-| **GOLD** (snapshots + JSON-Schema) | The exact CLI/CSV/JSON contract | `npm run test:gold` |
-| **JUDGE** (Playwright + rubric) | Subjective GUI qualities over real screenshots | `npm run judge` |
-| **MANUAL** ([runbook](acceptance/criteria/manual/runbook.md)) | Real sleep/wake, cadence, no-network, tray/hotkey | by hand |
-
-```sh
-npm test                 # PROP · GOLD · BDD · integration · parity (one command)
-npm run judge            # captures GUI screenshots, scores the JUDGE rubric
+npm test                 # PROP · GOLD · BDD · integration · parity
+npm run judge            # GUI screenshots scored against the JUDGE rubric
 npm run evidence         # regenerates acceptance/evidence/cli-transcript.md
 npm run verify:no-network
 ```
 
+No single verification system or notation covers the whole PRD, so acceptance
+uses five complementary methods (full map in
+[`acceptance/criteria/COVERAGE.md`](acceptance/criteria/COVERAGE.md)):
+
+| Method | Proves | Run |
+|--------|--------|-----|
+| **BDD** (Gherkin) | User flows against both surfaces | `npm run test:bdd` |
+| **PROP** (fast-check) | The money-affecting laws over many inputs | `npm run test:prop` |
+| **GOLD** (snapshots + JSON-Schema) | The exact CLI/CSV/JSON contract | `npm run test:gold` |
+| **JUDGE** (Playwright + rubric) | Subjective GUI qualities over real screenshots | `npm run judge` |
+| **MANUAL** ([runbook](acceptance/criteria/manual/runbook.md)) | Sleep/wake, cadence, no-network, tray/hotkey | by hand |
+
 The BDD suite runs each `.feature` against `@stint/core` **and** the built `tt`
-binary, which is how the full-parity claim (§17 R8) is proven without a second copy
-of the spec. The `acceptance/criteria/parity-matrix.json` (asserted complete) maps every GUI
-capability to its `tt` command.
+binary, which proves full parity without a second copy of the spec.
 
-### Evidence in this repo
+### A goal: ghost distribution
 
-- [`acceptance/evidence/cli-transcript.md`](acceptance/evidence/cli-transcript.md) —
-  verbatim `tt` output, organised by the §17 acceptance criteria.
-- [`acceptance/evidence/screenshots/`](acceptance/evidence/screenshots/) — the real
-  rendered GUI (empty state, running popover, flags in context).
-- [`acceptance/evidence/judge-report.json`](acceptance/evidence/judge-report.json) —
-  per-rubric PASS/FAIL with justifications.
+Stint aims to be **ghost-distributable** — specified completely enough that the
+software could be shipped as its requirements alone. The product and process
+specs — [`context/`](context/), [`acceptance/criteria/`](acceptance/criteria/),
+[`CLAUDE.md`](CLAUDE.md), [`.claude/`](.claude/), and this README — are meant to
+be complete enough that a capable agent harness and model could regenerate
+extremely similar, functionally identical software from them alone. The code in
+`packages/` is one rendering of that specification; the specification is the
+artifact worth keeping. Distributing only the specs, and letting an agent render
+the software downstream, is "ghost distribution."
 
 ## License
 
