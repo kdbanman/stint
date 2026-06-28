@@ -199,6 +199,7 @@
   <section id="s4">
     <div class="eyebrow"><span class="n">04</span> Architecture</div>
     <h2>One core, one file, two thin shells</h2>
+    <p>The requirements below are normative. For the consolidated picture — topology, write-path and IPC diagrams, and the file-level <code>@stint/core</code> module map — see <a href="architecture.html">architecture.html</a>, which gathers this section together with §13, §15, §19, and §20.</p>
     <ol class="req">
       <li><strong>Shared core.</strong> A TypeScript package (<code>@stint/core</code>) owns the schema, every state transition, and all invariants. The tray app and the <code>tt</code> CLI both import it; there is no duplicated logic and no privileged surface. <span class="st st-done">implemented</span></li>
       <li><strong>Single source of truth.</strong> <span class="core">core</span> One SQLite file in <strong>WAL mode</strong> (concurrent readers, single writer). All reads and writes go through <code>@stint/core</code>. Open-time invariants and durability pragmas are asserted on every open (§20 R01). <span class="st st-done">implemented</span></li>
@@ -207,7 +208,7 @@
       <li><strong>Change propagation by file-watch.</strong> Each surface watches the SQLite file (and its <code>-wal</code>) via <code>fs.watch</code> and refreshes on change, so a write from one surfaces in the other near-instantly. (The tray's 1-second display tick is independent of this.) This is a consistency/UX affordance and is <strong>not</strong> a core requirement. <span class="st st-done">implemented</span></li>
       <li><strong>UTC storage, local display.</strong> <span class="core">core</span> All timestamps stored UTC; rendered in the system locale and time zone. Durations are timezone-independent and DST-safe. <span class="st st-done">implemented</span></li>
     </ol>
-    <p>The integrity and durability guarantees these requirements rest on are hardened in <a href="#s20">§20</a> — open-time pragma assertions, a DB-level at-most-one-open index, integrity checks, backups, and corruption recovery.</p>
+    <p>The integrity and durability guarantees these requirements rest on are hardened in <a href="#s20">§20</a> — open-time pragma assertions, a DB-level at-most-one-open index, integrity checks, backups, and corruption recovery — and the write path that ties them together is diagrammed in <a href="architecture.html#s4">architecture.html §04</a>.</p>
   </section>
 
   <section id="s5">
@@ -428,11 +429,12 @@
   <section id="s15">
     <div class="eyebrow"><span class="n">15</span> Platform &amp; tech</div>
     <h2>macOS + Linux, shared-core</h2>
+    <p>The stack at a glance; <a href="architecture.html#s9">architecture.html §09</a> lays it out as a layer table and carries the <code>node:sqlite</code> runtime-constraint detail.</p>
     <ul class="d">
       <li><strong>GUI:</strong> Electron — a <code>Tray</code> with a popover <code>BrowserWindow</code> for the running timer (single-click popover, no dropdown menu — §12 R01), and a standard <code>BrowserWindow</code> for the sidebar shell and its views. The renderer is web tech (HTML/CSS, framework optional). Follows system light/dark; uses system typography; system accent applied only to the primary action and running state.</li>
       <li><strong>CLI:</strong> a Node executable, <code>tt</code>, built on <code>commander</code> with <code>--json</code> everywhere, importing the same <code>@stint/core</code> package.</li>
       <li><strong>Core:</strong> a TypeScript package, <code>@stint/core</code>, owning schema, transitions, invariants, reporting, and rounding. Both surfaces import it; no duplicated logic.</li>
-      <li><strong>Persistence:</strong> SQLite via Node's built-in <code>node:sqlite</code> (Node 22.5+), WAL mode set by pragma, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation. No native build step. <code>node:sqlite</code> only exists on Node 22.5+ and runs in two distinct runtimes — the system Node behind <code>tt</code> and Electron's own bundled Node — so v1 requires system Node ≥ 22.5 <em>and</em> an Electron whose bundled Node is ≥ 22.5 with <code>node:sqlite</code> loadable in the packaged main process (it is a stability-experimental module; confirm against the pinned versions).</li>
+      <li><strong>Persistence:</strong> SQLite via Node's built-in <code>node:sqlite</code> (Node 22.5+), WAL mode set by pragma, <code>BEGIN IMMEDIATE</code> writes, busy timeout for cross-process cooperation. No native build step. <code>node:sqlite</code> must load in <strong>both</strong> runtimes — the system Node behind <code>tt</code> and Electron's bundled Node — which is the stack's sharpest version dependency; the full constraint is in <a href="architecture.html#s9">architecture.html §09</a>.</li>
       <li><strong>System integration:</strong> <code>fs.watch</code> for file-watch; Electron <code>powerMonitor</code> <code>suspend</code>/<code>resume</code> events (with wall-clock-gap reconciliation on launch) for sleep flagging, and <code>powerMonitor.getSystemIdleTime()</code> available for idle; Electron <code>globalShortcut</code> for the hotkey; Electron <code>Notification</code> for check-ins.</li>
       <li><strong>Clickability convention.</strong> <span class="new">new</span> One convention across the whole window: every clickable text affordance / link carries the neutral button background; inert text never does; the <strong>accent color stays reserved for each view's single primary action</strong> (the accent discipline of the active-timer / Start primary). <em>Done when</em> no clickable text reads as plain prose and the accent appears on exactly one action per view. <span class="st st-done">done</span></li>
       <li><strong>Packaging &amp; distribution:</strong> macOS + Linux only; a single installer per platform; in-app self-update from GitHub Releases; date/build versioning. Specified fully in <a href="#s19">§19</a>.</li>
