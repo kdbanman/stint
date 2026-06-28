@@ -96,7 +96,16 @@ jobs:
         run: STINT_BUILD_N="${{ needs.version.outputs.build_n }}" npm run version:stamp
       - name: Build (core + cli + gui main)
         run: npm run build
-      - name: Package GUI (macOS + Linux targets)
+      # Each matrix runner packages ONLY its own host platform: macos-latest cuts the
+      # .dmg, ubuntu-latest the AppImage/.deb. (electron-builder cannot build a macOS
+      # .dmg on Linux, so a single `--mac --linux` invocation would fail the Linux job;
+      # the macos-latest + ubuntu-latest matrix already covers both platforms.)
+      # CSC_IDENTITY_AUTO_DISCOVERY=false keeps the unsigned mac build (electron-builder.yml
+      # identity: null) from looking for signing certs — no notarization/signing secrets
+      # (PRD §19 G3: the user clears Gatekeeper once).
+      - name: Package GUI (host-platform target)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
         run: npm --workspace @stint/gui run pack
       - name: Upload macOS artifacts
         if: matrix.os == 'macos-latest'
