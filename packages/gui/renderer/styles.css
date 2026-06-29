@@ -5,8 +5,8 @@
  * numerals, a 4px grid with the fixed radius trio (8 controls / 12 cards / 16 window &
  * overlays), and one strict elevation ladder: canvas → card → raised → popover → modal.
  *
- * ONE RATIONED ACCENT (--accent, the clay #C8623E, overridden at runtime by the system
- * accent): only each view's single primary action (button.primary), the active nav item,
+ * ONE RATIONED ACCENT (--accent, the clay #C8623E, unconditional — not a setting and never
+ * overridden at runtime): only each view's single primary action (button.primary), the active nav item,
  * the running-state indicator, and the keyboard focus ring carry it — never decoratively.
  *
  * SELECTION ≠ ACCENT: a chosen segmented-control option / range chip is a RAISED CHIP
@@ -42,7 +42,7 @@
   --rule: #ece5d8; /* line */
   --rule-strong: #ddd4c3; /* line-strong */
 
-  /* the one rationed clay accent (overridden at runtime by the system accent) */
+  /* the one rationed clay accent (unconditional — not a setting, never overridden at runtime) */
   --accent: #C8623E;
   --accent-ink: #a1492a;
   --accent-weak: #f7ece3;

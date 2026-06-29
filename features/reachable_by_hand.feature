@@ -144,5 +144,3 @@ Feature: Every capability reachable by hand
     # `tt config set`.
     When I set week start to "sunday"
     Then the configured week start is "sunday"
-    When I set accent usage to "monochrome"
-    Then the configured accent usage is "monochrome"

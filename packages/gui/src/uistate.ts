@@ -14,7 +14,6 @@ const WINDOW_DAYS = 60;
 
 export function buildUiState(
   store: Store,
-  accent: string,
   opts: { search?: string } = {},
 ): UiState {
   const now = new Date();
@@ -88,15 +87,12 @@ export function buildUiState(
       firstCheckinMin: settings.firstCheckinMin,
       checkinIntervalMin: settings.checkinIntervalMin,
       globalHotkey: settings.globalHotkey,
-      // §12 R11: the editable accent/date-format modes the Settings view edits. Kept
-      // distinct from the top-level `accent` colour string (the system accent for theming).
-      accent: settings.accent,
+      // §12 R11: the editable date-format mode the Settings view edits.
       dateFormat: settings.dateFormat,
       // §20 R04: the current backup-retention count the Settings → Backups picker paints; it
       // changes over the same setSetting channel `tt config set backup_retention` drives.
       backupRetention: settings.backupRetention,
     },
-    accent,
     // §19 R06 — the date/build version (the shared @stint/core APP_VERSION constant, the SAME
     // one `tt --version` prints). Carried on getState so the Settings → Software Update view
     // shows it without a new round-trip; read-only display (the check/download flow is R03/R04).

@@ -40,7 +40,7 @@
     { "gui": "addTag", "description": "§12 R10 — create a tag (create-or-return; the explicit manage-it-first path)", "tt": ["tag add"] },
     { "gui": "renameTag", "description": "§12 R10 — rename a tag", "tt": ["tag rename"] },
     { "gui": "archiveTag", "description": "§12 R10 — archive a tag (reversible hide from pickers, keeps history)", "tt": ["tag archive"] },
-    { "gui": "setSetting", "description": "§12 R11 / §14 — change any §14 setting from the GUI Settings view (rounding, rounding increment, week start, first check-in, check-in interval, global hotkey, accent usage, date format, backup retention); the report view's rounding controls ride the same channel — parity with tt config set", "tt": ["config set"] },
+    { "gui": "setSetting", "description": "§12 R11 / §14 — change any §14 setting from the GUI Settings view (rounding, rounding increment, week start, first check-in, check-in interval, global hotkey, date format, backup retention); the report view's rounding controls ride the same channel — parity with tt config set", "tt": ["config set"] },
     { "gui": "listBackups", "description": "§20 R04 / §17 R12 — list the automatic timestamped backups beside the database (the Settings → Backups restore list + 'Last backup' status); delegates to core store.listBackups, parity with tt backup ls", "tt": ["backup ls"] },
     { "gui": "restoreBackup", "description": "§20 R05 / §17 R12 — restore the database from a chosen backup (the Settings → Restore… action): core quarantines the current file and re-points the store at the backup; parity with tt backup restore", "tt": ["backup restore"] }
   ]

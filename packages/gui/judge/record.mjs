@@ -140,7 +140,7 @@ const RECIPES = {
       // Make Stop actually close the open row: flip the injected snapshot to idle so the
       // post-stop getState() reload paints the nothing-running state (faithful to core stop).
       await page.evaluate(() => {
-        const idle = { status: { running: false, entry: null }, days: [], sleepFlaggedIds: [], settings: window.__STATE__.settings, accent: window.__STATE__.accent };
+        const idle = { status: { running: false, entry: null }, days: [], sleepFlaggedIds: [], settings: window.__STATE__.settings };
         const prevToggle = window.stint.toggle;
         window.stint.toggle = () => {
           window.__STATE__ = idle;
@@ -557,7 +557,7 @@ const RECIPES = {
     page: 'index.html',
     // Running open entry (no stop) + the two pickerState closed entries, all on 2026-06-24, so
     // every entry point's single-day column shows the gray other-entries. Built inline (not a new
-    // shared fixture) so no JUDGE scene drifts; settings/accent are reused from pickerState().
+    // shared fixture) so no JUDGE scene drifts; settings are reused from pickerState().
     state: () => {
       const base = pickerState();
       const open = {
@@ -806,7 +806,6 @@ const RECIPES = {
             ],
             sleepFlaggedIds: [],
             settings: window.__STATE__.settings,
-            accent: window.__STATE__.accent,
           };
           return Promise.resolve(window.__ACK__);
         };
@@ -1062,7 +1061,6 @@ const RECIPES = {
             days: st.days,
             sleepFlaggedIds: [],
             settings: st.settings,
-            accent: st.accent,
           };
           return prevToggle();
         };
@@ -1153,7 +1151,6 @@ const RECIPES = {
             days: [{ day: nowIso.slice(0, 10), entries: [entry] }],
             sleepFlaggedIds: [],
             settings: window.__STATE__.settings,
-            accent: window.__STATE__.accent,
           };
           return Promise.resolve(window.__ACK__);
         };
@@ -1388,8 +1385,8 @@ const RECIPES = {
     },
   },
 
-  // §12 R11 / §14 — the Settings view: a control for every setting, including the accent +
-  // date-format pickers. The recording routes to Settings and dwells on the panel.
+  // §12 R11 / §14 — the Settings view: a control for every setting, including the
+  // date-format picker. The recording routes to Settings and dwells on the panel.
   'settings-view': {
     page: 'index.html',
     state: settingsState,
