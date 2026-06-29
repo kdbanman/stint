@@ -14,7 +14,7 @@
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {
-  const { rangeLabel, lineFlags, applyAccent } = window.SU;
+  const { rangeLabel, lineFlags, applyAccent, icon } = window.SU;
   const $ = (id) => document.getElementById(id);
 
   // The five core presets the range chips drive, plus their display label. 'custom' is the
@@ -76,11 +76,11 @@
   function specSummary(def) {
     const parts = [
       `<span class="k">${escapeHtml(rangeSummary(def.rangeSpec))}</span>`,
-      `grouped by <span class="k">${escapeHtml(BY_LABEL[def.by] || def.by)}</span>`,
+      `by <span class="k">${escapeHtml(BY_LABEL[def.by] || def.by)}</span>`,
     ];
     if (def.tag) parts.push(escapeHtml(`#${def.tag}`));
     parts.push(escapeHtml(BILLABLE_LABEL[def.billableFilter] || def.billableFilter));
-    parts.push(def.rounding ? `round nearest ${def.roundingIncrementMin} min` : 'rounding off');
+    parts.push(def.rounding ? `round ${def.roundingIncrementMin} min` : 'no rounding');
     return parts.join(' · ');
   }
 
@@ -115,9 +115,9 @@
           `<div class="di"><div class="dname">${escapeHtml(d.name)}</div>` +
           `<div class="dspec">${specSummary(d)}</div></div>` +
           `<div class="dactions">` +
-          `<button type="button" class="def-run" data-act="run">Run</button>` +
-          `<button type="button" class="def-edit" data-act="edit">Edit</button>` +
-          `<button type="button" class="def-kebab" data-act="menu" aria-label="Rename or delete">⋮</button>` +
+          `<button type="button" class="def-run" data-act="run">${icon('play')}Run</button>` +
+          `<button type="button" class="def-edit" data-act="edit">${icon('edit')}Edit</button>` +
+          `<button type="button" class="def-kebab" data-act="menu" aria-label="Rename or delete">${icon('dots')}</button>` +
           `</div></div>`
         );
       })
@@ -126,10 +126,23 @@
 
   // ----------------------------------------------------------------- builder (§09 R08)
 
-  // Reflect exactly one active segment in a segmented control (and its aria-pressed).
-  function selectSegment(container, predicate) {
-    for (const b of container.querySelectorAll('.seg-btn, .preset')) {
-      const on = predicate(b);
+  // The three segmented controls, single-sourced: the draft field each drives, the container
+  // it lives in, the button class it holds, and the data-* attribute that names each option.
+  // selectSegment, paintBuilder, and the click wiring all read this one map — so the field ↔
+  // attribute pairing is stated once, not re-inlined as a near-identical predicate at each site.
+  const SEGMENTS = {
+    preset: { container: 'rep-preset-seg', btn: '.preset', attr: 'preset' },
+    by: { container: 'rep-by-seg', btn: '.seg-btn', attr: 'by' },
+    billableFilter: { container: 'rep-billable-seg', btn: '.seg-btn', attr: 'billable' },
+  };
+
+  // Reflect exactly one active segment in a segmented control (and its aria-pressed): the
+  // button whose data-<attr> equals the current draft value is the chosen one.
+  function selectSegment(field) {
+    const seg = SEGMENTS[field];
+    const container = $(seg.container);
+    for (const b of container.querySelectorAll(seg.btn)) {
+      const on = b.dataset[seg.attr] === draft[field];
       b.classList.toggle('on', on);
       if (b.hasAttribute('aria-pressed')) b.setAttribute('aria-pressed', String(on));
     }
@@ -148,10 +161,10 @@
   function paintBuilder() {
     $('rep-builder-title').textContent = draft.editing ? `Edit “${draft.editing}”` : 'New report';
     $('rep-name').value = draft.editing ?? '';
-    selectSegment($('rep-preset-seg'), (b) => b.dataset.preset === draft.preset);
+    selectSegment('preset');
     $('rep-custom-range').hidden = draft.preset !== 'custom';
-    selectSegment($('rep-by-seg'), (b) => b.dataset.by === draft.by);
-    selectSegment($('rep-billable-seg'), (b) => b.dataset.billable === draft.billableFilter);
+    selectSegment('by');
+    selectSegment('billableFilter');
     $('rep-tag').value = draft.tag;
     $('rep-rounding').checked = draft.rounding;
     $('rep-rounding-increment').value = String(draft.roundingIncrementMin);
@@ -337,11 +350,12 @@
       .join('');
   }
   function rowHtml(line, depth, report, rounding) {
+    // Depth-0 group rows vs indented sub-rows; the sub-row indent + muted colour live in CSS
+    // (.report-sub td), not an inline style, so the table reads from one place.
     const cls = depth === 0 ? 'report-grp' : 'report-sub';
-    const indent = depth > 0 ? ' style="padding-left:30px"' : '';
     const secs = rounding ? line.roundedSeconds : line.totalSeconds;
     return (
-      `<tr class="${cls}"><td${indent}>${escapeHtml(line.key)}${flagsHtml(line, report)}</td>` +
+      `<tr class="${cls}"><td>${escapeHtml(line.key)}${flagsHtml(line, report)}</td>` +
       `<td class="num">${fmtHM(secs)}</td></tr>` +
       (line.children || []).map((c) => rowHtml(c, depth + 1, report, rounding)).join('')
     );
@@ -472,15 +486,29 @@
       }
     });
 
-    // §09 R01: the range preset chips. Clicking a named preset sets draft.preset; Custom
-    // reveals the explicit from/to inputs. No run here — Save persists, Run resolves later.
-    $('rep-preset-seg').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.preset');
-      if (!btn) return;
-      draft.preset = btn.dataset.preset;
-      selectSegment($('rep-preset-seg'), (b) => b.dataset.preset === draft.preset);
+    // Wire one segmented control: a click on an option writes the named draft field from the
+    // option's data-<attr>, reflects the selection, then runs an optional after-effect. All
+    // three segments share this — no per-control copy of the find-closest / set-draft / repaint
+    // dance (the field ↔ container ↔ attribute mapping comes from SEGMENTS).
+    function wireSegment(field, after) {
+      const seg = SEGMENTS[field];
+      $(seg.container).addEventListener('click', (ev) => {
+        const btn = ev.target.closest(seg.btn);
+        if (!btn) return;
+        draft[field] = btn.dataset[seg.attr];
+        selectSegment(field);
+        if (after) after();
+      });
+    }
+
+    // §09 R01: the range preset chips. A named preset sets draft.preset; Custom reveals the
+    // explicit from/to inputs. No run here — Save persists, Run resolves later.
+    wireSegment('preset', () => {
       $('rep-custom-range').hidden = draft.preset !== 'custom';
     });
+    // §09 R02/R03: group-by and billable-filter segments.
+    wireSegment('by');
+    wireSegment('billableFilter');
     // Custom from/to → absolute UTC bounds carried verbatim into the saved range-spec.
     $('rep-range-from').addEventListener('change', () => {
       const v = $('rep-range-from').value;
@@ -489,19 +517,6 @@
     $('rep-range-to').addEventListener('change', () => {
       const v = $('rep-range-to').value;
       draft.toUtc = v ? new Date(v).toISOString() : null;
-    });
-
-    $('rep-by-seg').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.seg-btn');
-      if (!btn) return;
-      draft.by = btn.dataset.by;
-      selectSegment($('rep-by-seg'), (b) => b.dataset.by === draft.by);
-    });
-    $('rep-billable-seg').addEventListener('click', (ev) => {
-      const btn = ev.target.closest('.seg-btn');
-      if (!btn) return;
-      draft.billableFilter = btn.dataset.billable;
-      selectSegment($('rep-billable-seg'), (b) => b.dataset.billable === draft.billableFilter);
     });
 
     // §09 R03: the client filter sends an ID (never a name) and repopulates the project

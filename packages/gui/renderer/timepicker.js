@@ -43,22 +43,21 @@ window.STP = (function () {
     return (y / TRACK_H) * DAY_MIN;
   }
 
+  // Zero-pad to two digits (the one padding helper for this module).
+  function pad(n) {
+    return String(n).padStart(2, '0');
+  }
   // datetime-local wants `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix). Mirrors
   // app.js / editor.js localInputValue so the picker writes back byte-identical strings.
   function localInputValue(date) {
-    const pad = (n) => String(n).padStart(2, '0');
     return (
       `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
       `T${pad(date.getHours())}:${pad(date.getMinutes())}`
     );
   }
-
-  function pad2(n) {
-    return String(n).padStart(2, '0');
-  }
   function hhmm(minutes) {
     const m = Math.round(minutes);
-    return `${pad2(Math.floor(m / 60) % 24)}:${pad2(m % 60)}`;
+    return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
   }
   // Minute-of-day for a Date in local time.
   function localMinuteOfDay(date) {
@@ -168,32 +167,29 @@ window.STP = (function () {
     pop.setAttribute('aria-label', 'Pick start and stop');
 
     pop.innerHTML =
-      `<div class="stp-head"><h2>Pick start &amp; stop</h2>` +
-      `<span class="stp-hint">Drag to set the span · text stays authoritative</span></div>` +
+      `<div class="stp-head"><h2>Pick start &amp; stop</h2></div>` +
       `<div class="stp-textfields">` +
       `<label class="stp-tf"><span>Start</span><input class="stp-echo-start" type="text" readonly /></label>` +
       (startOnly
         ? ''
         : `<label class="stp-tf"><span>Stop</span><input class="stp-echo-end" type="text" readonly /></label>`) +
-      `<span class="stp-authnote">Text stays authoritative — the picker just writes these fields.</span>` +
       `</div>` +
       `<div class="stp-body">` +
       `<div class="stp-cal">` +
       `<div class="stp-cal-head"><span class="stp-month"></span>` +
-      `<span class="stp-nav"><button type="button" class="stp-prev" aria-label="Previous month">‹</button>` +
-      `<button type="button" class="stp-next" aria-label="Next month">›</button></span></div>` +
+      `<span class="stp-nav">` +
+      `<button type="button" class="stp-prev" aria-label="Previous month"><svg class="ic" aria-hidden="true"><use href="#i-left" /></svg></button>` +
+      `<button type="button" class="stp-next" aria-label="Next month"><svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></button>` +
+      `</span></div>` +
       `<div class="stp-grid"></div>` +
-      `<div class="stp-cal-foot">Pick a day, then drag the entry on the day column.</div>` +
       `</div>` +
       `<div class="stp-day">` +
       `<div class="stp-day-lbl"></div>` +
       `<div class="stp-track"></div>` +
-      `<div class="stp-snaphint"><span class="stp-pill">5-min snap</span>` +
-      `Drag <b>body</b> = move · drag <b>bottom</b> = resize stop.</div>` +
       `</div>` +
       `</div>` +
       `<div class="stp-foot">` +
-      `<span class="stp-overnight">Overnight spans (stop next day) use text entry — type the dates.</span>` +
+      `<span class="stp-overnight" hidden>Stop is on the next day</span>` +
       `<span class="stp-actions">` +
       `<button type="button" class="stp-cancel">Cancel</button>` +
       `<button type="button" class="primary stp-apply">Apply range</button>` +
@@ -305,7 +301,7 @@ window.STP = (function () {
         const lbl = document.createElement('span');
         lbl.className = 'stp-hour';
         lbl.style.top = `${minutesToY(h * 60)}px`;
-        lbl.textContent = `${pad2(h % 24)}:00`;
+        lbl.textContent = `${pad(h % 24)}:00`;
         track.appendChild(lbl);
       }
       // Other entries (gray).
@@ -325,12 +321,11 @@ window.STP = (function () {
       me.style.top = `${top}px`;
       me.style.height = `${height}px`;
       me.innerHTML =
-        `<span class="stp-lab-top">▲ ${hhmm(startMin)}</span>` +
+        `<span class="stp-lab-top">${hhmm(startMin)}</span>` +
         (startOnly
-          ? `<span class="stp-grip">⋮ drag to set start ⋮</span>`
-          : `<span class="stp-grip">⋮⋮ drag to move ⋮⋮</span>` +
-            `<span class="stp-lab-bot">▼ ${hhmm(endMin)}</span>` +
-            `<span class="stp-resize" title="Drag to resize stop"><i></i></span>`);
+          ? ''
+          : `<span class="stp-lab-bot">${hhmm(endMin)}</span>` +
+            `<span class="stp-resize" aria-label="Resize stop"><i></i></span>`);
       track.appendChild(me);
       // Overlap regions (yellow, warn-only — pointer-events: none, never blocks Apply).
       for (const ov of overlapsOnDay()) {

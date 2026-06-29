@@ -12,7 +12,7 @@
     {
       "item": "NAV_SHELL",
       "pass": true,
-      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (480/760/1200) views=312/592/752 → true",
+      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (480/760/1200) views=312/592/872 → true",
       "screenshot": "main-nav.png"
     },
     {
@@ -96,7 +96,7 @@
     {
       "item": "ADD_FORM_PICKER",
       "pass": true,
-      "justification": "affordances={\"from\":true,\"to\":true,\"fromInput\":true,\"toInput\":true,\"hint\":true}; opened-echo={\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\"}; wrote-back from=2026-06-24T13:00 to=2026-06-24T14:30; Save sent {\"fromLocal\":\"2026-06-24T13:00\",\"toLocal\":\"2026-06-24T14:30\"} (text authoritative)",
+      "justification": "affordances={\"from\":true,\"to\":true,\"fromInput\":true,\"toInput\":true,\"hint\":false}; opened-echo={\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\"}; wrote-back from=2026-06-24T13:00 to=2026-06-24T14:30; Save sent {\"fromLocal\":\"2026-06-24T13:00\",\"toLocal\":\"2026-06-24T14:30\"} (text authoritative)",
       "screenshot": "add-form-picker.png"
     },
     {
@@ -186,13 +186,13 @@
     {
       "item": "REPORTS_VIEW",
       "pass": true,
-      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · grouped by project · billable only · rounding off\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · grouped by client · all entries · round nearest 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export CSV={\"format\":\"csv\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"savedReportRef\":\"Weekly billables — Globex\"}",
+      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export CSV={\"format\":\"csv\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"savedReportRef\":\"Weekly billables — Globex\"}",
       "screenshot": "reports-list.png"
     },
     {
       "item": "ENTRY_LIST_SEARCH",
       "pass": true,
-      "justification": "entry list: default={\"byOptions\":[\"day\",\"client\",\"project\",\"tag\"],\"byActive\":[\"day\"],\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"rowCount\":4,\"groupHeads\":[\"2026-06-24\",\"2026-06-23\"]} → search={\"reqSearch\":\"refactor\",\"rowCount\":2,\"descs\":[\"auth refactorAcme / APIdeep⋯EditEdit tagsSplitDelete\",\"refactor testsGlobex / Opsci⋯EditEdit tagsSplitDelete\"]} → by client={\"reqBy\":\"client\",\"byActive\":[\"client\"],\"groupHeads\":[\"Acme\",\"Globex\"],\"rowCount\":4}",
+      "justification": "entry list: default={\"byOptions\":[\"day\",\"client\",\"project\",\"tag\"],\"byActive\":[\"day\"],\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"rowCount\":4,\"groupHeads\":[\"2026-06-24\",\"2026-06-23\"]} → search={\"reqSearch\":\"refactor\",\"rowCount\":2,\"descs\":[\"auth refactorAcme / APIdeepEditEdit tagsSplitDelete\",\"refactor testsGlobex / OpsciEditEdit tagsSplitDelete\"]} → by client={\"reqBy\":\"client\",\"byActive\":[\"client\"],\"groupHeads\":[\"Acme\",\"Globex\"],\"rowCount\":4}",
       "screenshot": "entries-grouped.png"
     },
     {
@@ -210,7 +210,7 @@
     {
       "item": "SOFTWARE_UPDATE",
       "pass": true,
-      "justification": "version row=\"2026.6.24\" (R06); Check now → {\"checked\":true,\"resultText\":\"Update available · 2026.7.1\",\"resultIsNew\":true,\"linkHref\":\"https://github.com/kdbanman/stint/releases/tag/v2026.7.1\",\"linkOpensExternally\":true,\"pillPresent\":true,\"downloadLabel\":\"Download & install 2026.7.1\"} (R03); Download & install → {\"downloaded\":true,\"head\":\"✓ Downloaded 2026.7.1 Reveal installer\",\"steps\":[\"1Download the new version\",\"2Replace the app in /Applications (Stint reveals the installer for you)\",\"3Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed\"],\"revealPresent\":true,\"gatekeeperStep\":true,\"noDbNote\":true}, reveal fired=true (R04)",
+      "justification": "version row=\"2026.6.24\" (R06); Check now → {\"checked\":true,\"resultText\":\"Update available · 2026.7.1\",\"resultIsNew\":true,\"linkHref\":\"https://github.com/kdbanman/stint/releases/tag/v2026.7.1\",\"linkOpensExternally\":true,\"pillPresent\":true,\"downloadLabel\":\"Download & install 2026.7.1\"} (R03); Download & install → {\"downloaded\":true,\"head\":\"Downloaded 2026.7.1Reveal installer\",\"steps\":[\"1Download the new version\",\"2Replace the app in /Applications (Stint reveals the installer for you)\",\"3Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed\"],\"revealPresent\":true,\"gatekeeperStep\":true,\"noDbNote\":true}, reveal fired=true (R04)",
       "screenshot": "main-software-update.png"
     },
     {

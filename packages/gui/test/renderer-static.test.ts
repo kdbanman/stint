@@ -535,6 +535,25 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/item\.addEventListener\('click',\s*\(\)\s*=>\s*route\(item\.dataset\.view\)\)/);
   });
 
+  it('the nav rail labels each item with a line-icon from the one sprite — never an emoji (design-system)', () => {
+    const html = read('index.html');
+    // Each nav item carries the line-icon convention: an <svg class="ic"> pulling a #i-… symbol
+    // from the single sprite, paired with its .nav-label. The five items map to the five view
+    // icons (clock / list / users / chart / settings) in the Timer→Settings order.
+    const navIcons = [...html.matchAll(/class="nav-item[^"]*"\s+data-view="[^"]+"[^>]*>\s*<svg class="ic"[^>]*><use href="(#i-[^"]+)"/g)].map(
+      (m) => m[1],
+    );
+    expect(navIcons).toEqual(['#i-clock', '#i-list', '#i-users', '#i-chart', '#i-settings']);
+    // …and the shell carries NO emoji glyph anywhere (the restyle replaces every emoji/symbol
+    // pictograph with the line-icon sprite). Scan the whole document for any pictographic glyph
+    // (the prior nav used ◷ ▤ ◎ ▥ ⚙, the pickers ▦, the chevrons ▲▼) — none may remain. The
+    // ranges cover Miscellaneous Technical, Geometric Shapes, Misc Symbols/Dingbats, the
+    // supplemental arrows/shapes, and emoji — but spare the em-dash, ellipsis and § still in use.
+    expect(html).not.toMatch(
+      /[⌀-⏿■-◿☀-➿⬀-⯿←-⇿\u{1F000}-\u{1FAFF}]/u,
+    );
+  });
+
   it('the renderer ships a Clients nav view wired to the client/project IPC (§07, §12)', () => {
     const html = read('index.html');
     const app = read('app.js');
@@ -619,9 +638,11 @@ describe('renderer static contract', () => {
   it('the only accent affordance in the Reports view is the single + New report primary action (§15 / G10)', () => {
     const html = read('index.html');
     const css = read('styles.css');
-    // The + New report action is the view's single primary action…
+    // The New report action is the view's single primary action — a line-icon (i-plus) + label,
+    // no leading "+" glyph (the icon carries the add affordance, §design-system line icons only)…
     expect(html).toMatch(/id="rep-new" class="primary"/);
-    expect(html).toMatch(/\+ New report/);
+    expect(html).toMatch(/id="rep-new"[^>]*>[\s\S]*?<use href="#i-plus"[\s\S]*?New report/);
+    expect(html).not.toMatch(/\+ New report/);
     // …it carries the accent (the one sanctioned use here)…
     expect(css).toMatch(/#rep-new\s*\{[^}]*var\(--accent\)/s);
     // …and the saved-definition cards + the builder + the run-output stay monochrome — none
