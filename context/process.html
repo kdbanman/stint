@@ -134,7 +134,7 @@
   <section id="s2">
     <div class="eyebrow"><span class="n">02</span> Requirements</div>
     <h2>The principles</h2>
-    <p>Each is normative. The reference names the concern that motivated it; most surfaced from the release-packaging failure (the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while CI stayed green).</p>
+    <p>Each is normative. The reference names the concern that motivated it; the first surfaced from the release-packaging failure (the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while CI stayed green), and the later ones generalize the same discipline to the offline guarantee, evidence integrity, and build-time source transforms.</p>
     <ol class="req">
       <li><strong>Green is meaningful.</strong> A passing check must cover every concern its presence implies; a gate with a blind spot is a false guarantee, worse than none because it reassures. <em>(§19 R01: packaging was broken while CI was green — no check exercised it.)</em></li>
       <li><strong>Verify before the gate.</strong> A check that runs only after the merge it protects cannot prevent a regression, only discover it. Every release-gating concern has a check on the PR path. <em>(§19 R01: the real pack ran post-merge only.)</em></li>
@@ -142,6 +142,9 @@
       <li><strong>Self-heal or fail loud.</strong> A guard recovers a known-recoverable fault; otherwise it fails at the boundary with a specific, actionable message, never a cryptic downstream error. <em>(packaging guard reinstalls a missing native helper, else names the absent binary.)</em></li>
       <li><strong>Protect the guard.</strong> A guard is code: it can be deleted, disabled, or rot. Assert that it stays wired, so removing it is itself a caught regression. <em>(<code>build-matrix.test.ts</code> asserts <code>pack-smoke</code> + <code>verify:packaging</code> remain.)</em></li>
       <li><strong>Fix to the cause; record the residue.</strong> When a failure's mechanism is unproven, prefer a fix robust to the cause over one betting on a single mechanism, and document what stays uncertain rather than implying certainty.</li>
+      <li><strong>The offline guarantee has a backstop.</strong> The product makes no network connection except the user-initiated update check (§17 R09, §19 R03); an automated check asserts this across <em>every</em> shipped surface — including assets that ship outside <code>packages/*/src</code> — and asserts production dependencies stay within a reviewed minimal allowlist. The check's own coverage is asserted, so a newly shipped surface cannot silently escape it. <em>(§17 R09: the offline promise is load-bearing and otherwise only manually confirmable.)</em></li>
+      <li><strong>Regenerated evidence must not drift.</strong> Any check that regenerates checked-in acceptance evidence asserts the result is identical to what is committed and fails on any difference. Evidence that is regenerated but never compared is a false green. <em>(Generated proof is only trustworthy if a divergence between code and committed evidence breaks the build.)</em></li>
+      <li><strong>Build-time source transforms are idempotent and fail loud.</strong> A step that rewrites source as part of the build — such as stamping the version (§19 R06) — must be safe to re-run without changing the result, and must abort with an actionable error if the target it expects is absent, never silently leave the source untransformed. <em>(A silent no-op ships an unstamped or stale build.)</em></li>
     </ol>
   </section>
 
