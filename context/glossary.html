@@ -128,7 +128,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Tag</td>
-          <td data-l="Definition">A flat, reusable, cross-cutting label applied many-per-entry, used to filter and group across clients (e.g. all "meetings"). Created on the fly when first applied.</td>
+          <td data-l="Definition">A flat, reusable, cross-cutting label applied many-per-entry, used to filter and group across clients (e.g. all "meetings"). Created on the fly when first applied. <strong>Identity is case-insensitive and whitespace-trimmed</strong>: a given name resolves to exactly one tag row (the first-seen spelling is preserved), empty or whitespace-only names are dropped, and comma-separated input splits into discrete tags. Editing an entry's tags is a <strong>minimal diff</strong> under that identity — unchanged tags are left untouched and re-applying one is idempotent.</td>
           <td class="avoid" data-l="Avoid"><s>label</s>, <s>category</s></td>
         </tr>
         <tr>
@@ -142,9 +142,24 @@
           <td class="avoid" data-l="Avoid"><s>report</s> (unqualified — see §09), <s>view</s>, <s>filter set</s>, <s>query</s></td>
         </tr>
         <tr>
+          <td class="term" data-l="Term">Range spec</td>
+          <td data-l="Definition">The stored form of a <strong>Saved report</strong>'s date range, discriminated by <code>kind</code>: either a relative <strong>range preset</strong> (re-resolved on every run) or an <strong>absolute</strong> fixed UTC window passed straight through. The durable description of "which days," distinct from the concrete bounds a <strong>report run</strong> resolves it into.</td>
+          <td class="avoid" data-l="Avoid"><s>date filter</s>, <s>period</s>, <s>timeframe</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Range preset</td>
+          <td data-l="Definition">One of the <strong>five relative windows</strong> — <code>today</code>, <code>week</code> (this week), <code>last-week</code>, <code>month</code> (this month), <code>last-month</code> — each resolved against the user's <em>local</em> calendar (honoring the Week-start setting) into a half-open <code>[from, to)</code> UTC window at run time. The relative arm of a <strong>range spec</strong>.</td>
+          <td class="avoid" data-l="Avoid"><s>quick range</s>, <s>shortcut</s>, <s>date range</s> (unqualified)</td>
+        </tr>
+        <tr>
           <td class="term" data-l="Term">Setting</td>
           <td data-l="Definition">A key/value pair of app configuration (rounding, week start, check-in cadence, hotkey, …). Shared by both surfaces through the same database.</td>
           <td class="avoid" data-l="Avoid"><s>preference</s>, <s>config flag</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">SleepSpan</td>
+          <td data-l="Definition">A single <strong>sleep→wake cycle that occurred while an entry was open</strong>, stored in its own <code>sleep_span</code> table against that entry (many per entry; <code>sleep_utc</code>/<code>wake_utc</code>). Each carries a <strong><code>source</code></strong>: <code>event</code> — authoritative, captured live from the OS power monitor; <code>gap</code> — a wall-clock-gap <em>suspicion</em> recovered on launch (see <strong>Reconcile</strong>, §05); <code>unknown</code> — provenance unrecorded. The raw evidence behind <strong>Slept-through</strong>, and the only v1 origin of <strong>excluded time</strong> once <strong>subtracted</strong>.</td>
+          <td class="avoid" data-l="Avoid"><s>sleep</s> (unqualified), <s>downtime</s>, <s>idle span</s>, <s>away time</s></td>
         </tr>
       </tbody>
     </table>
@@ -258,6 +273,11 @@
           <td data-l="Definition">One <strong>resolution</strong> of a saved report (§01) against current data: the range-spec resolves to concrete dates, filters and group-by apply, totals render, optionally rounded — optionally piped to a CSV/JSON <strong>export</strong>. A run is ephemeral output; the <em>definition</em> is the durable noun. CLI: <code>tt report run &lt;name&gt;</code>. See §09 — this is the second sense of "report."</td>
           <td class="avoid" data-l="Avoid"><s>report</s> (the definition), <s>generate</s>, <s>render</s> (unqualified)</td>
         </tr>
+        <tr>
+          <td class="term" data-l="Term">Group key</td>
+          <td data-l="Definition">The value a <strong>report run</strong>'s rows are bucketed under when grouping is on: a local-date token <code>YYYY-MM-DD</code> (by day), or a client / project / tag name. An entry lacking a value for the grouped dimension falls under a canonical <strong>empty-dimension bucket</strong> — exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — which sorts first. Grouping by tag <strong>fans out</strong>: a multi-tag entry appears under each of its tags, so per-tag lines may sum to more than the grand total — which stays the de-duplicated sum of distinct entries and is identical under every grouping.</td>
+          <td class="avoid" data-l="Avoid"><s>bucket</s> (reserve that for the empty-dimension label), <s>segment</s>, <s>category</s></td>
+        </tr>
       </tbody>
     </table>
   </section>
@@ -311,7 +331,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Reconcile</td>
-          <td data-l="Definition">On launch, compare the wall-clock gap since the app's last recorded timestamp against the open entry to recover a sleep cycle missed while the app wasn't running, recording it as a SleepSpan with <code>source = gap</code>.</td>
+          <td data-l="Definition">On launch, compare the wall-clock gap between the app's last <strong>Heartbeat</strong> (<code>last_seen_utc</code>) and <code>now</code> against the open entry; when the gap exceeds the reconciliation threshold and an entry is open, record the missed sleep cycle as a <strong>SleepSpan</strong> with <code>source = gap</code>. Recovers a sleep that happened while the app wasn't running.</td>
           <td class="avoid" data-l="Avoid"><s>sync</s>, <s>catch up</s>, <s>recover</s></td>
         </tr>
         <tr>
@@ -330,19 +350,39 @@
           <td class="avoid" data-l="Avoid"><s>frequency</s>, <s>schedule</s> (unqualified)</td>
         </tr>
         <tr>
+          <td class="term" data-l="Term">Heartbeat</td>
+          <td data-l="Definition">The <code>last_seen_utc</code> timestamp the running app refreshes periodically (and on clean quit), kept in <strong>App state</strong> (§06). On next launch the gap between the heartbeat and <code>now</code> is what <strong>Reconcile</strong> measures to recover a missed sleep cycle. A liveness marker, never billable time.</td>
+          <td class="avoid" data-l="Avoid"><s>last ping</s>, <s>keepalive</s>, <s>last active</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Check-in schedule</td>
+          <td data-l="Definition">The persisted next-<strong>check-in</strong> due time (<code>checkin_state</code>, in <strong>App state</strong> §06) that survives relaunch and wake — so a due check-in fires once even if the app was closed when it came due, and the <strong>cadence</strong> realigns from wake after a long sleep. Present iff a timer is open; cleared the moment the timer stops.</td>
+          <td class="avoid" data-l="Avoid"><s>timer</s>, <s>alarm</s>, <s>next reminder</s></td>
+        </tr>
+        <tr>
           <td class="term" data-l="Term">Backup</td>
           <td data-l="Definition">A <strong>timestamped copy of the SQLite file</strong>, written beside the database on launch when the DB has changed since the last one; the last N are retained (default 5). The durability net for the <strong>stored truth</strong> — a copy, never a mutation. Source for <strong>restore</strong>.</td>
           <td class="avoid" data-l="Avoid"><s>snapshot</s>, <s>dump</s>, <s>archive</s> (that's reference data), <s>export</s> (that's CSV/JSON data-out)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Restore</td>
-          <td data-l="Definition">Replace the live database with the latest good <strong>backup</strong>. Invoked on demand, or automatically by <strong>corruption recovery</strong>: when the integrity check fails on open, the corrupt file is quarantined (<code>.corrupted</code>) and the newest good backup is restored, informing the user. Data is never silently lost.</td>
+          <td data-l="Definition">Replace the live database with the latest good <strong>backup</strong>. Invoked on demand — which first sets the current file aside as a <strong>replaced file</strong> — or automatically by <strong>corruption recovery</strong>, which moves the corrupt file aside as a <strong>quarantined file</strong> and restores the newest good backup, informing the user. Data is never silently lost.</td>
           <td class="avoid" data-l="Avoid"><s>rollback</s>, <s>revert</s>, <s>recover</s> (use "restore" for the act)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Integrity check</td>
           <td data-l="Definition">The <code>PRAGMA quick_check</code>/<code>integrity_check</code> run at startup. On failure, <strong>Core does not write</strong> — it triggers <strong>restore</strong> from the latest backup. One of the §20 hardening guarantees, alongside WAL/FK/busy-timeout assertions on open and the partial unique index enforcing at-most-one-open at the DB level.</td>
           <td class="avoid" data-l="Avoid"><s>health check</s>, <s>validation</s>, <s>db check</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Quarantined file</td>
+          <td data-l="Definition">The corrupt database moved aside to a <code>.corrupted-&lt;timestamp&gt;</code> sibling (with its <code>-wal</code>/<code>-shm</code> companions) when the <strong>integrity check</strong> fails on open and <strong>corruption recovery</strong> runs. Kept, never deleted — the bad file is preserved for inspection while a <strong>restore</strong> brings the live database back from the latest <strong>backup</strong>.</td>
+          <td class="avoid" data-l="Avoid"><s>corrupt backup</s>, <s>trash</s>, <s>bad file</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Replaced file</td>
+          <td data-l="Definition">The previously-live database displaced to a <code>.replaced-&lt;timestamp&gt;</code> sibling during a <strong>user-initiated restore</strong>, so restoring never destroys the current data outright — it is set aside first, then the chosen <strong>backup</strong> becomes live. The restore-time counterpart of the auto-recovery <strong>quarantined file</strong>.</td>
+          <td class="avoid" data-l="Avoid"><s>old db</s>, <s>overwritten file</s>, <s>backup</s> (that's the copy restored from)</td>
         </tr>
       </tbody>
     </table>
@@ -394,6 +434,26 @@
           <td class="term" data-l="Term">Update</td>
           <td data-l="Definition">The in-app, guided <strong>download + install of a newer release</strong>. Settings → Software Update checks the GitHub Releases API, reports up-to-date or newer, then downloads the artifact and walks the user through replacing the app. An update <strong>never touches the database</strong>.</td>
           <td class="avoid" data-l="Avoid"><s>upgrade</s>, <s>patch</s>, <s>auto-update</s> (it is guided, not silent)</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">App state</td>
+          <td data-l="Definition">The durable <code>app_state</code> key/value table holding the running app's own runtime bookkeeping — currently the <strong>check-in schedule</strong> (<code>checkin_state</code>) and the <strong>heartbeat</strong> (<code>last_seen_utc</code>). Distinct from <strong>Setting</strong> (user configuration) and from <strong>Entry</strong> data: it is what the app remembers about itself between runs, never tracked time.</td>
+          <td class="avoid" data-l="Avoid"><s>session state</s>, <s>cache</s>, <s>settings</s> (that's user config)</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">tt launcher</td>
+          <td data-l="Definition">The small, dependency-free POSIX-sh shim symlinked onto <code>PATH</code> (<code>/usr/local/bin/tt</code>, falling back to <code>~/.local/bin/tt</code>) by the single <strong>installer</strong>. It makes <code>tt</code> work with no separate Node install: it locates the CLI entrypoint inside the installed GUI app bundle and exec's the <strong>Electron-bundled Node</strong> against it (a system Node ≥ 22.5 is the fallback). The mechanism behind "one install puts <code>tt</code> on PATH."</td>
+          <td class="avoid" data-l="Avoid"><s>wrapper</s>, <s>tt binary</s> (it's a shim, not a compiled binary)</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Offline guarantee</td>
+          <td data-l="Definition">The standing invariant that <strong>no shipped code makes a network connection</strong> — the database is local, always — with the single exception of the user-initiated <strong>update</strong> check. Backstopped in CI by a scan that greps all shipped source for networking imports / request APIs and asserts production dependencies stay within a minimal allowlist (the live-traffic confirmation is manual, under a network monitor).</td>
+          <td class="avoid" data-l="Avoid"><s>privacy mode</s>, <s>airplane mode</s>, <s>local-only</s> (informal gloss)</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Version stamp</td>
+          <td data-l="Definition">The single shared <code>APP_VERSION</code> both surfaces report, written from the date-based <strong>release</strong> grammar (<code>YYYY.M.D[.N]</code>) at build time and overridable at runtime via <code>STINT_VERSION</code>. One source of truth for "which version is this," distinct from the <strong>release</strong> artifact it labels.</td>
+          <td class="avoid" data-l="Avoid"><s>build number</s>, <s>git sha</s>, <s>tag</s> (that's the release tag)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Time-range picker</td>
@@ -450,6 +510,10 @@
       <p><span class="who">Dev</span>"The DB looked corrupt on launch — did we lose her morning?"</p>
       <p><span class="who">Owner</span>"No. The <strong>integrity check</strong> failed, so Core didn't write — it quarantined the file and ran a <strong>restore</strong> from the latest <strong>backup</strong>. A backup is a copy of the stored truth; we never mutate it to fix it."</p>
     </div>
+    <div class="dlg">
+      <p><span class="who">Dev</span>"Reconcile added a two-hour <strong>SleepSpan</strong> on launch — do we trust it?"</p>
+      <p><span class="who">Owner</span>"That one's <code>source = gap</code> — a <em>suspicion</em> from the <strong>heartbeat</strong> gap, not a live power <code>event</code>. Flag it for review; don't subtract it automatically. Only the user's <strong>subtract</strong> moves seconds into <code>excluded_seconds</code>."</p>
+    </div>
   </section>
 
   <section id="s9">
@@ -499,9 +563,21 @@
           <td data-l="Ambiguity"><strong>What counts as "core"?</strong> — every must-ship requirement, or a narrower set?</td>
           <td data-l="Resolution"><strong>Core requirement</strong> is a precise classification (§C): data integrity, data-loss protection, or core data entry — nothing else. Sleep accuracy, the offline guarantee, and cross-surface sync are deliberately <em>not</em> core. "Core" is not a priority synonym; it gates the QA-evidence regime (recordings, the AC-sufficiency review).</td>
         </tr>
+        <tr>
+          <td data-l="Ambiguity"><strong>How a SleepSpan was found</strong> — is "the computer slept" a fact or a guess?</td>
+          <td data-l="Resolution">A <strong>SleepSpan</strong> records its <code>source</code>: <code>event</code> is an <em>authoritative</em> live capture from the OS power monitor; <code>gap</code> is a <em>suspicion</em> inferred on launch from a wall-clock <strong>heartbeat</strong> gap (see <strong>Reconcile</strong>); <code>unknown</code> is unrecorded provenance. Treat a <code>gap</code> span as a review-worthy guess, never ground truth; never silently bill or un-bill on a <code>gap</code> alone.</td>
+        </tr>
+        <tr>
+          <td data-l="Ambiguity"><strong>Quarantined vs replaced</strong> — two set-aside database files during recovery.</td>
+          <td data-l="Resolution"><strong>Quarantined file</strong> (<code>.corrupted-&lt;ts&gt;</code>) is the <em>corrupt</em> file moved aside by automatic <strong>corruption recovery</strong>. <strong>Replaced file</strong> (<code>.replaced-&lt;ts&gt;</code>) is the <em>previously-good live</em> file moved aside by a <em>user-initiated</em> <strong>restore</strong>. Both exist so data is never destroyed outright; neither is a <strong>backup</strong> (the copy restored <em>from</em>).</td>
+        </tr>
+        <tr>
+          <td data-l="Ambiguity"><strong>Range preset vs range spec</strong> — the menu choice vs what a saved report stores.</td>
+          <td data-l="Resolution"><strong>Range preset</strong> = one of the five named relative windows. <strong>Range spec</strong> = the durable range a <strong>saved report</strong> holds — either a preset (re-resolved each run) or an absolute UTC window. The preset is a value; the spec is the stored definition that may contain one.</td>
+        </tr>
       </tbody>
     </table>
-    <div class="note"><span class="lbl">Process</span>This glossary follows the <em>grill-with-docs</em> approach: fuzzy language gets sharpened through interview, then formalized here. New terms and refinements land in this file as the design tree is walked. It is the thinnest useful documentation layer — a glossary of non-obvious terms plus decisions already made — meant to be read alongside, and to stay consistent with, the concept and the PRD.</div>
+    <div class="note"><span class="lbl">Process</span>This glossary follows the <em>grill-with-docs</em> approach: fuzzy language gets sharpened through interview, then formalized here. New terms and refinements land in this file as the design tree is walked. It is the thinnest useful documentation layer — a glossary of non-obvious terms plus decisions already made — meant to be read alongside, and to stay consistent with, the concept and the PRD. Most recently extended via the <strong>issue&nbsp;#27</strong> grill, which canonicalized domain that emerged during implementation: <strong>SleepSpan</strong> (with its <code>event</code>/<code>gap</code> source), <strong>App state</strong> / <strong>Heartbeat</strong> / <strong>Check-in schedule</strong>, the <strong>quarantined</strong>/<strong>replaced</strong> recovery files, <strong>group key</strong> &amp; empty-dimension buckets, <strong>range preset</strong>/<strong>spec</strong>, and the packaging terms (<strong>tt launcher</strong>, <strong>offline guarantee</strong>, <strong>version stamp</strong>). "Switch" was deliberately <em>not</em> added — it is a redundant alias of <strong>Start</strong>, slated for removal (issue&nbsp;#34).</div>
   </section>
 
   <div class="foot">
