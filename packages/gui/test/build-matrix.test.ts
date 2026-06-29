@@ -231,6 +231,36 @@ describe('GOLD — publish-on-merge workflow is wired to publish a Release (§19
 });
 
 /**
+ * GOLD — pack never auto-publishes (PRD §19 R05; runbook "CHECK PUBLISH-ON-MERGE").
+ *
+ * electron-builder auto-detects CI and, for any *distributable* build (.dmg / .AppImage /
+ * .deb — anything but a `--dir` unpacked build), tries to PUBLISH to a GitHub Release, which
+ * needs a GH_TOKEN. The release-matrix `pack` job builds only and hands the artifacts to a
+ * SEPARATE `publish` job (§19 R05), so it runs with no token — and used to die at the very
+ * end with "GitHub Personal Access Token is not set …". That failure only surfaced POST-merge:
+ * the PR-path `pack-smoke` runs `--dir`, which never publishes, so nothing caught it before.
+ *
+ * The fix is `--publish never` on the distributable-producing `pack` script (the CLI flag
+ * overrides any config-level publish provider), enforced on every PR by `scripts/
+ * check-no-auto-publish.mjs` (`npm run verify:no-publish`, in the CI `verify` job). This GOLD
+ * block is the executable mirror that freezes the invariant + that wiring — the same
+ * self-protecting role the R01/R02/R05 guards play for the rest of the §19 config.
+ */
+describe('GOLD — pack never auto-publishes in CI (§19 R05)', () => {
+  it('the distributable `pack` script disables publishing (--publish never)', () => {
+    const pack = guiPkg.scripts?.['pack'] ?? '';
+    expect(pack).toMatch(/electron-builder\b/);
+    // Not a `--dir` build, so it would auto-publish in CI without this flag.
+    expect(pack).not.toMatch(/(?:^|\s)(?:--dir|dir)(?:\s|$)/);
+    expect(pack).toMatch(/--publish\s+never\b/);
+  });
+
+  it('the CI verify job runs the auto-publish guard before merge', () => {
+    expect(ciActive).toMatch(/verify:no-publish/);
+  });
+});
+
+/**
  * GOLD — PR-time packaging-smoke guard (PRD §19 R01; runbook "CHECK BUILD MATRIX").
  *
  * §19 R01's real artifacts are built by release.yml, which only runs POST-merge — so a
