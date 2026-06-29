@@ -14,8 +14,8 @@
   "scripts": {
     "build": "tsc --build tsconfig.main.json",
     "start": "electron .",
-    "pack": "electron-builder --config electron-builder.yml",
-    "pack:smoke": "electron-builder --linux dir --config electron-builder.yml"
+    "pack": "electron-builder --publish never --config electron-builder.yml",
+    "pack:smoke": "electron-builder --linux dir --publish never --config electron-builder.yml"
   },
   "dependencies": {
     "@stint/core": "1.0.0"
