@@ -1347,10 +1347,44 @@ const RECIPES = {
   'reports-view': {
     page: 'index.html',
     state: savedReportsState,
+    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
+      // Enter the in-shell Reports view from the sidebar; dwell on the saved-definition list
+      // (one restyled card per seeded saved report) so the new look reads on camera.
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('[data-view="reports"]:not([hidden])');
-      await wait(page, 1000);
+      await page.waitForSelector('#rep-defs .def');
+      await wait(page, 1100);
+
+      // + New report → the inline restyled BUILDER opens. Build a definition by clicking each
+      // control so the segmented-control / toggle / field styling is legible in motion.
+      await page.click('#rep-new');
+      await page.waitForSelector('#rep-builder:not([hidden])');
+      await wait(page, 500);
+      await page.fill('#rep-name', 'Weekly billables — Acme');
+      await wait(page, 400);
+      await page.click('#rep-preset-seg .preset[data-preset="week"]');
+      await wait(page, 300);
+      await page.click('#rep-by-seg .seg-btn[data-by="client"]');
+      await wait(page, 300);
+      await page.click('#rep-billable-seg .seg-btn[data-billable="billable"]');
+      await wait(page, 500);
+
+      // SAVE → the builder closes and the new card joins the restyled list.
+      await page.click('#rep-save');
+      await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
+      await page.waitForSelector('.def[data-name="Weekly billables — Acme"]');
+      await wait(page, 700);
+
+      // RUN → the on-screen GROUPED SUMMARY paints: per-line + grand totals, with the overlap
+      // and unreviewed-sleep flags surfaced IN CONTEXT on their affected rows. Dwell here so the
+      // restyled summary table + status flags are the closing beat.
+      const newCard = page.locator('.def[data-name="Weekly billables — Acme"]');
+      await newCard.locator('[data-act="run"]').click();
+      await page.waitForSelector('#rep-run:not([hidden])');
+      await page.waitForSelector('#rep-run-rows .report-grp');
+      await page.waitForSelector('#rep-run-rows .report-flag');
+      await wait(page, 1600);
     },
   },
 

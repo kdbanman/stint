@@ -22,7 +22,7 @@
   // setSetting key (the same key tt's descriptor maps from its snake_case); `kind` chooses the
   // control; `options` lists [value, label] pairs for selects/segments.
   const FIELDS = [
-    { group: 'Reporting', key: 'rounding', label: 'Rounding', hint: 'Applies at display/export only; stored time stays exact.', kind: 'toggle' },
+    { group: 'Reporting', key: 'rounding', label: 'Rounding', kind: 'toggle' },
     {
       group: 'Reporting', key: 'roundingIncrementMin', label: 'Rounding increment', kind: 'select', cast: 'number',
       options: [[6, 'nearest 6 min'], [10, 'nearest 10 min'], [15, 'nearest 15 min'], [30, 'nearest 30 min']],
@@ -32,20 +32,20 @@
       options: [['monday', 'Monday'], ['sunday', 'Sunday']],
     },
     {
-      group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', hint: 'After a timer starts.', kind: 'select', cast: 'number',
+      group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', kind: 'select', cast: 'number',
       options: [[30, '30 min'], [60, '60 min'], [90, '90 min']],
     },
     {
       group: 'Check-ins', key: 'checkinIntervalMin', label: 'Check-in interval', kind: 'select', cast: 'number',
       options: [[15, '15 min'], [30, '30 min'], [60, '60 min']],
     },
-    { group: 'System', key: 'globalHotkey', label: 'Global hotkey', hint: 'Toggles the timer from anywhere.', kind: 'hotkey' },
+    { group: 'System', key: 'globalHotkey', label: 'Global hotkey', kind: 'hotkey' },
     {
-      group: 'System', key: 'accent', label: 'Accent usage', kind: 'select',
-      options: [['system', 'System accent (primary action only)'], ['monochrome', 'Monochrome']],
+      group: 'System', key: 'accent', label: 'Accent colour', kind: 'select',
+      options: [['system', 'System accent'], ['monochrome', 'Monochrome']],
     },
     {
-      group: 'System', key: 'dateFormat', label: 'Date / number format', kind: 'select',
+      group: 'System', key: 'dateFormat', label: 'Date & number format', kind: 'select',
       options: [['system', 'System locale'], ['iso', 'ISO (24-hour)']],
     },
   ];
@@ -100,9 +100,8 @@
   }
 
   function rowHtml(f, settings) {
-    const hint = f.hint ? `<small>${esc(f.hint)}</small>` : '';
     return (
-      `<div class="set-row"><div class="set-k">${esc(f.label)}${hint}</div>` +
+      `<div class="set-row"><div class="set-k">${esc(f.label)}</div>` +
       `<div class="set-ctrl">${fieldControl(f, settings)}</div></div>`
     );
   }
@@ -138,7 +137,7 @@
     if (result && result.status === 'update-available') {
       const v = esc(result.latestVersion || '');
       const url = esc(result.releaseUrl || '');
-      pill = ` &nbsp; <a class="pill new" href="${url}" data-update-link>update available · ${v}</a>`;
+      pill = `<a class="pill new" href="${url}" data-update-link>update available · ${v}</a>`;
     }
     let line = '';
     if (result) {
@@ -155,13 +154,12 @@
       }
     }
     return (
-      `<div class="set-grp">Software Update</div>` +
-      `<div class="set-row"><div class="set-k">Current version` +
-      `<small>Date/build versioning · macOS + Linux only.</small></div>` +
+      `<div class="set-grp">Software update</div>` +
+      `<div class="set-row"><div class="set-k">Current version</div>` +
       `<div class="set-ctrl"><span class="ver">${ver}</span>${pill}</div></div>` +
-      `<div class="set-row"><div class="set-k">Check for updates` +
-      `<small>Queries GitHub Releases. Updates never touch the database.</small></div>` +
-      `<div class="set-ctrl"><button type="button" id="update-check" class="set-update-btn">Check now</button>` +
+      `<div class="set-row"><div class="set-k">Check for updates</div>` +
+      `<div class="set-ctrl"><button type="button" id="update-check" class="set-update-btn">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Check now</button>` +
       ` <span id="update-status">${line}</span></div></div>` +
       guidedInstallHtml(result, progress)
     );
@@ -186,20 +184,27 @@
     const steps = (progress && Array.isArray(progress.steps) && progress.steps.length)
       ? progress.steps
       : DEFAULT_GUIDED_STEPS;
+    const dlIcon = '<svg class="ic" aria-hidden="true"><use href="#i-download" /></svg>';
+    const okIcon = '<svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>';
+    let headIcon;
     let head;
     let action;
     if (phase === 'downloading') {
-      head = `⬇ Guided install — downloading ${version}`;
+      headIcon = dlIcon;
+      head = `Downloading ${version}`;
       action = '';
     } else if (phase === 'ready') {
-      head = `✓ Downloaded ${version}`;
-      action = `<button type="button" id="update-reveal" class="primary">Reveal installer</button>`;
+      headIcon = okIcon;
+      head = `Downloaded ${version}`;
+      action = `<button type="button" id="update-reveal" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Reveal installer</button>`;
     } else if (phase === 'error') {
+      headIcon = dlIcon;
       head = `Update download failed`;
-      action = `<button type="button" id="update-download" class="primary">Download &amp; install ${version}</button>`;
+      action = `<button type="button" id="update-download" class="primary">${dlIcon}Download &amp; install ${version}</button>`;
     } else {
+      headIcon = dlIcon;
       head = `Guided install — ${version}`;
-      action = `<button type="button" id="update-download" class="primary">Download &amp; install ${version}</button>`;
+      action = `<button type="button" id="update-download" class="primary">${dlIcon}Download &amp; install ${version}</button>`;
     }
     const barPct = Math.max(0, Math.min(100, pct));
     const showBar = phase === 'downloading';
@@ -222,11 +227,12 @@
         : '';
     return (
       `<div class="update" id="update-panel">` +
-      `<div class="uhd">${esc(head)} ${action}</div>` +
+      `<div class="uhd"><span class="uhd-t">${headIcon}${esc(head)}</span>${action}</div>` +
       `<div class="steps">${stepsHtml}</div>` +
       err +
-      `<div class="restore-note">Updates never touch the database — the artifact downloads to a temp folder, ` +
-      `not beside your data.</div>` +
+      `<div class="restore-note">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-info" /></svg>` +
+      `Updates never touch the database — the artifact downloads to a temp folder.</div>` +
       `</div>`
     );
   }
