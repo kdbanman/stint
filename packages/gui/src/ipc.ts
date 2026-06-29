@@ -173,9 +173,6 @@ export interface UiState {
     firstCheckinMin: number;
     checkinIntervalMin: number;
     globalHotkey: string;
-    /** §12 R11 — accent usage mode ('system' | 'monochrome'); distinct from the top-level
-     * `accent` colour string, which is the system accent the renderer paints when this is 'system'. */
-    accent: string;
     /** §12 R11 — date rendering mode ('system' | 'iso'). */
     dateFormat: string;
     /**
@@ -185,8 +182,6 @@ export interface UiState {
      */
     backupRetention: number;
   };
-  /** The system accent colour string (e.g. '#2f6fed') for theming — see settings.accent for the mode. */
-  accent: string;
   /**
    * §19 R06 — the date/build version string (`YYYY.M.D[.N]`, or the `0.0.0-dev` sentinel on an
    * unstamped build) the Settings → Software Update view shows. The shared @stint/core

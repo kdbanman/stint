@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Tray popover</title>
+<style>
+  :root{
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  /* desktop backdrop with a thin menu bar — the popover hangs from a tray icon */
+  body{min-height:560px;background:linear-gradient(160deg,#cdbfa8,#9f9788 60%,#7d7565)}
+  .menubar{height:26px;background:rgba(247,242,234,.86);backdrop-filter:saturate(140%) blur(8px);border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:flex-end;gap:18px;padding:0 16px;font-size:12px;color:#4a443b;font-weight:560}
+  .menubar .tray{display:inline-flex;align-items:center;gap:7px;background:rgba(0,0,0,.06);border-radius:6px;padding:2px 9px;color:var(--accent-ink);font-weight:640}
+  .menubar .tray .dot{width:7px;height:7px;background:var(--run)}
+  .menubar .clk{color:#4a443b;font-weight:560}
+  /* popover */
+  .pop-wrap{display:flex;justify-content:flex-end;padding:0 64px}
+  .notch{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:9px solid var(--paper);margin:8px 26px 0 0;filter:drop-shadow(0 -2px 1px rgba(60,42,18,.05))}
+  .pop{width:332px;margin-right:-9px;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r3);box-shadow:var(--sh-pop);overflow:hidden}
+  .pop-top{padding:18px 18px 16px}
+  .pop-state{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--run);font-weight:640}
+  .pop-clock{font-size:38px;font-weight:680;letter-spacing:-.01em;line-height:1.05;margin:8px 0 4px}
+  .pop-desc{font-weight:590;font-size:14px}
+  .pop-ctx{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .pop-tags{display:flex;gap:6px;margin-top:10px}
+  .pop-act{display:flex;gap:9px;padding:0 18px 16px}
+  .pop-act .btn{flex:1;justify-content:center}
+  .pop-sec{border-top:1px solid var(--line);padding:12px 10px 8px}
+  .pop-sec .h{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--faint);padding:0 8px 6px}
+  .qa{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r1);cursor:pointer}
+  .qa:hover{background:var(--hover)}
+  .qa .ic{color:var(--muted)}
+  .qa .qi{flex:1;min-width:0}
+  .qa .qn{font-size:13px;font-weight:560;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .qa .qm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+  .pop-foot{border-top:1px solid var(--line);display:flex;align-items:center;padding:6px 8px}
+  .pop-foot a{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:560;font-size:12.5px;flex:1}
+  .pop-foot a:hover{background:var(--hover)}
+  .pop-foot a .ic{color:var(--muted)}
+  .pop-foot a.q{flex:none;color:var(--muted)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>
+<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+</defs></svg>
+
+<div class="menubar">
+  <span class="tray"><span class="dot run"></span> 1:24:07</span>
+  <span>Wi-Fi</span><span>100%</span><span class="clk">9:41 AM</span>
+</div>
+
+<div class="pop-wrap">
+  <div>
+    <div class="notch"></div>
+    <div class="pop">
+      <div class="pop-top">
+        <div class="pop-state"><span class="dot run"></span> Running · since 09:00</div>
+        <div class="pop-clock tnum">01:24:07</div>
+        <div class="pop-desc">auth refactor</div>
+        <div class="pop-ctx">Client A · API</div>
+        <div class="pop-tags"><span class="tag">deep</span></div>
+      </div>
+      <div class="pop-act">
+        <button class="btn primary"><svg class="ic"><use href="#i-stop"/></svg> Stop</button>
+        <button class="btn"><svg class="ic"><use href="#i-swap"/></svg> Switch</button>
+      </div>
+
+      <div class="pop-sec">
+        <div class="h">Quick start</div>
+        <div class="qa">
+          <svg class="ic"><use href="#i-star"/></svg>
+          <div class="qi"><div class="qn">Standup</div><div class="qm">Client A · non-billable</div></div>
+          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+        </div>
+        <div class="qa">
+          <svg class="ic"><use href="#i-star"/></svg>
+          <div class="qi"><div class="qn">Deep work · API</div><div class="qm">Client A · billable · #deep</div></div>
+          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+        </div>
+      </div>
+
+      <div class="pop-foot">
+        <a href="timer.html">Open Stint <svg class="ic"><use href="#i-arrow"/></svg></a>
+        <a href="#" class="q" title="Quit"><svg class="ic"><use href="#i-x"/></svg></a>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

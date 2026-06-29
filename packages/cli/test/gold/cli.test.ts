@@ -487,7 +487,6 @@ describe('GOLD: settings defaults (§14)', () => {
       first_checkin_min       60
       checkin_interval_min    30
       global_hotkey           CommandOrControl+Alt+T
-      accent                  system
       date_format             system
       backup_retention        5"
     `);
@@ -502,7 +501,6 @@ describe('GOLD: settings defaults (§14)', () => {
       firstCheckinMin: 60,
       checkinIntervalMin: 30,
       globalHotkey: 'CommandOrControl+Alt+T',
-      accent: 'system',
       dateFormat: 'system',
       backupRetention: 5,
     });

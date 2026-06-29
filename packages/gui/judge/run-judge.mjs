@@ -2160,9 +2160,9 @@ async function main() {
 
   // SETTINGS_VIEW — §12 R11: the in-window Settings view. Routing to Settings renders an
   // editable control for every §14 setting (rounding toggle, rounding increment, week start,
-  // first check-in, check-in interval, global hotkey, accent usage, date format), each wired
-  // to window.stint.setSetting. Drive the real renderer: click the Settings nav, assert all
-  // eight controls render and that changing the accent-usage select fires setSetting with the
+  // first check-in, check-in interval, global hotkey, date format), each wired to
+  // window.stint.setSetting. Drive the real renderer: click the Settings nav, assert all
+  // seven controls render and that changing the date-format select fires setSetting with the
   // matching key/value. Captures main-settings.png as the rubric evidence for the controls'
   // look-and-feel, and confirms the panel stays accent-disciplined (no stray accent fill).
   await withPage(browser, settingsState(), 'index.html', async (page) => {
@@ -2193,35 +2193,34 @@ async function main() {
       return {
         visible: !document.querySelector('.view[data-view="settings"]').hidden,
         keys,
-        allEight:
+        allSeven:
           has('rounding') &&
           has('roundingIncrementMin') &&
           has('weekStart') &&
           has('firstCheckinMin') &&
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
-          has('accent') &&
           has('dateFormat'),
         offenders,
       };
     });
 
-    // Changing the accent-usage select fires a real setSetting with the chosen key/value.
-    await page.selectOption('.set-field[data-key="accent"]', 'monochrome');
-    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'accent');
+    // Changing the date-format select fires a real setSetting with the chosen key/value.
+    await page.selectOption('.set-field[data-key="dateFormat"]', 'iso');
+    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'dateFormat');
     const set = await page.evaluate(() => window.__SET_SETTING__);
 
     const ok =
       probe.visible &&
-      probe.allEight &&
+      probe.allSeven &&
       probe.offenders.length === 0 &&
       !!set &&
-      set.key === 'accent' &&
-      set.value === 'monochrome';
+      set.key === 'dateFormat' &&
+      set.value === 'iso';
     record(
       'SETTINGS_VIEW',
       ok,
-      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), accent-usage edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });

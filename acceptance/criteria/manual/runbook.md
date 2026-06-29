@@ -553,7 +553,7 @@ guard prove the gate in headless CI; this confirms it on a real desktop/DB.
 ## CHECK KEYBOARD & FOCUS (GUI) — the window is fully operable from the keyboard (§12 R14)
 
 §12 R14 requires every control to be **keyboard-reachable and focus-visible**, and the window
-to be **fully operable from the keyboard** while respecting the OS theme/accent. JUDGE
+to be **fully operable from the keyboard** while respecting the OS theme. JUDGE
 `KEYBOARD_FOCUS` (`main-focus.png`) Tab-walks the empty + running main windows in headless
 Chromium and asserts every visible control is reached and shows a ring; the renderer-static
 guard pins the `:focus-visible` ring + the toggle's aria hooks per commit. This MANUAL check
@@ -594,10 +594,10 @@ running timer for part of the walk (`tt start "auth refactor"`).
          between "Start timer" and "Stop timer" and its **pressed/running** state is announced
          (the `aria-label` + `aria-pressed` the renderer keeps current), so the running/idle
          state is conveyed without sight.
-6. Switch the OS between **light and dark** (and change the system accent) while the window is
+6. Switch the OS between **light and dark** while the window is
    open.
    - [ ] The window follows the theme and the focus ring stays visible/legible in both, and the
-         accent ring on the primary action tracks the new system accent.
+         accent ring on the primary action stays legible against both themes.
 
 ## CHECK ALL CAPABILITIES REACHABLE BY HAND (GUI) — the whole workflow with the terminal closed (§17 R10)
 
@@ -637,7 +637,7 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    - [ ] Each mutation lands; archived records drop from the active pickers but referenced
          entries keep their labels — all by hand (§12 R10).
 8. In the **Settings** view, change **every §14 setting** (rounding + increment, week start,
-   first check-in, check-in interval, global hotkey, accent usage, date format).
+   first check-in, check-in interval, global hotkey, date format).
    - [ ] Each setting persists immediately and the relevant control reflects it (§12 R11).
 9. Final tally:
    - [ ] You completed start-with-attributes → backfill → edit/split/merge/delete →
@@ -786,13 +786,13 @@ persisting over the **same `setSetting` IPC `tt config set` uses** (parity-cover
 channel), so an edit is immediately the new truth on **both** surfaces. Most of the arithmetic each
 setting drives is already proven elsewhere (rounding/week-start in reporting, check-in cadence in
 the cadence PROP); this MANUAL check covers what the headless host **cannot**: the live
-**re-registration of the global hotkey**, the **accent-usage** and **date-format** modes re-painting
+**re-registration of the global hotkey**, the **date-format** mode re-painting
 the real window against the real OS theme, and the round-trip of every control to the same DB `tt`
 reads. Run with `tt` in a second terminal on the same database.
 
 1. In the running app, click the **Settings** nav item. The panel shows the §14 settings grouped
    **Reporting / Check-ins / System**: Rounding (toggle) + Rounding increment, Week start, First
-   check-in, Check-in interval, Global hotkey, Accent usage, Date / number format.
+   check-in, Check-in interval, Global hotkey, Date / number format.
    - [ ] Each control is **pre-filled** from current state (the same values `tt config ls` prints).
 2. Change **each** control once — flip Rounding on, pick a different increment, switch Week start,
    change First check-in and Check-in interval.
@@ -802,16 +802,11 @@ reads. Run with `tt` in a second terminal on the same database.
    - [ ] The field shows the new accelerator, `tt config ls` shows `global_hotkey` updated, and the
          **new** hotkey toggles the timer from another application **without a restart** (main
          re-registers the OS shortcut live); the **old** chord no longer toggles.
-4. Set **Accent usage** to **Monochrome**.
-   - [ ] The window's accent (the primary Start/Stop button + running clock/state) drops to the
-         inked/monochrome treatment **live**; setting it back to **System accent** restores the
-         system-accent colour on those elements only (accent stays confined to the primary action +
-         running state, §15). `tt config ls` shows `accent` flipped both times.
-5. Set **Date / number format** to **ISO (24-hour)**.
+4. Set **Date / number format** to **ISO (24-hour)**.
    - [ ] Times rendered across the window (entry rows, the timer card, report headers) repaint to
          the **24-hour ISO** form **live**; switching back to **System locale** restores the locale
          rendering. `tt config ls` shows `date_format` flipped both times.
-6. From the other terminal, change a setting via `tt` (`tt config set rounding_increment_min 30`)
+5. From the other terminal, change a setting via `tt` (`tt config set rounding_increment_min 30`)
    while the Settings view is open.
    - [ ] The open panel **re-reads and updates** the affected control on the external change — the
          two surfaces stay in lockstep (the view re-renders off fresh state on every change).
@@ -819,7 +814,7 @@ reads. Run with `tt` in a second terminal on the same database.
 > The setSetting parity (the GUI Settings view ↔ `tt config set`, every §14 key) is the
 > `setSetting` parity-matrix row; JUDGE screenshots the panel headless (`SETTINGS_VIEW`,
 > `main-settings.png`) and the renderer-static guard pins the field set. This runbook confirms the
-> live hotkey re-registration, the accent-mode / date-format repaint against the real OS theme, and
+> live hotkey re-registration, the date-format repaint against the real OS theme, and
 > the cross-surface round-trip on a real desktop/DB the headless host cannot exercise.
 
 ## CHECK BUILD MATRIX — macOS + Linux only, no Windows (§19 R01)

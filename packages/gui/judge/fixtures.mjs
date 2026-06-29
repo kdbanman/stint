@@ -9,11 +9,9 @@ const DEFAULT_SETTINGS = {
   firstCheckinMin: 60,
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
-  // §12 R11 / §14 — the two settings the GUI Settings view's new controls edit.
-  accent: 'system',
+  // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
   dateFormat: 'system',
 };
-const ACCENT = '#2f6fed';
 
 // A pinned wall clock so the captured evidence is byte-for-byte reproducible: the
 // harness installs this as the page clock, the running fixture starts a fixed
@@ -28,7 +26,6 @@ export function emptyState() {
     days: [],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -73,7 +70,6 @@ export function runningState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -139,7 +135,6 @@ export function taggedState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -204,7 +199,6 @@ export function flaggedState() {
     ],
     sleepFlaggedIds: [12],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -259,7 +253,6 @@ export function splittableState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -292,7 +285,6 @@ export function editingState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -329,7 +321,6 @@ export function editableState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -376,7 +367,6 @@ export function mergeConflictState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -421,7 +411,6 @@ export function mergeAgreeState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -455,7 +444,6 @@ export function overlapWriteState() {
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -515,7 +503,6 @@ export function listState() {
     days,
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 
@@ -646,7 +633,6 @@ export function pickerState() {
     days: [{ day: '2026-06-24', entries: closed }],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
-    accent: ACCENT,
   };
 }
 

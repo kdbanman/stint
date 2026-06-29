@@ -5,24 +5,22 @@
 // over file:// in the packaged app; helpers come from window.SU (util.js, loaded first).
 //
 // This file is intentionally additive: it does not edit app.js. It hooks the Settings
-// nav-item to render the panel, mirrors the accent/date-format modes onto the renderer
-// (so app.js's plain applyAccent stays honoured), and re-reads on every external change.
+// nav-item to render the panel, mirrors the date-format mode onto the renderer, and
+// re-reads on every external change.
 (function () {
-  const { friendlyHotkey, applyAccentMode, applyDateFormat } = window.SU;
+  const { friendlyHotkey, applyDateFormat } = window.SU;
   const panel = () => document.getElementById('settings-panel');
 
-  // The live accent-usage + date-format modes. render() re-applies them off fresh getState
-  // (on startup, on every external change, and right after a setSetting), so the chosen mode
-  // is honoured: 'monochrome' maps --accent onto the ink colour (suppressing the coloured
-  // accent), and the date format drives util.js's localTime.
-  let accentMode = 'system';
+  // The live date-format mode. render() re-applies it off fresh getState (on startup, on
+  // every external change, and right after a setSetting), so the chosen format drives
+  // util.js's localTime.
   let dateFormatMode = 'system';
 
-  // §14 — the eight editable settings, in the mockup's grouped order. `key` is the camelCase
+  // §14 — the editable settings, in the mockup's grouped order. `key` is the camelCase
   // setSetting key (the same key tt's descriptor maps from its snake_case); `kind` chooses the
   // control; `options` lists [value, label] pairs for selects/segments.
   const FIELDS = [
-    { group: 'Reporting', key: 'rounding', label: 'Rounding', hint: 'Applies at display/export only; stored time stays exact.', kind: 'toggle' },
+    { group: 'Reporting', key: 'rounding', label: 'Rounding', kind: 'toggle' },
     {
       group: 'Reporting', key: 'roundingIncrementMin', label: 'Rounding increment', kind: 'select', cast: 'number',
       options: [[6, 'nearest 6 min'], [10, 'nearest 10 min'], [15, 'nearest 15 min'], [30, 'nearest 30 min']],
@@ -32,20 +30,16 @@
       options: [['monday', 'Monday'], ['sunday', 'Sunday']],
     },
     {
-      group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', hint: 'After a timer starts.', kind: 'select', cast: 'number',
+      group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', kind: 'select', cast: 'number',
       options: [[30, '30 min'], [60, '60 min'], [90, '90 min']],
     },
     {
       group: 'Check-ins', key: 'checkinIntervalMin', label: 'Check-in interval', kind: 'select', cast: 'number',
       options: [[15, '15 min'], [30, '30 min'], [60, '60 min']],
     },
-    { group: 'System', key: 'globalHotkey', label: 'Global hotkey', hint: 'Toggles the timer from anywhere.', kind: 'hotkey' },
+    { group: 'System', key: 'globalHotkey', label: 'Global hotkey', kind: 'hotkey' },
     {
-      group: 'System', key: 'accent', label: 'Accent usage', kind: 'select',
-      options: [['system', 'System accent (primary action only)'], ['monochrome', 'Monochrome']],
-    },
-    {
-      group: 'System', key: 'dateFormat', label: 'Date / number format', kind: 'select',
+      group: 'System', key: 'dateFormat', label: 'Date & number format', kind: 'select',
       options: [['system', 'System locale'], ['iso', 'ISO (24-hour)']],
     },
   ];
@@ -100,9 +94,8 @@
   }
 
   function rowHtml(f, settings) {
-    const hint = f.hint ? `<small>${esc(f.hint)}</small>` : '';
     return (
-      `<div class="set-row"><div class="set-k">${esc(f.label)}${hint}</div>` +
+      `<div class="set-row"><div class="set-k">${esc(f.label)}</div>` +
       `<div class="set-ctrl">${fieldControl(f, settings)}</div></div>`
     );
   }
@@ -138,7 +131,7 @@
     if (result && result.status === 'update-available') {
       const v = esc(result.latestVersion || '');
       const url = esc(result.releaseUrl || '');
-      pill = ` &nbsp; <a class="pill new" href="${url}" data-update-link>update available · ${v}</a>`;
+      pill = `<a class="pill new" href="${url}" data-update-link>update available · ${v}</a>`;
     }
     let line = '';
     if (result) {
@@ -155,13 +148,12 @@
       }
     }
     return (
-      `<div class="set-grp">Software Update</div>` +
-      `<div class="set-row"><div class="set-k">Current version` +
-      `<small>Date/build versioning · macOS + Linux only.</small></div>` +
+      `<div class="set-grp">Software update</div>` +
+      `<div class="set-row"><div class="set-k">Current version</div>` +
       `<div class="set-ctrl"><span class="ver">${ver}</span>${pill}</div></div>` +
-      `<div class="set-row"><div class="set-k">Check for updates` +
-      `<small>Queries GitHub Releases. Updates never touch the database.</small></div>` +
-      `<div class="set-ctrl"><button type="button" id="update-check" class="set-update-btn">Check now</button>` +
+      `<div class="set-row"><div class="set-k">Check for updates</div>` +
+      `<div class="set-ctrl"><button type="button" id="update-check" class="set-update-btn">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>Check now</button>` +
       ` <span id="update-status">${line}</span></div></div>` +
       guidedInstallHtml(result, progress)
     );
@@ -186,20 +178,27 @@
     const steps = (progress && Array.isArray(progress.steps) && progress.steps.length)
       ? progress.steps
       : DEFAULT_GUIDED_STEPS;
+    const dlIcon = '<svg class="ic" aria-hidden="true"><use href="#i-download" /></svg>';
+    const okIcon = '<svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>';
+    let headIcon;
     let head;
     let action;
     if (phase === 'downloading') {
-      head = `⬇ Guided install — downloading ${version}`;
+      headIcon = dlIcon;
+      head = `Downloading ${version}`;
       action = '';
     } else if (phase === 'ready') {
-      head = `✓ Downloaded ${version}`;
-      action = `<button type="button" id="update-reveal" class="primary">Reveal installer</button>`;
+      headIcon = okIcon;
+      head = `Downloaded ${version}`;
+      action = `<button type="button" id="update-reveal" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Reveal installer</button>`;
     } else if (phase === 'error') {
+      headIcon = dlIcon;
       head = `Update download failed`;
-      action = `<button type="button" id="update-download" class="primary">Download &amp; install ${version}</button>`;
+      action = `<button type="button" id="update-download" class="primary">${dlIcon}Download &amp; install ${version}</button>`;
     } else {
+      headIcon = dlIcon;
       head = `Guided install — ${version}`;
-      action = `<button type="button" id="update-download" class="primary">Download &amp; install ${version}</button>`;
+      action = `<button type="button" id="update-download" class="primary">${dlIcon}Download &amp; install ${version}</button>`;
     }
     const barPct = Math.max(0, Math.min(100, pct));
     const showBar = phase === 'downloading';
@@ -222,11 +221,12 @@
         : '';
     return (
       `<div class="update" id="update-panel">` +
-      `<div class="uhd">${esc(head)} ${action}</div>` +
+      `<div class="uhd"><span class="uhd-t">${headIcon}${esc(head)}</span>${action}</div>` +
       `<div class="steps">${stepsHtml}</div>` +
       err +
-      `<div class="restore-note">Updates never touch the database — the artifact downloads to a temp folder, ` +
-      `not beside your data.</div>` +
+      `<div class="restore-note">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-info" /></svg>` +
+      `Updates never touch the database — the artifact downloads to a temp folder.</div>` +
       `</div>`
     );
   }
@@ -337,7 +337,7 @@
   }
 
   function wire(host) {
-    // Selects (rounding increment, check-ins, accent, date format) — cast numeric values.
+    // Selects (rounding increment, check-ins, date format) — cast numeric values.
     for (const sel of host.querySelectorAll('select.set-field')) {
       sel.addEventListener('change', () => {
         const raw = sel.value;
@@ -394,10 +394,8 @@
       return;
     }
     const settings = (state && state.settings) || {};
-    // Mirror the editable modes so the renderer keeps honouring them across app.js loads.
-    accentMode = settings.accent === 'monochrome' ? 'monochrome' : 'system';
+    // Mirror the editable mode so the renderer keeps honouring it across app.js loads.
     dateFormatMode = settings.dateFormat === 'iso' ? 'iso' : 'system';
-    applyAccentMode(accentMode, state && state.accent);
     applyDateFormat(dateFormatMode);
     host.innerHTML = panelHtml(settings);
     wire(host);
@@ -414,12 +412,11 @@
   if (navItem) navItem.addEventListener('click', () => void render());
 
   // Re-read on every external change (a tt write may have changed a setting) so the panel +
-  // the accent/date-format modes stay current. Also render once on startup so the modes are
-  // applied from first paint even before the Settings view is opened.
+  // the date-format mode stay current. Also render once on startup so the mode is applied
+  // from first paint even before the Settings view is opened.
   if (window.stint && window.stint.onChange) {
     window.stint.onChange(() => {
-      // Only re-fetch when the Settings view is the visible one (cheap-guard); always keep
-      // the accent/date modes applied via the wrapped applyAccent on app.js's own load.
+      // Only re-fetch when the Settings view is the visible one (cheap-guard).
       const section = document.querySelector('.view[data-view="settings"]');
       if (section && !section.hidden) void render();
     });

@@ -11,12 +11,32 @@
 // asserts this), and accent discipline (§15) holds — the dialog chrome is monochrome grays
 // and only the primary Save button carries the accent (button.primary). The dialog opens
 // over the main window, which the JUDGE ACCENT_DISCIPLINE probe also scans, so every other
-// control here stays gray.
+// control here stays gray. The look mirrors context/mockups/edit-entry.html and
+// context/mockups/merge-conflict.html: the dialog sits one rung above content (sh-modal),
+// fields carry quiet labels, billable is a toggle, the two-step delete gate lives in the
+// footer, and a disagreeing merge resolves field-by-field with auto-kept rows.
 window.SE = (function () {
-  const { localTime } = window.SU;
+  const { localTime, icon } = window.SU;
 
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  }
+
+  // The destructive-confirm decision, mirrored from core's src/confirm.ts (PRD §12 R13
+  // / §17 R11) — the page is a classic file:// script and cannot import the TS module (the
+  // renderer-static guard forbids core / Node imports here), so the proven two-stage
+  // gate is mirrored as pure DOM-free helpers, exactly as app.js mirrors core elsewhere. A
+  // delete is armed (`requested`) on the first click and may run ONLY once an explicit confirm
+  // moves it to `confirmed`; mayProceed gates window.stint.remove so a stray click destroys
+  // nothing. confirm.test.ts proves the decision shape these mirror.
+  function requestConfirm() {
+    return { stage: 'requested' };
+  }
+  function grantConfirm(gate) {
+    return { ...gate, stage: 'confirmed' };
+  }
+  function mayProceed(gate) {
+    return gate.stage === 'confirmed';
   }
 
   // datetime-local wants `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix). Mirrors
@@ -38,6 +58,15 @@ window.SE = (function () {
   // Remove any open editor dialog (only one at a time). Used by close and before re-open.
   function closeEditor() {
     document.querySelector('.editor-backdrop')?.remove();
+  }
+
+  // The leading "(no client)" / "(no project)" choice every entity select carries: an
+  // empty-valued option the main process maps to null. Shared so the two selects can't drift.
+  function createEmptyOption(text) {
+    const opt = document.createElement('option');
+    opt.value = '';
+    opt.textContent = text;
+    return opt;
   }
 
   /**
@@ -76,25 +105,32 @@ window.SE = (function () {
         `<input type="datetime-local" class="ed-end" /></label>`;
 
     dialog.innerHTML =
-      `<div class="ed-title">Edit entry</div>` +
+      `<div class="ed-head"><div class="ed-title">Edit entry</div>` +
+      `<button type="button" class="iconbtn ed-close" aria-label="Close">${icon('x')}</button></div>` +
+      `<div class="ed-body">` +
+      `<div class="ed-grp">Work</div>` +
       `<label class="ed-field ed-desc-field"><span>Description</span>` +
       `<textarea class="ed-desc" rows="2" placeholder="(no description)"></textarea></label>` +
       `<div class="ed-row">` +
       `<label class="ed-field"><span>Client</span><select class="ed-client"></select></label>` +
       `<label class="ed-field"><span>Project</span><select class="ed-project"></select></label>` +
       `</div>` +
-      `<div class="ed-row">` +
-      `<label class="ed-field"><span>Start</span><input type="datetime-local" class="ed-start" /></label>` +
-      endField +
-      `</div>` +
       `<label class="ed-field ed-tags-field"><span>Tags</span>` +
       `<span class="chips ed-chips"></span></label>` +
-      `<label class="ed-bill"><input type="checkbox" class="ed-bill-box" /> Billable</label>` +
-      `<div class="ed-split"><button type="button" class="small ghost ed-split-btn">Split at instant…</button></div>` +
-      `<div class="ed-actions">` +
-      `<button type="button" class="small primary ed-save">Save</button>` +
+      `<label class="ed-bill"><span class="ed-sw"><input type="checkbox" class="ed-bill-box" /><i></i></span> Billable</label>` +
+      `<div class="ed-grp ed-grp-time">Time</div>` +
+      `<div class="ed-row">` +
+      `<label class="ed-field"><span>Start</span><input type="datetime-local" class="ed-start tnum" /></label>` +
+      endField +
+      `</div>` +
+      `<div class="ed-split"><button type="button" class="small ghost ed-split-btn">${icon('edit')}Split at instant…</button></div>` +
+      `</div>` +
+      `<div class="ed-foot">` +
+      `<div class="ed-gate">` +
       `<button type="button" class="small ghost ed-cancel">Cancel</button>` +
-      `<button type="button" class="small ghost danger ed-delete">Delete</button>` +
+      `<button type="button" class="small ghost danger ed-delete">${icon('flag')}Delete</button>` +
+      `</div>` +
+      `<button type="button" class="small primary ed-save">${icon('check')}Save</button>` +
       `</div>`;
     backdrop.appendChild(dialog);
     document.body.appendChild(backdrop);
@@ -115,10 +151,7 @@ window.SE = (function () {
 
     function fillClients() {
       clientSel.innerHTML = '';
-      const none = document.createElement('option');
-      none.value = '';
-      none.textContent = '(no client)';
-      clientSel.appendChild(none);
+      clientSel.appendChild(createEmptyOption('(no client)'));
       for (const c of clientList) {
         const opt = document.createElement('option');
         opt.value = String(c.id);
@@ -132,10 +165,7 @@ window.SE = (function () {
     // The project select is populated for the chosen client from the same source tt uses.
     async function fillProjects(clientId, preselectName) {
       projectSel.innerHTML = '';
-      const none = document.createElement('option');
-      none.value = '';
-      none.textContent = '(no project)';
-      projectSel.appendChild(none);
+      projectSel.appendChild(createEmptyOption('(no project)'));
       projectSel.disabled = clientId == null;
       if (clientId == null) return;
       const projects = (await window.stint.listProjects({ clientId })) || [];
@@ -223,7 +253,7 @@ window.SE = (function () {
         form.className = 'ed-split-form';
         form.innerHTML =
           `<span class="ed-split-q">Split at</span>` +
-          `<input type="datetime-local" class="ed-split-input" />` +
+          `<input type="datetime-local" class="ed-split-input tnum" />` +
           `<button type="button" class="small primary ed-split-go">Split</button>` +
           `<button type="button" class="small ghost ed-split-cancel">Cancel</button>` +
           `<span class="ed-split-err" hidden></span>`;
@@ -252,6 +282,7 @@ window.SE = (function () {
 
     // --- Save / Cancel / Delete ------------------------------------------------------
     dialog.querySelector('.ed-cancel').addEventListener('click', () => closeEditor());
+    dialog.querySelector('.ed-close').addEventListener('click', () => closeEditor());
     backdrop.addEventListener('click', (ev) => {
       if (ev.target === backdrop) closeEditor(); // click the dim backdrop to dismiss
     });
@@ -294,24 +325,37 @@ window.SE = (function () {
       onDone();
     });
 
-    // Delete is destructive (§06 R1): the first click arms an explicit confirm; only the
-    // confirm tap calls window.stint.remove.
-    const deleteBtn = dialog.querySelector('.ed-delete');
-    deleteBtn.addEventListener('click', () => {
-      const wrap = document.createElement('span');
-      wrap.className = 'ed-confirm-delete';
-      wrap.innerHTML =
-        `<span class="ed-confirm-q">Confirm delete?</span>` +
+    // Delete is destructive (§06 R1 / §12 R13): the first click only ARMS the gate
+    // (requestConfirm → `requested`); the confirm tap GRANTS it (`confirmed`) and the remove
+    // runs only behind mayProceed — so a stray click destroys nothing. Matching edit-entry.html,
+    // the arming click swaps the Cancel + Delete pair for a worded gate (flag + "Delete this
+    // entry?" + a danger Delete and a Keep escape). The state machine is the confirm.ts mirror
+    // above; the DOM only reflects each stage.
+    const gate = dialog.querySelector('.ed-gate');
+    const idleGate = gate.innerHTML; // the unarmed Cancel + Delete pair, restored by Keep
+    function wireIdleGate() {
+      gate.classList.remove('ed-confirm-delete');
+      gate.innerHTML = idleGate;
+      gate.querySelector('.ed-cancel').addEventListener('click', () => closeEditor());
+      gate.querySelector('.ed-delete').addEventListener('click', armDelete);
+    }
+    function armDelete() {
+      const armed = requestConfirm(); // `requested` — not yet permitted
+      gate.classList.add('ed-confirm-delete');
+      gate.innerHTML =
+        `<span class="ed-confirm-q">${icon('flag')}<b>Delete this entry?</b></span>` +
         `<button type="button" class="small danger ed-confirm-delete-go">Delete</button>` +
-        `<button type="button" class="small ghost ed-confirm-cancel">Cancel</button>`;
-      deleteBtn.replaceWith(wrap);
-      wrap.querySelector('.ed-confirm-delete-go').addEventListener('click', async () => {
+        `<button type="button" class="small ghost ed-confirm-cancel">Keep</button>`;
+      gate.querySelector('.ed-confirm-delete-go').addEventListener('click', async () => {
+        const granted = grantConfirm(armed); // the explicit confirm tap
+        if (!mayProceed(granted)) return; // remove() is reachable ONLY past this gate
         await window.stint.remove({ id: entry.id });
         closeEditor();
         onDone();
       });
-      wrap.querySelector('.ed-confirm-cancel').addEventListener('click', () => wrap.replaceWith(deleteBtn));
-    });
+      gate.querySelector('.ed-confirm-cancel').addEventListener('click', wireIdleGate);
+    }
+    gate.querySelector('.ed-delete').addEventListener('click', armDelete);
 
     dialog.querySelector('.ed-desc').focus();
     return dialog;
@@ -343,8 +387,12 @@ window.SE = (function () {
     openMergeConflict(list, onDone);
   }
 
-  // The in-dialog merge conflict prompt (§06 R3, §12 R6). Offered only when the selection
-  // disagrees on client/project or billable; it resolves which to keep before any merge.
+  // The in-dialog merge conflict prompt (§06 R3, §12 R6), styled to
+  // context/mockups/merge-conflict.html: a modal one rung above content resolving the
+  // disagreeing attributes field-by-field with accent radios, then listing the
+  // unconditionally-kept fields (description, tags, span) as auto-kept "agree" rows so the
+  // user sees exactly what merges. It sends { ids, winnerId, billable } — the winning
+  // entry's id, never a resolved name.
   function openMergeConflict(entries, onDone) {
     closeEditor();
     const backdrop = document.createElement('div');
@@ -364,28 +412,64 @@ window.SE = (function () {
     const clientChoices = [...seen.entries()];
     const billableConflict = new Set(entries.map((e) => !!e.billable)).size > 1;
 
+    // The merged span runs from the earliest start to the latest end.
+    const sorted = entries.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const spanLabel =
+      last.endUtc != null ? `${localTime(first.startUtc)} – ${localTime(last.endUtc)}` : localTime(first.startUtc);
+
     const clientOpts = clientChoices
       .map(
         ([label, id], i) =>
-          `<label class="mc-opt"><input type="radio" name="ed-mc-client" class="mc-client" ` +
-          `value="${id}"${i === 0 ? ' checked' : ''} /> ${escapeHtml(label)}</label>`,
+          `<label class="mc-opt${i === 0 ? ' on' : ''}"><input type="radio" name="ed-mc-client" class="mc-client" ` +
+          `value="${id}"${i === 0 ? ' checked' : ''} /><span class="rad"></span>` +
+          `<span class="ot"><b>${escapeHtml(label)}</b></span></label>`,
       )
       .join('');
     const billRow = billableConflict
-      ? `<div class="mc-row mc-bill-row"><span class="mc-q">Billable?</span>` +
-        `<label class="mc-opt"><input type="radio" name="ed-mc-bill" class="mc-bill" value="1" checked /> Billable</label>` +
-        `<label class="mc-opt"><input type="radio" name="ed-mc-bill" class="mc-bill" value="0" /> Non-billable</label></div>`
+      ? `<div class="conf mc-bill-row"><div class="mc-q">Billable</div><div class="opts">` +
+        `<label class="mc-opt on"><input type="radio" name="ed-mc-bill" class="mc-bill" value="1" checked /><span class="rad"></span><span class="ot"><b>Billable</b></span></label>` +
+        `<label class="mc-opt"><input type="radio" name="ed-mc-bill" class="mc-bill" value="0" /><span class="rad"></span><span class="ot"><b>Non-billable</b></span></label></div></div>`
       : '';
+
+    // Auto-kept rows: the fields core merges unconditionally, shown so nothing is a surprise.
+    const keptDesc = sorted
+      .map((e) => (e.description ?? '').trim())
+      .filter(Boolean)
+      .join(' · ');
+    const keptTags = [...new Set(entries.flatMap((e) => e.tags ?? []))].join(' · ');
+    const agreeRow = (label, value) =>
+      value
+        ? `<div class="agree">${icon('check')}<b>${label}</b><span class="val tnum">${escapeHtml(value)}</span></div>`
+        : '';
+
     dialog.innerHTML =
-      `<div class="ed-title">These entries disagree — which should the merged entry keep?</div>` +
-      `<div class="mc-row"><span class="mc-q">Client / project</span>${clientOpts}</div>` +
+      `<div class="ed-head"><div class="ed-title">Merge ${entries.length} entries</div>` +
+      `<button type="button" class="iconbtn mc-close" aria-label="Close">${icon('x')}</button></div>` +
+      `<div class="ed-body">` +
+      `<div class="conf mc-row"><div class="mc-q">Client / project</div><div class="opts">${clientOpts}</div></div>` +
       billRow +
-      `<div class="ed-actions">` +
-      `<button type="button" class="small primary mc-merge">Merge</button>` +
+      agreeRow('Description', keptDesc) +
+      agreeRow('Tags', keptTags) +
+      agreeRow('Span', spanLabel) +
+      `</div>` +
+      `<div class="ed-foot">` +
       `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
+      `<button type="button" class="small primary mc-merge">${icon('swap')}Merge</button>` +
       `</div>`;
     backdrop.appendChild(dialog);
     document.body.appendChild(backdrop);
+
+    // The accent rides the selected radio's row; clicking a radio moves the .on lift.
+    function syncRadioRows(name) {
+      for (const r of dialog.querySelectorAll(`input[name="${name}"]`)) {
+        r.closest('.mc-opt')?.classList.toggle('on', r.checked);
+      }
+    }
+    dialog.querySelectorAll('.mc-client, .mc-bill').forEach((r) => {
+      r.addEventListener('change', () => syncRadioRows(r.name));
+    });
 
     dialog.querySelector('.mc-merge').addEventListener('click', async () => {
       const winnerId = Number(dialog.querySelector('.mc-client:checked').value);
@@ -397,6 +481,7 @@ window.SE = (function () {
       onDone(ack);
     });
     dialog.querySelector('.mc-cancel').addEventListener('click', () => closeEditor());
+    dialog.querySelector('.mc-close').addEventListener('click', () => closeEditor());
     backdrop.addEventListener('click', (ev) => {
       if (ev.target === backdrop) closeEditor();
     });
