@@ -12,13 +12,19 @@
   </head>
   <body class="popover">
     <div class="pop idle" id="pop">
-      <div class="state" id="state">idle</div>
-      <div class="count" id="count">00:00:00</div>
-      <div class="ctx" id="ctx">nothing running</div>
-      <div class="row">
-        <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
-        <button id="switch" hidden>Switch</button>
-        <button id="open" aria-label="Open the main Stint window">Open Stint</button>
+      <div class="pop-top">
+        <div class="pop-state" id="state"><span class="pop-dot"></span> idle</div>
+        <div id="count" class="pop-clock tnum">00:00:00</div>
+        <div class="pop-desc" id="desc" hidden></div>
+        <div class="pop-ctx" id="ctx">nothing running</div>
+        <div class="pop-tags" id="tags" hidden></div>
+      </div>
+      <div class="pop-act">
+        <button class="btn primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
+        <button class="btn" id="switch" hidden>Switch</button>
+      </div>
+      <div class="pop-foot">
+        <button class="pop-open" id="open" aria-label="Open the main Stint window">Open Stint</button>
       </div>
     </div>
     <script src="util.js"></script>

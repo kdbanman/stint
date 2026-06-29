@@ -21,7 +21,6 @@ import {
   Notification,
   ipcMain,
   nativeTheme,
-  systemPreferences,
   dialog,
 } from 'electron';
 import { watch, writeFileSync, type FSWatcher } from 'node:fs';
@@ -134,14 +133,6 @@ function trayIcon(): Electron.NativeImage {
   const img = nativeImage.createFromBitmap(buf, { width: size, height: size });
   img.setTemplateImage(true);
   return img;
-}
-
-function accentColor(): string {
-  try {
-    return '#' + systemPreferences.getAccentColor().slice(0, 6);
-  } catch {
-    return '#2f6fed';
-  }
 }
 
 // ---------------------------------------------------------------- transitions
@@ -405,11 +396,11 @@ function listEntries(q: ListEntriesQuery): EntryListView {
 
 function registerIpc(): void {
   const handlers: Record<string, (payload: unknown) => unknown> = {
-    getState: () => buildUiState(store, accentColor()),
+    getState: () => buildUiState(store),
     // §09 R7: free-text search over the day-grouped history list. The query rides inside
     // the payload and narrows the listed entries through core (parity with `tt list
     // --search`); the returned UiState is painted exactly as getState's is.
-    search: (p) => buildUiState(store, accentColor(), { search: (p as { query?: string })?.query }),
+    search: (p) => buildUiState(store, { search: (p as { query?: string })?.query }),
     // §12 R9: the Entries view's control bar. Read-only (no refreshAll): resolve the range
     // (a preset through core's resolveRange — the same rule the report picker drives — or
     // the explicit custom from/to), list the entries through the SAME store.listEntries the

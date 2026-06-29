@@ -1247,7 +1247,7 @@ function presetKeyFull(spoken: string): 'today' | 'week' | 'last-week' | 'month'
 
 /**
  * §12 R11 / §14 — map a spoken setting name to its snake_case key (the key both surfaces
- * accept). The settings feature speaks in ubiquitous language ("week start", "accent usage",
+ * accept). The settings feature speaks in ubiquitous language ("week start",
  * "date format"); this resolves each to the descriptor key `tt config set` / core use.
  */
 function settingKey(spoken: string): string {
@@ -1258,8 +1258,6 @@ function settingKey(spoken: string): string {
     'first check-in': 'first_checkin_min',
     'check-in interval': 'checkin_interval_min',
     'global hotkey': 'global_hotkey',
-    'accent usage': 'accent',
-    accent: 'accent',
     'date format': 'date_format',
   };
   const key = KEYS[spoken.trim().toLowerCase()];

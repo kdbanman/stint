@@ -5,8 +5,6 @@
 import type { Db } from './db.js';
 
 export type WeekStart = 'monday' | 'sunday';
-/** Accent usage (PRD §12 R11, §15): the system accent on the primary action, or fully monochrome. */
-export type AccentMode = 'system' | 'monochrome';
 /** Date format (PRD §12 R11): the runner's locale, or an unambiguous ISO rendering. */
 export type DateFormat = 'system' | 'iso';
 
@@ -22,11 +20,6 @@ export interface Settings {
   checkinIntervalMin: number;
   /** Global hotkey, in Electron accelerator form. */
   globalHotkey: string;
-  /**
-   * §12 R11 — accent usage. 'system' lets the GUI paint the system accent on the primary
-   * action / running state; 'monochrome' suppresses it entirely (the chrome stays inked).
-   */
-  accent: AccentMode;
   /**
    * §12 R11 — date/number rendering. 'system' uses the runner's locale; 'iso' renders an
    * unambiguous ISO time. A pure display preference — stored instants are always UTC ISO.
@@ -47,7 +40,6 @@ export const DEFAULT_SETTINGS: Settings = {
   firstCheckinMin: 60,
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
-  accent: 'system',
   dateFormat: 'system',
   backupRetention: 5,
 };
@@ -109,14 +101,6 @@ export const SETTING_DESCRIPTORS: SettingDescriptor[] = [
     validate: (v) => requirePositiveMinutes('checkin_interval_min', v),
   },
   { key: 'globalHotkey', snake: 'global_hotkey', parse: (r) => r },
-  {
-    key: 'accent',
-    snake: 'accent',
-    parse: (r) => (r === 'system' || r === 'monochrome' ? r : undefined),
-    validate: (v) => {
-      if (v !== 'system' && v !== 'monochrome') throw new Error('accent must be system or monochrome');
-    },
-  },
   {
     key: 'dateFormat',
     snake: 'date_format',

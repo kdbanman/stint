@@ -2,7 +2,7 @@
 // grouped by day with flags in context, a one-tap subtract on slept entries, an
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (util.js, loaded first).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, applyAccent, tagDiff, deriveView } = window.SU;
+const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, tagDiff, deriveView } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -54,7 +54,6 @@ async function load() {
   state = searchQuery && !entryCtrlActive
     ? await window.stint.search({ query: searchQuery })
     : await window.stint.getState();
-  applyAccent(state.accent);
   // §12 R9: when the control bar is active, the entries section is the queried groups —
   // re-run the query on every (re)load so a tt write keeps the grouped/filtered view fresh.
   // Otherwise entryGroups stays null and render() paints the day-grouped state.days.
@@ -95,13 +94,23 @@ function clearOverlapBanner() {
   banner.hidden = true;
 }
 
+// The compact glance summary line shared by render() (data repaint) and tick() (per-second
+// advance), so both build the same markup: the run dot + "running" + the live elapsed +
+// description + tags while a timer runs, or a plain "idle" face. A pure function of the
+// running entry (null when idle) keeps the two call sites in lockstep.
+function summaryHtml(running) {
+  if (!running) return '<b>idle</b>';
+  return (
+    `<span class="run-dot" aria-hidden="true"></span> <b>running</b> ` +
+    `${fmtDur(elapsed(running.startUtc))} · ${escapeHtml(running.description ?? 'your timer')}${tagsHtml(running)}`
+  );
+}
+
 function render() {
   if (!state) return;
   const running = state.status.running ? state.status.entry : null;
 
-  $('summary').innerHTML = running
-    ? `▸ <b>running</b> ${fmtDur(elapsed(running.startUtc))} · ${escapeHtml(running.description ?? 'your timer')}${tagsHtml(running)}`
-    : '■ idle';
+  $('summary').innerHTML = summaryHtml(running);
 
   // §12 R04: the Entries view hosts only the COMPACT STRIP; the full Active-Timer card lives
   // in the Timer view. Paint both from the same running state so a write from either view (the
@@ -352,7 +361,7 @@ function dayBlock(day) {
   const total = day.entries.reduce((s, e) => s + e.billableSeconds, 0);
   const head = document.createElement('div');
   head.className = 'day-head';
-  head.innerHTML = `<span>${day.day}</span><span>${fmtHours(total)}</span>`;
+  head.innerHTML = `<span>${escapeHtml(day.day)}</span><span class="dsum tnum">${fmtHours(total)}</span>`;
   wrap.appendChild(head);
   for (const e of day.entries) wrap.appendChild(entryRow(e));
   return wrap;
@@ -367,7 +376,7 @@ function groupBlock(key, entries, billableSeconds) {
   wrap.className = 'day';
   const head = document.createElement('div');
   head.className = 'day-head';
-  head.innerHTML = `<span>${escapeHtml(key)}</span><span>${fmtHours(billableSeconds)}</span>`;
+  head.innerHTML = `<span>${escapeHtml(key)}</span><span class="dsum tnum">${fmtHours(billableSeconds)}</span>`;
   wrap.appendChild(head);
   for (const e of entries) wrap.appendChild(entryRow(e));
   return wrap;
@@ -403,7 +412,7 @@ function entryRow(e) {
   }
 
   const time = document.createElement('div');
-  time.className = 'time';
+  time.className = 'time tnum';
   time.textContent = e.endUtc ? `${localTime(e.startUtc)}–${localTime(e.endUtc)}` : `${localTime(e.startUtc)}–now`;
 
   const desc = document.createElement('div');
@@ -418,7 +427,7 @@ function entryRow(e) {
     overlapBannerHtml(e);
 
   const dur = document.createElement('div');
-  dur.className = 'dur';
+  dur.className = 'dur tnum';
   dur.innerHTML = durHtml(e);
 
   row.append(sel, time, desc, dur);
@@ -473,17 +482,19 @@ function overlapBannerHtml(e) {
 function actionsHtml(e) {
   const actions = [];
   if (e.sleptThrough) {
-    const label = e.excludedSeconds > 0 ? 'Restore' : 'Subtract sleep';
+    const restore = e.excludedSeconds > 0;
+    const label = restore ? 'Restore' : 'Subtract sleep';
+    const icon = restore ? 'i-restore' : 'i-moon';
     // §12 R14: a discernible aria-label so the action button reads meaningfully in the
     // accessibility tree (the visible label already does, but keep the hook explicit).
-    actions.push(`<button class="small" data-act="subtract" aria-label="${label}">${label}</button>`);
+    actions.push(`<button class="small" data-act="subtract" aria-label="${label}"><svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>`);
   }
   // §12 R6: the per-row kebab opens the consolidated entry editor (window.SE.openEditor) —
   // one modal surfacing every tt-editable field plus Split, the GUI counterpart to
   // `tt edit`/`tt split`. The inline Edit/tags/split/delete affordances below stay too, so
   // a quick single-field fix never needs the modal; the kebab is the all-fields entry point.
-  actions.push('<button class="small ghost kebab" data-act="menu" aria-label="Edit entry">⋯</button>');
-  actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields">Edit</button>');
+  actions.push('<button class="small ghost kebab" data-act="menu" aria-label="Edit entry"><svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg></button>');
+  actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg>Edit</button>');
   // §07: an in-context tag editor — chips are editable where they show, without opening
   // the full edit form. Offered on every row (including the open/running one); tags are
   // independent of the open/closed state.
@@ -582,7 +593,7 @@ function openConflictPrompt(entries) {
       `<label class="mc-opt"><input type="radio" name="mc-bill" class="mc-bill" value="0" /> Non-billable</label></div>`
     : '';
   panel.innerHTML =
-    `<div class="mc-title">These entries disagree — which should the merged entry keep?</div>` +
+    `<div class="mc-title">Which should the merged entry keep?</div>` +
     `<div class="mc-row"><span class="mc-q">Client / project</span>${clientOpts}</div>` +
     billRow +
     `<div class="mc-actions">` +
@@ -808,7 +819,7 @@ async function openEditForm(row, e) {
     ? ''
     : `<label class="edit-field"><span>End</span>` +
       `<span class="range-field"><input type="datetime-local" class="edit-end" />` +
-      `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker">▦</button></span></label>`;
+      `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>`;
   form.innerHTML =
     `<div class="edit-row">` +
     `<input type="text" class="edit-desc" placeholder="(no description)" />` +
@@ -816,7 +827,7 @@ async function openEditForm(row, e) {
     `<div class="edit-row">` +
     `<label class="edit-field"><span>Start</span>` +
     `<span class="range-field"><input type="datetime-local" class="edit-start" />` +
-    `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker">▦</button></span></label>` +
+    `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>` +
     endField +
     `</div>` +
     `<div class="edit-row">` +
@@ -945,7 +956,7 @@ function escapeHtml(s) {
 function tick() {
   if (!state?.status.running) return;
   const e = state.status.entry;
-  $('summary').innerHTML = `▸ <b>running</b> ${fmtDur(elapsed(e.startUtc))} · ${escapeHtml(e.description ?? 'your timer')}${tagsHtml(e)}`;
+  $('summary').innerHTML = summaryHtml(e);
   const clock = $('timer-clock');
   if (clock) clock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
   // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card.
@@ -1780,7 +1791,7 @@ $('add-tag').addEventListener('click', () => {
 
 // §05 R09: render the Timer view's favorites rail from the same listFavorites capability tt
 // exposes (`tt fav ls`). Each pinned favorite shows its name + client/project + tags, with a
-// kebab (⋯) opening Rename / Unpin — over window.stint.renameFavorite / unpinFavorite (no DB
+// kebab opening Rename / Unpin — over window.stint.renameFavorite / unpinFavorite (no DB
 // in the page), at parity with `tt fav rename` / `tt fav rm`. The Pin-as-favorite control
 // captures the running timer's template (or, when idle, the Start form's attributes) via
 // window.stint.pinFavorite. The rail repaints over the `changed` broadcast on every write.
@@ -1803,20 +1814,26 @@ async function renderFavorites() {
 function favoriteChip(f) {
   const card = document.createElement('div');
   card.className = 'fav-card';
-  // A favorite carries client/project IDS (not names); the rail's primary handle is the name,
-  // with the captured description as the secondary line and the tags as monochrome chips.
-  const tags = (f.tags ?? []).map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
+  // A favorite carries client/project IDS (not names), so the rail's single metadata line is
+  // built from what the view shape holds: the captured description, the billable word (colour
+  // is never the only signal, so it is spelled out) and any tags as #handles. The name is the
+  // primary handle above it.
+  const tagBits = (f.tags ?? []).map((t) => `#${t}`);
+  const meta = [f.description, f.billable ? 'billable' : 'non-billable', ...tagBits]
+    .filter(Boolean)
+    .join(' · ');
   card.innerHTML =
-    `<div class="fav-card-main">` +
-    `<span class="fav-name">${escapeHtml(f.name)}</span>` +
-    (f.description ? `<span class="where">${escapeHtml(f.description)}</span>` : '') +
-    (tags ? `<span class="fav-tags">${tags}</span>` : '') +
+    // §15: the star is the favorites mark — a monochrome line icon, never accent-coloured.
+    `<span class="star"><svg class="ic" aria-hidden="true"><use href="#i-star" /></svg></span>` +
+    `<div class="fi">` +
+    `<div class="fav-name">${escapeHtml(f.name)}</div>` +
+    (meta ? `<div class="fm">${escapeHtml(meta)}</div>` : '') +
     `</div>` +
     // §05 R10: one-click Resume — start a fresh timer from this favorite's template over the
     // startFavorite IPC (parity with `tt fav start` / `tt start --fav`). The `changed` broadcast
     // the write fans out repaints the rail + Active-Timer card.
-    `<button type="button" class="resume" data-act="fav-resume">Resume</button>` +
-    `<button type="button" class="fav-kebab" data-act="fav-menu" title="favorite actions">⋯</button>`;
+    `<button type="button" class="resume" data-act="fav-resume"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Resume</button>` +
+    `<button type="button" class="fav-kebab" data-act="fav-menu" aria-label="Favorite actions"><svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg></button>`;
   card.querySelector('[data-act="fav-resume"]').addEventListener('click', async (ev) => {
     ev.stopPropagation();
     await window.stint.startFavorite({ name: f.name });

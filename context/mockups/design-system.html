@@ -177,19 +177,58 @@
 </defs></svg>
 <div class="doc">
   <h1>Stint “Calm” · Warm Paper</h1>
-  <p class="lead">One shared language for every surface — sidebar, Timer, Entries, Reports, Settings, the entry editor and the time-range picker. Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — on a warm ivory canvas with a single clay accent.</p>
+  <p class="lead">One shared language for every surface — the sidebar, Timer, Entries, Clients, Reports, Settings, the entry editor, the time-range picker, the menu-bar tray popover, and the focused flows (software update, merge, sleep review). Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — on a warm ivory canvas with a single clay accent.</p>
 
   <h2>Principles</h2>
   <div class="two">
     <div class="panel">
       <p class="rule"><b>One rationed accent.</b> The canvas is a warm monochrome. The clay accent (#C8623E) appears only on the single primary action per view, the active nav item, and focus rings — never decoratively.</p>
       <p class="rule"><b>Soft, layered depth.</b> Content cards rest with a gentle shadow; modals and popovers float higher. No nested cards, no decorative tinted or dashed boxes.</p>
-      <p class="rule"><b>Quiet by default.</b> No baked-in spec annotations, no in-app note-strips, no PRD §-refs. Helper text earns its place or moves into an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance.</p>
+      <p class="rule"><b>The UI speaks for itself.</b> No unnecessary text — no annotations, no control instructions, no explanatory captions, no reassurance copy, no spec/§-refs. A control's label, state, and shape carry its meaning; if something seems to need explaining, redesign it or move the detail behind an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance rather than printing prose on the surface.</p>
     </div>
     <div class="panel">
       <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
       <p class="rule"><b>4px grid, generous air.</b> Every pad, gap, and height is a multiple of 4, with roomy margins. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
       <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
+    </div>
+  </div>
+
+  <h2>Fluent foundations</h2>
+  <p class="rule" style="margin:0 0 16px;max-width:740px">Microsoft's Fluent Design System rests on <b>five environmental elements</b> — light, depth, motion, material, scale — under <b>three Fluent&nbsp;2 principles</b> — familiarity, inclusivity, consistency. Stint keeps the <i>discipline</i> of each but dials the showy parts (acrylic blur, reveal glow, parallax) down to suit a calm, local, single-user desktop tool. Here is what each means and how this system applies it.</p>
+
+  <div class="two">
+    <div class="panel">
+      <p class="rule"><b>Light — draw the eye, don't decorate.</b> Fluent uses light to guide attention (reveal highlight, focus glow). Our only "light" is the clay focus ring (<span class="tnum">--ring</span>) and the warm hover wash (<span class="tnum">--hover</span>). The single primary action is the brightest thing in a view; everything else stays quiet so the eye always lands in one place.</p>
+    </div>
+    <div class="panel">
+      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>). The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel">
+      <p class="rule"><b>Motion — functional, short, rare.</b> Fluent uses connected animation and parallax for continuity. We keep motion to ~120ms state changes: toggles slide, a chosen segment lifts, the running dot is the one persistent cue. No parallax, no decorative transitions, nothing that moves without meaning.</p>
+    </div>
+    <div class="panel">
+      <p class="rule"><b>Material — warm paper, not glass.</b> Fluent's acrylic and mica make surfaces translucent. We swap translucency for opaque warm paper on an ivory canvas; the lone nod to material is the menu bar's faint blur where it meets the OS. Material restraint means no tinted, dashed, or decorative boxes — surface is signalled by elevation alone.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel" style="grid-column:1/-1">
+      <p class="rule"><b>Scale — one language, many sizes, on a 4px grid.</b> Fluent scales a single design across form factors from a four-pixel base unit. The same tokens, type ramp, controls and icons run unchanged from the 332px menu-bar tray popover to the 1040px main window — every pad, gap and height a multiple of 4, every corner one of the fixed radius trio (8&nbsp;controls&nbsp;/&nbsp;12&nbsp;cards&nbsp;/&nbsp;16&nbsp;window&nbsp;&amp;&nbsp;overlays).</p>
+    </div>
+  </div>
+
+  <div class="two" style="margin-top:18px">
+    <div class="panel">
+      <p class="rule"><b>Familiarity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — build on what the user already knows. Native macOS window chrome and the system font stack mean Stint feels like the platform it runs on rather than a web page in a frame.</p>
+    </div>
+    <div class="panel">
+      <p class="rule"><b>Inclusivity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — hierarchy never rides on colour alone. Size and weight carry structure, so it survives colour-blindness and dimmed screens; every semantic state pairs its colour with a word or icon (the run dot beside "running", the worded warn pill). Tabular numerals keep durations legible and steady.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel" style="grid-column:1/-1">
+      <p class="rule"><b>Consistency</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — one of everything. One token set, one line-icon family, one control per choice-shape, one elevation ladder, applied identically across every surface in this set. That single-source discipline is the entire point of this document: a new view should be assemblable from these parts without inventing anything.</p>
     </div>
   </div>
 

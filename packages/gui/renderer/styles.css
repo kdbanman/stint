@@ -1,84 +1,132 @@
 /*
- * Stint renderer styles (PRD §12, §15). Quiet, minimal, monochrome; system
- * typography; follows system light/dark via prefers-color-scheme. The system accent
- * (--accent, injected from the main process) is used ONLY on the primary action and
- * the running state — everything else is restrained system grays.
+ * Stint renderer styles — the "Calm · Warm Paper" design system (context/mockups/
+ * design-system.html), built on Fluent foundations (light, depth, motion, material,
+ * scale). A warm ivory canvas, one rationed clay accent, a small type ramp on tabular
+ * numerals, a 4px grid with the fixed radius trio (8 controls / 12 cards / 16 window &
+ * overlays), and one strict elevation ladder: canvas → card → raised → popover → modal.
+ *
+ * ONE RATIONED ACCENT (--accent, the clay #C8623E, unconditional — not a setting and never
+ * overridden at runtime): only each view's single primary action (button.primary), the active nav item,
+ * the running-state indicator, and the keyboard focus ring carry it — never decoratively.
+ *
+ * SELECTION ≠ ACCENT: a chosen segmented-control option / range chip is a RAISED CHIP
+ * (warm-paper lift + a soft shadow), NOT a colour fill — the accent stays a signal.
  *
  * §15 R-clickability / G10 — ONE clickability convention across the whole window:
- *   • clickable text affordance / link → carries the neutral button background (a
- *     non-transparent fill var(--paper)/var(--wash) AND/OR a visible 1px border on
- *     var(--rule)/var(--rule-strong)). The base `button` rule below IS that convention;
- *     every clickable text affordance (button.ghost, the nav rail items, the report nav
- *     tabs, the chip pills) inherits or mirrors it, so nothing clickable reads as plain
- *     prose. Quieter-than-primary variants stay quiet via muted ink / smaller sizing, not
- *     by dropping the background/border.
- *   • inert text (.wordmark, .summary, .day-head, .entry .desc/.time, .set-k,
- *     .report-lab, .settings-title, group headings, labels) → carries NO button
+ *   • clickable text affordance → carries the neutral button background (a non-transparent
+ *     fill var(--paper)/var(--wash) AND/OR a visible 1px border on var(--rule)/var(--rule-strong)).
+ *     The base `button` rule below IS that convention; every clickable text affordance mirrors it.
+ *   • inert text (.wordmark, .summary, .day-head, .entry .desc/.time, …) → NO button
  *     background; it stays bare prose. The JUDGE CLICKABILITY scan enforces both halves.
- *   • accent → reserved for each view's single primary action (button.primary) + the
- *     running state; never on an ordinary clickable affordance (§15 accent discipline).
- *   In-chip / in-control SUB-affordances are the one sanctioned exception: a control that
- *   already carries the convention (.chip, .seg, .presets) may host a bare inner control
- *   (.chip-x, the .set-toggle knob `i`) without re-bordering it — the parent IS the
- *   affordance. These are whitelisted in the CLICKABILITY scan.
+ *   • accent → reserved for each view's single primary action + the running state + the active
+ *     nav item; never on an ordinary clickable affordance.
+ *   In-control SUB-affordances (the chip remove glyph, the toggle knob, controls inside an
+ *   already-bordered chip/segment/preset row) are the sanctioned exception — the parent
+ *   carries the convention.
  */
 :root {
-  --paper: #ffffff;
-  --wash: #f6f6f5;
-  --ink: #16161a;
-  --ink-soft: #3c3c43;
-  --muted: #76767f;
-  --faint: #a6a6b0;
-  --rule: #e6e6e3;
-  --rule-strong: #d6d6d2;
-  --flag: #8a6d00;
-  --flag-bg: #fbf3d6;
-  --accent: #2f6fed; /* overridden at runtime by the system accent */
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif;
-  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #1b1b1d;
-    --wash: #161618;
-    --ink: #f0f0f2;
-    --ink-soft: #cfcfd6;
-    --muted: #9a9aa3;
-    --faint: #6c6c75;
-    --rule: #2c2c30;
-    --rule-strong: #3a3a40;
-    --flag: #e9c96b;
-    --flag-bg: #2a2410;
-  }
+  /* surfaces — warm opaque paper on an ivory canvas (material restraint, no glass) */
+  --paper: #fffdfa;
+  --canvas: #ede6da;
+  --sidebar: #f7f2ea;
+  --wash: #f4eee3; /* sunken fill — fields, quiet panels, raised-chip backdrops */
+  --hover: #f0e8db;
+
+  /* ink ramp — hierarchy from size + weight, never colour */
+  --ink: #23201b;
+  --ink-soft: #3c362d;
+  --muted: #6f685c;
+  --faint: #a99f8e;
+
+  /* hairlines */
+  --rule: #ece5d8; /* line */
+  --rule-strong: #ddd4c3; /* line-strong */
+
+  /* the one rationed clay accent (unconditional — not a setting, never overridden at runtime) */
+  --accent: #C8623E;
+  --accent-ink: #a1492a;
+  --accent-weak: #f7ece3;
+
+  /* semantic states — each paired with a word/icon elsewhere (inclusivity) */
+  --run: #5e8c5a;
+  --run-weak: #ecf2e7;
+  --flag: #8a6320; /* warn ink — the warn-not-block advisory palette */
+  --flag-bg: #f8efd8;
+  --warn-line: #e7d6ac;
+  --danger: #b23b2b;
+  --danger-weak: #f8e9e4;
+
+  /* fixed radius trio */
+  --r1: 8px; /* controls */
+  --r2: 12px; /* cards */
+  --r3: 16px; /* window & overlays */
+
+  /* the clay focus ring (the only "light" — draws the eye, never decorates) */
+  --ring: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+
+  /* the strict elevation ladder: card → raised → popover → modal */
+  --sh-card: 0 4px 16px rgba(74, 52, 24, 0.07), 0 1px 2px rgba(74, 52, 24, 0.05);
+  --sh-raise: 0 8px 24px rgba(74, 52, 24, 0.1), 0 1px 3px rgba(74, 52, 24, 0.06);
+  --sh-pop: 0 16px 44px rgba(60, 42, 18, 0.2), 0 2px 6px rgba(60, 42, 18, 0.1);
+  --sh-modal: 0 28px 70px rgba(50, 34, 14, 0.3), 0 3px 10px rgba(50, 34, 14, 0.14);
+
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable", "Segoe UI",
+    "Helvetica Neue", system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace;
+  --num: var(--mono);
 }
 
 * { box-sizing: border-box; }
 html, body {
   margin: 0;
-  background: var(--wash);
+  background: var(--canvas);
   color: var(--ink);
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
+/* The single line-icon family (util.js ICON_SPRITE / icon()). Every <svg class="ic"><use …/></svg>
+   the renderers drop in inherits this one stroke convention: 1.6px stroke in currentColor, no fill,
+   so an icon takes the colour of its context — never a second hardcoded fill, never the accent unless
+   its context already carries it. Drawn off the design-system base; per-context sizing/colour is
+   layered on by the scoped rules below (the nav rail, buttons). */
+.ic {
+  width: 16px;
+  height: 16px;
+  display: inline-block;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vertical-align: -2px;
+}
+/* An icon riding inside a clickable text button reads slightly smaller than its label and takes the
+   button's muted ink; the filled primary's icon goes white with its label. */
+button .ic { width: 15px; height: 15px; color: var(--muted); }
+button:hover .ic { color: var(--ink); }
+button.primary .ic,
+button.primary:hover .ic { color: #fff; }
+
+/* The tabular-numeral helper — every clock/duration uses it so digits never jitter
+   (design-system). Referenced by the editor/merge clocks, the popover clock, the settings
+   version string, and the day/strip summaries. */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
 /* ---- main window ------------------------------------------------------- */
-.app { max-width: 920px; margin: 0 auto; padding: 0; }
+.app { max-width: 1040px; margin: 0 auto; padding: 0; }
 
-/* §12 R3 (G7): the window shell — a persistent left nav rail beside the routed views, present
-   in EVERY view. The shell is the flex row; the rail is a FIXED width on resize and the views
-   column absorbs all of it. `.views { flex: 1; min-width: 0 }` is load-bearing twice: `flex: 1`
-   makes the views column the sole grow/shrink target so resize lands on the content, never the
-   rail, and `min-width: 0` lets a wide entry/report line shrink the column instead of pushing
-   the rail (a flex item's default `min-width: auto` would otherwise let overflow squeeze the
-   fixed rail). The Entries view keeps its own 760-ish reading width via the section padding. */
+/* §12 R3 (G7): the window shell — a persistent left nav rail beside the routed views.
+   The shell is the flex row; the rail is a FIXED width on resize and the views column
+   absorbs all of it. `.views { flex: 1; min-width: 0 }` is load-bearing twice: flex:1
+   makes the views column the sole grow/shrink target so resize lands on content, and
+   min-width:0 lets a wide entry/report line shrink the column instead of pushing the rail. */
 .shell { display: flex; align-items: stretch; min-height: 100vh; }
-.views { flex: 1; min-width: 0; padding: 0 20px 40px; }
+.views { flex: 1; min-width: 0; padding: 24px 28px 40px; }
 
-/* Each routed view fills the views column; the inactive ones are hidden by the attribute
-   (app.js toggles `hidden` per route). The [hidden] guard keeps the attribute authoritative
-   even though the rule does not set display — the UA `[hidden] { display:none }` wins. */
 .view { display: block; }
 .view[hidden] { display: none; }
 
@@ -86,140 +134,152 @@ header.mast {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 18px 0 14px;
-  border-bottom: 1px solid var(--ink);
+  padding: 6px 0 18px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
   position: sticky;
   top: 0;
-  background: var(--wash);
+  background: var(--paper);
+  z-index: 1;
 }
-.wordmark { font-size: 22px; font-weight: 680; letter-spacing: -0.02em; }
-.summary { font-family: var(--mono); font-size: 12px; color: var(--muted); }
-.summary b { color: var(--ink-soft); }
+.wordmark { font-size: 20px; font-weight: 680; letter-spacing: -0.01em; }
+.summary { font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.summary b { color: var(--ink-soft); font-weight: 590; }
+/* The glance-summary running dot (app.js summaryHtml) — the green running signal paired with
+   the bolded "running" word (inclusivity: colour + word). Unified with .timer-strip .strip-dot
+   and the design-system .dot.run token. */
+.run-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--run);
+  flex: none;
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: middle;
+}
 
-/* §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. A quiet bordered
-   block holding the live count-up, the running/idle state, the entry's description +
-   client/project, its attributes, and the Stop + Switch actions. Mirrors context/mockups/main.html's
-   .timer-card. Accent discipline (§15): the system accent appears ONLY on the running clock
-   and the running-state indicator (`.timer-card.running .clock/.state`) and the primary Stop
-   button (button.primary). Everything else — the idle clock, the label, the description,
-   client/project, the attribute flags, the Switch button — stays restrained system grays,
-   exactly like the popover's `.pop`/`.pop.running` treatment. */
+/* §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. A warm-paper
+   card (the elevation ladder's first rung) holding the live count-up, the running/idle
+   state, the entry's description + client/project, its attributes, and Stop + Switch.
+   Mirrors context/mockups/main.html's .strip. Accent discipline: the accent appears ONLY
+   on the running clock + the running-state indicator and the primary Stop (button.primary). */
 .timer-card {
   display: flex;
   gap: 24px;
   align-items: center;
-  margin-top: 14px;
-  padding: 16px 18px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--r2);
   background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 .timer-card .tc-clock-block { flex: none; }
 .timer-card .tc-lbl {
-  font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--faint);
   margin-bottom: 4px;
 }
 .timer-card .clock {
-  font-family: var(--mono);
+  font-family: var(--num);
   font-size: 38px;
-  font-weight: 600;
-  line-height: 1;
+  font-weight: 680;
+  line-height: 1.05;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--faint);
 }
-/* The running count-up is one of the two sanctioned accent uses on this card (§15). */
+/* The running count-up is one of the two sanctioned accent uses on this card. */
 .timer-card.running .clock { color: var(--accent); }
 .timer-card .state {
-  font-family: var(--mono);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 640;
   color: var(--muted);
   margin-top: 8px;
 }
-/* The running-state indicator is the other sanctioned accent use on this card (§15). */
+/* The running-state indicator is the other sanctioned accent use on this card. */
 .timer-card.running .state { color: var(--accent); }
 .timer-card .ctx { flex: 1; min-width: 0; }
-.timer-card .ctx .desc { font-size: 15px; font-weight: 600; color: var(--ink); margin-bottom: 4px; }
-.timer-card.idle .ctx .desc { color: var(--muted); font-weight: 500; }
-.timer-card .ctx .meta { font-size: 13px; color: var(--muted); }
-.timer-card .ctx .flags { display: flex; gap: 6px; margin-top: 8px; margin-left: 0; }
+.timer-card .ctx .desc { font-size: 15px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
+.timer-card.idle .ctx .desc { color: var(--muted); font-weight: 450; }
+.timer-card .ctx .meta { font-size: 12.5px; color: var(--muted); }
+.timer-card .ctx .flags { display: flex; gap: 6px; margin-top: 8px; }
 .timer-card .ctx .flags:empty { display: none; }
 .timer-card .btns { display: flex; gap: 9px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 
-/* §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the open entry's attributes + start time
-   without stopping it. The dashed accent border + the accent header word read as the SAME
-   sanctioned running-context accent the running card uses (§15 ACCENT_DISCIPLINE allows it
-   inside the running timer surface); every CONTROL inside stays monochrome (the inputs carry
-   the neutral wash/rule chrome, no accent fill), so the single primary action (Stop) keeps the
-   accent. Hidden while idle. Mirrors context/mockups/timer.html's .liveedit. */
+/* §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the open entry's attributes + start
+   time without stopping it. It sits on the warm-paper canvas; its single accent signal is
+   the running-context left bar (the SAME sanctioned running-surface accent the running card
+   uses). Every CONTROL inside stays monochrome (neutral wash/rule chrome, no accent fill),
+   so the single primary action (Stop) keeps the accent. Hidden while idle. */
 .liveedit {
-  margin-top: 14px;
-  padding: 12px 16px;
-  border: 1px dashed var(--accent);
-  border-radius: 10px;
-  background: var(--wash);
+  margin-bottom: 20px;
+  padding: 14px 16px 14px 18px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r2);
+  background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 .liveedit .le-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .liveedit .le-title {
-  font-size: 12px;
-  font-weight: 600;
-  /* Strip chrome stays monochrome (§15): the only sanctioned running-context
-     accent here is the dashed .liveedit border, not the title text. */
+  font-size: 13px;
+  font-weight: 590;
   color: var(--ink);
 }
 .liveedit .le-pill {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 590;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  /* Monochrome system grays (§15) — accent stays on the primary action /
-     running state only. */
   color: var(--muted);
-  background: var(--paper);
+  background: var(--wash);
   border: 1px solid var(--rule-strong);
-  border-radius: 10px;
-  padding: 1px 8px;
+  border-radius: 999px;
+  padding: 2px 10px;
 }
 .liveedit .le-grid {
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 .liveedit .le-field {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
-.liveedit .le-editable { color: var(--muted); }
+.liveedit .le-editable { color: var(--faint); }
 .liveedit .le-field input[type='text'],
 .liveedit .le-field input[type='datetime-local'] {
   display: block;
   width: 100%;
-  margin-top: 4px;
+  margin-top: 6px;
   font-family: inherit;
   font-size: 13px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 7px;
-  padding: 6px 9px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
 .liveedit .le-row2 {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin-top: 10px;
+  margin-top: 12px;
   flex-wrap: wrap;
 }
 .liveedit .le-bill {
@@ -227,37 +287,35 @@ header.mast {
   align-items: center;
   gap: 7px;
   font-size: 13px;
-  color: var(--ink-soft, var(--ink));
+  color: var(--ink);
 }
 .liveedit .le-note {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--faint);
   margin-left: auto;
 }
 
 /* §12 R04: the Entries-view COMPACT STRIP — a one-line mirror of the running timer that
-   links to the full Timer-view panel. It carries only the live count-up, the running/idle
-   state, and the description; no Stop/Switch, no flags grid (those live on the full card).
-   The whole strip is a button (clicking it routes to the Timer view). Accent discipline
-   (§15): like the card, the system accent appears ONLY on the running clock + the
-   running-state dot/text (`.timer-strip.running .clock` / `.state` / `.strip-dot`); the idle
-   strip and the rest of its chrome (the description, the Open Timer affordance) stay
-   restrained system grays, mirroring `.timer-card.running`. */
+   routes to the full Timer-view panel. The whole strip is a button. Accent discipline:
+   like the card, the accent appears ONLY on the running clock + the running-state dot/text. */
 .timer-strip {
   display: flex;
   align-items: center;
   gap: 16px;
   width: 100%;
-  margin-top: 14px;
-  padding: 10px 14px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--r2);
   background: var(--paper);
+  box-shadow: var(--sh-card);
   text-align: left;
   cursor: pointer;
   font: inherit;
   color: inherit;
+  transition: background 0.12s, box-shadow 0.12s;
 }
+.timer-strip:hover { box-shadow: var(--sh-raise); }
 .timer-strip .strip-clock-block { display: flex; align-items: center; gap: 9px; flex: none; }
 .timer-strip .strip-dot {
   width: 8px;
@@ -266,26 +324,26 @@ header.mast {
   background: var(--faint);
   flex: none;
 }
-.timer-strip.running .strip-dot { background: var(--accent); }
+.timer-strip.running .strip-dot { background: var(--run); }
 .timer-strip .clock {
-  font-family: var(--mono);
-  font-size: 20px;
-  font-weight: 600;
+  font-family: var(--num);
+  font-size: 22px;
+  font-weight: 640;
   line-height: 1;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
   color: var(--faint);
 }
-/* The running count-up is one of the sanctioned accent uses on the strip (§15). */
+/* The running count-up is one of the sanctioned accent uses on the strip. */
 .timer-strip.running .clock { color: var(--accent); }
 .timer-strip .state {
-  font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 640;
   color: var(--muted);
 }
-/* The running-state text is the other sanctioned accent use on the strip (§15). */
+/* The running-state text is the other sanctioned accent use on the strip. */
 .timer-strip.running .state { color: var(--accent); }
 .timer-strip .strip-desc {
   flex: 1;
@@ -294,94 +352,78 @@ header.mast {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 590;
   color: var(--ink);
 }
-.timer-strip.idle .strip-desc { color: var(--muted); font-weight: 500; }
+.timer-strip.idle .strip-desc { color: var(--muted); font-weight: 450; }
 .timer-strip .strip-open { flex: none; font-size: 12px; color: var(--muted); }
 
-/* §06 R4: the at-write-time overlap banner. A quiet, flag-coloured advisory (the same
-   --flag tokens the per-row overlap flag uses) shown inline right after a write that
-   creates an overlap — allowed, but flagged. It deliberately uses NO accent: accent is
-   reserved for the primary action and the running state (§15 accent discipline). */
+/* §06 R4: the at-write-time overlap banner — a quiet warn advisory (the same --flag tokens
+   the per-row overlap flag uses) shown inline right after a write that creates an overlap.
+   It uses NO accent: accent is reserved for the primary action and the running state. */
 .banner {
   font-size: 12px;
   color: var(--flag);
   background: var(--flag-bg);
-  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
-  border-radius: 6px;
-  padding: 6px 10px;
-  margin-top: 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r1);
+  padding: 7px 11px;
+  margin-bottom: 12px;
 }
 .banner[hidden] { display: none; }
 
-/* §12 R9: the detailed in-context overlap banner on an affected entry row ("Overlap: 15m
-   with previous entry"). It reuses the .banner flag-coloured advisory chrome but sits
-   inside the row's desc cell, so it spans the full description column under the inline
-   flags. Monochrome --flag tokens only — never the accent (§15 accent discipline). */
+/* §12 R9: the detailed in-context overlap banner on an affected entry row. Reuses the
+   .banner warn chrome but sits inside the row's desc cell. Monochrome --flag tokens only. */
 .entry .banner.overlap {
   display: block;
-  margin-top: 6px;
-  font-family: var(--mono);
+  margin: 6px 0 0;
+  font-family: var(--num);
   font-size: 11px;
   letter-spacing: 0.02em;
 }
 
-/* §12 R9: the struck-through raw duration shown beside a slept entry's trimmed billable
-   duration. The trimmed (billable) value reads as the live figure; the raw one is struck
-   in a faint gray so it plainly reads as "what was cut". No accent (§15). */
+/* §12 R9: the struck-through raw duration beside a slept entry's trimmed billable. The
+   trimmed value reads as the live figure; the raw one is struck in a faint gray. No accent. */
 .struck,
 s {
   text-decoration: line-through;
   color: var(--faint);
 }
 
-/* The report view's in-page back/forward nav (report.html) — a small horizontal row of
-   monochrome links. The active link is marked by weight/ink and an underline rule, never by
-   the accent (§15 accent discipline). Scoped to the bare `.nav` so the main-window left rail
-   (`.shell .nav`, below) is unaffected. */
+/* The report view's in-page back/forward nav — a small horizontal row of monochrome links.
+   Scoped to the bare `.nav` so the main-window left rail (`.shell .nav`, below) is unaffected. */
 .nav {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   padding: 10px 0 0;
 }
-/* §15 R-clickability / G10: these tab links are clickable text, so they carry the neutral
-   button background (a var(--wash) fill + a var(--rule) border) — mirroring context/mockups/main.html
-   `.nav .wk a` — rather than reading as bare prose. The active link keeps its weight/ink +
-   bottom-rule marker (never the accent — §15 accent discipline). */
 .nav .nav-link {
-  background: var(--wash);
-  border: 1px solid var(--rule);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 10px;
-  border-bottom: 2px solid transparent;
-  border-radius: 6px;
+  padding: 6px 12px;
+  border-radius: var(--r1);
 }
-.nav .nav-link:hover { color: var(--ink-soft); }
+.nav .nav-link:hover { background: var(--hover); color: var(--ink); }
 .nav .nav-link.active {
   color: var(--ink);
-  font-weight: 600;
-  border-bottom-color: var(--ink);
+  font-weight: 590;
+  background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 
-/* §12 R3 / R13: the main window's persistent left-hand nav rail. A fixed-width column of
-   monochrome system-gray items; the rail itself carries NO accent. The active item alone is
-   marked with the system accent (R13 "system accent on the active item") via a soft accent
-   wash + an accent left bar + accent ink — a sanctioned accent use the JUDGE
-   ACCENT_DISCIPLINE scan allows on `.nav-item.active`. Items are <button>s, so they are
-   keyboard-reachable with a visible focus ring (R13). The bare `.nav` rules above do not
-   apply here because this rail is `display:flex` column and overrides them. */
+/* §12 R3 / R13: the main window's persistent left-hand nav rail. A fixed-width warm-sidebar
+   column of line-icon items. The active item alone is marked with the accent (R13) via the
+   soft accent wash + accent ink + an inset accent hairline — the one sanctioned accent use in
+   the window chrome beyond the primary action / running state. Items are <button>s, keyboard-
+   reachable with a visible focus ring. */
 .shell .nav {
-  /* §12 R3 (G7): the rail is a FIXED width on resize. `flex: none` already pins it, but make
-     the fixed width robust against the views column overflowing by spelling out every flex
-     term: no grow, no shrink, a 168px basis (and an explicit width as the belt-and-braces
-     fallback), with border-box sizing so the padding/border never pad past 168px. A wide or
-     narrow window thus can never squeeze or grow the rail — the views column absorbs it all
-     (see the `.views` rule above, which sets `flex: 1` with `min-width: 0` as the sole
-     grow/shrink target). The JUDGE NAV_SHELL FIXED_WIDTH_ON_RESIZE
-     sub-fact measures this byte-identical 168 across 480/760/1200px viewports. */
+  /* §12 R3 (G7): the rail is a FIXED width on resize — spell out every flex term so a wide
+     or narrow window can never squeeze or grow it; the views column absorbs it all. The
+     JUDGE NAV_SHELL FIXED_WIDTH_ON_RESIZE sub-fact measures byte-identical 168 across
+     480/760/1200px viewports. */
   flex: none;
   flex-grow: 0;
   flex-shrink: 0;
@@ -391,149 +433,139 @@ s {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 16px 10px;
-  background: var(--wash);
+  padding: 16px 12px;
+  background: var(--sidebar);
   border-right: 1px solid var(--rule);
 }
-/* §15 R-clickability / G10: each rail item is clickable text, so in its resting state it
-   carries the neutral button background (a var(--paper) fill + a subtle var(--rule) border)
-   — it never reads as bare prose. :hover and the sanctioned .active accent-wash (the rail's
-   single accent use, whitelisted in the JUDGE scans) override this resting fill below. */
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
+  height: 38px;
   text-align: left;
-  border: 1px solid var(--rule);
-  background: var(--paper);
-  color: var(--ink-soft);
-  font-size: 14px;
+  border: 1px solid transparent;
+  /* §15 R-clickability / G10: a rail item is a clickable text affordance, so it carries the
+     convention — a non-transparent fill. It matches the rail (var(--sidebar)) so it reads bare
+     until hover/active brighten it, yet never registers as plain prose in the clickability scan. */
+  background: var(--sidebar);
+  color: var(--ink);
+  font-size: 13px;
   font-weight: 500;
-  padding: 8px 10px;
-  border-radius: 7px;
-  border-left: 3px solid transparent;
+  padding: 0 12px;
+  border-radius: var(--r1);
 }
-.nav-item .ic { width: 18px; text-align: center; opacity: 0.7; }
+.nav-item .ic { color: var(--muted); }
 .nav-item .nav-label { flex: 1; }
-.nav-item:hover:not(.active) { background: var(--rule); color: var(--ink); }
+.nav-item:hover:not(.active) { background: var(--hover); color: var(--ink); }
 .nav-item:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* The active item is the one place the rail uses the system accent (§12 R13): a soft accent
-   wash, an accent left bar, and accent ink. Sanctioned in the JUDGE accent scan. */
+/* The active item is the one place the rail uses the accent: a soft accent wash + accent
+   ink + an inset accent hairline. Sanctioned in the JUDGE accent scan. */
 .nav-item.active {
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-  border-left-color: var(--accent);
-  font-weight: 600;
+  background: var(--accent-weak);
+  color: var(--accent-ink);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  font-weight: 590;
 }
-.nav-item.active .ic { opacity: 1; }
+.nav-item.active .ic { color: var(--accent); }
 
-.toolbar { display: flex; gap: 8px; align-items: center; padding: 16px 0; }
+.toolbar { display: flex; gap: 10px; align-items: center; padding: 4px 0 12px; flex-wrap: wrap; }
 .toolbar[hidden] { display: none; }
 
-/* The toolbar search box — a restrained system-gray field, pushed to the right. Accent
-   stays reserved for the primary action + running state (§15), so the search box never
-   takes the accent. */
+/* The toolbar search box — a restrained warm field, pushed to the right. Never the accent. */
 .search {
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 12.5px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 9px;
+  border-radius: var(--r1);
+  padding: 7px 11px;
   margin-left: auto;
-  min-width: 160px;
+  min-width: 200px;
 }
-.search:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 
-/* §12 R9: the Entries-view control bar — the same label/control grid the report controls
-   use, so the range presets, group-by + billable segments, and client/project/tag filters
-   read consistently across the app. Every control here is monochrome: the active segment /
-   range chip is INKED (var(--ink)), never accented, so the §15 accent-discipline scan stays
-   green (accent is for the primary action + running state alone). */
+/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets,
+   group-by + billable segments, and client/project/tag filters. Sits on the warm canvas;
+   every control is monochrome (accent stays on the primary action + running state). */
 .entries-ctrl {
   display: grid;
   grid-template-columns: 88px 1fr;
-  gap: 10px 16px;
+  gap: 12px 16px;
   align-items: center;
-  padding: 14px;
-  margin-bottom: 12px;
+  padding: 16px;
+  margin-bottom: 16px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--wash);
+  border-radius: var(--r2);
+  background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 
-/* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface,
-   relocated from the Entries toolbar. A quiet bordered block holding the panel title, the
-   canonical Start / Switch / +with-details actions, and the collapsible attribute form.
-   Accent discipline (§15): the system accent appears ONLY on the single primary Start
-   (button.primary); the Switch and disclosure buttons + the title stay system grays. */
+/* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface.
+   A warm-paper card holding the panel title, the canonical Start / Switch / +with-details
+   actions, and the collapsible attribute form. Accent: only the single primary Start. */
 .start-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 16px 18px;
+  gap: 14px;
+  margin-bottom: 20px;
+  padding: 16px 20px;
   border: 1px solid var(--rule);
-  border-radius: 10px;
+  border-radius: var(--r2);
   background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 .start-panel .sp-head { display: flex; align-items: center; }
 .start-panel .sp-title {
-  font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--faint);
 }
-.start-panel .sp-actions { display: flex; gap: 8px; align-items: center; }
+.start-panel .sp-actions { display: flex; gap: 9px; align-items: center; }
 
-/* The optional attributed-start form — collapsed by default so the primary Start
-   stays one-tap; no new accent (the submit reuses button.primary). */
+/* The optional attributed-start form — collapsed by default; the submit reuses .primary. */
 .start-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px;
+  gap: 10px;
+  padding: 14px 16px;
   margin-bottom: 8px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  background: var(--paper);
+  border-radius: var(--r2);
+  background: var(--wash);
 }
 .start-form[hidden] { display: none; }
-.start-form .start-row { display: flex; gap: 8px; }
+.start-form .start-row { display: flex; gap: 10px; }
 .start-form input[type="text"] {
   flex: 1;
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
-.start-form input[type="text"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 .start-form .start-bill {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 13px;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 .start-form button.primary { align-self: flex-start; }
 
-/* The manual-backfill form reuses .start-form chrome; its datetime fields and the
-   inline overlap/validation warning stay in restrained system grays (no new accent —
-   only the Save button reuses .primary). */
+/* The manual-backfill form reuses .start-form chrome; its datetime fields + inline warning
+   stay monochrome (only Save reuses .primary). */
 .start-form .add-field {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -542,45 +574,47 @@ s {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
-.start-form input[type="datetime-local"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 
 /* §05 R05 / §12 R15 (G9): each from/to field pairs its text input with a calendar-icon
-   trigger that opens the shared visual time-range picker. The wrapper lets the input keep
-   flexing while the trigger sits flush beside it. */
+   trigger that opens the shared visual time-range picker. */
 .start-form .range-field {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
-/* §15 R-clickability / G10: the picker trigger is a clickable affordance, so it carries the
-   NEUTRAL button background (a var(--paper) fill + a subtle var(--rule) border) — never the
-   accent, which stays reserved for the form's single primary action (Save entry). */
-.start-form .range-pick-btn {
+/* The picker trigger is a clickable affordance, so it carries the NEUTRAL button background
+   — never the accent (reserved for each form's single primary action). One rule serves every
+   trigger: the start form, the inline-edit field, and the live-edit strip all share it. */
+.range-pick-btn {
   flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-size: 13px;
   line-height: 1;
-  color: var(--ink-soft);
+  color: var(--muted);
   background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 6px 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 8px 10px;
   cursor: pointer;
 }
-.start-form .range-pick-btn:hover { background: var(--wash); }
-.start-form .range-pick-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.range-pick-btn:hover { background: var(--hover); color: var(--ink); }
+/* §15 accent discipline: the picker trigger is a secondary ghost field-trigger, not a primary
+   action — it carries the NEUTRAL keyboard ring (only button.primary / .nav-item.active take the
+   accent ring). Matches the input/select :focus-visible ring. */
+.range-pick-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 
-/* §12 R07 (G9): the picker hint under the from/to row — mirrors the edit-entry mockup's
-   .pickhint. Muted, inert helper copy (no accent, no button chrome) stating the durability
-   contract: text entry stays authoritative and overnight spans use text entry. */
+/* §12 R07 (G9): the picker hint under the from/to row — muted, inert helper copy. */
 .start-form .pickhint {
   font-size: 11.5px;
-  color: var(--muted);
+  color: var(--faint);
   margin: -2px 0 2px;
 }
 
@@ -588,84 +622,119 @@ s {
   font-size: 12px;
   color: var(--flag);
   background: var(--flag-bg);
-  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border: 1px solid var(--warn-line);
+  border-radius: var(--r1);
+  padding: 7px 11px;
 }
 .add-warning[hidden] { display: none; }
 
+/* §15 R-clickability / G10: the base button IS the clickability convention — a warm-paper
+   fill + a visible hairline border. Quieter variants stay quiet via muted ink / sizing, never
+   by dropping the background/border. Motion is functional & short (~120ms). */
 button {
   font-family: var(--sans);
   font-size: 13px;
+  font-weight: 590;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--rule-strong);
   background: var(--paper);
   color: var(--ink);
-  border-radius: 6px;
-  padding: 6px 12px;
+  border-radius: var(--r1);
+  padding: 8px 14px;
   cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
 }
-button:hover { border-color: var(--muted); }
+button:hover { background: var(--hover); }
+/* Exactly one filled primary per view — the brightest thing in the view, so the eye lands. */
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
-  font-weight: 600;
+  font-weight: 590;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
 }
-/* §15 R-clickability / G10: a ghost button (Edit / Delete / Split / Rename / Archive /
-   Cancel / Add project / the per-row kebab) is clickable TEXT — so it MUST carry the neutral
-   button background, not read as bare prose. It inherits the base button's var(--paper) fill +
-   var(--rule-strong) border and stays quieter than .primary only via the muted ink and the
-   .small sizing — never by going transparent (the old transparent ghost was the offender the
-   CLICKABILITY scan now rejects). */
+button.primary:hover { background: color-mix(in srgb, var(--accent) 90%, #000); }
+/* A ghost button (Edit / Delete / Cancel / the kebab) is clickable TEXT — it carries the
+   neutral button background, staying quieter than .primary only via muted ink / .small sizing. */
 button.ghost { color: var(--muted); }
-button.small { font-size: 12px; padding: 3px 8px; }
-/* §05 R8: Switch is a plain (non-accent) button so it does not compete with the
-   primary Stop/Start accent — accent discipline (§15) stays a single fill. It is
-   hidden when idle (the `hidden` attribute, toggled in app.js/popover.js). */
+button.ghost:hover { color: var(--ink); }
+button.small { font-size: 12px; padding: 6px 11px; }
+/* The .small.primary cascade made explicit — keeps the .small sizing while .primary's accent
+   fill still applies (Clients view #add-client / #add-tag). No visual change, just one rule
+   instead of tracking button / button.primary / button.small together. */
+button.small.primary { font-size: 12px; padding: 6px 11px; }
+/* An icon inside a .btn sizes down per the system. */
+.btn .ic { width: 15px; height: 15px; }
+/* Switch is a plain (non-accent) button so it never competes with the primary Stop/Start. */
 button[hidden] { display: none; }
 
-/* §12 R14: the keyboard-operability focus pass. Every control must be reachable by Tab AND
-   show a visible focus ring when it has keyboard focus — without this rule the only
-   affordance is the inconsistent UA default outline. The ring is scoped to `:focus-visible`
-   (keyboard focus) rather than `:focus`, so a mouse click does NOT paint a ring — keeping the
-   quiet desktop feel — while a Tab-walk always does.
+/* The neutral-button convention, shared by the bespoke-classed clickable controls that don't take the
+   bare `button` rule (they set their own padding/sizing). One source for the warm-paper fill + hairline
+   border + control radius + hover, so the convention can never drift between views; each control's own
+   rule below keeps only its distinctive padding / font / ink. */
+.report-export-btn,
+.report-apply,
+.def .def-run,
+.def .def-edit,
+.def .def-kebab,
+.set-update-btn,
+.fav-pin,
+.fav-card .resume,
+.fav-kebab,
+.stp-cancel {
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  cursor: pointer;
+}
+.report-export-btn:hover,
+.report-apply:hover,
+.def .def-run:hover,
+.def .def-edit:hover,
+.def .def-kebab:hover,
+.set-update-btn:hover,
+.fav-pin:hover,
+.fav-card .resume:hover,
+.fav-kebab:hover,
+.stp-cancel:hover { background: var(--hover); }
 
-   Accent discipline (§15) carries into the focus ring: ordinary controls (the report/ghost/
-   action buttons, the popover Open/Stop-Start) take a NEUTRAL high-contrast ring on the
-   system gray --rule-strong, NOT the accent — the accent stays confined to the primary action
-   and the running state. The primary button is the one place the accent is already sanctioned,
-   so `button.primary:focus-visible` MAY use the accent ring. The seg/preset/nav/toggle focus
-   rules elsewhere in this file keep their own offsets; this block covers the bare buttons. */
+/* §12 R14: the keyboard-operability focus pass. Every control is reachable by Tab AND shows
+   a visible focus ring under keyboard focus. The ring is scoped to :focus-visible so a mouse
+   click paints no ring (quiet feel). Ordinary controls take a NEUTRAL --rule-strong ring; the
+   primary action — already sanctioned for the accent — may take the accent ring. */
 button:focus-visible {
   outline: 2px solid var(--rule-strong);
   outline-offset: 2px;
 }
-/* The primary action already sanctions the accent (§15), so its keyboard ring may be the
-   accent — the only focus ring in the chrome that carries it. */
 button.primary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-/* §12 R14 carries to the text/select controls too: the search box, the report/filter fields
-   (#search, #el-client, #el-tag, …), the inline edit-row inputs, the editor and settings
-   fields. Their `:focus` rules below paint only a quiet border (no ring) so a mouse click /
-   typing stays calm; but a Tab-walk must still land a VISIBLE ring. These `:focus-visible`
-   rules paint the same neutral --rule-strong ring as the bare buttons, and the per-element
-   `outline: none` `:focus` rules elsewhere in this file are kept out of the way by tagging
-   each input/select/textarea here at matching specificity. Neutral (never accent) — accent
-   stays on the primary action / running state (§15). */
+/* §12 R14 carries to the text/select controls too. Their `:focus` rules paint only a quiet
+   accent border + ring (no outline) on mouse/typing; a Tab-walk lands a VISIBLE neutral ring. */
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
   outline: 2px solid var(--rule-strong);
   outline-offset: 2px;
-  border-color: var(--muted);
+  border-color: var(--accent);
 }
 
-/* empty state instructs rather than decorates (PRD §12 R5). The per-view route placeholder
-   (§12 R3, the not-yet-built Timer/Reports/Settings views) reuses the same quiet, instructing
-   look but keeps a distinct class so the entries empty-state stays the unique `.empty`. */
+/* On mouse/typing focus (not a Tab-walk) every text/datetime/select/textarea field paints the
+   one quiet accent border + ring — no outline. One rule for the whole window so every field
+   shares the identical signal (the saved-report name field is the lone, deliberate exception,
+   keeping a muted border further below). */
+input[type="text"]:focus:not(:focus-visible),
+input[type="search"]:focus:not(:focus-visible),
+input[type="datetime-local"]:focus:not(:focus-visible),
+select:focus:not(:focus-visible),
+textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
+
+/* empty state instructs rather than decorates (§12 R5). */
 .empty,
 .view-placeholder {
   margin-top: 80px;
@@ -673,72 +742,67 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .empty .big,
-.view-placeholder .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.view-placeholder .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; font-weight: 590; }
 .empty code,
 .view-placeholder code {
-  font-family: var(--mono);
-  background: var(--paper);
+  font-family: var(--num);
+  background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 1px 6px;
   color: var(--ink);
 }
 
 .day { margin-top: 22px; }
 .day-head {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--muted);
+  font-weight: 640;
+  font-size: 13px;
+  color: var(--ink);
   border-bottom: 1px solid var(--rule);
-  padding-bottom: 6px;
+  padding: 16px 6px 9px;
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
 }
+.day-head .dsum { font-weight: 450; color: var(--faint); font-size: 12px; }
 
 .entry {
   display: grid;
-  grid-template-columns: 20px 84px 1fr auto;
-  gap: 12px;
+  grid-template-columns: 20px 96px 1fr auto;
+  gap: 14px;
   align-items: center;
-  padding: 9px 4px;
+  padding: 11px 6px;
   border-bottom: 1px solid var(--rule);
 }
-/* §06 R3: the leading multi-select cell. The open/running row leaves it empty (it is not
-   selectable), so the placeholder just preserves the grid alignment. The select control
-   stays monochrome — no accent — so §15 accent discipline holds. */
+.entry:hover { background: var(--wash); }
+/* §06 R3: the leading multi-select cell. The select control stays monochrome — no accent. */
 .entry .sel-cell { display: flex; justify-content: center; }
 .entry.selected { background: var(--wash); }
-.entry .time { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.entry .time { font-family: var(--num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
-.entry .dur { font-family: var(--mono); font-size: 13px; color: var(--ink-soft); text-align: right; }
-.entry.running .dur { color: var(--accent); font-weight: 600; }
+.entry .dur { font-family: var(--num); font-size: 12.5px; font-weight: 590; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
+.entry.running .dur { color: var(--accent); font-weight: 640; }
 .entry .nonbill { color: var(--faint); }
 
-/* §07: tag chips shown in-context on the entry row (and the running summary). Monochrome
-   system grays only — the accent stays on the primary action / running state per §15, so
-   no chip rule references var(--accent). The inline tag editor reuses .chip; its chips
-   carry a removable × and an `add a tag…` input. */
+/* §07: tag chips shown in-context on the entry row. Monochrome — the accent stays on the
+   primary action / running state, so no chip rule references var(--accent). */
 .chips { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
 .chip {
-  font-size: 11px;
-  color: var(--ink-soft);
+  font-size: 11.5px;
+  color: var(--muted);
   background: var(--wash);
-  border: 1px solid var(--rule-strong);
-  border-radius: 11px;
-  padding: 1px 8px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+  padding: 2px 10px;
   display: inline-flex;
   gap: 6px;
   align-items: center;
 }
-/* §15 R-clickability / G10: the removable × is a SUB-affordance INSIDE an already-bordered
-   chip (the .chip carries the neutral bg+border above), so it is the one sanctioned in-chip
-   exception — it stays a bare glyph and is whitelisted in the CLICKABILITY scan (the parent
-   chip IS the affordance). The same applies to the .set-toggle knob inside its bordered track. */
+/* The removable × is a SUB-affordance INSIDE the already-bordered chip — the one sanctioned
+   in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
 .chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
-.chip .chip-x:hover { color: var(--ink-soft); }
+.chip .chip-x:hover { color: var(--ink); }
 .tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
 .tag-editor .chips { margin-left: 0; }
 .tag-editor .tag-add-input {
@@ -752,48 +816,44 @@ textarea:focus-visible {
 }
 
 .flags { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
+/* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
 .flag {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.02em;
   color: var(--flag);
   background: var(--flag-bg);
-  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
-  border-radius: 3px;
-  padding: 1px 5px;
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  padding: 1px 9px;
 }
 .entry .actions { display: flex; gap: 6px; }
 
-/* Inline edit (PRD §05 R6): the row swaps into an in-place form. Restrained system
-   grays throughout; only the Save action carries the accent (button.primary), so the
-   §15 accent discipline holds. Editing the running entry keeps the .running class, so
-   the open-state indicator stays put. */
+/* Inline edit (§05 R6): the row swaps into an in-place form. Monochrome; only Save carries
+   the accent (button.primary). Editing the running entry keeps .running so the indicator stays. */
 .entry.editing { grid-template-columns: 1fr; }
 .entry .edit-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 6px 0;
+  gap: 10px;
+  padding: 8px 0;
 }
-.entry .edit-form .edit-row { display: flex; gap: 8px; }
+.entry .edit-form .edit-row { display: flex; gap: 10px; }
 .entry .edit-form input[type="text"],
 .entry .edit-form input[type="datetime-local"] {
   flex: 1;
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
-.entry .edit-form input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 .entry .edit-form .edit-field {
   display: flex;
   flex: 1;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-size: 12px;
   color: var(--muted);
 }
@@ -803,37 +863,30 @@ textarea:focus-visible {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
-.entry .edit-form select:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 .entry .edit-form .edit-bill {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 13px;
-  color: var(--ink-soft);
+  color: var(--ink);
 }
-.entry .edit-form .edit-actions { display: flex; gap: 8px; align-items: center; }
-/* Delete from within the form is pushed to the trailing edge — it is a destructive
-   action, kept visually distinct (a quiet ghost) from Save/Cancel but NOT given the
-   accent (§15 accent discipline: only Save reuses .primary). */
+.entry .edit-form .edit-actions { display: flex; gap: 9px; align-items: center; }
+/* Delete from within the form is pushed to the trailing edge — destructive, kept distinct
+   (a quiet danger ghost) but NOT given the accent (only Save reuses .primary). */
 .entry .edit-form .edit-delete { margin-left: auto; }
 
-/* §06 R1 / §12 R13: the in-window confirm gate for a destructive action (today Delete;
-   archive-when-referenced reuses the same .confirm chrome when the Clients view R10 lands).
-   A destructive action takes a second, explicit tap; the confirm chrome stays monochrome —
-   danger is conveyed by weight/label and the .danger button treatment, NOT by stealing the
-   system accent (the JUDGE ACCENT_DISCIPLINE scan rejects stray accent on this chrome). The
-   legacy .confirm-delete selector remains an alias of the generic .confirm so existing
-   markup/guards are unaffected. */
+/* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
+   danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */
 .confirm,
 .confirm-delete {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .confirm .confirm-q,
 .confirm-delete .confirm-q {
@@ -841,19 +894,18 @@ textarea:focus-visible {
   color: var(--ink-soft);
 }
 button.danger {
-  border-color: var(--rule-strong);
-  color: var(--ink);
-  font-weight: 600;
+  color: var(--danger);
+  border-color: transparent;
+  background: transparent;
+  font-weight: 590;
 }
-button.danger:hover { border-color: var(--ink-soft); }
+button.danger:hover { background: var(--danger-weak); }
 
-/* Inline split picker (§06 R2). A closed entry is cut at a picked instant; the picker
-   stays monochrome — only the Split (confirm) action reuses .primary, so the §15 accent
-   discipline holds. The datetime input matches the edit/add fields. */
+/* Inline split picker (§06 R2). Monochrome — only Split (confirm) reuses .primary. */
 .split-at {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .split-at .split-q {
   font-size: 12px;
@@ -863,39 +915,36 @@ button.danger:hover { border-color: var(--ink-soft); }
   font-family: var(--sans);
   font-size: 12px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 3px 8px;
+  border-radius: var(--r1);
+  padding: 5px 9px;
 }
-.split-at input[type="datetime-local"]:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 
-/* §06 R3: the Merge action bar appears under the entry list once a contiguous
-   selection of two-plus closed entries is armed. Only the Merge button carries the
-   accent (button.primary); the bar chrome stays monochrome (§15). */
+/* §06 R3: the Merge action bar — a warm-paper card under the list once a contiguous
+   selection of 2+ closed entries is armed. Only Merge carries the accent (button.primary). */
 .merge-bar {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
   margin-top: 18px;
-  padding: 12px;
+  padding: 14px 16px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--r2);
   background: var(--paper);
+  box-shadow: var(--sh-card);
 }
 .merge-bar[hidden] { display: none; }
 
-/* The inline conflict prompt (§06 R3, §12 R6): when the selected entries disagree on
-   client/project or billable, this panel asks which value the merged entry keeps before
-   any merge commits. Restrained system grays; only the Merge (confirm) reuses .primary. */
+/* The inline conflict prompt (§06 R3, §12 R6). Monochrome; only Merge (confirm) reuses .primary. */
 .merge-conflict {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 8px;
+  gap: 10px;
+  padding-top: 10px;
   border-top: 1px solid var(--rule);
 }
-.merge-conflict .mc-title { font-size: 13px; color: var(--ink-soft); }
+.merge-conflict .mc-title { font-size: 13px; font-weight: 590; color: var(--ink); }
 .merge-conflict .mc-row {
   display: flex;
   flex-wrap: wrap;
@@ -910,47 +959,48 @@ button.danger:hover { border-color: var(--ink-soft); }
 .merge-conflict .mc-opt {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 13px;
   color: var(--ink);
 }
-.merge-conflict .mc-actions { display: flex; gap: 8px; align-items: center; }
+.merge-conflict .mc-actions { display: flex; gap: 9px; align-items: center; }
 
-/* §07/§12: the Clients view. A quiet list of active clients, each with its active
-   projects and in-place rename/archive/add affordances. Entirely monochrome system grays
-   — only the create/rename/add (.primary) confirms carry the accent (§15 discipline). */
+/* §07/§12: the Clients view. A quiet list of active clients with their projects and
+   in-place rename/archive/add. Monochrome — only the create/rename/add (.primary) confirms. */
 .clients { padding-top: 8px; }
 .clients[hidden] { display: none; }
 .clients-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0 8px;
+  padding: 6px 0 14px;
+  margin-bottom: 4px;
   border-bottom: 1px solid var(--rule);
 }
-.clients-title { font-size: 15px; font-weight: 600; color: var(--ink-soft); margin: 0; }
+.clients-title { font-size: 18px; font-weight: 640; color: var(--ink); margin: 0; letter-spacing: -0.01em; }
 .clients-list { display: flex; flex-direction: column; }
 .clients-empty {
   margin-top: 60px;
   text-align: center;
   color: var(--muted);
 }
-.clients-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.clients-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; font-weight: 590; }
 .clients-empty code {
-  font-family: var(--mono);
-  background: var(--paper);
+  font-family: var(--num);
+  background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 1px 6px;
   color: var(--ink);
 }
 
 .client {
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--r2);
   background: var(--paper);
+  box-shadow: var(--sh-card);
   margin-top: 12px;
-  padding: 12px 14px;
+  padding: 14px 16px;
 }
 .client-head {
   display: flex;
@@ -958,13 +1008,13 @@ button.danger:hover { border-color: var(--ink-soft); }
   align-items: center;
   gap: 8px;
 }
-.client-name { font-size: 14px; font-weight: 600; color: var(--ink); }
-.client-actions, .project-actions { display: inline-flex; gap: 4px; }
+.client-name { font-size: 14px; font-weight: 590; color: var(--ink); }
+.client-actions, .project-actions { display: inline-flex; gap: 6px; }
 
 .project-list {
   display: flex;
   flex-direction: column;
-  margin-top: 8px;
+  margin-top: 10px;
   padding-left: 14px;
   border-left: 2px solid var(--rule);
 }
@@ -973,19 +1023,18 @@ button.danger:hover { border-color: var(--ink-soft); }
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 5px 0;
+  padding: 6px 0;
 }
 .project-name { font-size: 13px; color: var(--ink-soft); }
 .project-empty { font-size: 12px; color: var(--faint); padding: 4px 0; }
 
-/* Inline rename / add fields. Restrained system grays; the input matches the entry/edit
-   fields and only the Save/Add confirm (.primary) carries the accent. */
+/* Inline rename / add fields. Monochrome; only the Save/Add confirm (.primary) is accented. */
 .rename-form,
 .client-add,
 .project-add {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .project-add { width: 100%; justify-content: space-between; }
 .rename-input,
@@ -994,23 +1043,18 @@ button.danger:hover { border-color: var(--ink-soft); }
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: var(--r1);
+  padding: 6px 10px;
 }
-.rename-input:focus:not(:focus-visible),
-.client-add-input:focus:not(:focus-visible),
-.project-add-input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 
 /* ---- tag management strip (§12 R10) ------------------------------------ */
-/* Cross-cutting tags get their own section under the clients list. Mirrors the client/
-   project rows' restraint: rows in system grays, only the Add confirm (.primary) accented. */
 .tags-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 0 8px;
+  padding: 18px 0 14px;
   margin-top: 12px;
   border-bottom: 1px solid var(--rule);
 }
@@ -1020,12 +1064,12 @@ button.danger:hover { border-color: var(--ink-soft); }
   text-align: center;
   color: var(--muted);
 }
-.tags-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; }
+.tags-empty .big { font-size: 16px; color: var(--ink-soft); margin-bottom: 8px; font-weight: 590; }
 .tags-empty code {
-  font-family: var(--mono);
-  background: var(--paper);
+  font-family: var(--num);
+  background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 4px;
+  border-radius: 6px;
   padding: 1px 6px;
   color: var(--ink);
 }
@@ -1034,28 +1078,25 @@ button.danger:hover { border-color: var(--ink-soft); }
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 7px 2px;
+  padding: 8px 2px;
   border-bottom: 1px solid var(--rule);
 }
 .tag-row-name { font-size: 13px; color: var(--ink-soft); }
-.tag-row-actions { display: inline-flex; gap: 4px; }
-.tag-add { padding-top: 8px; }
+.tag-row-actions { display: inline-flex; gap: 6px; }
+.tag-add { padding-top: 10px; }
 .tag-new-input {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 4px 8px;
+  border-radius: var(--r1);
+  padding: 6px 10px;
 }
-.tag-new-input:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 
 /* ---- report builder (§08 R3, §09, §12 R8) ------------------------------ */
-/* The Billable / Group-by segmented controls and the grouped results table. Kept
-   strictly monochrome: the active segment is inked, NOT accented — accent stays on the
-   primary action and the running state only (§15 accent discipline), so the JUDGE accent
-   scan keeps passing. */
+/* SELECTION ≠ ACCENT: the Billable / Group-by segments + the range chips select via a
+   RAISED CHIP (warm-paper lift + soft shadow), never a colour fill — accent stays a signal. */
 .report { padding: 16px 0; }
 .report-ctrl {
   display: grid;
@@ -1064,108 +1105,108 @@ button.danger:hover { border-color: var(--ink-soft); }
   align-items: center;
   margin-bottom: 18px;
 }
-.report-lab { font-size: 13px; color: var(--muted); text-align: right; }
+.report-lab { font-size: 12px; color: var(--muted); text-align: right; }
 .report-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .seg {
   display: inline-flex;
-  border: 1px solid var(--rule-strong);
-  border-radius: 7px;
-  overflow: hidden;
+  background: var(--wash);
+  border: 1px solid var(--rule);
+  border-radius: var(--r1);
+  padding: 3px;
+  gap: 3px;
 }
 .seg .seg-btn {
   border: none;
-  border-right: 1px solid var(--rule);
-  background: var(--paper);
-  color: var(--ink-soft);
+  background: transparent;
+  color: var(--muted);
   font-family: var(--sans);
-  font-size: 13px;
-  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 12px;
+  height: 26px;
   cursor: pointer;
-  border-radius: 0;
+  border-radius: 6px;
+  box-shadow: none;
 }
-.seg .seg-btn:last-child { border-right: none; }
-.seg .seg-btn:hover:not(.on) { background: var(--wash); }
-/* The active segment is the chosen filter — inked, not accented (accent discipline). */
+.seg .seg-btn:hover:not(.on) { background: transparent; color: var(--ink); }
+/* The chosen segment is a RAISED CHIP — surface lift + shadow, ink text. Not the accent. */
 .seg .seg-btn.on {
-  background: var(--ink);
-  color: var(--paper);
-  font-weight: 600;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 590;
+  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
 }
 
-/* §09 R1: the date-range preset chip row. Chips are a monochrome wrap of pill buttons
-   (not a single segmented control — there are six, including Custom…). The active chip is
-   inked, not accented, so the accent-discipline scan (§15) stays green: accent is reserved
-   for the primary action and the running-state indicator. */
-.presets { flex-wrap: wrap; gap: 7px; border: none; border-radius: 0; overflow: visible; }
+/* §09 R1: the date-range preset chips (six, incl Custom…). The active chip is a raised
+   pill chip — surface lift, not the accent. */
+.presets { flex-wrap: wrap; gap: 6px; background: transparent; border: none; border-radius: 0; padding: 0; }
 .presets .preset {
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
   background: var(--paper);
-  color: var(--ink-soft);
+  color: var(--muted);
   font-family: var(--sans);
-  font-size: 13px;
+  font-size: 12.5px;
+  font-weight: 500;
   padding: 5px 13px;
+  height: auto;
   cursor: pointer;
+  box-shadow: none;
 }
-.presets .preset:hover:not(.on) { background: var(--wash); }
-/* The active range chip — inked fill, the same restrained active treatment the
-   Group-by / Billable segments use; deliberately NOT the accent. */
+.presets .preset:hover:not(.on) { background: var(--hover); color: var(--ink); }
+/* The active range chip — a raised paper chip (surface lift), deliberately NOT the accent. */
 .presets .preset.on {
-  background: var(--ink);
-  border-color: var(--ink);
-  color: var(--paper);
-  font-weight: 600;
+  background: var(--paper);
+  border-color: var(--rule-strong);
+  color: var(--ink);
+  font-weight: 590;
+  box-shadow: var(--sh-card);
 }
 
-/* The custom from/to inputs, revealed only for the Custom chip. The [hidden] guard keeps
-   the attribute authoritative — without it the display:flex below would override the UA
-   `[hidden] { display: none }` and the inputs would show under every preset. */
+/* The custom from/to inputs, revealed only for the Custom chip. */
 .custom-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; grid-column: 1 / -1; }
 .custom-range[hidden] { display: none; }
 .custom-range .report-lab { text-align: left; }
 .report-apply {
   font-family: var(--sans);
   font-size: 13px;
+  font-weight: 590;
   color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 12px;
-  cursor: pointer;
+  padding: 8px 14px;
 }
-.report-apply:hover { background: var(--wash); }
 
 /* The resolved window the report covers, painted under the head from core's bounds. */
 .report-range {
   padding: 8px 14px;
   font-size: 12.5px;
   color: var(--muted);
-  background: var(--paper);
+  background: var(--wash);
   border-bottom: 1px solid var(--rule);
   font-variant-numeric: tabular-nums;
 }
 
-.report-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink-soft); }
+.report-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink); }
 .report-field {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 8px;
+  border-radius: var(--r1);
+  padding: 7px 10px;
 }
-.report-field:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
-/* §09 R3: the project filter is disabled until a client is chosen — a project filter only
-   makes sense within a client. Dimmed in restrained system grays (no accent, §15). */
+/* §09 R3: the project filter is disabled until a client is chosen. Dimmed, monochrome. */
 .report-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
-/* §09 R4: the rounding increment picker reads as a secondary choice when rounding is OFF —
-   de-emphasized (dimmed) and not interactive, so the control group is plainly a single
-   Off/On rounding decision first. Monochrome (opacity only), no accent (§15). */
+/* §09 R4: the increment picker reads as a secondary choice when rounding is OFF. Monochrome. */
 .report-field.off { opacity: 0.5; }
 
-.report-summary { border: 1px solid var(--rule); border-radius: 9px; overflow: hidden; }
+.report-summary {
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  overflow: hidden;
+  box-shadow: var(--sh-card);
+}
 .report-head {
   display: flex;
   justify-content: space-between;
@@ -1175,43 +1216,43 @@ button.danger:hover { border-color: var(--ink-soft); }
   font-size: 13px;
   color: var(--muted);
 }
-.report-head b { color: var(--ink); }
-.report-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.report-head b { color: var(--ink); font-weight: 640; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--paper); }
 .report-table td,
-.report-table th { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--rule); }
+.report-table th { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); }
 .report-table th {
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
+  letter-spacing: 0.06em;
+  color: var(--faint);
+  background: var(--wash);
+  font-weight: 590;
 }
 .report-table td.num,
 .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.report-table .report-grp td { font-weight: 600; }
-.report-table .report-sub td { color: var(--ink-soft); }
+.report-table .report-grp td { font-weight: 590; }
+.report-table .report-sub td { color: var(--muted); padding-left: 32px; }
 .report-table .report-empty { color: var(--muted); text-align: center; }
 .report-table .report-tot td {
-  font-weight: 700;
-  border-top: 2px solid var(--ink);
+  font-weight: 680;
+  border-top: 2px solid var(--rule-strong);
   border-bottom: none;
   background: var(--wash);
 }
-/* §09 R6: a grouped line's flag (overlap / unreviewed sleep), shown in context on the
-   affected summary row. Uses the --flag tokens the per-entry flags use — never the accent,
-   which stays reserved for the primary action and the running state (§15 discipline). */
+/* §09 R6: a grouped line's flag (overlap / unreviewed sleep). Worded warn pill — the --flag
+   tokens the per-entry flags use, never the accent. */
 .report-flag {
   display: inline-block;
   font-size: 11px;
   font-weight: 500;
-  padding: 1px 6px;
-  border-radius: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
   vertical-align: middle;
   color: var(--flag);
   background: var(--flag-bg);
-  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+  border: 1px solid var(--warn-line);
 }
-/* §09 R6: the Export CSV / Export JSON action row. Monochrome buttons — the export is a
-   secondary action, so the accent stays on the primary action / running state (§15). */
+/* §09 R6: the Export CSV / Export JSON action row. Monochrome secondary buttons. */
 .report-export {
   display: flex;
   gap: 10px;
@@ -1221,110 +1262,124 @@ button.danger:hover { border-color: var(--ink-soft); }
 .report-export-btn {
   font-family: inherit;
   font-size: 13px;
-  border-radius: 7px;
+  font-weight: 590;
   padding: 8px 14px;
-  border: 1px solid var(--rule-strong);
-  background: var(--paper);
   color: var(--ink);
-  cursor: pointer;
 }
-.report-export-btn:hover { background: var(--wash); }
 .report-export-status { font-size: 12px; color: var(--muted); }
 
-/* §12 R08 / §09 R08–R09 (G11): the Reports view — SAVED, named report definitions. The
-   in-shell saved-reports surface (it replaces the retired standalone report.html). Its one
-   accent affordance is the + New report primary action (§15 / G10 accent discipline); the
-   saved-definition cards, the builder controls, and the run-output stay restrained grays. */
-.reports-view { padding: 16px 4px; }
+/* §12 R08 / §09 R08–R09 (G11): the Reports view — SAVED, named report definitions. Its one
+   accent affordance is the + New report primary action; the cards, builder, and run-output
+   stay monochrome. */
+.reports-view { padding: 0; }
 .reports-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 6px 0 14px;
   margin-bottom: 16px;
+  border-bottom: 1px solid var(--rule);
 }
-.reports-title { font-size: 18px; margin: 0; font-weight: 680; }
-/* The single accent primary action of the view (§15). Reuses the global `.primary` fill. */
+.reports-title { font-size: 18px; margin: 0; font-weight: 640; letter-spacing: -0.01em; }
+/* The single accent primary action of the view. */
 #rep-new {
   font-family: inherit;
   font-size: 13px;
-  border-radius: 7px;
+  font-weight: 590;
+  border-radius: var(--r1);
   padding: 8px 14px;
   border: 1px solid var(--accent);
   background: var(--accent);
   color: #fff;
-  font-weight: 600;
   cursor: pointer;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
 }
+#rep-new:hover { background: color-mix(in srgb, var(--accent) 90%, #000); }
 
-/* §09 R08: the saved-definition list — one card per saved report. Each card carries the
-   name + a spec summary and the Run / Edit / kebab affordances (all neutral-bg, no accent). */
-.defs { display: flex; flex-direction: column; gap: 10px; margin-bottom: 6px; }
-.def {
+/* §09 R08: the saved-definition list — one warm-paper card per saved report (name + spec
+   summary + Run / Edit / kebab; all neutral-bg, no accent). */
+/* STRICT ELEVATION LADDER: the saved-definition LIST is the card (one rung above canvas) and
+   each .def is a flat hairline-separated row — no nested per-row cards. */
+.defs {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 13px 15px;
+  border-radius: var(--r2);
+  background: var(--paper);
+  box-shadow: var(--sh-card);
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+.defs:empty { display: none; }
+.def {
   display: flex;
   align-items: center;
-  gap: 14px;
-  background: var(--paper);
+  gap: 16px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--rule);
 }
-/* The definition being edited is marked — inked outline, not the accent (§15). */
-.def.sel { border-color: var(--ink); box-shadow: 0 0 0 2px var(--rule-strong); }
+.def:last-child { border-bottom: 0; }
+/* SELECTION != ELEVATION: a selected row is signalled by a sunken fill, not a lift. */
+.def.sel { background: var(--wash); }
 .def .di { flex: 1; min-width: 0; }
-.def .dname { font-size: 14.5px; font-weight: 680; margin-bottom: 3px; }
-.def .dspec { font-size: 12.5px; color: var(--muted); }
-.def .dspec .k { color: var(--ink-soft); font-weight: 600; }
-.def .dactions { display: flex; gap: 8px; flex: none; align-items: center; }
-/* Every clickable affordance on a card carries the neutral button background (§15 / G10). */
+.def .dname { font-size: 13.5px; font-weight: 590; margin-bottom: 4px; }
+.def .dspec { font-size: 12px; color: var(--muted); }
+.def .dspec .k { color: var(--ink-soft); font-weight: 590; }
+.def .dactions { display: flex; gap: 7px; flex: none; align-items: center; }
+/* The card actions read as the standard small button family (.btn.sm / .btn.ghost.sm / .iconbtn)
+   but keep their pinned class names. None may be accented (only #rep-new is). */
 .def .def-run,
 .def .def-edit,
 .def .def-kebab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 590;
   color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 11px;
-  cursor: pointer;
+  height: 30px;
+  padding: 0 11px;
 }
-.def .def-kebab { padding: 5px 8px; color: var(--ink-soft); }
-.def .def-run:hover,
-.def .def-edit:hover,
-.def .def-kebab:hover { background: var(--wash); }
+/* the ghost variant — quieter via muted ink, same size */
+.def .def-edit { border-color: transparent; background: transparent; color: var(--muted); }
+.def .def-edit:hover { color: var(--ink); }
+/* the icon-only kebab */
+.def .def-kebab { width: 30px; height: 30px; padding: 0; justify-content: center; border: 0; background: none; color: var(--faint); }
+.def .def-kebab:hover { color: var(--ink); }
 .defs-empty { font-size: 13px; color: var(--muted); padding: 14px 2px; }
 
-/* §09 R08: the inline builder — create / edit a definition. Inked outline (not the accent)
-   so the accent stays on + New report alone (§15); the controls reuse the .report-ctrl /
-   .seg / .report-field rules above. */
+/* §09 R08: the inline builder — create / edit a definition. A warm-paper card (not the
+   accent) so the accent stays on + New report alone; the controls reuse .report-ctrl / .seg. */
 .builder {
-  border: 1px solid var(--rule-strong);
-  border-radius: 11px;
-  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  padding: 16px 18px 18px;
   margin: 14px 0 4px;
   background: var(--wash);
+  box-shadow: var(--sh-card);
 }
 .builder[hidden] { display: none; }
 .builder-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-.builder-title { font-size: 14px; margin: 0; font-weight: 680; flex: none; }
+.builder-title { font-size: 14px; margin: 0; font-weight: 640; flex: none; }
 .builder-name {
   flex: 1;
   font-family: inherit;
   font-size: 14px;
   border: 1px solid var(--rule-strong);
-  border-radius: 7px;
-  padding: 7px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
   background: var(--paper);
   color: var(--ink);
 }
-.builder-note { font-size: 11.5px; color: var(--muted); flex: none; }
+.builder-name:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.builder-note { font-size: 11.5px; color: var(--faint); flex: none; }
 .builder-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 
-/* §12 R6: the consolidated entry editor (window.SE). A centred modal dialog over a dim
-   backdrop, surfacing every tt-editable field plus Split / Delete. Restrained system grays
-   throughout — only the primary Save (and the Split/Merge confirm) reuse .primary, so §15
-   accent discipline holds: no rule here references var(--accent), and the dialog opens over
-   the main window which the JUDGE ACCENT_DISCIPLINE scan also walks. */
+/* §12 R6: the consolidated entry editor (window.SE). A centred MODAL dialog (the ladder's top
+   rung, --sh-modal) over a dim backdrop, surfacing every tt-editable field plus Split / Delete.
+   Monochrome — only the primary Save (and Split/Merge confirm) reuse .primary. */
 .editor-backdrop {
   position: fixed;
   inset: 0;
@@ -1336,27 +1391,80 @@ button.danger:hover { border-color: var(--ink-soft); }
   background: color-mix(in srgb, var(--ink) 38%, transparent);
   overflow: auto;
 }
+/* The dialog is a bare elevated frame (the ladder's top rung); its head / body / foot sections
+   own their own padding (context/mockups/edit-entry.html + merge-conflict.html). */
 .editor {
   width: 100%;
-  max-width: 460px;
+  max-width: 560px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 18px 20px;
+  gap: 0;
+  padding: 0;
   border: 1px solid var(--rule-strong);
-  border-radius: 12px;
+  border-radius: var(--r3);
   background: var(--paper);
-  box-shadow: 0 12px 40px color-mix(in srgb, var(--ink) 24%, transparent);
+  box-shadow: var(--sh-modal);
+  overflow: hidden;
 }
-.editor .ed-title { font-size: 15px; font-weight: 600; color: var(--ink); }
+/* head — title + close, on a hairline */
+.editor .ed-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--rule);
+}
+.editor .ed-title { font-size: 16px; font-weight: 640; color: var(--ink); }
+/* the close icon button (design-system .iconbtn) */
+.editor .iconbtn,
+.iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r1);
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  padding: 0;
+}
+.editor .iconbtn:hover,
+.iconbtn:hover { background: var(--hover); color: var(--ink); }
+.editor .iconbtn .ic,
+.iconbtn .ic { width: 16px; height: 16px; }
+/* body — the field column */
+.editor .ed-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 22px;
+}
+/* quiet uppercase group labels */
+.editor .ed-grp {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+  font-weight: 640;
+  margin: 0;
+}
+.editor .ed-grp-time {
+  margin-top: 6px;
+  padding-top: 18px;
+  border-top: 1px solid var(--rule);
+}
 .editor .ed-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   flex: 1;
   font-size: 12px;
   color: var(--muted);
 }
+.editor .ed-desc-field,
+.editor .ed-tags-field { width: 100%; }
 .editor .ed-row { display: flex; gap: 12px; }
 .editor textarea,
 .editor input[type="text"],
@@ -1365,32 +1473,61 @@ button.danger:hover { border-color: var(--ink-soft); }
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
-  background: var(--wash);
+  background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 6px 10px;
+  border-radius: var(--r1);
+  padding: 8px 11px;
 }
-.editor textarea { resize: vertical; }
-.editor textarea:focus:not(:focus-visible),
-.editor input:focus:not(:focus-visible),
-.editor select:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
+.editor textarea { resize: vertical; min-height: 42px; }
+/* billable is the design-system toggle wrapping the checkbox */
 .editor .ed-bill {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   font-size: 13px;
-  color: var(--ink-soft);
+  color: var(--ink);
+  cursor: pointer;
 }
+.editor .ed-sw {
+  position: relative;
+  width: 36px;
+  height: 21px;
+  border-radius: 999px;
+  background: #d7cdba;
+  flex: none;
+  transition: background 0.12s;
+}
+.editor .ed-sw input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.editor .ed-sw i {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.25);
+  transition: left 0.12s;
+}
+.editor .ed-sw:has(input:checked) { background: var(--accent); }
+.editor .ed-sw:has(input:checked) i { left: 17px; }
+.editor .ed-sw:has(input:focus-visible) { box-shadow: var(--ring); }
 .editor .ed-chips {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
   margin-left: 0;
-  padding: 4px 6px;
-  min-height: 30px;
+  padding: 5px 7px;
+  min-height: 34px;
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
+  border-radius: var(--r1);
   background: var(--wash);
 }
 .editor .ed-tag-input {
@@ -1407,44 +1544,99 @@ button.danger:hover { border-color: var(--ink-soft); }
 .editor .ed-split-q { font-size: 12px; color: var(--muted); }
 .editor .ed-split-err { font-size: 12px; color: var(--flag); }
 .editor .ed-split-err[hidden] { display: none; }
-.editor .ed-actions { display: flex; gap: 8px; align-items: center; }
-.editor .ed-delete { margin-left: auto; }
-.editor .ed-confirm-delete { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
-.editor .ed-confirm-q { font-size: 12px; color: var(--ink-soft); }
-/* The in-dialog merge conflict prompt reuses the .editor chrome; its radios/labels stay
-   monochrome and only the Merge confirm carries .primary. */
-.editor.conflict-prompt .mc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.editor.conflict-prompt .mc-q { font-size: 12px; color: var(--muted); min-width: 96px; }
-.editor.conflict-prompt .mc-opt { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--ink); }
+/* foot — justified row, hairline top, washed; Cancel+Delete grouped left, Save right */
+.editor .ed-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--rule);
+  background: var(--wash);
+}
+.editor .ed-gate { display: inline-flex; align-items: center; gap: 10px; }
+/* the armed two-step delete gate — worded, danger-flag icon (danger never steals the accent) */
+.editor .ed-gate.ed-confirm-delete .ed-confirm-q {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+}
+.editor .ed-gate.ed-confirm-delete .ed-confirm-q .ic { width: 14px; height: 14px; color: var(--danger); }
+.editor .ed-gate.ed-confirm-delete .ed-confirm-q b { font-weight: 590; }
+
+/* §06 R3 / §12 R6: the in-dialog merge conflict resolver (context/mockups/merge-conflict.html).
+   Field-by-field accent radios (the accent here is the field-resolution signal, matching the
+   mockup) + auto-kept "agree" rows; reuses the .ed-head / .ed-body / .ed-foot chrome above. */
+.editor.conflict-prompt .conf { padding: 0; }
+.editor.conflict-prompt .mc-q {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  font-weight: 640;
+  margin: 0 0 10px;
+}
+.editor.conflict-prompt .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.editor.conflict-prompt .mc-opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 9px 11px;
+  cursor: pointer;
+  background: var(--paper);
+  font-size: 13px;
+  color: var(--ink);
+}
+.editor.conflict-prompt .mc-opt:hover { background: var(--hover); }
+.editor.conflict-prompt .mc-opt input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
+.editor.conflict-prompt .mc-opt .rad {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule-strong);
+  flex: none;
+  position: relative;
+}
+.editor.conflict-prompt .mc-opt .ot b { font-weight: 590; font-size: 12.5px; }
+.editor.conflict-prompt .mc-opt.on {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: var(--accent-weak);
+}
+.editor.conflict-prompt .mc-opt.on .rad { border-color: var(--accent); }
+.editor.conflict-prompt .mc-opt.on .rad::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.editor.conflict-prompt .agree {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.editor.conflict-prompt .agree .ic { width: 15px; height: 15px; color: var(--run); }
+.editor.conflict-prompt .agree b { color: var(--ink); font-weight: 590; }
+.editor.conflict-prompt .agree .val { margin-left: auto; font-size: 12px; color: var(--muted); }
 
 /* ====================================================================== */
 /* §12 R15 (G9): the visual time-range picker (timepicker.js / window.STP). */
-/* A modal popover over the authoritative time text inputs: a month calendar */
-/* (pick the day) + a single-day column with hour lines, where the edited    */
-/* entry is a DRAGGABLE accent rectangle. Accent discipline (§15): only the   */
-/* primary "Apply range" button (.stp .primary) and the dragged "me"         */
-/* rectangle (.stp-block.me) carry the accent — everything else is monochrome.*/
-/* The JUDGE ACCENT_DISCIPLINE probe sanctions exactly those two selectors.   */
+/* A MODAL popover (the ladder's top rung) over the authoritative time text  */
+/* inputs: a month calendar + a single-day track where the edited entry is a */
+/* DRAGGABLE accent rectangle. Accent discipline: only the primary "Apply    */
+/* range" button (.stp-apply.primary), the dragged "me" rectangle            */
+/* (.stp-block.me), and the selected calendar day carry the accent.          */
 
-/* The inline-edit form's time fields reuse the .range-pick-btn trigger the   */
-/* add form ships; broaden the neutral-affordance styling beyond .start-form. */
-.range-field { position: relative; display: inline-flex; align-items: center; gap: 6px; }
-.edit-field .range-pick-btn,
-.liveedit .range-pick-btn {
-  flex: none;
-  font-size: 13px;
-  line-height: 1;
-  color: var(--ink-soft);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 6px 9px;
-  cursor: pointer;
-}
-.edit-field .range-pick-btn:hover,
-.liveedit .range-pick-btn:hover { background: var(--wash); }
-.edit-field .range-pick-btn:focus-visible,
-.liveedit .range-pick-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* The inline-edit form's time fields reuse the shared .range-pick-btn trigger (defined once
+   above); the bare .range-field only adds the positioning context the picker anchors to. */
+.range-field { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 
 /* The dim backdrop + centred popover, layered above the editor (z-index 60 > 50). */
 .stp-backdrop {
@@ -1463,39 +1655,38 @@ button.danger:hover { border-color: var(--ink-soft); }
   max-width: 660px;
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 12px;
-  box-shadow: 0 16px 50px color-mix(in srgb, var(--ink) 28%, transparent);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-modal);
   overflow: hidden;
 }
 .stp-head {
-  padding: 13px 18px;
+  padding: 16px 22px;
   border-bottom: 1px solid var(--rule);
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.stp-head h2 { font-size: 15px; margin: 0; font-weight: 600; color: var(--ink); }
+.stp-head h2 { font-size: 15px; margin: 0; font-weight: 640; color: var(--ink); }
 .stp-head .stp-hint { font-size: 11.5px; color: var(--muted); }
 
-/* The authoritative text fields echoed at the top (read-only mirror; the real */
-/* inputs live in the form behind — the picker writes those on Apply). */
+/* The authoritative text fields echoed at the top. */
 .stp-textfields {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   align-items: flex-end;
-  padding: 12px 18px;
+  padding: 16px 22px;
   border-bottom: 1px solid var(--rule);
   background: var(--wash);
 }
-.stp-tf { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.stp-tf { flex: 1; display: flex; flex-direction: column; gap: 5px; }
 .stp-tf span { font-size: 11px; color: var(--muted); }
 .stp-tf input {
   width: 100%;
-  font-family: var(--mono, ui-monospace, monospace);
+  font-family: var(--num);
   font-size: 13px;
   border: 1px solid var(--rule-strong);
-  border-radius: 7px;
-  padding: 7px 10px;
+  border-radius: var(--r1);
+  padding: 8px 10px;
   background: var(--paper);
   color: var(--ink);
 }
@@ -1504,15 +1695,18 @@ button.danger:hover { border-color: var(--ink-soft); }
 .stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
 
 /* month calendar */
-.stp-cal { border-right: 1px solid var(--rule); padding: 14px; }
+.stp-cal { border-right: 1px solid var(--rule); padding: 18px; }
 .stp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
-.stp-month { font-size: 13px; font-weight: 600; color: var(--ink); }
+.stp-month { font-size: 13px; font-weight: 590; color: var(--ink); }
 .stp-nav { display: flex; gap: 6px; }
 .stp-nav button {
-  cursor: pointer; color: var(--ink-soft); background: var(--wash);
-  border: 1px solid var(--rule); border-radius: 6px;
-  width: 24px; height: 24px; font-size: 12px; padding: 0;
+  cursor: pointer; color: var(--muted); background: var(--paper);
+  border: 1px solid var(--rule-strong); border-radius: var(--r1);
+  width: 26px; height: 26px; font-size: 12px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
 }
+.stp-nav button .ic { width: 14px; height: 14px; }
+.stp-nav button:hover { background: var(--hover); color: var(--ink); }
 .stp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .stp-dow { font-size: 10px; color: var(--faint); text-align: center; padding: 3px 0; text-transform: uppercase; }
 .stp-d {
@@ -1521,27 +1715,26 @@ button.danger:hover { border-color: var(--ink-soft); }
   border: 1px solid transparent;
 }
 .stp-d.stp-mut { color: transparent; cursor: default; }
-.stp-d:hover { background: var(--wash); }
-/* the selected day carries the accent — sanctioned as part of the picker's */
-/* "me"/primary surface (the chosen day IS the active span's day). */
-.stp-d.stp-sel { background: var(--accent); color: #fff; font-weight: 600; border-color: var(--accent); }
+.stp-d:hover { background: var(--hover); }
+/* the selected day carries the accent — part of the "me"/primary surface. */
+.stp-d.stp-sel { background: var(--accent); color: #fff; font-weight: 590; border-color: var(--accent); }
 .stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
 .stp-cal-foot { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 /* single-day column with hour lines */
-.stp-day { padding: 12px 16px 12px 8px; }
-.stp-day-lbl { font-size: 12px; color: var(--muted); margin: 0 0 8px 50px; }
+.stp-day { padding: 16px 20px 16px 8px; }
+.stp-day-lbl { font-size: 12px; color: var(--muted); margin: 0 0 10px 52px; }
 .stp-track {
   position: relative; height: 720px;
-  border-left: 1px solid var(--rule); margin-left: 50px;
+  border-left: 1px solid var(--rule); margin-left: 52px;
   background: repeating-linear-gradient(to bottom, transparent 0, transparent 29px, var(--rule) 29px, var(--rule) 30px);
 }
 .stp-hour {
-  position: absolute; left: -50px; width: 46px; text-align: right;
+  position: absolute; left: -52px; width: 46px; text-align: right;
   font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums;
   transform: translateY(-6px);
 }
-.stp-block { position: absolute; left: 8px; right: 14px; border-radius: 6px; }
+.stp-block { position: absolute; left: 8px; right: 14px; border-radius: 7px; }
 /* other entries — light gray, monochrome */
 .stp-block.other {
   background: var(--wash); border: 1px solid var(--rule-strong);
@@ -1555,36 +1748,32 @@ button.danger:hover { border-color: var(--ink-soft); }
 }
 .stp-block.me:active { cursor: grabbing; }
 .stp-block.me .stp-lab-top, .stp-block.me .stp-lab-bot {
-  position: absolute; left: 0; font-size: 11px; font-weight: 600;
+  position: absolute; left: 0; font-size: 11px; font-weight: 590;
   font-variant-numeric: tabular-nums; padding: 0 9px;
 }
 .stp-block.me .stp-lab-top { top: 4px; }
 .stp-block.me .stp-lab-bot { bottom: 4px; }
-.stp-block.me .stp-grip {
-  position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%);
-  text-align: center; font-size: 11px; opacity: 0.85; letter-spacing: 0.04em;
-}
 .stp-block.me .stp-resize {
   position: absolute; left: 0; right: 0; bottom: -1px; height: 12px;
   cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
 }
 .stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); display: block; }
-/* overlap region — yellow hatch, warn only (never blocks Apply) */
+/* overlap region — warn hatch, never blocks Apply */
 .stp-overlap {
   position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;
-  border: 1px solid var(--warn-bd, #ecd8a0); border-radius: 5px;
-  background: repeating-linear-gradient(45deg, var(--warn-bg, #fdf3d3), var(--warn-bg, #fdf3d3) 7px, #f7e9bf 7px, #f7e9bf 14px);
+  border: 1px solid var(--warn-line); border-radius: 0 0 7px 7px;
+  background: repeating-linear-gradient(45deg, var(--flag-bg), var(--flag-bg) 7px, #f1e3bd 7px, #f1e3bd 14px);
 }
 .stp-overlap .stp-otag {
-  position: absolute; right: 6px; top: 3px; font-size: 10px; color: var(--flag);
-  background: var(--warn-bg, #fdf3d3); border: 1px solid var(--warn-bd, #ecd8a0);
-  border-radius: 4px; padding: 0 5px;
+  position: absolute; right: 8px; top: 8px; font-size: 10px; color: var(--flag);
+  background: var(--flag-bg); border: 1px solid var(--warn-line);
+  border-radius: 999px; padding: 0 7px;
 }
-.stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 50px; display: flex; align-items: center; gap: 8px; }
-.stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 10px; padding: 1px 8px; }
+.stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 52px; display: flex; align-items: center; gap: 8px; }
+.stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; }
 
 .stp-foot {
-  padding: 12px 18px; border-top: 1px solid var(--rule);
+  padding: 14px 22px; border-top: 1px solid var(--rule);
   display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--wash);
 }
 .stp-overnight { font-size: 11.5px; color: var(--muted); }
@@ -1592,117 +1781,155 @@ button.danger:hover { border-color: var(--ink-soft); }
 .stp-actions { display: flex; gap: 10px; }
 /* the picker's buttons reuse the base button chrome; only .primary carries the accent. */
 .stp-cancel {
-  font-family: inherit; font-size: 13px; border-radius: 7px; padding: 8px 16px;
-  border: 1px solid var(--rule-strong); background: var(--paper); color: var(--ink); cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 590; padding: 8px 16px; color: var(--ink);
 }
 .stp-apply.primary {
-  font-family: inherit; font-size: 13px; border-radius: 7px; padding: 8px 16px;
-  background: var(--accent); border: 1px solid var(--accent); color: #fff; font-weight: 600; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 590; border-radius: var(--r1); padding: 8px 16px;
+  background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: pointer;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
-/* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button
-   in restrained system grays — no accent (the row actions never carry the accent, §15). It is
-   `.ghost`, so it carries the neutral button background + border (§15 R-clickability / G10);
-   these overrides only tune the glyph weight/ink and must NOT re-blank the background/border. */
+/* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button —
+   no accent (row actions never carry the accent). It is `.ghost`, so it carries the neutral
+   button background + border; these overrides only tune the glyph weight/ink. */
 .entry .kebab {
   font-weight: 700;
   letter-spacing: 0.04em;
   color: var(--muted);
 }
-.entry .kebab:hover { color: var(--ink-soft); }
+.entry .kebab:hover { color: var(--ink); }
 
-/* ---- popover ----------------------------------------------------------- */
-body.popover { background: var(--paper); }
+/* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
+/* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
+   block, an action row, and a foot — NOT a full-viewport flex fill. The popover BrowserWindow
+   is the surface itself, so the mockup's gradient backdrop + notch are demo-only (not added);
+   warm opaque canvas shows behind the floating popover card. */
+body.popover { background: var(--canvas); margin: 0; }
 .pop {
-  padding: 16px;
-  height: 100vh;
+  width: 332px;
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r3);
+  box-shadow: var(--sh-pop);
+  overflow: hidden;
+}
+/* top block: state line · clock · description · context · tags */
+.pop-top { padding: 18px 18px 16px; }
+.pop-state {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 10px;
-}
-.pop .count {
-  font-family: var(--mono);
-  font-size: 34px;
-  letter-spacing: -0.01em;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-.pop.idle .count { color: var(--faint); }
-.pop .ctx { color: var(--ink-soft); font-size: 13px; min-height: 18px; }
-.pop .ctx .where { color: var(--muted); font-size: 12px; }
-.pop .row { display: flex; gap: 8px; }
-.pop .state {
-  font-family: var(--mono);
+  align-items: center;
+  gap: 8px;
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  font-weight: 640;
   color: var(--muted);
 }
-.pop.running .state { color: var(--accent); }
+.pop.running .pop-state { color: var(--run); }
+/* run dot — the green running signal, paired with the worded state for inclusivity */
+.pop-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rule-strong); flex: none; display: inline-block; }
+.pop.running .pop-dot { background: var(--run); }
+.pop-clock {
+  font-family: var(--num);
+  font-size: 38px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+  margin: 8px 0 4px;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+/* only the running state carries the accent — the clock is faint when idle */
+.pop.running .pop-clock { color: var(--accent); }
+.pop-desc { font-weight: 590; font-size: 14px; color: var(--ink); }
+.pop-desc[hidden] { display: none; }
+.pop-ctx { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.pop-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.pop-tags[hidden] { display: none; }
+/* action row: Stop/Start (primary) + Switch — equal-width centered buttons */
+.pop-act { display: flex; gap: 9px; padding: 0 18px 16px; }
+.pop-act .btn { flex: 1; justify-content: center; }
+/* foot: Open Stint — a quiet full-width link row, one rung quieter than the actions */
+.pop-foot { border-top: 1px solid var(--rule); display: flex; align-items: center; padding: 6px 8px; }
+.pop-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--r1);
+  color: var(--ink);
+  font-weight: 560;
+  font-size: 12.5px;
+  flex: 1;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.pop-open:hover { background: var(--hover); }
+.pop-open .ic { color: var(--muted); }
 
 /* ---- settings view (§12 R11, §14) -------------------------------------- */
-/* The in-window Settings panel: editable controls for every §14 setting, modeled on
-   context/mockups/settings.html. Strictly monochrome — the active segment is inked (not accented),
-   the toggle's ON state uses the accent variable ONLY through the same primary-action
-   discipline (a single sanctioned fill), so the §15 ACCENT_DISCIPLINE scan stays green.
-   Reuses the existing tokens (--rule, --wash, --ink, --muted) the report controls use. */
-.settings-head { margin: 4px 0 6px; }
-.settings-title { font-size: 17px; margin: 0; font-weight: 650; color: var(--ink); }
-.settings-sub { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+/* The in-window Settings panel. Monochrome — the week-start segment selects via a RAISED CHIP
+   (not the accent); the rounding toggle's ON state is inked (--ink), not accented, so the
+   accent stays on the primary action / running state. */
+.settings-head { padding: 6px 0 4px; }
+.settings-title { font-size: 18px; margin: 0; font-weight: 640; color: var(--ink); letter-spacing: -0.01em; }
+.settings-sub { color: var(--muted); font-size: 13px; margin: 6px 0 8px; }
 .settings-sub code {
-  font-family: var(--mono);
-  background: var(--paper);
+  font-family: var(--num);
+  background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 4px;
-  padding: 1px 5px;
+  border-radius: 6px;
+  padding: 1px 6px;
   color: var(--ink);
 }
 .settings-panel { margin-top: 6px; }
 .set-grp {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--faint);
-  margin: 18px 0 4px;
+  font-size: 13px;
+  font-weight: 640;
+  color: var(--ink);
+  margin: 26px 0 2px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule-strong);
 }
 .set-row {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr 330px;
   align-items: center;
-  gap: 16px;
-  padding: 11px 0;
-  border-bottom: 1px solid var(--rule);
+  gap: 20px;
+  padding: 13px 2px;
 }
-.set-k { font-size: 14px; color: var(--ink); }
+.set-row + .set-row { border-top: 1px solid var(--rule); }
+.set-k { font-size: 13px; color: var(--ink); }
 .set-k small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.set-ctrl { display: inline-flex; align-items: center; gap: 9px; justify-self: end; }
+.set-ctrl { display: inline-flex; align-items: center; gap: 10px; justify-self: end; }
 .set-field {
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 9px;
+  border-radius: var(--r1);
+  padding: 7px 10px;
   min-width: 160px;
 }
-.set-field:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
-/* The week-start segmented control reuses the report .seg / .seg-btn rules (inked active
-   segment, monochrome) — no accent (§15). */
+/* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }
 /* The rounding toggle: a monochrome track that fills inked when on. The knob slides; the ON
-   state is inked (var(--ink)), NOT accented, so the accent stays on the primary action only. */
+   state is inked (--ink), NOT accented, so the accent stays on the primary action only. */
 .set-toggle {
   width: 38px;
   height: 22px;
-  border-radius: 11px;
+  border-radius: 999px;
   background: var(--rule-strong);
   border: none;
   position: relative;
   cursor: pointer;
   padding: 0;
   flex: none;
+  transition: background 0.12s;
 }
 .set-toggle i {
   position: absolute;
@@ -1712,48 +1939,45 @@ body.popover { background: var(--paper); }
   height: 18px;
   border-radius: 50%;
   background: var(--paper);
+  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.25);
   transition: left 0.12s ease;
 }
 .set-toggle.on { background: var(--ink); }
 .set-toggle.on i { left: 18px; }
-.set-toggle:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
+.set-toggle:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 .set-toggle-lbl { font-size: 13px; color: var(--ink-soft); min-width: 22px; }
 .set-hotkey {
-  font-family: var(--mono);
+  font-family: var(--num);
   font-size: 12.5px;
   color: var(--ink);
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
+  border-radius: var(--r1);
   padding: 5px 10px;
   background: var(--wash);
+  box-shadow: 0 1px 0 var(--rule-strong);
   cursor: pointer;
 }
-.set-hotkey:focus-visible { outline: 2px solid var(--muted); outline-offset: 2px; }
-/* §19 R03/R06 — Software Update. The version string is monospace/soft; the Check-now button
-   is a plain neutral button (§15 R-clickability — neutral background, never the accent: the
-   accent stays on each view's single primary action). The update pill + result line use the
-   monochrome --flag tokens (the same warn-not-block palette the overlap flag uses), so an
-   "update available" notice is visually distinct without smuggling in the accent. */
-.ver { font-family: var(--mono); font-size: 12.5px; color: var(--ink-soft); }
+.set-hotkey:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
+/* §19 R03/R06 — Software Update. The version string is mono/soft; the Check-now button is a
+   plain neutral button (never the accent). The update pill + result line use the --flag tokens
+   (the same warn-not-block palette the overlap flag uses). */
+.ver { font-family: var(--num); font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .set-update-btn {
   font-family: var(--sans);
   font-size: 13px;
+  font-weight: 590;
   color: var(--ink);
-  background: var(--wash);
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 11px;
-  cursor: pointer;
+  padding: 7px 12px;
 }
-.set-update-btn:disabled { color: var(--muted); cursor: default; }
+.set-update-btn:disabled { color: var(--muted); cursor: default; background: var(--wash); }
 .set-update-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 .pill.new,
 .update-result.new {
   color: var(--flag);
   background: var(--flag-bg);
-  border: 1px solid color-mix(in srgb, var(--flag) 30%, transparent);
+  border: 1px solid var(--warn-line);
   border-radius: 999px;
-  padding: 1px 9px;
+  padding: 1px 10px;
   font-size: 12px;
   text-decoration: none;
 }
@@ -1762,19 +1986,19 @@ body.popover { background: var(--paper); }
 .update-result.err { color: var(--flag); }
 .update-result a, .pill.new { color: inherit; }
 
-/* §19 R04 — the guided download + install panel. A bordered notice block (the --flag notice
+/* §19 R04 — the guided download + install panel. A warm warn-notice block (the --flag notice
    token, not the accent — the accent stays on the Download & install primary action inside it),
-   a live progress bar (.step .bar), and the numbered guided steps. */
+   a live progress bar, and the numbered guided steps. */
 .update {
   margin: 12px 0 4px;
-  border: 1px solid var(--rule-strong);
+  border: 1px solid var(--warn-line);
   background: var(--flag-bg);
-  border-radius: 9px;
-  padding: 12px 14px;
+  border-radius: var(--r2);
+  padding: 14px 16px;
 }
 .update .uhd {
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 640;
   color: var(--flag);
   margin-bottom: 8px;
   display: flex;
@@ -1782,7 +2006,10 @@ body.popover { background: var(--paper); }
   gap: 10px;
   justify-content: space-between;
 }
-.steps { display: flex; flex-direction: column; gap: 7px; }
+/* the head's icon + text span — lays out the line-icon (i-download / i-check) with the head
+   text and takes the available width so the action button is pushed to the right edge. */
+.update .uhd-t { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.steps { display: flex; flex-direction: column; gap: 8px; }
 .step { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-soft); }
 .step .n {
   width: 18px;
@@ -1799,60 +2026,73 @@ body.popover { background: var(--paper); }
   flex: none;
 }
 .step.done .n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-.step .bar { flex: 1; height: 6px; border-radius: 3px; background: var(--rule-strong); overflow: hidden; }
+.step .bar { width: 200px; height: 7px; border-radius: 4px; background: var(--wash); border: 1px solid var(--rule); overflow: hidden; }
+/* §15 accent discipline (pinned by the renderer-static guard): the guided panel chrome stays
+   monochrome — only the Download primary button carries the accent — so the progress fill is
+   inked, not accented. (The mockup uses the accent here; the harness keeps the panel mono.) */
 .step .bar i { display: block; height: 100%; width: 0%; background: var(--ink); transition: width 0.15s ease; }
-.update .restore-note { font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.update .restore-note { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.update .restore-note .ic { color: var(--faint); margin-top: 1px; }
 
-/* §05 R09 — the Timer view's favorites rail. The Pin control and per-favorite kebab/menu are
-   NEUTRAL buttons (the base button convention: a --wash fill + a --rule-strong border) — the
-   accent stays reserved for the view primary action / running state (§15 accent discipline), so
-   no rule here pulls in var(--accent). The chips reuse the monochrome .chip rule above. */
+/* §05 R09 — the Timer view's favorites rail. The Pin control + per-favorite kebab/menu are
+   NEUTRAL buttons; the accent stays on the view primary action / running state. The chips
+   reuse the monochrome .chip rule. */
 .favorites { display: flex; flex-direction: column; gap: 12px; }
 .fav-head { display: flex; align-items: center; justify-content: space-between; }
-.fav-title { font-weight: 600; color: var(--ink); }
+.fav-title { font-weight: 590; color: var(--ink); }
 .fav-pin {
   font-size: 12.5px;
+  font-weight: 590;
   color: var(--ink);
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  padding: 5px 10px;
-  background: var(--wash);
-  cursor: pointer;
+  padding: 7px 12px;
 }
 .fav-rail { display: flex; flex-wrap: wrap; gap: 10px; }
 .fav-card {
   position: relative;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 11px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 8px 10px;
+  border-radius: var(--r2);
+  padding: 10px 12px;
   background: var(--paper);
+  box-shadow: var(--sh-card);
 }
-.fav-card-main { display: flex; flex-direction: column; gap: 4px; }
-.fav-name { font-weight: 600; color: var(--ink); }
-.fav-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+/* the monochrome favorites mark (never accent-coloured, §15) */
+.fav-card .star { color: var(--muted); flex: none; display: inline-flex; align-items: center; }
+.fav-card .star .ic { width: 15px; height: 15px; }
+/* the name/meta text block, ellipsised */
+.fav-card .fi { flex: 1; min-width: 0; }
+.fav-card .fav-name {
+  font-size: 13px;
+  font-weight: 590;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fav-card .fm {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
 /* §05 R10: the favorite's one-click Resume. Monochrome (accent is confined to the running
-   Active-Timer card, §15) so the rail stays calm — it is an affordance, not the live state. */
+   Active-Timer card) so the rail stays calm — it is an affordance, not the live state. */
 .fav-card .resume {
   flex: none;
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  background: var(--wash);
   color: var(--ink);
-  cursor: pointer;
-  padding: 4px 11px;
+  padding: 6px 12px;
   font-size: 12px;
+  font-weight: 590;
 }
 .fav-kebab {
-  border: 1px solid var(--rule-strong);
-  border-radius: 6px;
-  background: var(--wash);
-  color: var(--ink-soft);
-  cursor: pointer;
-  padding: 2px 6px;
+  color: var(--muted);
+  padding: 4px 8px;
 }
+.fav-kebab:hover { color: var(--ink); }
 .fav-menu {
   position: absolute;
   top: 100%;
@@ -1862,9 +2102,10 @@ body.popover { background: var(--paper); }
   flex-direction: column;
   gap: 4px;
   margin-top: 4px;
-  padding: 4px;
+  padding: 5px;
   border: 1px solid var(--rule-strong);
-  border-radius: 6px;
+  border-radius: var(--r1);
   background: var(--paper);
+  box-shadow: var(--sh-pop);
 }
 .fav-empty { color: var(--faint); font-size: 13px; }

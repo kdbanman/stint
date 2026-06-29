@@ -33,7 +33,6 @@ const baseSettings = {
   firstCheckinMin: 60,
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
-  accent: 'system',
   dateFormat: 'system',
   backupRetention: 7,
 };
@@ -59,7 +58,6 @@ function runningSnapshot(
     days: [],
     sleepFlaggedIds: [],
     settings: baseSettings,
-    accent: '#2f6fed',
     appVersion: '0.0.0-dev',
     lastBackupUtc: null,
     recoveryNotice: null,
@@ -72,7 +70,6 @@ function idleSnapshot(): UiState {
     days: [],
     sleepFlaggedIds: [],
     settings: baseSettings,
-    accent: '#2f6fed',
     appVersion: '0.0.0-dev',
     lastBackupUtc: null,
     recoveryNotice: null,

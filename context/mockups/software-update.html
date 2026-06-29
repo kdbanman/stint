@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Software update</title>
+<style>
+  :root{
+    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
+    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
+    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
+    --danger:#B23B2B;--danger-weak:#F8E9E4;
+    --r1:8px;--r2:12px;--r3:16px;
+    --ring:0 0 0 3px #C8623E33;
+    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  /* window chrome */
+  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #DDD4C3}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
+  .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
+  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A99F8E;padding:4px 14px}
+  /* shell + sidebar */
+  .shell{display:flex;min-height:600px}
+  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a .ic{color:var(--muted)}
+  .nav a:hover{background:var(--hover)}
+  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C8623E22}
+  .nav a.on .ic{color:var(--accent)}
+  .nav .sp{flex:1}
+  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
+  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
+  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
+  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
+  .nav .stat a:hover{background:none;text-decoration:underline}
+  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
+  /* view */
+  .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
+  /* buttons */
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn:hover{background:var(--hover)}
+  .btn .ic{width:15px;height:15px;color:var(--muted)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
+  .btn.primary:hover{background:#b9582f}
+  .btn.primary .ic{color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--hover);color:var(--ink)}
+  .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
+  .btn.danger:hover{background:var(--danger-weak)}
+  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn:hover{background:var(--hover);color:var(--ink)}
+  /* fields */
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  select.field{width:auto;min-width:150px}
+  /* card / pill */
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
+  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C8623E33}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+
+  /* settings rows + update flow */
+  .view{gap:0}
+  .sub{color:var(--muted);font-size:13px;margin:-8px 0 20px}
+  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:640;margin:8px 0 2px}
+  .srow{display:flex;align-items:flex-start;gap:18px;padding:16px 2px;border-bottom:1px solid var(--line)}
+  .srow .lhs{flex:1;min-width:0}
+  .srow .nm{font-weight:590;font-size:13.5px}
+  .srow .ds{color:var(--muted);font-size:12px;margin-top:3px}
+  .srow .rhs{display:flex;align-items:center;gap:12px;flex:none}
+  .ver{font-family:var(--num);font-size:12.5px;color:var(--ink)}
+  /* update banner */
+  .ubann{display:flex;align-items:center;gap:14px;padding:14px 16px;margin:6px 0 22px;border-radius:var(--r2);background:var(--accent-weak);border:1px solid #C8623E33}
+  .ubann .ic{color:var(--accent)}
+  .ubann .ut{flex:1}
+  .ubann .ut b{font-weight:640}
+  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:1px}
+  /* guided install card */
+  .guide{margin-top:22px;padding:20px 22px}
+  .guide-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .guide-h h3{font-size:15px;font-weight:640;margin:0}
+  .guide-h .ver{margin-left:2px;color:var(--muted)}
+  .guide-h .btn{margin-left:auto}
+  .steps{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
+  .steps li{display:flex;gap:14px;padding:12px 4px;border-top:1px solid var(--line)}
+  .steps li .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--sunken);border:1px solid var(--line-strong);color:var(--muted);font-weight:640;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .steps li .stx{padding-top:1px}
+  .steps li .stx b{font-weight:590}
+  .steps li .stx .d{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .guide-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+  .guide-foot .ic{width:14px;height:14px;color:var(--faint)}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>
+<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+</defs></svg>
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Settings</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="main.html"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html" class="on"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">Version</div><div class="v tnum">2026.6.24</div><a href="#">Update ready · 2026.7.1 <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+</nav>
+    <div class="view">
+
+      <div class="vhead"><h2 class="vtitle">Software update</h2></div>
+
+      <div class="ubann">
+        <svg class="ic"><use href="#i-download"/></svg>
+        <div class="ut"><b>Version 2026.7.1 is ready to install.</b><span>Released June 27, 2026</span></div>
+        <button class="btn primary"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install</button>
+      </div>
+
+      <div class="group">Version</div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Current version</div></div>
+        <div class="rhs"><span class="ver">2026.6.24</span><span class="pill accent">update available</span></div>
+      </div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Check for updates</div><div class="ds">Last checked 9:12 AM</div></div>
+        <div class="rhs"><button class="btn"><svg class="ic"><use href="#i-check"/></svg> Check now</button></div>
+      </div>
+      <div class="srow">
+        <div class="lhs"><div class="nm">Check automatically</div></div>
+        <div class="rhs"><select class="field"><option>On launch + daily</option><option>On launch only</option><option>Never</option></select></div>
+      </div>
+
+      <div class="card guide">
+        <div class="guide-h">
+          <svg class="ic" style="color:var(--accent)"><use href="#i-download"/></svg>
+          <h3>Guided install</h3><span class="ver">2026.7.1</span>
+          <button class="btn primary"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install 2026.7.1</button>
+        </div>
+        <ol class="steps">
+          <li><span class="n">1</span><div class="stx"><b>Download the new version</b><div class="d">~64 MB</div></div></li>
+          <li><span class="n">2</span><div class="stx"><b>Replace the app in Applications</b></div></li>
+          <li><span class="n">3</span><div class="stx"><b>Approve once at first launch</b><div class="d">System Settings → Privacy &amp; Security</div></div></li>
+        </ol>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>
