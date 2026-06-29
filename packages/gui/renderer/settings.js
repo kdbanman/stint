@@ -5,20 +5,18 @@
 // over file:// in the packaged app; helpers come from window.SU (util.js, loaded first).
 //
 // This file is intentionally additive: it does not edit app.js. It hooks the Settings
-// nav-item to render the panel, mirrors the accent/date-format modes onto the renderer
-// (so app.js's plain applyAccent stays honoured), and re-reads on every external change.
+// nav-item to render the panel, mirrors the date-format mode onto the renderer, and
+// re-reads on every external change.
 (function () {
-  const { friendlyHotkey, applyAccentMode, applyDateFormat } = window.SU;
+  const { friendlyHotkey, applyDateFormat } = window.SU;
   const panel = () => document.getElementById('settings-panel');
 
-  // The live accent-usage + date-format modes. render() re-applies them off fresh getState
-  // (on startup, on every external change, and right after a setSetting), so the chosen mode
-  // is honoured: 'monochrome' maps --accent onto the ink colour (suppressing the coloured
-  // accent), and the date format drives util.js's localTime.
-  let accentMode = 'system';
+  // The live date-format mode. render() re-applies it off fresh getState (on startup, on
+  // every external change, and right after a setSetting), so the chosen format drives
+  // util.js's localTime.
   let dateFormatMode = 'system';
 
-  // §14 — the eight editable settings, in the mockup's grouped order. `key` is the camelCase
+  // §14 — the editable settings, in the mockup's grouped order. `key` is the camelCase
   // setSetting key (the same key tt's descriptor maps from its snake_case); `kind` chooses the
   // control; `options` lists [value, label] pairs for selects/segments.
   const FIELDS = [
@@ -40,10 +38,6 @@
       options: [[15, '15 min'], [30, '30 min'], [60, '60 min']],
     },
     { group: 'System', key: 'globalHotkey', label: 'Global hotkey', kind: 'hotkey' },
-    {
-      group: 'System', key: 'accent', label: 'Accent colour', kind: 'select',
-      options: [['system', 'System accent'], ['monochrome', 'Monochrome']],
-    },
     {
       group: 'System', key: 'dateFormat', label: 'Date & number format', kind: 'select',
       options: [['system', 'System locale'], ['iso', 'ISO (24-hour)']],
@@ -343,7 +337,7 @@
   }
 
   function wire(host) {
-    // Selects (rounding increment, check-ins, accent, date format) — cast numeric values.
+    // Selects (rounding increment, check-ins, date format) — cast numeric values.
     for (const sel of host.querySelectorAll('select.set-field')) {
       sel.addEventListener('change', () => {
         const raw = sel.value;
@@ -400,10 +394,8 @@
       return;
     }
     const settings = (state && state.settings) || {};
-    // Mirror the editable modes so the renderer keeps honouring them across app.js loads.
-    accentMode = settings.accent === 'monochrome' ? 'monochrome' : 'system';
+    // Mirror the editable mode so the renderer keeps honouring it across app.js loads.
     dateFormatMode = settings.dateFormat === 'iso' ? 'iso' : 'system';
-    applyAccentMode(accentMode, state && state.accent);
     applyDateFormat(dateFormatMode);
     host.innerHTML = panelHtml(settings);
     wire(host);
@@ -420,12 +412,11 @@
   if (navItem) navItem.addEventListener('click', () => void render());
 
   // Re-read on every external change (a tt write may have changed a setting) so the panel +
-  // the accent/date-format modes stay current. Also render once on startup so the modes are
-  // applied from first paint even before the Settings view is opened.
+  // the date-format mode stay current. Also render once on startup so the mode is applied
+  // from first paint even before the Settings view is opened.
   if (window.stint && window.stint.onChange) {
     window.stint.onChange(() => {
-      // Only re-fetch when the Settings view is the visible one (cheap-guard); always keep
-      // the accent/date modes applied via the wrapped applyAccent on app.js's own load.
+      // Only re-fetch when the Settings view is the visible one (cheap-guard).
       const section = document.querySelector('.view[data-view="settings"]');
       if (section && !section.hidden) void render();
     });

@@ -124,24 +124,6 @@ window.SU = (function () {
     host.innerHTML = ICON_SPRITE;
     (doc.body || doc.documentElement).appendChild(host);
   }
-  // Apply the system accent ONLY to the --accent variable (PRD §15).
-  function applyAccent(accent) {
-    if (accent) document.documentElement.style.setProperty('--accent', accent);
-  }
-  // §12 R11: honour the accent-usage setting. 'system' paints the system accent on the
-  // primary action / running state (the §15 default); 'monochrome' suppresses it by mapping
-  // --accent onto the ink colour, so the primary action and running indicator stop standing
-  // out — the whole chrome reads monochrome — without scattering a second hardcoded colour.
-  // Always drives the single --accent variable, so the §15 accent-discipline scan still sees
-  // exactly one sanctioned fill (the primary action), now inked rather than coloured.
-  function applyAccentMode(mode, accent) {
-    if (mode === 'monochrome') {
-      const ink = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#15151a';
-      document.documentElement.style.setProperty('--accent', ink);
-    } else {
-      applyAccent(accent);
-    }
-  }
   // §07: the pure tag-edit decision — diff the entry's current tags against the user's
   // edited chip set into the minimal addTags/removeTags the `edit` patch carries. A thin
   // mirror of src/tags.ts (the asserted, unit-tested contract) so app.js — a classic
@@ -226,5 +208,5 @@ window.SU = (function () {
     };
   }
 
-  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, applyAccent, applyAccentMode, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
+  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
 })();

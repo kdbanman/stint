@@ -783,7 +783,7 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/data-view="settings"/);
     expect(html).toMatch(/id="settings-panel"/);
     expect(html).toMatch(/src="settings\.js"/);
-    // settings.js exposes a control for every one of the eight §14 settings (by its
+    // settings.js exposes a control for every one of the seven §14 settings (by its
     // setSetting key) — a regression that drops a control is caught cheaply per commit.
     for (const key of [
       'rounding',
@@ -792,7 +792,6 @@ describe('renderer static contract', () => {
       'firstCheckinMin',
       'checkinIntervalMin',
       'globalHotkey',
-      'accent',
       'dateFormat',
     ]) {
       expect(settings, `settings.js must expose the ${key} control`).toMatch(new RegExp(`'${key}'`));
@@ -800,9 +799,8 @@ describe('renderer static contract', () => {
     // …and each control persists its value over the SAME setSetting channel tt config set
     // uses (no new channel — parity-covered), keyed/valued from the changed control.
     expect(settings).toMatch(/window\.stint\.setSetting\(\{\s*key,\s*value\s*\}\)/);
-    // …the renderer honours the new accent-usage / date-format modes through the pure util
-    // helpers (it derives no accent/date logic of its own beyond choosing the mode).
-    expect(settings).toMatch(/applyAccentMode\(/);
+    // …the renderer honours the date-format mode through the pure util helper (it derives no
+    // date logic of its own beyond choosing the mode).
     expect(settings).toMatch(/applyDateFormat\(/);
   });
 

@@ -1,7 +1,7 @@
 // Popover renderer (PRD §12 R1) — the running timer, counting up; one click to
 // stop, switch (§05 R8), or start; opens the main window.
 // Classic script: helpers come from window.SU (util.js, loaded first).
-const { fmtDur, elapsed, applyAccent, icon, injectSprite, localTime } = window.SU;
+const { fmtDur, elapsed, icon, injectSprite, localTime } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -14,7 +14,6 @@ $('open').innerHTML = 'Open Stint' + icon('arrow');
 
 async function load() {
   state = await window.stint.getState();
-  applyAccent(state.accent);
   render();
 }
 

@@ -2,7 +2,7 @@
 // grouped by day with flags in context, a one-tap subtract on slept entries, an
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (util.js, loaded first).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, applyAccent, tagDiff, deriveView } = window.SU;
+const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, tagDiff, deriveView } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -54,7 +54,6 @@ async function load() {
   state = searchQuery && !entryCtrlActive
     ? await window.stint.search({ query: searchQuery })
     : await window.stint.getState();
-  applyAccent(state.accent);
   // §12 R9: when the control bar is active, the entries section is the queried groups —
   // re-run the query on every (re)load so a tt write keeps the grouped/filtered view fresh.
   // Otherwise entryGroups stays null and render() paints the day-grouped state.days.

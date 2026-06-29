@@ -14,7 +14,7 @@
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {
-  const { rangeLabel, lineFlags, applyAccent, icon } = window.SU;
+  const { rangeLabel, lineFlags, icon } = window.SU;
   const $ = (id) => document.getElementById(id);
 
   // The five core presets the range chips drive, plus their display label. 'custom' is the
@@ -567,14 +567,6 @@
   }
 
   function init() {
-    // Parity with app.js: pull the system accent so the view's one primary action (+ New
-    // report) paints the same restrained accent (best-effort).
-    if (window.stint && window.stint.getState) {
-      void window.stint
-        .getState()
-        .then((ui) => applyAccent(ui && ui.accent))
-        .catch(() => {});
-    }
     wire();
     const navItem = document.querySelector('.nav-item[data-view="reports"]');
     if (navItem) navItem.addEventListener('click', () => void renderDefs());

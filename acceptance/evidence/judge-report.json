@@ -54,7 +54,7 @@
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": true,
-      "justification": "primary=rgb(47, 111, 237) accent=rgb(47, 111, 237); stray accent on [none]",
+      "justification": "primary=rgb(200, 98, 62) accent=rgb(200, 98, 62); stray accent on [none]",
       "screenshot": "main-running.png"
     },
     {
@@ -204,7 +204,7 @@
     {
       "item": "SETTINGS_VIEW",
       "pass": true,
-      "justification": "settings panel exposes all eight §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"accent\",\"dateFormat\"]), accent discipline holds (offenders=[none]), accent-usage edit fired setSetting={\"key\":\"accent\",\"value\":\"monochrome\"}",
+      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
       "screenshot": "main-settings.png"
     },
     {

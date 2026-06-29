@@ -69,7 +69,6 @@ describe('GOLD: settings defaults (§14)', () => {
     const store = Store.openMemory();
     expect(store.settings()).toMatchInlineSnapshot(`
       {
-        "accent": "system",
         "backupRetention": 5,
         "checkinIntervalMin": 30,
         "dateFormat": "system",
