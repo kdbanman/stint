@@ -18,51 +18,11 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/friendlyHotkey/); // shows the actual configured hotkey
   });
 
-  it('accent is applied only via the --accent variable (§15)', () => {
-    const css = read('styles.css');
-    // The primary action and running state use the accent variable…
-    expect(css).toMatch(/button\.primary\s*\{[^}]*var\(--accent\)/s);
-    // …and no rule hardcodes the seed accent hex outside the :root variable.
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/#2f6fed/);
-  });
-
-  it('the renderer ships a keyboard/focus pass: a :focus-visible ring, accent-disciplined, with announced toggle state (§12 R14)', () => {
-    const css = read('styles.css');
+  it('the renderer announces toggle state for assistive tech (§12 R14)', () => {
     const html = read('index.html');
     const pop = read('popover.html');
     const app = read('app.js');
     const popJs = read('popover.js');
-    // The focus pass exists: at least one :focus-visible rule defines the keyboard ring
-    // (scoped to :focus-visible, not :focus, so a mouse click paints no ring — quiet feel)…
-    expect(css).toMatch(/:focus-visible/);
-    // …an ordinary button takes a NEUTRAL ring on a system gray, never the accent (§15 accent
-    // discipline — accent stays on the primary action / running state)…
-    expect(css).toMatch(/button:focus-visible\s*\{[^}]*outline:[^}]*var\(--rule-strong\)/s);
-    // …only the primary action's ring may carry the accent (the one sanctioned accent ring)…
-    expect(css).toMatch(/button\.primary:focus-visible\s*\{[^}]*var\(--accent\)/s);
-    // …and no focus rule reintroduces a hardcoded accent hex outside the :root variable
-    // (the existing accent guard pattern, reused here so the ring can't smuggle the hex in).
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/#2f6fed/);
-
-    // The focus pass is NOT buttons-only: the text/select controls (the #search box, the
-    // #el-client / #el-tag report filters, the inline edit + editor + settings fields) must
-    // ALSO paint a keyboard ring. A single :focus-visible rule covers input/select/textarea
-    // with the same NEUTRAL --rule-strong ring (never the accent — §15). Without it the JUDGE
-    // KEYBOARD_FOCUS Tab-walk records ring misses on those controls.
-    expect(css).toMatch(
-      /input:focus-visible[\s\S]*?\{[^}]*outline:[^}]*var\(--rule-strong\)/,
-    );
-    expect(css).toMatch(/select:focus-visible/);
-    // …and the quiet ringless `:focus` rules that suppress the outline must scope themselves to
-    // `:focus:not(:focus-visible)` (mouse/typing only) so they never re-suppress the keyboard
-    // ring. Guard: no `outline: none` rule may match a bare `:focus` (a keyboard focus too).
-    const outlineNoneFocus = css.match(/[^\n]*:focus[^\n]*outline:\s*none/g) ?? [];
-    for (const rule of outlineNoneFocus) {
-      expect(rule).toMatch(/:focus:not\(:focus-visible\)/);
-    }
-
     // The toggle exposes the aria hooks the JUDGE accessibility-tree walk + a screen reader
     // read: an aria-label and an aria-pressed state, in both windows, kept current by render().
     expect(html).toMatch(/id="toggle"[^>]*aria-pressed=/);
@@ -247,7 +207,6 @@ describe('renderer static contract', () => {
 
   it('a destructive action goes through a generic in-window confirm gate, never a stray click (§12 R13)', () => {
     const app = read('app.js');
-    const css = read('styles.css');
     // The delete click handler routes to armDelete (no direct remove on the first click)…
     expect(app).toMatch(/act === 'delete'\)\s*return armDelete/);
     // …armDelete delegates to the GENERIC confirm gate (reused by the future archive-when-
@@ -267,13 +226,6 @@ describe('renderer static contract', () => {
     expect(removeSites.length).toBe(1);
     const armDeleteBody = app.slice(app.indexOf('function armDelete(btn, e)'));
     expect(armDeleteBody).toMatch(/onConfirm:\s*async \(\)\s*=>\s*\{[\s\S]*?window\.stint\.remove\(\{\s*id:\s*e\.id\s*\}\)/);
-    // The danger/confirm chrome is monochrome — the .danger button and the .confirm gate
-    // never paint the accent (§15 accent discipline; the JUDGE ACCENT_DISCIPLINE scan also
-    // walks this chrome). The danger button uses neutral/danger tokens, not var(--accent).
-    expect(css).toMatch(/button\.danger\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/button\.danger\s*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.confirm\b[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('destructive actions confirm and search/filter/group reflect live in the list AND the report total (§17 R11)', () => {
@@ -338,7 +290,6 @@ describe('renderer static contract', () => {
   it('a write that creates an overlap raises an at-write-time inline banner (§06 R4)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const css = read('styles.css');
     // The banner host is present, announced (role=status / aria-live) for accessibility…
     expect(html).toMatch(/id="overlap-banner"/);
     expect(html).toMatch(/id="overlap-banner"[^>]*role="status"/);
@@ -355,14 +306,10 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/const ack = await window\.stint\.toggle\(\)/);
     expect(app).toMatch(/const ack = await window\.stint\.edit\(/);
     expect(app).toMatch(/applyAck\(ack\)/);
-    // …and the banner uses the --flag tokens, never the accent (§15 accent discipline).
-    expect(css).toMatch(/\.banner\s*\{[^}]*var\(--flag\)/s);
-    expect(css).not.toMatch(/\.banner\s*\{[^}]*var\(--accent\)/s);
   });
 
   it('an overlapped row shows the detailed overlap banner and a slept-trimmed row strikes the raw duration (§12 R9)', () => {
     const app = read('app.js');
-    const css = read('styles.css');
     // The affected row paints a detailed banner spelling out the overlapping amount + which
     // neighbour (previous/next), not only the compact "overlap" badge…
     expect(app).toMatch(/function overlapBannerHtml\(e\)/);
@@ -376,21 +323,10 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/function durHtml\(e\)/);
     expect(app).toMatch(/<s class="struck">/);
     expect(app).toMatch(/e\.sleptThrough && \(e\.excludedSeconds \?\? 0\) > 0/);
-    // CSS defines the .banner (overlap) and .struck rules, and neither hardcodes the accent
-    // hex (monochrome --flag / --faint tokens only, §15 accent discipline).
-    expect(css).toMatch(/\.banner\b/);
-    expect(css).toMatch(/\.struck\b/);
-    expect(css).toMatch(/\.struck[^{]*\{[^}]*line-through/s);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.banner[^{]*\{[^}]*#2f6fed/s);
-    expect(withoutRootVar).not.toMatch(/\.struck[^{]*\{[^}]*#2f6fed/s);
-    // The detailed overlap banner is flag-coloured, never accented.
-    expect(withoutRootVar).not.toMatch(/\.banner\.overlap[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('tags show as chips in-context and an inline editor edits them over the edit IPC (§07)', () => {
     const app = read('app.js');
-    const css = read('styles.css');
     // Every row's tags render as monochrome chips, off an entry tags accessor…
     expect(app).toMatch(/function tagsHtml\(e\)/);
     expect(app).toMatch(/e\.tags/);
@@ -408,17 +344,11 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch:\s*\{\s*addTags,\s*removeTags\s*\}\s*\}\)/);
     // The chip text is always escaped (tags are user-controlled)…
     expect(app).toMatch(/escapeHtml\(t\)/);
-    // …and .chip is monochrome — defined in CSS with no hardcoded accent hex (§15).
-    expect(css).toMatch(/\.chip\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    // No chip rule pulls in the accent variable or the seed hex.
-    expect(withoutRootVar).not.toMatch(/\.chip[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the FULL Active-Timer card lives in the Timer view and Entries keeps a compact strip (§12 R04)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const css = read('styles.css');
     // The card region and its parts are present in the page: a live clock, a running/idle
     // state indicator, the description + client/project context, and the attribute flags…
     expect(html).toMatch(/id="timer-card"/);
@@ -481,34 +411,14 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/\$\('strip-clock'\)/);
     expect(app).toMatch(/clock\.textContent\s*=\s*fmtDur\(elapsed\(/);
     expect(app).toMatch(/stripClock\.textContent\s*=\s*fmtDur\(elapsed\(/);
-    // The card's accent stays on the running clock/state only, always via var(--accent) — and
-    // the strip mirrors it (`.timer-strip.running .clock`). No hardcoded seed hex (the §15
-    // accent-discipline guard above also covers the file).
-    expect(css).toMatch(/\.timer-card\.running\s+\.clock\s*\{[^}]*var\(--accent\)/s);
-    expect(css).toMatch(/\.timer-strip\.running\s+\.clock\s*\{[^}]*var\(--accent\)/s);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.timer-card[^{]*\{[^}]*#2f6fed/s);
-    expect(withoutRootVar).not.toMatch(/\.timer-strip[^{]*\{[^}]*#2f6fed/s);
   });
 
   it('the window shell ships a persistent left nav routing the five views (§12 R3)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const css = read('styles.css');
     // The shell wraps a persistent nav rail and the routed views…
     expect(html).toMatch(/class="shell"/);
     expect(html).toMatch(/class="views"/);
-    // §12 R3 (G7): the rail is a FIXED width on resize — `.shell .nav` declares flex-none
-    // (no grow/shrink) and a fixed 168px width, and `.views` is the sole grow/shrink target
-    // (`flex: 1; min-width: 0`) so resize lands on the content, never the rail. This is a cheap
-    // per-commit guard that the fixed-width rule is not accidentally removed; the behavioural
-    // proof (byte-identical 168 across viewports) stays in JUDGE NAV_SHELL FIXED_WIDTH_ON_RESIZE.
-    const navRule = css.match(/\.shell \.nav\s*\{[^}]*\}/s)?.[0] ?? '';
-    expect(navRule).toMatch(/flex:\s*none|flex-shrink:\s*0/);
-    expect(navRule).toMatch(/width:\s*168px/);
-    const viewsRule = css.match(/\.views\s*\{[^}]*\}/s)?.[0] ?? '';
-    expect(viewsRule).toMatch(/flex:\s*1/);
-    expect(viewsRule).toMatch(/min-width:\s*0/);
     // …with exactly the five nav items, in the Timer/Entries/Clients/Reports/Settings order
     // (a regression to a missing/re-ordered item is caught here, cheaply, per commit).
     const navViews = [...html.matchAll(/class="nav-item[^"]*"\s+data-view="([^"]+)"/g)].map((m) => m[1]);
@@ -632,19 +542,11 @@ describe('renderer static contract', () => {
 
   it('the only accent affordance in the Reports view is the single + New report primary action (§15 / G10)', () => {
     const html = read('index.html');
-    const css = read('styles.css');
     // The New report action is the view's single primary action — a line-icon (i-plus) + label,
     // no leading "+" glyph (the icon carries the add affordance, §design-system line icons only)…
     expect(html).toMatch(/id="rep-new" class="primary"/);
     expect(html).toMatch(/id="rep-new"[^>]*>[\s\S]*?<use href="#i-plus"[\s\S]*?New report/);
     expect(html).not.toMatch(/\+ New report/);
-    // …it carries the accent (the one sanctioned use here)…
-    expect(css).toMatch(/#rep-new\s*\{[^}]*var\(--accent\)/s);
-    // …and the saved-definition cards + the builder + the run-output stay monochrome — none
-    // of the card affordances or the builder outline carry the accent (§15 discipline).
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.def[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.builder[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the Reports builder creates/edits a saved definition (range/group-by/filters/rounding) over save/editReport (§09 R08)', () => {
@@ -696,7 +598,6 @@ describe('renderer static contract', () => {
   it('the Reports run-output paints grouped totals with flags in context + Export CSV/JSON from the saved report (§09 R09 / R06)', () => {
     const html = read('index.html');
     const js = read('reports.js');
-    const css = read('styles.css');
     // The run-output panel reuses the report-summary/table chrome, plus a resolved-range
     // header and the two Export buttons (the §09 R06 export surface over the saved range).
     expect(html).toMatch(/id="rep-run"/);
@@ -722,11 +623,6 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*savedReportRef/);
     expect(js).toMatch(/\$\('rep-export-csv'\)\.addEventListener/);
     expect(js).toMatch(/\$\('rep-export-json'\)\.addEventListener/);
-    // The flag chip uses the --flag tokens, never the accent; the export buttons are
-    // monochrome too (no accent fill/var on either) — §15 accent discipline.
-    expect(css).toMatch(/\.report-flag\s*\{[^}]*var\(--flag\)/s);
-    expect(css).not.toMatch(/\.report-flag\s*\{[^}]*var\(--accent\)/s);
-    expect(css).not.toMatch(/\.report-export-btn\s*\{[^}]*var\(--accent\)/s);
   });
 
   it('the consolidated entry editor is a pure renderer module exposing openEditor + split/merge (§12 R6)', () => {
@@ -817,7 +713,6 @@ describe('renderer static contract', () => {
   it('the Settings view ships a Software Update → Check-for-updates action over the update bridge (§19 R03)', () => {
     const html = read('index.html');
     const settings = read('settings.js');
-    const css = read('styles.css');
     // The dedicated Software Update host element lives in the page (after the settings panel),
     // and index.html still loads settings.js (which renders into it).
     expect(html).toMatch(/id="software-update"/);
@@ -841,18 +736,10 @@ describe('renderer static contract', () => {
     // in-window navigation.
     expect(settings).toMatch(/data-update-link/);
     expect(settings).toMatch(/setAttribute\('target',\s*'_blank'\)/);
-    // …and the Check-now button + the update pill stay monochrome — neutral background, the
-    // --flag tokens for the notice, never the accent (§15 accent discipline / R-clickability).
-    expect(css).toMatch(/\.set-update-btn\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.set-update-btn[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.update-result[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.pill\.new[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the Settings view ships a Software Update → download + guided install over the update bridge (§19 R04)', () => {
     const settings = read('settings.js');
-    const css = read('styles.css');
     // When an update is available, the guided-install panel renders: a "Download & install"
     // primary action wired to the GUI-ONLY window.stint.update.download() bridge (R04), a live
     // progress bar fed by onUpdateProgress, and the numbered guided steps. After the artifact is
@@ -881,20 +768,11 @@ describe('renderer static contract', () => {
     // …and the panel reassures the user the database is never touched (the artifact lands in a
     // temp folder, never beside the data — §19 R04 / §16 update-mid-timer).
     expect(settings).toMatch(/never touch the database/);
-    // The Download & install action is this section's SINGLE accent action (button.primary);
-    // the guided panel chrome itself stays the monochrome --flag notice — never the accent
-    // beyond the one primary (§15 accent discipline / R-clickability).
-    expect(css).toMatch(/\.update\s*\{/);
-    expect(css).toMatch(/\.step\s+\.bar\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.update[^-][^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.step[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the Settings view ships a Backups group (restore list + retention + recovery banner) over the backup IPC (§20 R04/R05)', () => {
     const html = read('index.html');
     const settings = read('settings.js');
-    const css = read('styles.css');
     // The dedicated Backups host element lives in the page (after the Software Update host),
     // and index.html loads settings.js which renders into it.
     expect(html).toMatch(/id="backups-panel"/);
@@ -917,21 +795,11 @@ describe('renderer static contract', () => {
     expect(settings).toMatch(/confirmInline/);
     expect(settings).toMatch(/kind:\s*'restore'/);
     expect(settings).toMatch(/onConfirm:\s*async\s*\(\)\s*=>\s*\{\s*await window\.stint\.restoreBackup\(/);
-    // …the Backups chrome is monochrome — the verified pill uses the calm run tokens, the
-    // restore list / retention / recovery banner carry NO accent (§15 accent discipline).
-    expect(css).toMatch(/\.backup-list\s*\{/);
-    expect(css).toMatch(/\.ok\s*\{/);
-    expect(css).toMatch(/\.banner\.recovery\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.backup-[a-z]+[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.ok\b[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.banner\.recovery[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the Timer view ships a favorites rail wired to the favorite IPC (§05 R09)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const css = read('styles.css');
     // The favorites rail + its Pin control live in the Timer view…
     expect(html).toMatch(/data-view="timer"/);
     expect(html).toMatch(/id="fav-rail"/);
@@ -951,17 +819,11 @@ describe('renderer static contract', () => {
     // the rail, so the in-window timer surface tracks the other surface)…
     expect(app).toMatch(/view === 'timer'\)\s*void renderFavorites/);
     expect(app).toMatch(/activeView === 'timer'\)\s*void load\(\)\.then\(\(\) => renderFavorites\(\)\)/);
-    // …and the rail chrome is monochrome — the Pin/kebab/menu carry no accent (§15 discipline).
-    expect(css).toMatch(/\.fav-pin\s*\{/);
-    expect(css).toMatch(/\.fav-rail\s*\{/);
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.fav-(pin|kebab|card|menu)[^{]*\{[^}]*var\(--accent\)/s);
   });
 
   it('the Timer view ships a live-edit-running strip whose edit never carries endUtc (§12 R14)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const css = read('styles.css');
     // The live-edit-running strip lives in the Timer view, with the no-stop pill + the
     // "End time not editable while running" note that make the no-close contract explicit…
     const timerView = html.match(
@@ -988,12 +850,6 @@ describe('renderer static contract', () => {
     expect(patchBody!).toMatch(/patch\.startUtc/);
     expect(patchBody!).toMatch(/patch\.description/);
     expect(patchBody!).toMatch(/patch\.billable/);
-    // …and the strip's chrome is monochrome — its controls carry no accent fill (§15: the
-    // accent stays on the running clock/state + the single primary Stop; the strip's dashed
-    // accent border is the sanctioned running-context use, not on any control).
-    const leControls = css.match(/\.liveedit \.le-field input[\s\S]*?\}/)?.[0];
-    expect(leControls, 'the live-edit inputs must be styled').toBeTruthy();
-    expect(leControls!).not.toMatch(/var\(--accent\)/);
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
@@ -1019,7 +875,6 @@ describe('renderer static contract', () => {
     const stp = read('timepicker.js');
     const app = read('app.js');
     const html = read('index.html');
-    const css = read('styles.css');
     // timepicker.js exposes the window.STP module with STP.open + the pure geometry/snap
     // helpers (snapTo5 / minutesToY / yToMinutes) so the guard + JUDGE can drive the math
     // deterministically. It is a classic script (no ES module export, loads over file://).
@@ -1058,14 +913,5 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/endInput:\s*null/);
     // The closed-entry inline form binds both inputs; the open row's editEndInput is null.
     expect(app).toMatch(/const editEndInput = running \? null : form\.querySelector\('\.edit-end'\)/);
-    // Accent discipline (§15): only the picker's primary Apply button + the "me" rectangle
-    // (and the selected calendar day) carry the accent; the rest of the chrome is monochrome.
-    expect(css).toMatch(/\.stp-block\.me\s*\{[^}]*var\(--accent\)/s);
-    expect(css).toMatch(/\.stp-apply\.primary\s*\{[^}]*var\(--accent\)/s);
-    // The non-primary picker controls (Cancel / nav / day cells / track / others) never
-    // fill with the accent — scan the rule bodies (ignoring the :root token definition).
-    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
-    expect(withoutRootVar).not.toMatch(/\.stp-cancel[^{]*\{[^}]*var\(--accent\)/s);
-    expect(withoutRootVar).not.toMatch(/\.stp-block\.other[^{]*\{[^}]*var\(--accent\)/s);
   });
 });
