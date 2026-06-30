@@ -21,10 +21,11 @@ function render() {
   const pop = $('pop');
   pop.classList.toggle('running', !!running);
   pop.classList.toggle('idle', !running);
-  // The state line pairs a run dot with a word (inclusivity — colour is never the only signal).
+  // Running shows the run dot + the start time ("since HH:MM"); the redundant "Running" word is
+  // dropped (the dot + the live clock carry the state). Idle is the bare dot at 00:00:00.
   $('state').innerHTML = running
-    ? '<span class="pop-dot"></span> Running · since ' + localTime(running.startUtc)
-    : '<span class="pop-dot"></span> Idle';
+    ? '<span class="pop-dot"></span> since ' + localTime(running.startUtc)
+    : '<span class="pop-dot"></span>';
   const toggle = $('toggle');
   toggle.innerHTML = (running ? icon('stop') : icon('play')) + (running ? 'Stop' : 'Start');
   // §12 R14: announce the toggle's running/idle state to the accessibility tree.

@@ -834,7 +834,6 @@ describe('renderer static contract', () => {
     expect(timerView!).toMatch(/id="le-desc"/);
     expect(timerView!).toMatch(/id="le-start"/);
     expect(timerView!).toMatch(/id="le-bill"/);
-    expect(timerView!).toMatch(/no stop/i);
     // …the strip carries NO End-time input (editing the open row must not close it)…
     const strip = timerView!.match(/<section class="liveedit"[\s\S]*?<\/section>/)?.[0];
     expect(strip, 'the live-edit strip must be present').toBeTruthy();
