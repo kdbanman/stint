@@ -191,7 +191,7 @@ function renderTimerCard(running) {
     $('timer-flags').innerHTML = cardFlagsHtml(running);
   } else {
     $('timer-clock').textContent = '00:00:00';
-    $('timer-desc').textContent = 'nothing running';
+    $('timer-desc').textContent = '';
     $('timer-meta').textContent = '';
     $('timer-flags').innerHTML = '';
   }
@@ -287,7 +287,7 @@ function renderTimerStrip(running) {
     $('strip-desc').textContent = running.description ?? 'your timer';
   } else {
     $('strip-clock').textContent = '00:00:00';
-    $('strip-desc').textContent = 'nothing running';
+    $('strip-desc').textContent = '';
   }
 }
 
