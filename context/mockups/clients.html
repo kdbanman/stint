@@ -105,6 +105,9 @@
   .proj{position:relative;margin-left:18px;padding-left:18px;border-left:2px solid var(--line-strong)}
   .proj .cl-row{padding:9px 12px}
   .proj .cl-row .nm{font-weight:500;color:var(--ink)}
+  .proj-add{display:inline-flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;font:inherit;font-size:13px;font-weight:500;color:var(--muted);padding:9px 12px}
+  .proj-add .ic{width:15px;height:15px;color:var(--accent)}
+  .proj-add:hover{color:var(--ink)}
   .cl.arch .cl-row.client .nm{color:var(--muted)}
   .empty{color:var(--faint);font-size:12px;padding:8px 12px}
   .taglist{display:flex;flex-direction:column}
@@ -172,7 +175,6 @@
               <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Acme</span><span class="count">2 projects · 14h 20m</span>
               <span class="acts">
-                <button class="iconbtn create" title="Add project"><svg class="ic"><use href="#i-plus"/></svg></button>
                 <button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button>
                 <button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button>
               </span>
@@ -184,6 +186,7 @@
               <div class="cl-row"><span class="nm">Web</span><span class="count">5h 20m</span>
                 <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
               </div>
+              <button class="proj-add"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
             </div>
           </div>
 
@@ -192,7 +195,6 @@
               <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Globex</span><span class="count">1 project · 6h 15m</span>
               <span class="acts">
-                <button class="iconbtn create" title="Add project"><svg class="ic"><use href="#i-plus"/></svg></button>
                 <button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button>
                 <button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button>
               </span>
@@ -201,6 +203,7 @@
               <div class="cl-row"><span class="nm">Onboarding</span><span class="count">6h 15m</span>
                 <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
               </div>
+              <button class="proj-add"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
             </div>
           </div>
 

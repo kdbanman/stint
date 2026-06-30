@@ -1599,7 +1599,6 @@ function clientRow(c, projects) {
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
     `<span class="client-actions">` +
-    `<button class="iconbtn create" type="button" data-act="add-project" aria-label="Add project"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="rename-client" aria-label="Rename client"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="archive-client" aria-label="Archive client"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
@@ -1607,14 +1606,16 @@ function clientRow(c, projects) {
 
   const list = document.createElement('div');
   list.className = 'project-list';
-  if (projects.length === 0) {
-    const none = document.createElement('div');
-    none.className = 'project-empty';
-    none.textContent = 'No projects';
-    list.appendChild(none);
-  } else {
-    for (const p of projects) list.appendChild(projectRow(p));
-  }
+  for (const p of projects) list.appendChild(projectRow(p));
+  // §07: the Add-project affordance sits at the foot of the client's own project list, in line
+  // with the projects — so it reads as "create a project here", under this client. The accent
+  // rides only the "+" (the rationed create signal).
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'proj-add';
+  add.dataset.act = 'add-project';
+  add.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add project`;
+  list.appendChild(add);
   wrap.appendChild(list);
 
   // Rename swaps the client name into an inline editor; Archive hides it from the active
@@ -1626,9 +1627,7 @@ function clientRow(c, projects) {
     await window.stint.archiveClient({ id: c.id });
     await renderClients();
   });
-  head.querySelector('[data-act="add-project"]').addEventListener('click', () =>
-    openProjectAdd(list, c),
-  );
+  add.addEventListener('click', () => openProjectAdd(list, c));
   return wrap;
 }
 
@@ -1695,6 +1694,7 @@ function inlineRenameForm(current, onSave) {
 // (core requires the owning client id, which the renderer has from the client row).
 function openProjectAdd(list, c) {
   list.querySelector('.project-add')?.remove();
+  const addBtn = list.querySelector('.proj-add');
   const form = document.createElement('form');
   form.className = 'project project-add';
   form.innerHTML =
@@ -1703,7 +1703,9 @@ function openProjectAdd(list, c) {
     `<button type="submit" class="small primary">Add</button>` +
     `<button type="button" class="small ghost project-add-cancel">Cancel</button>` +
     `</span>`;
-  list.appendChild(form);
+  // Open the inline field in line with the project list, just above the Add-project row.
+  if (addBtn) { addBtn.hidden = true; list.insertBefore(form, addBtn); }
+  else list.appendChild(form);
   form.querySelector('.project-add-input').focus();
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
