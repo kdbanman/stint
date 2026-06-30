@@ -191,7 +191,7 @@ function renderTimerCard(running) {
     $('timer-flags').innerHTML = cardFlagsHtml(running);
   } else {
     $('timer-clock').textContent = '00:00:00';
-    $('timer-desc').textContent = 'nothing running';
+    $('timer-desc').textContent = '';
     $('timer-meta').textContent = '';
     $('timer-flags').innerHTML = '';
   }
@@ -287,7 +287,7 @@ function renderTimerStrip(running) {
     $('strip-desc').textContent = running.description ?? 'your timer';
   } else {
     $('strip-clock').textContent = '00:00:00';
-    $('strip-desc').textContent = 'nothing running';
+    $('strip-desc').textContent = '';
   }
 }
 
@@ -1565,8 +1565,8 @@ function tagRow(t) {
   row.innerHTML =
     `<span class="tag-row-name">${escapeHtml(t.name)}</span>` +
     `<span class="tag-row-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-tag">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="archive-tag">Archive</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-tag" aria-label="Rename tag"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-tag" aria-label="Archive tag"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   row.querySelector('[data-act="rename-tag"]').addEventListener('click', () =>
     openTagRename(row, t),
@@ -1599,22 +1599,23 @@ function clientRow(c, projects) {
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
     `<span class="client-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-client">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="add-project">Add project</button>` +
-    `<button class="small ghost" type="button" data-act="archive-client">Archive</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-client" aria-label="Rename client"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-client" aria-label="Archive client"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   wrap.appendChild(head);
 
   const list = document.createElement('div');
   list.className = 'project-list';
-  if (projects.length === 0) {
-    const none = document.createElement('div');
-    none.className = 'project-empty';
-    none.textContent = 'No projects';
-    list.appendChild(none);
-  } else {
-    for (const p of projects) list.appendChild(projectRow(p));
-  }
+  for (const p of projects) list.appendChild(projectRow(p));
+  // §07: the Add-project affordance sits at the foot of the client's own project list, in line
+  // with the projects — so it reads as "create a project here", under this client. The accent
+  // rides only the "+" (the rationed create signal).
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'proj-add';
+  add.dataset.act = 'add-project';
+  add.innerHTML = `<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add project`;
+  list.appendChild(add);
   wrap.appendChild(list);
 
   // Rename swaps the client name into an inline editor; Archive hides it from the active
@@ -1626,9 +1627,7 @@ function clientRow(c, projects) {
     await window.stint.archiveClient({ id: c.id });
     await renderClients();
   });
-  head.querySelector('[data-act="add-project"]').addEventListener('click', () =>
-    openProjectAdd(list, c),
-  );
+  add.addEventListener('click', () => openProjectAdd(list, c));
   return wrap;
 }
 
@@ -1639,8 +1638,8 @@ function projectRow(p) {
   row.innerHTML =
     `<span class="project-name">${escapeHtml(p.name)}</span>` +
     `<span class="project-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-project">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="archive-project">Archive</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-project" aria-label="Rename project"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-project" aria-label="Archive project"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   row.querySelector('[data-act="rename-project"]').addEventListener('click', () =>
     openProjectRename(row, p),
@@ -1695,6 +1694,7 @@ function inlineRenameForm(current, onSave) {
 // (core requires the owning client id, which the renderer has from the client row).
 function openProjectAdd(list, c) {
   list.querySelector('.project-add')?.remove();
+  const addBtn = list.querySelector('.proj-add');
   const form = document.createElement('form');
   form.className = 'project project-add';
   form.innerHTML =
@@ -1703,7 +1703,9 @@ function openProjectAdd(list, c) {
     `<button type="submit" class="small primary">Add</button>` +
     `<button type="button" class="small ghost project-add-cancel">Cancel</button>` +
     `</span>`;
-  list.appendChild(form);
+  // Open the inline field in line with the project list, just above the Add-project row.
+  if (addBtn) { addBtn.hidden = true; list.insertBefore(form, addBtn); }
+  else list.appendChild(form);
   form.querySelector('.project-add-input').focus();
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();

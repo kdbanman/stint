@@ -306,8 +306,10 @@ function showMainWindow(): void {
     return;
   }
   mainWindow = new BrowserWindow({
-    width: 760,
-    height: 620,
+    width: 1040,
+    height: 800,
+    minWidth: 840,
+    minHeight: 600,
     show: true,
     title: 'Stint',
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1b1b1d' : '#ffffff',

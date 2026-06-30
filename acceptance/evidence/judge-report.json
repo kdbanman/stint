@@ -42,7 +42,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"noStopText\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -53,14 +53,14 @@
     },
     {
       "item": "ACCENT_DISCIPLINE",
-      "pass": true,
-      "justification": "primary=rgb(200, 98, 62) accent=rgb(200, 98, 62); stray accent on [none]",
+      "pass": null,
+      "justification": "primary=rgb(196, 76, 56) accent=rgb(196, 76, 56); primary-uses-accent=true; accent seen on [only sanctioned surfaces]",
       "screenshot": "main-running.png"
     },
     {
       "item": "CLICKABILITY",
-      "pass": true,
-      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "pass": null,
+      "justification": "clickable affordances reading as bare prose=[button.small ghost kebab, button.small ghost, button.small ghost, button.small ghost]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
@@ -168,7 +168,7 @@
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
-      "justification": "clients listed with nested projects, rename/archive in place, accent discipline holds: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[]}",
+      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\",\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\"]}",
       "screenshot": "main-clients.png"
     },
     {
