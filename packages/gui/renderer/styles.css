@@ -26,26 +26,27 @@
  */
 :root {
   /* surfaces — warm opaque paper on an ivory canvas (material restraint, no glass) */
-  --paper: #fffdfa;
-  --canvas: #ede6da;
-  --sidebar: #f7f2ea;
-  --wash: #f4eee3; /* sunken fill — fields, quiet panels, raised-chip backdrops */
-  --hover: #f0e8db;
+  --paper: #fdfdfc; /* the main surface — near-white, a whisper of warmth */
+  --canvas: #eae8e3;
+  --sidebar: #f6f5f2;
+  --wash: #f2f1ed; /* sunken fill — fields, quiet panels, raised-chip backdrops */
+  --hover: #ecebe5;
 
   /* ink ramp — hierarchy from size + weight, never colour */
-  --ink: #23201b;
-  --ink-soft: #3c362d;
-  --muted: #6f685c;
-  --faint: #a99f8e;
+  --ink: #221f1c;
+  --ink-soft: #3a3530;
+  --muted: #6b645d;
+  --faint: #a39b92;
 
   /* hairlines */
-  --rule: #ece5d8; /* line */
-  --rule-strong: #ddd4c3; /* line-strong */
+  --rule: #e9e6e0; /* line */
+  --rule-strong: #d6d1c9; /* line-strong */
 
-  /* the one rationed clay accent (unconditional — not a setting, never overridden at runtime) */
-  --accent: #C8623E;
-  --accent-ink: #a1492a;
-  --accent-weak: #f7ece3;
+  /* the one rationed clay accent (unconditional — not a setting, never overridden at runtime) —
+     a red-leaning brick, not orange */
+  --accent: #c44c38;
+  --accent-ink: #9e3829;
+  --accent-weak: #f8e9e5;
 
   /* semantic states — each paired with a word/icon elsewhere (inclusivity) */
   --run: #5e8c5a;
@@ -194,8 +195,10 @@ header.mast {
 }
 /* The running count-up is one of the two sanctioned accent uses on this card. */
 .timer-card.running .clock { color: var(--accent); }
+/* The running/idle word is redundant — the green dot + the clay running clock already say it —
+   so it is hidden (kept in the DOM for assistive tech + the harness probe). */
 .timer-card .state {
-  display: inline-flex;
+  display: none;
   align-items: center;
   gap: 7px;
   font-size: 11px;
@@ -337,6 +340,7 @@ header.mast {
 /* The running count-up is one of the sanctioned accent uses on the strip. */
 .timer-strip.running .clock { color: var(--accent); }
 .timer-strip .state {
+  display: none;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1453,18 +1457,9 @@ button.danger:hover { background: var(--danger-weak); }
   gap: 14px;
   padding: 20px 22px;
 }
-/* quiet uppercase group labels */
-.editor .ed-grp {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--faint);
-  font-weight: 640;
-  margin: 0;
-}
-.editor .ed-grp-time {
-  margin-top: 6px;
-  padding-top: 18px;
+/* Sections are grouped by a quiet hairline, not a worded heading — the fields name themselves. */
+.editor .ed-divider {
+  margin-top: 4px;
   border-top: 1px solid var(--rule);
 }
 .editor .ed-field {
@@ -1530,17 +1525,16 @@ button.danger:hover { background: var(--danger-weak); }
 .editor .ed-sw:has(input:checked) { background: var(--accent); }
 .editor .ed-sw:has(input:checked) i { left: 17px; }
 .editor .ed-sw:has(input:focus-visible) { box-shadow: var(--ring); }
+/* The tags area carries no surface of its own — just the chips on the modal's paper, with the
+   add-tag input reading as an inline continuation (design-system: surfaces aren't tinted boxes). */
 .editor .ed-chips {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
   margin-left: 0;
-  padding: 5px 7px;
-  min-height: 34px;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  background: var(--wash);
+  padding: 2px 0;
+  min-height: 28px;
 }
 .editor .ed-tag-input {
   border: 0;

@@ -108,7 +108,6 @@ window.SE = (function () {
       `<div class="ed-head"><div class="ed-title">Edit entry</div>` +
       `<button type="button" class="iconbtn ed-close" aria-label="Close">${icon('x')}</button></div>` +
       `<div class="ed-body">` +
-      `<div class="ed-grp">Work</div>` +
       `<label class="ed-field ed-desc-field"><span>Description</span>` +
       `<textarea class="ed-desc" rows="2" placeholder="(no description)"></textarea></label>` +
       `<div class="ed-row">` +
@@ -118,7 +117,7 @@ window.SE = (function () {
       `<label class="ed-field ed-tags-field"><span>Tags</span>` +
       `<span class="chips ed-chips"></span></label>` +
       `<label class="ed-bill"><span class="ed-sw"><input type="checkbox" class="ed-bill-box" /><i></i></span> Billable</label>` +
-      `<div class="ed-grp ed-grp-time">Time</div>` +
+      `<div class="ed-divider"></div>` +
       `<div class="ed-row">` +
       `<label class="ed-field"><span>Start</span><input type="datetime-local" class="ed-start tnum" /></label>` +
       endField +

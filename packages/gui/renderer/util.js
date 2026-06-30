@@ -93,13 +93,14 @@ window.SU = (function () {
     '<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>' +
     '<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>' +
     '<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>' +
+    '<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>' +
     '</defs></svg>';
   // The set of ids the sprite defines — the canonical icon vocabulary. Renderers
   // pass one of these to icon(); an unknown id is a programming error, not a glyph.
   const ICON_IDS = [
     'clock', 'list', 'users', 'chart', 'settings', 'search', 'play', 'stop', 'swap',
     'plus', 'star', 'cal', 'flag', 'moon', 'check', 'download', 'x', 'down', 'right',
-    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore',
+    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive',
   ];
   // Render one line icon by id as an <svg class="ic"><use href="#i-<id>"/></svg>
   // string the renderers can drop into innerHTML. Always class="ic" so it picks up
