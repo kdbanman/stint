@@ -6,13 +6,13 @@
 <title>Stint — Tray popover</title>
 <style>
   :root{
-    --paper:#FFFDFA;--canvas:#EDE6DA;--sidebar:#F7F2EA;--sunken:#F4EEE3;--hover:#F0E8DB;
-    --ink:#23201B;--muted:#6F685C;--faint:#A99F8E;--line:#ECE5D8;--line-strong:#DDD4C3;
-    --accent:#C8623E;--accent-ink:#A1492A;--accent-weak:#F7ECE3;
+    --paper:#FDFDFC;--canvas:#EAE8E3;--sidebar:#F6F5F2;--sunken:#F2F1ED;--hover:#ECEBE5;
+    --ink:#221F1C;--muted:#6B645D;--faint:#A39B92;--line:#E9E6E0;--line-strong:#D6D1C9;
+    --accent:#C44C38;--accent-ink:#9E3829;--accent-weak:#F8E9E5;
     --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
     --danger:#B23B2B;--danger-weak:#F8E9E4;
     --r1:8px;--r2:12px;--r3:16px;
-    --ring:0 0 0 3px #C8623E33;
+    --ring:0 0 0 3px #C44C3833;
     --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
     --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
     --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
@@ -25,8 +25,8 @@
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C8623E55}
-  .btn.primary:hover{background:#b9582f}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C44C3855}
+  .btn.primary:hover{background:#a83c2c}
   .btn.primary .ic{color:#fff}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
@@ -93,7 +93,7 @@
     <div class="notch"></div>
     <div class="pop">
       <div class="pop-top">
-        <div class="pop-state"><span class="dot run"></span> Running · since 09:00</div>
+        <div class="pop-state"><span class="dot run"></span> since 09:00</div>
         <div class="pop-clock tnum">01:24:07</div>
         <div class="pop-desc">auth refactor</div>
         <div class="pop-ctx">Client A · API</div>

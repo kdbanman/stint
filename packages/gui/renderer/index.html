@@ -41,6 +41,7 @@
       <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
       <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
       <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
+      <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>
     </defs></svg>
     <div class="app">
       <div class="shell">
@@ -65,7 +66,6 @@
           <section class="view" data-view="timer" hidden>
             <section class="timer-card idle" id="timer-card">
               <div class="tc-clock-block">
-                <div class="tc-lbl">Active timer</div>
                 <div class="clock tnum" id="timer-clock">00:00:00</div>
                 <div class="state" id="timer-state">idle</div>
               </div>
@@ -80,10 +80,6 @@
               </div>
             </section>
             <section class="liveedit" id="live-edit" hidden aria-label="Edit the running timer">
-              <div class="le-head">
-                <span class="le-title">Editing live</span>
-                <span class="le-pill">no stop</span>
-              </div>
               <div class="le-grid">
                 <label class="le-field le-desc">Description
                   <input id="le-desc" type="text" autocomplete="off" />
@@ -100,13 +96,9 @@
                 <label class="le-bill"><input id="le-bill" type="checkbox" /> Billable</label>
                 <button type="button" id="le-tags" class="ghost small">Tags</button>
                 <button type="button" id="le-project" class="ghost small">Client / project</button>
-                <span class="le-note">End time not editable while running</span>
               </div>
             </section>
             <section class="start-panel" id="start-panel">
-              <header class="sp-head">
-                <div class="sp-title">Start a new timer</div>
-              </header>
               <div class="sp-actions">
                 <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Start</button>
                 <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">Details</button>
