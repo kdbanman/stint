@@ -37,6 +37,13 @@ jobs:
         run: npm test
       - name: No-network backstop (§17 R9)
         run: npm run verify:no-network
+      # §19 R05 — auto-publish guard. The release `pack` job builds distributables and hands
+      # them to a separate `publish` job; if any electron-builder invocation forgets
+      # `--publish never` it auto-publishes in CI and dies without GH_TOKEN. That only ever
+      # showed post-merge (pack-smoke runs `--dir`, which never publishes), so this static
+      # guard catches it on the PR.
+      - name: Auto-publish guard (§19 R05)
+        run: npm run verify:no-publish
       # §19 R01 — cheap, deterministic guard that electron-builder's native helper
       # (app-builder-bin) is installed AND runnable, so a broken toolchain fails on the PR
       # instead of only in the post-merge release pack. A reinstall self-heals a genuinely
