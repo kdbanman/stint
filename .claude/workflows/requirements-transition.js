@@ -14,7 +14,7 @@ export const meta = {
     { title: 'Improve', detail: 'Apply both reviews’ feedback in a bounded loop-until-dry; must not regress AC' },
     { title: 'Recordings', detail: 'QA screen recordings (LAST): core-flow GUI, all Rec ▶ rows, code-change-adjacent reqs; ASCII-named, slowed (~0.5x) GIFs with an end-frame hold and visible cursor/click, committed under acceptance/evidence/recordings/ indexed by req id' },
     { title: 'PR', detail: 'Regenerate all evidence, commit on the working branch, open ONE ready-for-review PR with recordings embedded inline as GIF images (each with a caption) and a per-requirement status checklist' },
-    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete exactly what §Z names (the *-old.html docs, any folded GUI files, superseded workflows, this mapping), promote new docs, fix references, run §Z’s absence check for each removed concept' },
+    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete the *-old.html docs + this mapping per §Z, promote new docs, fix references, confirm no "switch" verb/affordance/alias/term survives (§Z)' },
   ],
 };
 
@@ -36,7 +36,7 @@ const WORKLIST = {
         type: 'object',
         required: ['reqId', 'section', 'change', 'core', 'surfaces', 'files', 'acMethods', 'rec', 'summary'],
         properties: {
-          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R01", "§12 R05", a deleted-row id like "§11 <alias>", or a docs-only id like "concept".' },
+          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R01", "§05 R8 (Switch)", "§11 switch-alias", "§12 R05", "concept".' },
           section: { type: 'string', description: 'Owning section, e.g. "§05 Timer & entries".' },
           change: { enum: ['NEW', 'MODIFIED', 'DELETED'] },
           core: { type: 'boolean', description: 'True iff marked ● (core requirement per §C).' },
@@ -224,7 +224,8 @@ const inv = await agent(
 Read requirements-transition.md IN FULL (it is the work-list), plus acceptance/criteria/COVERAGE.md and
 acceptance/criteria/parity-matrix.json for the current state. Parse EVERY requirement row in the §2
 section-by-section tables (and any net-new sections this transition adds) — including the docs-only
-rows (e.g. concept/glossary/acceptance) and every DELETED row. For each requirement capture:
+rows (concept/glossary/acceptance) and every DELETED row (for this transition: §05 R8 Switch and the
+CLI \`switch\` alias). For each requirement capture:
 reqId, section, change (NEW/MODIFIED/DELETED), core (● → true), surfaces, the Files column
 (verbatim where given), mockup(s), acMethods (BDD/PROP/GOLD/JUDGE/MANUAL — empty for docs/meta
 rows), rec (▶ → true), isGui (true iff it has a gui surface), and the one-line summary.
@@ -813,16 +814,17 @@ if (!swapGate) {
 
 Every requirement now has passing AC evidence and both reviews are clean. Perform the §Z old→new SWAP
 on the CURRENT PR branch (commit; do NOT merge — the human gate is the PR merge), then push so it lands
-on the open PR. requirements-transition.md §Z is AUTHORITATIVE — act on exactly what it names and
-nothing else (do NOT delete files §Z does not list). Generally:
-  - DELETE every path in §Z's deletePaths list (the *-old.html docs, any folded-away GUI files, any
-    superseded prior-art workflows, and requirements-transition.md itself — whatever §Z enumerates).
-  - For each removed concept, run §Z's absence check: confirm no leftover verb/affordance/alias/term/
-    JUDGE-item/scenario survives anywhere (code, specs, parity-matrix, COVERAGE, runbook, docs) EXCEPT
-    the explicit survivors §Z and §0 whitelist (intentional doc negations, generic English words, and
-    any unrelated same-spelling tokens such as ARIA role="switch" or a JS \`switch\` statement).
-  - Fix every path in §Z's referenceFixes list so it references ONLY the new docs and surfaces; repair
-    any dangling links to the deleted files.
+on the open PR. Read requirements-transition.md §Z for the AUTHORITATIVE delete/reference list and act on
+exactly what it names (do NOT delete files §Z does not list). For THIS (Switch-removal) transition §Z is:
+  - DELETE the *-old.html files §Z lists (context/prd-old.html, context/concept-old.html,
+    context/glossary-old.html, context/acceptance-old.html).
+  - DELETE requirements-transition.md (this mapping).
+  - There are NO GUI files folded away and NO legacy workflow to delete in this transition — Switch was an
+    alias/affordance, not a standalone page. Confirm no "switch" verb/affordance/alias/term remains anywhere
+    (code, specs, parity-matrix, COVERAGE, runbook, docs); the only allowed "switch" survivors are the
+    intentional negations in the docs ("no separate switch action") and the generic English verb in concept.html.
+  - Ensure README.md, CLAUDE.md, acceptance/criteria/COVERAGE.md, and acceptance/criteria/parity-matrix.json reference
+    ONLY the new docs and surfaces; fix any dangling links to the deleted *-old.html files.
 Then run \`npm run build && npm test && npm run verify:no-network\` once more to confirm nothing
 referenced the deleted files, commit the swap, and push to the PR branch. Report what was deleted,
 what references were fixed, and whether the tree is still green.`,
