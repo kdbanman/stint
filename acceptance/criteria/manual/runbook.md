@@ -617,26 +617,27 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    form** to start a timer with a **description**, a **client created on the fly**, a
    **project** scoped to that client, a **tag**, and the **billable** toggle — then Start.
    - [ ] The timer starts immediately fully attributed; no later edit was needed (§12 R5).
-2. **Switch** from the running card to a new entry (new description) in one action.
-   - [ ] The previous entry closes and the new one opens as a single Switch (§05 R8).
-3. Open the **Manual-add** form and **backfill** a completed past entry from explicit
+     Then **start a second entry** from the same Start form (new description) while the
+     first is running — starting *is* the atomic stop-then-start (§05 R01).
+   - [ ] The previous entry closes and the new one opens in one action — no separate switch.
+2. Open the **Manual-add** form and **backfill** a completed past entry from explicit
    from/to times plus a description + client/project + tag.
    - [ ] The completed entry appears in the list, fully attributed, no terminal used (§12 R7).
-4. Open a row's **editor** and (a) **amend** a field, (b) **Split** a span at an instant,
+3. Open a row's **editor** and (a) **amend** a field, (b) **Split** a span at an instant,
    (c) multi-select two adjacent rows and **Merge** them (resolving the conflict prompt if
    the selection disagrees), (d) **Delete** a row through its two-step confirm.
    - [ ] Each of edit / split / merge / delete completes entirely in the window (§12 R6/R13).
-5. In the **Entries** view, switch **group-by** (day/client/project/tag), apply a **range
+4. In the **Entries** view, switch **group-by** (day/client/project/tag), apply a **range
    preset** and a **client/project/tag filter**, and type in the **search** box.
    - [ ] The list regroups, narrows, and searches live — no terminal (§12 R9).
-6. In the **Reports** view, pick a range, choose a **group-by**, toggle **billable** and
+5. In the **Reports** view, pick a range, choose a **group-by**, toggle **billable** and
    **rounding**, read the on-screen grouped totals, then **Export CSV** and **Export JSON**.
    - [ ] The summary updates and both files are written via the OS save dialog (§12 R8, §09 R6).
-7. In the **Clients** view, **create / rename / archive** a client and a project, and from
+6. In the **Clients** view, **create / rename / archive** a client and a project, and from
    the **Tags** strip **create / rename / archive** a tag.
    - [ ] Each mutation lands; archived records drop from the active pickers but referenced
          entries keep their labels — all by hand (§12 R10).
-8. In the **Settings** view, change **every §14 setting** (rounding + increment, week start,
+7. In the **Settings** view, change **every §14 setting** (rounding + increment, week start,
    first check-in, check-in interval, global hotkey, date format).
    - [ ] Each setting persists immediately and the relevant control reflects it (§12 R11).
 9. Final tally:
