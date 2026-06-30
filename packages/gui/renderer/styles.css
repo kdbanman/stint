@@ -1805,13 +1805,21 @@ button.danger:hover { background: var(--danger-weak); }
   box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
-/* §12 R6: the per-row kebab (⋯) opens the consolidated editor. A quiet ghost glyph button —
-   no accent (row actions never carry the accent). It is `.ghost`, so it carries the neutral
-   button background + border; these overrides only tune the glyph weight/ink. */
+/* §12 R6: the per-row actions are quiet, borderless glyph/text buttons — the row itself is the
+   surface, so each control reads as a bare affordance (a soft hover wash on engage), not a
+   bordered button box. The kebab (⋯) opens the consolidated editor; the rest reveal on hover.
+   No accent (row actions never carry it). */
+.entry .actions .small {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  padding: 6px 8px;
+}
+.entry .actions .small:hover { background: var(--hover); color: var(--ink); }
 .entry .kebab {
   font-weight: 700;
   letter-spacing: 0.04em;
-  color: var(--muted);
+  color: var(--faint);
 }
 .entry .kebab:hover { color: var(--ink); }
 
