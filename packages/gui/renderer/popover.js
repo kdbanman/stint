@@ -1,5 +1,5 @@
 // Popover renderer (PRD §12 R1) — the running timer, counting up; one click to
-// stop, switch (§05 R8), or start; opens the main window.
+// stop or start; opens the main window.
 // Classic script: helpers come from window.SU (util.js, loaded first).
 const { fmtDur, elapsed, icon, injectSprite, localTime } = window.SU;
 
@@ -8,8 +8,7 @@ let state = null;
 
 injectSprite(document);
 
-// The action buttons carry the single line-icon family (no emoji): Stop / Switch / arrow.
-$('switch').innerHTML = icon('swap') + 'Switch';
+// The action buttons carry the single line-icon family (no emoji): Stop/Start / arrow.
 $('open').innerHTML = 'Open Stint' + icon('arrow');
 
 async function load() {
@@ -31,8 +30,6 @@ function render() {
   // §12 R14: announce the toggle's running/idle state to the accessibility tree.
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
-  // §05 R8: Switch only makes sense mid-timer, so it shows while running.
-  $('switch').hidden = !running;
   const desc = $('desc');
   const ctx = $('ctx');
   const tags = $('tags');
@@ -66,11 +63,6 @@ function tick() {
 
 $('toggle').addEventListener('click', async () => {
   await window.stint.toggle();
-  await load();
-});
-// §05 R8: Switch reuses the `start` IPC (store.start = atomic stop+start).
-$('switch').addEventListener('click', async () => {
-  await window.stint.start({});
   await load();
 });
 $('open').addEventListener('click', () => window.stint.openMain && window.stint.openMain());

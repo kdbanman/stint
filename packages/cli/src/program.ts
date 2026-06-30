@@ -204,7 +204,6 @@ export function buildProgram(deps: Deps): Command {
   // ----------------------------------------------------------------- start
   program
     .command('start')
-    .alias('switch') // §05 R8: Switch is the same atomic stop-then-start, under its named verb.
     .description('Stop any open entry and open a new one')
     .argument('[description]', 'what you are working on')
     .option('--client <name>', 'client name')

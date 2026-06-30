@@ -114,7 +114,7 @@ function render() {
 
   // §12 R04: the Entries view hosts only the COMPACT STRIP; the full Active-Timer card lives
   // in the Timer view. Paint both from the same running state so a write from either view (the
-  // card's Stop/Switch reloads via load()→render()) keeps the strip AND the Timer-view card in
+  // card's Stop reloads via load()→render()) keeps the strip AND the Timer-view card in
   // sync — even though only one is on-screen at a time. route('timer') also repaints the card.
   renderTimerStrip(running);
   renderTimerCard(running);
@@ -127,10 +127,6 @@ function render() {
   // the action so the icon-or-ambiguous button is discernible under a screen reader.
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
-
-  // §05 R8: Switch — a dedicated affordance for the atomic stop-then-start. It only
-  // makes sense mid-timer, so it shows while running and hides when idle.
-  $('switch').hidden = !running;
 
   // §17 R11: the report total reflects the active selection LIVE. When the control bar is
   // active (a search / filter / group is in play) the total is the snapshot-derived
@@ -177,7 +173,8 @@ function renderEntries() {
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
 // the Timer view (R14). When a timer runs it paints the live count-up (derived now − start,
 // never stored), the running state, the entry's description + client/project label and its
-// billable/slept attributes, and reveals the primary Stop + Switch actions. When idle it
+// billable/slept attributes, and reveals the primary Stop action (no Switch — issue #34;
+// starting while running is the Start form's job, the atomic stop-then-start). When idle it
 // shows an idle face (00:00:00, "nothing running") and hides the actions. The per-second
 // advance is driven by tick() updating #timer-clock; this only repaints when the data
 // changes. Called from route('timer') so the Timer view's card is fresh on every visit.
@@ -199,7 +196,6 @@ function renderTimerCard(running) {
     $('timer-flags').innerHTML = '';
   }
   $('timer-stop').hidden = !running;
-  $('timer-switch').hidden = !running;
   // §05 R09: the Pin-as-favorite control on the running card (captures the open entry's
   // template via window.stint.pinFavorite, parity with `tt fav add`). Shown only while running.
   const pin = $('timer-pin');
@@ -275,7 +271,7 @@ function scheduleLiveEdit() {
 // §12 R04: the COMPACT STRIP on the Entries view — a one-line mirror of the running timer
 // that links to the full Timer-view panel. It carries the live count-up (#strip-clock), the
 // running/idle state (#strip-state, with the .running class driving the accented dot + clock),
-// and the running entry's description (#strip-desc). It hosts NO Stop/Switch and no flags grid
+// and the running entry's description (#strip-desc). It hosts NO Stop and no flags grid
 // — those belong to the full card in the Timer view. Like the card, the per-second advance is
 // driven by tick(); this only repaints when the data changes. The strip itself routes to the
 // Timer view (wired below), so a click anywhere on it opens the full panel.
@@ -975,15 +971,6 @@ $('toggle').addEventListener('click', async () => {
   applyAck(ack);
 });
 
-// §05 R8: Switch reuses the `start` IPC channel, which the main process maps to
-// store.start — an atomic stop-then-start. Carry-forward of the prior entry's
-// attributes is the separate §12 R5 Start/Switch-form work; here Switch is one-tap.
-$('switch').addEventListener('click', async () => {
-  const ack = await window.stint.start({});
-  await load();
-  applyAck(ack);
-});
-
 // §12 R14: the live-edit-running strip wiring. Description + Start-time changes debounce a
 // commit (so a multi-keystroke edit sends one patch on settle); the Billable toggle commits
 // immediately. Every commit goes through commitLiveEdit → window.stint.edit with a patch that
@@ -1013,16 +1000,11 @@ $('switch').addEventListener('click', async () => {
 }
 
 // §12 R4: the Active-Timer card's primary Stop reuses the same `toggle` write the Timer-view
-// #toggle primary uses (stopping the open entry); the card's Switch reuses the `start` IPC
-// (store.start = atomic stop-then-start, §05 R8), exactly like the #switch primary. No new
-// channel — the card is a presentation surface over the existing writes.
+// #toggle primary uses (stopping the open entry). No new channel — the card is a presentation
+// surface over the existing writes. Starting while running (the atomic stop-then-start) is the
+// job of the start-with-details form, not a dedicated Switch button (issue #34).
 $('timer-stop').addEventListener('click', async () => {
   const ack = await window.stint.toggle();
-  await load();
-  applyAck(ack);
-});
-$('timer-switch').addEventListener('click', async () => {
-  const ack = await window.stint.start({});
   await load();
   applyAck(ack);
 });
@@ -1269,7 +1251,8 @@ void populateEntryClients();
 // out of the window shell. No new IPC, so no new parity row.
 $('report-btn').addEventListener('click', () => route('reports'));
 
-// §12 R05 (core): the GUI core-entry surface — the Start / Switch form. It lives in the
+// §12 R05 (core): the GUI core-entry surface — the Start form (no separate Switch; issue #34,
+// the form stays available while running so Start performs the atomic stop-then-start). It lives in the
 // Timer view (relocated from the Entries toolbar); the ids are unchanged, so these $()
 // lookups resolve the moved nodes. The primary Start stays one-tap; this disclosure
 // (#start-toggle) reveals optional description/client/project/tags/billable fields and

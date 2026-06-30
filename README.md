@@ -52,7 +52,7 @@ Times accept absolute (`14:30`, `2026-06-24T14:30`) and relative (`-90m`,
 npm run gui     # needs an Electron binary (see Install)
 ```
 
-A tray timer counts up; one click starts, stops, or switches. `Ctrl+Alt+T`
+A tray timer counts up; one click starts or stops. `Ctrl+Alt+T`
 toggles it from anywhere. The main window groups the day's entries, shows flags
 in context, and builds reports with CSV/JSON export. Anything the window does,
 `tt` does too.

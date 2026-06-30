@@ -217,21 +217,6 @@ export const steps: StepDef[] = [
       ctx.lastId = r.id;
     },
   },
-  {
-    pattern:
-      /^I switch to an entry "([^"]*)" for "([^"]*)" \/ "([^"]*)" at (\d{1,2}:\d{2})$/,
-    run: (w, ctx, desc, client, project, at) => {
-      const r = w.switch({ desc, client, project, atIso: iso(at) });
-      ctx.lastId = r.id;
-    },
-  },
-  {
-    pattern: /^I switch to an entry "([^"]*)" at (\d{1,2}:\d{2})$/,
-    run: (w, ctx, desc, at) => {
-      const r = w.switch({ desc, atIso: iso(at) });
-      ctx.lastId = r.id;
-    },
-  },
   { pattern: /^I stop at (\d{1,2}:\d{2})$/, run: (w, _c, at) => w.stop(iso(at)) },
   {
     pattern: /^I resume$/,
