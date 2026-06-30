@@ -787,6 +787,44 @@ describe('GOLD: favorite table + pinFavorite capture (§05 R09)', () => {
   });
 });
 
+describe('GOLD: resume closes the open entry at now, with no end-of-day clamp (§04 R04 / §05 R10 / §16)', () => {
+  // §04 R04 / §16 — starting OR resuming closes any open entry at `now`, full stop: there is no
+  // end-of-day (23:59) clamp on the close. The BDD favorites scenario runs on a clock fixed at
+  // 23:59, so a close-at-now and a (wrong) clamp-to-day-end produce the SAME instant there and
+  // cannot tell them apart. These guards pin the close to `now` on a NON-boundary clock (noon),
+  // where the two behaviours diverge: the stopped entry must end at exactly 12:00, never 23:59.
+  // Stored ends are core's `toUtc` form (Z, no milliseconds), matching FIXED_NOW exactly.
+  const DAY_END = '2026-06-24T23:59:00Z'; // the boundary a clamp would (wrongly) produce
+  const NOON = '2026-06-24T12:00:00Z'; // === FIXED_NOW — the real `now`
+
+  it('resume-from-favorite closes the previously open entry at now (not the day boundary)', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    // An entry opened earlier in the day; `now` is noon, well before any day boundary.
+    store.start({ description: 'earlier work', atUtc: '2026-06-24T09:00:00Z' });
+    store.pinFavorite({ name: 'Deep', billable: false, tags: ['focus'] });
+    // Resuming from the favorite atomically closes the open entry, then opens a fresh one.
+    store.startFromFavorite('Deep');
+    const earlier = store.listEntries().find((e) => e.description === 'earlier work')!;
+    expect(earlier.endUtc).toBe(NOON);
+    expect(earlier.endUtc).not.toBe(DAY_END);
+    // …and exactly one entry is open afterwards (the favorite-seeded one).
+    expect(store.listEntries().filter((e) => e.endUtc === null)).toHaveLength(1);
+    store.close();
+  });
+
+  it('a plain start (Switch) and resume() likewise close the open entry at now', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    store.start({ description: 'first', atUtc: '2026-06-24T08:00:00Z' });
+    // Switch: a bare start closes the open entry at now and opens a new one.
+    store.start({ description: 'second' });
+    expect(store.listEntries().find((e) => e.description === 'first')!.endUtc).toBe(NOON);
+    // resume() copies the last entry's template and, like start, closes the open one at now.
+    store.resume();
+    expect(store.listEntries().find((e) => e.description === 'second')!.endUtc).toBe(NOON);
+    store.close();
+  });
+});
+
 describe('GOLD: date/build version constant (§19 R06)', () => {
   // §19 R06 — the single shared APP_VERSION constant BOTH surfaces read (the tt CLI's
   // `--version` and the GUI Settings → Software Update view) is the date/build release
