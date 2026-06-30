@@ -156,18 +156,6 @@ export interface World {
     billable?: boolean;
     atIso: string;
   }): { id: number };
-  /**
-   * §05 R8 — Switch: stop the open entry and start a new one as one named action.
-   * Surface-neutral: core resolves to store.start (atomic stop+start), tt to
-   * `tt switch` (the alias of `start`); both return the new open entry's id.
-   */
-  switch(o: {
-    desc: string | null;
-    client?: string;
-    project?: string;
-    billable?: boolean;
-    atIso: string;
-  }): { id: number };
   stop(atIso: string): void;
   resume(): { id: number };
   backfill(o: { desc: string; from: string; to: string; client?: string; project?: string }): {
@@ -492,16 +480,6 @@ export class CoreWorld implements World {
       atUtc: o.atIso,
     });
     return { id: r.value.id };
-  }
-  switch(o: {
-    desc: string | null;
-    client?: string;
-    project?: string;
-    billable?: boolean;
-    atIso: string;
-  }): { id: number } {
-    // Switch is store.start: it atomically closes any open entry then opens a new one.
-    return this.start(o);
   }
   stop(atIso: string): void {
     this.store.stop({ atUtc: atIso });
@@ -1040,24 +1018,6 @@ export class CliWorld implements World {
     atIso: string;
   }): { id: number } {
     const args = ['start'];
-    if (o.desc) args.push(o.desc);
-    if (o.client) args.push('--client', o.client);
-    if (o.project) args.push('--project', o.project);
-    if (o.billable === true) args.push('--bill');
-    if (o.billable === false) args.push('--no-bill');
-    args.push('--at', o.atIso);
-    this.tt(args);
-    return { id: this.openId()! };
-  }
-  switch(o: {
-    desc: string | null;
-    client?: string;
-    project?: string;
-    billable?: boolean;
-    atIso: string;
-  }): { id: number } {
-    // `tt switch` is the alias of `tt start` (§05 R8) — same atomic stop+start.
-    const args = ['switch'];
     if (o.desc) args.push(o.desc);
     if (o.client) args.push('--client', o.client);
     if (o.project) args.push('--project', o.project);

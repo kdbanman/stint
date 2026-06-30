@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, switchState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -328,40 +328,42 @@ async function main() {
   // TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
   // surface. The tray's single left-click opens this popover; the dropdown action menu is
   // removed (the tray's own click/right-click has no host headless — confirmed under MANUAL).
-  // The half that IS headless-checkable: every tray action lives IN the popover. Drive the
-  // real popover renderer twice and assert all four actions are present —
-  //   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #switch visible, #open present;
-  //   idle snapshot:    #toggle reads 'Start', #switch hidden, #open present.
-  // If any of Stop / Switch / Start / Open Stint is absent from the popover, this fails —
-  // since the dropdown is gone, the popover MUST carry them all. Captures
-  // popover-tray-surface.png as the evidence that the popover is the one action surface.
+  // The half that IS headless-checkable: every tray action lives IN the popover, and Switch is
+  // GONE (issue #34 — Start is the atomic stop-then-start, no separate verb). Drive the real
+  // popover renderer twice and assert the surviving actions are present and NO #switch survives —
+  //   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #open present, NO #switch;
+  //   idle snapshot:    #toggle reads 'Start', #open present, NO #switch.
+  // If Stop / Start / Open Stint is absent — or a #switch element reappears in EITHER state —
+  // this fails. Since the dropdown is gone, the popover MUST carry Stop/Start + Open Stint.
+  // Captures popover-tray-surface.png as the evidence that the popover is the one action surface.
   await withPage(browser, runningState(), 'popover.html', async (page) => {
     const runningProbe = await page.evaluate(() => {
       const toggle = document.querySelector('#toggle');
-      const sw = document.querySelector('#switch');
       const open = document.querySelector('#open');
-      const swCs = sw ? getComputedStyle(sw) : null;
       return {
         toggleLabel: toggle ? toggle.textContent.trim() : null,
         togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
-        switchVisible: !!sw && !sw.hidden && swCs.display !== 'none',
+        // Switch is removed entirely — the popover must carry NO #switch element while running.
+        noSwitch: !document.querySelector('#switch'),
         openPresent: !!open,
         openLabel: open ? open.textContent.trim() : null,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'popover-tray-surface.png') });
+    // popover-running.png — the running-popover presentation still, the TRAY_POPOVER_SURFACE
+    // rubric evidence the retired SWITCH_AFFORDANCE scene used to capture.
+    await page.screenshot({ path: join(EVIDENCE, 'popover-running.png') });
 
-    // The idle snapshot: the same popover offers Start (one-tap) and hides Switch (which only
-    // makes sense mid-timer) — Start is still reachable here, so the dropdown's Start is not lost.
+    // The idle snapshot: the same popover offers Start (one-tap) and Open Stint, with no #switch
+    // element either — Start is reachable in both states, so the dropdown's Start is not lost.
     const idleProbe = await withPage(browser, emptyState(), 'popover.html', async (ip) =>
       ip.evaluate(() => {
         const toggle = document.querySelector('#toggle');
-        const sw = document.querySelector('#switch');
         const open = document.querySelector('#open');
         return {
           toggleLabel: toggle ? toggle.textContent.trim() : null,
           togglePressed: toggle ? toggle.getAttribute('aria-pressed') : null,
-          switchHidden: !!sw && sw.hidden,
+          noSwitch: !document.querySelector('#switch'),
           openPresent: !!open,
         };
       }),
@@ -370,19 +372,19 @@ async function main() {
     const runningOk =
       runningProbe.toggleLabel === 'Stop' &&
       runningProbe.togglePressed === 'true' &&
-      runningProbe.switchVisible &&
+      runningProbe.noSwitch &&
       runningProbe.openPresent &&
       /Open Stint/.test(runningProbe.openLabel ?? '');
     const idleOk =
       idleProbe.toggleLabel === 'Start' &&
       idleProbe.togglePressed === 'false' &&
-      idleProbe.switchHidden &&
+      idleProbe.noSwitch &&
       idleProbe.openPresent;
     record(
       'TRAY_POPOVER_SURFACE',
       runningOk && idleOk,
-      `popover is the sole tray action surface — running: Stop+Switch+Open present ${JSON.stringify(runningProbe)}; ` +
-        `idle: Start (Switch hidden) + Open present ${JSON.stringify(idleProbe)}`,
+      `popover is the sole tray action surface (no Switch) — running: Stop+Open present, no #switch ${JSON.stringify(runningProbe)}; ` +
+        `idle: Start + Open present, no #switch ${JSON.stringify(idleProbe)}`,
       'popover-tray-surface.png',
     );
   });
@@ -394,13 +396,15 @@ async function main() {
   // item) the full #timer-card clock reads the derived count-up and advances +3s across a
   // pinned-clock step (same technique as TRAY_COUNTUP), shows the running state, carries the
   // running description ('auth refactor') and the client/project label ('Client A / API'), and
-  // exposes BOTH a Stop and a Switch control; and (b) on the Entries view the compact
+  // exposes a Stop control with NO Switch (Switch is removed — issue #34; the start-with-details
+  // form performs the atomic stop-then-start); and (b) on the Entries view the compact
   // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
-  // Stop/Switch controls. Fails if the full panel stayed on Entries or the card/strip placement
-  // regressed. Captures timer-view.png (the full panel) and main-timer.png (the Entries strip).
+  // Stop control (and never a #timer-switch). Fails if the full panel stayed on Entries, the
+  // card/strip placement regressed, or a #timer-switch reappeared. Captures timer-view.png (the
+  // full panel) and main-timer.png (the Entries strip).
   await withPage(browser, runningState(), 'index.html', async (page) => {
     // Entries view (default) first: the compact strip mirrors the running timer and exposes no
-    // full-panel Stop/Switch controls (those live on the Timer-view card only).
+    // full-panel Stop control (it lives on the Timer-view card only); no #timer-switch anywhere.
     const strip = await page.evaluate(() => {
       const el = document.querySelector('#timer-strip');
       return {
@@ -409,9 +413,10 @@ async function main() {
         clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
         state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
         desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
-        // The strip must NOT carry the full Stop/Switch panel controls (they belong to the card).
+        // The strip must NOT carry the full Stop panel control (it belongs to the card).
         noStop: !document.querySelector('#timer-strip #timer-stop'),
-        noSwitch: !document.querySelector('#timer-strip #timer-switch'),
+        // Switch is removed — no #timer-switch element exists anywhere in the document.
+        noSwitch: !document.querySelector('#timer-switch'),
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-timer.png') });
@@ -435,7 +440,8 @@ async function main() {
         desc: document.querySelector('#timer-desc')?.textContent?.trim() ?? null,
         meta: document.querySelector('#timer-meta')?.textContent?.trim() ?? null,
         hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-        hasSwitch: !!document.querySelector('#timer-switch') && !document.querySelector('#timer-switch').hidden,
+        // Switch is removed — there must be NO #timer-switch element anywhere (issue #34).
+        noSwitch: !document.querySelector('#timer-switch'),
       };
     });
     const toSec = (s) => {
@@ -452,7 +458,7 @@ async function main() {
       probe.desc === 'auth refactor' &&
       /Client A \/ API/.test(probe.meta) &&
       probe.hasStop &&
-      probe.hasSwitch;
+      probe.noSwitch;
     const stripOk =
       strip.present &&
       strip.running &&
@@ -475,9 +481,10 @@ async function main() {
   // running/idle state indicator, the running entry's description ('auth refactor') + client/
   // project ('Client A / API'); the live-edit-running strip is present and its commit sends an
   // `edit` patch over IPC that carries the start-time/attributes but NEVER endUtc (the row stays
-  // open); a visible Stop (accent) + Switch (plain) are present while running. Drive the real
-  // renderer: route to the Timer view, read the clock, fast-forward 3s, edit the live strip's
-  // start time, and assert the recorded edit payload (window.__EDITED__) has no endUtc.
+  // open); a visible Stop (accent) is present while running, with NO Switch control (Switch is
+  // removed — issue #34; the start-with-details form performs the atomic stop-then-start). Drive
+  // the real renderer: route to the Timer view, read the clock, fast-forward 3s, edit the live
+  // strip's start time, and assert the recorded edit payload (window.__EDITED__) has no endUtc.
   await withPage(browser, timerViewRunningState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
@@ -487,7 +494,8 @@ async function main() {
       noEnd: !document.querySelector('#live-edit #le-end'),
       noStopText: /not editable while running/i.test(document.querySelector('#live-edit')?.textContent ?? ''),
       hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-      hasSwitch: !!document.querySelector('#timer-switch') && !document.querySelector('#timer-switch').hidden,
+      // Switch is removed — assert NO #timer-switch element survives anywhere (issue #34).
+      noSwitch: !document.querySelector('#timer-switch'),
       desc: document.querySelector('#timer-desc')?.textContent?.trim() ?? null,
       meta: document.querySelector('#timer-meta')?.textContent?.trim() ?? null,
       state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
@@ -514,7 +522,7 @@ async function main() {
       before.noEnd &&
       before.noStopText &&
       before.hasStop &&
-      before.hasSwitch &&
+      before.noSwitch &&
       before.desc === 'auth refactor' &&
       /Client A \/ API/.test(before.meta ?? '') &&
       before.state === 'running' &&
@@ -629,8 +637,8 @@ async function main() {
         // §12 R04: the in-window Active-Timer card's running affordance — the live count-up
         // clock and the running-state indicator carry the system accent (mirroring the
         // popover's running count). The whole running card container is sanctioned so the
-        // count-up accent is not flagged as a stray (the idle card and the Switch button
-        // stay monochrome). The full card lives in the Timer view; the Entries view keeps a
+        // count-up accent is not flagged as a stray (the idle card stays monochrome). The
+        // full card lives in the Timer view; the Entries view keeps a
         // compact strip whose running clock/state carry the SAME sanctioned accent — so the
         // running `.timer-strip` container is sanctioned alongside `.timer-card`.
         el.closest('.timer-card.running') ||
@@ -900,15 +908,16 @@ async function main() {
     );
   });
 
-  // START_FORM — §12 R5: the start surface as a whole. The idle window's Start offers the
-  // inline attribute form (description / client / project / tags / billable) so a timer can
-  // start carrying its attributes immediately (the primary Start stays one-tap behind a
-  // disclosure); while a timer runs, the surface instead offers the dedicated Switch
-  // affordance (the atomic stop-then-start, §05 R8) — Switch only makes sense mid-timer, so
-  // the label the start surface presents flips from Start (idle) to Switch (running). Two
-  // snapshots in one item: the idle form (startFormState) opened + its five controls present,
-  // and the running snapshot (switchState) where the Switch button is visible and labelled
-  // 'Switch'. Captures main-start-form.png (idle form) and main-switch.png (running Switch).
+  // START_FORM — §12 R5: the start surface as a whole. The Start offers the inline attribute
+  // form (description / client / project / tags / billable) so a timer can start carrying its
+  // attributes immediately (the primary Start stays one-tap behind a disclosure). The form
+  // STAYS AVAILABLE WHILE A TIMER RUNS (issue #34 — Switch is removed; it no longer flips to a
+  // separate Switch affordance): submitting the form while running starts a new entry, atomically
+  // stopping the open one — a strictly richer "switch" with no dedicated verb. Two snapshots in
+  // one item: the idle form (startFormState) opened + its five controls present + primary reads
+  // 'Start' + no #switch; and the running snapshot (runningState) where the start-with-details
+  // form is STILL present (its five controls reachable) and there is STILL no #switch element.
+  // Captures main-start-form.png (idle form) and main-start-form-running.png (running form).
   await withPage(browser, startFormState(), 'index.html', async (page) => {
     // §12 R05: route to the Timer view (the start surface's home; the default route is
     // Entries), then open the disclosure and confirm every optional attribute control.
@@ -919,9 +928,8 @@ async function main() {
     const idle = await page.evaluate(() => {
       const form = document.querySelector('#start-form');
       const has = (id) => !!document.querySelector(`#${id}`);
-      // The idle primary button reads Start (the one-tap quick start) and Switch is hidden.
+      // The idle primary button reads Start (the one-tap quick start); no Switch affordance exists.
       const toggleLabel = document.querySelector('#toggle')?.textContent?.trim() ?? null;
-      const sw = document.querySelector('#switch');
       return {
         formVisible: !!form && !form.hidden,
         fields: {
@@ -932,38 +940,49 @@ async function main() {
           bill: has('start-bill'),
         },
         toggleLabel,
-        switchHiddenWhenIdle: !!sw && sw.hidden,
+        noSwitch: !document.querySelector('#switch'),
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-start-form.png') });
 
-    // The running surface: the dedicated Switch affordance is visible and labelled 'Switch'.
-    // §12 R05: the Switch primary lives in the Timer view, so route there before reading it
-    // (otherwise the still-hidden Timer section would report the button as display:none).
-    const running = await withPage(browser, switchState(), 'index.html', async (rp) => {
+    // The running surface: the start-with-details form STAYS available while a timer runs and
+    // there is STILL no #switch element. §12 R05: the form lives in the Timer view, so route
+    // there and open the disclosure before reading the controls.
+    const running = await withPage(browser, runningState(), 'index.html', async (rp) => {
       await rp.click('.nav-item[data-view="timer"]');
-      await rp.waitForSelector('[data-view="timer"]:not([hidden]) #switch');
+      await rp.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+      await rp.click('#start-toggle');
+      await rp.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       const probe = await rp.evaluate(() => {
-        const sw = document.querySelector('#switch');
-        const cs = sw ? getComputedStyle(sw) : null;
+        const form = document.querySelector('#start-form');
+        const has = (id) => !!document.querySelector(`#${id}`);
         return {
-          present: !!sw,
-          visible: !!sw && !sw.hidden && cs.display !== 'none',
-          label: sw ? sw.textContent.trim() : null,
+          formVisible: !!form && !form.hidden,
+          fields: {
+            desc: has('start-desc'),
+            client: has('start-client'),
+            project: has('start-project'),
+            tags: has('start-tags'),
+            bill: has('start-bill'),
+          },
+          // Switch is removed — no #switch element on the running start surface either.
+          noSwitch: !document.querySelector('#switch'),
         };
       });
-      await rp.screenshot({ path: join(EVIDENCE, 'main-switch.png') });
+      await rp.screenshot({ path: join(EVIDENCE, 'main-start-form-running.png') });
       return probe;
     });
 
     const f = idle.fields;
     const formOk = idle.formVisible && f.desc && f.client && f.project && f.tags && f.bill;
-    const idleLabelOk = idle.toggleLabel === 'Start' && idle.switchHiddenWhenIdle;
-    const switchOk = running.present && running.visible && running.label === 'Switch';
+    const idleLabelOk = idle.toggleLabel === 'Start' && idle.noSwitch;
+    const rf = running.fields;
+    const runningOk =
+      running.formVisible && rf.desc && rf.client && rf.project && rf.tags && rf.bill && running.noSwitch;
     record(
       'START_FORM',
-      formOk && idleLabelOk && switchOk,
-      `idle start form fields=${JSON.stringify(idle)}; running surface offers Switch=${JSON.stringify(running)}`,
+      formOk && idleLabelOk && runningOk,
+      `idle start form fields=${JSON.stringify(idle)}; running surface keeps the start-with-details form (no Switch)=${JSON.stringify(running)}`,
       'main-start-form.png',
     );
   });
@@ -1710,44 +1729,11 @@ async function main() {
     );
   });
 
-  // SWITCH_AFFORDANCE — a dedicated Switch control (the atomic stop-then-start, §05
-  // R8) is present and visible while running, in both the main window and the
-  // popover, and absent when idle (Switch only makes sense mid-timer). Re-captures
-  // the running screenshots as the presentation evidence.
-  const switchVisible = (page) =>
-    page.evaluate(() => {
-      const el = document.querySelector('#switch');
-      if (!el) return { present: false, visible: false };
-      const cs = getComputedStyle(el);
-      return { present: true, visible: !el.hidden && cs.display !== 'none' };
-    });
-
-  const mainRunning = await withPage(browser, runningState(), 'index.html', async (page) => {
-    const probe = await switchVisible(page);
-    await page.screenshot({ path: join(EVIDENCE, 'main-running.png') });
-    return probe;
-  });
-  const popRunning = await withPage(browser, runningState(), 'popover.html', async (page) => {
-    const probe = await switchVisible(page);
-    await page.screenshot({ path: join(EVIDENCE, 'popover-running.png') });
-    return probe;
-  });
-  const mainIdle = await withPage(browser, emptyState(), 'index.html', async (page) => {
-    return switchVisible(page);
-  });
-  const switchOk =
-    mainRunning.present &&
-    mainRunning.visible &&
-    popRunning.present &&
-    popRunning.visible &&
-    mainIdle.present &&
-    !mainIdle.visible;
-  record(
-    'SWITCH_AFFORDANCE',
-    switchOk,
-    `Switch visible while running: main=${JSON.stringify(mainRunning)} popover=${JSON.stringify(popRunning)}; idle main=${JSON.stringify(mainIdle)}`,
-    'main-running.png',
-  );
+  // (SWITCH_AFFORDANCE removed — issue #34. Switch is gone: Start is the atomic stop-then-start,
+  // so there is no dedicated Switch control to assert. The popover/timer items above now assert
+  // Switch's ABSENCE — no #switch / #timer-switch element survives in any run state — and the
+  // running-popover / running-main stills they shared are captured in TRAY_POPOVER_SURFACE
+  // (popover-running.png) and ACCENT_DISCIPLINE (main-running.png).)
 
   // CLIENTS_VIEW — the Clients nav view lists active clients with their projects nested,
   // and offers create/rename/archive in place; archived items drop out of the active list

@@ -6,8 +6,8 @@ Feature: GUI ↔ tt parity (§17 R8)
   # parity proof for that capability. The acceptance/criteria/parity-matrix.json + gui/test/parity.test.ts
   # bind the GUI's IPC channels to existing tt commands (the static coverage claim); THIS file
   # exercises the behaviour those channels invoke across the capability classes the §12 views
-  # add (manual add, field edit, client/project create-rename-archive, setting change+read-back,
-  # switch), so the dynamic claim — same behaviour, both surfaces — is locked too. The reference-
+  # add (manual add, field edit, client/project create-rename-archive, setting change+read-back),
+  # so the dynamic claim — same behaviour, both surfaces — is locked too. The reference-
   # data lifecycle (reference_data.feature), the settings round-trip (settings.feature) and the
   # report/range/grouping parity (reports.feature, entry_list.feature) own their own deep
   # coverage; this file is the cross-cutting parity sampler that names each capability class once.
@@ -29,15 +29,6 @@ Feature: GUI ↔ tt parity (§17 R8)
     Given a closed entry "draft spec" for "Acme" / "API" from 09:00 to 10:00
     When I edit the entry "draft spec" description to "final spec"
     Then the entry "final spec" is for "Acme / API"
-
-  # §05 R8 — Switch (atomic stop-then-start). Reaches start/switch — `tt switch` is the alias of
-  # `tt start`; both close the open entry and open a new one as one named action.
-  Scenario: Switch closes the open entry and opens a new one on both surfaces
-    When I start an entry "morning" at 09:00
-    And I switch to an entry "afternoon" at 11:00
-    Then exactly one entry is open
-    And the open entry is "afternoon"
-    And the entry "morning" is closed with end 11:00
 
   # §07 / §12 R10 — the Clients view's client lifecycle: create, rename, archive. Reaches the
   # addClient / renameClient / archiveClient IPC channels, parity with `tt client add/rename/archive`.

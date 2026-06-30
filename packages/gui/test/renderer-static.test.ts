@@ -106,12 +106,12 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/billable:/);
   });
 
-  it('the start surface is the Timer-view core-entry form and flips to Switch while running (§12 R5)', () => {
+  it('the start surface is the Timer-view core-entry form and stays available while running, with no Switch (§12 R5)', () => {
     const html = read('index.html');
     const app = read('app.js');
     // §12 R05 (core): the inline Start form exposes every attribute control (the
     // start-immediately surface) and is hosted in the Timer view — the GUI core-entry
-    // surface relocated from the Entries toolbar (the form + disclosure + #toggle/#switch
+    // surface relocated from the Entries toolbar (the form + disclosure + #toggle
     // primary live inside <section data-view="timer">, not the Entries section).
     const timerView = html.match(
       /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
@@ -120,7 +120,10 @@ describe('renderer static contract', () => {
     expect(timerView!).toMatch(/id="start-form"/);
     expect(timerView!).toMatch(/id="start-toggle"/);
     expect(timerView!).toMatch(/id="toggle"/);
-    expect(timerView!).toMatch(/id="switch"/);
+    // §12 R05 / issue #34: Switch is removed entirely — the start surface carries NO #switch
+    // button. Starting while running IS the atomic stop-then-start, so the form simply stays
+    // available; there is no separate Switch affordance to flip to.
+    expect(timerView!).not.toMatch(/id="switch"/);
     for (const id of ['start-desc', 'start-client', 'start-project', 'start-tags', 'start-bill']) {
       expect(timerView!, `the Timer view must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
     }
@@ -136,12 +139,11 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.start\(\s*payload\s*\)/);
     expect(app).toMatch(/billable:\s*\$\('start-bill'\)\.checked/);
     expect(app).toMatch(/payload\.tags/);
-    // …and the start surface presents the dedicated Switch affordance only while running:
-    // the #switch button is shown by `running` and reads 'Switch', the one-tap atomic
-    // stop-then-start (§05 R8) — the surface's label flips Start↔Switch by run state.
-    expect(html).toMatch(/id="switch"[^>]*>Switch<|>Switch<\/button>/);
-    expect(app).toMatch(/\$\('switch'\)\.hidden\s*=\s*!running/);
-    expect(app).toMatch(/\$\('switch'\)\.addEventListener[\s\S]*?window\.stint\.start\(/);
+    // …and NO #switch element / wiring survives anywhere in the page (issue #34): no Switch
+    // button in the HTML and no $('switch') render/handler in app.js.
+    expect(html).not.toMatch(/>Switch<\/button>/);
+    expect(html).not.toMatch(/id="switch"/);
+    expect(app).not.toMatch(/\$\('switch'\)/);
   });
 
   it('the Add (backfill) form exposes explicit from/to + attributes and calls add over IPC (§05 R5)', () => {
@@ -180,20 +182,13 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.STP\.open\(/);
   });
 
-  it('Switch is a dedicated affordance shown only while running, over the start IPC (§05 R8)', () => {
-    const html = read('index.html');
+  it('the popover hosts no dedicated Switch affordance — Stop/Start toggle + Open only (§12 R01)', () => {
+    // Switch is removed as a distinct concept (issue #34): starting while running is the
+    // atomic stop-then-start, so the compact popover offers only the toggle and Open Stint.
     const pop = read('popover.html');
-    // Both surfaces expose a #switch control…
-    expect(html).toMatch(/id="switch"/);
-    expect(pop).toMatch(/id="switch"/);
-    const app = read('app.js');
     const popJs = read('popover.js');
-    // …toggled by `running` (hidden when idle — Switch only makes sense mid-timer)…
-    expect(app).toMatch(/\$\('switch'\)\.hidden\s*=\s*!running/);
-    expect(popJs).toMatch(/\$\('switch'\)\.hidden\s*=\s*!running/);
-    // …and clicking it calls window.stint.start (the atomic stop+start), then reloads.
-    expect(app).toMatch(/\$\('switch'\)\.addEventListener[\s\S]*?window\.stint\.start\(/);
-    expect(popJs).toMatch(/\$\('switch'\)\.addEventListener[\s\S]*?window\.stint\.start\(/);
+    expect(pop).not.toMatch(/id="switch"/);
+    expect(popJs).not.toMatch(/\$\('switch'\)/);
   });
 
   it('every entry is editable inline in-context and any field is editable (§06 R1, §05 R6)', () => {
@@ -432,10 +427,10 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/id="timer-desc"/);
     expect(html).toMatch(/id="timer-meta"/);
     expect(html).toMatch(/id="timer-flags"/);
-    // …with both the primary Stop and the Switch controls (Stop carries the accent, Switch
-    // is a plain button — accent discipline keeps a single fill).
+    // …with the primary Stop control (it carries the accent). §12 R04 / issue #34: Switch is
+    // removed — the running card's primary actions are Stop (+ favorite pin), no Switch button.
     expect(html).toMatch(/id="timer-stop"[^>]*class="primary"|class="primary"[^>]*id="timer-stop"/);
-    expect(html).toMatch(/id="timer-switch"/);
+    expect(html).not.toMatch(/id="timer-switch"/);
 
     // §12 R04 PLACEMENT: the full #timer-card is hosted in the Timer view section, NOT in the
     // Entries section. Slice each top-level view section and assert where the card lives.
@@ -445,7 +440,7 @@ describe('renderer static contract', () => {
     expect(timerView, 'index.html must declare the Timer view section').toBeTruthy();
     expect(timerView!).toMatch(/id="timer-card"/);
     expect(timerView!).toMatch(/id="timer-stop"/);
-    expect(timerView!).toMatch(/id="timer-switch"/);
+    expect(timerView!).not.toMatch(/id="timer-switch"/);
     // The Entries section runs from its comment to the start of the Clients view; the full card
     // must NOT live there — only the compact strip does.
     const entriesView = html.match(
@@ -475,10 +470,10 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/renderTimerCard\(state && state\.status\.running/);
     // …the strip routes to the Timer view (presentation only, no IPC)…
     expect(app).toMatch(/timerStrip\.addEventListener\('click',\s*\(\)\s*=>\s*route\('timer'\)\)/);
-    // …the Stop reuses the existing toggle write and Switch reuses the start IPC (no new
-    // channel — store.start is the atomic stop-then-start, §05 R8)…
+    // …the Stop reuses the existing toggle write (no new channel). §12 R04 / issue #34: Switch
+    // is removed — there is NO $('timer-switch') render or handler in app.js anywhere.
     expect(app).toMatch(/\$\('timer-stop'\)\.addEventListener[\s\S]*?window\.stint\.toggle\(/);
-    expect(app).toMatch(/\$\('timer-switch'\)\.addEventListener[\s\S]*?window\.stint\.start\(/);
+    expect(app).not.toMatch(/\$\('timer-switch'\)/);
     // …and the per-second count-up advances BOTH the card clock and the strip clock on the tick
     // path (independent of data changes), derived from elapsed(now − start), never stored.
     expect(app).toMatch(/function tick\(\)/);

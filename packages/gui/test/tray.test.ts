@@ -6,7 +6,7 @@
  * uses for assertions a headless renderer cannot drive.
  *
  * The decision this freezes: a single LEFT-click opens the compact popover (the SOLE
- * surface for Stop / Switch / Start + Open Stint); the old 3-item Start/Stop + Open
+ * surface for Stop / Start + Open Stint); the old 3-item Start/Stop + Open
  * Stint dropdown is GONE; the right-click context menu is the minimal OS-convention
  * Quit-only menu — it builds no timer action and nothing the popover already owns.
  */
@@ -43,7 +43,7 @@ describe('tray behavior (§12 R01 / G8)', () => {
 
   it('togglePopover shows the popover BrowserWindow (the popover is the action surface)', () => {
     // togglePopover toggles the popover window's visibility — the surface every tray action
-    // now lives on (Stop/Switch/Start + Open Stint), since the dropdown is removed.
+    // now lives on (Stop/Start + Open Stint), since the dropdown is removed.
     const start = main.indexOf('function togglePopover(');
     expect(start, 'togglePopover must exist').toBeGreaterThanOrEqual(0);
     const body = main.slice(start, main.indexOf('\n}\n', start));
@@ -70,20 +70,20 @@ describe('tray behavior (§12 R01 / G8)', () => {
 /**
  * The restyled popover surface (Calm · Warm Paper, context/mockups/tray-popover.html). A
  * static-guard over the renderer source the headless tray cannot drive: the chromeless compact
- * surface keeps the four-action shape (Stop / Switch / Start + Open Stint) on its new markup,
+ * surface offers the Stop/Start toggle + Open Stint only — no Switch — on its new markup,
  * paired with line icons from the one sprite and a worded + dotted run state — no emoji.
  */
 describe('tray popover surface (§12 R01)', () => {
   it('keeps the harness ids the tray-action surface is asserted through', () => {
-    // The compact surface still exposes the count, the running-state line, the Start/Stop toggle,
-    // the mid-timer Switch, and Open Stint — the four-action shape, on the restyled markup.
+    // The compact surface exposes the count, the running-state line, the Start/Stop toggle,
+    // and Open Stint — Stop/Start toggle + Open Stint only, no Switch — on the restyled markup.
     expect(popHtml).toMatch(/id="count"/);
     expect(popHtml).toMatch(/id="state"/);
     expect(popHtml).toMatch(/id="ctx"/);
     // The toggle is the single primary action; the restyle gives it `btn primary` (the .btn
     // chrome + the rationed accent fill), so we assert the primary marker without pinning class order.
     expect(popHtml).toMatch(/id="toggle"[^>]*class="[^"]*\bprimary\b|class="[^"]*\bprimary\b[^"]*"[^>]*id="toggle"/);
-    expect(popHtml).toMatch(/id="switch"[^>]*hidden/);
+    expect(popHtml).not.toMatch(/id="switch"/);
     expect(popHtml).toMatch(/id="open"/);
   });
 
@@ -113,10 +113,9 @@ describe('tray popover surface (§12 R01)', () => {
   });
 
   it('draws its action affordances with line icons from the one sprite — never emoji', () => {
-    // Stop/Switch/Start carry sprite icons; the sprite is injected so the <use> refs resolve.
+    // Stop/Start carry sprite icons; the sprite is injected so the <use> refs resolve.
     expect(popJs).toMatch(/injectSprite\(/);
     expect(popJs).toMatch(/icon\('stop'\)/);
-    expect(popJs).toMatch(/icon\('swap'\)/);
     expect(popJs).toMatch(/icon\('play'\)/);
     // No emoji glyphs anywhere in the restyled renderer.
     expect(popHtml).not.toMatch(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]/u);

@@ -65,6 +65,10 @@ type Op =
   | { kind: 'resume' }
   | { kind: 'gap'; minutes: number };
 
+// GUARD: the generated op set is deliberately start/stop/add/resume/gap with NO `switch`
+// op — `start` IS the atomic stop-then-start that subsumes switching (§05 R01), so the
+// atomic-transition / app_state-consistency laws below keep full coverage. Do not re-add
+// a redundant `switch` op.
 const opArb: fc.Arbitrary<Op> = fc.oneof(
   fc.constant<Op>({ kind: 'start' }),
   fc.constant<Op>({ kind: 'stop' }),

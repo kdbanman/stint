@@ -32,6 +32,7 @@
  */
 import { chromium } from 'playwright-core';
 import { mkdirSync, existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -76,6 +77,266 @@ function resolveChromium() {
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 const wait = (page, ms) => page.waitForTimeout(ms);
 
+// ASCII-only output slug from a requirement/recipe id, so the committed GIF name is filesystem-
+// and PR-image safe: "§12 R15" → "12-r15", "§05 R01" → "05-r01", "favorites-rail" → "favorites-rail".
+// Strips the section glyph, lowercases, and collapses any non-[a-z0-9] run to a single hyphen.
+function asciiSlug(id) {
+  return String(id)
+    .replace(/§/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+}
+
+// The VISIBLE-INTERACTION layer, injected via page.addInitScript so clicks never happen
+// invisibly (the recording requirement). It paints, with NO dependency on the renderer's own
+// CSS/markup and behind a high z-index so it never perturbs layout or the JUDGE selectors:
+//   (a) a synthetic cursor element that follows every `mousemove` (the real pointer Playwright
+//       drives — page.mouse.move steps make it visibly travel);
+//   (b) a click pulse/ripple spawned at the pointer on every `pointerdown`;
+//   (c) a brief outline highlight on the element under the pointer at `pointerdown` (the control
+//       about to be interacted with), auto-cleared after a beat;
+//   (d) a small caption banner (window.__recCaption(text)) a recipe can set to name the step.
+// Pure presentation injected ONLY by the recording entry point — the JUDGE harness does not load
+// it, so no judge behavior, rubric, or selector is touched.
+const VISIBLE_CURSOR_INIT = `
+  (() => {
+    const ready = () => {
+      if (document.getElementById('__rec_cursor__')) return;
+      const root = document.body || document.documentElement;
+      if (!root) return;
+      const style = document.createElement('style');
+      style.textContent = \`
+        #__rec_cursor__{position:fixed;left:0;top:0;width:22px;height:22px;margin:-11px 0 0 -11px;
+          border-radius:50%;border:2px solid rgba(20,20,20,.9);background:rgba(255,255,255,.35);
+          box-shadow:0 0 0 1px rgba(255,255,255,.7),0 1px 4px rgba(0,0,0,.35);
+          z-index:2147483646;pointer-events:none;transition:transform .04s linear;will-change:left,top;}
+        #__rec_cursor__::after{content:'';position:absolute;left:50%;top:50%;width:4px;height:4px;
+          margin:-2px 0 0 -2px;border-radius:50%;background:rgba(20,20,20,.9);}
+        .__rec_pulse__{position:fixed;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;
+          border:2px solid rgba(200,98,62,.9);background:rgba(200,98,62,.25);
+          z-index:2147483645;pointer-events:none;animation:__rec_ripple__ .55s ease-out forwards;}
+        @keyframes __rec_ripple__{from{transform:scale(.4);opacity:.95;}to{transform:scale(3.2);opacity:0;}}
+        .__rec_target__{outline:2px solid rgba(200,98,62,.95)!important;outline-offset:2px!important;
+          border-radius:3px;transition:outline-color .1s linear;}
+        #__rec_caption__{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);
+          max-width:88%;z-index:2147483646;pointer-events:none;font:600 12px/1.45 system-ui,sans-serif;
+          color:#fff;background:rgba(20,20,20,.82);padding:6px 12px;border-radius:14px;
+          box-shadow:0 1px 6px rgba(0,0,0,.4);opacity:0;transition:opacity .15s linear;white-space:nowrap;}
+        #__rec_caption__.__on__{opacity:1;}
+      \`;
+      document.head.appendChild(style);
+
+      const cur = document.createElement('div');
+      cur.id = '__rec_cursor__';
+      cur.style.left = '-40px';
+      cur.style.top = '-40px';
+      root.appendChild(cur);
+
+      const cap = document.createElement('div');
+      cap.id = '__rec_caption__';
+      root.appendChild(cap);
+
+      let capTimer = 0;
+      window.__recCaption = (text) => {
+        cap.textContent = text || '';
+        cap.classList.toggle('__on__', !!text);
+        clearTimeout(capTimer);
+        if (text) capTimer = setTimeout(() => cap.classList.remove('__on__'), 2600);
+      };
+
+      // (a) the cursor follows the real pointer.
+      window.addEventListener(
+        'mousemove',
+        (e) => {
+          cur.style.left = e.clientX + 'px';
+          cur.style.top = e.clientY + 'px';
+          cur.style.transform = 'scale(1)';
+        },
+        true,
+      );
+
+      // (b) a ripple at the press point + (c) a brief highlight on the pressed element.
+      let lastTarget = null;
+      let targetTimer = 0;
+      window.addEventListener(
+        'pointerdown',
+        (e) => {
+          cur.style.transform = 'scale(.8)';
+          const pulse = document.createElement('div');
+          pulse.className = '__rec_pulse__';
+          pulse.style.left = e.clientX + 'px';
+          pulse.style.top = e.clientY + 'px';
+          (document.body || root).appendChild(pulse);
+          setTimeout(() => pulse.remove(), 600);
+
+          const t = e.target;
+          if (t && t.classList && t !== document.body && t !== document.documentElement) {
+            if (lastTarget) lastTarget.classList.remove('__rec_target__');
+            t.classList.add('__rec_target__');
+            lastTarget = t;
+            clearTimeout(targetTimer);
+            targetTimer = setTimeout(() => {
+              t.classList.remove('__rec_target__');
+              if (lastTarget === t) lastTarget = null;
+            }, 700);
+          }
+        },
+        true,
+      );
+      window.addEventListener('pointerup', () => { cur.style.transform = 'scale(1)'; }, true);
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', ready, { once: true });
+    } else {
+      ready();
+    }
+    // Re-establish the layer after a full-document navigation (some recipes goto() a second page).
+    document.addEventListener('readystatechange', () => { if (document.readyState !== 'loading') ready(); });
+  })();
+`;
+
+// Wrap a Playwright Page so every scripted interaction is VISIBLE: the synthetic cursor travels
+// to the target in small steps (page.mouse.move steps), the about-to-click control is highlighted,
+// and there is a ~300–500ms settle beat before and after each click. We decorate the high-level
+// actions the recipes use (page.click / page.fill, and locator.click via a locator proxy) so the
+// existing recipe scripts need no edits — they just become legible on camera. Direct
+// page.mouse.* calls a recipe makes (the picker drags) already move the real pointer, so the
+// cursor follows them natively; this only adds the travel+pause around the high-level helpers.
+function decoratePage(page) {
+  const STEP_MS = 18;
+  const STEPS = 14;
+  const PRE_MS = 380;
+  const POST_MS = 360;
+
+  // Move the synthetic+real pointer to an element's centre in small visible steps.
+  async function travelTo(target) {
+    let box = null;
+    try {
+      box = await target.boundingBox();
+    } catch {
+      box = null;
+    }
+    if (!box) return false;
+    const x = Math.round(box.x + box.width / 2);
+    const y = Math.round(box.y + box.height / 2);
+    await page.mouse.move(x, y, { steps: STEPS });
+    return true;
+  }
+
+  const rawClick = page.click.bind(page);
+  const rawFill = page.fill.bind(page);
+  const rawLocator = page.locator.bind(page);
+
+  page.click = async (selector, opts) => {
+    const loc = rawLocator(selector).first();
+    try {
+      await loc.waitFor({ state: 'visible', timeout: 4000 });
+    } catch {
+      // fall through to the native click (it will surface the real error / auto-wait).
+    }
+    const travelled = await travelTo(loc);
+    if (travelled) await page.waitForTimeout(PRE_MS);
+    await rawClick(selector, opts);
+    await page.waitForTimeout(POST_MS);
+  };
+
+  page.fill = async (selector, value, opts) => {
+    const loc = rawLocator(selector).first();
+    const travelled = await travelTo(loc);
+    if (travelled) await page.waitForTimeout(160);
+    await rawFill(selector, value, opts);
+    await page.waitForTimeout(160);
+  };
+
+  // Locator proxy: a locator's .click() also travels + pauses, so recipes that use
+  // page.locator(...).click() (the kebab menus, the favorite Resume) are visible too.
+  page.locator = (...args) => {
+    const loc = rawLocator(...args);
+    return wrapLocator(loc);
+  };
+  function wrapLocator(loc) {
+    return new Proxy(loc, {
+      get(t, prop, recv) {
+        if (prop === 'click') {
+          return async (opts) => {
+            const one = t.first();
+            try {
+              await one.waitFor({ state: 'visible', timeout: 4000 });
+            } catch {}
+            const travelled = await travelTo(one);
+            if (travelled) await page.waitForTimeout(PRE_MS);
+            await loc.click(opts);
+            await page.waitForTimeout(POST_MS);
+          };
+        }
+        if (prop === 'locator') {
+          return (...a) => wrapLocator(Reflect.apply(t.locator, t, a));
+        }
+        if (prop === 'first' || prop === 'last' || prop === 'nth') {
+          return (...a) => wrapLocator(Reflect.apply(t[prop], t, a));
+        }
+        const v = Reflect.get(t, prop, recv);
+        return typeof v === 'function' ? v.bind(t) : v;
+      },
+    });
+  }
+  return page;
+}
+
+// Convert a finished .webm to a committed, ASCII-named animated GIF via the documented two-pass
+// palette pipeline — slowed to ~0.5x (setpts=2.0*PTS) with a ~1.5s hold on the final frame
+// (tpad), 15fps, lanczos scale, sierra2_4a dither for quality. Returns the GIF path on success,
+// or throws so the caller surfaces the conversion gap (we never ship a faked GIF).
+function convertToGif(webmPath, gifPath) {
+  const palette = gifPath.replace(/\.gif$/, '') + '.pal.png';
+  const vf =
+    'setpts=2.0*PTS,fps=15,scale=iw:-1:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5';
+  const pass1 = spawnSync(
+    'ffmpeg',
+    ['-y', '-i', webmPath, '-vf', `${vf},palettegen=stats_mode=diff`, palette],
+    { encoding: 'utf8' },
+  );
+  if (pass1.status !== 0) {
+    rmSync(palette, { force: true });
+    throw new Error(
+      `ffmpeg palettegen failed (status ${pass1.status}): ${(pass1.stderr || pass1.error?.message || '').split('\n').slice(-4).join(' ')}`,
+    );
+  }
+  const pass2 = spawnSync(
+    'ffmpeg',
+    [
+      '-y',
+      '-i',
+      webmPath,
+      '-i',
+      palette,
+      '-filter_complex',
+      `${vf}[v];[v][1:v]paletteuse=dither=sierra2_4a`,
+      gifPath,
+    ],
+    { encoding: 'utf8' },
+  );
+  rmSync(palette, { force: true });
+  if (pass2.status !== 0) {
+    throw new Error(
+      `ffmpeg paletteuse failed (status ${pass2.status}): ${(pass2.stderr || pass2.error?.message || '').split('\n').slice(-4).join(' ')}`,
+    );
+  }
+  if (!existsSync(gifPath) || statSync(gifPath).size === 0) {
+    throw new Error('ffmpeg produced no non-empty GIF.');
+  }
+  return gifPath;
+}
+
+// Is an `ffmpeg` runnable on PATH? (Capability honesty — if not, we keep the .webm and report
+// the gap rather than silently shipping no GIF.)
+function ffmpegAvailable() {
+  const r = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  return r.status === 0;
+}
+
 /**
  * The recording recipes. Each entry maps a requirement id to a short scripted scene over the
  * real renderer: which page to load, which canned fixture state to inject, any initScript
@@ -91,19 +352,20 @@ const RECIPES = {
   // timer already running (the canonical runningState open row 'auth refactor', reading a
   // deterministic 01:24:07), the recording routes to the Timer view, opens the inline
   // Start-with-details disclosure, fills the fresh entry's attributes, and submits. The start
-  // mock runs core's atomic stop-then-start ON the injected snapshot (switchOnStart), so the
+  // mock runs core's atomic stop-then-start ON the injected snapshot (startStopsOpen), so the
   // subsequent load()/getState repaint SHOWS the previously-running timer being stopped and the
-  // new entry becoming the single live count-up — the start-while-running atomic switch. The
-  // pinned JUDGE_NOW clock keeps the count-ups deterministic; we then step the clock so the new
-  // entry's 00:00:0x visibly ticks while the just-stopped row holds its frozen duration.
+  // new entry becoming the single live count-up — starting while a timer runs IS the atomic
+  // stop-then-start (§05 R01; no separate switch verb). The pinned JUDGE_NOW clock keeps the
+  // count-ups deterministic; we then step the clock so the new entry's 00:00:0x visibly ticks
+  // while the just-stopped row holds its frozen duration.
   '§05 R01': {
     page: 'index.html',
     state: runningState,
-    initOpts: { switchOnStart: true },
+    initOpts: { startStopsOpen: true },
     drive: async (page) => {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
-      // Dwell on the previously-running timer (auth refactor, 01:24:07) so the switch is legible.
+      // Dwell on the previously-running timer (auth refactor, 01:24:07) so the stop-then-start is legible.
       await wait(page, 800);
       await page.click('#start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
@@ -170,48 +432,48 @@ const RECIPES = {
     },
   },
 
-  // §12 R05 (core) — the GUI CORE-ENTRY surface, the Start / Switch form, now lives in the
-  // Timer view (relocated from the Entries toolbar). This recording PROVES the relocation and the
-  // start-with-details-in-one-step contract: it opens on the IDLE snapshot (nothing running),
-  // routes to the Timer view, and dwells on the relocated 'Start a new timer' panel — Start is
-  // the single primary, Switch is hidden (idle), and the `+ with details` disclosure is present.
-  // It then opens the disclosure (#start-toggle) and fills the full core-entry attribute set the
-  // form carries — description / client / project / a tag — and sets the Billable toggle, so the
-  // start is demonstrably ONE step that carries its attributes (not a parameterless start + later
-  // edit). Pressing 'Start with details' (#start-go) sends the whole payload over the SAME `start`
-  // IPC tt uses (window.stint.start → core startWithAttributes); with switchOnStart the injected
-  // snapshot gains a single fresh open row built from that payload, so the getState repaint paints
-  // the Timer card RUNNING with the entered description/label and the live count-up begins. We
-  // then step the pinned clock so the fresh entry's 00:00:0x visibly ticks on camera (the start
-  // carried its attributes into a live timer), and dwell on the STATE FLIP the requirement calls
-  // out: with a timer now running, the start-panel primary has flipped Start→Stop and the
-  // dedicated #switch affordance (hidden while idle) is now SHOWN — the Start↔Switch flip, the
-  // atomic stop-then-start surfaced only mid-timer. switchOnStart is the same scoped snapshot
-  // emulation §05 R01 uses; no shared fixture or JUDGE scene is touched.
+  // §12 R05 (core) — the GUI CORE-ENTRY surface, the Start form, now lives in the Timer view
+  // (relocated from the Entries toolbar) and STAYS AVAILABLE WHILE A TIMER RUNS (issue #34 —
+  // Switch is removed; the form no longer flips to a separate Switch affordance). This recording
+  // PROVES the §W contract: the Timer view WHILE RUNNING shows Stop + the start-with-details form
+  // (no Switch button); filling the form and submitting closes the open entry and opens the new
+  // one in ONE action — starting IS the atomic stop-then-start.
+  //
+  // It opens on the canonical runningState (the 'auth refactor' open row, deterministic
+  // 01:24:07), routes to the Timer view, and dwells on the RUNNING surface: the Active-Timer card
+  // shows Stop, and the relocated 'Start a new timer' panel still offers the `+ with details`
+  // disclosure — there is NO #switch button anywhere. It opens the disclosure (#start-toggle) and
+  // fills the full core-entry attribute set the form carries — description / client / project / a
+  // tag — and sets Billable, so the new start carries its attributes in ONE step. Pressing
+  // 'Start with details' (#start-go) sends the whole payload over the SAME `start` IPC tt uses
+  // (window.stint.start → core startWithAttributes); with startStopsOpen the injected snapshot
+  // closes the previously-open row and gains a single fresh open row built from that payload, so
+  // the getState repaint paints the Timer card RUNNING with the entered description/label — the
+  // previous timer visibly STOPPED and the new one became the single live count-up (start IS
+  // switch). We step the pinned clock so the fresh entry's 00:00:0x visibly ticks on camera.
+  // startStopsOpen is the same scoped snapshot emulation §05 R01 uses; no JUDGE scene is touched.
   '§12 R05': {
     page: 'index.html',
-    state: emptyState,
-    initOpts: { switchOnStart: true },
+    state: runningState,
+    initOpts: { startStopsOpen: true },
     drive: async (page) => {
-      // Route to the Timer view and dwell on the relocated 'Start a new timer' panel in its
-      // IDLE state: the Start primary is shown, the dedicated Switch is hidden, and the
-      // `+ with details` disclosure is present — the core-entry surface now lives here.
+      // Route to the Timer view and dwell on the RUNNING surface: the Active-Timer card shows
+      // Stop, the relocated 'Start a new timer' panel offers the `+ with details` disclosure, and
+      // there is NO Switch button — the start-with-details form stays available while running.
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-panel');
-      await page.waitForSelector('#start-panel #toggle');
-      await page.waitForFunction(
-        () => document.querySelector('#start-panel #toggle')?.textContent?.trim() === 'Start',
-      );
-      await page.waitForSelector('#start-panel #switch[hidden]', { state: 'attached' });
+      await page.waitForSelector('#timer-card.running');
+      await page.waitForSelector('#timer-stop:not([hidden])');
+      await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 800);
 
-      // Open the `+ with details` disclosure → the inline attribute form reveals.
+      // Open the `+ with details` disclosure → the inline attribute form reveals (while running).
       await page.click('#start-panel #start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await wait(page, 400);
 
       // Fill the full core-entry attribute set the form carries, then set the Billable toggle —
-      // proving the start carries description / client / project / tags / billable in ONE step.
+      // proving the new start carries description / client / project / tags / billable in ONE step.
       await page.fill('#start-desc', 'invoice prep');
       await page.fill('#start-client', 'Globex');
       await page.fill('#start-project', 'Billing');
@@ -223,8 +485,10 @@ const RECIPES = {
       await page.click('#start-bill');
       await wait(page, 400);
 
-      // Press 'Start with details' → the whole payload goes over `start`; switchOnStart makes the
-      // submitted attributes the single fresh open row, and the repaint paints the running card.
+      // Press 'Start with details' → the whole payload goes over `start`; startStopsOpen closes
+      // the previously-open 'auth refactor' row and makes the submitted attributes the single
+      // fresh open row, so the repaint SHOWS the open entry close and the new one open in ONE
+      // action — starting while a timer runs IS the atomic stop-then-start.
       await page.click('#start-go');
       await page.waitForSelector('#timer-card.running');
       await page.waitForFunction(
@@ -233,19 +497,12 @@ const RECIPES = {
       await wait(page, 400);
 
       // Step the pinned clock so the fresh entry's 00:00:0x visibly ticks — the start carried its
-      // attributes into a LIVE timer.
+      // attributes into a LIVE timer, with still no Switch button anywhere.
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
       }
-
-      // The Start↔Switch flip: with a timer running, the start-panel primary now reads 'Stop' and
-      // the dedicated #switch affordance (hidden while idle) is now SHOWN. Dwell on it so the
-      // mid-timer Switch surface is legible.
-      await page.waitForFunction(
-        () => document.querySelector('#start-panel #toggle')?.textContent?.trim() === 'Stop',
-      );
-      await page.waitForSelector('#start-panel #switch:not([hidden])');
+      await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 1200);
     },
   },
@@ -931,10 +1188,11 @@ const RECIPES = {
   // running-state dot; (2) EDIT THE RUNNING TIMER LIVE — change the description AND the start
   // time AND toggle Billable — and SHOW the row stays running (no stop), with the End time
   // deliberately absent ("no stop" pill + "End time not editable while running" note);
-  // (3) STOP, then START a NEW timer with details from the Start form; (4) SWITCH from one
-  // running timer to another (the atomic stop-then-start); (5) the pinned FAVORITES rail —
-  // PIN the running timer as a favorite, one-click RESUME a favorite to start a fresh timer,
-  // and RENAME / UNPIN via the kebab (§05 R09–R10).
+  // (3) STOP, then START a NEW timer with details from the Start form (which stays available
+  // across run states — starting while a timer runs IS the atomic stop-then-start, issue #34, no
+  // separate switch verb); (4) the pinned FAVORITES rail — PIN the running timer as a favorite,
+  // one-click RESUME a favorite to start a fresh timer, and RENAME / UNPIN via the kebab
+  // (§05 R09–R10) — confirming no Switch verb survives anywhere in the view.
   //
   // All writes go over the SAME window.stint.* channels tt uses (edit / toggle / start /
   // pinFavorite / startFavorite / renameFavorite / unpinFavorite) — the parity twins of
@@ -949,7 +1207,7 @@ const RECIPES = {
   '§12 R14': {
     page: 'index.html',
     state: timerViewFavoritesState,
-    initOpts: { switchOnStart: true },
+    initOpts: { startStopsOpen: true },
     contextOpts: { viewport: { width: 820, height: 980 } },
     drive: async (page) => {
       // Answer the rail's window.prompt() calls in order: pin name, then rename name. Any
@@ -1081,9 +1339,11 @@ const RECIPES = {
       );
       await wait(page, 700);
 
-      // START A NEW TIMER WITH DETAILS from the Start form (the relocated core-entry surface).
-      // switchOnStart makes the submitted attributes the single fresh open row, so the repaint
-      // paints the running card with the entered description and the count-up begins.
+      // START A NEW TIMER WITH DETAILS from the Start form (the relocated core-entry surface,
+      // which stays available across run states — issue #34, no Switch verb). startStopsOpen makes
+      // the submitted attributes the single fresh open row, so the repaint paints the running card
+      // with the entered description and the count-up begins. (Starting while a timer is running
+      // would close the open row first — the atomic stop-then-start — but here we start from idle.)
       await page.click('#start-panel #start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await page.fill('#start-desc', 'invoice prep');
@@ -1096,29 +1356,12 @@ const RECIPES = {
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'invoice prep',
       );
-      await tickClock(3);
-      await wait(page, 500);
-
-      // ---- (4) SWITCH from one running timer to another --------------------------------------
-      // The dedicated #switch affordance is shown only while running; one tap fires the SAME
-      // `start` IPC (core's atomic stop-then-start, §05 R8) with an empty payload — Switch is the
-      // one-tap atomic switch (carry-forward of attributes is the separate §12 R5 form work). With
-      // switchOnStart the prior 'invoice prep' row is closed and a fresh row opened, so the card
-      // repaints to the new running timer (its description reads the unattributed placeholder) while
-      // exactly one row stays open. The desc visibly FLIPS off 'invoice prep' — the switch happened.
-      await page.waitForSelector('#start-panel #switch:not([hidden])');
-      await page.click('#start-panel #switch');
-      await page.waitForFunction(
-        () => document.querySelector('#timer-desc')?.textContent?.trim() !== 'invoice prep',
-      );
-      await page.waitForFunction(
-        () => document.querySelector('#timer-desc')?.textContent?.trim() === 'your timer',
-      );
-      await page.waitForSelector('#timer-card.running');
+      // Confirm no Switch verb survives anywhere in the running Timer view (issue #34).
+      await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await tickClock(3);
       await wait(page, 600);
 
-      // ---- (5) FAVORITES RAIL — pin, resume, rename, unpin -----------------------------------
+      // ---- (4) FAVORITES RAIL — pin, resume, rename, unpin -----------------------------------
       // The rail paints one card per seeded favorite. PIN the running timer → a new chip appears.
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail .fav-card');
       const before = await page.$$eval('.fav-card', (els) => els.length);
@@ -1757,15 +2000,15 @@ const RECIPES = {
   //   1) Open on the Entries view (the GUI default, route('entries')) and dwell on the compact
   //      strip (#timer-strip) — it mirrors the running count-up (#strip-clock), the running dot +
   //      state (#strip-state → 'running', .timer-strip.running accent), and the running entry's
-  //      description (#strip-desc → 'auth refactor'). The strip carries NO Stop/Switch and NO
+  //      description (#strip-desc → 'auth refactor'). The strip carries NO Stop control and NO
   //      flags grid (those are the full panel's). Advancing the pinned clock makes the strip's
   //      count-up visibly TICK, proving it's the live running timer (not a static label).
   //   2) Click the strip itself (it's a button → app.js route('timer')) to navigate to the Timer
   //      view, where the FULL Active-Timer panel paints from the SAME running snapshot: the large
   //      live count-up (#timer-clock), the running state (#timer-state), the description
   //      (#timer-desc → 'auth refactor') + client/project label (#timer-meta → 'Client A / API')
-  //      + flags (#timer-flags), and the primary actions Stop (#timer-stop) + Switch
-  //      (#timer-switch). Advancing the clock again makes the full panel's count-up tick.
+  //      + flags (#timer-flags), and the primary action Stop (#timer-stop) — with NO Switch
+  //      control (Switch is removed, issue #34). Advancing the clock again makes the count-up tick.
   //   3) Route back to Entries (via the nav rail) so the recording ENDS showing the same running
   //      timer still represented as the compact strip — demonstrating the panel lives in Timer
   //      while Entries keeps the strip, the two staying in sync off one snapshot.
@@ -1793,21 +2036,39 @@ const RECIPES = {
       await wait(page, 500);
 
       // 2) Click the strip → route to the Timer view, where the FULL Active-Timer panel paints
-      // from the SAME running snapshot (large count-up + state + desc/meta/flags + Stop + Switch).
+      // from the SAME running snapshot (large count-up + state + desc/meta/flags + Stop, no Switch).
       await page.click('#timer-strip');
       await page.waitForSelector('.view[data-view="timer"]:not([hidden]) #timer-card.running');
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'auth refactor',
       );
       await page.waitForSelector('#timer-stop:not([hidden])');
-      await page.waitForSelector('#timer-switch:not([hidden])');
+      // §12 R04 — the running card's primary actions are exactly Stop + the favorite pin: confirm
+      // the Pin-as-favorite control (#timer-pin) is present/visible alongside Stop…
+      await page.waitForSelector('#timer-pin:not([hidden])');
+      // …and that Switch is removed — no #timer-switch survives on the full panel (issue #34).
+      await page.waitForFunction(() => !document.querySelector('#timer-switch'));
       // Dwell on the full panel and step the clock so its larger count-up ticks on camera too.
       await wait(page, 700);
       for (let i = 4; i <= 6; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
       }
-      await wait(page, 600);
+      // Travel the cursor over the two remaining primary actions so the running card's
+      // Stop (+ favorite pin) set is legible on camera — the card hosts these and nothing else.
+      // Use stepped mouse.move so the synthetic cursor visibly travels to each control.
+      for (const sel of ['#timer-stop', '#timer-pin']) {
+        const box = await page.locator(sel).first().boundingBox();
+        if (box) {
+          await page.mouse.move(
+            Math.round(box.x + box.width / 2),
+            Math.round(box.y + box.height / 2),
+            { steps: 16 },
+          );
+          await wait(page, 800);
+        }
+      }
+      await wait(page, 400);
 
       // 3) Route back to Entries via the nav rail — the same running timer is still the compact
       // strip there, proving the panel moved into Timer while Entries keeps the strip.
@@ -1816,6 +2077,37 @@ const RECIPES = {
       await page.waitForFunction(
         () => document.querySelector('#strip-desc')?.textContent?.trim() === 'auth refactor',
       );
+      await wait(page, 1000);
+    },
+  },
+
+  // §12 R01 — the tray popover while running: Stop + Open Stint ONLY, no Switch button (issue
+  // #34 — Switch is removed; the popover does not host a quick-start/favorites list either, G4).
+  // The recording drives the REAL popover renderer (popover.html) over the canonical runningState
+  // (the 'auth refactor' open row, deterministic 01:24:07): it dwells on the running popover —
+  // the Stop/Start toggle reads 'Stop' (the running state), the Open Stint link is present, and
+  // there is NO #switch element — and steps the pinned clock so the popover count-up visibly TICKS
+  // (proving it's the live timer). Then it confirms, on camera, that the popover surface carries
+  // exactly Stop + Open Stint and nothing labelled Switch. Presentation/routing only; the popover
+  // runs over the same window.stint mock the JUDGE TRAY_POPOVER_SURFACE scene drives.
+  '§12 R01': {
+    page: 'popover.html',
+    state: runningState,
+    drive: async (page) => {
+      // The running popover: the toggle reads 'Stop', Open Stint is present, and NO #switch exists.
+      await page.waitForFunction(
+        () => document.querySelector('#toggle')?.textContent?.trim() === 'Stop',
+      );
+      await page.waitForSelector('#open');
+      await page.waitForFunction(() => !document.querySelector('#switch'));
+      await wait(page, 800);
+      // Step the pinned clock so the popover count-up visibly ticks — the live running timer, with
+      // still only Stop + Open Stint on the surface (no Switch).
+      for (let i = 1; i <= 3; i++) {
+        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
+        await wait(page, 350);
+      }
+      await page.waitForFunction(() => !document.querySelector('#switch'));
       await wait(page, 1000);
     },
   },
@@ -1936,8 +2228,9 @@ const RECIPES = {
  */
 async function recordRecipe(browser, reqId, recipe) {
   // Per-recipe staging dir so Playwright's auto-named .webm cannot collide between recipes;
-  // we rename the single produced file to <reqId>.webm afterward.
-  const stage = join(RECORDINGS, `.stage-${reqId}`);
+  // we rename the single produced file to <ascii-slug>.webm afterward. The dir is ASCII-slugged
+  // too (the §-prefixed reqId is not filesystem-clean) and matches the .gitignore .stage-* rule.
+  const stage = join(RECORDINGS, `.stage-${asciiSlug(reqId)}`);
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
 
@@ -1957,7 +2250,14 @@ async function recordRecipe(browser, reqId, recipe) {
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   const state = recipe.state();
+  // The window.stint mock + canned fixture (the SAME initScript the JUDGE harness injects)…
   await page.addInitScript(initScript(JSON.stringify(state), recipe.initOpts ?? {}));
+  // …plus the recording-only VISIBLE-INTERACTION layer (synthetic cursor / click pulse /
+  // highlight / caption). JUDGE never loads this — only the recording entry point does — so no
+  // judge behavior or selector is touched. Decorate the page so high-level clicks/fills travel
+  // the cursor and pause around each action, making every interaction legible on camera.
+  await page.addInitScript(VISIBLE_CURSOR_INIT);
+  decoratePage(page);
   await page.goto(fileUrl(recipe.page));
   await recipe.drive(page);
 
@@ -1981,11 +2281,24 @@ async function recordRecipe(browser, reqId, recipe) {
     rmSync(stage, { recursive: true, force: true });
     throw new Error('no non-empty .webm file was produced — recording capability is missing here.');
   }
-  const out = join(RECORDINGS, `${reqId}.webm`);
-  rmSync(out, { force: true });
-  renameSync(produced, out);
+  // Stage the .webm under an ASCII-safe name (the .webm itself is git-ignored — the GIF is the
+  // committed deliverable, embedded inline in the PR).
+  const slug = asciiSlug(reqId);
+  const webmOut = join(RECORDINGS, `${slug}.webm`);
+  rmSync(webmOut, { force: true });
+  renameSync(produced, webmOut);
   rmSync(stage, { recursive: true, force: true });
-  return { out, bytes: statSync(out).size };
+  const webmBytes = statSync(webmOut).size;
+
+  // Convert to the committed ASCII-named GIF (two-pass palette, ~0.5x, 1.5s end hold). If ffmpeg
+  // is unavailable, keep the .webm and report the gap honestly — never ship a faked GIF.
+  if (!ffmpegAvailable()) {
+    return { webm: webmOut, webmBytes, gif: null, gifBytes: 0, gifGap: 'ffmpeg not on PATH' };
+  }
+  const gifOut = join(RECORDINGS, `${slug}.gif`);
+  rmSync(gifOut, { force: true });
+  convertToGif(webmOut, gifOut);
+  return { webm: webmOut, webmBytes, gif: gifOut, gifBytes: statSync(gifOut).size, gifGap: null };
 }
 
 async function main() {
@@ -2016,9 +2329,15 @@ async function main() {
   try {
     for (const id of ids) {
       try {
-        const { out, bytes } = await recordRecipe(browser, id, RECIPES[id]);
-        saved.push({ id, out, bytes });
-        console.log(`RECORDED ${id.padEnd(22)} ${out} (${bytes} bytes)`);
+        const r = await recordRecipe(browser, id, RECIPES[id]);
+        saved.push({ id, ...r });
+        if (r.gif) {
+          console.log(`RECORDED ${id.padEnd(22)} ${r.gif} (${r.gifBytes} bytes GIF)`);
+        } else {
+          console.log(
+            `RECORDED ${id.padEnd(22)} ${r.webm} (${r.webmBytes} bytes WEBM; GIF skipped: ${r.gifGap})`,
+          );
+        }
       } catch (err) {
         failures.push({ id, message: err.message });
         console.error(`FAILED   ${id.padEnd(22)} ${err.message}`);
@@ -2045,9 +2364,20 @@ async function main() {
     console.error(`\n${failures.length} recipe(s) failed; ${saved.length} recorded.`);
     process.exit(1);
   }
+  const gifs = saved.filter((s) => s.gif).length;
+  const gaps = saved.filter((s) => !s.gif);
   console.log(
-    `\nAll ${saved.length} recording(s) saved to acceptance/evidence/recordings/ as <reqId>.webm.`,
+    `\nAll ${saved.length} recording(s) saved to acceptance/evidence/recordings/ ` +
+      `(${gifs} as committed <ascii-slug>.gif).`,
   );
+  if (gaps.length) {
+    console.error(
+      `\nMISSING CAPABILITY: ${gaps.length} recording(s) produced a .webm but NO GIF ` +
+        `(${gaps.map((g) => g.gifGap).join('; ')}). Install ffmpeg (apt-get install -y ffmpeg) ` +
+        'and re-run; nothing was faked.',
+    );
+    process.exit(1);
+  }
 }
 
 main().catch((err) => {
