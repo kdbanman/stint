@@ -319,6 +319,144 @@
     wireUpdateLinks(host);
   }
 
+  // §20 R04/R05 — the Settings → Backups group (context/mockups/settings.html:173-176). It paints,
+  // off the SAME getState snapshot both surfaces read:
+  //   • a one-shot recovery-notice banner (R05) when the database was recovered from a backup on
+  //     this launch — naming the backup it recovered from and the `.corrupted` file it set aside;
+  //   • a "Last backup …" status line (R04) off state.lastBackupUtc, with a "verified" pill;
+  //   • a retention picker (backupRetention) persisted over the SAME setSetting channel
+  //     `tt config set backup_retention` uses (parity-covered — no new channel);
+  //   • a restore list painted from window.stint.listBackups() (name · createdUtc · size), each
+  //     row offering a Restore… action wired to window.stint.restoreBackup({ name }) behind the
+  //     existing destructive-action confirm gate (§12 R13 — confirmInline, from app.js).
+  // listBackups/restoreBackup are the parity twins of `tt backup ls` / `tt backup restore`.
+
+  // A compact size for a backup file. Display only — core owns the bytes.
+  function fmtBytes(n) {
+    const bytes = Number(n) || 0;
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb < 10 ? kb.toFixed(1) : Math.round(kb)} KB`;
+    return `${(kb / 1024).toFixed(1)} MB`;
+  }
+
+  // A local date+time stamp honouring the live date-format mode (ISO 24h vs system locale) —
+  // the same mode the §14 date-format control drives, so backups read consistently with the app.
+  function backupStamp(iso) {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '—';
+    if (dateFormatMode === 'iso') {
+      const p = (n) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+    }
+    return d.toLocaleString([], {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+    });
+  }
+
+  // §20 R05 — the corruption-recovery banner. Reuses the monochrome warn `.banner` chrome (the
+  // same --flag tokens the overlap banner uses — no accent), naming the backup recovered from and
+  // the quarantined `.corrupted` sibling so the user can see exactly what happened on launch.
+  function recoveryBannerHtml(notice) {
+    if (!notice) return '';
+    return (
+      `<div id="recovery-notice" class="banner recovery" role="status">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-info" /></svg> ` +
+      `<span class="recovery-text">Database recovered from <b>${esc(notice.recoveredFrom)}</b> on launch. ` +
+      `The unreadable file was set aside as <span class="recovery-quar">${esc(notice.quarantinedTo)}</span>.</span>` +
+      `</div>`
+    );
+  }
+
+  // The retention picker's offered values (mirrors the mockup's last 3 / last 5 / last 10).
+  const RETENTION_OPTIONS = [[3, 'last 3'], [5, 'last 5'], [10, 'last 10']];
+
+  function backupsHtml(state, backups) {
+    const settings = (state && state.settings) || {};
+    const retention = settings.backupRetention || 5;
+    const last = state && state.lastBackupUtc;
+    const lastLine = last
+      ? `<span class="ver">${esc(backupStamp(last))}</span>` +
+        `<span class="ok" role="status"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>verified</span>`
+      : `<span class="set-empty">No backups yet — Stint backs up automatically on launch.</span>`;
+    const retSelect =
+      `<select class="set-field" data-key="backupRetention" data-cast="number" aria-label="Backups to keep">` +
+      RETENTION_OPTIONS.map(
+        ([val, lbl]) => `<option value="${val}"${val === retention ? ' selected' : ''}>${esc(lbl)}</option>`,
+      ).join('') +
+      `</select>`;
+    let listHtml;
+    if (Array.isArray(backups) && backups.length) {
+      listHtml =
+        `<div class="backup-list" id="backup-list">` +
+        backups
+          .map(
+            (b) =>
+              `<div class="backup-item" data-name="${esc(b.name)}">` +
+              `<span class="backup-id"><span class="backup-name">${esc(b.name)}</span>` +
+              `<span class="backup-meta">${esc(backupStamp(b.createdUtc))} · ${esc(fmtBytes(b.sizeBytes))}</span></span>` +
+              `<button type="button" class="set-update-btn backup-restore" data-name="${esc(b.name)}">` +
+              `<svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore…</button>` +
+              `</div>`,
+          )
+          .join('') +
+        `</div>`;
+    } else {
+      listHtml = `<span class="set-empty">No backups to restore from yet.</span>`;
+    }
+    return (
+      recoveryBannerHtml(state && state.recoveryNotice) +
+      `<div class="set-grp">Backups</div>` +
+      `<div class="set-row"><div class="set-k">Last backup</div>` +
+      `<div class="set-ctrl">${lastLine}</div></div>` +
+      `<div class="set-row"><div class="set-k">Keep<small>Older automatic backups are pruned.</small></div>` +
+      `<div class="set-ctrl">${retSelect}</div></div>` +
+      `<div class="set-row backup-restore-row"><div class="set-k">Restore from backup` +
+      `<small>Replaces the current database; the existing file is set aside, not deleted.</small></div>` +
+      `<div class="set-ctrl set-ctrl-list">${listHtml}</div></div>`
+    );
+  }
+
+  // Render the Backups group into its own host and wire its actions. The restore list is read
+  // over window.stint.listBackups() (parity with `tt backup ls`); the retention picker persists
+  // over setSetting; each Restore… goes through the destructive-action confirm gate (§12 R13).
+  async function renderBackups(state) {
+    const host = document.getElementById('backups-panel');
+    if (!host) return;
+    let backups = [];
+    try {
+      if (window.stint && window.stint.listBackups) backups = await window.stint.listBackups();
+    } catch {
+      backups = [];
+    }
+    host.innerHTML = backupsHtml(state, backups);
+    // Retention picker → persist over the existing setSetting channel (numeric cast), then reload.
+    const sel = host.querySelector('select.set-field[data-key="backupRetention"]');
+    if (sel) {
+      sel.addEventListener('change', () => void persist('backupRetention', Number(sel.value)));
+    }
+    // §20 R05 / §12 R13: a Restore is destructive (it swaps the live database), so it never acts
+    // on a single stray click — it goes through app.js's generic confirmInline gate. The first
+    // click only ARMS the confirm; ONLY the explicit confirm calls window.stint.restoreBackup.
+    for (const btn of host.querySelectorAll('.backup-restore')) {
+      btn.addEventListener('click', () => {
+        const name = btn.dataset.name;
+        const gate = window.confirmInline;
+        if (typeof gate !== 'function') return;
+        gate(btn, {
+          kind: 'restore',
+          question: `Restore from ${name}?`,
+          confirmLabel: 'Restore',
+          onConfirm: async () => {
+            await window.stint.restoreBackup({ name });
+            // A restore swaps the whole database — re-read so the panel + status reflect it.
+            await render();
+          },
+        });
+      });
+    }
+  }
+
   // A release link must open in the default browser, never navigate the app window.
   function wireUpdateLinks(host) {
     for (const a of host.querySelectorAll('a[data-update-link]')) {
@@ -404,6 +542,10 @@
     // wiring the Check-now action. The snapshot appVersion is the fallback when the bridge
     // is unavailable (e.g. a renderer harness without preload).
     void renderSoftwareUpdate(state && state.appVersion);
+    // §20 R04/R05 — the Backups group + recovery banner render into their own host (after the
+    // Software Update group), off the SAME snapshot: the restore list / "Last backup" status /
+    // retention picker (R04) and the one-shot corruption-recovery notice (R05).
+    void renderBackups(state);
   }
 
   // The Settings nav-item routes via app.js (which only toggles the section hidden); render
