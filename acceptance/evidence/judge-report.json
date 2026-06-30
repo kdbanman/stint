@@ -60,7 +60,7 @@
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[button.small ghost kebab, button.small ghost, button.small ghost, button.small ghost]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
