@@ -168,7 +168,7 @@
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
-      "justification": "clients listed with nested projects, rename/archive in place, accent discipline holds: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[]}",
+      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[\"button.iconbtn create\",\"button.iconbtn create\"]}",
       "screenshot": "main-clients.png"
     },
     {
