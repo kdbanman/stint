@@ -24,7 +24,7 @@ Feature: Every capability reachable by hand
   Background:
     Given an empty database
 
-  Scenario: Start with attributes by hand (the Start/Switch form)
+  Scenario: Start with attributes by hand (the Start form)
     # §12 R5 — the window's Start form carries description + client + project (and tags /
     # billable), so a timer is fully attributed without a later edit. GUI: #start-form →
     # `start` IPC → core store.start; tt: `tt start "desc" --client … --project …`.
@@ -32,15 +32,6 @@ Feature: Every capability reachable by hand
     Then exactly one entry is open
     And the open entry is "auth refactor"
     And the open entry is for "Acme / Billing"
-
-  Scenario: Switch by hand stops the open entry and starts the next as one action
-    # §05 R8 / §12 R4 — the running card's Switch is the atomic stop-then-start, reachable
-    # by hand. GUI: Switch button → `start` IPC; tt: `tt switch`.
-    Given I start an entry "draft" at 09:00
-    When I switch to an entry "review" at 10:00
-    Then exactly one entry is open
-    And the open entry is "review"
-    And the entry "draft" is closed with end 10:00
 
   Scenario: Backfill a completed past entry by hand (the Manual-add form)
     # §12 R7 — the Manual-add form creates a completed past entry from explicit from/to plus

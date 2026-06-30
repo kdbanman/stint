@@ -15,12 +15,14 @@ Feature: Tracking and backfill
     And the open entry is billable
     And the open entry has a different id from the original
 
-  Scenario: Switch stops the open entry and starts a new one as one action
-    # PRD §05 R8 — Switch is a single named action: stop-then-start, atomic. Runs
-    # twice (CoreWorld.switch = store.start, CliWorld.switch = `tt switch`), proving
-    # the named action is at full parity across both surfaces.
+  Scenario: Starting while running stops the open entry first
+    # PRD §05 R01 — Start is the atomic stop-then-start: starting while a timer
+    # runs stops the open entry first, so switching IS starting with no separate
+    # verb. Uses only the `start` step (no `switch`), run twice (core store.start +
+    # tt start) — proving the start-as-switch behaviour at full parity across both
+    # surfaces with no dedicated action.
     Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
-    When I switch to an entry "code review" at 10:30
+    When I start an entry "code review" at 10:30
     Then exactly one entry is open
     And the entry "auth refactor" is closed with end 10:30
     And the open entry is "code review"

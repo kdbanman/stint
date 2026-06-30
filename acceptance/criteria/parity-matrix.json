@@ -5,7 +5,7 @@
     { "gui": "search", "description": "§09 R7 — free-text search over the day-grouped history (description / client / project / tag, case-insensitive); narrows the visible list, parity with tt list/report --search", "tt": ["list", "report"] },
     { "gui": "listEntries", "description": "§12 R9 — the Entries view's control bar: group the entry list by day/client/project/tag, narrow by a range preset (or custom range) + client/project/tag/billable, and free-text search — all over core's buildEntryList; read-only, parity with tt list --range/--client/--project/--tag/--search --by", "tt": ["list"] },
     { "gui": "toggle", "description": "global-hotkey / tray toggle of the timer", "tt": ["start", "stop"] },
-    { "gui": "start", "description": "start a new entry / Switch (atomic stop+start)", "tt": ["start", "switch"] },
+    { "gui": "start", "description": "start a new entry (atomic stop+start)", "tt": ["start"] },
     { "gui": "stop", "description": "stop the open entry", "tt": ["stop"] },
     { "gui": "resume", "description": "resume the last entry", "tt": ["resume"] },
     { "gui": "add", "description": "backfill a completed entry from explicit from/to", "tt": ["add"] },

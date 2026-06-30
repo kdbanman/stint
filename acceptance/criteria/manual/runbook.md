@@ -69,10 +69,10 @@ tray host headless, so this is the gating evidence for the tray's own click beha
 2. Click the tray icon and observe the click behavior (§12 R01).
    - [ ] A single **LEFT-click** opens the **compact popover only** — **no dropdown
          menu appears**.
-   - [ ] The popover shows **Stop** and **Switch** while a timer runs, **Start** while
-         idle, and **Open Stint** in both states.
-   - [ ] One click on the popover's Stop/Start toggles the timer; Switch (while running)
-         stops-then-starts; Open Stint opens the main window.
+   - [ ] The popover shows **Stop** while a timer runs, **Start** while idle, and
+         **Open Stint** in both states — and **no Switch button** in either state.
+   - [ ] One click on the popover's Stop/Start toggles the timer; Open Stint opens the
+         main window.
    - [ ] A **RIGHT-click** yields at most a **minimal Quit-only OS menu** — it has **no
          Start / Stop / Open Stint** items.
    - [ ] There is **no 3-item dropdown action menu anywhere** (a left-click that shows a
@@ -586,8 +586,8 @@ running timer for part of the walk (`tt start "auth refactor"`).
          previously-focused control (or a sane fallback) holds focus after a re-render (a `tt`
          write that repaints the list must not dump focus into the void).
 4. Open the **tray popover** (click the tray, or the global hotkey) and Tab through it.
-   - [ ] **Stop/Start**, **Switch** (while running), and **Open Stint** are each reachable in
-         order with a visible ring, and Enter/Space activates each.
+   - [ ] **Stop/Start** and **Open Stint** are each reachable in order with a visible ring,
+         and Enter/Space activates each.
 5. With a screen reader on (VoiceOver / Narrator / Orca), focus the **Start/Stop** toggle and
    toggle the timer.
    - [ ] The screen reader **announces the toggle's state** — its accessible name flips
@@ -677,40 +677,6 @@ the by-hand confirmation on a real window.
 7. Clear the search and reset the filters.
    - [ ] The list and the total both return to the full week — the live view and the plain
          load agree.
-
-## CHECK IN-WINDOW SWITCH (GUI) — atomic stop-then-start from the card and popover (§05 R8, §12 R4)
-
-§05 R8's Switch is the one-tap **atomic stop-then-start**: it closes the open entry and opens a
-fresh one in a single write, with no idle gap between. The §12 R4 Active-Timer card and the tray
-**popover** both surface Switch (alongside Stop) while a timer runs; both reuse the `start` IPC,
-which maps to `store.start` (= `tt switch`). The atomicity and carry-nothing semantics are proven
-surface-neutrally over core + tt by the BDD Switch scenarios in `features/tracking.feature`, and
-the card/popover affordances are screenshotted headless under JUDGE (`main-switch.png`,
-`popover-running.png`); this runbook confirms the real card button, the **tray popover** (which has
-no Playwright host, the same residual as the global hotkey), and the round-trip to `tt` on a real
-desktop.
-
-1. Start a live timer (`tt start "auth refactor" --client "Client A"` or the GUI Start). Confirm
-   the **Active-Timer card** shows the running clock counting up, the description, and both a
-   **Stop** and a **Switch** button.
-2. Note the running entry's id (`tt status --json`), then click the card's **Switch**.
-   - [ ] The previous entry **closes** and a **new** entry **opens immediately** — the clock keeps
-         counting (it does not return to idle), the card still shows *running*.
-   - [ ] `tt status` reports a **different** open entry id than before (a new row), and `tt list`
-         shows the prior entry now **closed** with an `endUtc` that **equals** the new entry's
-         `startUtc` — no gap, no overlap (atomic stop-then-start).
-3. Open the **tray popover** (click the tray icon, or press the global hotkey). While the timer
-   runs it shows **Stop**, **Switch**, and **Open Stint**. Click the popover's **Switch**.
-   - [ ] Same as step 2 from the popover: the open entry rolls over to a fresh one with no idle
-         gap, and `tt status` shows the new id while the prior entry is closed at the same instant.
-4. Stop the timer; open the popover again.
-   - [ ] While **idle**, the popover hides **Switch** (Switch only makes sense mid-timer) and
-         shows **Start** — its `aria-label` reads "Start timer" and flips to "Stop timer" when
-         running (screen-reader state, §12 R14).
-
-> Switch carries no attributes forward (a one-tap atomic roll-over); the attributed Start/Switch
-> *form* is the separate §12 R5 work covered by CHECK START WITH ATTRIBUTES. This check confirms
-> only the atomic stop-then-start and its presence on both the card and the tray popover.
 
 ## CHECK CLIENTS & PROJECTS MANAGEMENT (GUI) — create / rename / archive in-window at parity (§12 R10, §07)
 

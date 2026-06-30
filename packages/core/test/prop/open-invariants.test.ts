@@ -27,8 +27,16 @@ function pragma(db: Db, name: string): unknown {
   return Object.values(row)[0];
 }
 
+// Unlike the other PROP suites (which open in-memory DBs), this property must open a real
+// file-backed database per run — WAL/FULL durability is only observable on disk. mkdtemp +
+// WAL open/close + rmSync is heavy enough that the default 100 runs can brush past Vitest's
+// 5s timeout. Cap the run count for this I/O-bound property and give it generous headroom; the
+// integer arbitrary still spans the full 1..600_000 busy-timeout domain, so no assertion weakens.
+const FS_PROP_RUNS = 50;
+const FS_PROP_TIMEOUT_MS = 30_000;
+
 describe('PROP: DB-open durability pragmas are enforced for any busy timeout (§20 R01)', () => {
-  test.prop([fc.integer({ min: 1, max: 600_000 })])(
+  test.prop([fc.integer({ min: 1, max: 600_000 })], { numRuns: FS_PROP_RUNS })(
     'every generated busyTimeoutMs yields wal / fk=1 / the requested busy_timeout / FULL',
     (busyTimeoutMs) => {
       const dir = mkdtempSync(join(tmpdir(), 'stint-prop-open-'));
@@ -44,5 +52,6 @@ describe('PROP: DB-open durability pragmas are enforced for any busy timeout (§
         rmSync(dir, { recursive: true, force: true });
       }
     },
+    FS_PROP_TIMEOUT_MS,
   );
 });
