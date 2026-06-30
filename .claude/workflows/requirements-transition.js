@@ -14,7 +14,7 @@ export const meta = {
     { title: 'Improve', detail: 'Apply both reviews’ feedback in a bounded loop-until-dry; must not regress AC' },
     { title: 'Recordings', detail: 'QA screen recordings (LAST): core-flow GUI, all Rec ▶ rows, code-change-adjacent reqs; ASCII-named, slowed (~0.5x) GIFs with an end-frame hold and visible cursor/click, committed under acceptance/evidence/recordings/ indexed by req id' },
     { title: 'PR', detail: 'Regenerate all evidence, commit on the working branch, open ONE ready-for-review PR with recordings embedded inline as GIF images (each with a caption) and a per-requirement status checklist' },
-    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete *-old.html / report.html / report.js / legacy workflow / this mapping, promote new docs, fix references (§Z)' },
+    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete the *-old.html docs + this mapping per §Z, promote new docs, fix references, confirm no "switch" verb/affordance/alias/term survives (§Z)' },
   ],
 };
 
@@ -31,12 +31,12 @@ const WORKLIST = {
   properties: {
     items: {
       type: 'array',
-      description: 'EVERY requirement row in requirements-transition.md (§2, §19, §20, plus the deleted report.html row).',
+      description: 'EVERY requirement row in requirements-transition.md (§2 section tables, any net-new sections, plus every DELETED row).',
       items: {
         type: 'object',
         required: ['reqId', 'section', 'change', 'core', 'surfaces', 'files', 'acMethods', 'rec', 'summary'],
         properties: {
-          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R09", "§12 R-report.html", "§20 R04", "concept".' },
+          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R01", "§05 R8 (Switch)", "§11 switch-alias", "§12 R05", "concept".' },
           section: { type: 'string', description: 'Owning section, e.g. "§05 Timer & entries".' },
           change: { enum: ['NEW', 'MODIFIED', 'DELETED'] },
           core: { type: 'boolean', description: 'True iff marked ● (core requirement per §C).' },
@@ -58,7 +58,7 @@ const WORKLIST = {
       type: 'object', description: 'The §Z swap/cleanup work-list, captured now so the final phase is data-driven.',
       required: ['deletePaths', 'referenceFixes'],
       properties: {
-        deletePaths: { type: 'array', items: { type: 'string' }, description: 'Files to delete at swap (*-old.html, report.html/js, legacy workflow, this mapping).' },
+        deletePaths: { type: 'array', items: { type: 'string' }, description: 'Files to delete at swap (the *-old.html docs, any folded-away GUI files, superseded workflows, and this mapping) — exactly what §Z names.' },
         referenceFixes: { type: 'array', items: { type: 'string' }, description: 'Docs whose references must point only at the new docs/entities (README, CLAUDE.md, COVERAGE.md, parity-matrix.json).' },
       },
     },
@@ -223,17 +223,17 @@ const inv = await agent(
 
 Read requirements-transition.md IN FULL (it is the work-list), plus acceptance/criteria/COVERAGE.md and
 acceptance/criteria/parity-matrix.json for the current state. Parse EVERY requirement row in the §2
-section-by-section tables, the §19 packaging table, and the §20 hardening table — including the
-docs-only "concept" row and the DELETED "§12 R-report.html" row. For each requirement capture:
+section-by-section tables (and any net-new sections this transition adds) — including the docs-only
+rows (concept/glossary/acceptance) and every DELETED row (for this transition: §05 R8 Switch and the
+CLI \`switch\` alias). For each requirement capture:
 reqId, section, change (NEW/MODIFIED/DELETED), core (● → true), surfaces, the Files column
 (verbatim where given), mockup(s), acMethods (BDD/PROP/GOLD/JUDGE/MANUAL — empty for docs/meta
 rows), rec (▶ → true), isGui (true iff it has a gui surface), and the one-line summary.
 
-Also return: globalDecisions (the §1 G1–G13 table), swapTargets (the §Z deletePaths and
+Also return: globalDecisions (the §1 G-decisions table), swapTargets (the §Z deletePaths and
 referenceFixes), and recordingScope — the union, per §W, of (1) every GUI requirement marked
-core, (2) every Rec ▶ row, and (3) every code-change-adjacent GUI requirement (the §19 update
-flow R03/R04 and §20 backup/restore R04/R05). Be exhaustive: a row missed here never gets built,
-verified, or recorded.`,
+core, (2) every Rec ▶ row, and (3) every code-change-adjacent GUI requirement. Be exhaustive: a
+row missed here never gets built, verified, or recorded.`,
   { label: 'inventory', phase: 'Inventory', agentType: 'Explore', schema: WORKLIST, effort: 'high' }
 );
 
@@ -256,8 +256,9 @@ if (scope) {
   if (!work.length) return { scopedOut: true, scope, note: 'No inventoried requirement matched the scope tokens; nothing to do.' };
 }
 
-// Requirements an agent actually builds/tests vs. pure-doc rows. The "concept" doc-only row and
-// the DELETED report.html row carry no executable AC; they are handled by the doc/swap stages.
+// Requirements an agent actually builds/tests vs. pure-doc rows. The docs-only rows (concept/
+// glossary/acceptance) and the DELETED rows carry no executable AC; they are handled by the
+// doc/swap stages (a DELETED row is verified by the absence-of-"switch" check, not a new test).
 const buildable = work.filter((w) => w.change !== 'DELETED' && (w.acMethods || []).length > 0);
 const docOnly = work.filter((w) => (w.acMethods || []).length === 0 && w.change !== 'DELETED');
 const deletions = work.filter((w) => w.change === 'DELETED');
@@ -813,15 +814,17 @@ if (!swapGate) {
 
 Every requirement now has passing AC evidence and both reviews are clean. Perform the §Z old→new SWAP
 on the CURRENT PR branch (commit; do NOT merge — the human gate is the PR merge), then push so it lands
-on the open PR. Read requirements-transition.md §Z for the authoritative list, then:
-  - DELETE context/prd-old.html, context/concept-old.html, context/glossary-old.html, context/acceptance-old.html.
-  - DELETE packages/gui/renderer/report.html and packages/gui/renderer/report.js (folded into the
-    in-sidebar Reports view); remove any remaining references/wiring to them.
-  - DELETE .claude/workflows/stint-prd-coverage.js (legacy, superseded — used only as prior art).
+on the open PR. Read requirements-transition.md §Z for the AUTHORITATIVE delete/reference list and act on
+exactly what it names (do NOT delete files §Z does not list). For THIS (Switch-removal) transition §Z is:
+  - DELETE the *-old.html files §Z lists (context/prd-old.html, context/concept-old.html,
+    context/glossary-old.html, context/acceptance-old.html).
   - DELETE requirements-transition.md (this mapping).
+  - There are NO GUI files folded away and NO legacy workflow to delete in this transition — Switch was an
+    alias/affordance, not a standalone page. Confirm no "switch" verb/affordance/alias/term remains anywhere
+    (code, specs, parity-matrix, COVERAGE, runbook, docs); the only allowed "switch" survivors are the
+    intentional negations in the docs ("no separate switch action") and the generic English verb in concept.html.
   - Ensure README.md, CLAUDE.md, acceptance/criteria/COVERAGE.md, and acceptance/criteria/parity-matrix.json reference
-    ONLY the new docs and the new entities (favorite, saved report); fix any dangling links to the
-    deleted files.
+    ONLY the new docs and surfaces; fix any dangling links to the deleted *-old.html files.
 Then run \`npm run build && npm test && npm run verify:no-network\` once more to confirm nothing
 referenced the deleted files, commit the swap, and push to the PR branch. Report what was deleted,
 what references were fixed, and whether the tree is still green.`,
