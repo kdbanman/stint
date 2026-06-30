@@ -26,6 +26,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
+    "metrics": "node scripts/sloc-report.mjs",
+    "metrics:check": "node scripts/sloc-report.mjs --check",
     "verify:no-network": "node scripts/check-no-network.mjs",
     "verify:packaging": "node scripts/check-packaging.mjs",
     "verify:no-publish": "node scripts/check-no-auto-publish.mjs",

@@ -22,6 +22,13 @@
  *   node packages/gui/judge/record.mjs                # record every known fixture
  *   node packages/gui/judge/record.mjs <reqId> [...]  # record only the named recipe(s)
  *   node packages/gui/judge/record.mjs --list         # list the recipe ids and exit
+ *
+ * Publishing to GIF: the produced .webm is a gitignored working artifact; the committed evidence
+ * is a .gif per recipe (e.g. `§20 R04` → `20-r04.gif`). Install ffmpeg (`apt-get install -y
+ * ffmpeg`) and convert at the recordings' convention (full resolution, 50/3 fps, palette):
+ *   ffmpeg -y -i "§20 R04.webm" -vf "fps=50/3,palettegen=stats_mode=diff" /tmp/pal.png
+ *   ffmpeg -y -i "§20 R04.webm" -i /tmp/pal.png \
+ *     -lavfi "fps=50/3,paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" 20-r04.gif
  */
 import { chromium } from 'playwright-core';
 import { mkdirSync, existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
@@ -36,6 +43,8 @@ import {
   timerViewEmptyFavoritesState,
   savedReportsState,
   settingsState,
+  backupsState,
+  recoveryState,
   pickerState,
   initScript,
   JUDGE_NOW,
@@ -1789,6 +1798,108 @@ const RECIPES = {
         if (note) note.scrollIntoView({ block: 'center' });
       });
       await wait(page, 1300);
+    },
+  },
+
+  // §20 R04 — automatic backups + retention + restore, the Settings → Backups surface (G3/§17 R12).
+  // The recording routes to Settings, dwells on the Backups group the way the requirement reads it:
+  // the "Last backup" status + "verified" pill (off state.lastBackupUtc), the retention picker, and
+  // the restore list painted from window.stint.listBackups() (one row per backup: name · time ·
+  // size). It then CHANGES the retention picker (last 5 → last 10, persisted over the same
+  // setSetting channel `tt config set backup_retention` uses) and drives a RESTORE end to end
+  // through the §12 R13 destructive-action confirm gate: clicking Restore… ARMS the inline confirm
+  // (restoreBackup not yet called), then the explicit Restore confirm fires
+  // window.stint.restoreBackup({name}). To SHOW the restore land, a scoped restoreBackup override
+  // (mirroring §05 R02's toggle override) stamps a fresh "Last backup" + recovery-free state and
+  // re-renders, so the post-restore panel repaints on camera. The override is scoped to THIS page
+  // only — no shared fixture or JUDGE scene is touched.
+  '§20 R04': {
+    page: 'index.html',
+    state: backupsState,
+    contextOpts: { viewport: { width: 820, height: 900 } },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('[data-view="settings"]:not([hidden])');
+      // Dwell on the Backups group: Last backup + verified pill, retention picker, restore list.
+      await page.waitForSelector('#backups-panel .set-grp');
+      await page.waitForSelector('#backups-panel .backup-item');
+      await page.evaluate(() =>
+        document.querySelector('#backups-panel .set-grp')?.scrollIntoView({ block: 'center' }),
+      );
+      await wait(page, 1300);
+
+      // CHANGE RETENTION (last 5 → last 10) over the same setSetting channel.
+      await page.selectOption('#backups-panel select[data-key="backupRetention"]', '10');
+      await page.waitForFunction(() => window.__SET_SETTING__?.key === 'backupRetention');
+      await wait(page, 900);
+
+      // Scope a restoreBackup override so the restore visibly lands on the repaint: it records the
+      // payload and stamps a fresh Last-backup time, then we re-render to show the panel update.
+      await page.evaluate(() => {
+        const now = window.__JUDGE_NOW__;
+        window.stint.restoreBackup = (p) => {
+          window.__RESTORED_BACKUP__ = p;
+          window.__STATE__.lastBackupUtc = now;
+          window.__STATE__.recoveryNotice = null;
+          return Promise.resolve({ recoveredFrom: (p && p.name) || '', quarantinedTo: '/db/timetracker.sqlite.replaced' });
+        };
+      });
+
+      // RESTORE through the confirm gate: first click ARMS the confirm…
+      await page.click('#backups-panel .backup-item .backup-restore');
+      await page.waitForSelector('#backups-panel .confirm-restore');
+      await wait(page, 900);
+      // …the explicit confirm fires restoreBackup({name}); the panel repaints (re-render in onConfirm).
+      await page.click('#backups-panel [data-act="confirm-restore"]');
+      await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
+      await page.waitForSelector('#backups-panel .backup-item');
+      await wait(page, 1400);
+    },
+  },
+
+  // §20 R05 — corruption recovery NOTICE, the Settings → Backups surface (G3/§17 R12). On a launch
+  // where the database was recovered from a backup (the recoveryState snapshot carries a non-null
+  // recoveryNotice), the recording routes to Settings and dwells on the one-shot recovery BANNER —
+  // it names the backup it recovered from AND the `.corrupted` file it set aside (recoveredFrom +
+  // quarantinedTo). Then, to SHOW the surface is actionable, it drives a RESTORE from the list
+  // through the §12 R13 confirm gate (arm → confirm → window.stint.restoreBackup), with the same
+  // scoped restoreBackup override §20 R04 uses so the post-restore repaint clears the notice on
+  // camera (recovered, then the user restored a chosen good backup). Override scoped to THIS page.
+  '§20 R05': {
+    page: 'index.html',
+    state: recoveryState,
+    contextOpts: { viewport: { width: 820, height: 900 } },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('[data-view="settings"]:not([hidden])');
+      // Dwell on the recovery banner (recoveredFrom + quarantinedTo) atop the Backups group.
+      await page.waitForSelector('#backups-panel #recovery-notice');
+      await page.evaluate(() =>
+        document.querySelector('#backups-panel #recovery-notice')?.scrollIntoView({ block: 'center' }),
+      );
+      await wait(page, 1600);
+
+      // Scope the restore override so the restore lands on the repaint and the notice clears.
+      await page.evaluate(() => {
+        const now = window.__JUDGE_NOW__;
+        window.stint.restoreBackup = (p) => {
+          window.__RESTORED_BACKUP__ = p;
+          window.__STATE__.lastBackupUtc = now;
+          window.__STATE__.recoveryNotice = null;
+          return Promise.resolve({ recoveredFrom: (p && p.name) || '', quarantinedTo: '/db/timetracker.sqlite.replaced' });
+        };
+      });
+
+      // RESTORE from the list through the confirm gate: arm, then confirm → restoreBackup({name}).
+      await page.waitForSelector('#backups-panel .backup-item .backup-restore');
+      await page.click('#backups-panel .backup-item .backup-restore');
+      await page.waitForSelector('#backups-panel .confirm-restore');
+      await wait(page, 900);
+      await page.click('#backups-panel [data-act="confirm-restore"]');
+      await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
+      // The repaint clears the one-shot recovery notice (the user restored a chosen good backup).
+      await page.waitForSelector('#backups-panel #recovery-notice', { state: 'detached' }).catch(() => {});
+      await wait(page, 1400);
     },
   },
 

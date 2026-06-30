@@ -891,6 +891,43 @@ describe('renderer static contract', () => {
     expect(withoutRootVar).not.toMatch(/\.step[^{]*\{[^}]*var\(--accent\)/s);
   });
 
+  it('the Settings view ships a Backups group (restore list + retention + recovery banner) over the backup IPC (§20 R04/R05)', () => {
+    const html = read('index.html');
+    const settings = read('settings.js');
+    const css = read('styles.css');
+    // The dedicated Backups host element lives in the page (after the Software Update host),
+    // and index.html loads settings.js which renders into it.
+    expect(html).toMatch(/id="backups-panel"/);
+    expect(html).toMatch(/src="settings\.js"/);
+    // settings.js renders the Backups group off the getState snapshot: the "Last backup" status
+    // (R04) off state.lastBackupUtc, the restore list painted from window.stint.listBackups()
+    // (parity with `tt backup ls`), and the recovery banner (R05) off state.recoveryNotice.
+    expect(settings).toMatch(/function renderBackups\(/);
+    expect(settings).toMatch(/Last backup/);
+    expect(settings).toMatch(/window\.stint\.listBackups\(\)/);
+    expect(settings).toMatch(/state\.lastBackupUtc/);
+    expect(settings).toMatch(/recoveryNotice/);
+    expect(settings).toMatch(/recoveredFrom/);
+    expect(settings).toMatch(/quarantinedTo/);
+    // …the retention picker (backupRetention) persists over the SAME setSetting channel
+    // `tt config set` uses (no new channel — parity-covered), keyed/valued from the control…
+    expect(settings).toMatch(/'backupRetention'/);
+    // …and a Restore is destructive, so it goes through app.js's generic confirm gate (§12 R13):
+    // restoreBackup is reachable ONLY from inside an onConfirm callback (never a stray click).
+    expect(settings).toMatch(/confirmInline/);
+    expect(settings).toMatch(/kind:\s*'restore'/);
+    expect(settings).toMatch(/onConfirm:\s*async\s*\(\)\s*=>\s*\{\s*await window\.stint\.restoreBackup\(/);
+    // …the Backups chrome is monochrome — the verified pill uses the calm run tokens, the
+    // restore list / retention / recovery banner carry NO accent (§15 accent discipline).
+    expect(css).toMatch(/\.backup-list\s*\{/);
+    expect(css).toMatch(/\.ok\s*\{/);
+    expect(css).toMatch(/\.banner\.recovery\s*\{/);
+    const withoutRootVar = css.replace(/--accent:[^;]+;/g, '');
+    expect(withoutRootVar).not.toMatch(/\.backup-[a-z]+[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.ok\b[^{]*\{[^}]*var\(--accent\)/s);
+    expect(withoutRootVar).not.toMatch(/\.banner\.recovery[^{]*\{[^}]*var\(--accent\)/s);
+  });
+
   it('the Timer view ships a favorites rail wired to the favorite IPC (§05 R09)', () => {
     const html = read('index.html');
     const app = read('app.js');

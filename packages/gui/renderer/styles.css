@@ -2034,6 +2034,49 @@ body.popover { background: var(--canvas); margin: 0; }
 .update .restore-note { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
 .update .restore-note .ic { color: var(--faint); margin-top: 1px; }
 
+/* §20 R04/R05 — the Settings → Backups group. The "verified" pill uses the calm green run
+   tokens; the restore list + retention picker + the corruption-recovery banner all stay
+   monochrome/notice-toned — NO accent (the accent is reserved for the primary action / running
+   state, §15). The recovery banner reuses the warn .banner chrome (the --flag notice palette). */
+.ok {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--run);
+  background: var(--run-weak);
+  border: 1px solid rgba(94, 140, 90, 0.27);
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+.ok .ic { width: 14px; height: 14px; }
+/* The recovery notice: the warn .banner block laid out as an icon + wrapping text, with the
+   quarantined path in the mono face so it reads as a filename. */
+.banner.recovery { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
+.banner.recovery .ic { color: var(--flag); margin-top: 1px; flex: none; }
+.banner.recovery .recovery-quar { font-family: var(--num); font-size: 11px; word-break: break-all; }
+/* The restore list spans the FULL panel width (the timestamped filenames are long), so its row
+   drops the two-column grid and stacks the label above a full-width list. */
+.set-row.backup-restore-row { display: block; }
+.set-row.backup-restore-row .set-k { margin-bottom: 10px; }
+.set-ctrl-list { display: block; width: 100%; }
+.backup-list { display: flex; flex-direction: column; gap: 8px; }
+.backup-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r1);
+  padding: 8px 10px;
+}
+.backup-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.backup-name { font-family: var(--num); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
+.backup-meta { font-size: 11.5px; color: var(--muted); }
+.backup-restore { flex: none; }
+.set-empty { font-size: 12.5px; color: var(--muted); }
+
 /* §05 R09 — the Timer view's favorites rail. The Pin control + per-favorite kebab/menu are
    NEUTRAL buttons; the accent stays on the view primary action / running state. The chips
    reuse the monochrome .chip rule. */

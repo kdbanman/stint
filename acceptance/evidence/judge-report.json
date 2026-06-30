@@ -208,6 +208,18 @@
       "screenshot": "main-software-update.png"
     },
     {
+      "item": "BACKUPS_SECTION",
+      "pass": true,
+      "justification": "backups group: last-backup+verified=true/true, retention=5 (edit fired {\"key\":\"backupRetention\",\"value\":10}), restore list rows=2 [\"timetracker.sqlite.bak-20260627T101500Z\",\"timetracker.sqlite.bak-20260626T090000Z\"] (each Restore… present=true); confirm gate: armed-not-restored=true, confirmed restore={\"name\":\"timetracker.sqlite.bak-20260627T101500Z\"}; stray accent=[none]",
+      "screenshot": "main-backups.png"
+    },
+    {
+      "item": "RECOVERY_NOTICE",
+      "pass": true,
+      "justification": "recovery banner shown=true naming recoveredFrom=true + quarantinedTo=true; Restore… still reachable=true; text=\"Database recovered from timetracker.sqlite.bak-20260627T101500Z on launch. The unreadable file was set aside as /db/timetracker.sqlite.corrupted-20260627T120500Z.\"",
+      "screenshot": "main-recovery.png"
+    },
+    {
       "item": "PARITY_REACH",
       "pass": true,
       "justification": "window.stint exposes 42/42 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",

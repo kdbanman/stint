@@ -11,6 +11,9 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
   dateFormat: 'system',
+  // §20 R04 — how many automatic backups to keep; the Settings → Backups retention picker
+  // paints this and changes it over the same setSetting channel `tt config set backup_retention`.
+  backupRetention: 5,
 };
 
 // A pinned wall clock so the captured evidence is byte-for-byte reproducible: the
@@ -537,6 +540,37 @@ export function settingsState() {
  */
 export function softwareUpdateState() {
   return emptyState();
+}
+
+/**
+ * §20 R04 / §17 R12 — the Settings → Backups fixture. emptyState plus the snapshot fields the
+ * Backups group paints: a "Last backup <ts>" status (lastBackupUtc, the newest backup's
+ * createdUtc, matching the __BACKUPS__ list the listBackups mock returns), the retention count
+ * (settings.backupRetention, default 5), and NO recovery notice (the un-recovered launch). The
+ * BACKUPS_SECTION scene routes to Settings, asserts the restore list + retention render from this
+ * state, and drives a Restore… through the confirm gate (window.stint.restoreBackup).
+ */
+export function backupsState() {
+  const s = emptyState();
+  s.lastBackupUtc = '2026-06-27T10:15:00Z';
+  s.recoveryNotice = null;
+  return s;
+}
+
+/**
+ * §20 R05 — the corruption-recovery fixture. Same Backups snapshot, but carrying a non-null
+ * recoveryNotice (the DB was recovered from a backup on this launch): recoveredFrom names the
+ * backup, quarantinedTo the `.corrupted` sibling the launch set aside. The RECOVERY_NOTICE scene
+ * routes to Settings and asserts the one-shot recovery banner renders both, then that a Restore…
+ * is still reachable from the same surface.
+ */
+export function recoveryState() {
+  const s = backupsState();
+  s.recoveryNotice = {
+    recoveredFrom: 'timetracker.sqlite.bak-20260627T101500Z',
+    quarantinedTo: '/db/timetracker.sqlite.corrupted-20260627T120500Z',
+  };
+  return s;
 }
 
 /**

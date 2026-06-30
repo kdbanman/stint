@@ -59,6 +59,19 @@ jobs:
           }
       - name: Regenerate acceptance evidence
         run: npm run evidence
+      # Vanity metrics — a repeatable SLOC + documentation census. The --check gate
+      # fails the PR if a new file/directory escapes categorization or the line counts
+      # stop reconciling (sloc-report.mjs has no catch-all rule on purpose). The
+      # rendered report ships as a build artifact rather than a committed file, so it
+      # can never go stale relative to the tree it describes.
+      - name: Codebase metrics — reconcile & render
+        run: node scripts/sloc-report.mjs --out METRICS.md
+      - name: Upload codebase metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codebase-metrics
+          path: METRICS.md
 
   # §19 R01 — packaging SMOKE on every PR. The release matrix (release.yml) only runs
   # post-merge, so a broken `pack` (e.g. the app-builder ENOENT) used to land on main

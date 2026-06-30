@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2322,6 +2322,128 @@ async function main() {
     },
     { update: UPDATE_FIXTURE },
   );
+
+  // BACKUPS_SECTION — §20 R04 / §17 R12: the Settings → Backups group. Routing to Settings (with
+  // the canned listBackups mock + the backupsState snapshot carrying lastBackupUtc + the retention
+  // count) renders, as DETERMINISTIC Playwright facts (not just PARITY_REACH IPC presence):
+  //   LAST BACKUP   — the "Last backup" status line prints the newest backup's timestamp + a
+  //                   "verified" pill (off state.lastBackupUtc).
+  //   RETENTION     — the retention picker (backupRetention) reflects the snapshot's value (5) and
+  //                   persists a change over the SAME setSetting channel `tt config set` uses.
+  //   RESTORE LIST  — one row per window.stint.listBackups() entry (name · createdUtc · size), each
+  //                   with a Restore… action.
+  //   RESTORE GATE  — Restore… is destructive, so it goes through the §12 R13 confirm gate: the
+  //                   first click only ARMS the confirm (restoreBackup NOT yet called); only the
+  //                   explicit confirm fires window.stint.restoreBackup({name}) — exactly once, with
+  //                   the chosen backup's name. Captures main-backups.png as the rubric evidence.
+  await withPage(browser, backupsState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#backups-panel .set-grp', { state: 'attached' });
+    await page.waitForSelector('#backups-panel .backup-item', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-backups.png'), fullPage: true });
+    const probe = await page.evaluate(() => {
+      const host = document.querySelector('#backups-panel');
+      const rows = [...host.querySelectorAll('.backup-item')];
+      const ret = host.querySelector('select[data-key="backupRetention"]');
+      // No stray accent in the Backups chrome (§15 — accent stays on the primary action only).
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const toRgb = (hex) => {
+        const n = parseInt(hex.replace('#', ''), 16);
+        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+      };
+      const accentRgb = toRgb(accent);
+      const offenders = [];
+      for (const el of host.querySelectorAll('*')) {
+        if (el.matches('button.primary') || el.closest('button.primary')) continue;
+        const cs = getComputedStyle(el);
+        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+        }
+      }
+      return {
+        lastBackupShown: /2026/.test(host.querySelector('.ver')?.textContent ?? ''),
+        verifiedPill: !!host.querySelector('.ok'),
+        retentionValue: ret ? ret.value : null,
+        rowCount: rows.length,
+        rowNames: rows.map((r) => r.dataset.name),
+        eachHasRestore: rows.every((r) => !!r.querySelector('.backup-restore')),
+        offenders,
+      };
+    });
+
+    // RETENTION: change the picker → a real setSetting fires with the matching key/value.
+    await page.selectOption('#backups-panel select[data-key="backupRetention"]', '10');
+    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'backupRetention');
+    const setRet = await page.evaluate(() => window.__SET_SETTING__);
+
+    // RESTORE GATE: the first Restore… click only ARMS the confirm (no restoreBackup yet)…
+    await page.click('#backups-panel .backup-item .backup-restore');
+    await page.waitForSelector('#backups-panel .confirm-restore', { state: 'attached' });
+    const armedNotRestored = await page.evaluate(() => window.__RESTORED_BACKUP__ === undefined);
+    // …and ONLY the explicit confirm fires restoreBackup, exactly once, with the row's name.
+    await page.click('#backups-panel [data-act="confirm-restore"]');
+    await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
+    const restored = await page.evaluate(() => window.__RESTORED_BACKUP__);
+
+    const ok =
+      probe.lastBackupShown &&
+      probe.verifiedPill &&
+      probe.retentionValue === '5' &&
+      probe.rowCount === 2 &&
+      probe.eachHasRestore &&
+      probe.offenders.length === 0 &&
+      !!setRet &&
+      setRet.key === 'backupRetention' &&
+      setRet.value === 10 &&
+      armedNotRestored &&
+      !!restored &&
+      restored.name === probe.rowNames[0];
+    record(
+      'BACKUPS_SECTION',
+      ok,
+      `backups group: last-backup+verified=${probe.lastBackupShown}/${probe.verifiedPill}, ` +
+        `retention=${probe.retentionValue} (edit fired ${JSON.stringify(setRet)}), ` +
+        `restore list rows=${probe.rowCount} ${JSON.stringify(probe.rowNames)} (each Restore… present=${probe.eachHasRestore}); ` +
+        `confirm gate: armed-not-restored=${armedNotRestored}, confirmed restore=${JSON.stringify(restored)}; ` +
+        `stray accent=[${probe.offenders.join(', ') || 'none'}]`,
+      'main-backups.png',
+    );
+  });
+
+  // RECOVERY_NOTICE — §20 R05 / §17 R12: the corruption-recovery banner. With a snapshot carrying a
+  // non-null recoveryNotice (the DB was recovered from a backup on launch), routing to Settings
+  // renders a one-shot banner that names BOTH the backup it recovered from (recoveredFrom) AND the
+  // quarantined `.corrupted` file it set aside (quarantinedTo), as a deterministic Playwright fact.
+  // The Backups group + a reachable Restore… still render alongside it. Captures main-recovery.png.
+  await withPage(browser, recoveryState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#backups-panel #recovery-notice', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-recovery.png'), fullPage: true });
+    const probe = await page.evaluate(() => {
+      const banner = document.querySelector('#backups-panel #recovery-notice');
+      const text = banner?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      return {
+        bannerShown: !!banner,
+        text,
+        recoveredFromShown: /timetracker\.sqlite\.bak-20260627T101500Z/.test(text),
+        quarantinedShown: /\.corrupted-20260627T120500Z/.test(text),
+        restoreReachable: !!document.querySelector('#backups-panel .backup-restore'),
+      };
+    });
+    const ok =
+      probe.bannerShown &&
+      probe.recoveredFromShown &&
+      probe.quarantinedShown &&
+      probe.restoreReachable;
+    record(
+      'RECOVERY_NOTICE',
+      ok,
+      `recovery banner shown=${probe.bannerShown} naming recoveredFrom=${probe.recoveredFromShown} ` +
+        `+ quarantinedTo=${probe.quarantinedShown}; Restore… still reachable=${probe.restoreReachable}; ` +
+        `text=${JSON.stringify(probe.text)}`,
+      'main-recovery.png',
+    );
+  });
 
   // PARITY_REACH — §17 R8: the rendered window surfaces an affordance for EVERY capability,
   // so nothing tt can do is unreachable from the GUI. Two parts in one item:
