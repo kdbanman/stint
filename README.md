@@ -120,7 +120,17 @@ npm test                 # PROP · GOLD · BDD · integration · parity
 npm run judge            # GUI screenshots scored against the JUDGE rubric
 npm run evidence         # regenerates acceptance/evidence/cli-transcript.md
 npm run verify:no-network
+npm run metrics          # celebratory SLOC + documentation census (--out FILE to save)
+npm run metrics:check    # reconcile-only gate: fails if a file escapes categorization
 ```
+
+`npm run metrics` walks every git-tracked file, buckets it
+(implementation / tests / verification / requirements / design / AI context /
+build / packaging / docs), and prints a reconciled report — `code + comment +
+blank = total` at every level, with no catch-all rule, so a new directory or
+unforeseen file fails the count loudly until it is categorized. CI runs the
+`--check` gate and uploads the rendered report as a `codebase-metrics` build
+artifact, so the numbers can never go stale relative to the tree.
 
 No single verification system or notation covers the whole PRD, so acceptance
 uses five complementary methods (full map in
