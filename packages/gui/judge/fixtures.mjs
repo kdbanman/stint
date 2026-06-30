@@ -630,18 +630,6 @@ export function startFormState() {
   return emptyState();
 }
 
-/**
- * §12 R5 — the START_FORM scene's running snapshot. A single open/running entry, so the
- * start surface presents the dedicated Switch affordance (the atomic stop-then-start,
- * §05 R8) that only appears mid-timer; the START_FORM scene asserts the inline
- * description/client/project/tags/billable form on the idle snapshot (startFormState) and
- * that Switch is visible on THIS running one. Reuses the canonical runningState so the
- * count-up/accent stay byte-for-byte reproducible under the pinned JUDGE clock.
- */
-export function switchState() {
-  return runningState();
-}
-
 /** The empty-state snapshot the ADD_FORM scene drives the manual-backfill form over. */
 export function addFormState() {
   return emptyState();
@@ -1085,15 +1073,16 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, switchOnStart = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false } = {}) {
   return `
     window.__STATE__ = ${stateJson};
     // §05 R01 (RECORD only) — when set, the start mock performs core's atomic stop-then-start
     // ON the injected snapshot: it closes any currently-open row at the pinned now and inserts a
     // single fresh open row from the submitted attributes, so the subsequent load()/getState
     // repaint visibly SHOWS the previous timer stopping and the new entry becoming the one live
-    // count-up (the start-while-running switch). Off by default → JUDGE's start mock is unchanged.
-    window.__SWITCH_ON_START__ = ${switchOnStart ? 'true' : 'false'};
+    // count-up (starting while a timer runs IS the atomic stop-then-start, §05 R01 — there is no
+    // separate switch verb). Off by default → JUDGE's start mock is unchanged.
+    window.__START_STOPS_OPEN__ = ${startStopsOpen ? 'true' : 'false'};
     window.__JUDGE_NOW__ = '${JUDGE_NOW}';
     // §09 R6: in the REPORT_SUMMARY scene the report mock routes EVERY report request to the
     // single flag-carrying REPORT_SUMMARY report, so the summary always paints the nested
@@ -1166,9 +1155,10 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       start: (p) => {
         window.__STARTED__ = p;
         // §05 R01 (RECORD): emulate core's atomic stop-then-start on the snapshot so the
-        // recording shows the switch. Close the open row at the pinned now, then make the
-        // submitted attributes the single new open row; getState repaints the new live count-up.
-        if (window.__SWITCH_ON_START__ && window.__STATE__) {
+        // recording shows the start-while-running close. Close the open row at the pinned now,
+        // then make the submitted attributes the single new open row; getState repaints the new
+        // live count-up — starting while a timer runs IS the atomic stop-then-start (no switch verb).
+        if (window.__START_STOPS_OPEN__ && window.__STATE__) {
           const now = window.__JUDGE_NOW__;
           const st = window.__STATE__;
           const day = now.slice(0, 10);

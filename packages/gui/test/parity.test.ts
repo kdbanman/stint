@@ -70,12 +70,11 @@ function allCommandPaths(): Set<string> {
 }
 
 /**
- * Alias → canonical leaf, so an alias (e.g. `switch` for `start`, `ls` for `list`) is
- * counted as the same capability as the command it aliases, not a second one. Folding
- * these keeps the bidirectional reach assertion exact (one row per real capability).
+ * Alias → canonical leaf, so an alias (e.g. `ls` for `list`) is counted as the same
+ * capability as the command it aliases, not a second one. Folding these keeps the
+ * bidirectional reach assertion exact (one row per real capability).
  */
 const CANONICAL: Record<string, string> = {
-  switch: 'start',
   ls: 'list',
 };
 

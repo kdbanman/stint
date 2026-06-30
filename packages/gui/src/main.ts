@@ -277,7 +277,7 @@ function updateTray(open: EntryView | null = store.openEntry()): void {
 
 /**
  * §12 R01 (G8): the tray exposes NO dropdown of app actions. A single left-click opens
- * the compact popover, which is the SOLE surface for Stop / Switch / Start + Open Stint.
+ * the compact popover, which is the SOLE surface for Stop / Start + Open Stint.
  * The right-click context menu is the minimal OS-convention Quit-only menu — no timer
  * actions, nothing the popover already owns. The old 3-item Start/Stop + Open Stint
  * dropdown is removed.

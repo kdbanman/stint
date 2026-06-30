@@ -37,6 +37,9 @@ type Op =
   | { kind: 'add'; durationS: number }
   | { kind: 'gap'; ms: number };
 
+// GUARD: the generated op set is deliberately start/stop/resume/add/gap with NO `switch`
+// op — `start` IS the atomic stop-then-start that subsumes switching (§05 R01), so the
+// at-most-one-open law below keeps full coverage. Do not re-add a redundant `switch` op.
 const opArb: fc.Arbitrary<Op> = fc.oneof(
   fc.constant<Op>({ kind: 'start' }),
   fc.constant<Op>({ kind: 'stop' }),
@@ -45,9 +48,13 @@ const opArb: fc.Arbitrary<Op> = fc.oneof(
   fc.integer({ min: 1000, max: 3_600_000 }).map((ms): Op => ({ kind: 'gap', ms })),
 );
 
-// §05 R01 Start is classified `core` (data integrity / core-entry per §03): this
-// property is the PROP evidence that the at-most-one-open invariant holds under the
-// `start` op in opArb — the badge labels behaviour this law already pins, unchanged.
+// §05 R01 Start is the atomic stop-then-start (data integrity / core-entry per §03):
+// starting while a timer runs stops the open entry first, so switching IS starting
+// with no separate verb. This property is the PROP evidence that the atomic
+// stop-then-start never leaves two open rows — the at-most-one-open law holds under
+// the `start` op in opArb (there is no `switch` op; the `switch` token below is a JS
+// switch statement). It would fail if `start` ever opened a second entry without
+// closing the first.
 describe('PROP: one open entry under any op sequence (§03, §05 R01, §17 R2)', () => {
   test.prop([fc.array(opArb, { maxLength: 40 })])(
     'at most one open entry after every operation',

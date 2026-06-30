@@ -161,7 +161,7 @@ header.mast {
 
 /* §12 R4: the in-window Active-Timer card — the GUI mirror of `tt status`. A warm-paper
    card (the elevation ladder's first rung) holding the live count-up, the running/idle
-   state, the entry's description + client/project, its attributes, and Stop + Switch.
+   state, the entry's description + client/project, its attributes, and Stop (no Switch — issue #34).
    Mirrors context/mockups/main.html's .strip. Accent discipline: the accent appears ONLY
    on the running clock + the running-state indicator and the primary Stop (button.primary). */
 .timer-card {
@@ -505,8 +505,9 @@ s {
 }
 
 /* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface.
-   A warm-paper card holding the panel title, the canonical Start / Switch / +with-details
-   actions, and the collapsible attribute form. Accent: only the single primary Start. */
+   A warm-paper card holding the panel title, the canonical Start / +with-details
+   actions (no separate Switch — issue #34; the form stays available while running so Start is
+   the atomic stop-then-start), and the collapsible attribute form. Accent: only the single primary Start. */
 .start-panel {
   display: flex;
   flex-direction: column;
@@ -668,7 +669,6 @@ button.small { font-size: 12px; padding: 6px 11px; }
 button.small.primary { font-size: 12px; padding: 6px 11px; }
 /* An icon inside a .btn sizes down per the system. */
 .btn .ic { width: 15px; height: 15px; }
-/* Switch is a plain (non-accent) button so it never competes with the primary Stop/Start. */
 button[hidden] { display: none; }
 
 /* The neutral-button convention, shared by the bespoke-classed clickable controls that don't take the
@@ -1846,7 +1846,7 @@ body.popover { background: var(--canvas); margin: 0; }
 .pop-ctx { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .pop-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
 .pop-tags[hidden] { display: none; }
-/* action row: Stop/Start (primary) + Switch — equal-width centered buttons */
+/* action row: Stop/Start (primary) — a single full-width centered button */
 .pop-act { display: flex; gap: 9px; padding: 0 18px 16px; }
 .pop-act .btn { flex: 1; justify-content: center; }
 /* foot: Open Stint — a quiet full-width link row, one rung quieter than the actions */

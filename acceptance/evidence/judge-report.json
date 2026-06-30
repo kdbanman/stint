@@ -30,19 +30,19 @@
     {
       "item": "TRAY_POPOVER_SURFACE",
       "pass": true,
-      "justification": "popover is the sole tray action surface — running: Stop+Switch+Open present {\"toggleLabel\":\"Stop\",\"togglePressed\":\"true\",\"switchVisible\":true,\"openPresent\":true,\"openLabel\":\"Open Stint\"}; idle: Start (Switch hidden) + Open present {\"toggleLabel\":\"Start\",\"togglePressed\":\"false\",\"switchHidden\":true,\"openPresent\":true}",
+      "justification": "popover is the sole tray action surface (no Switch) — running: Stop+Open present, no #switch {\"toggleLabel\":\"Stop\",\"togglePressed\":\"true\",\"noSwitch\":true,\"openPresent\":true,\"openLabel\":\"Open Stint\"}; idle: Start + Open present, no #switch {\"toggleLabel\":\"Start\",\"togglePressed\":\"false\",\"noSwitch\":true,\"openPresent\":true}",
       "screenshot": "popover-tray-surface.png"
     },
     {
       "item": "IN_WINDOW_TIMER",
       "pass": true,
-      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"hasSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}",
+      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}",
       "screenshot": "timer-view.png"
     },
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"noStopText\":true,\"hasStop\":true,\"hasSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"noStopText\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -78,7 +78,7 @@
     {
       "item": "START_FORM",
       "pass": true,
-      "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"switchHiddenWhenIdle\":true}; running surface offers Switch={\"present\":true,\"visible\":true,\"label\":\"Switch\"}",
+      "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"noSwitch\":true}; running surface keeps the start-with-details form (no Switch)={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"noSwitch\":true}",
       "screenshot": "main-start-form.png"
     },
     {
@@ -164,12 +164,6 @@
       "pass": true,
       "justification": "Delete confirms before acting: present pre-confirm=true (remove calls=0); gone post-confirm=true, removed once: [{\"id\":20}]",
       "screenshot": "main-confirm.png"
-    },
-    {
-      "item": "SWITCH_AFFORDANCE",
-      "pass": true,
-      "justification": "Switch visible while running: main={\"present\":true,\"visible\":true} popover={\"present\":true,\"visible\":true}; idle main={\"present\":true,\"visible\":false}",
-      "screenshot": "main-running.png"
     },
     {
       "item": "CLIENTS_VIEW",
