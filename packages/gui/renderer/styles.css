@@ -125,7 +125,7 @@ button.primary:hover .ic { color: #fff; }
    makes the views column the sole grow/shrink target so resize lands on content, and
    min-width:0 lets a wide entry/report line shrink the column instead of pushing the rail. */
 .shell { display: flex; align-items: stretch; min-height: 100vh; }
-.views { flex: 1; min-width: 0; padding: 24px 28px 40px; }
+.views { flex: 1; min-width: 0; padding: 24px 32px 44px; background: var(--paper); }
 
 .view { display: block; }
 .view[hidden] { display: none; }
@@ -134,16 +134,20 @@ header.mast {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  padding: 6px 0 18px;
-  margin-bottom: 8px;
-  border-bottom: 1px solid var(--rule);
+  padding: 0 0 12px;
+  margin-bottom: 2px;
   position: sticky;
   top: 0;
   background: var(--paper);
   z-index: 1;
 }
-.wordmark { font-size: 20px; font-weight: 680; letter-spacing: -0.01em; }
-.summary { font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The OS title bar already names the app and the strip below carries the running state, so the
+   in-content wordmark stays a quiet label rather than a second masthead (design-system: less
+   visual noise). */
+.wordmark { font-size: 12px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+/* The running state already shows in the compact strip directly below the mast, so the mast's
+   duplicate running summary stays hidden — one running indicator, not two (design-system). */
+.summary { display: none; font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .summary b { color: var(--ink-soft); font-weight: 590; }
 /* The glance-summary running dot (app.js summaryHtml) — the green running signal paired with
    the bolded "running" word (inclusivity: colour + word). Unified with .timer-strip .strip-dot
@@ -491,17 +495,17 @@ s {
 /* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets,
    group-by + billable segments, and client/project/tag filters. Sits on the warm canvas;
    every control is monochrome (accent stays on the primary action + running state). */
+/* The control bar reads as quiet inline controls on the paper canvas, not a heavy nested card
+   (design-system: no decorative boxes; surface is signalled by elevation, and these controls
+   are flush with the list they filter). A single hairline separates them from the entries. */
 .entries-ctrl {
   display: grid;
-  grid-template-columns: 88px 1fr;
-  gap: 12px 16px;
+  grid-template-columns: 64px 1fr;
+  gap: 10px 14px;
   align-items: center;
-  padding: 16px;
-  margin-bottom: 16px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r2);
-  background: var(--paper);
-  box-shadow: var(--sh-card);
+  padding: 4px 2px 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--rule);
 }
 
 /* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface.
@@ -826,7 +830,14 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: 999px;
   padding: 1px 9px;
 }
-.entry .actions { display: flex; gap: 6px; }
+.entry .actions { display: inline-flex; flex-direction: row-reverse; gap: 4px; align-items: center; float: right; margin-left: 12px; }
+/* A row reads calm: at rest only the kebab (⋯) shows; the explicit Edit / Edit tags / Split /
+   Delete reveal on hover or keyboard focus. They stay in the DOM (and stay Playwright-clickable
+   via opacity, not display:none) so every affordance and selector is intact — only the visual
+   noise is hidden until the row is engaged. */
+.entry .actions .small:not(.kebab) { opacity: 0; transition: opacity 0.12s ease; }
+.entry:hover .actions .small,
+.entry:focus-within .actions .small { opacity: 1; }
 
 /* Inline edit (§05 R6): the row swaps into an in-place form. Monochrome; only Save carries
    the accent (button.primary). Editing the running entry keeps .running so the indicator stays. */
@@ -1106,6 +1117,11 @@ button.danger:hover { background: var(--danger-weak); }
   margin-bottom: 18px;
 }
 .report-lab { font-size: 12px; color: var(--muted); text-align: right; }
+/* In the Entries control grid the segments/presets hug their options instead of stretching to
+   fill the column (the grid would otherwise justify them full-width). */
+.entries-ctrl .seg,
+.entries-ctrl .presets,
+.entries-ctrl .report-row { justify-self: start; }
 .report-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 
 .seg {
