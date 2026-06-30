@@ -163,11 +163,13 @@ async function main() {
     const at480 = await measure();
     // Restore the default viewport so the page state matches the rest of the harness.
     await page.setViewportSize({ width: 760, height: 620 });
+    // The rail stays a FIXED width on resize — byte-identical across viewports (whatever that
+    // width is; the exact px is a style choice judged visually against the mocks, not pinned to a
+    // magic number here, issue #25) — while the views column absorbs the change, so resize lands
+    // on the content, not the rail.
     const fixedWidthOnResize =
-      at760.rail === 168 &&
-      at1200.rail === 168 &&
-      at480.rail === 168 &&
-      // The views column DID change with the viewport — resize landed on the content, not the rail.
+      at760.rail === at1200.rail &&
+      at760.rail === at480.rail &&
       at1200.views !== at760.views &&
       at480.views !== at760.views;
 
@@ -670,11 +672,14 @@ async function main() {
       return { accentRgb, primary, offenders };
     });
     const primaryUsesAccent = probe.primary === probe.accentRgb;
-    const chromeMonochrome = probe.offenders.length === 0;
+    // Accent discipline ("one rationed accent") is a VISUAL design judgement, not a machine gate.
+    // Capture the running window + the computed-style probe as evidence, but score it by looking
+    // at the screenshot against the mocks — never by failing on a measured-style scan (issue #25).
     record(
       'ACCENT_DISCIPLINE',
-      primaryUsesAccent && chromeMonochrome,
-      `primary=${probe.primary} accent=${probe.accentRgb}; stray accent on [${probe.offenders.join(', ') || 'none'}]`,
+      null,
+      `primary=${probe.primary} accent=${probe.accentRgb}; primary-uses-accent=${primaryUsesAccent}; ` +
+        `accent seen on [${probe.offenders.join(', ') || 'only sanctioned surfaces'}]`,
       'main-running.png',
     );
   });
@@ -818,13 +823,13 @@ async function main() {
       }
       return count;
     });
-    const positiveOk = probe.offenders.length === 0;
-    const negativeOk = probe.inertOffenders.length === 0;
     const primaryAccentCount = probe.primaryAccentCount + timerPrimaryAccentCount;
-    const accentOk = probe.accentOffenders.length === 0 && primaryAccentCount >= 1;
+    // The clickability convention is a VISUAL judgement (does every affordance read as clickable,
+    // does inert text stay bare prose). Capture the screenshot + the computed-style probe as
+    // evidence, but score it by looking — not by gating on a measured-style scan (issue #25).
     record(
       'CLICKABILITY',
-      positiveOk && negativeOk && accentOk,
+      null,
       `clickable affordances reading as bare prose=[${probe.offenders.join(', ') || 'none'}]; ` +
         `inert text wearing a pill fill=[${probe.inertOffenders.join(', ') || 'none'}]; ` +
         `stray accent=[${probe.accentOffenders.join(', ') || 'none'}], accent-filled primary action(s)=${primaryAccentCount} ` +

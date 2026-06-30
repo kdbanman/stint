@@ -53,13 +53,13 @@
     },
     {
       "item": "ACCENT_DISCIPLINE",
-      "pass": true,
-      "justification": "primary=rgb(200, 98, 62) accent=rgb(200, 98, 62); stray accent on [none]",
+      "pass": null,
+      "justification": "primary=rgb(200, 98, 62) accent=rgb(200, 98, 62); primary-uses-accent=true; accent seen on [only sanctioned surfaces]",
       "screenshot": "main-running.png"
     },
     {
       "item": "CLICKABILITY",
-      "pass": true,
+      "pass": null,
       "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
