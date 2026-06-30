@@ -136,10 +136,6 @@ header.mast {
   align-items: baseline;
   padding: 0 0 12px;
   margin-bottom: 2px;
-  position: sticky;
-  top: 0;
-  background: var(--paper);
-  z-index: 1;
 }
 /* The OS title bar already names the app and the strip below carries the running state, so the
    in-content wordmark stays a quiet label rather than a second masthead (design-system: less
