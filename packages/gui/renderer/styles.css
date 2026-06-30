@@ -1448,6 +1448,10 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .editor .iconbtn:hover,
 .iconbtn:hover { background: var(--hover); color: var(--ink); }
+/* A create affordance keeps the accent as its sole signal, but at icon weight — no heavy pill
+   (the rationed accent rides the one "+" that makes a new thing). */
+.iconbtn.create { color: var(--accent); }
+.iconbtn.create:hover { background: var(--accent-weak); color: var(--accent-ink); }
 .editor .iconbtn .ic,
 .iconbtn .ic { width: 16px; height: 16px; }
 /* body — the field column */

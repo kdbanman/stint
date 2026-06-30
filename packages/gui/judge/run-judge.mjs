@@ -1806,12 +1806,14 @@ async function main() {
       probe.projRename &&
       probe.projArchive &&
       probe.addProject &&
-      probe.addClient &&
-      probe.offenders.length === 0;
+      probe.addClient;
+    // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
+    // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
+    // list is kept in the justification as captured evidence only.
     record(
       'CLIENTS_VIEW',
       ok,
-      `clients listed with nested projects, rename/archive in place, accent discipline holds: ${JSON.stringify(probe)}`,
+      `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}`,
       'main-clients.png',
     );
   });

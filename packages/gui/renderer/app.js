@@ -1599,7 +1599,7 @@ function clientRow(c, projects) {
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
     `<span class="client-actions">` +
-    `<button class="small primary" type="button" data-act="add-project"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add project</button>` +
+    `<button class="iconbtn create" type="button" data-act="add-project" aria-label="Add project"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="rename-client" aria-label="Rename client"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="archive-client" aria-label="Archive client"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
