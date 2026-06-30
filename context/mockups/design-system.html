@@ -179,29 +179,19 @@
 </defs></svg>
 <div class="doc">
   <h1>Stint “Calm” · Warm Paper</h1>
-  <p class="lead">One shared language for every surface — the sidebar, Timer, Entries, Clients, Reports, Settings, the entry editor, the time-range picker, the menu-bar tray popover, and the focused flows (software update, merge, sleep review). Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — on a warm ivory canvas with a single clay accent.</p>
+  <p class="lead">One shared language for every surface — the sidebar, Timer, Entries, Clients, Reports, Settings, the entry editor, the time-range picker, the menu-bar tray popover, and the focused flows (software update, merge, sleep review). Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — a quiet canvas and a single rationed accent.</p>
 
   <h2>Principles</h2>
   <div class="two">
     <div class="panel">
-      <p class="rule"><b>Near-white, low-saturation surfaces.</b> The main surface is almost white; warmth survives only as faint sidebar/sunken tints, never a beige cast. Brightness and desaturation keep the content — text, time, the one accent — the only things wearing colour.</p>
-      <p class="rule"><b>One rationed accent — red, not orange.</b> A single red-leaning brick accent (#C44C38) appears only on the one create/primary action per view, the active nav item, focus rings, and the running clock — never decoratively.</p>
-      <p class="rule"><b>Soft, layered depth.</b> Content cards rest with a gentle shadow; modals and popovers float higher. No nested cards, no decorative tinted or dashed boxes — and no tinted sub-surface inside a card (a tags field holds its chips on the parent paper, not in a box of its own).</p>
-      <p class="rule"><b>The UI speaks for itself.</b> No unnecessary text — no annotations, no control instructions, no explanatory captions, no reassurance copy, no spec/§-refs, and no group headings or state words the layout already makes obvious (no "Work"/"Time" labels over self-evident fields, no "running" beside the running clock, no "end time not editable" note). A control's label, state, and shape carry its meaning; if something seems to need explaining, redesign it or move the detail behind an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance rather than printing prose on the surface.</p>
+      <p class="rule"><b>One rationed accent on a quiet canvas.</b> The surfaces are a near-neutral monochrome so the eye lands on the content; a single accent marks the one thing that matters most in a view — its primary or create action, and the live running state. It is a signal, never decoration. <span class="cap">(The palette is the tokens' to set — colour is a system decision, not a per-view one.)</span></p>
+      <p class="rule"><b>Depth, not tint.</b> A region rises by a soft shadow alone, never a coloured or bordered box. Surfaces don't nest, and no sub-region earns a fill of its own — elevation is the only thing that says "this is a layer".</p>
+      <p class="rule"><b>The UI speaks for itself.</b> Every element earns its pixels. When shape, position, or state already carry the meaning, the words go — no headings, captions, instructions, or state words the layout makes plain — and a verb that recurs becomes its icon. If something still seems to need explaining, redesign it or move the detail behind an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance instead of printing prose on the surface.</p>
     </div>
     <div class="panel">
       <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
       <p class="rule"><b>4px grid, generous air.</b> Every pad, gap, and height is a multiple of 4, with roomy margins. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
       <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
-    </div>
-  </div>
-
-  <div class="two" style="margin-top:18px">
-    <div class="panel">
-      <p class="rule"><b>Create leads, and wears the accent.</b> The make-a-new-thing action is the one accented control in its cluster and comes first. A top-level create is an accent button (<b>Add client</b>, <b>New report</b>, <b>Save</b>); a repeated per-row create shrinks to a single accent <b>+</b> icon (add a project to a client) rather than a heavy pill on every row — same rationed-accent signal, lighter weight.</p>
-    </div>
-    <div class="panel">
-      <p class="rule"><b>Repeated row verbs are icons.</b> Actions that recur on every row — rename (<svg class="ic" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-edit"/></svg> pencil), archive (<svg class="ic" style="width:14px;height:14px;vertical-align:-2px"><use href="#i-archive"/></svg> banker's box), more (⋯) — are line icons with a tooltip, never worded buttons. One icon vocabulary, applied identically across client / project / tag rows, so a row of verbs reads as a quiet toolbar, not a wall of text.</p>
     </div>
   </div>
 
