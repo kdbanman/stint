@@ -42,7 +42,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"noStopText\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -54,7 +54,7 @@
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": null,
-      "justification": "primary=rgb(200, 98, 62) accent=rgb(200, 98, 62); primary-uses-accent=true; accent seen on [only sanctioned surfaces]",
+      "justification": "primary=rgb(196, 76, 56) accent=rgb(196, 76, 56); primary-uses-accent=true; accent seen on [only sanctioned surfaces]",
       "screenshot": "main-running.png"
     },
     {

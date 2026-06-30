@@ -1565,8 +1565,8 @@ function tagRow(t) {
   row.innerHTML =
     `<span class="tag-row-name">${escapeHtml(t.name)}</span>` +
     `<span class="tag-row-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-tag">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="archive-tag">Archive</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-tag" aria-label="Rename tag"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-tag" aria-label="Archive tag"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   row.querySelector('[data-act="rename-tag"]').addEventListener('click', () =>
     openTagRename(row, t),
@@ -1599,9 +1599,9 @@ function clientRow(c, projects) {
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
     `<span class="client-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-client">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="add-project">Add project</button>` +
-    `<button class="small ghost" type="button" data-act="archive-client">Archive</button>` +
+    `<button class="small primary" type="button" data-act="add-project"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add project</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-client" aria-label="Rename client"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-client" aria-label="Archive client"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   wrap.appendChild(head);
 
@@ -1639,8 +1639,8 @@ function projectRow(p) {
   row.innerHTML =
     `<span class="project-name">${escapeHtml(p.name)}</span>` +
     `<span class="project-actions">` +
-    `<button class="small ghost" type="button" data-act="rename-project">Rename</button>` +
-    `<button class="small ghost" type="button" data-act="archive-project">Archive</button>` +
+    `<button class="iconbtn" type="button" data-act="rename-project" aria-label="Rename project"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
+    `<button class="iconbtn" type="button" data-act="archive-project" aria-label="Archive project"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
     `</span>`;
   row.querySelector('[data-act="rename-project"]').addEventListener('click', () =>
     openProjectRename(row, p),

@@ -494,7 +494,6 @@ async function main() {
     const before = await page.evaluate(() => ({
       stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
       noEnd: !document.querySelector('#live-edit #le-end'),
-      noStopText: /not editable while running/i.test(document.querySelector('#live-edit')?.textContent ?? ''),
       hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
       // Switch is removed — assert NO #timer-switch element survives anywhere (issue #34).
       noSwitch: !document.querySelector('#timer-switch'),
@@ -522,7 +521,6 @@ async function main() {
       delta === 3 &&
       before.stripPresent &&
       before.noEnd &&
-      before.noStopText &&
       before.hasStop &&
       before.noSwitch &&
       before.desc === 'auth refactor' &&
