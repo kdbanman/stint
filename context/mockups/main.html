@@ -144,6 +144,7 @@
   /* overlap band */
   .ov{position:absolute;left:6px;right:6px;z-index:4;pointer-events:none;background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 7px,#f1e3bc 7px,#f1e3bc 14px);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line)}
   .ov .otag{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:10px;color:var(--warn-ink);background:var(--paper);border:1px solid var(--warn-line);border-radius:999px;padding:0 7px;white-space:nowrap}
+  .dcol.end{border-right:1px solid var(--line)}
   .win:last-of-type{margin-bottom:44px}
 </style>
 </head>
@@ -350,6 +351,55 @@
             <div class="dcol">
               <div class="dh"><span class="dw">Sun</span><b class="dd">28</b></div>
               <div class="dt"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Entries</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">18h 00m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+</nav>
+    <div class="view">
+
+      <div class="vhead">
+        <h2 class="vtitle">Entries</h2>
+        <button class="btn"><svg class="ic"><use href="#i-plus"/></svg> Add entry</button>
+      </div>
+
+      <div class="toolbar">
+        <span class="seg"><button class="on">Today</button><button>This week</button><button>Last week</button><button>This month</button><button>Custom…</button></span>
+        <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
+        <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
+        <select class="field"><option>All tags</option></select>
+        <span class="srch"><svg class="ic"><use href="#i-search"/></svg><input placeholder="Search entries"></span>
+        <span class="tot tnum">2.25h</span>
+      </div>
+
+      <div class="calwrap">
+        <div class="cstrip">
+          <div class="cgrid">
+            <div class="gut"><div class="sp2"></div><div class="gtr">
+              <span class="hlab" style="top:0">07:00</span><span class="hlab" style="top:44px">08:00</span><span class="hlab" style="top:88px">09:00</span><span class="hlab" style="top:132px">10:00</span><span class="hlab" style="top:176px">11:00</span><span class="hlab" style="top:220px">12:00</span><span class="hlab" style="top:264px">13:00</span><span class="hlab" style="top:308px">14:00</span><span class="hlab" style="top:352px">15:00</span><span class="hlab" style="top:396px">16:00</span><span class="hlab" style="top:440px">17:00</span><span class="hlab" style="top:484px">18:00</span>
+            </div></div>
+            <div class="dcol end">
+              <div class="dh"><span class="dw">Thu</span><b class="dd">25</b><span class="ds tnum">2.25h</span></div>
+              <div class="dt">
+                <a class="ev" href="edit-entry.html" style="top:88px;height:99px"><span class="bd">Sprint planning</span><span class="bc">Globex Corp</span><span class="bt">09:00 – 11:15</span></a>
+                <a class="ev run" href="edit-entry.html" style="top:286px;height:132px"><span class="bd"><span class="dot run"></span>Drafting proposals</span><span class="bc">Globex Corp</span><span class="bt">13:30 –</span></a>
+              </div>
             </div>
           </div>
         </div>
