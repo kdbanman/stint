@@ -77,6 +77,9 @@
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
+  .field.time{width:72px;text-align:center;font-family:var(--num);font-size:12.5px}
+  .field:disabled{color:var(--faint);background:var(--sunken);border-color:var(--line)}
+  .srow.off .sk{color:var(--faint)}
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
@@ -156,6 +159,11 @@
       <div class="srow"><div class="sk">Rounding</div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
       <div class="srow"><div class="sk">Rounding increment</div><div class="sc"><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div></div>
       <div class="srow"><div class="sk">Week start</div><div class="sc"><span class="seg"><button class="on">Monday</button><button>Sunday</button></span></div></div>
+
+      <div class="sgrp">Timeline</div>
+      <div class="srow"><div class="sk">Working hours<small>Entries and the picker open to these hours</small></div><div class="sc"><input class="field time tnum" value="07:00"><span class="meta">–</span><input class="field time tnum" value="18:00"></div></div>
+      <div class="srow"><div class="sk">Picker window</div><div class="sc"><span class="seg"><button class="on">Working hours</button><button>Around now</button></span></div></div>
+      <div class="srow off"><div class="sk">Around</div><div class="sc"><select class="field" disabled><option>4 h</option><option>6 h</option><option selected>8 h</option><option>12 h</option></select></div></div>
 
       <div class="sgrp">Check-ins</div>
       <div class="srow"><div class="sk">First check-in</div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
