@@ -314,6 +314,11 @@ conflict that wave scheduling can't resolve.`,
     )
   )
 )).filter(Boolean);
+if (plans.length < buildable.length) {
+  const planned = new Set(plans.map((p) => p.reqId));
+  const dropped = buildable.filter((w) => !planned.has(w.reqId)).map((w) => w.reqId);
+  log(`⚠ ${dropped.length} plan agent(s) died: ${dropped.join(', ')} — these requirements are NOT scheduled this run; resume to re-plan them. Swap must not fire without them.`);
+}
 const planById = new Map(plans.map((p) => [p.reqId, p]));
 
 // ---------------------------------------------------------------------------
@@ -412,6 +417,7 @@ failing test names with the key error line for any failures. Do not fix anything
 (judge/evidence/noNetwork: report false here; they run in the Verify phase.)`,
       { label: `verify-wave-${w + 1}`, phase: 'Implement', schema: SUITE, effort: 'high' }
     );
+    if (!check) { log(`verify-wave-${w + 1} attempt ${attempt + 1} returned null (agent died) — retrying`); continue; }
     if (check.build && check.testPassed) { green = true; break; }
     log(`Wave ${w + 1} red (attempt ${attempt + 1}): ${(check.failures || []).slice(0, 5).join(' | ')}`);
     await agent(
@@ -552,7 +558,7 @@ const acInsufficient = acVerdicts.filter((v) => v.verdict === 'insufficient');
 log(`Review 5a (AC sufficiency): ${acVerdicts.length - acInsufficient.length} sufficient, ${acInsufficient.length} insufficient.`);
 
 // --- 5b. Code-quality & architecture review (whole diff) ------------------
-const archReview = await agent(
+const archReview = (await agent(
   `${REPO}
 
 CODE-QUALITY & ARCHITECTURE REVIEW of everything this transition changed (diff against the merge-base
@@ -574,7 +580,7 @@ Rate each finding Strong / Worth exploring / Speculative, give file:symbol locat
 deletion-test result, and a concrete behavior-preserving recommendation. Give ONE topRecommendation.
 Set clean=true ONLY if there are no Strong findings left. Recommendations must NOT weaken any AC.`,
   { label: 'review-arch', phase: 'Review', agentType: 'Explore', schema: ARCH_REVIEW, effort: 'high' }
-);
+)) || { clean: false, findings: [], topRecommendation: 'review agent died — treated as not clean' };
 const strongFindings = (archReview.findings || []).filter((f) => f.rating === 'Strong');
 log(`Review 5b (architecture): ${(archReview.findings || []).length} findings (${strongFindings.length} Strong); clean=${archReview.clean}. Top: ${archReview.topRecommendation}`);
 
@@ -587,6 +593,11 @@ log(`Review 5b (architecture): ${(archReview.findings || []).length} findings ($
 // ===========================================================================
 phase('Improve');
 let openAc = new Set(acInsufficient.map((v) => v.reqId));
+// A requirement whose verdict agent died has NO verdict — treat missing as insufficient (never let a dead agent read as a pass).
+{
+  const judged = new Set(acVerdicts.map((v) => v.reqId));
+  for (const w of buildable) if (!judged.has(w.reqId)) { openAc.add(w.reqId); log(`⚠ no AC verdict for ${w.reqId} (review agent died) — counted insufficient.`); }
+}
 let archClean = archReview.clean && strongFindings.length === 0;
 let lastArch = archReview;
 const FUEL = budget && budget.total
@@ -669,14 +680,14 @@ non-trivial assertion AND it's reflected in COVERAGE.md + regenerated evidence. 
   // keep latest verdict text for any still-open req so next round's gaps are fresh
   reAc.forEach((v) => { const i = acVerdicts.findIndex((x) => x.reqId === v.reqId); if (i >= 0) acVerdicts[i] = v; });
 
-  lastArch = await agent(
+  lastArch = (await agent(
     `${REPO}
 
 Re-run the CODE-QUALITY & ARCHITECTURE review over the current diff (same Matt-Pocock method,
 deletion test, Strong/Worth-exploring/Speculative ratings). Report remaining findings and set
 clean=true ONLY if no Strong findings remain.`,
     { label: `review-arch-r${round + 1}`, phase: 'Improve', agentType: 'Explore', schema: ARCH_REVIEW, effort: 'high' }
-  );
+  )) || { clean: false, findings: [] };
   archClean = lastArch.clean && (lastArch.findings || []).every((f) => f.rating !== 'Strong');
 }
 if (openAc.size) log(`⚠ AC still insufficient after ${FUEL} rounds: ${[...openAc].join(', ')} — surfaced in the PR checklist.`);
@@ -778,14 +789,14 @@ NOTE the missing capability and what a human must do — never fabricate a file.
 // recordings linked and a per-requirement status checklist.
 // ===========================================================================
 phase('PR');
-const finalSuite = await agent(
+const finalSuite = (await agent(
   `${REPO}
 
 Final evidence regen — run in order and report precisely: \`npm run build\`, \`npm test\`,
 \`npm run verify:no-network\`, \`npm run judge\`, \`npm run evidence\`. Return the five booleans, any
 failures with the key error line, and a one-paragraph summary. Do not fix anything.`,
   { label: 'final-evidence', phase: 'PR', schema: SUITE, effort: 'high' }
-);
+)) || { build: false, testPassed: false, judge: false, evidence: false, noNetwork: false };
 log(`Final evidence: build=${finalSuite.build} tests=${finalSuite.testPassed} judge=${finalSuite.judge} evidence=${finalSuite.evidence} no-network=${finalSuite.noNetwork}`);
 
 // Build the per-requirement status checklist from the latest AC verdicts + deletions/doc rows.
@@ -800,7 +811,7 @@ const checklistData = work.map((w) => {
   return { reqId: w.reqId, status: sufficient ? 'done' : 'partial', note: [v && !sufficient ? (v.gaps || []).join('; ') : '', recNote].filter(Boolean).join(' | ') };
 });
 
-const pr = await agent(
+const pr = (await agent(
   `${REPO}
 
 Aggregate this transition into ONE GitHub PR on the CURRENT working branch (do NOT target the default
@@ -826,7 +837,7 @@ ${recordings.length ? recordings.map((r) => `     - ${r.reqId} | ${r.captured ? 
      and the Markdown PR-body footer required by the repo conventions.
 3. Do NOT merge (the human gate is PR merge). Return committed, the PR url, the checklist, and a summary.`,
   { label: 'open-pr', phase: 'PR', schema: PR_RESULT, effort: 'high' }
-);
+)) || { committed: false, prUrl: '(pr agent died — commit/push by hand or resume)' };
 log(`PR: committed=${pr.committed} url=${pr.prUrl}`);
 
 // ===========================================================================
