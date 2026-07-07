@@ -3,7 +3,7 @@ export const meta = {
   description:
     'Carry out the Stint old→new requirements transition end-to-end. Consumes requirements-transition.md as the work-list: inventory every new/modified/deleted requirement (with core flag, surfaces, files, mockup, AC methods, Rec flag), plan, implement in dependency-ordered file-disjoint waves, verify the executable AC and regenerate evidence, run TWO separate reviews (AC-evidence-sufficiency + code-quality/architecture), apply review feedback in a bounded improvement loop, gather screen-recording QA evidence LAST, aggregate everything into one GitHub PR, and — only once every requirement has passing AC evidence and both reviews are clean — perform the §Z old→new swap. Loops until every requirement has clear verification evidence aggregated into the PR. The human gate is PR merge.',
   whenToUse:
-    'When you want the requirements-transition.md work-list executed in full: every pending requirement implemented across core/cli/gui with parity, proven by its mapped AC methods, reviewed twice, demonstrated by screen recordings, and packaged into one ready-for-review PR. Pass args to scope a calibration run to a subset of requirement ids (e.g. args: ["§05 R09", "§20"]); omit args for the full transition. The swap/cleanup (§Z) only fires on a full, all-green, unscoped run.',
+    'When you want the requirements-transition.md work-list executed in full: every pending requirement implemented across core/cli/gui with parity, proven by its mapped AC methods, reviewed twice, demonstrated by screen recordings, and packaged into one ready-for-review PR. Pass args to scope a calibration run to a subset of requirement ids (e.g. args: ["§12 R16", "§14"]); omit args for the full transition. The swap/cleanup (§Z) only fires on a full, all-green, unscoped run.',
   // These titles MUST match the phase() calls below, in order.
   phases: [
     { title: 'Inventory', detail: 'Parse requirements-transition.md into a structured per-requirement work-list' },
@@ -12,9 +12,9 @@ export const meta = {
     { title: 'Verify', detail: 'Run/extend executable AC (BDD/PROP/GOLD/JUDGE/MANUAL) per the mapping; regenerate evidence' },
     { title: 'Review', detail: 'TWO separate passes: (a) adversarial AC-evidence-sufficiency critic, (b) code-quality & architecture review (deletion test, shallow modules, leaky seams)' },
     { title: 'Improve', detail: 'Apply both reviews’ feedback in a bounded loop-until-dry; must not regress AC' },
-    { title: 'Recordings', detail: 'QA screen recordings (LAST): core-flow GUI, all Rec ▶ rows, code-change-adjacent reqs; ASCII-named, slowed (~0.5x) GIFs with an end-frame hold and visible cursor/click, committed under acceptance/evidence/recordings/ indexed by req id' },
+    { title: 'Recordings', detail: 'QA screen recordings (LAST): every core (●) GUI row and every Rec ▶ row (§W); ASCII-named, slowed (~0.5x) GIFs with an end-frame hold and visible cursor/click, committed under acceptance/evidence/recordings/ indexed by req id' },
     { title: 'PR', detail: 'Regenerate all evidence, commit on the working branch, open ONE ready-for-review PR with recordings embedded inline as GIF images (each with a caption) and a per-requirement status checklist' },
-    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete the *-old.html docs + this mapping per §Z, promote new docs, fix references, confirm no "switch" verb/affordance/alias/term survives (§Z)' },
+    { title: 'Swap', detail: 'Only when every req has passing AC evidence AND both reviews clean: delete the *-old.html docs, the retired time-range-picker mockup, editor.js (host moved) + this mapping per §Z, rename the parity feature file, fix references, and confirm every §Z forbidden-survivor grep is empty in its scope (time-range-picker, datetime-local entry inputs, list --by, editor.js, Edit tags, picker modal chrome, entries group-by, TIME_RANGE_PICKER/ADD_FORM_PICKER, parity_new_entities, -old.html)' },
   ],
 };
 
@@ -36,7 +36,7 @@ const WORKLIST = {
         type: 'object',
         required: ['reqId', 'section', 'change', 'core', 'surfaces', 'files', 'acMethods', 'rec', 'summary'],
         properties: {
-          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R01", "§05 R8 (Switch)", "§11 switch-alias", "§12 R05", "concept".' },
+          reqId: { type: 'string', description: 'Stable id, e.g. "§05 R05", "§11 tt-list", "§12 R16", "§14 timeline-settings", "§18 main.html".' },
           section: { type: 'string', description: 'Owning section, e.g. "§05 Timer & entries".' },
           change: { enum: ['NEW', 'MODIFIED', 'DELETED'] },
           core: { type: 'boolean', description: 'True iff marked ● (core requirement per §C).' },
@@ -56,14 +56,16 @@ const WORKLIST = {
     },
     swapTargets: {
       type: 'object', description: 'The §Z swap/cleanup work-list, captured now so the final phase is data-driven.',
-      required: ['deletePaths', 'referenceFixes'],
+      required: ['deletePaths', 'referenceFixes', 'renames', 'forbiddenGreps'],
       properties: {
-        deletePaths: { type: 'array', items: { type: 'string' }, description: 'Files to delete at swap (the *-old.html docs, any folded-away GUI files, superseded workflows, and this mapping) — exactly what §Z names.' },
+        deletePaths: { type: 'array', items: { type: 'string' }, description: 'Files to delete at swap (the four *-old.html docs, the retired context/mockups/time-range-picker.html, folded-away GUI files like packages/gui/renderer/editor.js, and this mapping) — exactly what §Z names.' },
         referenceFixes: { type: 'array', items: { type: 'string' }, description: 'Docs whose references must point only at the new docs/entities (README, CLAUDE.md, COVERAGE.md, parity-matrix.json).' },
+        renames: { type: 'array', items: { type: 'object', required: ['from', 'to'], properties: { from: { type: 'string' }, to: { type: 'string' } } }, description: 'File RENAMES §Z mandates (e.g. features/parity_new_entities.feature → features/parity_favorites_saved_reports.feature), whose references must follow.' },
+        forbiddenGreps: { type: 'array', items: { type: 'object', required: ['pattern', 'scope'], properties: { pattern: { type: 'string' }, scope: { type: 'string' } } }, description: 'The §Z forbidden-survivor greps: pattern + its scope/carve-out note verbatim (e.g. datetime-local scoped to gui entry-time surfaces — plain date range inputs per G3 are allowed; --by scoped to the program.ts list block — the report --by stays).' },
       },
     },
     recordingScope: {
-      type: 'array', description: 'Req ids that need a screen recording per §W (core-flow GUI ∪ Rec ▶ ∪ code-change-adjacent GUI).',
+      type: 'array', description: 'Req ids that need a screen recording per §W (every core ● GUI row ∪ every Rec ▶ row; GUI-only — a CLI-side row is evidenced by the transcript, no GIF).',
       items: { type: 'string' },
     },
   },
@@ -190,12 +192,17 @@ const PR_RESULT = {
 // ===========================================================================
 const REPO = `Repo: Stint, a TypeScript monorepo at the cwd. Surfaces are EQUAL: @stint/core
 (packages/core), the tt CLI (packages/cli), and the Electron GUI (packages/gui). ALL logic
-lives in @stint/core; CLI and GUI are thin shells over it. Parity (PRD §17 R8) is mandatory:
-favorites and saved reports must each be fully reachable from both tt and the GUI.
+lives in @stint/core; CLI and GUI are thin shells over it. Parity (PRD §17) is mandatory:
+every capability stays fully reachable from both tt and the GUI where both surfaces apply;
+the new §14 settings reach tt config automatically.
 
 This run is driven by requirements-transition.md (the work-list). New requirement text is
-specified inline there; the legacy text is in *-old.html. macOS + Linux only — Windows is
-dropped everywhere (code, build matrix, docs, %APPDATA% path).
+specified inline there; the legacy text is in *-old.html. This transition (issue #43) replaces
+the native datetime-local entry-time inputs and the standalone picker modal with an inline
+interval picker inside ONE unified entry form (add + edit, with a collapsed Start/Stop expander
+as the exact/overnight path), replaces the Entries list with a readonly entries calendar, moves
+grouping entirely to Reports (no tt list --by), and adds the §14 timeline-window settings.
+macOS + Linux only.
 
 Conventions you MUST follow (do not invent new structure):
 - BDD: features/*.feature (Gherkin); steps in packages/core/test/bdd/steps.ts; every scenario
@@ -209,8 +216,10 @@ Conventions you MUST follow (do not invent new structure):
 - Parity: every new GUI IPC channel in packages/gui/src/ipc.ts CHANNELS gets a row in
   acceptance/criteria/parity-matrix.json (asserted by packages/gui/test/parity.test.ts).
 - Coverage index: acceptance/criteria/COVERAGE.md is hand-maintained — add/refresh the PRD row.
-- New core entities (favorite, report) need a schema/migration in packages/core, then CLI
-  (tt fav …, tt report save|ls|show|rm|run) and GUI (Timer favorites rail, Reports view).
+- New §14 settings are key-value rows in packages/core/src/settings.ts (validated as strictly
+  as existing keys; NO schema migration) and reach tt config automatically. The GUI renderer is
+  plain JS under packages/gui/renderer/ (app.js, timepicker.js, settings.js, reports.js,
+  index.html, styles.css) — keep it thin view wiring over core IPC.
 Commands: npm run build · npm test · npm run test:bdd|test:prop|test:gold · npm run judge
 · npm run evidence · npm run verify:no-network. Node ≥22.5; node:sqlite; NO network ever.`;
 
@@ -224,16 +233,19 @@ const inv = await agent(
 Read requirements-transition.md IN FULL (it is the work-list), plus acceptance/criteria/COVERAGE.md and
 acceptance/criteria/parity-matrix.json for the current state. Parse EVERY requirement row in the §2
 section-by-section tables (and any net-new sections this transition adds) — including the docs-only
-rows (concept/glossary/acceptance) and every DELETED row (for this transition: §05 R8 Switch and the
-CLI \`switch\` alias). For each requirement capture:
+rows (the §12 R18–R20 renumber, §17 R10/R11, the §18 mockup rows) and every DELETED row (for this
+transition: §11 tt-list \`--by\`; the §12 picker modal chrome, entries group-by control, per-row
+Edit-tags control, row-inline edit form, modal editor editor.js, native datetime-local entry inputs,
+and the TIME_RANGE_PICKER/ADD_FORM_PICKER judge scenes; §18 time-range-picker.html). For each requirement capture:
 reqId, section, change (NEW/MODIFIED/DELETED), core (● → true), surfaces, the Files column
 (verbatim where given), mockup(s), acMethods (BDD/PROP/GOLD/JUDGE/MANUAL — empty for docs/meta
 rows), rec (▶ → true), isGui (true iff it has a gui surface), and the one-line summary.
 
-Also return: globalDecisions (the §1 G-decisions table), swapTargets (the §Z deletePaths and
-referenceFixes), and recordingScope — the union, per §W, of (1) every GUI requirement marked
-core, (2) every Rec ▶ row, and (3) every code-change-adjacent GUI requirement. Be exhaustive: a
-row missed here never gets built, verified, or recorded.`,
+Also return: globalDecisions (the §1 G-decisions table), swapTargets (the §Z deletePaths,
+referenceFixes, file RENAMES, and forbidden-survivor greps with their scope/carve-out notes
+verbatim), and recordingScope — the union, per §W, of (1) every core (●) GUI row and (2) every
+Rec ▶ row (GUI-only: where a row's tt side is CLI, the transcript is the evidence, no GIF). Be
+exhaustive: a row missed here never gets built, verified, or recorded.`,
   { label: 'inventory', phase: 'Inventory', agentType: 'Explore', schema: WORKLIST, effort: 'high' }
 );
 
@@ -256,9 +268,10 @@ if (scope) {
   if (!work.length) return { scopedOut: true, scope, note: 'No inventoried requirement matched the scope tokens; nothing to do.' };
 }
 
-// Requirements an agent actually builds/tests vs. pure-doc rows. The docs-only rows (concept/
-// glossary/acceptance) and the DELETED rows carry no executable AC; they are handled by the
-// doc/swap stages (a DELETED row is verified by the absence-of-"switch" check, not a new test).
+// Requirements an agent actually builds/tests vs. pure-doc rows. Doc-only rows are handled by
+// the doc wave. DELETED rows are not scheduled directly: their removal work rides with the
+// successor MODIFIED/NEW rows that rework the same files (per the md §0 legend), and they are
+// verified by their §Z forbidden-survivor grep coming up empty plus the successor row's AC.
 const buildable = work.filter((w) => w.change !== 'DELETED' && (w.acMethods || []).length > 0);
 const docOnly = work.filter((w) => (w.acMethods || []).length === 0 && w.change !== 'DELETED');
 const deletions = work.filter((w) => w.change === 'DELETED');
@@ -284,12 +297,18 @@ recording required: ${w.rec ? 'YES (▶)' : 'no'}).
 Read the relevant source, the inline spec in requirements-transition.md, and the mockup(s) before
 planning. Return the EXACT, COMPLETE set of files you will create/edit/delete (code AND tests AND
 schema/rubric/runbook/parity/coverage/mockup/context/prd.html section) — this list schedules non-conflicting
-parallel work, so precision matters. Provide concrete steps (for a NEW table: schema/migration FIRST,
-then core query, then CLI, then GUI). Provide an acPlan covering EVERY AC method in this requirement's
+parallel work, so precision matters. Provide concrete steps (for a NEW §14 setting: core key +
+validation FIRST, then the CLI/GUI consumers; the merge-conflict host moves from editor.js to app.js
+BEFORE anything assumes editor.js is gone). Where a §2 DELETED row targets your files (picker modal
+chrome, entries group-by control, Edit-tags control, row-inline edit form, datetime-local entry
+inputs), fold that removal into this plan — deletions ship with their successor rows; §Z only deletes
+whole files/docs. Provide an acPlan covering EVERY AC method in this requirement's
 AC column, each with the precise assertion. State the evidence regen step (evidence/judge/both/none).
 If this requirement is in the recording scope, give a recordingPlan (which GUI state/flow to drive,
-what the video must show); else "none". List dependsOn (schema before consumers; core query before its
-GUI view; nav shell before settings view). Set needsWorktree true ONLY if you expect a hard file
+what the video must show — the §W table in requirements-transition.md prescribes the shot list); else
+"none". List dependsOn (core settings before the picker/calendar viewports that read them; the unified
+form before the calendar's hover→edit wiring; the merge-conflict host move before editor.js deletion).
+Set needsWorktree true ONLY if you expect a hard file
 conflict that wave scheduling can't resolve.`,
       { label: `plan:${w.reqId}`, phase: 'Plan', schema: PLAN, effort: 'high' }
     )
@@ -365,9 +384,12 @@ Plan:
 - Steps: ${p.steps}
 - AC to add now: ${p.acPlan.map((a) => `${a.method} in ${a.file} (${a.what})`).join('; ')}
 
-Put real behavior in @stint/core where logic belongs; keep CLI/GUI thin and at PARITY. For a new
-table (favorite/report) write the schema/migration and core query first, then wire CLI and GUI over
-the SAME core API. Add any new GUI IPC channel to packages/gui/src/ipc.ts CHANNELS and a row in
+Put real behavior in @stint/core where logic belongs (settings validation, description first-line
+capping, CSV quoting); keep CLI/GUI thin and at PARITY. The renderer stays plain-JS view wiring:
+timepicker.js owns the inline interval picker (+ the start-only and Start/Stop-expander variants),
+app.js owns the entries calendar and the unified entry form. NO new GUI IPC channel is expected this
+transition (§14 settings flow through the existing setSetting); if you truly must add one, add it to
+packages/gui/src/ipc.ts CHANNELS and a row in
 acceptance/criteria/parity-matrix.json. Write the BDD/PROP/GOLD/JUDGE-fixture/MANUAL artifacts named in the
 plan as you go. Match surrounding style and the conventions above.
 
@@ -405,7 +427,7 @@ what this wave added, WITHOUT weakening any assertion. Then stop.`,
   if (!green) log(`⚠ Wave ${w + 1} still red after repair attempts — carrying failures into the Verify phase.`);
 }
 
-// Doc-only rows (the concept rewrite, context/prd.html badge/section text, mockup sync) — these touch
+// Doc-only rows (the §12 R18–R20 renumber, §17 R10/R11 wording, the §18 mockup sync) — these touch
 // only docs/HTML and the context/prd.html section text, so run them together after code lands.
 if (docOnly.length) {
   log(`Doc wave: ${docOnly.map((d) => d.reqId).join(', ')}`);
@@ -415,11 +437,13 @@ if (docOnly.length) {
         `${REPO}
 
 Apply the documentation change for ${d.reqId} — ${d.summary} (files hint: ${(d.files || []).join(', ') || 'docs'}).
-Edit the new docs (context/prd.html / context/concept.html / context/glossary.html / context/acceptance.html) and any mockup named,
-rendering the inline spec from requirements-transition.md in the legacy house style: add the \`core\`
-badge where ● is marked, drop every Windows/%APPDATA% mention, and cross-reference §20 hardening where
-the mapping says to. Keep mockups in sync with the PRD (PRD §18). Do NOT touch the *-old.html files
-(they are deleted at swap). Touch only docs/mockups.`,
+Edit the new docs (context/prd.html / context/glossary.html / context/acceptance.html / context/process.html) and any mockup named,
+rendering the inline spec from requirements-transition.md in the legacy house style AND the timeless
+voice (G19: never "new", "changed", "previously", "no longer" — the doc reads as if the product was
+always this way): add the \`core\` badge where ● is marked (§12 R17), record the §14 timeline-settings
+NOT-core exclusion where core labeling is discussed (prd.html §03), and keep cross-references (e.g.
+the §12 R18–R20 renumber) consistent. Keep mockups in sync with the PRD (PRD §18). Do NOT touch the
+*-old.html files (they are deleted at swap). Touch only docs/mockups.`,
         { label: `doc:${d.reqId}`, phase: 'Implement' }
       )
     )
@@ -436,9 +460,11 @@ await parallel([
   () => agent(
     `${REPO}
 
-Update acceptance/criteria/parity-matrix.json so EVERY GUI IPC channel now in packages/gui/src/ipc.ts CHANNELS
-(including the new favorite and saved-report channels) has a row mapping it to its tt command path(s)
-— §17 R14 parity for the new entities. Confirm packages/gui/test/parity.test.ts still asserts
+Update acceptance/criteria/parity-matrix.json for this transition: the listEntries row's notes lose
+grouping (grouped breakdowns now live only in reports), and the inline interval picker gets NO row
+(it adds zero capabilities over the existing add/edit channels). Confirm EVERY GUI IPC channel in
+packages/gui/src/ipc.ts CHANNELS still has a row mapping it to its tt command path(s) — no new
+channels are expected this transition — and that packages/gui/test/parity.test.ts still asserts
 completeness; extend it only if the channel-extraction shape changed. Run \`npm run test:gold\` and
 report pass/fail in your notes.`,
     { label: 'cover:parity', phase: 'Verify' }
@@ -446,25 +472,33 @@ report pass/fail in your notes.`,
   () => agent(
     `${REPO}
 
-Extend the JUDGE apparatus for the new/changed GUI surfaces: the full Timer view with the favorites
-rail (§12 R14, §05 R09/R10), the in-sidebar Reports view = saved reports (§12 R08), the visual
-time-range picker (§12 R15), the always-present fixed-width sidebar shell (§12 R03), the single-click
-popover / removed dropdown (§12 R01), and the one-clickability convention (§15). Add rubric items to
+Extend the JUDGE apparatus for the new/changed GUI surfaces: the UNIFIED_FORM scene (unified entry
+form add+edit inline in the Entries view — multiline description, inline interval picker, collapsed
+Start/Stop expander, edit-mode footer with Split + two-step Delete, overlap warning; §05 R05/R10,
+§06 R01/R02, §12 R06/R07/R15/R17), the ENTRIES_CALENDAR scene (fixed-width day columns, day-header
+billable totals, range chip, yellow warn bands, slept hatch, hover Delete/Split/Edit + corner
+checkbox, running future-fade; §12 R09/R10/R16, §06 R03/R04), the TIMELINE_WINDOW scene (§14
+settings driving the picker/calendar default viewports; §12 R12), the Timer inline start-only
+disclosure (§12 R14, §05 R06), and Reports custom range as two plain date fields (§09 R01). Rework
+away the retired TIME_RANGE_PICKER and ADD_FORM_PICKER scenes (UNIFIED_FORM / ENTRIES_CALENDAR are
+their successors). Add rubric items to
 acceptance/criteria/judge-rubric.md (machine-checkable → deterministic Playwright assertion in
 packages/gui/judge/run-judge.mjs; subjective → screenshot-only pass:null). Add fixtures to
 packages/gui/judge/fixtures.mjs (keep the pinned clock JUDGE_NOW). Do NOT run the judge harness yet.
-Keep existing items intact.`,
+Keep existing unrelated items intact.`,
     { label: 'cover:judge', phase: 'Verify' }
   ),
   () => agent(
     `${REPO}
 
-Append MANUAL "CHECK <TITLE>" procedures to acceptance/criteria/manual/runbook.md for the OS-reality items this
-transition introduced: §16 update-mid-timer / backup-on-launch / corruption-recovery; §17 R12 backups
-& recovery; §17 R13 install & update; §19 R01–R06 (build matrix, single installer, in-app update
-check/download, publish-on-merge, date/build versioning); §20 R03/R05 integrity-check & corruption
-recovery. Numbered steps + verify bullets, matching the existing format. Don't duplicate existing
-procedures.`,
+Append MANUAL "CHECK <TITLE>" procedures to acceptance/criteria/manual/runbook.md for the hands-on items this
+transition introduced: picker drag interactions (§12 R15 — body-move + bottom-grip resize on the
+5-min snap); overnight backfill via the Start/Stop expander (§12 R17); manual add via the inline
+picker (§05 R05, §12 R07); unified-editor edit + two-step Delete (§06 R01, §12 R06); multi-select
+merge via corner checkboxes (§06 R03); running-entry start-only adjust with future fade (§05 R06,
+§12 R14); and the entries calendar hover controls + horizontal scroll (§12 R16). Numbered steps +
+verify bullets, matching the existing format. Retire any runbook procedure that drove the old picker
+modal or entry-list rows. Don't duplicate existing procedures.`,
     { label: 'cover:manual', phase: 'Verify' }
   ),
 ]);
@@ -524,13 +558,18 @@ const archReview = await agent(
 CODE-QUALITY & ARCHITECTURE REVIEW of everything this transition changed (diff against the merge-base
 of the working branch). Adapt Matt Pocock's improve-codebase-architecture method:
   - Hunt SHALLOW MODULES (big interface, little behind it), LEAKY SEAMS (abstractions that force
-    callers to know internals; core logic that leaked into cli/gui shells), POOR LOCALITY (related
-    logic scattered; the favorite/report flows split awkwardly across core/cli/gui), and COGNITIVE
+    callers to know internals; core logic re-derived in the renderer — description capping,
+    settings validation, window math), POOR LOCALITY (related
+    logic scattered; the picker/calendar/unified-form flows split awkwardly across
+    app.js/timepicker.js), and COGNITIVE
     BOUNCE (a reader must jump across many files to follow one behavior).
   - Apply the DELETION TEST to every new abstraction/module/wrapper: could it be deleted or inlined
-    with no loss? If yes, that's a finding.
-  - Pay attention to the new core entities (favorite, report), the schema/migration, the visual
-    time-range picker component, and the durability/backup code (§20).
+    with no loss? If yes, that's a finding. Also check removed-concept code truly left no residue
+    (picker modal chrome, entries group-by wiring, Edit-tags, row-inline edit form, editor.js remnants).
+  - Pay attention to the inline interval picker (timepicker.js), the entries-calendar rendering in
+    app.js, DUPLICATED window/viewport math between the picker and the calendar (§14 settings
+    consumers), the merge-conflict host moved out of editor.js, and parity discipline (no new IPC
+    without a parity row).
 Rate each finding Strong / Worth exploring / Speculative, give file:symbol locations, state the
 deletion-test result, and a concrete behavior-preserving recommendation. Give ONE topRecommendation.
 Set clean=true ONLY if there are no Strong findings left. Recommendations must NOT weaken any AC.`,
@@ -651,8 +690,8 @@ const reviewsClean = allAcSufficient && archClean;
 // ===========================================================================
 // PHASE 7 — Recordings (QA evidence). GATED TO RUN LAST: only after plan →
 // implement → verify(AC) → both reviews → improve. These are NOT executable AC;
-// they are PR QA evidence. Scope per §W: core-flow GUI ∪ Rec ▶ ∪ code-change-
-// adjacent GUI. Drive the GUI via the repo's existing Playwright/judge harness
+// they are PR QA evidence. Scope per §W: every core (●) GUI row ∪ every Rec ▶
+// row. Drive the GUI via the repo's existing Playwright/judge harness
 // with video recording; if a capability is missing, NOTE it — never fake it.
 // ===========================================================================
 phase('Recordings');
@@ -679,8 +718,9 @@ if (recTargets.length) {
     `${REPO}
 
 Set up screen-RECORDING capability by reusing the existing JUDGE harness (packages/gui/judge/
-run-judge.mjs + fixtures.mjs, Playwright + pinned clock). Add a recording entry point (e.g.
-packages/gui/judge/record.mjs) that launches the SAME renderer/window setup with Playwright
+run-judge.mjs + fixtures.mjs, Playwright + pinned clock). Add — or update, if a prior transition
+left one — the recording entry point
+packages/gui/judge/record.mjs that launches the SAME renderer/window setup with Playwright
 \`recordVideo\` enabled, drives a named fixture state, and captures a video. Do NOT change any
 existing judge behavior or rubric.
 
@@ -715,8 +755,11 @@ ${p && p.recordingPlan && p.recordingPlan !== 'none' ? `Recording plan: ${p.reco
 Use the recording entry point from rec:setup (with the visible synthetic cursor + click-pulse +
 element highlight). Save a slowed, ASCII-named GIF to acceptance/evidence/recordings/<ascii-slug>.gif
 (slug the requirement id, e.g. "§12 R15" → "12-r15.gif"). The GIF must SHOW the requirement being
-exercised (e.g. start/stop/add for §05; favorites rail resume for §05 R09/R10; saved-report run/export
-for §12 R08; range-picker drag for §12 R15; backup/restore for §20; update check/download for §19) AND
+exercised per the §W shot-list table in requirements-transition.md (e.g. drag-add on the inline picker
+for §05 R05/§12 R07/§12 R15; the overnight expander entry for §12 R17; the start-only future-fade drag
+for §05 R06/§12 R14; the fixed-width week calendar + horizontal scroll for §12 R16; multi-select merge
+for §06 R03; warn bands + slept hatch for §06 R04/§12 R10; Timeline settings moving the default window
+for §12 R12/§14; the two plain date fields for §09 R01; the multiline description for §05 R10) AND
 make each interaction visible (cursor travel + click pulse on every action). Return captured=true, the
 committed GIF path, and \`shows\` = a concise one-line description of what the GIF demonstrates (this is
 used verbatim as the PR caption). If the harness cannot record/convert here, return captured=false and
@@ -764,8 +807,9 @@ Aggregate this transition into ONE GitHub PR on the CURRENT working branch (do N
 branch directly; commit on the working branch and open the PR FROM it INTO the default branch).
 
 1. Stage and commit all changes from this transition with a clear message describing the requirements
-   delivered (favorites, saved reports, full Timer view, visual range picker, durability/backups,
-   packaging/update flow, Windows removal, the core relabeling, and all AC + evidence). Use the repo's
+   delivered (the inline interval picker + unified entry form + Start/Stop expander, the readonly
+   entries calendar, multiline descriptions, the tt list cap / grouping-to-Reports move, the §14
+   timeline-window settings, and all AC + evidence). Use the repo's
    commit trailer convention.
 2. Push the working branch and create a PR that is READY FOR REVIEW (not draft). Body must include:
    - a one-paragraph summary of the transition;
@@ -814,20 +858,38 @@ if (!swapGate) {
 
 Every requirement now has passing AC evidence and both reviews are clean. Perform the §Z old→new SWAP
 on the CURRENT PR branch (commit; do NOT merge — the human gate is the PR merge), then push so it lands
-on the open PR. Read requirements-transition.md §Z for the AUTHORITATIVE delete/reference list and act on
-exactly what it names (do NOT delete files §Z does not list). For THIS (Switch-removal) transition §Z is:
-  - DELETE the *-old.html files §Z lists (context/prd-old.html, context/concept-old.html,
-    context/glossary-old.html, context/acceptance-old.html).
+on the open PR. Read requirements-transition.md §Z for the AUTHORITATIVE delete/rename/reference/grep
+list and act on exactly what it names (do NOT delete files §Z does not list). Inventory captured it as:
+${JSON.stringify(inv.swapTargets || {})}
+For THIS (issue-43 interval-picker / entries-calendar) transition §Z is:
+  - DELETE the *-old.html docs §Z lists (context/prd-old.html, context/glossary-old.html,
+    context/acceptance-old.html, context/process-old.html) and the retired mockup
+    context/mockups/time-range-picker.html.
+  - DELETE packages/gui/renderer/editor.js — but FIRST confirm its merge-conflict dialog host already
+    moved to app.js (§06 R03 / the §12 modal-editor row); if it has not, STOP and report instead of
+    deleting.
   - DELETE requirements-transition.md (this mapping).
-  - There are NO GUI files folded away and NO legacy workflow to delete in this transition — Switch was an
-    alias/affordance, not a standalone page. Confirm no "switch" verb/affordance/alias/term remains anywhere
-    (code, specs, parity-matrix, COVERAGE, runbook, docs); the only allowed "switch" survivors are the
-    intentional negations in the docs ("no separate switch action") and the generic English verb in concept.html.
+  - RENAME features/parity_new_entities.feature → features/parity_favorites_saved_reports.feature
+    (§17 R14) and update every reference that names it (COVERAGE.md, prd.html §17 R14, test globs).
   - Ensure README.md, CLAUDE.md, acceptance/criteria/COVERAGE.md, and acceptance/criteria/parity-matrix.json reference
-    ONLY the new docs and surfaces; fix any dangling links to the deleted *-old.html files.
+    ONLY the new docs and surfaces: drop time-range-picker from CLAUDE.md's mockup list (its only stale
+    reference); in COVERAGE.md retitle §17 R14 and replace time-range-picker / datetime-local /
+    TIME_RANGE_PICKER / ADD_FORM_PICKER references with their successors; in parity-matrix.json strip
+    grouping from the listEntries row notes and add NO picker row (it adds zero capabilities); fix any
+    dangling links to the deleted files.
+  - FORBIDDEN-SURVIVOR GREPS — run each and confirm EMPTY within its scope:
+      time-range-picker (repo-wide) · editor.js (repo-wide: file gone, no script tag or doc reference) ·
+      parity_new_entities (repo-wide) · -old.html references (repo-wide) ·
+      datetime-local in packages/gui/renderer/ entry-time surfaces + acceptance/criteria/ (plain *date*
+      range inputs per G3 are the ONLY allowed survivors) ·
+      --by inside the list subcommand block of packages/cli/src/program.ts (the report command keeps
+      its --by) ·
+      "Edit tags", stp-backdrop / stp-apply, and the entries group-by wiring (entries-ctrl grouping /
+      list groupBy) in packages/gui/renderer/ ·
+      TIME_RANGE_PICKER / ADD_FORM_PICKER in packages/gui/judge/ + acceptance/criteria/.
 Then run \`npm run build && npm test && npm run verify:no-network\` once more to confirm nothing
-referenced the deleted files, commit the swap, and push to the PR branch. Report what was deleted,
-what references were fixed, and whether the tree is still green.`,
+referenced the deleted files, commit the swap, and push to the PR branch. Report what was deleted and
+renamed, what references were fixed, each grep result, and whether the tree is still green.`,
     { label: 'swap', phase: 'Swap', effort: 'high' }
   );
   swap = { performed: true, reason: 'all-green; swap committed to PR branch' };
