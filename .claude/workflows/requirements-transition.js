@@ -416,7 +416,7 @@ instead of editing.`,
 Run \`npm run build\` then \`npm test\`. Report build success, whether ALL tests pass, and the exact
 failing test names with the key error line for any failures. Do not fix anything — just report.
 (judge/evidence/noNetwork: report false here; they run in the Verify phase.)`,
-      { label: `verify-wave-${w + 1}`, phase: 'Implement', schema: SUITE, effort: 'high' }
+      { label: `verify-wave-${w + 1}`, phase: 'Implement', schema: SUITE, model: 'opus', effort: 'high' }
     );
     if (!check) { log(`verify-wave-${w + 1} attempt ${attempt + 1} returned null (agent died) — retrying`); continue; }
     if (check.build && check.testPassed) { green = true; break; }
@@ -521,7 +521,7 @@ Run, in order, and report each result precisely:
   npm run evidence     (regenerates acceptance/evidence/cli-transcript.md)
 Return build, testPassed, judge, evidence, noNetwork booleans, the list of any failures with their
 key error line, and a one-paragraph summary. Do not fix anything here.`,
-  { label: 'regen-evidence', phase: 'Verify', schema: SUITE, effort: 'high' }
+  { label: 'regen-evidence', phase: 'Verify', schema: SUITE, model: 'opus', effort: 'high' }
 ) || { build: false, testPassed: false, judge: false, evidence: false, noNetwork: false, failures: ['regen-evidence agent died'] };
 log(`Verify/evidence: build=${suite.build} tests=${suite.testPassed} judge=${suite.judge} evidence=${suite.evidence} no-network=${suite.noNetwork}`);
 
@@ -650,7 +650,7 @@ green. If a finding turns out to be wrong or risky, skip it and say why in your 
 Run \`npm run build && npm test && npm run verify:no-network\`, then regenerate evidence
 (\`npm run judge\` and \`npm run evidence\`). Report build/testPassed/judge/evidence/noNetwork and any
 failures with the key error line. Do not fix anything.`,
-    { label: `improve-guard-r${round + 1}`, phase: 'Improve', schema: SUITE, effort: 'high' }
+    { label: `improve-guard-r${round + 1}`, phase: 'Improve', schema: SUITE, model: 'opus', effort: 'high' }
   ) || { build: false, testPassed: false, failures: ['improve-guard agent died'] };
   if (!(guard.build && guard.testPassed)) {
     log(`⚠ Improve round ${round + 1} regressed the build/tests: ${(guard.failures || []).slice(0, 5).join(' | ')} — repairing before re-review.`);
@@ -776,7 +776,7 @@ make each interaction visible (cursor travel + click pulse on every action). Ret
 committed GIF path, and \`shows\` = a concise one-line description of what the GIF demonstrates (this is
 used verbatim as the PR caption). If the harness cannot record/convert here, return captured=false and
 NOTE the missing capability and what a human must do — never fabricate a file.`,
-        { label: `rec:${id}`, phase: 'Recordings', schema: RECORDING }
+        { label: `rec:${id}`, phase: 'Recordings', schema: RECORDING, model: 'opus' }
       );
     })
   )).filter(Boolean);
@@ -796,7 +796,7 @@ const finalSuite = (await agent(
 Final evidence regen — run in order and report precisely: \`npm run build\`, \`npm test\`,
 \`npm run verify:no-network\`, \`npm run judge\`, \`npm run evidence\`. Return the five booleans, any
 failures with the key error line, and a one-paragraph summary. Do not fix anything.`,
-  { label: 'final-evidence', phase: 'PR', schema: SUITE, effort: 'high' }
+  { label: 'final-evidence', phase: 'PR', schema: SUITE, model: 'opus', effort: 'high' }
 )) || { build: false, testPassed: false, judge: false, evidence: false, noNetwork: false };
 log(`Final evidence: build=${finalSuite.build} tests=${finalSuite.testPassed} judge=${finalSuite.judge} evidence=${finalSuite.evidence} no-network=${finalSuite.noNetwork}`);
 
