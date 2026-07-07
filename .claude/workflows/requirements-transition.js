@@ -248,6 +248,7 @@ Rec ▶ row (GUI-only: where a row's tt side is CLI, the transcript is the evide
 exhaustive: a row missed here never gets built, verified, or recorded.`,
   { label: 'inventory', phase: 'Inventory', agentType: 'Explore', schema: WORKLIST, effort: 'high' }
 );
+if (!inv) throw new Error('inventory agent died — nothing to work from; resume the run');
 
 // scopeTo: narrow a calibration run to a subset of requirement ids. args may be a string,
 // an array of strings, or { scopeTo: [...] }. Each token is matched case-insensitively
@@ -521,7 +522,7 @@ Run, in order, and report each result precisely:
 Return build, testPassed, judge, evidence, noNetwork booleans, the list of any failures with their
 key error line, and a one-paragraph summary. Do not fix anything here.`,
   { label: 'regen-evidence', phase: 'Verify', schema: SUITE, effort: 'high' }
-);
+) || { build: false, testPassed: false, judge: false, evidence: false, noNetwork: false, failures: ['regen-evidence agent died'] };
 log(`Verify/evidence: build=${suite.build} tests=${suite.testPassed} judge=${suite.judge} evidence=${suite.evidence} no-network=${suite.noNetwork}`);
 
 // ===========================================================================
@@ -650,7 +651,7 @@ Run \`npm run build && npm test && npm run verify:no-network\`, then regenerate 
 (\`npm run judge\` and \`npm run evidence\`). Report build/testPassed/judge/evidence/noNetwork and any
 failures with the key error line. Do not fix anything.`,
     { label: `improve-guard-r${round + 1}`, phase: 'Improve', schema: SUITE, effort: 'high' }
-  );
+  ) || { build: false, testPassed: false, failures: ['improve-guard agent died'] };
   if (!(guard.build && guard.testPassed)) {
     log(`⚠ Improve round ${round + 1} regressed the build/tests: ${(guard.failures || []).slice(0, 5).join(' | ')} — repairing before re-review.`);
     await agent(
@@ -864,7 +865,7 @@ if (!swapGate) {
   log(`Swap SKIPPED — gate not met: ${swap.reason}`);
 } else {
   log('Swap gate MET — performing §Z old→new swap on the PR branch.');
-  await agent(
+  const swapResult = await agent(
     `${REPO}
 
 Every requirement now has passing AC evidence and both reviews are clean. Perform the §Z old→new SWAP
@@ -903,7 +904,9 @@ referenced the deleted files, commit the swap, and push to the PR branch. Report
 renamed, what references were fixed, each grep result, and whether the tree is still green.`,
     { label: 'swap', phase: 'Swap', effort: 'high' }
   );
-  swap = { performed: true, reason: 'all-green; swap committed to PR branch' };
+  swap = swapResult
+    ? { performed: true, reason: 'all-green; swap committed to PR branch' }
+    : { performed: false, reason: 'swap agent died — gate was met; resume to retry the swap' };
 }
 
 // ---------------------------------------------------------------------------
