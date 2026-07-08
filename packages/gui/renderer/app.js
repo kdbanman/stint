@@ -18,7 +18,9 @@ let searchQuery = '';
 // is idle (default Day grouping, This-week-or-wider window, no filters) — in which case
 // render() paints the day-grouped getState exactly as before, so the existing JUDGE and
 // empty-state facts hold. A control change or search keystroke re-queries and repaints.
-const entryQuery = { preset: 'week', by: 'day', billable: 'all', clientId: null, projectId: null, tag: '', fromUtc: null, toUtc: null };
+// §09 R01: fromDate/toDate are the custom range's two PLAIN DATES (raw `YYYY-MM-DD` field
+// strings, no time component) — main resolves them to the inclusive-end-day local window.
+const entryQuery = { preset: 'week', by: 'day', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
 let entryGroups = null;
 
 // True once the user touches any control (range/group-by/filter) — the search box alone
@@ -212,7 +214,12 @@ function renderLiveEdit(running) {
   const strip = $('live-edit');
   if (!strip) return;
   strip.hidden = !running;
-  if (!running) return;
+  if (!running) {
+    // §05 R06: collapse the inline start-only disclosure with the strip, so a later timer
+    // never resumes a stale expanded state (the toggle's aria-expanded resets with it).
+    closeLeStartDisc();
+    return;
+  }
   // Seed the fields from the running entry, but only when not focused — so a debounced commit
   // mid-typing (or a 1s tick repaint) never clobbers what the user is editing.
   const desc = $('le-desc');
@@ -242,8 +249,13 @@ function liveEditPatch(strip) {
   }
   const start = $('le-start');
   if (start && start.value) {
-    const nextIso = new Date(start.value).toISOString();
-    if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+    // §12 R14 (G1): #le-start is a RAW text field (localInputValue format) — a half-typed
+    // value can be unparseable, so an invalid instant contributes nothing to the patch.
+    const parsed = new Date(start.value);
+    if (!isNaN(parsed.getTime())) {
+      const nextIso = parsed.toISOString();
+      if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+    }
   }
   const bill = $('le-bill');
   if (bill && String(bill.checked) !== strip.dataset.seedBill) patch.billable = bill.checked;
@@ -854,10 +866,12 @@ async function openEditForm(row, e) {
   });
   // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's
   // own time inputs. The closed entry's picker carries both start+stop; the running (open)
-  // entry's form has only a Start field (no End), so its picker is seeded start-only and
-  // never writes a stop — editing the open row cannot close it (§05 R6). The picker writes
-  // localInputValue strings back into the inputs (text stays authoritative) — the submit
-  // path then sends the same patch over window.stint.edit unchanged.
+  // entry's form has only a Start field (no End), so its picker is seeded START-ONLY
+  // (§05 R06): the running block fades into the future with a start grip only — no end
+  // grip, label, or echo — and the picker never computes or writes a stop (end fields stay
+  // empty, never a synthetic "now"), so editing the open row cannot close it. The picker
+  // writes localInputValue strings back into the inputs (text stays authoritative) — the
+  // submit path then sends the same patch over window.stint.edit unchanged.
   const editStartInput = form.querySelector('.edit-start');
   const editEndInput = running ? null : form.querySelector('.edit-end');
   for (const pick of form.querySelectorAll('.edit-pick')) {
@@ -980,7 +994,14 @@ $('toggle').addEventListener('click', async () => {
   const leStart = $('le-start');
   const leBill = $('le-bill');
   if (leDesc) leDesc.addEventListener('input', scheduleLiveEdit);
-  if (leStart) leStart.addEventListener('change', () => void commitLiveEdit());
+  // §05 R06: the Start text field rides the DEBOUNCED commit — typing settles into one
+  // patch, and the inline start-only picker's live per-drag writes (each firing input +
+  // change) coalesce the same way. Every commit is commitLiveEdit → liveEditPatch, whose
+  // patch NEVER carries endUtc, so amending the start can never stop the open row.
+  if (leStart) {
+    leStart.addEventListener('input', scheduleLiveEdit);
+    leStart.addEventListener('change', scheduleLiveEdit);
+  }
   if (leBill) leBill.addEventListener('change', () => void commitLiveEdit());
   // Tags + client/project are richer than a single inline field, so they route to the
   // consolidated editor (window.SE.openEditor) for the OPEN entry — which omits the End field
@@ -1097,9 +1118,12 @@ async function applyEntryQuery() {
   updateLiveTotal();
   const q = { by: entryQuery.by, billable: entryQuery.billable };
   if (entryQuery.preset === 'custom') {
-    if (!entryQuery.fromUtc || !entryQuery.toUtc) return; // wait for a complete custom range
-    q.fromUtc = entryQuery.fromUtc;
-    q.toUtc = entryQuery.toUtc;
+    if (!entryQuery.fromDate || !entryQuery.toDate) return; // wait for a complete date pair
+    // §09 R01 (G3): a custom range is a pair of PLAIN DATES — the two fields' raw
+    // `YYYY-MM-DD` strings travel verbatim; main resolves the inclusive-end-day local
+    // window (the renderer constructs no Date and derives no window).
+    q.fromDate = entryQuery.fromDate;
+    q.toDate = entryQuery.toDate;
   } else {
     q.preset = entryQuery.preset;
   }
@@ -1131,8 +1155,9 @@ function selectSegment(group, btn) {
 }
 
 // Range presets (parity with `tt list --today/--week/…/--range`). A preset sends its name
-// (resolved through core's resolveRange in main); Custom reveals the from/to inputs whose
-// Apply sends explicit UTC bounds. This-week is the default active chip.
+// (resolved through core's resolveRange in main); Custom reveals the two plain date
+// fields (§09 R01 / G3) which apply LIVE once both are set — there is no Apply button.
+// This-week is the default active chip.
 const elPresetSeg = $('el-preset-seg');
 const elCustomRange = $('el-custom-range');
 if (elPresetSeg) {
@@ -1143,20 +1168,22 @@ if (elPresetSeg) {
     entryQuery.preset = btn.dataset.preset;
     const custom = entryQuery.preset === 'custom';
     if (elCustomRange) elCustomRange.hidden = !custom;
-    // A named preset queries immediately; Custom waits for Apply (a complete from/to).
-    if (!custom) activateEntryQuery();
-    else entryCtrlActive = true;
+    // A named preset queries immediately; Custom marks the bar active and waits for a
+    // complete date pair (the two date fields below apply live) — applyEntryQuery no-ops
+    // until both dates are set.
+    activateEntryQuery();
   });
 }
-const elRangeApply = $('el-range-apply');
-if (elRangeApply) {
-  elRangeApply.addEventListener('click', () => {
-    const from = $('el-range-from').value;
-    const to = $('el-range-to').value;
-    if (!from || !to) return;
-    entryQuery.fromUtc = new Date(from).toISOString();
-    entryQuery.toUtc = new Date(to).toISOString();
-    activateEntryQuery();
+// §09 R01: the two plain date fields. Each change stores the field's raw `YYYY-MM-DD`
+// string (no Date construction — main owns the plain-date → window rule) and re-queries
+// LIVE once both dates are populated.
+for (const id of ['el-range-from', 'el-range-to']) {
+  const field = $(id);
+  if (!field) continue;
+  field.addEventListener('change', () => {
+    entryQuery.fromDate = $('el-range-from').value || null;
+    entryQuery.toDate = $('el-range-to').value || null;
+    if (entryQuery.fromDate && entryQuery.toDate) activateEntryQuery();
   });
 }
 
@@ -1428,26 +1455,44 @@ function openAddRangePicker(focusField) {
 $('add-from-pick').addEventListener('click', () => openAddRangePicker('add-from'));
 $('add-to-pick').addEventListener('click', () => openAddRangePicker('add-to'));
 
-// §12 R15: the running entry's live-edit start (#le-start) opens the picker SEEDED START-ONLY
-// — there is no End input on the open row (editing it must never close the timer, §05 R6), so
-// the picker shows only a start handle and never writes a stop. The picker writes the start
-// back into #le-start and fires its `change` event, which the live-edit strip already commits
-// over window.stint.edit with a patch that never carries endUtc.
+// §05 R06 / §12 R14/R15: the running entry's Start field carries an INLINE start-only
+// DISCLOSURE of the interval picker — expanded in flow into #le-start-disc below the field
+// (no modal, no backdrop, no Apply). The picker renders the running block with a start grip
+// only, fading into the future (G8); every grip drag 5-min-snaps and writes #le-start LIVE
+// (input+change), riding the strip's debounced commitLiveEdit → window.stint.edit path whose
+// liveEditPatch NEVER carries endUtc — so amending the start can never stop the open row or
+// synthesize an end. Text stays authoritative: the picker only ever writes the text field.
+function closeLeStartDisc() {
+  const disc = $('le-start-disc');
+  const toggle = $('le-start-pick');
+  if (disc) {
+    disc.hidden = true;
+    disc.innerHTML = '';
+  }
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
+}
 {
   const leStartPick = $('le-start-pick');
-  if (leStartPick) {
+  const leStartDisc = $('le-start-disc');
+  if (leStartPick && leStartDisc) {
     leStartPick.addEventListener('click', () => {
       const leStart = $('le-start');
-      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-        leStart.focus();
+      if (leStartPick.getAttribute('aria-expanded') === 'true') {
+        closeLeStartDisc(); // second click collapses the disclosure
         return;
       }
-      window.STP.open({
-        startInput: leStart,
-        endInput: null, // start-only: the open row has no stop
+      if (typeof window.STP === 'undefined' || typeof window.STP.openStartOnly !== 'function') {
+        leStart.focus(); // picker unavailable — text entry is always reachable
+        return;
+      }
+      window.STP.openStartOnly({
+        host: leStartDisc,
+        startInput: leStart, // the ONLY binding — this variant takes no end input at all
         otherEntries: snapshotEntries(state?.status?.entry?.id ?? null),
-        onApply: () => {},
+        settings: state?.settings ?? null,
       });
+      leStartDisc.hidden = false;
+      leStartPick.setAttribute('aria-expanded', 'true');
     });
   }
 }

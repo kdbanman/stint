@@ -43,6 +43,7 @@ import {
   timerViewEmptyFavoritesState,
   savedReportsState,
   settingsState,
+  timelineWindowState,
   backupsState,
   recoveryState,
   pickerState,
@@ -935,30 +936,34 @@ const RECIPES = {
       await page.click('.entry[data-id="1"] form.edit-form .edit-cancel');
       await wait(page, 500);
 
-      // ===== (3) EDIT-RUNNING-START — Timer view live-edit, picker seeded START-ONLY (no stop) =====
+      // ===== (3) EDIT-RUNNING-START — the INLINE START-ONLY disclosure (§05 R06, no modal) =====
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
       await wait(page, 600);
-      // Open the picker from the running Start field's calendar icon (#le-start-pick). The open row
-      // has NO stop, so the picker is seeded START-ONLY: only a thin start handle shows — no resize,
-      // no stop — editing the open row can never close the timer (§05 R6).
+      // The running Start field's calendar affordance DISCLOSES the start-only picker inline,
+      // in flow below the field — no modal, no backdrop, no Apply. The open row has NO stop,
+      // so the running block fades into the future with a START grip only — no resize handle,
+      // no end label — editing the open row can never close the timer (§05 R06). (The dedicated
+      // 'running-start-only' recipe below is the §05 R06 QA evidence; this beat keeps the R15
+      // every-surface tour complete.)
       await page.click('#le-start-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      // Confirm there is NO resize handle (start-only) on camera.
-      await page.waitForSelector('.stp-block.me .stp-resize', { state: 'detached' }).catch(() => {});
+      await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
       await wait(page, 900);
-      // DRAG the thin start handle UP -20px (≈ -40min, 5-min snap): start 12:00 → ~11:20.
-      const r0 = await meBox();
-      const rGrabX = Math.round(r0.cx);
-      const rGrabY = Math.round((r0.top + r0.bottom) / 2);
+      // DRAG the start grip UP -20px (≈ -40min, 5-min snap): start 12:00 → 11:20, written LIVE
+      // into #le-start (no Apply — the text field is the authoritative commit path).
+      const grip3 = page.locator('#le-start-disc .stp-grip');
+      await grip3.scrollIntoViewIfNeeded();
+      const r0 = await grip3.boundingBox();
+      const rGrabX = Math.round(r0.x + r0.width / 2);
+      const rGrabY = Math.round(r0.y + r0.height / 2);
       await page.mouse.move(rGrabX, rGrabY);
       await page.mouse.down();
       await page.mouse.move(rGrabX, rGrabY - 20, { steps: 16 });
       await page.mouse.up();
       await wait(page, 1000);
-      // APPLY → writes ONLY #le-start (no stop ever written); dwell so the new start is legible.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
+      // Collapse the disclosure — the amended start stands in the Start text field.
+      await page.click('#le-start-pick');
+      await page.waitForSelector('#le-start-disc[hidden]', { state: 'attached' });
       await wait(page, 1200);
 
       // ===== (4) OVERNIGHT VIA TEXT — text remains authoritative, picker degrades to focus =====
@@ -985,6 +990,75 @@ const RECIPES = {
       }
       // Dwell on the typed overnight text values standing as the authoritative span.
       await wait(page, 1600);
+    },
+  },
+
+  // §05 R06 / §12 R14 — the RUNNING entry's inline START-ONLY picker disclosure. On the
+  // canonical running snapshot (open row 'auth refactor', started 21:35Z, two closed same-day
+  // entries painting gray; page pinned to UTC so the geometry is deterministic), the recording
+  // routes to the Timer view, expands the disclosure from the Start field's calendar
+  // affordance — IN FLOW below the field, no modal/backdrop — showing the running block with a
+  // start grip only and its transparency fade dissolving toward the future (no end grip, no
+  // end label, no end field anywhere). It then drags the grip UP -30px (= -60min on the
+  // 720px/24h track, 5-min snap: 21:35 → 20:35), each step writing the raw #le-start text
+  // LIVE, and finally steps the pinned clock so the count-up visibly keeps ticking — editing
+  // the open row never stops it and never synthesizes an end (§05 R06).
+  'running-start-only': {
+    page: 'index.html',
+    state: timerViewRunningState,
+    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Running timer — adjust its start inline (§05 R06)'));
+      await wait(page, 900);
+      // Expand the start-only disclosure — in flow below the Start field, no modal chrome.
+      await page.click('#le-start-pick');
+      await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Start-only picker, in flow: a start grip, no end — the block fades into the future'));
+      await wait(page, 1400);
+      // Make the debounced live-edit commit visibly APPLY on the repaint: scope an `edit`
+      // override that applies the startUtc patch to the open row in __STATE__ (faithful to
+      // core's edit-on-open-row — never an endUtc, the row stays open), so the post-commit
+      // load() does not snap the Start field back to the stale injected snapshot on camera.
+      await page.evaluate(() => {
+        window.stint.edit = (p) => {
+          window.__EDITED__ = p;
+          const st = window.__STATE__;
+          const patch = (p && p.patch) || {};
+          const apply = (e) => {
+            if (e.id === p.id && 'startUtc' in patch) e.startUtc = patch.startUtc;
+            // endUtc is NEVER in a live-edit patch — the open row stays open (§05 R06).
+          };
+          if (st.status?.entry) apply(st.status.entry);
+          for (const d of st.days || []) for (const e of d.entries) apply(e);
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+      // Drag the start grip UP -30px (-60min, 5-min snap): 21:35 → 20:35, written LIVE into
+      // the raw #le-start text field on every step (no Apply anywhere).
+      const grip = page.locator('#le-start-disc .stp-grip');
+      await grip.scrollIntoViewIfNeeded();
+      const g = await grip.boundingBox();
+      const gx = Math.round(g.x + g.width / 2);
+      const gy = Math.round(g.y + g.height / 2);
+      await page.mouse.move(gx, gy);
+      await page.mouse.down();
+      await page.mouse.move(gx, gy - 30, { steps: 20 });
+      await page.mouse.up();
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Drags write Start live (5-min snap) — the end stays empty, never a synthetic now'));
+      await wait(page, 1300);
+      // Step the pinned clock so the count-up visibly keeps ticking after the start edit —
+      // amending the start never stops the open row (§05 R06).
+      for (let i = 1; i <= 3; i++) {
+        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
+        await wait(page, 400);
+      }
+      await wait(page, 900);
     },
   },
 
@@ -1297,10 +1371,13 @@ const RECIPES = {
       await page.waitForSelector('#timer-card.running');
       await wait(page, 600);
 
-      // 2b — change the START TIME via the editable datetime-local; its `change` commits an
-      // `edit` patch carrying startUtc (and never endUtc). The row stays open/running.
+      // 2b — change the START TIME via the raw text Start field (localInputValue format —
+      // §12 R14/G1, no datetime-local); its edits ride the same 500ms debounced commit as the
+      // description (and as the inline start-only picker's live drag writes), so advance the
+      // pinned clock to flush the `edit` patch carrying startUtc (and never endUtc).
       await page.fill('#live-edit #le-start', '2026-06-24T21:15');
       await page.dispatchEvent('#live-edit #le-start', 'change');
+      await tickClock(1, 0);
       await page.waitForFunction(() => !!window.__EDITED__ && 'startUtc' in (window.__EDITED__.patch || {}));
       await page.waitForSelector('#timer-card.running');
       await wait(page, 600);
@@ -1646,6 +1723,119 @@ const RECIPES = {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
       await wait(page, 1000);
+    },
+  },
+
+  // §12 R12 / §14 timeline-settings (§W — shared shot) — the Settings → Timeline group (G15)
+  // and the default viewport it drives (G16). The recording routes to Settings, dwells on the
+  // Timeline group (the paired HH:MM working-hours inputs reading the stored 09:00–15:00, the
+  // Picker-window segment, the disabled Around select), then SHOWS the four beats:
+  //   1) edit Working hours start (a valid HH:MM persists over the existing setSetting channel
+  //      and reads back on the repaint);
+  //   2) attempt an INVALID end (06:00 — inverts the start<end pair): the write is REJECTED and
+  //      the re-render reverts the field to stored truth on camera (the recipe scopes a
+  //      setSetting override that validates exactly as core does, so the mock is as strict as
+  //      the real channel — recipe-scoped, no JUDGE behavior touched);
+  //   3) flip Picker window → Around now: the Around select ENABLES (row loses 'off') and a
+  //      12 h span persists;
+  //   4) once §12 R15/R16 land, close on the CONSUMER: the entries calendar / picker opens to
+  //      the configured window as a scroll default over the full 24h track, never a clipped
+  //      one (guarded on the [data-timeline-track] hook; before the consumer rows land the
+  //      recording ends on the Settings beat — re-record in the workflow's last phase).
+  // The tt half of this requirement (config set/ls parity) is CLI evidence and lives in the
+  // transcript (§W: no GIF for CLI surfaces).
+  'timeline-window-settings': {
+    page: 'index.html',
+    state: timelineWindowState,
+    contextOpts: { viewport: { width: 820, height: 900 } },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('[data-view="settings"]:not([hidden])');
+      await page.waitForSelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]');
+      await page.evaluate(() => {
+        window.__recCaption && window.__recCaption('Settings → Timeline: working hours + picker window (§14)');
+        document
+          .querySelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]')
+          ?.scrollIntoView({ block: 'center' });
+      });
+      await wait(page, 1400);
+
+      // Scope a core-faithful setSetting: the injected mock accepts anything, but the REAL
+      // channel rejects a malformed HH:MM / inverted pair / out-of-range span — mirror that
+      // strictness here so the revert-on-reject beat below is honest. Recipe-scoped only.
+      await page.evaluate(() => {
+        const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+        window.stint.setSetting = (p) => {
+          const s = window.__STATE__.settings;
+          const next = { ...s, [p.key]: p.value };
+          const bad =
+            ((p.key === 'workingHoursStart' || p.key === 'workingHoursEnd') &&
+              (!HHMM.test(String(p.value)) || next.workingHoursStart >= next.workingHoursEnd)) ||
+            (p.key === 'pickerAroundHours' &&
+              !(Number.isInteger(p.value) && p.value >= 1 && p.value <= 24)) ||
+            (p.key === 'pickerWindowMode' && p.value !== 'working_hours' && p.value !== 'around_now');
+          if (bad) return Promise.reject(new Error('invalid setting value'));
+          window.__SET_SETTING__ = p;
+          s[p.key] = p.value;
+          return Promise.resolve();
+        };
+      });
+
+      // 1) A valid working-hours edit persists and reads back on the repaint (09:00 → 08:00).
+      await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', '08:00');
+      await page.press('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', 'Tab');
+      // The change persisted over setSetting and the repaint reads it back from stored truth.
+      await page.waitForFunction(
+        () =>
+          window.__SET_SETTING__?.key === 'workingHoursStart' &&
+          document.querySelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]')?.value ===
+            '08:00',
+      );
+      await wait(page, 900);
+
+      // 2) An INVALID end (06:00 < start) is rejected; the re-render reverts to stored truth.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('An inverted pair is rejected — the field reverts to stored truth'),
+      );
+      await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]', '06:00');
+      await page.press('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]', 'Tab');
+      await page.waitForFunction(
+        () =>
+          document.querySelector('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]')?.value ===
+          '15:00',
+      );
+      await wait(page, 1100);
+
+      // 3) Flip the Picker-window mode → Around now: the Around select enables; pick 12 h.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Picker window → Around now: the Around span enables'),
+      );
+      await page.click('#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]');
+      await page.waitForFunction(() => {
+        const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+        return !!around && !around.disabled;
+      });
+      await wait(page, 800);
+      await page.selectOption('#settings-panel select[data-key="pickerAroundHours"]', '12');
+      await page.waitForFunction(() => window.__SET_SETTING__?.key === 'pickerAroundHours');
+      await wait(page, 1000);
+
+      // 4) The consumer beat (post §12 R15/R16): the entries calendar opens to the configured
+      // window — a scroll default over the full 24h track, never clipped (G16). Guarded on the
+      // data-timeline-track hook so this recipe records meaningfully before those rows land.
+      await page.click('.nav-item[data-view="entries"]');
+      await wait(page, 700);
+      const hasTrack = await page.evaluate(() => !!document.querySelector('[data-timeline-track]'));
+      if (hasTrack) {
+        await page.evaluate(() =>
+          window.__recCaption &&
+          window.__recCaption('The calendar opens to the configured window — scroll, never clip (G16)'),
+        );
+        await wait(page, 2000);
+      } else {
+        await page.click('.nav-item[data-view="settings"]');
+        await wait(page, 1100);
+      }
     },
   },
 

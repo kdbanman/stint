@@ -60,6 +60,65 @@ window.SU = (function () {
   function friendlyHotkey(accel) {
     return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
   }
+  // §14 / G16 — the ONE default-viewport derivation for the timeline surfaces: the inline
+  // interval picker (§12 R15) and the readonly entries calendar (§12 R16) both consume THIS
+  // helper and must never re-derive the window math themselves. It returns a scroll window
+  // { startMin, endMin } in LOCAL minutes-of-day over the full 24h track (0–1440) — a scroll
+  // default, never a clipped one (the track itself always spans the whole day):
+  //   • editedInterval present ({ startUtc, endUtc|null }) → the window keeps the mode's
+  //     span but re-centers on the edited interval (a running entry centers on its start);
+  //   • else pickerWindowMode 'working_hours' → [workingHoursStart, workingHoursEnd];
+  //   • else 'around_now' → now ± pickerAroundHours/2, clamped to [0, 1440].
+  // The entries calendar always defaults to working hours (§12 R16): it passes settings with
+  // pickerWindowMode forced to 'working_hours'. Display only — core owns and validates the
+  // stored settings; the fallbacks here only shield against a stale/partial snapshot.
+  function timelineWindow(settings, nowUtcIso, editedInterval) {
+    const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const toMin = (hhmm, fallback) =>
+      HHMM.test(String(hhmm || ''))
+        ? Number(String(hhmm).slice(0, 2)) * 60 + Number(String(hhmm).slice(3, 5))
+        : fallback;
+    const localMin = (iso) => {
+      const d = new Date(iso);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+    const s = settings || {};
+    let start = toMin(s.workingHoursStart, 7 * 60);
+    let end = toMin(s.workingHoursEnd, 18 * 60);
+    if (end <= start) {
+      start = 7 * 60;
+      end = 18 * 60;
+    }
+    if (s.pickerWindowMode === 'around_now') {
+      const hours =
+        Number.isInteger(s.pickerAroundHours) && s.pickerAroundHours >= 1 && s.pickerAroundHours <= 24
+          ? s.pickerAroundHours
+          : 8;
+      const nowMin = localMin(nowUtcIso);
+      start = nowMin - (hours * 60) / 2;
+      end = nowMin + (hours * 60) / 2;
+    }
+    if (editedInterval && editedInterval.startUtc) {
+      const a = localMin(editedInterval.startUtc);
+      const b = editedInterval.endUtc ? localMin(editedInterval.endUtc) : a;
+      const span = end - start;
+      const mid = (a + b) / 2;
+      start = mid - span / 2;
+      end = mid + span / 2;
+    }
+    // Clamp into the 24h track: the window is a viewport over the day column, so its edges
+    // never leave [0, 1440] (an around-now window near midnight simply meets the day edge).
+    const clamp = (m) => Math.max(0, Math.min(1440, Math.round(m)));
+    let startMin = clamp(start);
+    let endMin = clamp(end);
+    if (endMin <= startMin) {
+      // Degenerate after clamping (should not happen off validated settings) — fall back to
+      // the documented working-hours default rather than a zero-height viewport.
+      startMin = 7 * 60;
+      endMin = 18 * 60;
+    }
+    return { startMin, endMin };
+  }
   // The single line-icon family — the SVG <symbol> sprite from the design system,
   // the one sanctioned icon source for both the main window and the popover. Drawn
   // at 1.6px stroke in currentColor (see the shared `.ic` rule), so an icon inherits
@@ -209,5 +268,5 @@ window.SU = (function () {
     };
   }
 
-  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
+  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, timelineWindow, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
 })();

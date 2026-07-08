@@ -51,9 +51,27 @@ Feature: Tracking and backfill
   # PRD §05 R05 (core: core data entry) — manual backfill creates a COMPLETED entry from
   # explicit from/to. Runs twice (CoreWorld.backfill = store.add, CliWorld.backfill =
   # `tt add --from --to`), proving the core-entry behaviour is identical and reachable on
-  # both surfaces. The GUI from/to fields also open the §12 R15 range picker, but text
-  # entry stays authoritative, so this surface-neutral scenario is the core-entry AC.
+  # both surfaces. In the GUI the from/to span is chosen on the unified entry form's
+  # inline interval picker (§12 R07/R15) — or typed exactly in the collapsed Start/Stop
+  # expander (§12 R17), the overnight path — both writing the same shared form values that
+  # "Save entry" commits over the same add capability; this surface-neutral scenario stays
+  # the core-entry AC regardless of which input drove the values.
   Scenario: Backfill creates a completed entry
     When I backfill an entry "spec review" from 13:00 to 14:30
     Then exactly zero entries are open
     And the entry "spec review" has a billable duration of 90 minutes
+
+  # PRD §05 R06 — the running entry is editable (even its start) and its end does not exist
+  # until it is stopped: editing the open row never closes it and never synthesizes an end
+  # instant. Runs TWICE (CoreWorld store.edit + CliWorld `tt edit`), proving the amend-start
+  # path is identical on both surfaces. In the GUI the same amendment is made by dragging the
+  # start grip of the START-ONLY interval-picker variant (§12 R14/R15) — an affordance that is
+  # structurally incapable of producing an end value — riding the same edit capability with a
+  # patch that never carries an end. Fails if any surface's edit path stops the open row or
+  # writes/synthesizes an end instant (e.g. defaulting the end to "now" on edit).
+  Scenario: Editing the running entry start never closes it and never synthesizes an end
+    Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
+    When I edit the open entry start to 08:30
+    Then exactly one entry is open
+    And the open entry starts at 08:30
+    And the open entry has no end

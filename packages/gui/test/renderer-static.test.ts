@@ -585,14 +585,59 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/draft\.clientId\s*=\s*v === ''\s*\?\s*null\s*:\s*Number\(v\)/);
     expect(js).toMatch(/window\.stint\.listProjects\(\{\s*clientId:\s*draft\.clientId\s*\}\)/);
     expect(js).toMatch(/window\.stint\.listClients\(\)/);
-    // …the range-spec is a relative preset OR an absolute custom window (kind preset/absolute)…
+    // …the range-spec is a relative preset OR an absolute custom range (kind preset/absolute)…
     expect(js).toMatch(/kind:\s*'preset'/);
     expect(js).toMatch(/kind:\s*'absolute'/);
+    // §09 R01 (G3): the custom range is a pair of PLAIN DATES — the two builder range
+    // inputs are type="date" (no time component; never datetime-local)…
+    expect(html).toMatch(/id="rep-range-from"[^>]*type="date"/);
+    expect(html).toMatch(/id="rep-range-to"[^>]*type="date"/);
+    // …the absolute arm carries the raw field strings as fromDate/toDate (never a UTC
+    // instant), and reports.js constructs no Date and derives no window — the plain-date →
+    // window rule lives once in gui/src (resolveDateRange), main-process side.
+    expect(js).toMatch(/fromDate:\s*draft\.fromDate/);
+    expect(js).toMatch(/toDate:\s*draft\.toDate/);
+    expect(js).not.toMatch(/new Date\(/);
+    expect(js).not.toMatch(/toISOString/);
     // …rounding rides the saved DEFINITION (no setSetting from the builder — it is per-def)…
     expect(js).not.toMatch(/setSetting/);
     // …and the renderer re-derives no preset date math (core owns resolveRange).
     expect(js).not.toMatch(/setHours\(0, 0, 0, 0\)/);
     expect(js).not.toMatch(/thisWeekRange/);
+  });
+
+  it('the custom range is a pair of plain date fields on BOTH range surfaces, applied live in Entries (§09 R01 / G3)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    const js = read('reports.js');
+    // The four RANGE inputs — the Reports builder pair and the Entries toolbar pair — are
+    // plain type="date" fields (no time component); no range input is a datetime-local.
+    for (const id of ['rep-range-from', 'rep-range-to', 'el-range-from', 'el-range-to']) {
+      expect(html, `#${id} must be a plain date input`).toMatch(
+        new RegExp(`id="${id}"[^>]*type="date"`),
+      );
+      expect(html, `#${id} must not be a datetime-local`).not.toMatch(
+        new RegExp(`id="${id}"[^>]*type="datetime-local"`),
+      );
+    }
+    // The Entries toolbar has NO Apply button — the two date fields apply LIVE once both
+    // are populated (matching the main.html mockup toolbar), driving activateEntryQuery.
+    expect(html).not.toMatch(/id="el-range-apply"/);
+    expect(app).not.toMatch(/el-range-apply/);
+    expect(app).toMatch(/entryQuery\.fromDate/);
+    expect(app).toMatch(/entryQuery\.toDate/);
+    expect(app).toMatch(/if \(entryQuery\.fromDate && entryQuery\.toDate\) activateEntryQuery\(\)/);
+    // The listEntries query carries the RAW date strings (fromDate/toDate, never a derived
+    // fromUtc/toUtc instant) — main resolves the pair via gui/src resolveDateRange.
+    expect(app).toMatch(/q\.fromDate = entryQuery\.fromDate/);
+    expect(app).toMatch(/q\.toDate = entryQuery\.toDate/);
+    expect(app).not.toMatch(/fromUtc/);
+    expect(app).not.toMatch(/toUtc/);
+    // Neither range surface converts a field value through the Date constructor — the two
+    // raw strings travel verbatim over IPC (reports.js is fully Date-free; app.js keeps
+    // Date only off the range path, so the range fields' handlers stay string-only).
+    expect(js).not.toMatch(/new Date\(/);
+    expect(app).not.toMatch(/new Date\(\$\('el-range/);
   });
 
   it('the Reports run-output paints grouped totals with flags in context + Export CSV/JSON from the saved report (§09 R09 / R06)', () => {
@@ -824,8 +869,7 @@ describe('renderer static contract', () => {
   it('the Timer view ships a live-edit-running strip whose edit never carries endUtc (§12 R14)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    // The live-edit-running strip lives in the Timer view, with the no-stop pill + the
-    // "End time not editable while running" note that make the no-close contract explicit…
+    // The live-edit-running strip lives in the Timer view…
     const timerView = html.match(
       /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
     )?.[0];
@@ -834,6 +878,10 @@ describe('renderer static contract', () => {
     expect(timerView!).toMatch(/id="le-desc"/);
     expect(timerView!).toMatch(/id="le-start"/);
     expect(timerView!).toMatch(/id="le-bill"/);
+    // …the Start field is a RAW text field in localInputValue format (§12 R14 / G1 — the
+    // native datetime-local popover is gone from this entry-time surface)…
+    expect(timerView!).toMatch(/id="le-start"[^>]*type="text"/);
+    expect(timerView!).not.toMatch(/id="le-start"[^>]*type="datetime-local"/);
     // …the strip carries NO End-time input (editing the open row must not close it)…
     const strip = timerView!.match(/<section class="liveedit"[\s\S]*?<\/section>/)?.[0];
     expect(strip, 'the live-edit strip must be present').toBeTruthy();
@@ -848,6 +896,9 @@ describe('renderer static contract', () => {
     expect(patchBody!).toMatch(/patch\.startUtc/);
     expect(patchBody!).toMatch(/patch\.description/);
     expect(patchBody!).toMatch(/patch\.billable/);
+    // …and the raw text field's value goes through a validity guard before it can patch
+    // (a half-typed instant contributes nothing — never a NaN toISOString crash).
+    expect(patchBody!).toMatch(/isNaN\(parsed\.getTime\(\)\)/);
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
@@ -898,18 +949,43 @@ describe('renderer static contract', () => {
     expect(stp).toMatch(/stp-overlap/);
     // index.html loads timepicker.js BEFORE app.js (the triggers depend on window.STP)…
     expect(html).toMatch(/src="timepicker\.js"[\s\S]*src="app\.js"/);
-    // …and the running-edit Start field carries its own calendar trigger (#le-start-pick).
-    expect(html).toMatch(/id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="le-start"/);
+    // …and the running-edit Start field's calendar affordance is a DISCLOSURE toggle
+    // (aria-expanded) over the IN-FLOW start-only host below the field — no modal (§05 R06):
+    expect(html).toMatch(
+      /id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-expanded="false"[\s\S]*?aria-controls="le-start-disc"/,
+    );
+    expect(html).toMatch(/id="le-start-disc"/);
     // app.js wires the picker on EVERY R15 surface: the add form (#add-from/#add-to), the
     // inline closed-entry edit form (.edit-pick over .edit-start/.edit-end), and the
-    // running-entry start (#le-start-pick → start-only, endInput null so no stop is written).
+    // running-entry start (#le-start-pick → the inline START-ONLY disclosure).
     expect(app).toMatch(/window\.STP\.open\(/);
     expect(app).toMatch(/le-start-pick'\)/);
     expect(app).toMatch(/\.edit-pick/);
-    // The running-start case opens start-only (endInput: null) so editing the open row can
-    // never write a stop (§05 R6) — the picker only writes #le-start.
-    expect(app).toMatch(/endInput:\s*null/);
-    // The closed-entry inline form binds both inputs; the open row's editEndInput is null.
+    // §05 R06 — the running surface opens STP.openStartOnly (host + startInput ONLY): the
+    // variant takes no end binding at all, so its write path is structurally incapable of
+    // producing an end value. The wiring block never mentions an end input or endUtc.
+    expect(stp).toMatch(/function openStartOnly\(/);
+    expect(app).toMatch(/window\.STP\.openStartOnly\(\{\s*\n\s*host:/);
+    const discBlock = app.match(/function closeLeStartDisc[\s\S]*?leStartPick\.setAttribute\('aria-expanded', 'true'\);[\s\S]*?\n\}/)?.[0];
+    expect(discBlock, 'the start-only disclosure wiring must be present').toBeTruthy();
+    expect(discBlock!).not.toMatch(/endInput/);
+    expect(discBlock!).not.toMatch(/endUtc/);
+    expect(discBlock!).not.toMatch(/STP\.open\(/); // the modal never opens on the running surface
+    // The start-only variant renders the RUNNING block: future-fade class + start grip only —
+    // no bottom resize grip, no end label, no end echo (timepicker.js builds them only when an
+    // end binding exists; the fade mask lives on .stp-block.me.open).
+    expect(stp).toMatch(/stp-block me open/);
+    expect(stp).toMatch(/stp-grip/);
+    const css = read('styles.css');
+    expect(css).toMatch(/\.stp-block\.me\.open\s*\{[\s\S]*?mask-image:\s*linear-gradient/);
+    expect(css).toMatch(/\.stp-grip\s*\{/);
+    // The inline disclosure is IN FLOW: .stp-inline is position: static (no backdrop, no
+    // fixed/absolute chrome) with a scrollable day viewport (G16 — scroll, never clip).
+    expect(css).toMatch(/\.stp-inline\s*\{\s*\n?\s*position:\s*static/);
+    expect(css).toMatch(/\.stp-inline\s+\.stp-dayview\s*\{[\s\S]*?overflow-y:\s*auto/);
+    // The modal edit path still binds start-only for the open row (endInput null there), and
+    // the closed-entry inline form binds both inputs.
+    expect(app).toMatch(/endInput:\s*null|const editEndInput = running \? null/);
     expect(app).toMatch(/const editEndInput = running \? null : form\.querySelector\('\.edit-end'\)/);
   });
 });

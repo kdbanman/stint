@@ -1,9 +1,9 @@
-Feature: Parity for the new entities (§17 R14)
-  # PRD §17 R14 (new) — the two NEW v1 entities, FAVORITES (pinned timer templates, §05
-  # R09–R10) and SAVED REPORTS (named report definitions, §09 R08–R09), must each be FULLY
+Feature: Parity for favorites & saved reports (§17 R14)
+  # PRD §17 R14 — FAVORITES (pinned timer templates, §05 R09–R10) and SAVED REPORTS (named
+  # report definitions, §09 R08–R09) must each be FULLY
   # reachable from BOTH surfaces: the GUI and `tt`, behaving identically. This feature is the
   # cross-surface PARITY PROOF for those entities — the §17 R8 dual-run claim, applied to the
-  # capability classes the new entities add. It owns no production code: favorites live in
+  # capability classes those entities add. It owns no production code: favorites live in
   # @stint/core + `tt fav` (§05 R09–R10, §11), saved reports in @stint/core + `tt report …`
   # saved verbs (§09 R08–R09, §11), and the GUI Timer favorites rail / Reports view (§12
   # R08/R14). This feature only EXERCISES them, surface-neutrally.

@@ -171,6 +171,28 @@ md.push(
   '',
 );
 
+// ───────────────────── §14 — timeline-window settings ───────────────────────
+section(
+  '§14 — timeline-window settings reach tt config automatically (R8 parity)',
+  'The Timeline group the GUI Settings view edits (working hours, picker window mode, ' +
+    'around-now span — G15) is four key-value rows in `@stint/core`’s descriptor list, so ' +
+    '`tt config` exposes and validates them with ZERO CLI edits (§17 R8 — parity by ' +
+    'construction). Writes round-trip through `config ls --json`; an invalid write (here an ' +
+    'inverted working-hours pair) exits non-zero with a diagnostic and stores nothing.',
+);
+show(['config', 'ls'], {
+  note: 'The four timeline keys ship with their documented defaults: 07:00–18:00, working_hours, 8.',
+});
+show(['config', 'set', 'working_hours_start', '08:30']);
+show(['config', 'set', 'working_hours_end', '16:30']);
+show(['config', 'set', 'picker_window_mode', 'around_now']);
+show(['config', 'set', 'working_hours_end', '06:00'], {
+  note: 'Rejected — the pair must satisfy start<end (core validation, identical on both surfaces); nothing was stored.',
+});
+show(['config', 'ls', '--json'], {
+  note: 'Read-back: the three valid writes round-tripped; `working_hours_end` still reads `16:30` — the rejected write left it untouched.',
+});
+
 // ───────────────────────────── R9 ───────────────────────────────────────────
 section('R9 — no network connections');
 {

@@ -20,6 +20,18 @@
 // other entries render gray, overlap regions render yellow (warn-only, never blocks Apply).
 // Overnight (stop on a later day) is handled only via the text fields, with a footer note —
 // the visual column is single-day.
+//
+// §05 R06 / §12 R14 (G8) — the START-ONLY variant for the RUNNING entry. Opened with no end
+// binding, the picker renders the running block with a START drag grip ONLY: no bottom
+// resize grip, no end time label, no end echo field. The block carries the `open` class and
+// dissolves toward the future via a transparency mask (mockups/timer.html .block.me.open) —
+// the end does not exist until the timer is stopped, so nothing may paint or write one. The
+// start-only write path is STRUCTURALLY incapable of producing an end value: there is no end
+// binding, no end minute is ever computed, defaulted to "now", or written — drags move only
+// the bound start. STP.openStartOnly() is the Timer view's inline disclosure form of the same
+// variant (in flow below the Start field — no backdrop, no modal chrome, no Apply): every
+// grip drag 5-min-snaps and writes the bound start input LIVE, riding the surrounding form's
+// existing input/change listeners.
 window.STP = (function () {
   // ---- pure geometry / snap helpers (deterministic, no DOM) ------------------------
   // Exposed on window.STP so the renderer-static guard and JUDGE can drive them directly.
@@ -85,6 +97,57 @@ window.STP = (function () {
   // Remove any open picker popover (only one at a time). Used by close + before re-open.
   function closePicker() {
     document.querySelector('.stp-backdrop')?.remove();
+  }
+
+  // Other entries clamped to `day`, as [from,to] minute pairs (drawn gray, warn-only).
+  // Shared by the popover column and the inline start-only disclosure.
+  function othersOnDayFor(day, others) {
+    const out = [];
+    const dayStart = startOfLocalDay(day);
+    const dayEnd = new Date(dayStart.getTime() + DAY_MIN * MS_PER_MIN);
+    for (const e of others) {
+      if (!e || e.startUtc == null) continue;
+      const s = new Date(e.startUtc);
+      const t = e.endUtc != null ? new Date(e.endUtc) : new Date();
+      if (t <= dayStart || s >= dayEnd) continue; // entirely off this day
+      const from = s <= dayStart ? 0 : localMinuteOfDay(s);
+      const to = t >= dayEnd ? DAY_MIN : localMinuteOfDay(t);
+      out.push({ from, to, label: e.description || '(no description)' });
+    }
+    return out;
+  }
+
+  // §05 R06 — the VISIBLE bottom edge of the running block on `day`: the current wall-clock
+  // minute (the block runs start → "so far"), or the end of the column day when the entry
+  // started on an earlier day. Painting only — this minute is NEVER an end value: the
+  // start-only paths carry no end binding, so no end can be computed, defaulted, or written.
+  function runningEdgeMin(day, startMin) {
+    const now = new Date();
+    if (sameLocalDay(now, day)) return Math.max(startMin + SNAP_MIN, localMinuteOfDay(now));
+    return DAY_MIN;
+  }
+
+  // Paint the 25 hour lines/labels onto a fresh track element (00:00 … 24:00).
+  function paintHourLabels(track) {
+    for (let h = 0; h <= 24; h++) {
+      const lbl = document.createElement('span');
+      lbl.className = 'stp-hour';
+      lbl.style.top = `${minutesToY(h * 60)}px`;
+      lbl.textContent = `${pad(h % 24)}:00`;
+      track.appendChild(lbl);
+    }
+  }
+
+  // Paint the gray other-entry blocks for `day` onto a track element.
+  function paintOtherBlocks(track, day, others) {
+    for (const o of othersOnDayFor(day, others)) {
+      const block = document.createElement('div');
+      block.className = 'stp-block other';
+      block.style.top = `${minutesToY(o.from)}px`;
+      block.style.height = `${Math.max(2, minutesToY(o.to) - minutesToY(o.from))}px`;
+      block.textContent = o.label;
+      track.appendChild(block);
+    }
   }
 
   // Parse a datetime-local text input value into a local Date (null when blank/invalid).
@@ -251,28 +314,11 @@ window.STP = (function () {
     });
 
     // ---- single-day column --------------------------------------------------------
-    // Other entries clamped to the column day, as [from,to] minute pairs (warn-only gray).
-    function othersOnDay() {
-      const out = [];
-      for (const e of others) {
-        if (!e || e.startUtc == null) continue;
-        const s = new Date(e.startUtc);
-        const t = e.endUtc != null ? new Date(e.endUtc) : new Date();
-        // The visible portion that falls on the column day.
-        const dayStart = startOfLocalDay(columnDay);
-        const dayEnd = new Date(dayStart.getTime() + DAY_MIN * MS_PER_MIN);
-        if (t <= dayStart || s >= dayEnd) continue; // entirely off this day
-        const from = s <= dayStart ? 0 : localMinuteOfDay(s);
-        const to = t >= dayEnd ? DAY_MIN : localMinuteOfDay(t);
-        out.push({ from, to, label: e.description || '(no description)' });
-      }
-      return out;
-    }
     // Overlap of the me-span with the other-entry spans, as minute pairs (yellow, warn-only).
     function overlapsOnDay() {
       if (startOnly || endMin == null) return [];
       const out = [];
-      for (const o of othersOnDay()) {
+      for (const o of othersOnDayFor(columnDay, others)) {
         const from = Math.max(startMin, o.from);
         const to = Math.min(endMin, o.to);
         if (to > from) out.push({ from, to });
@@ -296,28 +342,18 @@ window.STP = (function () {
         day: 'numeric',
       });
       track.innerHTML = '';
-      // Hour lines + labels every hour.
-      for (let h = 0; h <= 24; h++) {
-        const lbl = document.createElement('span');
-        lbl.className = 'stp-hour';
-        lbl.style.top = `${minutesToY(h * 60)}px`;
-        lbl.textContent = `${pad(h % 24)}:00`;
-        track.appendChild(lbl);
-      }
-      // Other entries (gray).
-      for (const o of othersOnDay()) {
-        const block = document.createElement('div');
-        block.className = 'stp-block other';
-        block.style.top = `${minutesToY(o.from)}px`;
-        block.style.height = `${Math.max(2, minutesToY(o.to) - minutesToY(o.from))}px`;
-        block.textContent = o.label;
-        track.appendChild(block);
-      }
-      // The "me" rectangle (accent). For start-only it is a thin handle at the start.
+      paintHourLabels(track);
+      paintOtherBlocks(track, columnDay, others);
+      // The "me" rectangle (accent). §05 R06: for start-only (the RUNNING entry) it is the
+      // running block — start → "so far", class `open` (the future-fade mask), a start GRIP
+      // only: no bottom resize grip, no end label. Its extent is painting only; no end value
+      // exists anywhere on this path.
       const me = document.createElement('div');
-      me.className = 'stp-block me';
+      me.className = startOnly ? 'stp-block me open' : 'stp-block me';
       const top = minutesToY(startMin);
-      const height = startOnly ? 18 : Math.max(6, minutesToY(endMin) - minutesToY(startMin));
+      const height = startOnly
+        ? Math.max(18, minutesToY(runningEdgeMin(columnDay, startMin)) - top)
+        : Math.max(6, minutesToY(endMin) - minutesToY(startMin));
       me.style.top = `${top}px`;
       me.style.height = `${height}px`;
       me.innerHTML =
@@ -327,6 +363,15 @@ window.STP = (function () {
           : `<span class="stp-lab-bot">${hhmm(endMin)}</span>` +
             `<span class="stp-resize" aria-label="Resize stop"><i></i></span>`);
       track.appendChild(me);
+      // The start-only grip sits at track level (nothing hides it — mockups/timer.html).
+      let grip = null;
+      if (startOnly) {
+        grip = document.createElement('span');
+        grip.className = 'stp-grip';
+        grip.style.top = `${top - 3}px`;
+        grip.setAttribute('aria-label', 'Drag to adjust start');
+        track.appendChild(grip);
+      }
       // Overlap regions (yellow, warn-only — pointer-events: none, never blocks Apply).
       for (const ov of overlapsOnDay()) {
         const o = document.createElement('div');
@@ -336,8 +381,8 @@ window.STP = (function () {
         o.innerHTML = `<span class="stp-otag">overlap ${Math.round(ov.to - ov.from)}m</span>`;
         track.appendChild(o);
       }
-      // Wire dragging on the freshly-built "me" rectangle.
-      wireDrag(me);
+      // Wire dragging on the freshly-built "me" rectangle (and the start grip, if any).
+      wireDrag(me, grip);
       syncEchoes();
     }
 
@@ -349,10 +394,11 @@ window.STP = (function () {
       const rect = track.getBoundingClientRect();
       return yToMinutes(clientY - rect.top);
     }
-    function wireDrag(me) {
+    function wireDrag(me, grip) {
       const resize = me.querySelector('.stp-resize');
-      // BODY drag = move both (skip when the press started on the resize grip).
-      me.addEventListener('pointerdown', (ev) => {
+      // BODY drag = move both; the start-only GRIP moves the start (skip a press that
+      // started on the resize grip — that one moves the stop below).
+      const startDrag = (ev) => {
         if (resize && (ev.target === resize || resize.contains(ev.target))) return;
         ev.preventDefault();
         const grabMin = pointerMinutes(ev.clientY);
@@ -368,7 +414,8 @@ window.STP = (function () {
             startMin = nextStart;
             endMin = nextStart + span;
           } else {
-            startMin = nextStart;
+            // §05 R06: only the START moves — there is no end to drag, compute, or write.
+            startMin = Math.max(0, Math.min(runningEdgeMin(columnDay, 0), nextStart));
           }
           // Dragging on the column day resolves any prior overnight state (single-day span).
           overnightActive = false;
@@ -380,7 +427,9 @@ window.STP = (function () {
         };
         window.addEventListener('pointermove', onMove);
         window.addEventListener('pointerup', onUp);
-      });
+      };
+      me.addEventListener('pointerdown', startDrag);
+      if (grip) grip.addEventListener('pointerdown', startDrag);
       // BOTTOM resize = move the stop only (closed entries only).
       if (resize && !startOnly) {
         resize.addEventListener('pointerdown', (ev) => {
@@ -431,6 +480,105 @@ window.STP = (function () {
     return pop;
   }
 
+  /**
+   * §05 R06 / §12 R14 (G8) — STP.openStartOnly({ host, startInput, otherEntries, settings })
+   * — the Timer view's INLINE start-only disclosure. Renders the single-day track IN FLOW
+   * into `host` (no backdrop, no dialog/modal chrome, no Apply): the running entry is the
+   * accent block fading into the future (`.stp-block.me.open`), with a START drag grip only
+   * — no bottom resize grip, no end label, no end echo field. Every grip drag 5-min-snaps
+   * and writes the bound start input LIVE (writeBack fires input+change, so the live-edit
+   * strip's existing debounced commit path picks it up). This path is STRUCTURALLY incapable
+   * of producing an end value: it takes no end binding and computes no end minute — the
+   * running block's painted extent is the wall clock, never a value.
+   *
+   * The default scroll viewport comes from SU.timelineWindow (§14/G16 — the ONE window
+   * derivation; never re-derived here), centered on the edited (running) interval. The
+   * viewport carries the `data-timeline-track` hook the TIMELINE_WINDOW judge scene probes.
+   */
+  function openStartOnly(opts = {}) {
+    const host = opts.host || null;
+    const startInput = opts.startInput || null;
+    if (!host || !startInput) return null;
+    const others = Array.isArray(opts.otherEntries) ? opts.otherEntries : [];
+    host.innerHTML = '';
+
+    // Seed from the bound start input (the running entry's start); drags stay on its day.
+    const startDate = parseInput(startInput) || new Date();
+    const columnDay = startOfLocalDay(startDate);
+    let startMin = snapTo5(localMinuteOfDay(startDate));
+
+    const box = document.createElement('div');
+    box.className = 'stp stp-inline stp-start-only';
+    box.innerHTML =
+      `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
+      `<div class="stp-snaphint"><span class="stp-pill">snap · 5 min</span>` +
+      `<span>Drag the grip to adjust the start — the running entry has no end until you stop it</span></div>`;
+    host.appendChild(box);
+    const viewport = box.querySelector('.stp-dayview');
+    const track = box.querySelector('.stp-track');
+
+    function pointerMin(clientY) {
+      return yToMinutes(clientY - track.getBoundingClientRect().top);
+    }
+    function wireGrip(grip) {
+      grip.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        const grabMin = pointerMin(ev.clientY);
+        const base = startMin;
+        grip.setPointerCapture?.(ev.pointerId);
+        const onMove = (mv) => {
+          const next = snapTo5(base + (pointerMin(mv.clientY) - grabMin));
+          startMin = Math.max(0, Math.min(runningEdgeMin(columnDay, 0), next));
+          // LIVE write-back of the START only — the sole write this variant can make.
+          writeBack(startInput, dateAtMinute(columnDay, startMin));
+          renderTrack();
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+    }
+    function renderTrack() {
+      track.innerHTML = '';
+      paintHourLabels(track);
+      paintOtherBlocks(track, columnDay, others);
+      // The running block: start → "so far", dissolving into the future (class `open`).
+      const me = document.createElement('div');
+      me.className = 'stp-block me open';
+      const top = minutesToY(startMin);
+      me.style.top = `${top}px`;
+      me.style.height = `${Math.max(18, minutesToY(runningEdgeMin(columnDay, startMin)) - top)}px`;
+      track.appendChild(me);
+      // Time label + start grip live at TRACK level so the fade never hides them (mockup).
+      const lab = document.createElement('span');
+      lab.className = 'stp-tlabel';
+      lab.style.top = `${top + 4}px`;
+      lab.textContent = hhmm(startMin);
+      track.appendChild(lab);
+      const grip = document.createElement('span');
+      grip.className = 'stp-grip';
+      grip.style.top = `${top - 3}px`;
+      grip.setAttribute('aria-label', 'Drag to adjust start');
+      track.appendChild(grip);
+      wireGrip(grip);
+    }
+    renderTrack();
+
+    // Default scroll window (§14/G16): SU.timelineWindow centered on the running interval.
+    const win =
+      window.SU && typeof window.SU.timelineWindow === 'function'
+        ? window.SU.timelineWindow(opts.settings || null, new Date().toISOString(), {
+            startUtc: startDate.toISOString(),
+            endUtc: null,
+          })
+        : { startMin: 7 * 60, endMin: 18 * 60 };
+    viewport.scrollTop = Math.round(minutesToY(win.startMin));
+    return box;
+  }
+
   // Compatibility shim for the existing add-form wiring (app.js openAddRangePicker, the
   // ADD_FORM_PICKER JUDGE scene). Maps the {fromUtc,toUtc,onConfirm} contract onto STP.open
   // by binding to the two add-form inputs and translating Apply into onConfirm. The picker
@@ -455,7 +603,7 @@ window.STP = (function () {
     });
   }
 
-  return { open, closePicker, openRangePicker, snapTo5, minutesToY, yToMinutes, localInputValue, TRACK_H };
+  return { open, openStartOnly, closePicker, openRangePicker, snapTo5, minutesToY, yToMinutes, localInputValue, TRACK_H };
 })();
 // Expose the compat shim at the top level too (the add-form path calls window.openRangePicker).
 window.openRangePicker = window.STP.openRangePicker;

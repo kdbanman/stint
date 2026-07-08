@@ -179,6 +179,33 @@ export const steps: StepDef[] = [
     },
   },
 
+  // §09 R1 — place a closed, client-attributed entry at an explicit LOCAL day + wall-clock
+  // time (new Date(y, m-1, d, h, m), the same local calendar the GUI's plain date fields
+  // resolve against), so a plain-date range's local-midnight boundaries are exercised: an
+  // entry ending 23:30 LOCAL on the range's to-date must still fall INSIDE the window,
+  // and one in the small hours of the next local day must fall outside it.
+  {
+    pattern:
+      /^a closed entry "([^"]*)" for "([^"]*)" on local day (\d{4})-(\d{2})-(\d{2}) at (\d{2}):(\d{2}) lasting (\d+) minutes$/,
+    run: (w, ctx, desc, client, y, mo, d, hh, mm, minutes) => {
+      const fromIso = new Date(
+        Number(y),
+        Number(mo) - 1,
+        Number(d),
+        Number(hh),
+        Number(mm),
+      ).toISOString();
+      const r = w.backfillAt({
+        desc,
+        client,
+        fromIso,
+        toIso: plusMinutes(fromIso, Number(minutes)),
+      });
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+
   // §09 R4 — place a closed, client/project-attributed entry of a given length in MINUTES
   // (not whole hours) on day 1 of this week, so a rounding scenario can use a duration that
   // is NOT a clean multiple of the rounding increment and observe nearest-not-always-up.
@@ -365,6 +392,20 @@ export const steps: StepDef[] = [
   {
     pattern: /^the open entry starts at (\d{1,2}:\d{2})$/,
     run: (w, _c, at) => expect(open(w)?.startUtc).toBe(iso(at)),
+  },
+  // §05 R06 — the amended open row still has NO end instant: status (a second, independent
+  // capability — core store.status / `tt status --json`) still reports it running, and the
+  // listed row's end is null (core: endUtc null; tt: `list --json` end null). Fails if any
+  // surface's edit path stopped the open row or wrote/synthesized an end (e.g. an edit that
+  // defaults the missing end to "now").
+  {
+    pattern: /^the open entry has no end$/,
+    run: (w) => {
+      expect(w.status().running).toBe(true);
+      const o = open(w);
+      expect(o).toBeDefined();
+      expect(o!.endUtc).toBeNull();
+    },
   },
   {
     pattern: /^the entry "([^"]*)" is for "([^"]*)"$/,
@@ -671,6 +712,27 @@ export const steps: StepDef[] = [
     },
   },
 
+  // §09 R1 — a report over a PLAIN-DATE pair (no time component, G3). The step resolves
+  // the day pair with the SAME rule the GUI side applies (gui/src/reportview.ts
+  // resolveDateRange): local Date(y, m-1, d) construction → the half-open local window
+  // [from 00:00, day-after-to 00:00), the day-after by CALENDAR arithmetic (never +24h,
+  // so a DST-transition to-day still ends at true local midnight). It then drives the
+  // same World `report` capability the other range scenarios use — CoreWorld store.report
+  // over the resolved bounds, CliWorld `tt report --range FROM TO --json` — so the
+  // plain-date window is proven identical on both logic surfaces (§17 R8). Decimal hours
+  // let the half-hour boundary entry register (e.g. 2.5h = Mon 2h + late-Tue 0.5h).
+  {
+    pattern:
+      /^a report for the plain-date range (\d{4})-(\d{2})-(\d{2}) through (\d{4})-(\d{2})-(\d{2}) totals ([\d.]+) billable hours?$/,
+    run: (w, _c, y1, m1, d1, y2, m2, d2, hours) => {
+      const fromUtc = new Date(Number(y1), Number(m1) - 1, Number(d1)).toISOString();
+      // The inclusive end day: the window closes at 00:00 local the day AFTER the to-date.
+      const toUtc = new Date(Number(y2), Number(m2) - 1, Number(d2) + 1).toISOString();
+      const r = w.report({ fromUtc, toUtc, by: 'client', billableFilter: 'billable' });
+      expect(r.grandTotalSeconds).toBe(Number(hours) * 3600);
+    },
+  },
+
   // ---- §09 R2 report grouping (the contract the GUI Group-by control drives) ----
   // The grouping engine is core's store.report with the chosen `by`; these steps drive it
   // surface-neutrally over the same World.report the range scenarios use, so the grouping
@@ -784,6 +846,16 @@ export const steps: StepDef[] = [
     pattern: /^the configured (.+?) is "?([^"]*?)"?$/,
     run: (w, _c, setting, value) => {
       expect(w.getConfig(settingKey(setting))).toBe(value);
+    },
+  },
+  {
+    // §14 — an INVALID setting write is rejected on this surface (a malformed HH:MM, an
+    // inverted working-hours pair, an out-of-range around span), storing nothing. Runs over
+    // the World attemptSetConfig capability so the strictness is proven identical on core
+    // AND tt (§17 R8); a follow-up "the configured … is …" step asserts the default survived.
+    pattern: /^setting (?:the )?(.+?) to "([^"]*)" is rejected$/,
+    run: (w, _c, setting, value) => {
+      expect(w.attemptSetConfig(settingKey(setting), value).rejected).toBe(true);
     },
   },
 
@@ -1244,6 +1316,12 @@ function settingKey(spoken: string): string {
     'check-in interval': 'checkin_interval_min',
     'global hotkey': 'global_hotkey',
     'date format': 'date_format',
+    // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
+    // default-window mode, and the around-now span.
+    'working hours start': 'working_hours_start',
+    'working hours end': 'working_hours_end',
+    'picker window mode': 'picker_window_mode',
+    'picker around hours': 'picker_around_hours',
   };
   const key = KEYS[spoken.trim().toLowerCase()];
   if (!key) throw new Error(`unknown setting name "${spoken}"`);

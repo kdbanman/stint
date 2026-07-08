@@ -11,6 +11,13 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
   dateFormat: 'system',
+  // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
+  // default-window mode, and the around-now span. The Settings → Timeline group edits them;
+  // SU.timelineWindow derives the picker/calendar default viewport from them (G16).
+  workingHoursStart: '07:00',
+  workingHoursEnd: '18:00',
+  pickerWindowMode: 'working_hours',
+  pickerAroundHours: 8,
   // §20 R04 — how many automatic backups to keep; the Settings → Backups retention picker
   // paints this and changes it over the same setSetting channel `tt config set backup_retention`.
   backupRetention: 5,
@@ -533,6 +540,31 @@ export function settingsState() {
 }
 
 /**
+ * §14 / §12 R12 — the TIMELINE_WINDOW fixtures. Non-default working hours (09:00–15:00,
+ * mode working_hours) so the scene can assert SU.timelineWindow returns exactly 540–900
+ * minutes AND that the Settings → Timeline group renders the stored values (not the
+ * defaults); plus an around_now/8 variant whose window is JUDGE_NOW ± 4h (clamped to the
+ * 24h track), deterministic under the pinned page clock.
+ */
+export function timelineWindowState() {
+  const s = emptyState();
+  s.settings = {
+    ...DEFAULT_SETTINGS,
+    workingHoursStart: '09:00',
+    workingHoursEnd: '15:00',
+    pickerWindowMode: 'working_hours',
+    pickerAroundHours: 8,
+  };
+  return s;
+}
+
+export function timelineAroundState() {
+  const s = timelineWindowState();
+  s.settings = { ...s.settings, pickerWindowMode: 'around_now', pickerAroundHours: 8 };
+  return s;
+}
+
+/**
  * §19 R03/R04/R06 — the SOFTWARE_UPDATE scene's snapshot. The Settings view's Software Update
  * group reads its version over the GUI-only window.stint.update bridge (injected by initScript's
  * `update` option), so the snapshot itself is just the empty-state shape; the version, the
@@ -724,15 +756,22 @@ export function roundingState() {
 }
 
 /**
- * §12 R14 (G5) — the TIMER_VIEW fixture. The same canonical runningState (a single open entry
- * 'auth refactor' for 'Client A / API', started a fixed 01:24:07 before the pinned JUDGE clock),
- * so the Timer view's live clock reads a deterministic 01:24:07 that advances +3s on a pinned-
- * clock step, the running state shows, and the live-edit-running strip seeds from this entry. The
- * scene asserts the strip's Save sends an `edit` patch carrying the start-time/attributes but
- * NEVER endUtc (window.__EDITED__ recorded by the edit mock), so the row stays open.
+ * §12 R14 (G5) / §05 R06 — the TIMER_VIEW fixture. The canonical runningState (a single open
+ * entry 'auth refactor' for 'Client A / API', started a fixed 01:24:07 before the pinned JUDGE
+ * clock), so the Timer view's live clock reads a deterministic 01:24:07 that advances +3s on a
+ * pinned-clock step, plus two CLOSED same-day entries so the inline START-ONLY picker
+ * disclosure has other entries to paint gray on its track (the scene runs its page in
+ * timezoneId 'UTC' so these UTC instants land on the same local day as the running start).
+ * The scene drags the disclosure's start grip and asserts the recorded `edit` patch
+ * (window.__EDITED__) carries startUtc but NEVER endUtc, so the row stays open.
  */
 export function timerViewRunningState() {
-  return runningState();
+  const s = runningState();
+  s.days[0].entries.unshift(
+    { id: 2, description: 'morning sync', clientLabel: 'Client A / API', startUtc: '2026-06-24T19:00:00Z', endUtc: '2026-06-24T20:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+    { id: 3, description: 'inbox triage', clientLabel: null, startUtc: '2026-06-24T20:30:00Z', endUtc: '2026-06-24T21:00:00Z', billableSeconds: 0, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: [] },
+  );
+  return s;
 }
 
 /** §05 R09 — three seeded favorites for the FAVORITES_RAIL scene (name + client/project/billable
@@ -1119,6 +1158,17 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       listEntries: function (q) {
         window.__LIST_REQ__ = q;
         let rows = this.__LIST_ENTRIES__.slice();
+        // §09 R01 (G3): a custom range arrives as a PAIR OF PLAIN DATES (fromDate/toDate,
+        // the raw YYYY-MM-DD strings of the two toolbar date fields — never a derived
+        // instant). The mock narrows to the entries whose day falls inside the INCLUSIVE
+        // day pair, standing in for main's resolveDateRange half-open local window, so the
+        // ENTRY_LIST_SEARCH scene can assert the fields apply LIVE and narrow the rows.
+        if (q && q.fromDate && q.toDate) {
+          rows = rows.filter((e) => {
+            const day = e.startUtc.slice(0, 10);
+            return day >= q.fromDate && day <= q.toDate;
+          });
+        }
         if (q && q.billable === 'billable') rows = rows.filter((e) => e.billable);
         if (q && q.billable === 'non-billable') rows = rows.filter((e) => !e.billable);
         if (q && q.search) {

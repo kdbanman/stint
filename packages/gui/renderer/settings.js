@@ -29,6 +29,24 @@
       group: 'Reporting', key: 'weekStart', label: 'Week start', kind: 'segment',
       options: [['monday', 'Monday'], ['sunday', 'Sunday']],
     },
+    // §14 — the Timeline group (G15, mockup settings.html): the working-hours pair (one row,
+    // two strict HH:MM inputs), the picker's default-window mode, and the around-now span.
+    // The Around row is disabled (row class 'off') while the mode is working_hours — the span
+    // is only consulted by the around_now window (G16).
+    {
+      group: 'Timeline', key: 'workingHours', label: 'Working hours', kind: 'hhmm-pair',
+      note: 'Entries and the picker open to these hours',
+      keys: ['workingHoursStart', 'workingHoursEnd'],
+    },
+    {
+      group: 'Timeline', key: 'pickerWindowMode', label: 'Picker window', kind: 'segment',
+      options: [['working_hours', 'Working hours'], ['around_now', 'Around now']],
+    },
+    {
+      group: 'Timeline', key: 'pickerAroundHours', label: 'Around', kind: 'select', cast: 'number',
+      options: [[4, '4 h'], [6, '6 h'], [8, '8 h'], [12, '12 h']],
+      offWhen: (settings) => settings.pickerWindowMode !== 'around_now',
+    },
     {
       group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', kind: 'select', cast: 'number',
       options: [[30, '30 min'], [60, '60 min'], [90, '90 min']],
@@ -50,16 +68,33 @@
 
   // Persist one setting then reload — the value is now the new truth core reads on both
   // surfaces. The hotkey edit additionally re-registers the OS shortcut in main.ts's
-  // setSetting handler, so a hotkey change takes effect live (no restart).
+  // setSetting handler, so a hotkey change takes effect live (no restart). A REJECTED
+  // setSetting (core validation: a malformed HH:MM, an inverted working-hours pair, an
+  // out-of-range around span) stores nothing — the re-render below then repaints the
+  // control from stored truth, so the field visibly reverts (§14).
   async function persist(key, value) {
-    await window.stint.setSetting({ key, value });
+    try {
+      await window.stint.setSetting({ key, value });
+    } catch {
+      // Invalid value rejected by core — nothing stored; fall through to re-render.
+    }
     // Re-render off fresh state so every control reflects the saved value (and the accent /
     // date-format modes re-apply). app.js's onChange/load also fires from the refreshAll.
     await render();
   }
 
-  function fieldControl(f, settings) {
+  function fieldControl(f, settings, off) {
     const v = settings[f.key];
+    if (f.kind === 'hhmm-pair') {
+      // §14 — one row, two strict HH:MM text inputs (workingHoursStart / workingHoursEnd),
+      // each persisting on change over the SAME setSetting channel. Core validates (shape +
+      // start<end); a rejection re-renders, reverting the field to stored truth.
+      const input = (key) =>
+        `<input class="set-field set-hhmm tnum" type="text" inputmode="numeric" size="5" maxlength="5" ` +
+        `placeholder="HH:MM" data-key="${key}" value="${esc(settings[key] ?? '')}" ` +
+        `aria-label="${esc(f.label)} ${key === f.keys[0] ? 'start' : 'end'}">`;
+      return input(f.keys[0]) + `<span class="set-hhmm-sep">–</span>` + input(f.keys[1]);
+    }
     if (f.kind === 'toggle') {
       const on = v === true;
       return (
@@ -85,7 +120,7 @@
     }
     // select
     return (
-      `<select class="set-field" data-key="${f.key}"${f.cast === 'number' ? ' data-cast="number"' : ''} aria-label="${esc(f.label)}">` +
+      `<select class="set-field" data-key="${f.key}"${f.cast === 'number' ? ' data-cast="number"' : ''}${off ? ' disabled' : ''} aria-label="${esc(f.label)}">` +
       f.options
         .map(([val, lbl]) => `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(lbl)}</option>`)
         .join('') +
@@ -94,9 +129,14 @@
   }
 
   function rowHtml(f, settings) {
+    // §14 — an `offWhen` field renders dimmed + disabled while its precondition does not
+    // hold (the Around row while the picker window mode is working_hours, per the mockup).
+    const off = typeof f.offWhen === 'function' && f.offWhen(settings);
     return (
-      `<div class="set-row"><div class="set-k">${esc(f.label)}</div>` +
-      `<div class="set-ctrl">${fieldControl(f, settings)}</div></div>`
+      `<div class="set-row${off ? ' off' : ''}"><div class="set-k">${esc(f.label)}` +
+      (f.note ? `<small>${esc(f.note)}</small>` : '') +
+      `</div>` +
+      `<div class="set-ctrl">${fieldControl(f, settings, off)}</div></div>`
     );
   }
 
@@ -475,12 +515,20 @@
   }
 
   function wire(host) {
-    // Selects (rounding increment, check-ins, date format) — cast numeric values.
+    // Selects (rounding increment, check-ins, date format, around-now span) — cast numeric values.
     for (const sel of host.querySelectorAll('select.set-field')) {
       sel.addEventListener('change', () => {
         const raw = sel.value;
         const value = sel.dataset.cast === 'number' ? Number(raw) : raw;
         void persist(sel.dataset.key, value);
+      });
+    }
+    // §14 — the working-hours HH:MM pair persists each field on change; core validates the
+    // shape + the start<end pair, and a rejection re-renders so the field reverts to the
+    // stored truth (persist swallows the rejection and repaints either way).
+    for (const inp of host.querySelectorAll('input.set-hhmm')) {
+      inp.addEventListener('change', () => {
+        void persist(inp.dataset.key, inp.value.trim());
       });
     }
     // The rounding toggle flips a boolean.

@@ -14,7 +14,7 @@
  * client/project/tag narrowing) so the MANUAL byte-for-byte parity check holds — the
  * report view's filters shape the on-screen summary, not the exported file.
  */
-import { resolveRange, toCsv, toJsonEntries } from '@stint/core';
+import { resolveRange, toCsv, toJsonEntries, toUtc } from '@stint/core';
 import type {
   Store,
   EntryView,
@@ -28,6 +28,55 @@ import type {
 import type { SavedReportView, SavedReportInputView, SavedReportRangeView } from './ipc.js';
 
 export type RangePreset = 'today' | 'week' | 'last-week' | 'month' | 'last-month';
+
+// ----------------------------------------------- plain-date custom ranges (§09 R01 / G3)
+
+/** A local midnight, `plusDays` calendar days after the given `YYYY-MM-DD` plain date. */
+function localMidnight(date: string, plusDays = 0): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) throw new Error(`invalid plain date (expected YYYY-MM-DD): ${date}`);
+  // Local Date(y, m-1, d) construction: the day-after arithmetic is CALENDAR arithmetic
+  // (never `+ 24h`), so a DST-transition day of 23/25 local hours still resolves to the
+  // true next local midnight.
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + plusDays);
+}
+
+/** The local `YYYY-MM-DD` calendar day an instant falls on. */
+function localDateOf(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). Resolve the
+ * two date-field values (`YYYY-MM-DD`) to the half-open local window
+ * [from 00:00 local, day-after-to 00:00 local): the to-day is included IN FULL (an entry
+ * late that evening still counts) and the next day is excluded — the same inclusive-end-
+ * day, half-open convention core's resolveRange presets produce. This is the ONE home of
+ * the plain-date → window rule on the GUI side (main.ts's listEntries handler and the
+ * saved-report rangeSpec conversions both route through it); the renderer only ever
+ * carries the raw date strings.
+ */
+export function resolveDateRange(fromDate: string, toDate: string): { fromUtc: string; toUtc: string } {
+  return { fromUtc: toUtc(localMidnight(fromDate)), toUtc: toUtc(localMidnight(toDate, 1)) };
+}
+
+/**
+ * §09 R01 — the inverse of resolveDateRange: paint a stored absolute window back into the
+ * two plain date fields. The stored to-bound is EXCLUSIVE, so the inclusive to-day is the
+ * local day of the instant just before it. Tolerant of LEGACY arbitrary-instant windows
+ * (a saved def whose bounds are not local midnights): the pair rounds OUTWARD to the
+ * covering day pair, so re-saving such a def normalises it to plain-date bounds.
+ */
+export function utcWindowToDatePair(
+  fromUtc: string,
+  toUtcBound: string,
+): { fromDate: string; toDate: string } {
+  return {
+    fromDate: localDateOf(new Date(fromUtc)),
+    toDate: localDateOf(new Date(Date.parse(toUtcBound) - 1)),
+  };
+}
 
 /** What the renderer's Export buttons send over the `exportEntries` IPC channel. */
 export interface ExportRequest {
@@ -162,21 +211,23 @@ export function exportFileName(fromUtc: string, format: 'csv' | 'json'): string 
 
 // ----------------------------------------------- saved reports (§09 R08–R09)
 // Pure, Electron-free conversions between core's SavedReport types and the renderer-safe
-// View shapes (no core import in the page). The two shapes mirror each other field-for-
-// field, so these are faithful pass-throughs the main-process IPC handlers wrap.
+// View shapes (no core import in the page). The preset arm mirrors field-for-field; the
+// absolute arm converts between core's UTC instants and the renderer's PLAIN DATE pair
+// (§09 R01 / G3) via resolveDateRange / utcWindowToDatePair, so the date math lives here
+// (once), never in the page.
 
-/** Core RangeSpec → renderer-safe range view. */
+/** Core RangeSpec → renderer-safe range view (absolute window → its covering date pair). */
 function rangeSpecToView(spec: RangeSpec): SavedReportRangeView {
-  return spec.kind === 'preset'
-    ? { kind: 'preset', preset: spec.preset }
-    : { kind: 'absolute', fromUtc: spec.fromUtc, toUtc: spec.toUtc };
+  if (spec.kind === 'preset') return { kind: 'preset', preset: spec.preset };
+  const { fromDate, toDate } = utcWindowToDatePair(spec.fromUtc, spec.toUtc);
+  return { kind: 'absolute', fromDate, toDate };
 }
 
-/** Renderer-safe range view → core RangeSpec. */
+/** Renderer-safe range view → core RangeSpec (date pair → the half-open local window). */
 function rangeSpecFromView(spec: SavedReportRangeView): RangeSpec {
-  return spec.kind === 'preset'
-    ? { kind: 'preset', preset: spec.preset }
-    : { kind: 'absolute', fromUtc: spec.fromUtc, toUtc: spec.toUtc };
+  if (spec.kind === 'preset') return { kind: 'preset', preset: spec.preset };
+  const { fromUtc, toUtc: toUtcBound } = resolveDateRange(spec.fromDate, spec.toDate);
+  return { kind: 'absolute', fromUtc, toUtc: toUtcBound };
 }
 
 /** §09 R08 — a core saved report → the renderer-safe projection the Reports view paints. */
