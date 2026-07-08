@@ -229,6 +229,15 @@ export interface World {
    */
   setConfig(key: string, value: string): void;
   getConfig(key: string): string;
+  /**
+   * §14 — attempt a config write that may be INVALID (a malformed HH:MM, an inverted
+   * working-hours pair, an out-of-range around span) and report whether it was rejected
+   * WITHOUT storing anything. Surface-neutral: CoreWorld runs the same descriptor parse +
+   * store.setSetting the happy path uses and catches the validation throw; CliWorld checks
+   * the non-zero exit of `tt config set`. Both leave the stored value untouched on a
+   * rejection — the same strictness on BOTH surfaces (§17 R8).
+   */
+  attemptSetConfig(key: string, value: string): { rejected: boolean };
   list(): EntryRec[];
   /**
    * §09 R7 — free-text search over the entries. Surface-neutral: CoreWorld drives
@@ -608,6 +617,17 @@ export class CoreWorld implements World {
     const d = settingDescriptor(key);
     if (!d) throw new Error(`unknown setting "${key}"`);
     return String((this.store.settings() as unknown as Record<string, unknown>)[d.key]);
+  }
+  attemptSetConfig(key: string, value: string): { rejected: boolean } {
+    // §14 — the same descriptor parse + store.setSetting the happy path uses; a parse miss
+    // or a validation throw (including the cross-field start<end pair) IS the rejection,
+    // and nothing was stored.
+    try {
+      this.setConfig(key, value);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
   }
   list(): EntryRec[] {
     return this.store.listEntries().map((e) => ({
@@ -1147,6 +1167,12 @@ export class CliWorld implements World {
     if (!d) throw new Error(`unknown setting "${key}"`);
     const obj = JSON.parse(this.tt(['config', 'ls', '--json']).out || '{}') as Record<string, unknown>;
     return String(obj[d.key]);
+  }
+  attemptSetConfig(key: string, value: string): { rejected: boolean } {
+    // §14 — an invalid `tt config set` exits non-zero with a diagnostic on stderr and
+    // stores nothing; that non-zero exit is the surface's rejection signal.
+    const r = this.tt(['config', 'set', key, value]);
+    return { rejected: r.code !== 0 };
   }
   list(): EntryRec[] {
     return this.listRows(['list', '--all', '--json']);

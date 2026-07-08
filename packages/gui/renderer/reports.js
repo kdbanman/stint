@@ -43,13 +43,15 @@
 
   // The builder's edit state. `editing` is null for a fresh New report, or the name of the
   // saved definition being edited (so Save routes to editReport not saveReport). The range
-  // half is EITHER a preset name (re-resolved on each run by core) OR a custom absolute
-  // from/to passed straight through — the renderer never derives a window.
+  // half is EITHER a preset name (re-resolved on each run by core) OR a custom PAIR OF
+  // PLAIN DATES (§09 R01 / G3) carried as the two date fields' raw `YYYY-MM-DD` strings —
+  // the renderer constructs no Date and derives no window (main resolves the pair to the
+  // inclusive-end-day local window in core-side code).
   const draft = {
     editing: null,
     preset: 'week', // a PRESETS key, or 'custom'
-    fromUtc: null,
-    toUtc: null,
+    fromDate: null,
+    toDate: null,
     by: 'client',
     billableFilter: 'billable',
     clientId: null,
@@ -66,12 +68,13 @@
   // ----------------------------------------------------------------- spec summary
 
   // A one-line human summary of a saved definition's spec, painted on its card. The range
-  // half reads the stored relative preset OR the absolute custom window; the rest mirrors
-  // the def's group-by / client-or-tag filter / billable / rounding. Pure formatting of the
+  // half reads the stored relative preset OR the absolute custom day pair (§09 R01: two
+  // plain dates, printed verbatim — no time component to show); the rest mirrors the
+  // def's group-by / client-or-tag filter / billable / rounding. Pure formatting of the
   // stored def — no range resolution here (that is core's, at run time).
   function rangeSummary(spec) {
     if (spec.kind === 'preset') return PRESETS[spec.preset] || spec.preset;
-    return `Custom: ${rangeLabel(spec.fromUtc, spec.toUtc)}`;
+    return `Custom: ${spec.fromDate} – ${spec.toDate}`;
   }
   function specSummary(def) {
     const parts = [
@@ -163,6 +166,9 @@
     $('rep-name').value = draft.editing ?? '';
     selectSegment('preset');
     $('rep-custom-range').hidden = draft.preset !== 'custom';
+    // §09 R01: the two plain date fields paint the draft's raw `YYYY-MM-DD` strings back.
+    $('rep-range-from').value = draft.fromDate ?? '';
+    $('rep-range-to').value = draft.toDate ?? '';
     selectSegment('by');
     selectSegment('billableFilter');
     $('rep-tag').value = draft.tag;
@@ -177,8 +183,8 @@
   function resetDraft() {
     draft.editing = null;
     draft.preset = 'week';
-    draft.fromUtc = null;
-    draft.toUtc = null;
+    draft.fromDate = null;
+    draft.toDate = null;
     draft.by = 'client';
     draft.billableFilter = 'billable';
     draft.clientId = null;
@@ -189,17 +195,18 @@
   }
 
   // Load an existing saved definition into the draft for editing. The range-spec maps back
-  // to the preset/custom inputs; the rest is carried verbatim (the renderer holds the ids).
+  // to the preset/custom inputs — the absolute arm's plain date pair fills the two date
+  // fields verbatim (§09 R01); the rest is carried as-is (the renderer holds the ids).
   function loadDraft(def) {
     draft.editing = def.name;
     if (def.rangeSpec.kind === 'preset') {
       draft.preset = def.rangeSpec.preset;
-      draft.fromUtc = null;
-      draft.toUtc = null;
+      draft.fromDate = null;
+      draft.toDate = null;
     } else {
       draft.preset = 'custom';
-      draft.fromUtc = def.rangeSpec.fromUtc;
-      draft.toUtc = def.rangeSpec.toUtc;
+      draft.fromDate = def.rangeSpec.fromDate;
+      draft.toDate = def.rangeSpec.toDate;
     }
     draft.by = def.by;
     draft.billableFilter = def.billableFilter;
@@ -240,13 +247,15 @@
   }
 
   // §09 R08: build the renderer-safe SavedReportInput half from the draft. The range-spec is
-  // EITHER a relative preset (re-resolved on each run) or an absolute custom window; an unset
-  // client/project is omitted (no filter) and a blank tag is dropped. The renderer sends the
-  // entity IDS it already holds — it never resolves names — so core filters exactly as for tt.
+  // EITHER a relative preset (re-resolved on each run) or an absolute custom range as the
+  // PLAIN DATE PAIR the two fields hold (§09 R01 — main converts it to core's UTC window);
+  // an unset client/project is omitted (no filter) and a blank tag is dropped. The renderer
+  // sends the entity IDS it already holds — it never resolves names — so core filters
+  // exactly as for tt.
   function draftToInput() {
     const rangeSpec =
       draft.preset === 'custom'
-        ? { kind: 'absolute', fromUtc: draft.fromUtc, toUtc: draft.toUtc }
+        ? { kind: 'absolute', fromDate: draft.fromDate, toDate: draft.toDate }
         : { kind: 'preset', preset: draft.preset };
     const input = {
       name: $('rep-name').value.trim(),
@@ -272,8 +281,8 @@
       $('rep-name').focus();
       return;
     }
-    // Custom range needs both bounds before it can save.
-    if (input.rangeSpec.kind === 'absolute' && (!input.rangeSpec.fromUtc || !input.rangeSpec.toUtc)) {
+    // A custom range needs both plain dates before it can save (§09 R01).
+    if (input.rangeSpec.kind === 'absolute' && (!input.rangeSpec.fromDate || !input.rangeSpec.toDate)) {
       return;
     }
     try {
@@ -502,21 +511,21 @@
     }
 
     // §09 R01: the range preset chips. A named preset sets draft.preset; Custom reveals the
-    // explicit from/to inputs. No run here — Save persists, Run resolves later.
+    // two plain date fields. No run here — Save persists, Run resolves later.
     wireSegment('preset', () => {
       $('rep-custom-range').hidden = draft.preset !== 'custom';
     });
     // §09 R02/R03: group-by and billable-filter segments.
     wireSegment('by');
     wireSegment('billableFilter');
-    // Custom from/to → absolute UTC bounds carried verbatim into the saved range-spec.
+    // §09 R01: the two plain date fields carry their raw `YYYY-MM-DD` strings into the
+    // saved range-spec verbatim — no Date construction, no window derivation here (main
+    // resolves the pair to the inclusive-end-day local window in core-side code).
     $('rep-range-from').addEventListener('change', () => {
-      const v = $('rep-range-from').value;
-      draft.fromUtc = v ? new Date(v).toISOString() : null;
+      draft.fromDate = $('rep-range-from').value || null;
     });
     $('rep-range-to').addEventListener('change', () => {
-      const v = $('rep-range-to').value;
-      draft.toUtc = v ? new Date(v).toISOString() : null;
+      draft.toDate = $('rep-range-to').value || null;
     });
 
     // §09 R03: the client filter sends an ID (never a name) and repopulates the project

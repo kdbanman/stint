@@ -86,12 +86,23 @@
                 </label>
                 <label class="le-field le-start">Start
                   <span class="range-field">
-                    <input id="le-start" type="datetime-local" aria-label="Running timer start time" />
+                    <!-- §05 R06 / §12 R14 (G1): a RAW text field (localInputValue format,
+                         YYYY-MM-DDTHH:mm) — no native datetime-local popover. The calendar
+                         affordance is a DISCLOSURE toggle over the in-flow start-only picker
+                         host below (no modal, no backdrop); editing the open row can never
+                         write an end. -->
+                    <input id="le-start" type="text" autocomplete="off" spellcheck="false"
+                           placeholder="YYYY-MM-DDTHH:mm" aria-label="Running timer start time" />
                     <button id="le-start-pick" type="button" class="range-pick-btn"
-                            aria-controls="le-start" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button>
+                            aria-expanded="false" aria-controls="le-start-disc"
+                            aria-label="Adjust start on the day timeline"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button>
                   </span>
                 </label>
               </div>
+              <!-- §05 R06: the in-flow host the inline START-ONLY picker expands into,
+                   below the Start field. It renders the running block with a start grip
+                   only, fading into the future — never an end control. -->
+              <div id="le-start-disc" class="le-start-disc" hidden></div>
               <div class="le-row2">
                 <label class="le-bill"><input id="le-bill" type="checkbox" /> Billable</label>
                 <button type="button" id="le-tags" class="ghost small">Tags</button>
@@ -190,12 +201,15 @@
                 <button type="button" class="preset" data-preset="last-month">Last month</button>
                 <button type="button" class="preset" data-preset="custom">Custom…</button>
               </div>
+              <!-- §09 R01 (G3): a custom range is a pair of PLAIN DATES, no time component.
+                   The two date fields apply LIVE once both are set (no Apply button); main
+                   resolves the pair to the inclusive-end-day local window through core-side
+                   code — the renderer derives no window. -->
               <div class="custom-range" id="el-custom-range" hidden>
                 <label class="report-lab" for="el-range-from">From</label>
-                <input id="el-range-from" class="report-field" type="datetime-local" aria-label="Range from" />
+                <input id="el-range-from" class="report-field" type="date" aria-label="Range from" />
                 <label class="report-lab" for="el-range-to">To</label>
-                <input id="el-range-to" class="report-field" type="datetime-local" aria-label="Range to" />
-                <button type="button" class="report-apply" id="el-range-apply">Apply</button>
+                <input id="el-range-to" class="report-field" type="date" aria-label="Range to" />
               </div>
 
               <span class="report-lab">Group by</span>
@@ -277,11 +291,14 @@
                     <button type="button" class="preset" data-preset="custom">Custom…</button>
                   </div>
                 </div>
+                <!-- §09 R01 (G3): the builder's custom range is a pair of PLAIN DATES, no
+                     time component — the raw values travel in the saved rangeSpec and main
+                     resolves them to the inclusive-end-day local window in core-side code. -->
                 <div class="custom-range" id="rep-custom-range" hidden>
                   <label class="report-lab" for="rep-range-from">From</label>
-                  <input id="rep-range-from" class="report-field" type="datetime-local" aria-label="Range from" />
+                  <input id="rep-range-from" class="report-field" type="date" aria-label="Range from" />
                   <label class="report-lab" for="rep-range-to">To</label>
-                  <input id="rep-range-to" class="report-field" type="datetime-local" aria-label="Range to" />
+                  <input id="rep-range-to" class="report-field" type="date" aria-label="Range to" />
                 </div>
 
                 <span class="report-lab">Group by</span>

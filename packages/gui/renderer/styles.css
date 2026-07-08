@@ -1786,6 +1786,45 @@ button.danger:hover { background: var(--danger-weak); }
   cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
 }
 .stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); display: block; }
+/* §05 R06 (G8) — the RUNNING entry on the picker track: a start with no end yet. The block
+   dissolves into the future via a transparency mask (mockups/timer.html .block.me.open) —
+   nothing paints an end edge, because no end exists until the timer is stopped. */
+.stp-block.me.open {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 15%, rgba(0, 0, 0, 0.5) 48%, transparent 78%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 15%, rgba(0, 0, 0, 0.5) 48%, transparent 78%);
+  cursor: default;
+}
+/* the start GRIP and time label live at TRACK level so the fade never hides them; the grip
+   is the one drag affordance of the start-only variant (no bottom resize grip anywhere). */
+.stp-grip {
+  position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: 999px;
+  background: var(--paper); border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  cursor: ns-resize; z-index: 7; touch-action: none;
+}
+.stp-tlabel {
+  position: absolute; left: 8px; font-size: 11px; font-weight: 590;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  background: var(--wash); border-radius: 6px; padding: 1px 8px; z-index: 7;
+}
+/* §05 R06 / §12 R14 — the Timer view's IN-FLOW start-only disclosure (#le-start-disc):
+   plain block flow below the Start field — no backdrop, no positioning, no modal chrome.
+   The picker renders inline (.stp-inline) with a scrollable day viewport (G16: a scroll
+   window over the full 24h track, never a clipped one). */
+.le-start-disc { margin-top: 10px; }
+.le-start-disc[hidden] { display: none; }
+.stp-inline {
+  position: static; width: auto; max-width: 420px;
+  border: 1px solid var(--rule); border-radius: var(--r1); background: var(--paper);
+  box-shadow: none; /* in flow — none of the popover's modal chrome */
+  padding: 12px 16px 10px;
+}
+.stp-inline .stp-dayview {
+  position: relative; height: 352px; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px 4px 6px 0;
+}
+.stp-inline .stp-snaphint { margin-left: 52px; }
+
 /* overlap region — warn hatch, never blocks Apply */
 .stp-overlap {
   position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;

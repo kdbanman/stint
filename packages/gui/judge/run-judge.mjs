@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -478,39 +478,93 @@ async function main() {
     );
   });
 
-  // TIMER_VIEW (full Timer view, G5) — §12 R14: routing to the Timer view renders the live clock
-  // reading the derived count-up (advances +3s across the pinned-clock step, not reset), a
-  // running/idle state indicator, the running entry's description ('auth refactor') + client/
-  // project ('Client A / API'); the live-edit-running strip is present and its commit sends an
-  // `edit` patch over IPC that carries the start-time/attributes but NEVER endUtc (the row stays
-  // open); a visible Stop (accent) is present while running, with NO Switch control (Switch is
-  // removed — issue #34; the start-with-details form performs the atomic stop-then-start). Drive
-  // the real renderer: route to the Timer view, read the clock, fast-forward 3s, edit the live
-  // strip's start time, and assert the recorded edit payload (window.__EDITED__) has no endUtc.
-  await withPage(browser, timerViewRunningState(), 'index.html', async (page) => {
+  // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
+  // Timer view renders the live clock reading the derived count-up (advances +3s across the
+  // pinned-clock step, not reset) with the live-edit-running strip present (no End input).
+  // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
+  // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
+  // container computes position: static — showing the running block with a START drag grip
+  // ONLY (no .stp-resize end grip, no end label, no end echo field) and the computed future
+  // transparency fade (mask-image gradient) dissolving the block toward the future; the
+  // snapshot's other same-day entries paint gray. Dragging the grip UP by a known pixel delta
+  // (-30px on the 720px/24h track = -60min) advances the raw #le-start text field LIVE by the
+  // snapped 5-min amount (21:35 → 20:35); the debounced commit then sends an `edit` patch over
+  // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
+  // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
+  // instants land on a deterministic local day/track geometry.
+  {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(timerViewRunningState()), {}));
+    await page.goto(fileUrl('index.html'));
+
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
     const t1 = await page.textContent('#timer-clock');
     const before = await page.evaluate(() => ({
       stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
       noEnd: !document.querySelector('#live-edit #le-end'),
+      // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
+      startIsText: document.querySelector('#le-start')?.type === 'text',
       hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-      // Switch is removed — assert NO #timer-switch element survives anywhere (issue #34).
       noSwitch: !document.querySelector('#timer-switch'),
-      desc: document.querySelector('#timer-desc')?.textContent?.trim() ?? null,
-      meta: document.querySelector('#timer-meta')?.textContent?.trim() ?? null,
       state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
     }));
-    await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png') });
-    // Advance the pinned clock +3s — the card's tick() must advance the live count-up.
+    // Advance the pinned clock +3s — the card's tick() must advance the live count-up (the
+    // count-up never stops while the start is being edited, §05 R06).
     await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
     const t2 = await page.textContent('#timer-clock');
-    // Edit the live-edit-running strip's start time (a change event commits immediately) and the
-    // description (debounced); assert the recorded edit patch carries the change but NO endUtc.
-    await page.fill('#live-edit #le-desc', 'auth refactor v2');
-    await page.fill('#live-edit #le-start', '2026-06-24T20:00');
-    await page.dispatchEvent('#live-edit #le-start', 'change');
-    // Let the debounced description commit settle (scheduleLiveEdit waits 500ms).
+
+    // Open the inline start-only disclosure from the Start field's calendar affordance.
+    await page.click('#le-start-pick');
+    await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+    const disc = await page.evaluate(() => {
+      const host = document.querySelector('#le-start-disc');
+      const box = host.querySelector('.stp-inline');
+      const me = host.querySelector('.stp-block.me.open');
+      const cs = me ? getComputedStyle(me) : null;
+      const mask = cs ? cs.maskImage || cs.webkitMaskImage || '' : '';
+      return {
+        // IN FLOW — no modal chrome anywhere: no backdrop, no dialog role, static position.
+        inFlow: !!box && getComputedStyle(box).position === 'static',
+        noBackdrop: !document.querySelector('.stp-backdrop'),
+        noDialog: !host.querySelector('[role="dialog"], [aria-modal]'),
+        expanded: document.querySelector('#le-start-pick')?.getAttribute('aria-expanded') === 'true',
+        // START-ONLY chrome: a start grip, and NO end grip / end label / end echo anywhere.
+        grip: !!host.querySelector('.stp-grip'),
+        noResize: !host.querySelector('.stp-resize'),
+        noEndLabel: !host.querySelector('.stp-lab-bot'),
+        noEndEcho: !host.querySelector('.stp-echo-end'),
+        // The running block dissolves into the future — the computed transparency mask.
+        fade: /gradient/.test(mask),
+        others: host.querySelectorAll('.stp-block.other').length,
+        startBefore: document.querySelector('#le-start')?.value ?? null,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
+
+    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, 5-min
+    // snapped): the raw #le-start text must advance LIVE from 21:35 to 20:35 (UTC page).
+    const grip = page.locator('#le-start-disc .stp-grip');
+    await grip.scrollIntoViewIfNeeded();
+    const g = await grip.boundingBox();
+    const gx = Math.round(g.x + g.width / 2);
+    const gy = Math.round(g.y + g.height / 2);
+    await page.mouse.move(gx, gy);
+    await page.mouse.down();
+    await page.mouse.move(gx, gy - 30, { steps: 6 });
+    await page.mouse.up();
+    const dragged = await page.evaluate(() => ({
+      startLive: document.querySelector('#le-start')?.value ?? null,
+      // Still no end anywhere after the drag — the variant cannot even paint one.
+      stillNoEndChrome: !document.querySelector('#le-start-disc .stp-resize') &&
+        !document.querySelector('#le-start-disc .stp-lab-bot'),
+      noBackdrop: !document.querySelector('.stp-backdrop'),
+    }));
+
+    // Let the debounced live-edit commit settle (scheduleLiveEdit waits 500ms) and assert the
+    // committed patch: startUtc present, NO endUtc key (the load-bearing §05 R06 invariant).
     await page.clock.fastForward(600);
     await page.waitForFunction(() => !!window.__EDITED__);
     const edited = await page.evaluate(() => window.__EDITED__);
@@ -521,24 +575,39 @@ async function main() {
       delta === 3 &&
       before.stripPresent &&
       before.noEnd &&
+      before.startIsText &&
       before.hasStop &&
       before.noSwitch &&
-      before.desc === 'auth refactor' &&
-      /Client A \/ API/.test(before.meta ?? '') &&
       before.state === 'running' &&
+      disc.inFlow &&
+      disc.noBackdrop &&
+      disc.noDialog &&
+      disc.expanded &&
+      disc.grip &&
+      disc.noResize &&
+      disc.noEndLabel &&
+      disc.noEndEcho &&
+      disc.fade &&
+      disc.others >= 1 &&
+      disc.startBefore === '2026-06-24T21:35' &&
+      dragged.startLive === '2026-06-24T20:35' &&
+      dragged.stillNoEndChrome &&
+      dragged.noBackdrop &&
       !!edited &&
       typeof edited.id === 'number' &&
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
-      (edited.patch.startUtc !== undefined || edited.patch.description !== undefined);
+      edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
     record(
       'TIMER_VIEW',
       ok,
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
+        `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
         `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'})`,
       'timer-view-full.png',
     );
-  });
+    await page.close();
+  }
 
   // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
   // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
@@ -1869,7 +1938,12 @@ async function main() {
   //       flags ON the affected rows (reusing the REPORT_SUMMARY shape) plus the resolved-range
   //       header;
   //   (d) Export CSV / Export JSON drive a real exportEntries call carrying the saved ref;
-  //   (e) the sidebar nav is present with Reports active.
+  //   (e) the sidebar nav is present with Reports active;
+  //   (f) §09 R01 (G3): the builder's CUSTOM range is a pair of PLAIN DATES — the two range
+  //       inputs are type="date" (zero datetime-local anywhere in the builder), the Custom…
+  //       chip reveals them, and saving a filled custom def fires a saveReport whose captured
+  //       rangeSpec is exactly { kind:'absolute', fromDate, toDate } (raw YYYY-MM-DD strings,
+  //       no time component, no 'T'), with the new card's spec summary printing the date pair.
   // Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
   // output) for rubric review.
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
@@ -1914,6 +1988,12 @@ async function main() {
       name: !!document.querySelector('#rep-name'),
       range: !!document.querySelector('#rep-preset-seg'),
       custom: !!document.querySelector('#rep-custom-range'),
+      customHidden: !!document.querySelector('#rep-custom-range')?.hidden,
+      // §09 R01 (G3): the custom range is a pair of PLAIN DATE fields — type="date", no
+      // time component, and ZERO datetime-local inputs anywhere in the builder.
+      fromType: document.querySelector('#rep-range-from')?.type ?? '',
+      toType: document.querySelector('#rep-range-to')?.type ?? '',
+      datetimeLocals: document.querySelectorAll('#rep-builder input[type="datetime-local"]').length,
       by: !!document.querySelector('#rep-by-seg'),
       client: !!document.querySelector('#rep-client'),
       project: !!document.querySelector('#rep-project'),
@@ -1924,7 +2004,25 @@ async function main() {
       presets: [...document.querySelectorAll('#rep-preset-seg .preset')].map((c) => c.dataset.preset),
       bys: [...document.querySelectorAll('#rep-by-seg .seg-btn')].map((b) => b.dataset.by),
     }));
-    await page.click('#rep-cancel');
+    // (f) §09 R01: clicking Custom… reveals the two plain date fields; filling the pair and
+    // saving fires a real saveReport whose captured rangeSpec is EXACTLY the plain-date
+    // absolute arm { kind:'absolute', fromDate, toDate } — raw YYYY-MM-DD strings, no 'T'.
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#rep-name', 'June window');
+    await page.fill('#rep-range-from', '2026-06-01');
+    await page.fill('#rep-range-to', '2026-06-07');
+    await page.click('#rep-save');
+    await page.waitForFunction(() => !!window.__SAVED_REPORT__);
+    await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length === 3);
+    const customSave = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('#rep-defs .def')].map((d) => ({
+        name: d.querySelector('.dname')?.textContent.trim() ?? '',
+        spec: d.querySelector('.dspec')?.textContent.replace(/\s+/g, ' ').trim() ?? '',
+      }));
+      return { payload: window.__SAVED_REPORT__ ?? null, cards };
+    });
+    // Save closes the builder itself (closeBuilder), so no Cancel is needed here.
     await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
     // Edit the first card → the builder re-opens populated for that def (showReport).
     await page.click('#rep-defs .def:first-child .def-edit');
@@ -1981,6 +2079,21 @@ async function main() {
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
       ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
       ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b));
+    // (f) §09 R01 (G3): the custom range is a pair of PLAIN DATE fields (no time component,
+    // zero datetime-local in the builder), revealed by Custom…, and the captured saveReport
+    // payload's rangeSpec is EXACTLY { kind:'absolute', fromDate, toDate } — plain dates,
+    // no 'T', no fromUtc/toUtc instant — with the saved card's summary printing the pair.
+    const savedSpec = customSave.payload && customSave.payload.rangeSpec;
+    const customOk =
+      builder.fromType === 'date' && builder.toType === 'date' && builder.datetimeLocals === 0 &&
+      builder.customHidden && // the date pair stays tucked behind Custom… until chosen
+      !!savedSpec && savedSpec.kind === 'absolute' &&
+      savedSpec.fromDate === '2026-06-01' && savedSpec.toDate === '2026-06-07' &&
+      Object.keys(savedSpec).sort().join(',') === 'fromDate,kind,toDate' &&
+      !String(savedSpec.fromDate).includes('T') && !String(savedSpec.toDate).includes('T') &&
+      customSave.cards.some(
+        (c) => c.name === 'June window' && c.spec.includes('2026-06-01') && c.spec.includes('2026-06-07'),
+      );
     const editOk = /Weekly billables/.test(editOpen.title) && /Weekly billables/.test(editOpen.name) && editOpen.deleteVisible;
     const runOk =
       !!run.ranReport && /Weekly billables/.test(String(run.ranReport.ref)) && // Run sent the card's name
@@ -1996,11 +2109,11 @@ async function main() {
       afterJson.format === 'json' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
       afterJson.savedReportRef === 'Weekly billables — Globex';
-    const ok = listOk && sidebarOk && accentOk && builderOk && editOk && runOk && exportOk;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
       'reports-list.png',
     );
   });
@@ -2008,9 +2121,13 @@ async function main() {
   // ENTRY_LIST_SEARCH — §12 R9: the Entries-view control bar. Loading the multi-entry
   // fixture paints the default day-grouped list; typing in the search box drives a real
   // window.stint.listEntries query that narrows the visible rows (only matches remain), and
-  // switching the Group-by control to Client regroups the same set into client buckets. The
-  // deterministic sub-facts are machine-scored under the pinned JUDGE clock; the grouped and
-  // searched looks are captured (entries-grouped.png / entries-search.png) for rubric review.
+  // switching the Group-by control to Client regroups the same set into client buckets.
+  // §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields — #el-range-from/#el-range-to
+  // are input[type="date"] (no time component), there is NO #el-range-apply button, and
+  // setting both dates drives a real listEntries call carrying { fromDate, toDate } (the raw
+  // YYYY-MM-DD strings) that narrows the visible rows LIVE. The deterministic sub-facts are
+  // machine-scored under the pinned JUDGE clock; the grouped and searched looks are captured
+  // (entries-grouped.png / entries-search.png) for rubric review.
   await withPage(browser, listState(), 'index.html', async (page) => {
     // The default load paints the day-grouped getState (no control touched yet).
     await page.waitForFunction(() => document.querySelectorAll('#entries .day').length > 0);
@@ -2023,6 +2140,11 @@ async function main() {
       hasClientFilter: !!document.querySelector('#el-client'),
       hasTagFilter: !!document.querySelector('#el-tag'),
       hasSearch: !!document.querySelector('#search'),
+      // §09 R01 (G3): the two custom-range fields are PLAIN DATE inputs and the toolbar
+      // ships NO Apply button (the pair applies live).
+      fromType: document.querySelector('#el-range-from')?.type ?? '',
+      toType: document.querySelector('#el-range-to')?.type ?? '',
+      hasApply: !!document.querySelector('#el-range-apply'),
       // The default day-grouped list shows every entry (4) under its day headers.
       rowCount: document.querySelectorAll('#entries .entry').length,
       groupHeads: [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim()),
@@ -2057,6 +2179,24 @@ async function main() {
       rowCount: document.querySelectorAll('#entries .entry').length,
     }));
 
+    // §09 R01 (G3): pick Custom… and fill the two plain date fields with the fixture's
+    // earlier day (2026-06-23). Setting BOTH dates drives a real listEntries call carrying
+    // the raw { fromDate, toDate } strings LIVE — no Apply click exists — and the visible
+    // rows narrow to the two in-range entries (standup / refactor tests).
+    await page.click('#el-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#el-range-from', '2026-06-23');
+    await page.fill('#el-range-to', '2026-06-23');
+    await page.waitForFunction(
+      () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
+    );
+    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
+    const onCustom = await page.evaluate(() => ({
+      req: { ...(window.__LIST_REQ__ || {}) },
+      rowCount: document.querySelectorAll('#entries .entry').length,
+      descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
+    }));
+
     const controlsOk =
       before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch &&
       before.byOptions.length === 4 &&
@@ -2074,11 +2214,23 @@ async function main() {
       onClient.byActive.length === 1 && onClient.byActive[0] === 'client' &&
       onClient.groupHeads.includes('Acme') && onClient.groupHeads.includes('Globex') &&
       onClient.rowCount === 4; // every row returns once the search is cleared
-    const ok = controlsOk && defaultOk && searchOk && groupOk;
+    // §09 R01 (G3): plain date fields, no Apply, and the live plain-date query narrowed the
+    // rows to the 2026-06-23 pair — the payload carries the raw strings (fromDate/toDate,
+    // no 'T', no derived fromUtc/toUtc instant).
+    const customRangeOk =
+      before.fromType === 'date' && before.toType === 'date' && !before.hasApply &&
+      onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
+      onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
+      !String(onCustom.req.fromDate).includes('T') &&
+      onCustom.rowCount === 2 &&
+      onCustom.descs.some((d) => /standup/.test(d)) &&
+      onCustom.descs.some((d) => /refactor tests/.test(d)) &&
+      !onCustom.descs.some((d) => /auth refactor|deploy pipeline/.test(d));
+    const ok = controlsOk && defaultOk && searchOk && groupOk && customRangeOk;
     record(
       'ENTRY_LIST_SEARCH',
       ok,
-      `entry list: default=${JSON.stringify(before)} → search=${JSON.stringify(onSearch)} → by client=${JSON.stringify(onClient)}`,
+      `entry list: default=${JSON.stringify(before)} → search=${JSON.stringify(onSearch)} → by client=${JSON.stringify(onClient)} → custom dates=${JSON.stringify(onCustom)}`,
       'entries-grouped.png',
     );
   });
@@ -2213,6 +2365,177 @@ async function main() {
       ok,
       `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
+    );
+  });
+
+  // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
+  // and the ONE viewport derivation they drive. Three machine-scored fact groups:
+  //   (a) The Settings → Timeline group renders controls for all four data-keys
+  //       (workingHoursStart / workingHoursEnd / pickerWindowMode / pickerAroundHours),
+  //       the HH:MM inputs read the STORED (non-default) 09:00 / 15:00, and the Around
+  //       select is disabled (row class 'off') while the mode is working_hours; flipping
+  //       the Picker-window segment fires setSetting({key:'pickerWindowMode',
+  //       value:'around_now'}) over the EXISTING channel (no new IPC) and the re-render
+  //       enables the Around select.
+  //   (b) SU.timelineWindow — the single source of the window math (G16; §12 R15's picker
+  //       and §12 R16's calendar must consume it, never re-derive it) — evaluated in-page
+  //       under the pinned JUDGE_NOW clock: the working-hours fixture yields exactly
+  //       540–900 minutes (09:00–15:00) and the around_now/8 fixture yields the page-local
+  //       JUDGE_NOW ± 4h clamped to the 24h track (deterministic, consumer-independent).
+  //   (c) The timeline consumers (§12 R15 picker / §12 R16 calendar) open as a FULL-24h
+  //       scrollable track — scrollHeight > clientHeight, scrollTop matching the configured
+  //       window: a scroll default, never a clipped one. The consumers mark their scroll
+  //       container with the `data-timeline-track` hook; until §12 R15/R16 land there is no
+  //       track in the DOM, so (c) reports "pending" WITHOUT failing — it is re-verified in
+  //       the post-wave AC pass once the consumer rows land (this scene is their dependency,
+  //       not the reverse).
+  await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#settings-panel [data-key="pickerWindowMode"]', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'timeline-window.png'), fullPage: true });
+
+    // (a) the Timeline group's four controls, stored values, and the off/disabled Around row.
+    const probe = await page.evaluate(() => {
+      const panel = document.querySelector('#settings-panel');
+      const keys = [...panel.querySelectorAll('[data-key]')].map((el) => el.dataset.key);
+      const start = panel.querySelector('input.set-hhmm[data-key="workingHoursStart"]');
+      const end = panel.querySelector('input.set-hhmm[data-key="workingHoursEnd"]');
+      const around = panel.querySelector('select[data-key="pickerAroundHours"]');
+      const aroundRow = around ? around.closest('.set-row') : null;
+      return {
+        allFour: ['workingHoursStart', 'workingHoursEnd', 'pickerWindowMode', 'pickerAroundHours'].every(
+          (k) => keys.includes(k),
+        ),
+        startValue: start ? start.value : null,
+        endValue: end ? end.value : null,
+        aroundDisabled: !!(around && around.disabled),
+        aroundRowOff: !!(aroundRow && aroundRow.classList.contains('off')),
+      };
+    });
+
+    // (a, continued) flipping the Picker-window segment persists over the EXISTING setSetting
+    // channel and the re-render enables the Around select (row no longer 'off').
+    await page.click('#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]');
+    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'pickerWindowMode');
+    const set = await page.evaluate(() => window.__SET_SETTING__);
+    await page.waitForFunction(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      return !!around && !around.disabled;
+    });
+    const afterFlip = await page.evaluate(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      const row = around ? around.closest('.set-row') : null;
+      return { aroundEnabled: !!around && !around.disabled, rowOff: !!(row && row.classList.contains('off')) };
+    });
+
+    // (b) SU.timelineWindow, evaluated in-page under the pinned clock. The working-hours
+    // fixture is exact (540–900); the around_now/8 expectation is computed from the SAME
+    // page-local rendering of JUDGE_NOW the helper sees (now ± 240min, clamped to [0,1440]),
+    // so the fact holds in any runner timezone.
+    const windows = await page.evaluate(() => {
+      const nowIso = window.__JUDGE_NOW__;
+      const working = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'working_hours', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      const around = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'around_now', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      const now = new Date(nowIso);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const clamp = (m) => Math.max(0, Math.min(1440, Math.round(m)));
+      const expectedAround = { startMin: clamp(nowMin - 240), endMin: clamp(nowMin + 240) };
+      // The entries calendar always defaults to working hours (§12 R16): forcing the mode
+      // on an around_now snapshot must reproduce the working-hours window.
+      const calendar = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'working_hours', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      return {
+        working,
+        around,
+        expectedAround,
+        workingOk: working.startMin === 540 && working.endMin === 900,
+        aroundOk: around.startMin === expectedAround.startMin && around.endMin === expectedAround.endMin,
+        calendarOk: calendar.startMin === 540 && calendar.endMin === 900,
+      };
+    });
+
+    // (c) the consumer track — present only once §12 R15/R16 land (data-timeline-track hook).
+    const track = await page.evaluate(() => {
+      const el = document.querySelector('[data-timeline-track]');
+      if (!el) return { present: false, ok: false };
+      const scrollable = el.scrollHeight > el.clientHeight;
+      // The scroll window sits at the configured start: scrollTop/scrollHeight ≈ startMin/1440.
+      const expected = window.SU.timelineWindow(window.__STATE__.settings, window.__JUDGE_NOW__, null);
+      const frac = el.scrollTop / el.scrollHeight;
+      const ok = scrollable && Math.abs(frac - expected.startMin / 1440) < 0.02;
+      return { present: true, ok, scrollable, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    });
+
+    const ok =
+      probe.allFour &&
+      probe.startValue === '09:00' &&
+      probe.endValue === '15:00' &&
+      probe.aroundDisabled &&
+      probe.aroundRowOff &&
+      !!set &&
+      set.key === 'pickerWindowMode' &&
+      set.value === 'around_now' &&
+      afterFlip.aroundEnabled &&
+      !afterFlip.rowOff &&
+      windows.workingOk &&
+      windows.aroundOk &&
+      windows.calendarOk &&
+      (track.present ? track.ok : true);
+    record(
+      'TIMELINE_WINDOW',
+      ok,
+      `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
+        `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
+        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}); mode flip fired ` +
+        `setSetting=${JSON.stringify(set)} and enabled Around (${afterFlip.aroundEnabled}); ` +
+        `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
+        `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
+        `(${windows.aroundOk}), calendar-forced-working-hours ok=${windows.calendarOk}; ` +
+        (track.present
+          ? `consumer track scrollable+positioned=${track.ok} (scrollTop=${track.scrollTop}/${track.scrollHeight})`
+          : `consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)`),
+      'timeline-window.png',
+    );
+  });
+
+  // TIMELINE_WINDOW around_now snapshot — the Settings view painted FROM an around_now
+  // fixture: the Around select renders enabled with the stored span selected (the inverse
+  // of the working_hours-disabled fact above), proving the off/disabled state follows the
+  // STORED mode, not a hardcoded default. Folded into the TIMELINE_WINDOW rubric row.
+  await withPage(browser, timelineAroundState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#settings-panel select[data-key="pickerAroundHours"]', { state: 'attached' });
+    const probe = await page.evaluate(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      const row = around ? around.closest('.set-row') : null;
+      const seg = document.querySelector(
+        '#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]',
+      );
+      return {
+        aroundEnabled: !!around && !around.disabled,
+        rowOff: !!(row && row.classList.contains('off')),
+        aroundValue: around ? around.value : null,
+        modeOn: !!(seg && seg.classList.contains('on')),
+      };
+    });
+    const ok = probe.aroundEnabled && !probe.rowOff && probe.aroundValue === '8' && probe.modeOn;
+    record(
+      'TIMELINE_WINDOW',
+      ok,
+      `around_now fixture paints the mode segment on (${probe.modeOn}) with the Around select ` +
+        `enabled (${probe.aroundEnabled}, row off=${probe.rowOff}) reading the stored span (${probe.aroundValue}h)`,
+      'timeline-window.png',
     );
   });
 

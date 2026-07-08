@@ -440,6 +440,45 @@ describe('GOLD: config set validates (§14)', () => {
     expect(r.code).not.toBe(0);
     expect(r.err).toMatch(/one of/);
   });
+
+  // §14 timeline-window keys — tt parity arrived automatically from the descriptor list
+  // (the config block is fully descriptor-driven), so the CLI must expose AND validate the
+  // four keys exactly as core does. Each rejection exits non-zero with a diagnostic and
+  // leaves `config ls --json` reading the documented default.
+  it('rejects a malformed working_hours_start (not zero-padded HH:MM)', () => {
+    const r = tt(['config', 'set', 'working_hours_start', '7am']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/invalid value for working_hours_start/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).workingHoursStart).toBe('07:00');
+  });
+
+  it('rejects a working-hours pair that violates start<end', () => {
+    // Against the default start 07:00, an end of 06:00 inverts the pair.
+    const r = tt(['config', 'set', 'working_hours_end', '06:00']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/start must be before end/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).workingHoursEnd).toBe('18:00');
+  });
+
+  it('rejects picker_around_hours outside 1–24', () => {
+    for (const bad of ['0', '25']) {
+      const r = tt(['config', 'set', 'picker_around_hours', bad]);
+      expect(r.code).not.toBe(0);
+      expect(r.err).toMatch(/1 to 24/);
+    }
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerAroundHours).toBe(8);
+  });
+
+  it('round-trips picker_window_mode through config set / ls --json', () => {
+    const set = tt(['config', 'set', 'picker_window_mode', 'around_now']);
+    expect(set.code).toBe(0);
+    expect(set.out).toBe('set picker_window_mode = around_now');
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerWindowMode).toBe('around_now');
+    // …and an unknown mode is rejected, leaving the stored choice intact.
+    const bad = tt(['config', 'set', 'picker_window_mode', 'sometimes']);
+    expect(bad.code).not.toBe(0);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerWindowMode).toBe('around_now');
+  });
 });
 
 describe('GOLD: tt report (§09)', () => {
@@ -488,6 +527,10 @@ describe('GOLD: settings defaults (§14)', () => {
       checkin_interval_min    30
       global_hotkey           CommandOrControl+Alt+T
       date_format             system
+      working_hours_start     07:00
+      working_hours_end       18:00
+      picker_window_mode      working_hours
+      picker_around_hours     8
       backup_retention        5"
     `);
   });
@@ -502,6 +545,10 @@ describe('GOLD: settings defaults (§14)', () => {
       checkinIntervalMin: 30,
       globalHotkey: 'CommandOrControl+Alt+T',
       dateFormat: 'system',
+      workingHoursStart: '07:00',
+      workingHoursEnd: '18:00',
+      pickerWindowMode: 'working_hours',
+      pickerAroundHours: 8,
       backupRetention: 5,
     });
   });
@@ -655,13 +702,16 @@ describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
     }
   });
 
-  it('the report-save / fav rows stay new-only, never core (§09, §05 parity rows)', () => {
+  it('the report-save / fav rows are present and never core (§09, §05 parity rows)', () => {
+    // The timeless-docs principle (process.html §02) removed the change-narrative
+    // "new" badges from the PRD entirely; what must still hold is that these
+    // parity rows exist and never gain a core badge.
     const rows = rowsByCommand();
     for (const cmd of ['tt report save <name>', 'tt report ls / show <name> / rm <name>', 'tt report run <name>', 'tt fav …']) {
       const does = rows.get(cmd);
       expect(does, `missing §11 row: ${cmd}`).toBeDefined();
       expect(hasCoreBadge(does!), `${cmd} should NOT be badged core`).toBe(false);
-      expect(/<span class="new">new<\/span>/.test(does!), `${cmd} should stay new`).toBe(true);
+      expect(/<span class="new">new<\/span>/.test(does!), `${cmd} must not carry change-narrative badges (timeless docs)`).toBe(false);
     }
   });
 });

@@ -64,6 +64,7 @@ import { startWithAttributes, type StartPayload } from './start.js';
 import {
   buildReportView,
   buildSavedReportView,
+  resolveDateRange,
   resolveExportDefinition,
   exportPayload,
   exportFileName,
@@ -336,16 +337,18 @@ function createPopover(): void {
 
 /**
  * §12 R9 — the Entries view's grouped/filtered/searched list. A read-only query: it
- * resolves the range (preset via core's resolveRange, or the explicit custom from/to),
- * narrows through store.listEntries (range/client/project/tag/billable/search — exactly
- * `tt list`), groups via core's buildEntryList, and projects each entry to the
- * renderer-safe row shape with its overlap flag. No write, so it never refreshes windows.
+ * resolves the range (a preset via core's resolveRange, or the custom PLAIN-DATE pair —
+ * §09 R01 — via reportview.ts's resolveDateRange, the inclusive-end-day half-open local
+ * window [from 00:00, day-after-to 00:00)), narrows through store.listEntries
+ * (range/client/project/tag/billable/search — exactly `tt list`), groups via core's
+ * buildEntryList, and projects each entry to the renderer-safe row shape with its
+ * overlap flag. No write, so it never refreshes windows.
  */
 function listEntries(q: ListEntriesQuery): EntryListView {
   const now = new Date();
   const range = q.preset
     ? resolveRange(q.preset, store.settings().weekStart, now)
-    : { fromUtc: q.fromUtc!, toUtc: q.toUtc! };
+    : resolveDateRange(q.fromDate!, q.toDate!);
   const filter: Parameters<Store['listEntries']>[0] = {
     fromUtc: range.fromUtc,
     toUtc: range.toUtc,
@@ -405,7 +408,9 @@ function registerIpc(): void {
     search: (p) => buildUiState(store, { search: (p as { query?: string })?.query }),
     // §12 R9: the Entries view's control bar. Read-only (no refreshAll): resolve the range
     // (a preset through core's resolveRange — the same rule the report picker drives — or
-    // the explicit custom from/to), list the entries through the SAME store.listEntries the
+    // the custom plain-date pair through resolveDateRange, §09 R01: the toolbar's two date
+    // fields resolve to the inclusive-end-day half-open local window here, never in the
+    // renderer), list the entries through the SAME store.listEntries the
     // CLI uses (range/client/project/tag/billable/search all narrow there), then group via
     // core's buildEntryList. Returns the grouped rows + the resolved window; the renderer
     // paints it and re-derives no grouping/matching (parity with `tt list … --by`).

@@ -367,16 +367,26 @@ parity, R8, that JUDGE's canned `report` mock cannot exercise).
 4. Click **Today**, **This month**, **Last month** in turn.
    - [ ] Each repaints the resolved-range header + rows to match the corresponding
          `tt report --today` / `--month` / `--last-month` output.
-5. Click **Custom…**, enter an explicit **from**/**to** spanning only the last-week entry,
-   and click **Apply**.
-   - [ ] The resolved-range header echoes the entered window and the total/rows match
-         `tt report --range <FROM> <TO>` for the same bounds.
+5. Click **Custom…** and enter the **two plain dates** (§09 R1 / G3: a from-day and a
+   to-day, `YYYY-MM-DD`, **no time component** — the two fields are date pickers, not
+   datetime inputs) covering only the last-week entry's day(s), then Save and **Run** the
+   definition.
+   - [ ] The resolved-range header covers **the from-day from 00:00 local through the END
+         of the to-day** (the window closes at 00:00 local the day *after* the to-day —
+         the to-day is included in full), and the total/rows match
+         `tt report --range <FROM> <TO>` for those same resolved local-midnight bounds.
+   - [ ] An entry late in the evening of the to-day is **included**; one on the following
+         day is **excluded** (inclusive end day, half-open window).
 
 > The preset→window resolution lives in core's `resolveRange` (BDD `features/reports.feature`
-> runs the same This-week / Last-week / custom / group-by-client contract over core AND tt);
-> this runbook confirms the GUI picker calls into it and agrees with `tt report --<preset>` /
+> runs the same This-week / Last-week / custom / group-by-client contract over core AND tt),
+> and the plain-date pair → local-midnight window rule lives once in `gui/src/reportview.ts`
+> `resolveDateRange` (BDD `features/reporting.feature` "A custom range is a pair of plain
+> dates covering both boundary days" proves the window surface-neutrally; GOLD
+> `gui/test/reportview.test.ts` pins the local-midnight/inclusive-end-day/DST math); this
+> runbook confirms the GUI picker calls into it and agrees with `tt report --<preset>` /
 > `--range` on a real session. JUDGE screenshots the affordance headless
-> (`REPORT_RANGE_PICKER`, `reports-default.png` / `reports-custom.png`).
+> (`REPORTS_VIEW`, `reports-list.png` / `reports-run.png`).
 
 ## CHECK REPORT EXPORT (GUI) — Export CSV / JSON writes a file matching `tt export` (§09 R6, §12 R8)
 
@@ -503,10 +513,12 @@ confirms it live and cross-checks it against `tt list` with equivalent flags.
          billable hours; a multi-tag entry appears under each of its tags under Tag grouping.
    - [ ] Each grouping matches `tt list --by <day|client|project|tag>` (the same buckets,
          the same per-group hours).
-3. Pick a **range preset** (e.g. This week), then switch to **Custom…** and enter an explicit
-   from/to covering only one day, and Apply.
-   - [ ] Only the in-range entries remain; the preset/custom window matches
-         `tt list --week` / `tt list --range FROM TO`.
+3. Pick a **range preset** (e.g. This week), then switch to **Custom…** and enter the **two
+   plain dates** (§09 R1 / G3: from-day and to-day, no time component) covering only one day.
+   - [ ] The list narrows **live as soon as both dates are set** — there is no Apply button.
+   - [ ] Only the in-range entries remain (the to-day included in full, the next day
+         excluded); the preset/custom window matches `tt list --week` /
+         `tt list --range FROM TO` over the same resolved local-midnight bounds.
 4. Apply a **client**, then a **project**, then a **tag** filter.
    - [ ] The list narrows to the chosen client / project / tag, matching
          `tt list --client … / --project … / --tag …`.
@@ -1413,10 +1425,10 @@ on a single-day calendar column — drag the body to move, drag the bottom to re
    calendar icon beside **Start** (or **End**).
    - [ ] The same picker opens, seeded from that entry's span, and dragging/Apply writes the
          `.edit-start`/`.edit-end` fields; Save commits the amended span.
-4. **Edit the running timer's start.** With a timer running, open the Timer view's live-edit
-   strip and click the calendar icon beside **Start time**.
-   - [ ] The picker opens **start-only** (no Stop handle, no end label) — it **never writes a
-         stop**, so editing the open row cannot close it (§05 R6). Apply writes only the start.
+4. **Edit the running timer's start.** With a timer running, the Timer view's Start field
+   expands the **inline start-only disclosure** below the field — no modal, no Apply; drags
+   write the start **live** and the variant carries **no end control at all** (§05 R06). That
+   surface has its own dedicated procedure: run **CHECK RUNNING START-ONLY PICKER** below.
 5. **Overnight span.** Set a **From** today and a **To** tomorrow by **typing** the dates.
    - [ ] The span is accepted via text; the picker's day column stays **single-day** and shows
          a footer note that **overnight spans use text entry** (the visual column does not span
@@ -1429,3 +1441,48 @@ on a single-day calendar column — drag the body to move, drag the bottom to re
 > `ADD_FORM_PICKER`. This runbook confirms, on a real build, that the picker opens on every
 > R15 surface, that dragging snaps and writes the authoritative text fields, that overlaps
 > warn without blocking, and that overnight spans round-trip through text entry.
+
+## CHECK RUNNING START-ONLY PICKER (§05 R06, §12 R14)
+
+The running entry's start is adjusted through the **inline, start-only disclosure** of the
+interval picker below the Timer view's Start field — in flow, no modal — and the running
+entry's **end does not exist until it is stopped**: no surface may render or write one, and
+the count-up must never stop while the start is being edited.
+
+1. In a real desktop session, start a timer (`tt start "disclosure check"` or the Timer
+   view's Start form) and let it run a few minutes. Open the **Timer view**.
+   - [ ] The live-edit strip shows the **Start** field as a plain text value
+         (`YYYY-MM-DDTHH:mm`) with a **calendar affordance** beside it — the field is **not**
+         a native `datetime-local` control (no OS date popover on click).
+2. Click the calendar affordance beside **Start**.
+   - [ ] The day timeline expands **inline, in flow below the Start field** — the page
+         content moves down to make room; there is **no modal, no dimmed backdrop, no
+         Apply/Cancel**, and the rest of the window stays fully interactive.
+   - [ ] The running entry renders as an accent block that **dissolves into the future** —
+         its lower edge fades to transparent (a gradient, not a hard end edge) — with a
+         **start drag grip** at its top edge and **no end control anywhere**: no bottom
+         resize grip, no end time label, no end text field.
+   - [ ] Any other entries from that day render **gray** on the track; the viewport opens
+         scrolled to the configured §14 window (scrollable across the full 24 h — the track
+         is never clipped).
+3. **Drag the grip earlier** (upward), watching the Start field and the running clock.
+   - [ ] The grip and block edge move with a visible **5-minute snap**, and every drag step
+         writes the **Start text field live** (no Apply — the field is the commit path).
+   - [ ] The **count-up never stops or resets** while dragging — it keeps ticking and
+         grows to reflect the earlier start after the edit settles.
+4. Collapse the disclosure (click the calendar affordance again), then verify from the
+   other surface:
+   - [ ] `tt status` shows the entry **still running**, with the **amended start** and the
+         larger derived elapsed.
+   - [ ] `tt list --json` shows the amended `start` and `"end": null` — **empty, never a
+         synthetic "now"**; exactly one entry is open.
+
+> The in-flow/no-modal chrome, start-grip-only rendering, computed future-fade mask, the
+> live 5-min-snapped write into `#le-start`, and the committed edit patch carrying `startUtc`
+> with **no `endUtc` key** are pinned headless under JUDGE (`TIMER_VIEW`,
+> `timer-view-full.png`) driving the real renderer; the cross-surface no-close/no-end
+> behavior is proven twice (core + `tt`) by `features/tracking.feature` "Editing the running
+> entry start never closes it and never synthesizes an end". This runbook confirms the same
+> on a real desktop: real drags snap and write live, the block visibly dissolves toward the
+> future with no end affordance, the count-up never stops, and `tt` sees the amended start
+> with the entry still open and its end empty.
