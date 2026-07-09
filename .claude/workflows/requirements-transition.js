@@ -262,6 +262,7 @@ function normalizeScope(a) {
 const scope = normalizeScope(args);
 const FULL_RUN = !scope; // swap/cleanup (§Z) only fires on an unscoped, all-green run.
 
+if (!inv) throw new Error('Inventory agent died (likely a rate limit) — resume the run to retry it; nothing can proceed without the work-list.');
 let work = inv.items;
 if (scope) {
   work = work.filter((w) => scope.some((s) => `${w.reqId} ${w.section} ${w.summary}`.toLowerCase().includes(s)));
