@@ -1,14 +1,12 @@
-Feature: Entries-view grouping, filtering & search (§12 R9)
-  # PRD §12 R9 — the Entries view's control bar: group the entry list by day / client /
-  # project / tag, narrow it by a range preset (or custom range) and by client / project /
-  # tag, and search it free-text — all over one core model (buildEntryList) so the GUI
-  # Entries view (gui/renderer/index.html #entries-ctrl → window.stint.listEntries) and
-  # `tt list --by/--search/--range/--client/--project/--tag` group and match identically.
-  # This locks that CONTRACT; it runs TWICE — over @stint/core (store.listEntries +
-  # buildEntryList) and over tt (`tt list … --json` re-grouped through the SAME core
-  # buildEntryList) — so the surfaces are proven identical (§17 R8). The fixed clock is a
-  # Wednesday (2026-06-24); the entries below all fall in that week, on day 1 (Jun 24) or
-  # day 2 (Jun 23) so by-day grouping is observable.
+Feature: Entry list — range, filtering & search (§11)
+  # PRD §11 — `tt list` (and core store.listEntries) return ONE flat, ungrouped set of entries
+  # for a range, narrowed by client / project / tag and free-text search. Grouping left the
+  # list entirely for Reports (`tt report --by` / GUI Reports, G11) — there is no `--by` flag.
+  # This locks that CONTRACT; it runs TWICE — over @stint/core (store.listEntries) and over tt
+  # (`tt list … --json`) — so the surfaces are proven to list the identical flat set (§17 R8).
+  # The fixed clock is a Wednesday (2026-06-24); the entries below all fall in that week, on
+  # day 1 (Jun 24) or day 2 (Jun 23). (The 60-char first-line description cap is a CLI-human
+  # rendering concern — asserted in GOLD, not here.)
 
   Background:
     Given an empty database
@@ -18,78 +16,67 @@ Feature: Entries-view grouping, filtering & search (§12 R9)
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci,deep" this week on day 2 lasting 1 hour
     And a closed entry "standup" for "Acme" / "Billing" tagged "meeting" this week on day 2 lasting 1 hour
 
-  Scenario: Grouping by client buckets each client's entries
-    When I view entries this week grouped by client
-    Then the entry list has groups exactly "Acme,Globex"
-    And the entry list shows "auth refactor" under group "Acme"
-    And the entry list shows "standup" under group "Acme"
-    And the entry list shows "deploy pipeline" under group "Globex"
-
-  Scenario: Grouping by project buckets each project's entries
-    When I view entries this week grouped by project
-    Then the entry list has groups exactly "Billing,Ops"
-    And the entry list shows "auth refactor" under group "Billing"
-    And the entry list shows "deploy pipeline" under group "Ops"
-
-  Scenario: Grouping by day buckets each day, newest first
-    When I view entries this week grouped by day
-    Then the entry list has groups exactly "2026-06-24,2026-06-23"
-    And the entry list shows "auth refactor" under group "2026-06-24"
-    And the entry list shows "deploy pipeline" under group "2026-06-23"
-    And the entry list shows "standup" under group "2026-06-23"
-
-  Scenario: Grouping by tag fans a multi-tag entry into each of its tags
-    When I view entries this week grouped by tag
-    Then the entry list has groups exactly "ci,deep,meeting"
-    And the entry list shows "auth refactor" under group "deep"
-    And the entry list shows "deploy pipeline" under group "deep"
-    And the entry list shows "deploy pipeline" under group "ci"
-    And the entry list shows "standup" under group "meeting"
+  Scenario: The whole week lists as one flat, ungrouped set
+    When I list entries this week
+    Then the entry list is exactly "auth refactor,deploy pipeline,standup"
 
   Scenario: A custom range includes only in-range entries
     # A range covering only day 2 (Jun 23) captures that day's entries and excludes day 1's.
-    When I view entries grouped by day for the range 2026-06-23T00:00:00Z to 2026-06-24T00:00:00Z
-    Then the entry list shows "deploy pipeline" under group "2026-06-23"
-    And the entry list shows "standup" under group "2026-06-23"
+    When I list entries for the range 2026-06-23T00:00:00Z to 2026-06-24T00:00:00Z
+    Then the entry list is exactly "deploy pipeline,standup"
     And the entry list does not show "auth refactor"
 
   Scenario: A client filter narrows the list
-    When I view entries this week grouped by day
+    When I list entries this week
     And I filter the entry list to client "Acme"
-    Then the entry list shows "auth refactor" under group "2026-06-24"
-    And the entry list shows "standup" under group "2026-06-23"
+    Then the entry list is exactly "auth refactor,standup"
     And the entry list does not show "deploy pipeline"
 
   Scenario: A project filter narrows the list
-    When I view entries this week grouped by client
+    When I list entries this week
     And I filter the entry list to project "Ops"
-    Then the entry list shows "deploy pipeline" under group "Globex"
+    Then the entry list is exactly "deploy pipeline"
     And the entry list does not show "auth refactor"
 
   Scenario: A tag filter narrows the list
-    When I view entries this week grouped by client
+    When I list entries this week
     And I filter the entry list to tag "meeting"
-    Then the entry list shows "standup" under group "Acme"
+    Then the entry list is exactly "standup"
     And the entry list does not show "deploy pipeline"
 
-  Scenario: A search query matches live on description, excluding non-matches
-    When I view entries this week grouped by client
+  Scenario: A search query matches on description, excluding non-matches
+    When I list entries this week
     And I search the entry list for "refactor"
-    Then the entry list shows "auth refactor" under group "Acme"
+    Then the entry list is exactly "auth refactor"
     And the entry list does not show "deploy pipeline"
     And the entry list does not show "standup"
 
   Scenario: Search matches the client / project / tag, not just the description
-    When I view entries this week grouped by day
+    When I list entries this week
     And I search the entry list for "globex"
-    Then the entry list shows "deploy pipeline" under group "2026-06-23"
+    Then the entry list is exactly "deploy pipeline"
     And the entry list does not show "auth refactor"
 
-  Scenario: An empty query and no filters returns every in-range entry grouped by day
-    When I view entries this week grouped by day
-    Then the entry list shows "auth refactor" under group "2026-06-24"
-    And the entry list shows "deploy pipeline" under group "2026-06-23"
-    And the entry list shows "standup" under group "2026-06-23"
+  Scenario: A tag filter keeps each surviving entry once (no fan-out)
+    # A multi-tag entry ("deploy pipeline" is tagged ci,deep) appears exactly ONCE in the flat
+    # list — the by-tag fan-out that grouping used to do is gone with grouping (G11).
+    When I list entries this week
+    And I filter the entry list to tag "deep"
+    Then the entry list is exactly "auth refactor,deploy pipeline"
+    And the entry list does not show "standup"
+
+  Scenario: A range with client + project + tag filters and a free-text search list the same flat set on both surfaces
+    # §11 / §17 R8 — every narrowing field applied together returns exactly the same flat,
+    # ungrouped set on core (store.listEntries) and tt (`tt list … --json`), proving the two
+    # surfaces list identically after grouping left the command.
+    When I list entries this week
+    And I filter the entry list to client "Globex"
+    And I filter the entry list to project "Ops"
+    And I filter the entry list to tag "deep"
+    And I search the entry list for "deploy"
+    Then the entry list is exactly "deploy pipeline"
+    And the entry list does not show "auth refactor"
+    And the entry list does not show "standup"
 
   Scenario: A description with embedded newlines is stored and reported verbatim
     # §05 R10 / §17 R8 — a description typed with a line break is kept VERBATIM: the interior
