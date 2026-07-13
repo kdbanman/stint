@@ -41,24 +41,25 @@ Feature: Every capability reachable by hand
     And the entry "design review" is for "Acme / Billing"
     And the entry "design review" has a billable duration of 60 minutes
 
-  Scenario: Edit any field of an entry by hand (the consolidated editor)
-    # §12 R6 — the per-entry editor amends any tt-editable field in the window. GUI: the
-    # editor → `edit` IPC → core store.edit; tt: `tt edit`.
+  Scenario: Edit any field of an entry by hand (the unified entry form)
+    # §12 R06 — the unified entry form (edit mode) amends any tt-editable field in the window,
+    # inline in the Entries view (no modal). GUI: the unified form → `edit` IPC → core
+    # store.edit; tt: `tt edit`.
     Given I start an entry "draft" at 09:00
     When I edit the entry "draft" description to "final draft"
     Then exactly one entry is open
     And the open entry is "final draft"
 
-  Scenario: Split an entry by hand (the editor's Split-at-instant)
-    # §12 R6 / §06 R2 — split a span in two from the window. GUI: editor Split → `split` IPC
-    # → core store.split; tt: `tt split`.
+  Scenario: Split an entry by hand (the unified form's edit-mode footer)
+    # §12 R06 / §06 R2 — split a span in two from the window. GUI: the unified form's edit-mode
+    # footer Split → `split` IPC → core store.split; tt: `tt split`.
     Given a closed entry "block" from 09:00 to 12:00
     When I split it at 10:30
     Then there are two entries covering 09:00 to 12:00
 
-  Scenario: Merge a contiguous selection by hand (the editor's Merge-selected)
-    # §12 R6 / §06 R3 — fold an adjacent selection into one entry from the window. GUI:
-    # Merge selected → `merge` IPC → core store.merge; tt: `tt merge`.
+  Scenario: Merge a contiguous selection by hand (the calendar corner-checkbox merge)
+    # §12 R06 / §06 R3 — fold an adjacent selection into one entry from the window. GUI:
+    # the corner-checkbox multi-select Merge → `merge` IPC → core store.merge; tt: `tt merge`.
     Given a closed entry "part one" for "Acme" / "Billing" from 09:00 to 10:00
     And a closed entry "part two" from 10:00 to 11:00
     When I merge those two entries

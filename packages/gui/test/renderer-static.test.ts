@@ -155,9 +155,9 @@ describe('renderer static contract', () => {
     const app = read('app.js');
     // Every row (including the open one) exposes an inline Edit affordance…
     expect(app).toMatch(/data-act="edit"/);
-    // …handled into an inline edit form (not a separate page) that calls
-    // window.stint.edit with {id, patch}…
-    expect(app).toMatch(/openEditForm/);
+    // …handled into the unified entry form in edit mode (openEntryForm), inline in the Entries
+    // view (not a separate page / modal), that calls window.stint.edit with {id, patch}…
+    expect(app).toMatch(/openEntryForm/);
     expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch\s*\}\)/);
     // …the form seeds every field from the entry: description, start, end, billable,
     // and a client select populated from the same source tt uses (§06 R1: any field).
@@ -702,14 +702,19 @@ describe('renderer static contract', () => {
     expect(editor).toMatch(/winnerId/);
     expect(editor).toMatch(/which .* keep/i);
 
-    // app.js wires the per-row kebab (⋯) to open the consolidated editor, loads the client
-    // list once for it, and exposes a toolbar Merge-selected control over window.SE…
-    expect(app).toMatch(/data-act="menu"/);
-    expect(app).toMatch(/act === 'menu'\)\s*return window\.SE\.openEditor/);
+    // §12 R06: editing an entry no longer opens the modal editor via a per-row kebab — the
+    // kebab (⋯) and its window.SE.openEditor wiring are removed; editing goes through the
+    // inline unified entry form (openEntryForm). editor.js (window.SE) survives only for the
+    // running-entry live-edit richer fields (le-tags / le-project) and the toolbar
+    // Merge-selected control, until §Z removes the file (its merge-conflict host already moved
+    // to app.js, §06 R3).
+    expect(app).not.toMatch(/data-act="menu"/);
+    expect(app).toMatch(/openEntryForm/);
+    expect(app).toMatch(/window\.SE\.openEditor/); // running live-edit richer-fields path
     expect(app).toMatch(/window\.stint\.listClients\(\)/);
     expect(app).toMatch(/window\.SE\.mergeSelected/);
     expect(html).toMatch(/id="merge-selected"/);
-    // …and index.html loads editor.js before app.js (the kebab handler depends on window.SE).
+    // …and index.html loads editor.js before app.js (the surviving window.SE paths depend on it).
     expect(html).toMatch(/src="editor\.js"[\s\S]*src="app\.js"/);
   });
 

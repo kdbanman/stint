@@ -906,10 +906,44 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   font-size: 13px;
   color: var(--ink);
 }
-.entry .edit-form .edit-actions { display: flex; gap: 9px; align-items: center; }
-/* Delete from within the form is pushed to the trailing edge — destructive, kept distinct
-   (a quiet danger ghost) but NOT given the accent (only Save reuses .primary). */
-.entry .edit-form .edit-delete { margin-left: auto; }
+/* §12 R06: the unified entry form's project select shares the client select's chrome; a
+   disabled project (no client chosen yet) reads dimmed. */
+.entry .edit-form select:disabled { color: var(--muted); background: var(--wash); }
+/* §12 R06 (G6): the in-form tag chip editor — the removable chips + the add input sit inline in
+   the Tags field, reusing the row chip chrome. */
+.entry .edit-form .ef-tags { align-items: flex-start; }
+.entry .edit-form .ef-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
+.entry .edit-form .ef-tag-add {
+  flex: 1;
+  min-width: 90px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 5px 9px;
+}
+/* §12 R17: the collapsed Start/Stop expander — a quiet disclosure toggle over the raw exact-time
+   fields (the overnight / exact escape hatch). Monochrome; no accent. */
+.entry .edit-form .ef-times { flex-direction: column; align-items: stretch; gap: 8px; }
+.entry .edit-form .ef-times-toggle {
+  align-self: flex-start;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+.entry .edit-form .ef-times-toggle:hover { color: var(--ink); }
+.entry .edit-form .ef-times-body { display: flex; gap: 10px; }
+/* §12 R06: the edit-mode footer — Split on the leading edge, then Save entry / Cancel / Delete
+   pushed to the trailing edge by the flexible spacer. Only Save entry carries the accent (§15);
+   Split, Cancel and Delete are quiet ghosts (danger conveyed by the confirm gate, not colour). */
+.entry .edit-form .edit-foot { display: flex; gap: 9px; align-items: center; }
+.entry .edit-form .ef-foot-spacer { flex: 1; }
 
 /* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
    danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */

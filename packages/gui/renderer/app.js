@@ -498,11 +498,11 @@ function actionsHtml(e) {
     // accessibility tree (the visible label already does, but keep the hook explicit).
     actions.push(`<button class="small" data-act="subtract" aria-label="${label}"><svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>`);
   }
-  // §12 R6: the per-row kebab opens the consolidated entry editor (window.SE.openEditor) —
-  // one modal surfacing every tt-editable field plus Split, the GUI counterpart to
-  // `tt edit`/`tt split`. The inline Edit/tags/split/delete affordances below stay too, so
-  // a quick single-field fix never needs the modal; the kebab is the all-fields entry point.
-  actions.push('<button class="small ghost kebab" data-act="menu" aria-label="Edit entry"><svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg></button>');
+  // §12 R06: the row's Edit affordance opens the UNIFIED ENTRY FORM in edit mode (openEntryForm)
+  // inline in the Entries view — one form surfacing EVERY tt-editable field plus the footer Split
+  // + two-step Delete, the GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere
+  // on the entry opens the same form (wired below), so no separate modal or kebab is needed — the
+  // consolidated modal editor (window.SE.openEditor) is retired for editing (§12 modal-editor / §Z).
   actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg>Edit</button>');
   // §07: an in-context tag editor — chips are editable where they show, without opening
   // the full edit form. Offered on every row (including the open/running one); tags are
@@ -521,15 +521,23 @@ function wire(row, e) {
       ev.stopPropagation();
       const act = btn.dataset.act;
       if (act === 'select') return toggleSelect(e.id, btn.checked); // multi-select for merge
-      else if (act === 'menu') return window.SE.openEditor(e, clientList, { onDone: () => load() }); // §12 R6 modal
       else if (act === 'subtract') await window.stint.subtractSleep({ id: e.id });
-      else if (act === 'edit') return openEditForm(row, e); // stays open; resolves on Save
+      else if (act === 'edit') return openEntryForm(row, e); // §12 R06: unified form (edit mode), inline
       else if (act === 'tags') return openTagEditor(btn, e); // inline; resolves on commit
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
       else if (act === 'delete') return armDelete(btn, e); // two-step; first click only arms
       else return;
       await load();
     });
+  });
+  // §12 R06 (R16 wiring): a click anywhere on the entry — not on one of its action controls —
+  // opens the unified entry form in edit mode INLINE, the same form the Edit affordance opens.
+  // The action buttons/inputs above stopPropagation, so a click on them never also opens the
+  // form; a click on the inert body (time / description / duration) does.
+  row.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at, .tag-editor')) return;
+    if (row.classList.contains('editing')) return; // already the form
+    void openEntryForm(row, e);
   });
 }
 
@@ -866,24 +874,39 @@ function openTagEditor(btn, e) {
   input.focus();
 }
 
-// Inline edit (PRD §06 R1, §05 R6): ANY field of an entry — including the RUNNING one
-// — is editable in-context. The form seeds every field (description, start, end,
-// billable, client) from the entry and sends only the changed ones over the same
-// `edit` IPC tt uses, never a separate page. Editing the running entry must NOT stop
-// it: the open row's form omits End, so the patch never carries endUtc and the open
-// row stays open (mirrors the §05 R6 BDD guarantee).
-async function openEditForm(row, e) {
+// §12 R06 (G5/G6/G7): the UNIFIED ENTRY FORM in EDIT MODE — the single in-window editor for
+// an existing entry, opened INLINE in the Entries view (no modal, no backdrop, position:static
+// in flow) from an entry's Edit affordance OR a click on the entry itself. It is the same form
+// the manual-add uses (add mode is §12 R07), so editing an entry is identical to creating one.
+// It seeds EVERY tt-editable field from the entry — the multiline description (a 3-line
+// textarea, §05 R10), client + project selects (pre-selected), the tag chips (G6), the billable
+// toggle, and the start/stop instants via the collapsed Start/Stop expander (§12 R17, the exact
+// / overnight path) plus the visual picker trigger (§12 R15). On Save it sends ONLY the changed
+// fields as { id, patch } over the same `edit` IPC tt uses — the sole commit (G7). The edit-mode
+// FOOTER carries a Split control (window.stint.split) and a two-step Delete gate (confirmInline
+// → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
+// merge stays the corner-checkbox multi-select path (§06 R3). Editing the RUNNING entry must NOT
+// stop it: the open row's form omits End (start-only), so the patch never carries endUtc and the
+// row stays open (§05 R6). Successor to the row-inline edit form, the per-row Edit-tags control,
+// and the modal editor (the §12 R06 / DELETED rows).
+async function openEntryForm(row, e) {
   const running = e.endUtc === null;
-  // The current client (the leading name in "Client / Project") so the select can
-  // pre-select it without the renderer ever resolving names itself.
+  // The current client / project (the two halves of "Client / Project") so the selects can
+  // pre-select them without the renderer ever resolving names itself.
   const currentClient = e.clientLabel ? e.clientLabel.split(' / ')[0] : '';
+  const currentProject =
+    e.clientLabel && e.clientLabel.includes(' / ')
+      ? e.clientLabel.split(' / ').slice(1).join(' / ')
+      : '';
 
   const form = document.createElement('form');
-  form.className = 'edit-form';
-  // End is omitted for the open entry (§05 R6/§06 R1): editing the running entry's
-  // start must not require an end, so the open row stays open.
-  // §12 R15: each time field gets a calendar-icon trigger that opens the shared visual
-  // picker bound to the form's own .edit-start/.edit-end inputs (text stays authoritative).
+  // Keep the `.edit-form` chrome (shared with add mode) and mark it the unified entry form
+  // in edit mode so the JUDGE UNIFIED_FORM scene can target it.
+  form.className = 'edit-form entry-form';
+  form.dataset.mode = 'edit';
+  // End is omitted for the open entry (§05 R6/§12 R06): editing the running entry's start must
+  // not require an end, so the open row stays open. The Start/Stop expander is the exact /
+  // overnight path (§12 R17); it holds the raw datetime-local fields the picker also writes.
   const endField = running
     ? ''
     : `<label class="edit-field"><span>End</span>` +
@@ -898,20 +921,41 @@ async function openEditForm(row, e) {
     `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
     `</div>` +
     `<div class="edit-row">` +
+    `<label class="edit-field"><span>Client</span>` +
+    `<select class="edit-client"></select></label>` +
+    // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
+    // and pre-selected to the entry's project. Disabled until a client is chosen.
+    `<label class="edit-field"><span>Project</span>` +
+    `<select class="edit-project" disabled></select></label>` +
+    `</div>` +
+    `<div class="edit-row">` +
+    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input — the same
+    // chip UI the retired per-row Edit-tags control used, folded into the one editor.
+    `<label class="edit-field ef-tags"><span>Tags</span>` +
+    `<span class="chips ef-tag-chips"></span></label>` +
+    `<label class="edit-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
+    `</div>` +
+    // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
+    // for overnight spans. Collapsed by default; the picker trigger (§12 R15) opens the visual
+    // picker bound to the SAME raw fields, so expander and picker drive one set of form values.
+    `<div class="edit-row ef-times">` +
+    `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
+    `<div class="ef-times-body" hidden>` +
     `<label class="edit-field"><span>Start</span>` +
     `<span class="range-field"><input type="datetime-local" class="edit-start" />` +
     `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>` +
     endField +
-    `</div>` +
-    `<div class="edit-row">` +
-    `<label class="edit-field"><span>Client</span>` +
-    `<select class="edit-client"></select></label>` +
-    `<label class="edit-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
-    `</div>` +
-    `<div class="edit-actions">` +
-    `<button type="submit" class="small primary">Save</button>` +
+    `</div></div>` +
+    // §12 R06: the edit-mode footer. Only Save entry carries the accent (§15); Split, Cancel and
+    // the two-step Delete are quiet. Split + Delete are absent nowhere else the form can reach.
+    `<div class="edit-foot">` +
+    (running
+      ? ''
+      : `<button type="button" class="small ghost ef-split" data-act="split">Split</button>`) +
+    `<span class="ef-foot-spacer"></span>` +
+    `<button type="submit" class="small primary">Save entry</button>` +
     `<button type="button" class="small ghost edit-cancel">Cancel</button>` +
-    `<button type="button" class="small ghost edit-delete" data-act="delete">Delete</button>` +
+    `<button type="button" class="small ghost ef-delete" data-act="delete">Delete</button>` +
     `</div>`;
   form.querySelector('.edit-desc').value = e.description ?? '';
   form.querySelector('.edit-start').value = localInputValue(new Date(e.startUtc));
@@ -919,24 +963,89 @@ async function openEditForm(row, e) {
   form.querySelector('.edit-bill-box').checked = !!e.billable;
 
   const select = form.querySelector('.edit-client');
-  // currentClientId is filled once the client list resolves; it stays null until then,
-  // and the save handler reads it lazily (the user cannot submit before it populates).
+  const projectSelect = form.querySelector('.edit-project');
+  // currentClientId/currentProjectId are filled once the reference data resolves; they stay
+  // null until then, and the save handler reads them lazily (the user cannot submit before the
+  // selects populate).
   let currentClientId = null;
+  let currentProjectId = null;
+
+  // §12 R06 (G6): the in-form tag chip editor. `nextTags` is the working set the chips mutate;
+  // Save diffs it against the entry's original tags via the pure window.SU.tagDiff and sends the
+  // minimal { addTags, removeTags } inside the one patch — the renderer holds no tag logic.
+  const originalTags = (e.tags ?? []).slice();
+  const nextTags = originalTags.slice();
+  const chipHost = form.querySelector('.ef-tag-chips');
+  const tagInput = document.createElement('input');
+  tagInput.type = 'text';
+  tagInput.className = 'tag-add-input ef-tag-add';
+  tagInput.placeholder = 'add a tag…';
+  tagInput.autocomplete = 'off';
+  function renderTagChips() {
+    chipHost.innerHTML = '';
+    for (const t of nextTags) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+      chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const i = nextTags.indexOf(t);
+        if (i >= 0) nextTags.splice(i, 1);
+        renderTagChips();
+        tagInput.focus();
+      });
+      chipHost.appendChild(chip);
+    }
+    chipHost.appendChild(tagInput);
+  }
+  function addTypedTag() {
+    const name = tagInput.value.trim();
+    tagInput.value = '';
+    if (!name) return;
+    if (!nextTags.some((t) => t.toLowerCase() === name.toLowerCase())) nextTags.push(name);
+    renderTagChips();
+    tagInput.focus();
+  }
+  tagInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      addTypedTag();
+    }
+  });
+  renderTagChips();
+
+  // §12 R17: the Start/Stop expander toggle reveals / hides the raw exact-time fields in flow.
+  const timesToggle = form.querySelector('.ef-times-toggle');
+  const timesBody = form.querySelector('.ef-times-body');
+  timesToggle.addEventListener('click', () => {
+    const open = timesBody.hidden;
+    timesBody.hidden = !open;
+    timesToggle.setAttribute('aria-expanded', String(open));
+  });
 
   form.querySelector('.edit-cancel').addEventListener('click', () => render());
-  // Delete from within the form is the same two-step confirm as the row affordance.
-  form.querySelector('.edit-delete').addEventListener('click', (ev) => {
+  // §12 R06 / §06 R2: the footer Split control cuts a closed span in two. It reuses the same
+  // inline instant picker + `split` IPC the (retiring) row affordance used — offered only on a
+  // closed entry (an open row has no end to cut). Absent for the running entry.
+  const splitBtn = form.querySelector('.ef-split');
+  if (splitBtn) {
+    splitBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openSplitForm(ev.currentTarget, e);
+    });
+  }
+  // §12 R06 / §06 R1 / §12 R13: the footer's two-step Delete gate. The first click ARMS an
+  // explicit confirm affordance; only the explicit confirm removes the entry (window.stint.remove).
+  form.querySelector('.ef-delete').addEventListener('click', (ev) => {
     ev.stopPropagation();
     armDelete(ev.currentTarget, e);
   });
-  // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's
-  // own time inputs. The closed entry's picker carries both start+stop; the running (open)
-  // entry's form has only a Start field (no End), so its picker is seeded START-ONLY
-  // (§05 R06): the running block fades into the future with a start grip only — no end
-  // grip, label, or echo — and the picker never computes or writes a stop (end fields stay
-  // empty, never a synthetic "now"), so editing the open row cannot close it. The picker
-  // writes localInputValue strings back into the inputs (text stays authoritative) — the
-  // submit path then sends the same patch over window.stint.edit unchanged.
+  // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's own
+  // time inputs (text stays authoritative). The closed entry's picker carries both start+stop;
+  // the running (open) entry's form has only a Start field (no End), so its picker is seeded
+  // START-ONLY (§05 R06) and never computes or writes a stop — so editing the open row cannot
+  // close it. The picker writes localInputValue strings back into the inputs; the submit path
+  // then sends the same patch over window.stint.edit unchanged.
   const editStartInput = form.querySelector('.edit-start');
   const editEndInput = running ? null : form.querySelector('.edit-end');
   for (const pick of form.querySelectorAll('.edit-pick')) {
@@ -955,14 +1064,16 @@ async function openEditForm(row, e) {
   }
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    addTypedTag(); // fold any half-typed tag still in the add input
     const desc = form.querySelector('.edit-desc').value.trim();
     const startLocal = form.querySelector('.edit-start').value;
     const endLocal = running ? '' : form.querySelector('.edit-end').value;
     const billable = form.querySelector('.edit-bill-box').checked;
     const clientSel = select.value === '' ? null : Number(select.value);
+    const projectSel = projectSelect.value === '' ? null : Number(projectSelect.value);
 
-    // Send only changed fields. For the open entry the form has no End input, so the
-    // patch never carries endUtc and editing cannot close it.
+    // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
+    // the form has no End input, so the patch never carries endUtc and editing cannot close it.
     const patch = {};
     const nextDesc = desc || null;
     if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
@@ -976,27 +1087,60 @@ async function openEditForm(row, e) {
     }
     if (billable !== !!e.billable) patch.billable = billable;
     if (clientSel !== currentClientId) patch.clientId = clientSel;
+    // Project only rides along when the client is unchanged or the project actually differs;
+    // a null clears it. (Changing the client resets the project select, so a stale id never leaks.)
+    if (projectSel !== currentProjectId) patch.projectId = projectSel;
+    const { addTags, removeTags } = tagDiff(originalTags, nextTags);
+    if (addTags.length) patch.addTags = addTags;
+    if (removeTags.length) patch.removeTags = removeTags;
 
-    // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck,
-    // reload to repaint the per-row flags, then raise the inline banner (after load(),
-    // which clears it). The write already committed — the banner is advisory.
+    // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck, reload
+    // to repaint the per-row flags, then raise the inline banner (after load(), which clears it).
+    // The write already committed — the banner is advisory.
     const ack = await window.stint.edit({ id: e.id, patch });
     await load();
     applyAck(ack);
   });
 
-  // Swap the row into edit mode in place; the open-state class is preserved so the
-  // running indicator stays put while editing. The form is in the DOM before the
-  // async client fetch, so the seeded fields (description/start/billable) are visible
-  // immediately even while the select is still populating.
+  // Swap the row into edit mode in place; the open-state class is preserved so the running
+  // indicator stays put while editing. The form is in the DOM before the async reference-data
+  // fetch, so the seeded fields (description/tags/billable/times) are visible immediately even
+  // while the selects are still populating.
   row.classList.add('editing');
   if (running) row.classList.add('running');
   row.innerHTML = '';
   row.appendChild(form);
   form.querySelector('.edit-desc').focus();
 
-  // Populate the client select from the same source tt uses; pre-select the current
-  // client by name. "(no client)" maps to a null clientId on save.
+  // §12 R06 (G6): populate the project select from the same source tt uses, for the given
+  // client id, and pre-select the entry's project by name. "(no project)" maps to null.
+  async function fillProjects(clientId, preselectName) {
+    projectSelect.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '(no project)';
+    projectSelect.appendChild(none);
+    currentProjectId = null;
+    if (clientId == null) {
+      projectSelect.disabled = true;
+      projectSelect.value = '';
+      return;
+    }
+    projectSelect.disabled = false;
+    const projects = (await window.stint.listProjects({ clientId })) || [];
+    for (const p of projects) {
+      const opt = document.createElement('option');
+      opt.value = String(p.id);
+      opt.textContent = p.name;
+      if (preselectName && p.name === preselectName) currentProjectId = p.id;
+      projectSelect.appendChild(opt);
+    }
+    projectSelect.value = currentProjectId === null ? '' : String(currentProjectId);
+  }
+
+  // Populate the client select from the same source tt uses; pre-select the current client by
+  // name. "(no client)" maps to a null clientId on save. Changing the client repopulates the
+  // project select (dropping any stale pre-selection).
   const clients = await window.stint.listClients();
   const none = document.createElement('option');
   none.value = '';
@@ -1010,6 +1154,11 @@ async function openEditForm(row, e) {
     select.appendChild(opt);
   }
   select.value = currentClientId === null ? '' : String(currentClientId);
+  await fillProjects(currentClientId, currentProject);
+  select.addEventListener('change', () => {
+    const cid = select.value === '' ? null : Number(select.value);
+    void fillProjects(cid, null); // a client change resets the project (no stale pre-selection)
+  });
 }
 
 function weekTotal() {

@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -1400,47 +1400,129 @@ async function main() {
     await page.close();
   }
 
-  // EDIT_INLINE — any field of a (closed) entry is editable in-context (§06 R1). Open
-  // the row's inline Edit form and assert it appears in place — not a separate page —
-  // seeded from the entry: description, start, end, billable, and a client select.
-  await withPage(browser, editingState(), 'index.html', async (page) => {
-    const editRow = '.entry[data-id="20"]';
+  // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE,
+  // INLINE in the Entries view (no modal / backdrop / dialog chrome; the host sits in flow with
+  // position:static), the same form add mode uses. Drive the real renderer: both a click on the
+  // entry AND its Edit affordance open it; it seeds EVERY tt-editable field from the entry
+  // (multiline description textarea, client + project selects pre-selected, tag chips, billable
+  // checkbox, and the Start/Stop expander's Start+Stop), Save sends a patch of ONLY the changed
+  // fields over `edit`, and the edit-mode FOOTER carries a Split control plus a two-step Delete
+  // gate that ARMS (a worded confirm appears, nothing removed) then CONFIRMS (remove fires with
+  // the entry id). Fails if edit mode is a modal, omits a seeded field, or the footer lacks Split
+  // or the two-step Delete gate.
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    const editRow = '.entry[data-id="80"]';
+    // (a) A click on the entry body (an inert cell, not an action control) opens the form inline.
+    await page.click(`${editRow} .time`);
+    await page.waitForSelector(`${editRow} .edit-form.entry-form`, { state: 'attached' });
+    const clickOpens = await page.evaluate(
+      () => !!document.querySelector('.entry[data-id="80"] .edit-form.entry-form'),
+    );
+    // Cancel back to the list so the Edit-affordance path opens a fresh form for the full probe.
+    await page.click(`${editRow} .edit-cancel`);
+    await page.waitForSelector(`${editRow} .edit-form`, { state: 'detached' });
+
+    // (b) The Edit affordance opens the same form; wait for the async reference-data to fill both
+    // the client (Acme=1) and project (API=11) selects so the seeded-select assertions are stable.
     await page.click(`${editRow} [data-act="edit"]`);
-    // The form is appended before the async client fetch; wait for the select to fill
-    // so the seeded-client assertion is deterministic.
     await page.waitForSelector(`${editRow} .edit-form .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editRow} .edit-form .edit-project option[value="11"]`, { state: 'attached' });
     const probe = await page.evaluate(() => {
-      const row = document.querySelector('.entry[data-id="20"]');
-      const form = row?.querySelector('.edit-form');
+      const row = document.querySelector('.entry[data-id="80"]');
+      const form = row?.querySelector('.edit-form.entry-form');
       const v = (sel) => form?.querySelector(sel);
       const desc = v('.edit-desc');
       const start = v('.edit-start');
       const end = v('.edit-end');
       const bill = v('.edit-bill-box');
       const client = v('.edit-client');
+      const project = v('.edit-project');
+      const chips = [...(form?.querySelectorAll('.ef-tag-chips .chip') ?? [])].map((c) => c.textContent.replace('×', '').trim());
       return {
-        inContext: !!form && form.closest('.entry[data-id="20"]') !== null,
+        inContext: !!form && form.closest('.entry[data-id="80"]') !== null,
+        // No modal chrome anywhere, and the form host is in normal flow (not a positioned overlay).
+        noBackdrop: !document.querySelector('.editor-backdrop'),
+        noDialog: !document.querySelector('[role="dialog"]'),
+        hostStatic: form ? getComputedStyle(form).position === 'static' : false,
+        descTag: desc ? desc.tagName : null,
         descSeeded: desc ? desc.value : null,
+        clientSeeded: client ? client.value : null,
+        projectSeeded: project ? project.value : null,
+        tagChips: chips,
+        billSeeded: bill ? bill.checked : null,
         startSeeded: start ? start.value.length > 0 : false,
         endPresent: !!end,
         endSeeded: end ? end.value.length > 0 : false,
-        billSeeded: bill ? bill.checked : null,
-        // The select offers the client list and pre-selects the entry's client.
-        clientOptions: client ? client.options.length : 0,
-        clientSeeded: client ? client.value : null,
+        // The edit-mode footer's two reachability controls.
+        hasSplit: !!v('.ef-split'),
+        hasDelete: !!v('.ef-delete'),
+        // Only Save entry carries the accent (§15) — it is the single .primary in the footer.
+        footAccent: form ? form.querySelectorAll('.edit-foot .primary').length : 0,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-edit.png') });
-    const ok =
+
+    // (c) Save commits ONLY the changed fields: amend the description, then Save entry.
+    await page.fill(`${editRow} .edit-desc`, 'final draft');
+    await page.click(`${editRow} .edit-form button[type="submit"]`);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+
+    // (d) The footer's two-step Delete gate: re-open, arm (a worded confirm appears, nothing
+    // removed yet), then confirm (remove fires with the entry id).
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editRow} .edit-form .ef-delete`, { state: 'attached' });
+    await page.click(`${editRow} .ef-delete`);
+    const armed = await page.evaluate(() => ({
+      confirmShown: !!document.querySelector('.entry[data-id="80"] [data-act="confirm-delete"]'),
+      question: document.querySelector('.entry[data-id="80"] .confirm-q')?.textContent ?? null,
+      removedYet: window.__REMOVED__ === true,
+    }));
+    await page.click(`${editRow} [data-act="confirm-delete"]`);
+    await page.waitForFunction(() => window.__REMOVED__ === true);
+    const removed = await page.evaluate(() => ({
+      removed: window.__REMOVED__ === true,
+      calls: window.__REMOVE_CALLS__ || [],
+    }));
+
+    const seeded =
       probe.inContext &&
+      probe.noBackdrop &&
+      probe.noDialog &&
+      probe.hostStatic &&
+      probe.descTag === 'TEXTAREA' &&
       probe.descSeeded === 'design review' &&
+      probe.clientSeeded === '1' &&
+      probe.projectSeeded === '11' &&
+      probe.tagChips.join(',') === 'deep' &&
+      probe.billSeeded === true &&
       probe.startSeeded &&
       probe.endPresent &&
-      probe.endSeeded &&
-      probe.billSeeded === true &&
-      probe.clientOptions >= 2 &&
-      probe.clientSeeded === '1';
-    record('EDIT_INLINE', ok, `inline edit form seeded in-context: ${JSON.stringify(probe)}`, 'main-edit.png');
+      probe.endSeeded;
+    const footer = probe.hasSplit && probe.hasDelete && probe.footAccent === 1;
+    // Save patched ONLY the changed field (description), nothing else.
+    const savePatch =
+      !!edited &&
+      edited.id === 80 &&
+      edited.patch &&
+      edited.patch.description === 'final draft' &&
+      Object.keys(edited.patch).length === 1;
+    const deleteGate =
+      armed.confirmShown &&
+      /confirm/i.test(armed.question || '') &&
+      !armed.removedYet &&
+      removed.removed &&
+      removed.calls.length === 1 &&
+      removed.calls[0].id === 80;
+    const ok = clickOpens && seeded && footer && savePatch && deleteGate;
+    record(
+      'UNIFIED_FORM',
+      ok,
+      `unified entry form (edit mode) inline, seeded, footer Split + two-step Delete, save patch: ` +
+        `clickOpens=${clickOpens} probe=${JSON.stringify(probe)} edited=${JSON.stringify(edited)} ` +
+        `armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)}`,
+      'main-edit.png',
+    );
   });
 
   // MULTILINE_DESC — §05 R10 / §12 R07: the entry form's description control is a 3-line
@@ -1482,60 +1564,10 @@ async function main() {
     );
   });
 
-  // INLINE_EDITOR — §12 R6: the per-entry kebab (⋯) opens the CONSOLIDATED entry editor
-  // (window.SE.openEditor) — one modal surfacing EVERY tt-editable field (description,
-  // client, project, start, end, tags, billable) in one place, the GUI counterpart to
-  // `tt edit`, plus the Split and Merge affordances. Drive the real renderer: click the
-  // closed row's kebab, assert the editor dialog appears with an input/control for each
-  // tt-editable field (the 'done when' bar) and that the Split control and the Merge
-  // selection affordance are reachable; screenshot main-editor.png for visual review.
-  await withPage(browser, editableState(), 'index.html', async (page) => {
-    const row = '.entry[data-id="80"]';
-    // The kebab opens the modal; the Client/Project selects fill from the async
-    // listClients/listProjects mocks, so wait for the dialog + a populated client option.
-    await page.click(`${row} [data-act="menu"]`);
-    await page.waitForSelector('.editor[role="dialog"]', { state: 'attached' });
-    await page.waitForSelector('.editor .ed-client option[value="1"]', { state: 'attached' });
-    await page.screenshot({ path: join(EVIDENCE, 'main-editor.png'), fullPage: true });
-    const probe = await page.evaluate(() => {
-      const dialog = document.querySelector('.editor[role="dialog"]');
-      const has = (sel) => !!dialog?.querySelector(sel);
-      // Every tt-editable field is present as its own control (the 'done when' bar).
-      const fields = {
-        description: has('.ed-desc'),
-        client: has('.ed-client'),
-        project: has('.ed-project'),
-        start: has('.ed-start'),
-        end: has('.ed-end'),
-        tags: has('.ed-chips'),
-        billable: has('.ed-bill-box'),
-      };
-      // Seeded from the entry so the modal opens ready to edit (not blank).
-      const descSeeded = dialog?.querySelector('.ed-desc')?.value ?? null;
-      const clientSeeded = dialog?.querySelector('.ed-client')?.value ?? null;
-      // Split and Merge affordances are reachable: the modal's Split control, and the row
-      // multi-select that arms the toolbar/merge-bar Merge action.
-      const splitReachable = has('.ed-split-btn');
-      const rowSelect = !!document.querySelector('.entry[data-id="80"] [data-act="select"]');
-      const mergeWiring = typeof window.SE?.mergeSelected === 'function';
-      return { fields, descSeeded, clientSeeded, splitReachable, rowSelect, mergeWiring };
-    });
-    const f = probe.fields;
-    const allFields = f.description && f.client && f.project && f.start && f.end && f.tags && f.billable;
-    const ok =
-      allFields &&
-      probe.descSeeded === 'design review' &&
-      probe.clientSeeded === '1' &&
-      probe.splitReachable &&
-      probe.rowSelect &&
-      probe.mergeWiring;
-    record(
-      'INLINE_EDITOR',
-      ok,
-      `kebab opens the consolidated editor with every tt-editable field + Split/Merge reachable: ${JSON.stringify(probe)}`,
-      'main-editor.png',
-    );
-  });
+  // §12 R06: the consolidated modal editor (the old INLINE_EDITOR / kebab scene) is retired —
+  // editing is the UNIFIED_FORM inline edit-mode form above (every tt-editable field in one
+  // place, no modal), and the merge selection stays the corner-checkbox path exercised by the
+  // MERGE_CONFLICT / MERGE_NOCONFLICT scenes. No kebab, no modal-editor scene here.
 
   // OVERLAP_BANNER — a write that creates an overlap surfaces a non-blocking inline
   // banner AT THE MOMENT of the edit, not only the per-row flag (§06 R4, §12). Drive the
@@ -2837,7 +2869,7 @@ async function main() {
   record(
     'DESKTOP_FEEL',
     null,
-    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-editor, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
+    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
     'main-running.png',
   );
 
