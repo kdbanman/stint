@@ -39,6 +39,7 @@ import {
   emptyState,
   runningState,
   multilineDescState,
+  listState,
   timerViewRunningState,
   timerViewFavoritesState,
   timerViewEmptyFavoritesState,
@@ -507,6 +508,91 @@ const RECIPES = {
       }
       await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 1200);
+    },
+  },
+
+  // §09 R01 (G3) — a CUSTOM range is a pair of PLAIN DATES on BOTH surfaces the requirement
+  // touches: the Reports builder and the Entries toolbar. There is no time-of-day, no
+  // datetime-local, and no standalone visual range-picker modal for the entry-range chrome —
+  // just two `type="date"` fields whose raw YYYY-MM-DD strings ARE the range. This recording
+  // walks both surfaces in one take, driving the SAME selectors the REPORTS_VIEW and
+  // ENTRY_LIST_SEARCH judge scenes gate:
+  //
+  //   (A) REPORTS BUILDER — route to Reports, open + New report, pick the Custom… preset (which
+  //       reveals #rep-custom-range, hidden until chosen), and TYPE the plain-date pair into
+  //       #rep-range-from / #rep-range-to (2026-06-01 → 2026-06-07). Save → the new card lands in
+  //       the saved-defs list with its spec summary printing the verbatim date pair ("Custom:
+  //       2026-06-01 – 2026-06-07"); the captured saveReport payload's rangeSpec is exactly
+  //       { kind:'absolute', fromDate, toDate } — raw dates, no 'T'. Running the fresh custom
+  //       card paints the grouped run-output under a resolved-range header, so the plain-date
+  //       range is shown resolving to real billable lines.
+  //
+  //   (B) ENTRIES TOOLBAR — route to Entries (the default day-grouped calendar), pick the
+  //       toolbar's Custom… preset (revealing #el-custom-range), and TYPE the plain-date pair
+  //       into #el-range-from / #el-range-to (2026-06-23 → 2026-06-23). There is NO Apply
+  //       button — setting both dates drives a LIVE listEntries carrying { fromDate, toDate }
+  //       as raw strings, and the calendar narrows on the spot to the two in-range entries.
+  //
+  // The listState fixture serves both surfaces from one page load: the Entries calendar reads
+  // its day-grouped snapshot while the Reports builder reads the always-seeded SAVED_REPORTS via
+  // the initScript listReports mock (independent of the snapshot), and runReport returns the
+  // canned flag-carrying summary for any card. No write beyond the real saveReport/listEntries
+  // the renderer already issues — no scoped override, no JUDGE scene touched.
+  '§09 R01': {
+    page: 'index.html',
+    state: listState,
+    drive: async (page) => {
+      // ===== (A) REPORTS BUILDER — the custom range is a pair of plain dates =====
+      await page.click('.nav-item[data-view="reports"]');
+      await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Reports — a custom range is a plain date pair (§09 R01)'));
+      await wait(page, 600);
+      // Open the inline builder.
+      await page.click('#rep-new');
+      await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+      await wait(page, 400);
+      // Pick Custom… → the two plain date fields reveal (hidden until chosen).
+      await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+      await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+      await wait(page, 500);
+      // Name the report and TYPE the plain-date pair — no time-of-day anywhere.
+      await page.fill('#rep-name', 'June window');
+      await page.fill('#rep-range-from', '2026-06-01');
+      await page.fill('#rep-range-to', '2026-06-07');
+      await wait(page, 700);
+      // Save → the new card lands with its spec summary printing the verbatim date pair.
+      await page.click('#rep-save');
+      await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length === 3);
+      await page.waitForFunction(
+        () => !!window.__SAVED_REPORT__ && window.__SAVED_REPORT__.rangeSpec?.kind === 'absolute',
+      );
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Saved: Custom 2026-06-01 – 2026-06-07 (plain dates, no time)'));
+      await wait(page, 1200);
+      // Run the fresh custom card → the grouped run-output paints under the resolved-range header.
+      await page.click('#rep-defs .def:last-child .def-run');
+      await page.waitForFunction(
+        () => !document.querySelector('#rep-run')?.hidden && document.querySelectorAll('#rep-run-rows .report-grp').length > 0,
+      );
+      await wait(page, 1400);
+
+      // ===== (B) ENTRIES TOOLBAR — the same plain-date pair, applied LIVE (no Apply) =====
+      await page.click('.nav-item[data-view="entries"]');
+      await page.waitForFunction(() => document.querySelectorAll('#entries .day').length > 0);
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Entries — Custom… is a plain date pair, applied live (no Apply)'));
+      await wait(page, 700);
+      // Pick the toolbar's Custom… preset → the two plain date fields reveal.
+      await page.click('#el-preset-seg .preset[data-preset="custom"]');
+      await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+      await wait(page, 500);
+      // TYPE the plain-date pair → setting BOTH dates drives a LIVE listEntries carrying the raw
+      // { fromDate, toDate } strings; the calendar narrows on the spot (no Apply button exists).
+      await page.fill('#el-range-from', '2026-06-23');
+      await wait(page, 400);
+      await page.fill('#el-range-to', '2026-06-23');
+      await page.waitForFunction(
+        () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
+      );
+      await wait(page, 1600);
     },
   },
 
