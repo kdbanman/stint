@@ -1,12 +1,22 @@
 Feature: Overlap, split and merge
-  # PRD §06 — editing; overlap warns-not-blocks; split/merge.
+  # PRD §06 — editing; overlap warns-not-blocks; split/merge. Overlap is never blocked:
+  # the write commits, a non-blocking warning is surfaced, and the overlap is flagged
+  # downstream. In the GUI that flag reaches three warn-only surfaces — a yellow warn band
+  # on the entries calendar (§12 R16), a warn-only band in the inline interval picker
+  # (§12 R15), and the amount+neighbour detail in the unified editor (§12 R10) — while the
+  # authoritative overlapped flag stays core-fed. These scenarios prove the surface-neutral
+  # core behaviour (warn, allow, flag) that every one of those surfaces renders, run twice
+  # (core + tt); the warn-band/detail painting itself is JUDGE evidence on the GUI.
 
   Background:
     Given an empty database
     And a client "Client A" with project "API"
 
   Scenario: Backfill that overlaps an existing entry is warned, not blocked
-    # PRD §06 R4 — overlap is allowed if meant, and flagged downstream.
+    # PRD §06 R4 — overlap is allowed if meant, and flagged downstream: the backfill lands,
+    # a non-blocking warning is surfaced (the GUI's transient overlap banner / picker +
+    # calendar warn bands, tt's stderr note), and both spans read overlapped in a report.
+    # Regresses if any surface silently blocks the write or drops the flag.
     Given a closed entry "morning" from 09:00 to 11:00
     When I backfill an entry "call" from 10:00 to 10:30
     Then the backfill succeeds
@@ -14,10 +24,12 @@ Feature: Overlap, split and merge
     And both entries are flagged overlapped in a report covering the day
 
   Scenario: Attribute-bearing backfill that overlaps is warned, not blocked
-    # PRD §12 R7 / §06 R4 — the GUI Manual-add form backfills a completed entry carrying
-    # client/project alongside its explicit from/to (the same attribute set tt add accepts);
-    # an overlapping span is warned, not blocked, and the entry is first-class (billable by
-    # the client rule, labelled, flagged). The surface-neutral parity twin of the GUI form.
+    # PRD §12 R7 / §06 R4 — the GUI's unified entry form (add mode) backfills a completed
+    # entry carrying client/project alongside its explicit from/to picked on the inline
+    # interval picker (the same attribute set tt add accepts); an overlapping span is warned,
+    # not blocked, and the entry is first-class (billable by the client rule, labelled,
+    # flagged overlapped — a warn band on the calendar/picker, the amount+neighbour detail in
+    # the editor). The surface-neutral parity twin of that form.
     Given a closed entry "morning" from 09:00 to 11:00
     When I backfill an entry "design review" for "Client A" / "API" from 10:00 to 10:30
     Then the backfill succeeds
