@@ -415,6 +415,41 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
     expect(csv.split('\n')[1]).toContain('"wrote ""the, report"""');
     store.close();
   });
+
+  it('a description with an embedded newline is quoted and round-trips byte-for-byte (§05 R10)', () => {
+    // §05 R10 / §17 R8 — multiline descriptions are stored VERBATIM and the CSV escape hatch
+    // must round-trip them: the embedded newline forces RFC-4180 quoting so the field survives
+    // whole, and parsing the emitted cell back yields the original byte-for-byte. This fails if
+    // csvCell stops quoting \n, or any surface flattens the stored text.
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const original = 'line one\nline two';
+    store.add({
+      description: original,
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T09:30:00Z',
+    });
+    const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
+    // The interior newline is preserved inside a single quoted field — not split across rows.
+    expect(csv).toContain('"line one\nline two"');
+    // Parse the quoted description cell back out (unescaping doubled quotes) and prove it is
+    // byte-identical to the stored value.
+    const open = csv.indexOf('"');
+    let roundTripped = '';
+    for (let i = open + 1; i < csv.length; i++) {
+      const ch = csv[i];
+      if (ch === '"') {
+        if (csv[i + 1] === '"') {
+          roundTripped += '"';
+          i++;
+          continue;
+        }
+        break;
+      }
+      roundTripped += ch;
+    }
+    expect(roundTripped).toBe(original);
+    store.close();
+  });
 });
 
 describe('GOLD: free-text search query contract (§09 R7)', () => {

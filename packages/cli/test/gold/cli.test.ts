@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
+import { descriptionCell } from '../../src/format.js';
 // ajv-formats ships a CJS default export; cast to its callable shape for NodeNext.
 const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
 
@@ -1136,5 +1137,51 @@ describe('GOLD: merge conflict override (§06, §16)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].client).toBe('Client B');
     expect(rows[0].description).toBe('part one / part two');
+  });
+});
+
+describe('GOLD: descriptionCell (§05 R10)', () => {
+  // The human-table cap: `tt list`'s table shows only the FIRST line of a description, capped at
+  // 60 chars + '…'. The cap lives ONLY here — the machine read-side keeps full fidelity.
+  it('null / empty → empty cell', () => {
+    expect(descriptionCell(null)).toBe('');
+    expect(descriptionCell('')).toBe('');
+  });
+
+  it('a short single line passes through unchanged', () => {
+    expect(descriptionCell('auth refactor')).toBe('auth refactor');
+  });
+
+  it('a multiline description keeps only its first line', () => {
+    expect(descriptionCell('line one\nline two')).toBe('line one');
+    expect(descriptionCell('first\r\nsecond\r\nthird')).toBe('first');
+  });
+
+  it('a first line longer than 60 chars is capped at 60 + ellipsis', () => {
+    const long = 'x'.repeat(80);
+    const capped = descriptionCell(long);
+    expect(capped).toBe(`${'x'.repeat(60)}…`);
+    // Exactly 60 is unchanged (the cap only bites past 60).
+    expect(descriptionCell('y'.repeat(60))).toBe('y'.repeat(60));
+  });
+
+  it('caps by the first line only, never the whole multiline blob', () => {
+    // A short first line followed by more lines is untouched — the cap is a first-line concern.
+    expect(descriptionCell(`short\n${'z'.repeat(80)}`)).toBe('short');
+  });
+
+  it('tt list --json carries the full multiline description verbatim (full fidelity)', () => {
+    // The machine read-side never truncates or flattens: the interior newline survives byte-for-byte
+    // and the row still validates against the published list schema.
+    const multiline = 'line one\nline two';
+    tt(['add', multiline, '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T09:30:00Z']);
+    const r = tt(['list', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--all', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('list.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toHaveLength(1);
+    expect(json[0].description).toBe(multiline);
+    expect(json[0].description).toContain('\n');
   });
 });

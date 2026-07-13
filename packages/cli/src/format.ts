@@ -21,6 +21,20 @@ export function clientProjectLabel(e: EntryView): string {
   return joinClientProject(e.clientName, e.projectName) ?? '—';
 }
 
+/**
+ * §05 R10 — the human-table rendering of a (possibly multiline) description. Descriptions are
+ * stored VERBATIM with their newlines intact and `--json`/CSV carry the full text (§09 R06,
+ * §11); the `tt list` human table, however, is one line per entry, so it shows ONLY the first
+ * line, capped at 60 characters with a trailing ellipsis (U+2026) when longer. This is the sole
+ * place that cap lives — the machine read-side (`--json`, CSV export) never calls it, so full
+ * fidelity is preserved there. null / empty → ''. Consumed by `tt list`'s `toRow` (§11).
+ */
+export function descriptionCell(desc: string | null): string {
+  if (!desc) return '';
+  const firstLine = desc.split(/\r?\n/)[0] ?? '';
+  return firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine;
+}
+
 /** Flags shown against an entry in lists/reports (PRD §06, §10). */
 export function entryFlags(e: EntryView, overlapped = false): string {
   const f: string[] = [];

@@ -161,7 +161,10 @@
               </span>
             </div>
             <form id="add-form" class="start-form" hidden>
-              <input id="add-desc" type="text" placeholder="Description" autocomplete="off" />
+              <!-- §05 R10 — multiline description: a 3-line scrollable textarea keeps the interior
+                   newlines a user types (stored verbatim; the calendar/table display may truncate,
+                   the record never does). -->
+              <textarea id="add-desc" class="desc-field" rows="3" placeholder="Description" autocomplete="off"></textarea>
               <div class="start-row">
                 <input id="add-client" type="text" placeholder="Client" autocomplete="off" list="add-client-list" />
                 <datalist id="add-client-list"></datalist>
