@@ -50,17 +50,21 @@ Feature: Overlap, split and merge
     And the merged entry is for "Client B"
 
   Scenario: Editing amends a field without disturbing the open state
-    # PRD §05 R6, §06 R1 — any field is editable; the entry stays as it was otherwise.
+    # PRD §05 R6, §06 R1 — any field is editable; the entry stays as it was otherwise. In the
+    # GUI this edit runs through the unified entry form (§12 R06) opened in edit mode from the
+    # entries calendar (§12 R16) — no separate modal, no row-inline form; this scenario proves
+    # the edit arithmetic is identical on core and tt, whichever surface hosts the form.
     Given I start an entry "draft" at 09:00
     When I edit the entry "draft" description to "final draft"
     Then exactly one entry is open
     And the open entry is "final draft"
 
   Scenario: Deleting an entry removes it and its time from the list
-    # PRD §06 R1 — an entry can be deleted outright; the row is gone and the surviving
-    # entries are exactly the rest (the deleted entry's time no longer counts). The
-    # confirmation gate is a surface concern (GOLD/JUDGE); this proves the underlying
-    # delete arithmetic is identical on core and tt.
+    # PRD §06 R1 — an entry can be deleted outright; it is gone from the entries calendar
+    # (§12 R16) and the surviving entries are exactly the rest (the deleted entry's time no
+    # longer counts). The confirmation gate is a surface concern (GOLD/JUDGE) — in the GUI it
+    # is the unified editor's edit-mode footer two-step Delete (§12 R06/R13); here we prove the
+    # underlying delete arithmetic is identical on core and tt.
     Given a closed entry "keep" from 09:00 to 10:00
     And a closed entry "scratch" from 10:00 to 11:00
     When I delete the entry "scratch"
@@ -72,8 +76,10 @@ Feature: Overlap, split and merge
     # PRD §06 R1 — the confirm gate IS the loss-protection (a core requirement): a
     # destructive delete that is NOT confirmed never destroys data. Surface-neutral over
     # the World `removeUnconfirmed` capability — core never auto-confirms a destructive
-    # delete, and `tt rm` (no --force) refuses on stderr with a non-zero exit — so the gate
-    # behaves identically on both surfaces. Regresses if either surface deletes unconfirmed.
+    # delete, `tt rm` (no --force) refuses on stderr with a non-zero exit, and the GUI's
+    # unified editor requires the edit-mode footer's two-step Delete (arm then confirm,
+    # §12 R06/R13) before any remove fires — so the gate behaves identically on every
+    # surface. Regresses if any surface deletes unconfirmed.
     Given a closed entry "keep" from 09:00 to 10:00
     And a closed entry "scratch" from 10:00 to 11:00
     When I attempt to delete the entry "scratch" without confirming
