@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -1441,6 +1441,45 @@ async function main() {
       probe.clientOptions >= 2 &&
       probe.clientSeeded === '1';
     record('EDIT_INLINE', ok, `inline edit form seeded in-context: ${JSON.stringify(probe)}`, 'main-edit.png');
+  });
+
+  // MULTILINE_DESC — §05 R10 / §12 R07: the entry form's description control is a 3-line
+  // scrollable <textarea>, and a stored description that carries an embedded newline renders
+  // VERBATIM (not flattened to one line). Open the multiline entry's edit form and assert the
+  // .edit-desc control is a textarea with rows=3, is vertically scrollable (overflow-y:auto), and
+  // its .value contains the seeded interior '\n' byte-for-byte.
+  await withPage(browser, multilineDescState(), 'index.html', async (page) => {
+    const editRow = '.entry[data-id="30"]';
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editRow} .edit-form .edit-desc`, { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-multiline-desc.png') });
+    const probe = await page.evaluate(() => {
+      const el = document.querySelector('.entry[data-id="30"] .edit-form .edit-desc');
+      if (!el) return { present: false };
+      const cs = getComputedStyle(el);
+      return {
+        present: true,
+        tag: el.tagName,
+        rows: Number(el.getAttribute('rows')),
+        value: el.value,
+        hasInteriorNewline: el.value.includes('\n'),
+        overflowY: cs.overflowY,
+        resize: cs.resize,
+      };
+    });
+    const ok =
+      probe.present &&
+      probe.tag === 'TEXTAREA' &&
+      probe.rows === 3 &&
+      probe.value === 'line one\nline two' &&
+      probe.hasInteriorNewline &&
+      (probe.overflowY === 'auto' || probe.overflowY === 'scroll');
+    record(
+      'MULTILINE_DESC',
+      ok,
+      `description control is a 3-line scrollable textarea rendering the stored newline verbatim: ${JSON.stringify(probe)}`,
+      'main-multiline-desc.png',
+    );
   });
 
   // INLINE_EDITOR — §12 R6: the per-entry kebab (⋯) opens the CONSOLIDATED entry editor

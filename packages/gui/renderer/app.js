@@ -830,7 +830,11 @@ async function openEditForm(row, e) {
       `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>`;
   form.innerHTML =
     `<div class="edit-row">` +
-    `<input type="text" class="edit-desc" placeholder="(no description)" />` +
+    // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
+    // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
+    // only the OUTER whitespace and preserves every interior newline, so the stored record stays
+    // verbatim.
+    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
     `</div>` +
     `<div class="edit-row">` +
     `<label class="edit-field"><span>Start</span>` +

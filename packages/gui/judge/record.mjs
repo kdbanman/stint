@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 import {
   emptyState,
   runningState,
+  multilineDescState,
   timerViewRunningState,
   timerViewFavoritesState,
   timerViewEmptyFavoritesState,
@@ -1077,105 +1078,80 @@ const RECIPES = {
     },
   },
 
-  // §05 R10 — Resume from favorite: ONE action starts a FRESH timer from a favorite's template,
-  // atomically replacing any already-running timer (CLI parity: `tt fav start <name>` /
-  // `tt start --fav <name>`). The recording opens the Timer view on the favorites-rail snapshot —
-  // a timer is ALREADY RUNNING (the canonical 'auth refactor' open row reading a deterministic
-  // 01:24:07) and three favorites are pinned ('Standup', 'Deep work', 'Admin / email') — so the
-  // scene shows (1) the rail with each pinned template (name + captured description/tags), then
-  // clicks the 'Deep work' favorite's Resume button. To SHOW the requirement actually exercised
-  // (not just the click), this recipe scopes a local override of window.stint.startFavorite
-  // (mirroring §05 R02's toggle / §05 R05's add overrides): the override records the resumed name
-  // AND flips the injected snapshot to a FRESH single open entry built from that favorite's
-  // template (description 'focus block', client/project label, billable, tags) whose startUtc is
-  // the pinned JUDGE_NOW — so the count-up starts fresh at 00:00:00, the previously-running
-  // 'auth refactor' row is gone (atomic replacement → exactly one open entry), and the renderer's
-  // post-resume load() repaints the Active-Timer card from that fresh state. We then step the
-  // pinned clock so the new entry's 00:00:0x visibly TICKS on camera, proving a live fresh timer.
-  // The favorite itself is left untouched in the in-memory FAVORITES list, so the rail still shows
-  // 'Deep work' pinned/unchanged afterward (the §05 R10 'favorite remains pinned' fact).
+  // §05 R10 — Multiline descriptions (G9): a description keeps the line breaks a user types, stored
+  // VERBATIM with no surface flattening it. The GUI half is the entry form's description control —
+  // a 3-line scrollable multiline <textarea>. This recording opens the Entries view on a seeded
+  // CLOSED entry whose description is already two lines ('line one\nline two'), clicks its Edit
+  // affordance to reveal the inline form, and shows the description surfaced in the 3-line textarea
+  // with its interior break intact. It then TYPES a fresh two-line description into the field (a
+  // literal Enter inserts a newline in a textarea — it does not submit the form), Saves, and the
+  // entry repaints. Reopening the form in edit mode shows the newly-typed text rendered INTACT —
+  // proving the field is genuinely multiline and the stored record kept the newline verbatim. To
+  // show the write faithfully (the harness IPC is mocked), this recipe scopes a local
+  // window.stint.edit override — mirroring §05 R06's edit override — that applies the description
+  // patch to the injected snapshot, so the post-commit load() repaints from the new value rather
+  // than snapping back to the stale seed. The CLI-side of R10 (the `tt list` first-line 60-char cap
+  // and the CSV round-trip) is transcript/GOLD evidence, so it is not part of this GIF.
   '§05 R10': {
     page: 'index.html',
-    state: timerViewFavoritesState,
+    state: multilineDescState,
     drive: async (page) => {
-      await page.click('.nav-item[data-view="timer"]');
-      await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
-      // Dwell on the rail (each pinned template) AND the already-running 'auth refactor' card, so
-      // the before-state is legible: a timer running + favorites pinned.
-      await page.waitForSelector('.fav-card .fav-name');
+      const row = '.entry[data-id="30"]';
+      await page.waitForSelector(row);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Multiline description — a 3-line scrollable field, newlines kept verbatim (§05 R10)'));
+      await wait(page, 700);
+
+      // Open the inline edit form; the description surfaces in the multiline <textarea rows=3>,
+      // seeded with its stored two lines intact.
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector(`${row} .edit-form .edit-desc`);
       await wait(page, 900);
 
-      // Scope a local startFavorite override: record the resumed name and flip the injected
-      // snapshot to a FRESH open entry from the named favorite's template, starting at JUDGE_NOW
-      // (count-up 00:00:00) and atomically replacing the prior open row (single open entry).
-      await page.evaluate((nowIso) => {
-        window.stint.startFavorite = async (p) => {
-          (window.__RESUMED__ ||= []).push(p);
-          const fav = (window.stint.__FAVORITES__ || []).find((f) => f.name === (p && p.name)) || {};
-          const entry = {
-            id: 500,
-            description: fav.description ?? null,
-            // The favorite carries client/project IDS; core resolves them to a label on start.
-            // Use a faithful label for the seeded 'Deep work' template (Client A / Focus).
-            clientLabel: fav.clientId ? 'Client A / Focus' : null,
-            startUtc: nowIso,
-            billableSeconds: 0,
-            billable: fav.billable !== false,
-            excludedSeconds: 0,
-            sleptThrough: false,
-            tags: Array.isArray(fav.tags) ? fav.tags.slice() : [],
+      // Scope a local edit override that applies the description patch to the injected snapshot
+      // (faithful to core's edit), so the post-Save load() repaints from the freshly-typed value.
+      await page.evaluate(() => {
+        window.stint.edit = (p) => {
+          window.__EDITED__ = p;
+          const st = window.__STATE__;
+          const patch = (p && p.patch) || {};
+          const apply = (e) => {
+            if (e.id === p.id && 'description' in patch) e.description = patch.description;
           };
-          // Atomic replacement: the prior open row is closed; the fresh entry is the ONE open row.
-          window.__STATE__ = {
-            status: { running: true, entry },
-            days: [
-              {
-                day: nowIso.slice(0, 10),
-                entries: [
-                  {
-                    ...entry,
-                    endUtc: null,
-                    clientLabel: entry.clientLabel,
-                    overlapped: false,
-                    overlapMinutes: 0,
-                    overlapRelation: null,
-                    rawSeconds: 0,
-                  },
-                ],
-              },
-            ],
-            sleepFlaggedIds: [],
-            settings: window.__STATE__.settings,
-          };
+          if (st.status?.entry) apply(st.status.entry);
+          for (const d of st.days || []) for (const e of d.entries) apply(e);
           return Promise.resolve(window.__ACK__);
         };
-      }, JUDGE_NOW);
+      });
 
-      // ONE click on the 'Deep work' favorite's Resume button. The renderer fires startFavorite
-      // then load()→render(), repainting the Active-Timer card from the fresh snapshot.
-      const deepWork = page.locator('.fav-card', { hasText: 'Deep work' });
-      await deepWork.locator('[data-act="fav-resume"]').click();
+      // Type a fresh TWO-LINE description. Clear the field, type the first line, then a literal
+      // Enter (a newline inside a textarea — never a submit) and the second line: the field scrolls
+      // and keeps the interior break.
+      const editDesc = page.locator(`${row} .edit-desc`);
+      await editDesc.fill('');
+      await editDesc.click();
+      await page.keyboard.type('Refactored the auth layer', { delay: 45 });
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Press Enter for a second line — the break is preserved, not flattened'));
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('Follow-up: write the regression tests', { delay: 45 });
+      await wait(page, 1000);
 
-      // Repaint the card from the flipped snapshot: in the harness the resume handler only calls
-      // renderFavorites(), so drive the same load() the real `changed` broadcast would, to show
-      // the Active-Timer card now carrying the fresh 'focus block' template.
-      await page.evaluate(() => (typeof load === 'function' ? load() : null));
+      // Save; the submit reads .value.trim() (interior newlines preserved) and sends the edit patch.
+      await page.click(`${row} .edit-form button[type="submit"]`);
+      await page.waitForSelector(`${row} .edit-form`, { state: 'detached' }).catch(() => {});
+      await wait(page, 700);
+
+      // Reopen in edit mode: the textarea now carries the newly-typed multiline text rendered INTACT.
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector(`${row} .edit-form .edit-desc`);
       await page.waitForFunction(
-        () => document.querySelector('#timer-desc')?.textContent?.trim() === 'focus block',
+        () => (document.querySelector('.entry[data-id="30"] .edit-desc')?.value ?? '').includes('\n'),
       );
-      await page.waitForSelector('#timer-card.running');
-      await wait(page, 500);
-
-      // Step the pinned clock so the FRESH entry's 00:00:0x visibly ticks on camera — a live,
-      // freshly-started timer (not the inherited 01:24:07).
-      for (let i = 1; i <= 4; i++) {
-        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
-        await wait(page, 350);
-      }
-      // Final dwell on (a) the running fresh timer and (b) the 'Deep work' favorite still pinned
-      // and unchanged in the rail.
-      await page.waitForSelector('.fav-card:has(.fav-name >> text=Deep work)').catch(() => {});
-      await wait(page, 900);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Reopened — both lines render intact, stored verbatim'));
+      await wait(page, 1200);
     },
   },
 

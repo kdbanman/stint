@@ -562,6 +562,26 @@ s {
   font-size: 13px;
   color: var(--ink);
 }
+
+/* §05 R10 — the multiline description control (add form #add-desc + the inline editor's
+   .edit-desc). A 3-line-tall, vertically scrollable textarea that shares the text-field chrome
+   but keeps the interior newlines a user types: it scrolls past three lines (never clips) and
+   the user may drag it taller. Mirrors the edit-entry.html mockup's `textarea.field{resize:vertical}`
+   + `.dayview` scroll idiom. */
+.desc-field {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 8px 11px;
+  min-height: calc(3 * 1.4em + 16px);
+  overflow-y: auto;
+  resize: vertical;
+}
 .start-form button.primary { align-self: flex-start; }
 
 /* The manual-backfill form reuses .start-form chrome; its datetime fields + inline warning

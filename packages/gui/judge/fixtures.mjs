@@ -299,6 +299,40 @@ export function editingState() {
 }
 
 /**
+ * §05 R10 — the MULTILINE_DESC fixture. A single CLOSED entry whose description carries an
+ * embedded newline (two lines), so the judge can open the entry's edit form and assert the
+ * description control is a 3-line scrollable <textarea> rendering the stored newline VERBATIM
+ * (not flattened to one line). The interior '\n' lives here, in the fixture, not in any DOM
+ * markup, so a surface that flattened stored text would be caught.
+ */
+export function multilineDescState() {
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-24',
+        entries: [
+          {
+            id: 30,
+            description: 'line one\nline two',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T14:00:00Z',
+            endUtc: '2026-06-24T15:30:00Z',
+            billableSeconds: 5400,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+        ],
+      },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * §12 R6 — the INLINE_EDITOR fixture. A single CLOSED entry whose client/project match the
  * canned reference data (Acme / API → CLIENTS id 1, PROJECTS 11) so the consolidated editor
  * modal (window.SE.openEditor) opens with its Client + Project selects pre-selectable and

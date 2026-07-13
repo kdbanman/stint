@@ -90,3 +90,11 @@ Feature: Entries-view grouping, filtering & search (§12 R9)
     Then the entry list shows "auth refactor" under group "2026-06-24"
     And the entry list shows "deploy pipeline" under group "2026-06-23"
     And the entry list shows "standup" under group "2026-06-23"
+
+  Scenario: A description with embedded newlines is stored and reported verbatim
+    # §05 R10 / §17 R8 — a description typed with a line break is kept VERBATIM: the interior
+    # newline survives storage and full-fidelity reporting identically on both surfaces (core
+    # store.listEntries description, tt list --all --json description). The newline lives in the
+    # step definition, not this Gherkin cell, so the feature text stays single-line.
+    When I add a closed entry with a two-line description
+    Then the stored description keeps both lines verbatim

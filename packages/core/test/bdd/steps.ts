@@ -46,6 +46,12 @@ export interface StepDef {
 const DAY = '2026-06-24';
 const iso = (hhmm: string): string => `${DAY}T${hhmm.padStart(5, '0')}:00Z`;
 
+// §05 R10 — a description carrying an interior newline. The line break lives HERE, in the step
+// definition, not in the Gherkin cell, so the .feature stays single-line while the stored/reported
+// value is genuinely multiline. Read back on BOTH surfaces to prove verbatim storage + full-fidelity
+// reporting identically (§17 R8).
+const MULTILINE_DESC = 'line one\nline two';
+
 // §09 R1 — fixed midday UTC anchors for the range scenarios. The clock (FIXED_NOW) is a
 // Wednesday; an entry at midday on this Wednesday is unambiguously "this week", and one a
 // full week earlier is unambiguously "last week", across any reasonable runner timezone.
@@ -270,6 +276,29 @@ export const steps: StepDef[] = [
       const r = w.backfill({ desc, client, project, from: iso(from), to: iso(to) });
       ctx.lastId = r.id;
       ctx.lastWarned = r.warned;
+    },
+  },
+  {
+    // §05 R10 — backfill a closed entry whose description spans two lines (the newline is in
+    // MULTILINE_DESC, not the Gherkin cell). Surface-neutral over the same `backfill`/`add`
+    // capability the other manual-add steps use.
+    pattern: /^I add a closed entry with a two-line description$/,
+    run: (w, ctx) => {
+      const r = w.backfill({ desc: MULTILINE_DESC, from: iso('09:00'), to: iso('10:00') });
+      ctx.lastId = r.id;
+      ctx.lastWarned = r.warned;
+    },
+  },
+  {
+    // §05 R10 / §17 R8 — read the description back over the World `list` capability (CoreWorld
+    // store.listEntries description, CliWorld `tt list --all --json` description) and prove the
+    // interior newline survived storage + reporting byte-for-byte, identically on both surfaces.
+    pattern: /^the stored description keeps both lines verbatim$/,
+    run: (w) => {
+      const e = w.list().find((x) => x.description === MULTILINE_DESC);
+      expect(e, 'an entry with the two-line description exists').toBeTruthy();
+      expect(e!.description).toBe(MULTILINE_DESC);
+      expect(e!.description).toContain('\n');
     },
   },
   {
