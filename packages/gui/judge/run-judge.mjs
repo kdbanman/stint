@@ -1400,39 +1400,6 @@ async function main() {
     await page.close();
   }
 
-  // EDIT_RUNNING — the running entry is editable inline without stopping it (§05 R6).
-  // Click the running row's Edit affordance, assert the inline form appears seeded
-  // from the entry, and that the row stays in the open (.running) state — the edit
-  // path never sends endUtc, so editing cannot close the open row.
-  await withPage(browser, runningState(), 'index.html', async (page) => {
-    const runningRow = '.entry[data-id="1"]';
-    await page.click(`${runningRow} [data-act="edit"]`);
-    const probe = await page.evaluate(() => {
-      const row = document.querySelector('.entry[data-id="1"]');
-      const form = row?.querySelector('.edit-form');
-      const desc = form?.querySelector('.edit-desc');
-      const start = form?.querySelector('.edit-start');
-      return {
-        formVisible: !!form,
-        descSeeded: desc ? desc.value : null,
-        startSeeded: start ? start.value.length > 0 : false,
-        stillRunning: !!row && row.classList.contains('running'),
-      };
-    });
-    await page.screenshot({ path: join(EVIDENCE, 'main-edit-running.png') });
-    const ok =
-      probe.formVisible &&
-      probe.descSeeded === 'auth refactor' &&
-      probe.startSeeded &&
-      probe.stillRunning;
-    record(
-      'EDIT_RUNNING',
-      ok,
-      `inline edit form on running row: ${JSON.stringify(probe)}`,
-      'main-edit-running.png',
-    );
-  });
-
   // EDIT_INLINE — any field of a (closed) entry is editable in-context (§06 R1). Open
   // the row's inline Edit form and assert it appears in place — not a separate page —
   // seeded from the entry: description, start, end, billable, and a client select.

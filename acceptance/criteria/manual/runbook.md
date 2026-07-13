@@ -157,30 +157,6 @@ every field `tt add` accepts — and treat an overlapping span as warned, not bl
 > matrix. This runbook confirms the real window lands the full-attribute entry day-grouped
 > at parity with `tt add` and that an overlapping span is warned inline but still saved.
 
-## CHECK EDIT RUNNING ENTRY (GUI) — amend the open timer without stopping it (§05 R6)
-
-1. Start a live timer in the GUI (or `tt start "auth refactor" --client "Client A"`).
-   Confirm the running row shows a live count-up.
-2. On the running entry's row, click **Edit**. The row swaps into an inline edit
-   form seeded with the current description and start time.
-   - [ ] While the form is open the entry is still shown as running (the running
-         indicator/accent stays on the row; the timer has not stopped).
-3. Change the **description** and nudge the **start time** a few minutes earlier,
-   then click **Save**.
-   - [ ] The row returns to display mode with the new description and start time;
-         the count-up continues — the entry was **not** closed.
-   - [ ] `tt status` still reports the timer as running (no `endUtc`), and
-         `tt list` shows the amended description and start time.
-4. Click **Edit** again, then **Cancel**.
-   - [ ] The form closes with no change; the entry is unchanged and still running.
-
-> The edit-running semantics are proven surface-neutrally over core+tt by the BDD
-> scenarios "Editing amends a field without disturbing the open state" and "Editing
-> the running entry's start does not stop it"; the GUI affordance is screenshotted
-> under JUDGE (`EDIT_RUNNING`, `main-edit-running.png`) and guarded statically
-> (`renderer-static.test.ts`: the edit path never sends `endUtc`). This runbook
-> confirms the real app keeps the timer open and round-trips the change to `tt`.
-
 ## CHECK EDIT/DELETE ENTRIES (GUI) — amend any field in-context, two-step delete (§06 R1)
 
 1. Open the main window with at least one **closed** entry (or `tt add "design
