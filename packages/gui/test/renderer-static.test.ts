@@ -279,11 +279,13 @@ describe('renderer static contract', () => {
     // …clicking Merge routes through mergeSelected, which calls window.stint.merge…
     expect(app).toMatch(/mergeSelected/);
     expect(app).toMatch(/window\.stint\.merge\(/);
-    // …and disagreeing selections raise a conflict prompt asking which value to keep,
-    // sending the winning entry's id (winnerId) + the chosen billable, never resolving
-    // names in the renderer.
-    expect(app).toMatch(/openConflictPrompt/);
-    expect(app).toMatch(/which .* keep/i);
+    // …and disagreeing selections raise the app.js-hosted conflict prompt (openMergeConflict,
+    // moved here off editor.js so the modal editor can retire, §12 modal-editor / §Z): the
+    // `.editor.conflict-prompt` modal resolving client/project + billable field-by-field,
+    // sending the winning entry's id (winnerId) + the chosen billable, never resolving names
+    // in the renderer.
+    expect(app).toMatch(/function openMergeConflict\(/);
+    expect(app).toMatch(/conflict-prompt/);
     expect(app).toMatch(/winnerId/);
   });
 

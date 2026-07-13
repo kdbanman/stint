@@ -45,6 +45,7 @@ import {
   savedReportsState,
   settingsState,
   timelineWindowState,
+  mergeConflictState,
   backupsState,
   recoveryState,
   pickerState,
@@ -1151,6 +1152,83 @@ const RECIPES = {
       );
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Reopened — both lines render intact, stored verbatim'));
+      await wait(page, 1200);
+    },
+  },
+
+  // §06 R03 — MERGE via multi-select. Two contiguous CLOSED entries that DISAGREE on client
+  // (and billable) are armed by checking their corner checkboxes; the selection bar reveals a
+  // live "Merge 2 entries" count, and Merge raises the app.js-hosted conflict prompt (moved off
+  // editor.js so the modal editor can retire, §12 modal-editor / §Z). The prompt resolves the
+  // disagreeing client/billable field-by-field, then commits { ids, winnerId, billable } over
+  // the same merge IPC — no clientId/projectId resolved in the renderer. To SHOW the merged
+  // event appear (the IPC is mocked), this recipe scopes a local window.stint.merge override
+  // that folds the two source rows into one spanning earliest-start→latest-end on the injected
+  // snapshot, so the post-commit load() repaints the single merged entry.
+  // (Selection is driven from the entry rows' corner checkboxes; those checkboxes ride the
+  // calendar's `.ev` events once §12 R16's readonly entries calendar lands.)
+  '§06 R03': {
+    page: 'index.html',
+    state: mergeConflictState,
+    drive: async (page) => {
+      await page.waitForSelector('.entry[data-id="40"] .sel');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Check two contiguous events to arm the merge (§06 R03)'));
+      await wait(page, 700);
+      await page.check('.entry[data-id="40"] .sel');
+      await wait(page, 400);
+      await page.check('.entry[data-id="41"] .sel');
+      await page.waitForFunction(() => {
+        const bar = document.querySelector('#merge-bar');
+        return bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+      });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('The selection bar shows the live count — Merge 2 entries'));
+      await wait(page, 900);
+
+      // Fold the two source rows into one merged entry on the snapshot so the reload SHOWS the
+      // merge (spanning earliest start → latest end), faithful to core's merge; the winnerId
+      // decides the surviving client (resolved by the main process, never in the renderer).
+      await page.evaluate(() => {
+        window.stint.merge = (p) => {
+          window.__MERGED__ = p;
+          const st = window.__STATE__;
+          for (const d of st.days || []) {
+            const kept = d.entries.filter((e) => p.ids.includes(e.id));
+            if (kept.length < 2) continue;
+            const sorted = kept.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+            const winner = kept.find((e) => e.id === p.winnerId) || sorted[0];
+            const merged = {
+              ...sorted[0],
+              endUtc: sorted[sorted.length - 1].endUtc,
+              description: sorted.map((e) => (e.description ?? '').trim()).filter(Boolean).join(' · '),
+              clientLabel: winner.clientLabel,
+              billable: p.billable ?? sorted[0].billable,
+            };
+            d.entries = [merged, ...d.entries.filter((e) => !p.ids.includes(e.id))];
+          }
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+
+      await page.click('#merge-go');
+      await page.waitForSelector('.editor.conflict-prompt');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Disagreeing selection — resolve the client/billable, then Merge'));
+      await wait(page, 1100);
+      // Pick the second offered client as the winner, then commit.
+      const clientRadios = page.locator('.editor.conflict-prompt .mc-client');
+      if ((await clientRadios.count()) > 1) await clientRadios.nth(1).check();
+      await wait(page, 500);
+      await page.click('.editor.conflict-prompt .mc-merge');
+      await page.waitForSelector('.editor.conflict-prompt', { state: 'detached' }).catch(() => {});
+      await page.waitForSelector('.entry[data-id="41"]', { state: 'detached' }).catch(() => {});
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('One merged event remains, spanning earliest start to latest end'));
       await wait(page, 1200);
     },
   },

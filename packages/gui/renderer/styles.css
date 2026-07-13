@@ -967,34 +967,9 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .merge-bar[hidden] { display: none; }
 
-/* The inline conflict prompt (§06 R3, §12 R6). Monochrome; only Merge (confirm) reuses .primary. */
-.merge-conflict {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--rule);
-}
-.merge-conflict .mc-title { font-size: 13px; font-weight: 590; color: var(--ink); }
-.merge-conflict .mc-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-.merge-conflict .mc-q {
-  font-size: 12px;
-  color: var(--muted);
-  min-width: 96px;
-}
-.merge-conflict .mc-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--ink);
-}
-.merge-conflict .mc-actions { display: flex; gap: 9px; align-items: center; }
+/* §06 R3: the disagreeing-merge conflict prompt is the modal `.editor.conflict-prompt`
+   (hosted in app.js, styled below with the shared editor chrome) — no longer an inline
+   panel under the merge bar. */
 
 /* §07/§12: the Clients view. A quiet list of active clients with their projects and
    in-place rename/archive/add. Monochrome — only the create/rename/add (.primary) confirms. */
