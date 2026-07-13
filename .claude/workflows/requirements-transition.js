@@ -246,7 +246,7 @@ referenceFixes, file RENAMES, and forbidden-survivor greps with their scope/carv
 verbatim), and recordingScope — the union, per §W, of (1) every core (●) GUI row and (2) every
 Rec ▶ row (GUI-only: where a row's tt side is CLI, the transcript is the evidence, no GIF). Be
 exhaustive: a row missed here never gets built, verified, or recorded.`,
-  { label: 'inventory', phase: 'Inventory', agentType: 'Explore', schema: WORKLIST, effort: 'high' }
+  { label: 'inventory', phase: 'Inventory', agentType: 'Explore', schema: WORKLIST, model: 'opus', effort: 'high' }
 );
 if (!inv) throw new Error('inventory agent died — nothing to work from; resume the run');
 
@@ -312,7 +312,7 @@ what the video must show — the §W table in requirements-transition.md prescri
 form before the calendar's hover→edit wiring; the merge-conflict host move before editor.js deletion).
 Set needsWorktree true ONLY if you expect a hard file
 conflict that wave scheduling can't resolve.`,
-      { label: `plan:${w.reqId}`, phase: 'Plan', schema: PLAN, effort: 'high' }
+      { label: `plan:${w.reqId}`, phase: 'Plan', schema: PLAN, model: 'opus', effort: 'high' }
     )
   )
 )).filter(Boolean);
@@ -379,7 +379,7 @@ for (let w = 0; w < waves.length; w++) {
     ids.map((id) => () => {
       const p = planById.get(id);
       const wreq = work.find((x) => x.reqId === id);
-      const opts = { label: `impl:${id}`, phase: 'Implement', schema: IMPL };
+      const opts = { label: `impl:${id}`, phase: 'Implement', schema: IMPL, model: 'opus' };
       if (worktreeIds.has(id)) opts.isolation = 'worktree';
       return agent(
         `${REPO}
@@ -429,7 +429,7 @@ The wave's build/tests are failing. Fix ONLY what is broken — do not redesign.
 ${(check.failures || []).join('\n')}
 Touch the minimum set of files (code or the new tests) to make \`npm run build && npm test\` green for
 what this wave added, WITHOUT weakening any assertion. Then stop.`,
-      { label: `repair-wave-${w + 1}-${attempt + 1}`, phase: 'Implement' }
+      { label: `repair-wave-${w + 1}-${attempt + 1}`, phase: 'Implement', model: 'opus' }
     );
   }
   if (!green) log(`⚠ Wave ${w + 1} still red after repair attempts — carrying failures into the Verify phase.`);
@@ -441,7 +441,7 @@ what this wave added, WITHOUT weakening any assertion. Then stop.`,
 
 Commit and push this wave's work as a checkpoint. Run:
   git add -A
-  git commit with a one-line message: "Checkpoint wave ${w + 1}: ${wave.join(', ')} (issue #43)" plus the
+  git commit with a one-line message: "Checkpoint wave ${w + 1}: ${ids.join(', ')} (issue #43)" plus the
   repo's standard commit trailers (match the trailer convention visible in \`git log\`).
   git push -u origin HEAD (on push rejection: git pull --rebase origin <branch>, resolve mechanically
   preferring the remote for files this wave did not touch, then push again; NEVER force-push).
@@ -468,7 +468,7 @@ always this way): add the \`core\` badge where ● is marked (§12 R17), record 
 NOT-core exclusion where core labeling is discussed (prd.html §03), and keep cross-references (e.g.
 the §12 R18–R20 renumber) consistent. Keep mockups in sync with the PRD (PRD §18). Do NOT touch the
 *-old.html files (they are deleted at swap). Touch only docs/mockups.`,
-        { label: `doc:${d.reqId}`, phase: 'Implement' }
+        { label: `doc:${d.reqId}`, phase: 'Implement', model: 'opus' }
       )
     )
   );
@@ -499,7 +499,7 @@ packages/gui/src/ipc.ts CHANNELS still has a row mapping it to its tt command pa
 channels are expected this transition — and that packages/gui/test/parity.test.ts still asserts
 completeness; extend it only if the channel-extraction shape changed. Run \`npm run test:gold\` and
 report pass/fail in your notes.`,
-    { label: 'cover:parity', phase: 'Verify' }
+    { label: 'cover:parity', phase: 'Verify', model: 'opus' }
   ),
   () => agent(
     `${REPO}
@@ -518,7 +518,7 @@ acceptance/criteria/judge-rubric.md (machine-checkable → deterministic Playwri
 packages/gui/judge/run-judge.mjs; subjective → screenshot-only pass:null). Add fixtures to
 packages/gui/judge/fixtures.mjs (keep the pinned clock JUDGE_NOW). Do NOT run the judge harness yet.
 Keep existing unrelated items intact.`,
-    { label: 'cover:judge', phase: 'Verify' }
+    { label: 'cover:judge', phase: 'Verify', model: 'opus' }
   ),
   () => agent(
     `${REPO}
@@ -531,7 +531,7 @@ merge via corner checkboxes (§06 R03); running-entry start-only adjust with fut
 §12 R14); and the entries calendar hover controls + horizontal scroll (§12 R16). Numbered steps +
 verify bullets, matching the existing format. Retire any runbook procedure that drove the old picker
 modal or entry-list rows. Don't duplicate existing procedures.`,
-    { label: 'cover:manual', phase: 'Verify' }
+    { label: 'cover:manual', phase: 'Verify', model: 'opus' }
   ),
 ]);
 
@@ -585,7 +585,7 @@ Default to "insufficient" and only upgrade to "sufficient" if you can PROVE all 
   3. reflectedInEvidence — there is a COVERAGE.md row AND the regenerated evidence
      (cli-transcript / judge-report / parity-matrix) reflects it.
 List the precise gaps. Be a hostile critic: when in doubt, "insufficient".`,
-      { label: `review-ac:${w.reqId}`, phase: 'Review', agentType: 'Explore', schema: AC_VERDICT, effort: 'high' }
+      { label: `review-ac:${w.reqId}`, phase: 'Review', agentType: 'Explore', schema: AC_VERDICT, model: 'opus', effort: 'high' }
     )
   )
 )).filter(Boolean);
@@ -614,7 +614,7 @@ of the working branch). Adapt Matt Pocock's improve-codebase-architecture method
 Rate each finding Strong / Worth exploring / Speculative, give file:symbol locations, state the
 deletion-test result, and a concrete behavior-preserving recommendation. Give ONE topRecommendation.
 Set clean=true ONLY if there are no Strong findings left. Recommendations must NOT weaken any AC.`,
-  { label: 'review-arch', phase: 'Review', agentType: 'Explore', schema: ARCH_REVIEW, effort: 'high' }
+  { label: 'review-arch', phase: 'Review', agentType: 'Explore', schema: ARCH_REVIEW, model: 'opus', effort: 'high' }
 )) || { clean: false, findings: [], topRecommendation: 'review agent died — treated as not clean' };
 const strongFindings = (archReview.findings || []).filter((f) => f.rating === 'Strong');
 log(`Review 5b (architecture): ${(archReview.findings || []).length} findings (${strongFindings.length} Strong); clean=${archReview.clean}. Top: ${archReview.topRecommendation}`);
@@ -656,7 +656,7 @@ Implement any missing behavior AND/OR add the missing REAL AC assertion (mapped 
 ${(wreq.acMethods || []).join('/')}; not a stub/skip) AND/OR add the missing COVERAGE.md row / parity row.
 Then run the affected suite to confirm it goes green. Touch the minimum files; do not weaken other
 assertions.`,
-        { label: `improve-ac:${id}-r${round + 1}`, phase: 'Improve' }
+        { label: `improve-ac:${id}-r${round + 1}`, phase: 'Improve', model: 'opus' }
       )
     );
   }
@@ -671,7 +671,7 @@ Apply these Strong code-quality/architecture findings WITHOUT changing behavior 
 ${strong.map((f, i) => `${i + 1}. [${f.kind}] ${f.title} @ ${(f.locations || []).join(', ')} — ${f.recommendation} (deletion test: ${f.deletionTest})`).join('\n')}
 Refactor conservatively, keep core/cli/gui parity, then run \`npm run build && npm test\` and confirm
 green. If a finding turns out to be wrong or risky, skip it and say why in your result.`,
-        { label: `improve-arch-r${round + 1}`, phase: 'Improve' }
+        { label: `improve-arch-r${round + 1}`, phase: 'Improve', model: 'opus' }
       )
     );
   }
@@ -693,7 +693,7 @@ failures with the key error line. Do not fix anything.`,
 
 The last improvement pass broke the build/tests. Fix ONLY what regressed, minimally, without weakening
 assertions, until \`npm run build && npm test\` is green again. Then stop.`,
-      { label: `improve-repair-r${round + 1}`, phase: 'Improve' }
+      { label: `improve-repair-r${round + 1}`, phase: 'Improve', model: 'opus' }
     );
   }
   await agent(
@@ -716,7 +716,7 @@ untouched files, push again; NEVER force-push). If nothing is staged, report don
 Re-run the ADVERSARIAL AC-EVIDENCE-SUFFICIENCY check for ${id} — ${wreq.summary || ''}. Same bar as before:
 sufficient ONLY if implemented AND a mapped method (${(wreq.acMethods || []).join('/')}) has a passing
 non-trivial assertion AND it's reflected in COVERAGE.md + regenerated evidence. Default insufficient.`,
-        { label: `review-ac:${id}-r${round + 1}`, phase: 'Improve', agentType: 'Explore', schema: AC_VERDICT, effort: 'high' }
+        { label: `review-ac:${id}-r${round + 1}`, phase: 'Improve', agentType: 'Explore', schema: AC_VERDICT, model: 'opus', effort: 'high' }
       );
     })
   )).filter(Boolean);
@@ -730,7 +730,7 @@ non-trivial assertion AND it's reflected in COVERAGE.md + regenerated evidence. 
 Re-run the CODE-QUALITY & ARCHITECTURE review over the current diff (same Matt-Pocock method,
 deletion test, Strong/Worth-exploring/Speculative ratings). Report remaining findings and set
 clean=true ONLY if no Strong findings remain.`,
-    { label: `review-arch-r${round + 1}`, phase: 'Improve', agentType: 'Explore', schema: ARCH_REVIEW, effort: 'high' }
+    { label: `review-arch-r${round + 1}`, phase: 'Improve', agentType: 'Explore', schema: ARCH_REVIEW, model: 'opus', effort: 'high' }
   )) || { clean: false, findings: [] };
   archClean = lastArch.clean && (lastArch.findings || []).every((f) => f.rating !== 'Strong');
 }
@@ -795,7 +795,7 @@ recordings/ directory. The GIFs MUST be COMMITTED (do NOT git-ignore them) — t
 in the PR as images. If \`ffmpeg\` is missing, install it (apt-get) or report the gap. If the headless
 Chromium build here cannot record video, do not fake anything — make the entry point clearly report
 the missing capability so per-req agents can surface it. Build if needed.`,
-    { label: 'rec:setup', phase: 'Recordings' }
+    { label: 'rec:setup', phase: 'Recordings', model: 'opus' }
   );
 
   recordings = (await parallel(
@@ -880,7 +880,7 @@ ${recordings.length ? recordings.map((r) => `     - ${r.reqId} | ${r.captured ? 
      judge=${finalSuite.judge}, evidence=${finalSuite.evidence}, no-network=${finalSuite.noNetwork},
      and the Markdown PR-body footer required by the repo conventions.
 3. Do NOT merge (the human gate is PR merge). Return committed, the PR url, the checklist, and a summary.`,
-  { label: 'open-pr', phase: 'PR', schema: PR_RESULT, effort: 'high' }
+  { label: 'open-pr', phase: 'PR', schema: PR_RESULT, model: 'opus', effort: 'high' }
 )) || { committed: false, prUrl: '(pr agent died — commit/push by hand or resume)' };
 log(`PR: committed=${pr.committed} url=${pr.prUrl}`);
 
@@ -945,7 +945,7 @@ For THIS (issue-43 interval-picker / entries-calendar) transition §Z is:
 Then run \`npm run build && npm test && npm run verify:no-network\` once more to confirm nothing
 referenced the deleted files, commit the swap, and push to the PR branch. Report what was deleted and
 renamed, what references were fixed, each grep result, and whether the tree is still green.`,
-    { label: 'swap', phase: 'Swap', effort: 'high' }
+    { label: 'swap', phase: 'Swap', model: 'opus', effort: 'high' }
   );
   swap = swapResult
     ? { performed: true, reason: 'all-green; swap committed to PR branch' }
