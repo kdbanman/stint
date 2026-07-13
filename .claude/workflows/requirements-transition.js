@@ -433,6 +433,22 @@ what this wave added, WITHOUT weakening any assertion. Then stop.`,
     );
   }
   if (!green) log(`⚠ Wave ${w + 1} still red after repair attempts — carrying failures into the Verify phase.`);
+  // Durability checkpoint: a container can die (rate limit, reclamation) at any moment, and an
+  // unpushed working tree dies with it. Push every wave the moment it verifies; the PR phase
+  // squashes nothing — it just builds on already-durable history.
+  await agent(
+    `${REPO}
+
+Commit and push this wave's work as a checkpoint. Run:
+  git add -A
+  git commit with a one-line message: "Checkpoint wave ${w + 1}: ${wave.join(', ')} (issue #43)" plus the
+  repo's standard commit trailers (match the trailer convention visible in \`git log\`).
+  git push -u origin HEAD (on push rejection: git pull --rebase origin <branch>, resolve mechanically
+  preferring the remote for files this wave did not touch, then push again; NEVER force-push).
+${green ? '' : 'The wave is still red — commit anyway (the checkpoint preserves progress; the Verify phase repairs).'}
+Report done.`,
+    { label: `push-wave-${w + 1}`, phase: 'Implement', model: 'opus', effort: 'low' }
+  );
 }
 
 // Doc-only rows (the §12 R18–R20 renumber, §17 R10/R11 wording, the §18 mockup sync) — these touch
@@ -455,6 +471,14 @@ the §12 R18–R20 renumber) consistent. Keep mockups in sync with the PRD (PRD 
         { label: `doc:${d.reqId}`, phase: 'Implement' }
       )
     )
+  );
+  await agent(
+    `${REPO}
+
+Commit and push the doc wave as a checkpoint: git add -A; one-line message "Checkpoint doc wave (issue #43)"
+with the repo's standard commit trailers (match \`git log\`); git push -u origin HEAD (on rejection:
+git pull --rebase, resolve preferring the remote for untouched files, push again; NEVER force-push). Report done.`,
+    { label: 'push-doc-wave', phase: 'Implement', model: 'opus', effort: 'low' }
   );
 }
 
@@ -525,6 +549,15 @@ key error line, and a one-paragraph summary. Do not fix anything here.`,
   { label: 'regen-evidence', phase: 'Verify', schema: SUITE, model: 'opus', effort: 'high' }
 ) || { build: false, testPassed: false, judge: false, evidence: false, noNetwork: false, failures: ['regen-evidence agent died'] };
 log(`Verify/evidence: build=${suite.build} tests=${suite.testPassed} judge=${suite.judge} evidence=${suite.evidence} no-network=${suite.noNetwork}`);
+await agent(
+  `${REPO}
+
+Commit and push the verify-phase output (AC files + regenerated evidence) as a checkpoint: git add -A;
+one-line message "Checkpoint verify phase (issue #43)" with the repo's standard commit trailers (match
+\`git log\`); git push -u origin HEAD (on rejection: git pull --rebase, resolve preferring the remote for
+untouched files, push again; NEVER force-push). Report done.`,
+  { label: 'push-verify', phase: 'Verify', model: 'opus', effort: 'low' }
+);
 
 // ===========================================================================
 // PHASE 5 — Review: TWO SEPARATE passes (mapping §R). Each produces feedback
@@ -663,6 +696,15 @@ assertions, until \`npm run build && npm test\` is green again. Then stop.`,
       { label: `improve-repair-r${round + 1}`, phase: 'Improve' }
     );
   }
+  await agent(
+    `${REPO}
+
+Commit and push this improve round as a checkpoint: git add -A; one-line message
+"Checkpoint improve round ${round + 1} (issue #43)" with the repo's standard commit trailers (match
+\`git log\`); git push -u origin HEAD (on rejection: git pull --rebase, resolve preferring the remote for
+untouched files, push again; NEVER force-push). If nothing is staged, report done without committing.`,
+    { label: `push-improve-r${round + 1}`, phase: 'Improve', model: 'opus', effort: 'low' }
+  );
 
   // Re-run BOTH reviews over the (now smaller) open set to decide loop termination.
   const reAc = (await parallel(
