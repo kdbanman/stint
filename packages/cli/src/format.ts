@@ -22,17 +22,21 @@ export function clientProjectLabel(e: EntryView): string {
 }
 
 /**
- * §05 R10 — the human-table rendering of a (possibly multiline) description. Descriptions are
- * stored VERBATIM with their newlines intact and `--json`/CSV carry the full text (§09 R06,
+ * §05 R10, §11 — the human-table rendering of a (possibly multiline) description. Descriptions
+ * are stored VERBATIM with their newlines intact and `--json`/CSV carry the full text (§09 R06,
  * §11); the `tt list` human table, however, is one line per entry, so it shows ONLY the first
- * line, capped at 60 characters with a trailing ellipsis (U+2026) when longer. This is the sole
+ * line, capped at 60 characters. A trailing ellipsis (U+2026) is appended whenever content was
+ * dropped — either the first line ran past 60 characters, OR the description had more than one
+ * line (so the reader is signalled there is more than the single line shown). This is the sole
  * place that cap lives — the machine read-side (`--json`, CSV export) never calls it, so full
  * fidelity is preserved there. null / empty → ''. Consumed by `tt list`'s `toRow` (§11).
  */
 export function descriptionCell(desc: string | null): string {
   if (!desc) return '';
-  const firstLine = desc.split(/\r?\n/)[0] ?? '';
-  return firstLine.length > 60 ? `${firstLine.slice(0, 60)}…` : firstLine;
+  const lines = desc.split(/\r?\n/);
+  const firstLine = lines[0] ?? '';
+  const truncated = lines.length > 1 || firstLine.length > 60;
+  return truncated ? `${firstLine.slice(0, 60)}…` : firstLine;
 }
 
 /** Flags shown against an entry in lists/reports (PRD §06, §10). */

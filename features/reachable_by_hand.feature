@@ -65,15 +65,15 @@ Feature: Every capability reachable by hand
     Then there is one entry from 09:00 to 11:00
     And the merged entry is for "Acme / Billing"
 
-  Scenario: Search and group the entry list by hand (the Entries control bar)
-    # §12 R9 / §09 R7 — group the list and free-text search it from the window. GUI:
-    # #entries-ctrl → `listEntries` IPC → core buildEntryList; tt: `tt list --by/--search`.
+  Scenario: Search and filter the entry list by hand (the Entries control bar)
+    # §12 R9 / §11 — filter + free-text search the entries list from the window; grouping left
+    # this view for Reports (G11). GUI: #entries-ctrl → `listEntries` IPC; tt: `tt list --search`.
     Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
-    When I view entries this week grouped by client
-    Then the entry list has groups exactly "Acme,Globex"
+    When I list entries this week
+    Then the entry list is exactly "auth refactor,deploy pipeline"
     When I search the entry list for "auth"
-    Then the entry list shows "auth refactor" under group "Acme"
+    Then the entry list is exactly "auth refactor"
     And the entry list does not show "deploy pipeline"
 
   Scenario: Build a grouped report by hand (the Reports view)

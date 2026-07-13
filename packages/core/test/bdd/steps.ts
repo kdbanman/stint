@@ -3,7 +3,7 @@
  * binds to the World interface, so it runs identically against @stint/core and tt.
  */
 import { expect } from 'vitest';
-import type { World, EntryRec, ExportRowRec, EntryGroupRec, ListViewReq, FavoriteRec } from './world.js';
+import type { World, EntryRec, ExportRowRec, ListFilterReq, FavoriteRec } from './world.js';
 
 /** Scenario-scoped scratch shared across steps. */
 export interface Ctx {
@@ -20,10 +20,10 @@ export interface Ctx {
   searchResults?: EntryRec[];
   /** §09 R6 — the rows returned by the most recent `When I export the range …`. */
   exportRows?: ExportRowRec[];
-  /** §12 R9 — the accumulating Entries-view query the control-bar clauses build up. */
-  listQuery?: ListViewReq;
-  /** §12 R9 — the grouped result of the most recent Entries-view query. */
-  listGroups?: EntryGroupRec[];
+  /** §11 — the accumulating entry-list query the range/filter/search clauses build up. */
+  listReq?: ListFilterReq;
+  /** §11 — the flat, ungrouped result of the most recent entry-list query. */
+  listResults?: EntryRec[];
   /** §09 R09 — the grand total seconds of the most recent saved-report run. */
   runTotalSeconds?: number;
   /** §09 R09 — the grand total captured before a re-grouping edit, to prove regroup-invariance. */
@@ -598,88 +598,68 @@ export const steps: StepDef[] = [
     },
   },
 
-  // ---- §12 R9 Entries-view grouping / filtering / search ------------------
-  // The control bar the GUI Entries view drives (window.stint.listEntries) and `tt list
-  // --by/--search/--range/--client/--project/--tag`. Each clause mutates an accumulating
-  // ListViewReq and re-runs World.listView (CoreWorld store.listEntries+buildEntryList,
-  // CliWorld `tt list … --json` then the SAME buildEntryList), so the surfaces are compared
-  // on identical grouping. The assertions read the latest grouped result.
+  // ---- §11 entry list: range / filter / free-text search (flat, ungrouped) --
+  // `tt list` (and core store.listEntries) return ONE flat set for a range, narrowed by
+  // client / project / tag and free-text search — no grouping (that left the list for
+  // Reports, G11). Each clause accumulates a ListFilterReq and re-runs World.listFiltered
+  // (CoreWorld store.listEntries, CliWorld `tt list … --json`), so the two surfaces are
+  // compared on the identical flat set (§17 R8). The assertions read the latest result.
   {
-    pattern: /^I view entries grouped by (day|client|project|tag)$/,
-    run: (w, ctx, by) => {
-      ctx.listQuery = { ...(ctx.listQuery ?? {}), by: by as ListViewReq['by'] };
-      ctx.listGroups = w.listView(ctx.listQuery);
+    pattern: /^I list entries this week$/,
+    run: (w, ctx) => {
+      ctx.listReq = { ...(ctx.listReq ?? {}), preset: 'week' };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
-    pattern: /^I view entries this week grouped by (day|client|project|tag)$/,
-    run: (w, ctx, by) => {
-      ctx.listQuery = { ...(ctx.listQuery ?? {}), by: by as ListViewReq['by'], preset: 'week' };
-      ctx.listGroups = w.listView(ctx.listQuery);
-    },
-  },
-  {
-    pattern:
-      /^I view entries grouped by (day|client|project|tag) for the range (\S+) to (\S+)$/,
-    run: (w, ctx, by, from, to) => {
-      ctx.listQuery = {
-        ...(ctx.listQuery ?? {}),
-        by: by as ListViewReq['by'],
-        fromUtc: from,
-        toUtc: to,
-      };
-      delete ctx.listQuery.preset;
-      ctx.listGroups = w.listView(ctx.listQuery);
+    pattern: /^I list entries for the range (\S+) to (\S+)$/,
+    run: (w, ctx, from, to) => {
+      ctx.listReq = { ...(ctx.listReq ?? {}), fromUtc: from, toUtc: to };
+      delete ctx.listReq.preset;
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to client "([^"]*)"$/,
     run: (w, ctx, client) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), client };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), client };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to project "([^"]*)"$/,
     run: (w, ctx, project) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), project };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), project };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to tag "([^"]*)"$/,
     run: (w, ctx, tag) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), tag };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), tag };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I search the entry list for "([^"]*)"$/,
     run: (w, ctx, query) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), search: query };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), search: query };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
-    pattern: /^the entry list shows "([^"]*)" under group "([^"]*)"$/,
-    run: (_w, ctx, desc, key) => {
-      const group = (ctx.listGroups ?? []).find((g) => g.key === key);
-      expect(group, `expected a group "${key}" in the entry list`).toBeDefined();
-      expect(group!.descriptions).toContain(desc);
+    pattern: /^the entry list is exactly "([^"]*)"$/,
+    run: (_w, ctx, descs) => {
+      const expected = descs.split(',').map((d) => d.trim()).sort();
+      const got = (ctx.listResults ?? []).map((e) => e.description ?? '').sort();
+      expect(got).toEqual(expected);
     },
   },
   {
     pattern: /^the entry list does not show "([^"]*)"$/,
     run: (_w, ctx, desc) => {
-      const all = (ctx.listGroups ?? []).flatMap((g) => g.descriptions);
+      const all = (ctx.listResults ?? []).map((e) => e.description);
       expect(all).not.toContain(desc);
-    },
-  },
-  {
-    pattern: /^the entry list has groups exactly "([^"]*)"$/,
-    run: (_w, ctx, keys) => {
-      const expected = keys.split(',').map((k) => k.trim());
-      expect((ctx.listGroups ?? []).map((g) => g.key)).toEqual(expected);
     },
   },
 
