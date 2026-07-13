@@ -1990,6 +1990,22 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 7px 10px;
   min-width: 160px;
 }
+/* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
+   row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM") and
+   tabular so the two times line up; they reuse the .set-field chrome via the shared class. */
+.set-hhmm {
+  min-width: 0;
+  width: 68px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.set-hhmm-sep { color: var(--muted); font-size: 13px; }
+/* §14 — a row whose control is inapplicable under the current mode (the Around span while the
+   picker window is working_hours) dims and stops interacting; the control itself also carries
+   `disabled`, this is the visual half. The dim never hides the row — it stays legible. */
+.set-row.off { opacity: 0.5; }
+.set-row.off .set-ctrl { pointer-events: none; }
 /* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }
 /* The rounding toggle: a monochrome track that fills inked when on. The knob slides; the ON
