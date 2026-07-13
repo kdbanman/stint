@@ -267,9 +267,9 @@ export function splittableState() {
 }
 
 /**
- * A single closed entry on the pinned day, so the EDIT_INLINE scene can open the
- * inline edit form deterministically and assert the seeded field values. Closed (it
- * has an endUtc) so the form shows the full field set including End.
+ * A single closed entry on the pinned day, so the delete-gate scenes (DELETE_CONFIRM /
+ * CONFIRM_DELETE) can open the entry's row affordances deterministically. Closed (it has
+ * an endUtc) so it offers the full field set including End when opened.
  */
 export function editingState() {
   return {
@@ -333,14 +333,14 @@ export function multilineDescState() {
 }
 
 /**
- * §12 R6 — the INLINE_EDITOR fixture. A single CLOSED entry whose client/project match the
- * canned reference data (Acme / API → CLIENTS id 1, PROJECTS 11) so the consolidated editor
- * modal (window.SE.openEditor) opens with its Client + Project selects pre-selectable and
- * every tt-editable field present (description, client, project, start, end, tags, billable)
- * plus the Split affordance. Closed (it has an endUtc), so the editor shows the full field
- * set including End and offers Split (only a bounded span can be cut).
+ * §12 R06 — the UNIFIED_FORM edit-mode fixture. A single CLOSED entry seeding EVERY tt-editable
+ * field, whose client/project match the canned reference data (Acme / API → CLIENTS id 1,
+ * PROJECTS 11) so the unified entry form opens INLINE (not a modal) in edit mode with its Client
+ * + Project selects pre-selectable, the description textarea, the tag chips, the billable toggle
+ * and the Start/Stop expander all seeded from the entry. Closed (it has an endUtc), so the form
+ * carries End and the footer offers Split (only a bounded span can be cut).
  */
-export function editableState() {
+export function unifiedFormState() {
   return {
     status: { running: false, entry: null },
     days: [

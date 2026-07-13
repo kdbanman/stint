@@ -157,38 +157,50 @@ every field `tt add` accepts — and treat an overlapping span as warned, not bl
 > matrix. This runbook confirms the real window lands the full-attribute entry day-grouped
 > at parity with `tt add` and that an overlapping span is warned inline but still saved.
 
-## CHECK EDIT/DELETE ENTRIES (GUI) — amend any field in-context, two-step delete (§06 R1)
+## CHECK UNIFIED ENTRY FORM — EDIT, SPLIT & DELETE (GUI) (§12 R06)
 
-1. Open the main window with at least one **closed** entry (or `tt add "design
-   review" --from "2h ago" --to "30m ago" --client "Acme"`). Confirm the row shows in
-   its day group.
-2. On the closed entry's row, click **Edit**. The row swaps into an inline edit form
-   (not a separate window) seeded from the entry.
-   - [ ] The form shows description, **Start**, **End**, **Billable**, and a **client
-         select** — all pre-filled from the entry (any field is editable in-context).
-3. Change the **description** and nudge the **Start** time a few minutes, optionally
-   pick a different **client**, then click **Save**.
-   - [ ] The row returns to display mode showing the new values.
-   - [ ] `tt list` shows the amended description/start/client — the GUI and the DB
-         agree (the edit went through the same `edit` path `tt` uses).
-4. Now edit the **open** (running) entry's **Start** and Save (parity with the BDD
-   scenario "Editing the running entry's start does not stop it").
-   - [ ] The open entry stays open — `tt status` still reports it running (the form
-         has no End field for the open row, so the patch never carries `endUtc`).
-5. On any row, click **Delete** (the row's or the form's).
-   - [ ] The first click does **not** remove the entry — it swaps into a "Confirm
-         delete?" affordance with a **Cancel**.
-   - [ ] Click **Cancel**: the entry survives, the button returns to **Delete**.
-   - [ ] Click **Delete** then **confirm**: the entry disappears from the GUI **and**
-         from `tt list`.
+Confirms the §12 R06 unified entry form (**edit mode**) end-to-end on a **real desktop**
+against a **real DB**: one form — the same one add mode uses — surfaces every `tt`-editable
+field **inline** in the Entries view (no modal), and its edit-mode footer reaches Split and a
+two-step Delete. Every change round-trips to the same DB `tt` reads (the Electron host + the
+OS-level DB round-trip have no Playwright host, so this is MANUAL). Run with `tt` in a second
+terminal pointed at the same database.
 
-> The edit/delete *behaviour* is proven surface-neutrally over core+tt by the BDD
-> scenarios in `features/overlap_and_editing.feature`; the GUI affordances are
-> screenshotted under JUDGE (`EDIT_INLINE` / `DELETE_CONFIRM`, `main-edit.png`) and
-> guarded statically (`renderer-static.test.ts`: an Edit control wired to
-> `window.stint.edit`, every field seeded, and Delete routed through a confirm step).
-> This runbook confirms real keyboard input, the client select, and the two-step
-> delete on a real desktop — the OS residual the headless harness cannot cover.
+1. Seed a closed entry: `tt add "design review" --from "2h ago" --to "1h ago" --client "Acme" --project API --tag deep`.
+2. In the running main window, on the entries calendar **hover the event and click its Edit
+   affordance** — then repeat, this time **clicking the event itself**.
+   - [ ] **Both** open the **same unified entry form in edit mode**, and it opens **INLINE in
+         the Entries view — no modal, no backdrop/dim** (the form sits in the view, in flow).
+   - [ ] The form is **seeded from the entry**: a multiline **Description**, **Client** +
+         **Project** selects (pre-selected), the **tag chips** (`deep`), the **Billable**
+         toggle, and — under the collapsed **Start / Stop (exact times)** expander — the
+         seeded **Start** and **Stop**.
+3. Amend **each** field — edit the description, pick a different client/project, add and remove
+   a tag, flip Billable, expand Start/Stop and nudge a time — then click **Save entry**.
+   - [ ] Only **Save entry** carries the accent; Split, Cancel and Delete are quiet.
+   - [ ] `tt list --json` shows **every changed field persisted**; the GUI and the DB agree
+         (Save went through the same `edit` path `tt` uses, sending only the changed fields).
+4. Re-open the form and, in the footer, click **Split**; pick an instant **inside** the span
+   and confirm.
+   - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span (the
+         boundary is the picked instant; no time is lost or gained), cross-checking `tt split`.
+   - [ ] Picking an instant **outside** the span is rejected (core would reject it too).
+5. Open the form on the **open (running)** entry and nudge its **Start**, then Save.
+   - [ ] The open entry stays open — `tt status` still reports it running (the running variant
+         has **no End**, so the patch never carries `endUtc`).
+6. Re-open the form on any entry and, in the footer, click **Delete**.
+   - [ ] The first click does **not** remove the entry — it **arms** a "Confirm delete?"
+         affordance with a **Cancel**.
+   - [ ] Click **Cancel**: the entry survives, the control returns to **Delete**.
+   - [ ] Click **Delete** then the explicit **confirm**: the entry disappears from the GUI
+         **and** from `tt list` — cross-checking `tt rm` (a stray first click never deletes).
+
+> The edit/split/delete *behaviour* is proven surface-neutrally over core+tt by the BDD
+> scenarios in `features/reachable_by_hand.feature` + `features/overlap_and_editing.feature`;
+> the unified form (edit mode) is screenshotted headless under JUDGE (`UNIFIED_FORM`,
+> `main-edit.png`) and guarded statically (`renderer-static.test.ts`). This runbook confirms
+> the real inline form (no modal), the client/project selects, the footer Split, the two-step
+> Delete, and the round-trip to `tt` on a real desktop — the OS residual no headless host covers.
 
 ## CHECK MERGE (GUI) — multi-select + conflict prompt folds entries into one (§06 R3, §12 R6)
 
@@ -258,49 +270,6 @@ off `editor.js`). Running (open) events have no end, so they offer no checkbox.
 > *arithmetic* (concatenated descriptions, unioned tags, winner override) is proven
 > surface-neutrally over core+tt by the BDD merge scenarios in
 > `features/overlap_and_editing.feature`.
-
-## CHECK INLINE EDIT, SPLIT & MERGE (GUI) — the consolidated entry editor (§12 R6)
-
-Confirms the §12 R6 editor surface end-to-end on a **real desktop** against a **real DB**:
-the per-entry kebab opens one modal exposing every `tt`-editable field, plus Split and
-Merge, and every change round-trips to the same DB `tt` reads (the Electron host and the
-OS-level DB round-trip have no Playwright host, so this is MANUAL). Run with `tt` in a
-second terminal pointed at the same database.
-
-1. Seed a closed entry: `tt add "design review" --from "2h ago" --to "1h ago" --client "Acme" --project API --tag deep`.
-2. In the running main window, click the entry row's **⋯ (kebab)** button.
-   - [ ] A modal **editor** opens showing **Description**, **Client**, **Project**,
-         **Start**, **End**, **Tags** (chips), and a **Billable** toggle — every field
-         `tt edit` accepts, all seeded from the entry.
-3. Change **each** field — edit the description, pick a different client/project, nudge
-   Start/End, add and remove a tag, flip Billable — then click **Save**.
-   - [ ] `tt list --json` shows the entry with **every changed field persisted**; the GUI
-         and the DB agree (the editor went through the same `edit` path `tt` uses).
-4. Re-open the editor and click **Split at instant…**, pick an instant **inside** the span,
-   confirm **Split**.
-   - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span
-         (the split boundary is the picked instant; no time is lost or gained).
-   - [ ] Picking an instant **outside** the span is rejected (the editor refuses it and
-         core would reject it too).
-5. With two **adjacent closed** entries that **disagree** on client/billable selected via
-   their row checkboxes, click the toolbar **Merge selected** (or the merge bar).
-   - [ ] A **conflict prompt** asks which **client/project** and which **billable** value
-         to keep **before** merging; pick the winners and confirm.
-   - [ ] `tt list` shows **one merged row** with the **chosen** client/project/billable,
-         the two **descriptions concatenated**, and the **tags unioned** (§06 R3) — GUI
-         and DB agree.
-6. Re-open the editor on any entry, click **Delete**, and confirm the two-step prompt.
-   - [ ] The entry is gone from both the GUI and `tt list` — and only after the explicit
-         confirm tap (a stray first click never deletes).
-
-> The edit/split/merge/delete *behaviour* is proven surface-neutrally over core+tt by the
-> BDD scenarios in `features/overlap_and_editing.feature` and the GOLD merge-override
-> contract; the consolidated editor modal is screenshotted headless under JUDGE
-> (`INLINE_EDITOR`, `main-editor.png`) and guarded statically (`renderer-static.test.ts`:
-> `editor.js` is a pure renderer exposing `openEditor` + the split/merge paths, every
-> `tt`-editable field present, no name resolution). This runbook confirms the real kebab,
-> the live modal, and the round-trip to `tt` on a real desktop — the parts no headless host
-> can drive.
 
 ## CHECK OVERLAP BANNER (GUI) (§06 R4, §12)
 
