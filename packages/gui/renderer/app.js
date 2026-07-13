@@ -345,7 +345,8 @@ function renderMergeBar() {
   bar.hidden = n < 2;
   if (n >= 2) $('merge-go').textContent = `Merge ${n} entries`;
   // §12 R6: the toolbar Merge-selected affordance tracks the same selection — hidden until
-  // at least two contiguous closed entries are armed, labelled with the live count.
+  // at least two contiguous closed entries are armed, labelled with the live count. (Retires
+  // with the modal editor, §12 R06 / §Z.)
   const tb = $('merge-selected');
   if (tb) {
     tb.hidden = n < 2;
@@ -564,19 +565,44 @@ async function mergeSelected() {
     applyAck(ack);
     return;
   }
-  openConflictPrompt(entries);
+  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, now
+  // hosted here in app.js (moved off editor.js so the modal editor can retire, §12 modal
+  // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
+  // overlap ack the fold raised against a third entry (§06 R4).
+  openMergeConflict(entries, async (ack) => {
+    await load();
+    if (ack) applyAck(ack);
+  });
 }
 
-// The inline conflict panel (§06 R3, §12 R6). It offers, for the disagreeing attributes,
-// which entry's client/project to keep and which billable value to keep — before any
-// merge commits. On confirm it sends { ids, winnerId, billable }: winnerId selects the
-// entry whose client/project win (the main process resolves it to clientId/projectId,
-// which the renderer never sees), and billable is the chosen flag.
-function openConflictPrompt(entries) {
-  const bar = $('merge-bar');
-  // Re-clicking Merge re-raises a single prompt rather than stacking panels.
-  bar.querySelector('.merge-conflict')?.remove();
-  // Distinct client choices, each mapped back to a representative entry id (the winner).
+// Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
+// helper so app.js owns the modal's lifecycle without depending on editor.js's closeEditor
+// — the two share the `.editor-backdrop` chrome but not the code path.
+function closeMergeConflict() {
+  document.querySelector('.editor-backdrop')?.remove();
+}
+
+// The merge-conflict prompt (§06 R3, §12 R6), moved verbatim from editor.js so the modal
+// editor can be deleted (§12 modal-editor row / §Z) while the calendar multi-select merge
+// path keeps its resolver. Styled to context/mockups/merge-conflict.html: a modal one rung
+// above content (.editor.conflict-prompt over .editor-backdrop) resolving the disagreeing
+// attributes field-by-field with accent radios, then listing the unconditionally-kept
+// fields (description, tags, span) as auto-kept "agree" rows so the user sees exactly what
+// merges. It sends { ids, winnerId, billable } — the winning entry's id, never a resolved
+// name — over the same window.stint.merge IPC (no new channel, no parity row); the main
+// process maps winnerId to core's MergeOptions. `onDone(ack)` reloads after the commit.
+function openMergeConflict(entries, onDone = () => {}) {
+  closeMergeConflict();
+  const { icon } = window.SU;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'editor-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'editor conflict-prompt';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', 'Resolve merge conflict');
+
+  // Distinct client choices, each mapped to a representative (winning) entry id.
   const seen = new Map();
   for (const e of entries) {
     const label = e.clientLabel ?? '(no client)';
@@ -585,45 +611,80 @@ function openConflictPrompt(entries) {
   const clientChoices = [...seen.entries()];
   const billableConflict = new Set(entries.map((e) => !!e.billable)).size > 1;
 
-  const panel = document.createElement('div');
-  panel.className = 'merge-conflict';
+  // The merged span runs from the earliest start to the latest end.
+  const sorted = entries.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const spanLabel =
+    last.endUtc != null ? `${localTime(first.startUtc)} – ${localTime(last.endUtc)}` : localTime(first.startUtc);
+
   const clientOpts = clientChoices
     .map(
       ([label, id], i) =>
-        `<label class="mc-opt"><input type="radio" name="mc-client" class="mc-client" ` +
-        `value="${id}"${i === 0 ? ' checked' : ''} /> ${escapeHtml(label)}</label>`,
+        `<label class="mc-opt${i === 0 ? ' on' : ''}"><input type="radio" name="ed-mc-client" class="mc-client" ` +
+        `value="${id}"${i === 0 ? ' checked' : ''} /><span class="rad"></span>` +
+        `<span class="ot"><b>${escapeHtml(label)}</b></span></label>`,
     )
     .join('');
-  // Billable is a single yes/no; offer it only when the selection disagrees on it.
   const billRow = billableConflict
-    ? `<div class="mc-row mc-bill-row"><span class="mc-q">Billable?</span>` +
-      `<label class="mc-opt"><input type="radio" name="mc-bill" class="mc-bill" value="1" checked /> Billable</label>` +
-      `<label class="mc-opt"><input type="radio" name="mc-bill" class="mc-bill" value="0" /> Non-billable</label></div>`
+    ? `<div class="conf mc-bill-row"><div class="mc-q">Billable</div><div class="opts">` +
+      `<label class="mc-opt on"><input type="radio" name="ed-mc-bill" class="mc-bill" value="1" checked /><span class="rad"></span><span class="ot"><b>Billable</b></span></label>` +
+      `<label class="mc-opt"><input type="radio" name="ed-mc-bill" class="mc-bill" value="0" /><span class="rad"></span><span class="ot"><b>Non-billable</b></span></label></div></div>`
     : '';
-  panel.innerHTML =
-    `<div class="mc-title">Which should the merged entry keep?</div>` +
-    `<div class="mc-row"><span class="mc-q">Client / project</span>${clientOpts}</div>` +
-    billRow +
-    `<div class="mc-actions">` +
-    `<button type="button" class="small primary" data-act="confirm-merge">Merge</button>` +
-    `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
-    `</div>`;
-  bar.appendChild(panel);
 
-  panel.querySelector('[data-act="confirm-merge"]').addEventListener('click', async (ev) => {
-    ev.stopPropagation();
-    const winnerId = Number(panel.querySelector('.mc-client:checked').value);
+  // Auto-kept rows: the fields core merges unconditionally, shown so nothing is a surprise.
+  const keptDesc = sorted
+    .map((e) => (e.description ?? '').trim())
+    .filter(Boolean)
+    .join(' · ');
+  const keptTags = [...new Set(entries.flatMap((e) => e.tags ?? []))].join(' · ');
+  const agreeRow = (label, value) =>
+    value
+      ? `<div class="agree">${icon('check')}<b>${label}</b><span class="val tnum">${escapeHtml(value)}</span></div>`
+      : '';
+
+  dialog.innerHTML =
+    `<div class="ed-head"><div class="ed-title">Merge ${entries.length} entries</div>` +
+    `<button type="button" class="iconbtn mc-close" aria-label="Close">${icon('x')}</button></div>` +
+    `<div class="ed-body">` +
+    `<div class="conf mc-row"><div class="mc-q">Client / project</div><div class="opts">${clientOpts}</div></div>` +
+    billRow +
+    agreeRow('Description', keptDesc) +
+    agreeRow('Tags', keptTags) +
+    agreeRow('Span', spanLabel) +
+    `</div>` +
+    `<div class="ed-foot">` +
+    `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
+    `<button type="button" class="small primary mc-merge">${icon('swap')}Merge</button>` +
+    `</div>`;
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+
+  // The accent rides the selected radio's row; clicking a radio moves the .on lift.
+  function syncRadioRows(name) {
+    for (const r of dialog.querySelectorAll(`input[name="${name}"]`)) {
+      r.closest('.mc-opt')?.classList.toggle('on', r.checked);
+    }
+  }
+  dialog.querySelectorAll('.mc-client, .mc-bill').forEach((r) => {
+    r.addEventListener('change', () => syncRadioRows(r.name));
+  });
+
+  dialog.querySelector('.mc-merge').addEventListener('click', async () => {
+    const winnerId = Number(dialog.querySelector('.mc-client:checked').value);
     const payload = { ids: entries.map((e) => e.id), winnerId };
-    const billChoice = panel.querySelector('.mc-bill:checked');
+    const billChoice = dialog.querySelector('.mc-bill:checked');
     if (billChoice) payload.billable = billChoice.value === '1';
     const ack = await window.stint.merge(payload);
-    await load();
-    applyAck(ack);
+    closeMergeConflict();
+    onDone(ack);
   });
-  panel.querySelector('.mc-cancel').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    panel.remove();
+  dialog.querySelector('.mc-cancel').addEventListener('click', () => closeMergeConflict());
+  dialog.querySelector('.mc-close').addEventListener('click', () => closeMergeConflict());
+  backdrop.addEventListener('click', (ev) => {
+    if (ev.target === backdrop) closeMergeConflict();
   });
+  return dialog;
 }
 
 // §12 R13: the generic in-window confirm gate for a destructive action. A destructive
@@ -1502,14 +1563,17 @@ function closeLeStartDisc() {
 }
 
 // §06 R3: the Merge action folds the current contiguous selection. mergeSelected()
-// decides whether the selection agrees (merge directly) or disagrees (raise the inline
-// conflict prompt to pick the winning client/project/billable first).
+// decides whether the selection agrees (merge directly) or disagrees (raise the app.js-
+// hosted conflict prompt — openMergeConflict, moved here off editor.js — to pick the
+// winning client/project/billable first).
 $('merge-go').addEventListener('click', () => void mergeSelected());
 
 // §12 R6: the toolbar Merge-selected button routes the current selection through the
 // consolidated editor's merge flow (window.SE.mergeSelected) — the same merge IPC +
 // conflict prompt — reloading on commit. It mirrors the merge bar's button so the action
-// is reachable from the toolbar too.
+// is reachable from the toolbar too. (This editor.js-hosted path retires with the modal
+// editor's deletion, §12 R06 / §Z; until then the merge-bar path above uses the app.js-
+// hosted openMergeConflict.)
 const mergeSelectedBtn = $('merge-selected');
 if (mergeSelectedBtn) {
   mergeSelectedBtn.addEventListener('click', () => {

@@ -1615,10 +1615,14 @@ async function main() {
   });
 
   // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
-  // action; merging entries that DISAGREE on client/billable raises an inline conflict
-  // prompt offering the distinct client choices and a billable choice BEFORE committing
-  // (§06 R3, §12 R6). The renderer sends no clientId/projectId — the winning entry's id
-  // (winnerId) plus the chosen billable go to the main process, which resolves the names.
+  // action; merging entries that DISAGREE on client/billable raises the conflict prompt
+  // offering the distinct client choices and a billable choice BEFORE committing
+  // (§06 R3, §12 R6). The prompt is now hosted in app.js (moved off editor.js so the modal
+  // editor can retire, §12 modal-editor / §Z) — it is the `.editor.conflict-prompt` modal.
+  // The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
+  // chosen billable go to the main process, which resolves the names. (The selection surface
+  // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
+  // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
     const barHiddenInitially = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
@@ -1629,13 +1633,13 @@ async function main() {
       const bar = document.querySelector('#merge-bar');
       return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
     });
-    // Click Merge: the selection disagrees, so a conflict prompt must appear rather than
-    // a silent merge.
+    // Click Merge: the selection disagrees, so the app.js-hosted conflict prompt must appear
+    // rather than a silent merge.
     await page.click('#merge-go');
-    await page.waitForSelector('.merge-conflict', { state: 'attached' });
+    await page.waitForSelector('.editor.conflict-prompt', { state: 'attached' });
     await page.screenshot({ path: join(EVIDENCE, 'main-merge-conflict.png'), fullPage: true });
     const probe = await page.evaluate(() => {
-      const panel = document.querySelector('.merge-conflict');
+      const panel = document.querySelector('.editor.conflict-prompt');
       const clientOpts = [...(panel?.querySelectorAll('.mc-client') ?? [])];
       const clientLabels = clientOpts.map((r) => r.closest('.mc-opt')?.textContent?.trim());
       const billOpts = [...(panel?.querySelectorAll('.mc-bill') ?? [])];
@@ -1677,7 +1681,7 @@ async function main() {
     await page.check('.entry[data-id="51"] .sel');
     await page.click('#merge-go');
     const probe = await page.evaluate(() => ({
-      promptShown: !!document.querySelector('.merge-conflict'),
+      promptShown: !!document.querySelector('.editor.conflict-prompt'),
       merged: window.__MERGED__,
     }));
     const ok =

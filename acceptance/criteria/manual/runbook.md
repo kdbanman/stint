@@ -222,6 +222,43 @@ every field `tt add` accepts — and treat an overlapping span as warned, not bl
 > runbook confirms the real checkboxes, the live prompt, and the round-trip to `tt` on a
 > real desktop.
 
+## CHECK MERGE VIA CALENDAR CHECKBOXES (GUI) — corner-checkbox selection on the entries calendar (§06 R03, §12 R16)
+
+The merge selection surface is the **readonly entries calendar** (§12 R16): each closed
+event carries a **hover-corner checkbox**, and checking any box enters **multi-select
+mode** — every closed event reveals its checkbox and the per-event hover Delete/Split/Edit
+are suppressed while selecting. The conflict prompt is hosted in `app.js` (the modal moved
+off `editor.js`). Running (open) events have no end, so they offer no checkbox.
+
+1. Open the main window (Entries view) with at least two **adjacent closed** entries on the
+   same day that **disagree** on client/billable — e.g.
+   `tt add "api work" --from "3h ago" --to "2h ago" --client "Client A" --project API`
+   then `tt add "internal sync" --from "2h ago" --to "1h ago" --no-billable` (no client).
+2. Hover the first event and **check its corner checkbox**.
+   - [ ] The calendar enters **multi-select mode**: every closed event now shows its corner
+         checkbox, and the hover Delete/Split/Edit affordances are suppressed.
+   - [ ] The selection bar's **Merge** action stays hidden with only one event checked.
+3. Check the second (contiguous) event's corner checkbox.
+   - [ ] The selection bar appears and reads **"Merge 2 entries"** (the live count).
+4. Click **Merge**.
+   - [ ] Because the two entries disagree, the **conflict prompt** (a modal, not an inline
+         panel) appears asking which **client / project** to keep and which **billable**
+         value to keep — *before* anything is merged.
+5. Pick the winning client/project and billable, then confirm **Merge**.
+   - [ ] Exactly **one merged event** replaces the two on the calendar, spanning
+         **earliest start → latest end**.
+   - [ ] `tt list` shows the merged entry with the **chosen** client/project/billable, the
+         two **descriptions concatenated**, and the **tags unioned** — the GUI and the DB
+         agree (the merge went through the same `merge` path `tt` uses).
+6. Uncheck all boxes (or complete the merge): the calendar **exits multi-select mode** and
+   the per-event hover affordances return.
+
+> The corner-checkbox selection + app.js-hosted prompt is screenshotted under JUDGE
+> (`MERGE_CONFLICT` / `MERGE_NOCONFLICT`) and recorded under §W (`§06 R03`); the merge
+> *arithmetic* (concatenated descriptions, unioned tags, winner override) is proven
+> surface-neutrally over core+tt by the BDD merge scenarios in
+> `features/overlap_and_editing.feature`.
+
 ## CHECK INLINE EDIT, SPLIT & MERGE (GUI) — the consolidated entry editor (§12 R6)
 
 Confirms the §12 R6 editor surface end-to-end on a **real desktop** against a **real DB**:
