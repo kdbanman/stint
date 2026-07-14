@@ -2006,24 +2006,26 @@ async function main() {
     );
   });
 
-  // ENTRY_LIST_SEARCH — §12 R9: the Entries-view control bar. Loading the multi-entry
-  // fixture paints the default day-grouped list; typing in the search box drives a real
-  // window.stint.listEntries query that narrows the visible rows (only matches remain), and
-  // switching the Group-by control to Client regroups the same set into client buckets.
-  // §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields — #el-range-from/#el-range-to
-  // are input[type="date"] (no time component), there is NO #el-range-apply button, and
-  // setting both dates drives a real listEntries call carrying { fromDate, toDate } (the raw
-  // YYYY-MM-DD strings) that narrows the visible rows LIVE. The deterministic sub-facts are
-  // machine-scored under the pinned JUDGE clock; the grouped and searched looks are captured
-  // (entries-grouped.png / entries-search.png) for rubric review.
+  // ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
+  // readonly entries calendar. There is NO grouping control here — grouped breakdowns moved to
+  // Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT. The surviving toolbar
+  // controls (range presets, the plain-date custom pair, client/project/tag filters, the search
+  // box) apply LIVE to the calendar: each drives a real window.stint.listEntries query and the
+  // visible calendar events (.dcol .ev) narrow to the matching set, with #week-total tracking the
+  // selection live. §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields —
+  // #el-range-from/#el-range-to are input[type="date"] (no time component), there is NO
+  // #el-range-apply button, and setting both dates drives a listEntries call carrying the raw
+  // { fromDate, toDate } strings (no derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE.
+  // R16 supplies the calendar-structure half of this scene (the day columns + events); R09 owns
+  // the toolbar-drives-calendar facts below. Deterministic sub-facts are machine-scored under the
+  // pinned JUDGE clock; the calendar looks are captured (entries-search.png / entries-calendar.png).
   await withPage(browser, listState(), 'index.html', async (page) => {
-    // The default load paints the day-grouped getState (no control touched yet).
-    await page.waitForFunction(() => document.querySelectorAll('#entries .day').length > 0);
+    // The default load paints the readonly entries calendar (R16) — no toolbar control touched yet.
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
     const before = await page.evaluate(() => ({
-      // The control bar's four group-by options + default-active Day.
-      byOptions: [...document.querySelectorAll('#el-by-seg .seg-btn')].map((b) => b.dataset.by),
-      byActive: [...document.querySelectorAll('#el-by-seg .seg-btn.on')].map((b) => b.dataset.by),
-      // The control bar is present and discoverable.
+      // §12 R09 / G11: the group-by control left the Entries view entirely (no grouping here).
+      hasByControl: !!document.querySelector('#el-by-seg'),
+      // The surviving toolbar controls are present and discoverable.
       hasPresets: !!document.querySelector('#el-preset-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
       hasTagFilter: !!document.querySelector('#el-tag'),
@@ -2033,44 +2035,35 @@ async function main() {
       fromType: document.querySelector('#el-range-from')?.type ?? '',
       toType: document.querySelector('#el-range-to')?.type ?? '',
       hasApply: !!document.querySelector('#el-range-apply'),
-      // The default day-grouped list shows every entry (4) under its day headers.
-      rowCount: document.querySelectorAll('#entries .entry').length,
-      groupHeads: [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim()),
+      // The default calendar lays every entry (4) into its day columns.
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
-    // Type a query that matches exactly the two "refactor" rows (auth refactor / refactor
-    // tests). The search drives a real listEntries call; the visible rows narrow to 2.
+    // Type a query that matches exactly the two "refactor" events (auth refactor / refactor
+    // tests). The search drives a real listEntries call; the visible calendar events narrow to 2
+    // and #week-total tracks the narrowing live (off the in-memory snapshot, no reload).
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
     const onSearch = await page.evaluate(() => ({
       reqSearch: window.__LIST_REQ__?.search ?? null,
-      rowCount: document.querySelectorAll('#entries .entry').length,
-      descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
+      // The toolbar query carries NO group-by (grouping left this view, G11).
+      reqHasBy: window.__LIST_REQ__?.by !== undefined,
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
+      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
-    // Clear the search, then switch the Group-by control to Client — the same set regroups
-    // into client buckets (Acme / Globex) while every row returns.
+    // Clear the search — every event returns to the calendar and the total returns to the full set.
     await page.fill('#search', '');
-    await page.click('#el-by-seg .seg-btn[data-by="client"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.by === 'client');
-    await page.waitForFunction(() => {
-      const heads = [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim());
-      return heads.includes('Acme') && heads.includes('Globex');
-    });
-    await page.screenshot({ path: join(EVIDENCE, 'entries-grouped.png'), fullPage: true });
-    const onClient = await page.evaluate(() => ({
-      reqBy: window.__LIST_REQ__?.by ?? null,
-      byActive: [...document.querySelectorAll('#el-by-seg .seg-btn.on')].map((b) => b.dataset.by),
-      groupHeads: [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim()),
-      rowCount: document.querySelectorAll('#entries .entry').length,
-    }));
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 4);
 
     // §09 R01 (G3): pick Custom… and fill the two plain date fields with the fixture's
     // earlier day (2026-06-23). Setting BOTH dates drives a real listEntries call carrying
     // the raw { fromDate, toDate } strings LIVE — no Apply click exists — and the visible
-    // rows narrow to the two in-range entries (standup / refactor tests).
+    // calendar narrows to the two in-range events (standup / refactor tests).
     await page.click('#el-preset-seg .preset[data-preset="custom"]');
     await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
     await page.fill('#el-range-from', '2026-06-23');
@@ -2078,48 +2071,45 @@ async function main() {
     await page.waitForFunction(
       () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
     );
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
+    await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
     const onCustom = await page.evaluate(() => ({
       req: { ...(window.__LIST_REQ__ || {}) },
-      rowCount: document.querySelectorAll('#entries .entry').length,
-      descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
     }));
 
+    // §12 R09 / G11: the group-by control is gone; the surviving toolbar controls are all present.
     const controlsOk =
-      before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch &&
-      before.byOptions.length === 4 &&
-      ['day', 'client', 'project', 'tag'].every((b) => before.byOptions.includes(b)) &&
-      before.byActive.length === 1 && before.byActive[0] === 'day';
-    const defaultOk = before.rowCount === 4; // all four entries visible under the day groups
+      !before.hasByControl &&
+      before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch;
+    const defaultOk = before.evCount === 4; // all four events laid into the calendar
     const searchOk =
       onSearch.reqSearch === 'refactor' &&
-      onSearch.rowCount === 2 && // narrowed to the two "refactor" rows…
-      onSearch.descs.some((d) => /auth refactor/.test(d)) &&
-      onSearch.descs.some((d) => /refactor tests/.test(d)) &&
-      !onSearch.descs.some((d) => /deploy pipeline/.test(d)); // …non-matches excluded
-    const groupOk =
-      onClient.reqBy === 'client' &&
-      onClient.byActive.length === 1 && onClient.byActive[0] === 'client' &&
-      onClient.groupHeads.includes('Acme') && onClient.groupHeads.includes('Globex') &&
-      onClient.rowCount === 4; // every row returns once the search is cleared
+      !onSearch.reqHasBy && // the toolbar query never carries a group-by
+      onSearch.evCount === 2 && // narrowed to the two "refactor" events…
+      onSearch.evText.some((t) => /auth refactor/.test(t)) &&
+      onSearch.evText.some((t) => /refactor tests/.test(t)) &&
+      !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded
+      onSearch.weekTotal !== before.weekTotal; // #week-total tracked the narrowing live
     // §09 R01 (G3): plain date fields, no Apply, and the live plain-date query narrowed the
-    // rows to the 2026-06-23 pair — the payload carries the raw strings (fromDate/toDate,
+    // calendar to the 2026-06-23 pair — the payload carries the raw strings (fromDate/toDate,
     // no 'T', no derived fromUtc/toUtc instant).
     const customRangeOk =
       before.fromType === 'date' && before.toType === 'date' && !before.hasApply &&
       onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
       onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
       !String(onCustom.req.fromDate).includes('T') &&
-      onCustom.rowCount === 2 &&
-      onCustom.descs.some((d) => /standup/.test(d)) &&
-      onCustom.descs.some((d) => /refactor tests/.test(d)) &&
-      !onCustom.descs.some((d) => /auth refactor|deploy pipeline/.test(d));
-    const ok = controlsOk && defaultOk && searchOk && groupOk && customRangeOk;
+      onCustom.evCount === 2 &&
+      onCustom.evText.some((t) => /standup/.test(t)) &&
+      onCustom.evText.some((t) => /refactor tests/.test(t)) &&
+      !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
+    const ok = controlsOk && defaultOk && searchOk && customRangeOk;
     record(
-      'ENTRY_LIST_SEARCH',
+      'ENTRIES_CALENDAR',
       ok,
-      `entry list: default=${JSON.stringify(before)} → search=${JSON.stringify(onSearch)} → by client=${JSON.stringify(onClient)} → custom dates=${JSON.stringify(onCustom)}`,
-      'entries-grouped.png',
+      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} -> custom dates=${JSON.stringify(onCustom)}`,
+      'entries-calendar.png',
     );
   });
 
