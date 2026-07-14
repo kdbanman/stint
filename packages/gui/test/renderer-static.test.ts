@@ -943,15 +943,21 @@ describe('renderer static contract', () => {
     }
   });
 
-  it('the visual time-range picker is a pure renderer component (window.STP) wired on every R15 surface (§12 R15)', () => {
+  it('the interval picker is a pure INLINE renderer component (window.STP) wired on every R15 surface (§12 R15)', () => {
     const stp = read('timepicker.js');
     const app = read('app.js');
     const html = read('index.html');
-    // timepicker.js exposes the window.STP module with STP.open + the pure geometry/snap
-    // helpers (snapTo5 / minutesToY / yToMinutes) so the guard + JUDGE can drive the math
-    // deterministically. It is a classic script (no ES module export, loads over file://).
+    // timepicker.js exposes the window.STP module with the two INLINE mount forms (openInline +
+    // openStartOnly) and the pure geometry/snap helpers (snapTo5 / minutesToY / yToMinutes) so the
+    // guard + JUDGE can drive the math deterministically. There is NO modal open() — the picker only
+    // ever renders IN FLOW. It is a classic script (no ES module export, loads over file://).
     expect(stp).toMatch(/window\.STP\s*=/);
-    expect(stp).toMatch(/function open\(/);
+    expect(stp).toMatch(/function openInline\(/);
+    expect(stp).toMatch(/function openStartOnly\(/);
+    // The retired modal open() + its backdrop/Apply chrome are gone from timepicker.js.
+    expect(stp).not.toMatch(/function open\(/);
+    expect(stp).not.toMatch(/stp-backdrop/);
+    expect(stp).not.toMatch(/stp-apply/);
     for (const fn of ['snapTo5', 'minutesToY', 'yToMinutes']) {
       expect(stp, `timepicker.js must define the pure helper ${fn}`).toMatch(new RegExp(`function ${fn}\\b`));
     }
@@ -970,7 +976,7 @@ describe('renderer static contract', () => {
     // Other entries render gray and overlaps render yellow (warn-only).
     expect(stp).toMatch(/stp-block other/);
     expect(stp).toMatch(/stp-overlap/);
-    // index.html loads timepicker.js BEFORE app.js (the triggers depend on window.STP)…
+    // index.html loads timepicker.js BEFORE app.js (the mounts depend on window.STP)…
     expect(html).toMatch(/src="timepicker\.js"[\s\S]*src="app\.js"/);
     // …and the running-edit Start field's calendar affordance is a DISCLOSURE toggle
     // (aria-expanded) over the IN-FLOW start-only host below the field — no modal (§05 R06):
@@ -978,17 +984,22 @@ describe('renderer static contract', () => {
       /id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-expanded="false"[\s\S]*?aria-controls="le-start-disc"/,
     );
     expect(html).toMatch(/id="le-start-disc"/);
-    // app.js wires the picker on EVERY R15 surface: the add form (#add-from/#add-to), the
-    // inline closed-entry edit form (.edit-pick over .edit-start/.edit-end), and the
-    // running-entry start (#le-start-pick → the inline START-ONLY disclosure).
-    expect(app).toMatch(/window\.STP\.open\(/);
+    // §12 R15: app.js mounts the picker IN FLOW on every R15 surface through ONE shared helper
+    // (mountIntervalPicker): the add form (#add-picker over #add-from/#add-to), the inline edit
+    // form (.edit-picker over .edit-start/.edit-end), and the running-entry start (#le-start-pick →
+    // the inline START-ONLY disclosure). There is NO modal picker: app.js never calls window.STP.open
+    // and has no .edit-pick trigger (the retired modal chrome).
+    expect(app).toMatch(/function mountIntervalPicker\(/);
+    expect(app).toMatch(/window\.STP\.openInline\(/);
+    expect(app).toMatch(/host:\s*form\.querySelector\('\.edit-picker'\)/);
     expect(app).toMatch(/le-start-pick'\)/);
-    expect(app).toMatch(/\.edit-pick/);
+    expect(app).not.toMatch(/window\.STP\.open\(/);
+    expect(app).not.toMatch(/edit-pick['"]/);
     // §05 R06 — the running surface opens STP.openStartOnly (host + startInput ONLY): the
     // variant takes no end binding at all, so its write path is structurally incapable of
-    // producing an end value. The wiring block never mentions an end input or endUtc.
+    // producing an end value. The disclosure wiring block never mentions an end input or endUtc.
     expect(stp).toMatch(/function openStartOnly\(/);
-    expect(app).toMatch(/window\.STP\.openStartOnly\(\{\s*\n\s*host:/);
+    expect(app).toMatch(/window\.STP\.openStartOnly\(/);
     const discBlock = app.match(/function closeLeStartDisc[\s\S]*?leStartPick\.setAttribute\('aria-expanded', 'true'\);[\s\S]*?\n\}/)?.[0];
     expect(discBlock, 'the start-only disclosure wiring must be present').toBeTruthy();
     expect(discBlock!).not.toMatch(/endInput/);
@@ -1006,9 +1017,12 @@ describe('renderer static contract', () => {
     // fixed/absolute chrome) with a scrollable day viewport (G16 — scroll, never clip).
     expect(css).toMatch(/\.stp-inline\s*\{\s*\n?\s*position:\s*static/);
     expect(css).toMatch(/\.stp-inline\s+\.stp-dayview\s*\{[\s\S]*?overflow-y:\s*auto/);
-    // The modal edit path still binds start-only for the open row (endInput null there), and
-    // the closed-entry inline form binds both inputs.
-    expect(app).toMatch(/endInput:\s*null|const editEndInput = running \? null/);
-    expect(app).toMatch(/const editEndInput = running \? null : form\.querySelector\('\.edit-end'\)/);
+    // The modal backdrop / Apply chrome is gone from the stylesheet entirely.
+    expect(css).not.toMatch(/\.stp-backdrop/);
+    expect(css).not.toMatch(/\.stp-apply/);
+    // The inline edit mount binds the START-ONLY variant for the open row (endInput null → no stop
+    // is ever written) and both inputs for a closed entry — the shared helper switches on the
+    // presence of an end field.
+    expect(app).toMatch(/endInput:\s*running \? null : form\.querySelector\('\.edit-end'\)/);
   });
 });

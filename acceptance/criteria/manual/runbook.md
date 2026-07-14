@@ -1395,49 +1395,57 @@ release** artifact, with `tt` available in a terminal on the same database (find
 > replacement + Gatekeeper, and the relaunch across a running timer — awaits a real desktop operator's
 > screen recording in `acceptance/evidence/recordings/` (see that directory's `README.md`).
 
-## CHECK VISUAL TIME-RANGE PICKER (GUI) (§12 R15)
+## CHECK INLINE INTERVAL PICKER (GUI) (§12 R15)
 
-The §12 R15 visual time-range picker (G9) must let the user pick a **start + stop together**
-on a single-day calendar column — drag the body to move, drag the bottom to resize, with
-5-min snapping — while the **text fields stay authoritative** everywhere it appears
-(add-entry, edit-closed-entry, edit-running-start). Overnight spans stay text-only.
+The §12 R15 interval picker (G5/G7) is an **inline, in-flow** component of the unified entry
+form — **no modal, no dimmed backdrop, no Apply button**. It lets the user pick a **start +
+stop together** on a single-day calendar column (drag the body to move, drag the bottom grip
+to resize the stop, both 5-min snapping); every drag writes the form's **Start/Stop fields
+LIVE**, and **Save entry is the only commit**. The text fields stay authoritative everywhere
+it appears (add-entry, edit-closed-entry, edit-running-start). Overnight spans use the
+collapsed **Start/Stop expander** (§12 R17), not the single-day column.
 
-1. In a real desktop session, open the main window and click **Add entry**. Click the
-   **calendar icon** (▦) beside the **From** field.
-   - [ ] A picker popover opens with a **month calendar** on the left and a **single-day
-         column with hour lines** on the right; the **Start/Stop text values are echoed at
-         the top**. It **defaults to the form's current span** (else last-stop → now).
-   - [ ] **Drag the body** of the accent rectangle up/down: **both** Start and Stop move
-         together, with a visible **5-minute snap** (the echoed times jump in 5-min steps).
-   - [ ] **Drag the bottom handle**: only the **Stop** moves (also 5-min-snapped); the Start
-         stays put.
-   - [ ] Any **other entries** on that day render **gray**; where your span **overlaps** one,
-         the overlap region renders **yellow** — and **Apply is never blocked** by it.
-   - [ ] Click **Apply range**: the popover closes and the chosen times appear in the **From**
-         /**To** text fields. Click **Save entry** — the entry lands with exactly those times.
-2. **Text stays authoritative.** Re-open the picker, then instead of dragging, **type**
-   directly into the **From**/**To** fields (or into the picker's bound fields) — your typed
-   times win; the picker only ever *writes* the fields, it never overrides a manual edit.
-3. **Edit a closed entry.** Open the inline edit form for a completed entry and click the
-   calendar icon beside **Start** (or **End**).
-   - [ ] The same picker opens, seeded from that entry's span, and dragging/Apply writes the
-         `.edit-start`/`.edit-end` fields; Save commits the amended span.
-4. **Edit the running timer's start.** With a timer running, the Timer view's Start field
-   expands the **inline start-only disclosure** below the field — no modal, no Apply; drags
-   write the start **live** and the variant carries **no end control at all** (§05 R06). That
-   surface has its own dedicated procedure: run **CHECK RUNNING START-ONLY PICKER** below.
-5. **Overnight span.** Set a **From** today and a **To** tomorrow by **typing** the dates.
-   - [ ] The span is accepted via text; the picker's day column stays **single-day** and shows
-         a footer note that **overnight spans use text entry** (the visual column does not span
-         days).
+1. In a real desktop session, open the main window and click **Add entry**.
+   - [ ] The unified form opens **inline** (the Entries content moves down to make room — **no
+         modal, no dimmed backdrop**), with the interval picker already mounted in the form's
+         right column: a **month calendar** beside a **single-day column with hour lines**.
+   - [ ] There is **no "Apply"/"Apply range" button** and **no separate calendar-icon trigger**
+         — the picker is simply present in flow.
+2. **Body-drag moves the whole interval.** Drag the body of the accent rectangle up/down.
+   - [ ] **Both** Start and Stop move together with a visible **5-minute snap**, and the
+         form's Start/Stop values (in the Start/Stop expander) **update live on every drag**.
+3. **Bottom grip resizes only the stop.** Drag the rectangle's **bottom grip** up/down.
+   - [ ] Only the **Stop** moves (also 5-min-snapped); the Start stays put, updating the
+         Stop field live.
+4. **Others gray, overlap yellow (warn-only).** Ensure another entry exists on that day.
+   - [ ] Other entries on the day render **gray**; where your span **overlaps** one, the
+         overlap region renders **yellow** — and it **never blocks** (Save stays enabled).
+5. **Save is the sole commit.** Click **Save entry**.
+   - [ ] The entry lands with exactly the dragged times — no separate Apply step was needed,
+         and nothing committed until Save.
+6. **Edit a closed entry.** Open the inline edit form for a completed entry.
+   - [ ] The same inline picker is mounted in the edit form, seeded from that entry's span;
+         body-drag/grip-resize write the `.edit-start`/`.edit-end` fields live, and **Save
+         entry** commits the amended span (nothing commits until Save).
+7. **Running entry — start grip only, future fade, no end.** With a timer running, open the
+   Timer view's Start field disclosure.
+   - [ ] The running block shows a **start grip only** with the block **fading into the
+         future** and **no end control at all** (§05 R06). That surface has its own dedicated
+         procedure: run **CHECK RUNNING START-ONLY PICKER** below.
+8. **Overnight via the expander.** Expand the **Start/Stop (exact times)** disclosure and
+   **type** a span crossing midnight (From today, To tomorrow).
+   - [ ] The typed overnight span is accepted and authoritative; the single-day column simply
+         shows the start day (the overnight path is the expander, not the column).
 
-> The drag-to-move / drag-to-resize geometry, 5-min snap, gray-others / yellow-overlap
-> painting, the top text-echo, Apply write-back, and accent discipline with the picker open
-> are pinned headless under JUDGE (`TIME_RANGE_PICKER`, `time-range-picker.png`) driving the
-> real renderer; the add-form trigger + authoritative-Save path is also covered by
-> `ADD_FORM_PICKER`. This runbook confirms, on a real build, that the picker opens on every
-> R15 surface, that dragging snaps and writes the authoritative text fields, that overlaps
-> warn without blocking, and that overnight spans round-trip through text entry.
+> The in-flow chrome (no `.stp-backdrop`, no `.stp-apply`, `position:static` host), the
+> month calendar + `.stp-track` with hour lines, the body-drag-moves-both / grip-resizes-stop
+> 5-min-snapped LIVE writes into the bound form fields, the gray-others / inert-yellow-overlap
+> painting, and Save-as-sole-commit are pinned headless under JUDGE (`UNIFIED_FORM`,
+> `main-edit.png`; add mode under `UNIFIED_FORM_ADD`, `unified-add.png`; the running start-only
+> variant under `TIMER_VIEW`, `timer-view-full.png`) driving the real renderer. This runbook
+> confirms, on a real build, that the picker is inline on every R15 surface, that dragging
+> snaps and writes the form fields live, that overlaps warn without blocking, that Save is the
+> only commit, and that overnight spans go through the exact-time expander.
 
 ## CHECK RUNNING START-ONLY PICKER (§05 R06, §12 R14)
 

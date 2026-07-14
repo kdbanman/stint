@@ -1273,6 +1273,89 @@ async function main() {
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-edit.png') });
 
+    // §12 R15 — the INLINE interval picker mounted in the edit form (successor to the retired
+    // picker-modal judge scene). It renders IN FLOW (no .stp-backdrop, no .stp-apply anywhere;
+    // the .stp-inline host computes position:static) as a month calendar + a single-day .stp-track
+    // with hour lines. Entry 83 (15:00–16:00Z) paints as a gray other block AND, over the shared
+    // 15:00–15:30 minutes with entry 80's edited "me" span (14:00–15:30Z), an inert yellow warn band
+    // (pointer-events:none — warn-only, never blocks Save). A known BODY drag advances BOTH bound
+    // form fields (.edit-start/.edit-end) by the snapped 5-min amount (span preserved); a bottom
+    // .stp-resize drag advances ONLY .edit-end. Every write is LIVE into the form's own fields — no
+    // commit fires here (the Cancel below discards them; Save entry is the sole commit, tested next,
+    // G7). The running-entry start-only variant (.stp-block.me.open mask + start grip only, no
+    // .stp-resize/end label/echo, no end value) is asserted by the TIMER_VIEW scene, which drives
+    // STP.openStartOnly over the same component.
+    await page.waitForSelector(`${editRow} .edit-picker .stp-track`, { state: 'attached' });
+    await page.waitForSelector(`${editRow} .edit-picker .stp-block.me`, { state: 'attached' });
+    const picker = await page.evaluate(() => {
+      const form = document.querySelector('.entry[data-id="80"] .edit-form');
+      const host = form.querySelector('.edit-picker');
+      const box = host.querySelector('.stp-inline');
+      const overlaps = [...host.querySelectorAll('.stp-overlap')];
+      return {
+        inFlow: !!box && getComputedStyle(box).position === 'static',
+        noBackdrop: !document.querySelector('.stp-backdrop'),
+        noApply: !document.querySelector('.stp-apply'),
+        hasCal: !!host.querySelector('.stp-cal .stp-grid .stp-d'),
+        hasTrack: !!host.querySelector('.stp-track'),
+        hours: host.querySelectorAll('.stp-hour').length,
+        others: host.querySelectorAll('.stp-block.other').length,
+        overlaps: overlaps.length,
+        overlapInert: overlaps.length > 0 && overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
+      };
+    });
+    // BODY drag up ~60px (720px/24h track → 0.5px/min → −120min, 5-min snapped) — BOTH fields move,
+    // span preserved (LIVE into the form's own start/stop state, before any Save).
+    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+    const seedTimes = await page.evaluate(() => ({
+      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
+      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+    }));
+    await page.locator(`${editRow} .edit-picker .stp-block.me`).scrollIntoViewIfNeeded();
+    const meBox = await page.evaluate(() => {
+      const r = document.querySelector('.entry[data-id="80"] .edit-picker .stp-block.me').getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
+    await page.mouse.up();
+    const bodyDrag = await page.evaluate(() => ({
+      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
+      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+    }));
+    const bodyOk =
+      bodyDrag.from !== seedTimes.from &&
+      bodyDrag.to !== seedTimes.to &&
+      spanMin(bodyDrag.from, bodyDrag.to) === spanMin(seedTimes.from, seedTimes.to);
+    // Bottom .stp-resize drag down ~30px (+60min snapped) — ONLY .edit-end advances; .edit-start holds.
+    await page.locator(`${editRow} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
+    const resizeBox = await page.evaluate(() => {
+      const r = document.querySelector('.entry[data-id="80"] .edit-picker .stp-resize').getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy + 30), { steps: 8 });
+    await page.mouse.up();
+    const resizeDrag = await page.evaluate(() => ({
+      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
+      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+    }));
+    const resizeOk = resizeDrag.from === bodyDrag.from && resizeDrag.to !== bodyDrag.to;
+    const pickerOk =
+      picker.inFlow && picker.noBackdrop && picker.noApply && picker.hasCal && picker.hasTrack &&
+      picker.hours > 0 && picker.others >= 1 && picker.overlaps >= 1 && picker.overlapInert &&
+      bodyOk && resizeOk;
+
+    // Discard the dragged times — Cancel and reopen a FRESH form so the Save-patch test below sees
+    // the entry's original (unchanged) times and asserts a description-ONLY patch (Save sole commit).
+    await page.click(`${editRow} .edit-cancel`);
+    await page.waitForSelector(`${editRow} .edit-form`, { state: 'detached' });
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editRow} .edit-form .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editRow} .edit-picker .stp-block.me`, { state: 'attached' });
+
     // (c) Save commits ONLY the changed fields: amend the description, then Save entry.
     await page.fill(`${editRow} .edit-desc`, 'final draft');
     await page.click(`${editRow} .edit-form button[type="submit"]`);
@@ -1378,14 +1461,18 @@ async function main() {
       removed.removed &&
       removed.calls.length === 1 &&
       removed.calls[0].id === 80;
-    const ok = clickOpens && seeded && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
+    const ok = clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
     record(
       'UNIFIED_FORM',
       ok,
-      `unified entry form (edit mode) inline, seeded, footer Split + two-step Delete, save patch, ` +
+      `unified entry form (edit mode) inline, seeded, INLINE picker (in-flow, no backdrop/apply, ` +
+        `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
+        `gray others + inert yellow overlap), footer Split + two-step Delete, save patch, ` +
         `§12 R10 flags (overlap detail + reversible subtract): ` +
-        `clickOpens=${clickOpens} probe=${JSON.stringify(probe)} edited=${JSON.stringify(edited)} ` +
-        `armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
+        `clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
+        `picker=${JSON.stringify(picker)} seed=${JSON.stringify(seedTimes)}→body=${JSON.stringify(bodyDrag)}` +
+        `(bodyOk=${bodyOk})→resize=${JSON.stringify(resizeDrag)}(resizeOk=${resizeOk}) ` +
+        `edited=${JSON.stringify(edited)} armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
         `overlapDetail=${JSON.stringify(overlapDetail)} sleptBefore=${JSON.stringify(sleptBefore)} ` +
         `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored}`,
       'main-edit.png',

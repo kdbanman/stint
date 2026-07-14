@@ -599,25 +599,19 @@ const RECIPES = {
     },
   },
 
-  // §05 R05 — manual add gains the visual range picker in the GUI (G9, §12 R14/R15). Drives
-  // the REAL renderer end to end: open the Add-entry disclosure, click the From field's
-  // calendar-icon trigger to open the shared visual time-range picker (window.STP /
-  // timepicker.js — month view → single-day hour-line column with the bound text inputs
-  // echoed), DRAG the "me" rectangle body (start+stop move together, 5-min snap) and DRAG the
-  // bottom resize edge (stop only, 5-min snap) into a span that OVERLAPS a seeded other entry
-  // so the gray other-entries + the yellow warn-only overlap region paint on camera, Apply the
-  // range (the picked start/stop write BACK into the authoritative #add-from/#add-to text
-  // fields — text stays authoritative), then Save and SHOW the new completed backfill entry
-  // appear in the Entries list.
+  // §05 R05 — manual add by DRAG on the unified form's INLINE interval picker (G5/G7, §12 R07/R15).
+  // Drives the REAL renderer end to end: open the Add-entry disclosure — the unified add form mounts
+  // the inline interval picker IN FLOW (window.STP / timepicker.js — month view → single-day
+  // hour-line column, no modal, no Apply) — DRAG the "me" rectangle body (start+stop move together,
+  // 5-min snap) and DRAG the bottom resize edge (stop only, 5-min snap); every drag writes the
+  // picked span LIVE into the authoritative #add-from/#add-to fields (text stays authoritative),
+  // then Save (the SOLE commit) and SHOW the new completed backfill entry appear in the Entries list.
   //
-  // The add form lives in the Entries view (the GUI default view), under the toolbar's "Add
-  // entry" disclosure — the manual-add (backfill) affordance §12 R14 surfaces; the picker is
-  // the SAME shared component the Timer-view/edit paths reuse. The page is pinned to UTC (like
-  // the JUDGE TIME_RANGE_PICKER scene) so the seeded UTC other-entries land on the same local
-  // day as the filled 2026-06-24 span — making the gray/overlap geometry deterministic on
-  // camera. The drag pixel deltas mirror the JUDGE geometry (track = 720px/24h → 0.5px/min):
-  // +30px body ≈ +60min (13:00–14:30 → 14:00–15:30), +15px resize ≈ +30min stop (→ 16:00),
-  // overlapping the seeded 14:00–15:00 other entry → a yellow overlap region.
+  // The add form lives in the Entries view (the GUI default view), under the toolbar's "Add entry"
+  // disclosure; the picker is the SAME shared component the Timer-view/edit paths reuse. The page is
+  // pinned to UTC so the seeded UTC other-entries land on a deterministic local day, and the drag
+  // pixel deltas ride the shared geometry (track = 720px/24h → 0.5px/min): +30px body ≈ +60min,
+  // +15px resize ≈ +30min stop.
   //
   // To SHOW the saved entry appear, this recipe scopes a local override of window.stint.add
   // (exactly like §05 R02 scopes its toggle override): the override records the backfill and
@@ -631,31 +625,28 @@ const RECIPES = {
     state: pickerState,
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Open the Add-entry disclosure in the Entries view (the default view).
+      // Open the Add-entry disclosure in the Entries view (the default view). The unified add form
+      // mounts the INLINE interval picker in flow (no modal, no calendar-icon trigger) into
+      // #add-picker, seeded from the raw #add-from/#add-to fields; give the backfill a description
+      // so the saved row is legible in the list.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-      // single-day column for that day and the "me" rectangle is 13:00–14:30 — and give the
-      // backfill a description so the saved row is legible in the list.
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 600);
-      // Click the From field's calendar-icon trigger → the REAL visual picker opens.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
+      await wait(page, 700);
+      // Bring the "me" span into the scrollable day viewport so the drag is on camera.
+      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
       // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
       const meBox = () =>
         page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
+          const me = document.querySelector('#add-picker .stp-block.me');
           const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
         });
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible on camera.
+      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
+      // into #add-from/#add-to. Slow, stepped move so the snap is legible on camera.
       const before = await meBox();
       const grabX = Math.round(before.cx);
       const grabY = Math.round((before.top + before.bottom) / 2);
@@ -665,15 +656,14 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 other entry.
+      // DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap), written
+      // LIVE into #add-to. Any seeded other-entries on the day paint gray; if the span lands on one,
+      // the overlap region paints yellow (warn-only, never blocks).
       const me2 = await meBox();
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring: the other entries paint gray, the overlap region
-      // paints yellow (warn-only) while Apply still works.
       await wait(page, 1200);
 
       // Scope a local add override so the saved backfill SHOWS in the list on repaint (mirrors
@@ -713,11 +703,9 @@ const RECIPES = {
         };
       });
 
-      // Apply the range → the picked start/stop write BACK into the authoritative
-      // #add-from/#add-to text fields, and the popover closes.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      // Dwell so the written-back text-field values (14:00 / 16:00) are legible on camera.
+      // No Apply — the picker wrote the picked start/stop into the authoritative #add-from/#add-to
+      // fields LIVE on every drag (Save entry is the sole commit). Dwell so the live-updated span is
+      // legible on camera.
       await wait(page, 1200);
 
       // Save → the unchanged submit path sends the explicit fromLocal/toLocal over `add`; the
@@ -848,42 +836,41 @@ const RECIPES = {
     },
   },
 
-  // §12 R15 (G9) — the VISUAL TIME-RANGE PICKER itself, the umbrella requirement the §05 R05 /
-  // §12 R07 manual-add scenes are special cases of. This recording exercises the picker through
-  // ALL THREE of its sanctioned entry points in one take, plus the durability contract:
+  // §12 R15 — the INLINE INTERVAL PICKER itself, the umbrella requirement the §05 R05 / §12 R07
+  // manual-add scenes are special cases of. This recording exercises the picker through ALL THREE
+  // of its sanctioned entry points in one take, plus the durability contract — every one renders IN
+  // FLOW (no modal, no backdrop, no Apply) and writes the picked span LIVE into the authoritative
+  // text fields, with Save entry the sole commit:
   //
-  //   (1) ADD-ENTRY — open the Entries-view Add form, open the picker from the Start field's
-  //       calendar icon, DRAG the accent "me" rectangle body (start+stop move together, 5-min
-  //       snap — the echoed Start/Stop text fields tick as it snaps), DRAG the bottom handle to
-  //       resize the stop, land the span OVER the seeded 14:00–15:00 'market research' entry so
-  //       the other entries paint GRAY and the overlap region paints YELLOW (warn-only — Apply
-  //       stays enabled), then APPLY and SHOW 14:00 / 16:00 land in the authoritative
-  //       #add-from/#add-to text fields. Cancel the add form (this scene is about the picker).
+  //   (1) ADD-ENTRY — open the Entries-view Add form; the inline picker is mounted in flow in the
+  //       form's right column. DRAG the accent "me" rectangle body (start+stop move together, 5-min
+  //       snap — the #add-from/#add-to fields tick LIVE as it snaps), DRAG the bottom handle to
+  //       resize the stop; any seeded other-entry on the day paints GRAY and an overlapping span
+  //       paints YELLOW (warn-only). Close the add form (this beat is about the picker).
   //
-  //   (2) EDIT-CLOSED — click Edit on the closed 'morning sync' row (09:00–11:00); its inline
-  //       form's calendar icon opens the picker carrying BOTH start+stop. The OTHER closed entry
-  //       ('market research', 14:00–15:00) paints gray; drag the bottom handle DOWN to extend the
-  //       stop past 14:00 so the span overlaps it → the yellow warn region paints. Apply writes
-  //       the new stop back into the form's .edit-end text input. Cancel (no commit needed — the
-  //       requirement is the picker, not the edit).
+  //   (2) EDIT-CLOSED — click Edit on the closed 'morning sync' row (09:00–11:00); its inline form
+  //       mounts the picker carrying BOTH start+stop. The OTHER closed entry ('market research',
+  //       14:00–15:00) paints gray; drag the bottom handle DOWN to extend the stop past 14:00 so the
+  //       span overlaps it → the yellow warn region paints, written LIVE into the form's .edit-end
+  //       field. Cancel (no commit needed — the requirement is the picker, not the edit).
   //
   //   (3) EDIT-RUNNING-START — route to the Timer view; the live-edit strip's Start field
-  //       (#le-start) calendar icon opens the picker SEEDED START-ONLY (the open row has no stop,
-  //       so editing it can never close the timer, §05 R6). Only a thin start handle shows — no
-  //       resize, no stop. Drag it to a new start; Apply writes only #le-start.
+  //       (#le-start) calendar affordance DISCLOSES the picker inline SEEDED START-ONLY (the open
+  //       row has no stop, so editing it can never close the timer, §05 R6). Only a thin start
+  //       handle shows — no resize, no stop, the block fading into the future. Drag it to a new
+  //       start; #le-start updates LIVE (no Apply — the text field is the authoritative commit path).
   //
-  //   (4) OVERNIGHT VIA TEXT — back in the add form, TYPE a span that crosses midnight directly
-  //       into the text fields (2026-06-24T22:00 → 2026-06-25T06:00). Clicking the calendar icon
-  //       on an overnight span DEGRADES to a plain field focus (the picker is single-day; the
-  //       footer steers overnight to text) — proving TEXT ENTRY REMAINS and stays authoritative.
+  //   (4) OVERNIGHT VIA THE EXPANDER — back in the add form, expand the Start/Stop expander (§12
+  //       R17) and TYPE a span that crosses midnight directly into the raw text fields
+  //       (2026-06-24T22:00 → 2026-06-25T06:00) — the single-day picker's escape hatch and the only
+  //       overnight path — proving TEXT ENTRY REMAINS and stays authoritative.
   //
   // The page is pinned to UTC (like the §05 R05 scene) and the state carries a running open entry
-  // (id 99, start 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24,
-  // so the picker's single-day column draws the gray other-entries deterministically for every
-  // entry point. Drag pixel deltas mirror the JUDGE/§05 R05 geometry (track 720px/24h → 0.5px/min,
-  // i.e. 30px/hour). No write IPC is needed — this scene demonstrates the picker affordance and
-  // its write-back into the authoritative text fields; the add/edit submit paths are already
-  // proven on camera by §05 R05 and §12 R07.
+  // (id 99, start 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24, so
+  // the picker's single-day column draws the gray other-entries deterministically for every entry
+  // point. Drag pixel deltas ride the shared geometry (track 720px/24h → 0.5px/min, i.e. 30px/hour).
+  // No write IPC is needed — this scene demonstrates the picker affordance and its LIVE write into
+  // the authoritative text fields; the add/edit submit paths are proven on camera by §05 R05 / §12 R07.
   '§12 R15': {
     page: 'index.html',
     // Running open entry (no stop) + the two pickerState closed entries, all on 2026-06-24, so
@@ -915,32 +902,26 @@ const RECIPES = {
     },
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
+      // Helper: the "me" rectangle box within a given picker host, to grab its body centre and
+      // bottom edge for dragging.
+      const meBox = (hostSel) =>
+        page.evaluate((sel) => {
+          const me = document.querySelector(`${sel} .stp-block.me`);
           const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        });
+        }, hostSel);
 
-      // ===== (1) ADD-ENTRY — open from the calendar icon, drag body + resize, overlap, Apply =====
+      // ===== (1) ADD-ENTRY — the inline picker, mounted in flow; drag body + resize LIVE =====
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the column draws that day
-      // and the "me" rectangle is 13:00–14:30.
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 500);
-      // OPEN FROM THE CALENDAR ICON (the Start field's ▦ trigger) → the real visual picker opens.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
+      await wait(page, 600);
+      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible and the echoed
-      // Start/Stop text fields tick as it snaps.
-      const a0 = await meBox();
+      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
+      // into the #add-from/#add-to fields. Slow, stepped move so the snap is legible.
+      const a0 = await meBox('#add-picker');
       const aGrabX = Math.round(a0.cx);
       const aGrabY = Math.round((a0.top + a0.bottom) / 2);
       await page.mouse.move(aGrabX, aGrabY);
@@ -949,53 +930,37 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE HANDLE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 'market research'
-      // entry → the gray other-entries + the yellow warn-only overlap region paint on camera.
-      const a1 = await meBox();
+      // DRAG THE BOTTOM RESIZE HANDLE DOWN +15px → only the stop moves (+30min, 5-min snap), LIVE.
+      // Any seeded other-entry on the day paints gray; an overlapping span paints yellow (warn-only).
+      const a1 = await meBox('#add-picker');
       await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1 + 15), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring (other entries gray, overlap yellow) while Apply works.
       await wait(page, 1300);
 
-      // APPLY → the picked 14:00 / 16:00 write BACK into the authoritative #add-from/#add-to text
-      // fields and the popover closes; dwell so the written-back values are legible (text-authoritative).
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await page
-        .waitForFunction(() => document.querySelector('#add-to')?.value === '2026-06-24T16:00')
-        .catch(() => {});
-      await wait(page, 1200);
       // Close the add form — this scene is about the picker, not the save (proven by §05 R05).
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await wait(page, 500);
 
-      // ===== (2) EDIT-CLOSED — inline edit a closed row, open picker with start+stop, overlap =====
-      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00).
+      // ===== (2) EDIT-CLOSED — inline edit a closed row; the picker carries start+stop, overlap =====
+      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00); the inline
+      // picker mounts in flow carrying BOTH start+stop.
       await page.click('.entry[data-id="1"] [data-act="edit"]');
-      await page.waitForSelector('.entry[data-id="1"] form.edit-form', { state: 'attached' });
-      await wait(page, 600);
-      // Open the picker from the Start field's calendar icon → carries BOTH start+stop (closed row).
-      await page.click('.entry[data-id="1"] form.edit-form .edit-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
+      await page.waitForSelector('.entry[data-id="1"] form.edit-form .edit-picker .stp-block.me', { state: 'attached' });
       await wait(page, 800);
+      await page.locator('.entry[data-id="1"] .edit-picker .stp-resize').scrollIntoViewIfNeeded();
       // The OTHER closed entry ('market research' 14:00–15:00) paints gray. Drag the bottom resize
       // handle DOWN ~+95px (≈ +190min) to extend the stop from 11:00 past 14:00 → the span overlaps
-      // it and the yellow warn-only region paints.
-      const e1 = await meBox();
+      // it and the yellow warn-only region paints, written LIVE into the form's .edit-end field.
+      const e1 = await meBox('.entry[data-id="1"] .edit-picker');
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1 + 95), { steps: 24 });
       await page.mouse.up();
-      // Dwell on the gray other-entry + yellow overlap (warn-only) while Apply stays enabled.
+      // Dwell on the gray other-entry + yellow overlap (warn-only) — the write is already live.
       await wait(page, 1300);
-      // APPLY → the picked stop writes back into the form's .edit-end text input (text authoritative).
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await wait(page, 1000);
       // Cancel the edit form (the requirement is the picker; the edit submit path is proven elsewhere).
       await page.click('.entry[data-id="1"] form.edit-form .edit-cancel');
       await wait(page, 500);
@@ -1030,27 +995,27 @@ const RECIPES = {
       await page.waitForSelector('#le-start-disc[hidden]', { state: 'attached' });
       await wait(page, 1200);
 
-      // ===== (4) OVERNIGHT VIA TEXT — text remains authoritative, picker degrades to focus =====
-      // Back to the Entries view and the Add form; TYPE an overnight span directly into the text
-      // fields (crosses midnight). The text is authoritative; the calendar icon on an overnight
-      // span degrades to a plain field focus (single-day picker; overnight steered to text).
+      // ===== (4) OVERNIGHT VIA THE EXPANDER — text remains authoritative (§12 R17) =====
+      // Back to the Entries view and the Add form; expand the collapsed Start/Stop expander — the
+      // single-day picker's exact/overnight escape hatch — and TYPE a span that crosses midnight
+      // directly into the raw text fields. The typed span is authoritative; the inline picker's
+      // single-day column simply shows the start day.
       await page.click('.nav-item[data-view="entries"]');
       await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
       await page.fill('#add-desc', 'overnight deploy');
+      // Expand the Start/Stop expander (the overnight path) and type the overnight span.
+      await page.click('#add-times-toggle');
+      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
       await page.fill('#add-from', '2026-06-24T22:00');
       await page.fill('#add-to', '2026-06-25T06:00');
       await wait(page, 800);
-      // Click the calendar icon on the now-overnight span → NO picker opens (degrades to focus),
-      // proving the overnight case is handled by text entry, which stays authoritative.
-      await page.click('#add-from-pick');
-      await wait(page, 600);
       const overnightHandled = await page.evaluate(
-        () => !document.querySelector('.stp-backdrop'),
+        () => !document.querySelector('.stp-backdrop') && document.querySelector('#add-to')?.value === '2026-06-25T06:00',
       );
       if (!overnightHandled) {
-        throw new Error('overnight span unexpectedly opened the single-day picker (text should stay authoritative)');
+        throw new Error('overnight span not preserved via the Start/Stop expander (text should stay authoritative)');
       }
       // Dwell on the typed overnight text values standing as the authoritative span.
       await wait(page, 1600);
