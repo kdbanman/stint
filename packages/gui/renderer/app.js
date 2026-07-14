@@ -1526,14 +1526,17 @@ startForm.addEventListener('submit', async (ev) => {
   applyAck(ack);
 });
 
-// Manual backfill (PRD §05 R5): a discoverable inline form that creates a completed
-// entry from explicit from/to times, with the same attributes `tt add` accepts. The
-// renderer stays a thin shell — it resolves nothing itself; client/project names and
-// the local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
+// §12 R07 (G5/G7) — manual backfill through the ONE unified entry form in ADD mode: an inline,
+// two-column form (no modal) in the Entries view. The left column holds the same attributes
+// `tt add` accepts (multiline description, client/project, tags, billable); the right column
+// mounts the inline interval picker (§12 R15) over the collapsed Start/Stop expander (§12 R17).
+// The picker updates the form's start/stop state LIVE and "Save entry" is the SOLE commit. The
+// renderer stays a thin shell — it resolves nothing itself; client/project names and the
+// local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
 const addForm = $('add-form');
 
 function localInputValue(date) {
-  // datetime-local wants `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix).
+  // The raw Start/Stop text fields hold `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix).
   const pad = (n) => String(n).padStart(2, '0');
   return (
     `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
@@ -1541,17 +1544,113 @@ function localInputValue(date) {
   );
 }
 
+// §12 R07 (G5/G6): the add form's live tag working set — the chips mutate this array and Save
+// reads it (parity with the edit form's in-form chip editor). Reset on each open so a fresh form
+// never inherits a prior draft's tags.
+let addFormTags = [];
+
+function renderAddTagChips() {
+  const host = $('add-tag-chips');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const t of addFormTags) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+    chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const i = addFormTags.indexOf(t);
+      if (i >= 0) addFormTags.splice(i, 1);
+      renderAddTagChips();
+      $('add-tag-input')?.focus();
+    });
+    host.appendChild(chip);
+  }
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'add-tag-input';
+  input.className = 'tag-add-input uf-tag-add';
+  input.placeholder = 'add a tag…';
+  input.autocomplete = 'off';
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      const name = input.value.trim();
+      input.value = '';
+      if (name && !addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
+      renderAddTagChips();
+      $('add-tag-input')?.focus();
+    }
+  });
+  host.appendChild(input);
+}
+
+// §12 R06 (G6): fill the add form's project select for the chosen client, from the same source
+// tt uses (window.stint.listProjects). Disabled with a "(no project)" default until a client is
+// chosen — the renderer resolves no names itself; Save sends the chosen project NAME.
+async function fillAddProjects(clientId) {
+  const sel = $('add-project');
+  sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(no project)';
+  sel.appendChild(none);
+  if (clientId == null) {
+    sel.disabled = true;
+    sel.value = '';
+    return;
+  }
+  sel.disabled = false;
+  const projects = (await window.stint.listProjects({ clientId })) || [];
+  for (const p of projects) {
+    const opt = document.createElement('option');
+    opt.value = String(p.id);
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+}
+
+// §12 R07 / §12 R15 (G7): mount the inline interval picker into the form's right column. It reads
+// the raw Start/Stop text fields (#add-from/#add-to) as its seed and writes them back LIVE on every
+// drag — those fields are the authoritative form state "Save entry" reads, so the picker updating
+// them IS the form-state update (no separate model). The collapsed Start/Stop expander drives the
+// same fields (§12 R17). Degrades gracefully to text entry when the picker is unavailable.
+function mountAddPicker() {
+  const host = $('add-picker');
+  if (!host || typeof window.STP === 'undefined' || typeof window.STP.openInline !== 'function') return;
+  window.STP.openInline({
+    host,
+    startInput: $('add-from'),
+    endInput: $('add-to'),
+    otherEntries: snapshotEntries(null),
+    settings: state?.settings ?? null,
+    onChange: () => {},
+  });
+}
+
 async function openAddForm() {
-  // Populate the client datalist from the same source tt uses, and default the
-  // from/to to a sensible recent hour the user can adjust.
-  const clients = await window.stint.listClients();
-  const list = $('add-client-list');
-  list.innerHTML = '';
+  // Populate the client select from the same source tt uses; a "(no client)" default keeps the
+  // clientless-internal path reachable (§05 R3).
+  const clients = (await window.stint.listClients()) || [];
+  const clientSel = $('add-client');
+  clientSel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(no client)';
+  clientSel.appendChild(none);
   for (const c of clients) {
     const opt = document.createElement('option');
-    opt.value = c.name;
-    list.appendChild(opt);
+    opt.value = String(c.id);
+    opt.textContent = c.name;
+    clientSel.appendChild(opt);
   }
+  clientSel.value = '';
+  await fillAddProjects(null);
+  // A fresh attribute draft each open.
+  addFormTags = [];
+  renderAddTagChips();
+  $('add-bill').checked = true;
+  // Default the span to a sensible recent hour the user can adjust by dragging or typing.
   const now = new Date();
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   $('add-from').value = localInputValue(hourAgo);
@@ -1559,35 +1658,67 @@ async function openAddForm() {
   const warn = $('add-warning');
   warn.hidden = true;
   warn.textContent = '';
+  // Collapse the Start/Stop expander — the inline picker is the primary picking surface (G2).
+  const timesBody = $('add-times-body');
+  if (timesBody) timesBody.hidden = true;
+  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
   addForm.hidden = false;
   $('add-toggle').setAttribute('aria-expanded', 'true');
+  // Mount the inline picker AFTER the form is visible so its column geometry measures correctly.
+  mountAddPicker();
   $('add-desc').focus();
 }
 
 function closeAddForm() {
-  addForm.reset();
   addForm.hidden = true;
   $('add-toggle').setAttribute('aria-expanded', 'false');
+  $('add-desc').value = '';
+  $('add-from').value = '';
+  $('add-to').value = '';
+  $('add-bill').checked = true;
+  addFormTags = [];
+  const chips = $('add-tag-chips');
+  if (chips) chips.innerHTML = '';
+  const picker = $('add-picker');
+  if (picker) picker.innerHTML = ''; // drop the mounted inline picker
+  const timesBody = $('add-times-body');
+  if (timesBody) timesBody.hidden = true;
+  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
   const warn = $('add-warning');
   warn.hidden = true;
   warn.textContent = '';
 }
 
 async function submitAddForm() {
-  const trimmed = (id) => $(id).value.trim();
-  const tags = $('add-tags').value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const desc = $('add-desc').value.trim();
+  const clientSel = $('add-client');
+  const projectSel = $('add-project');
+  // The selects carry the entity id as value + the NAME as option text; Save sends the NAME, so
+  // core resolves it through the SAME single rule tt add uses (the renderer resolves nothing).
+  const clientName =
+    clientSel.value === '' ? '' : (clientSel.options[clientSel.selectedIndex]?.textContent || '').trim();
+  const projectName =
+    projectSel.value === '' ? '' : (projectSel.options[projectSel.selectedIndex]?.textContent || '').trim();
+  // Fold any half-typed tag still in the add input into the working set before Save.
+  const pending = $('add-tag-input');
+  if (pending && pending.value.trim()) {
+    const name = pending.value.trim();
+    pending.value = '';
+    if (!addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
+    renderAddTagChips();
+  }
   const payload = {
+    // §12 R07 (G7): Save entry is the SOLE commit — the from/to come from the raw Start/Stop
+    // fields the inline picker (and the expander) keep in sync, so the `add` IPC payload shape
+    // is unchanged (fromLocal/toLocal + attributes), exactly what `tt add` sends.
     fromLocal: $('add-from').value,
     toLocal: $('add-to').value,
     billable: $('add-bill').checked,
   };
-  if (trimmed('add-desc')) payload.description = trimmed('add-desc');
-  if (trimmed('add-client')) payload.client = trimmed('add-client');
-  if (trimmed('add-project')) payload.project = trimmed('add-project');
-  if (tags.length) payload.tags = tags;
+  if (desc) payload.description = desc;
+  if (clientName) payload.client = clientName;
+  if (projectName) payload.project = projectName;
+  if (addFormTags.length) payload.tags = addFormTags.slice();
 
   const warn = $('add-warning');
   try {
@@ -1618,15 +1749,24 @@ addForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   await submitAddForm();
 });
-
-// §05 R05 / §12 R15 (G9): the from/to calendar icons open the shared visual time-range
-// picker (window.STP, timepicker.js) for the add-form's span. TEXT ENTRY REMAINS
-// AUTHORITATIVE — the picker only writes a chosen start/stop BACK into the existing
-// #add-from/#add-to datetime-local fields (5-min snapping lives inside the picker), so the
-// unchanged submit path (fromLocal/toLocal → window.stint.add) is the one source of truth
-// and the add IPC payload shape never changes. When the picker is unavailable, or the span
-// crosses midnight (overnight spans use text entry per G9), the click degrades to a plain
-// focus on the field so the user just types — text entry is always reachable.
+// §12 R06 (G6): the client select drives the project options for the chosen client (same source
+// tt uses); changing the client refills the projects and clears any stale selection.
+$('add-client').addEventListener('change', () =>
+  void fillAddProjects($('add-client').value === '' ? null : Number($('add-client').value)),
+);
+// §12 R17: the collapsed Start/Stop expander toggle reveals / hides the raw exact-time fields in
+// flow — the exact / overnight escape hatch. Both the picker and these fields drive the same span.
+{
+  const toggle = $('add-times-toggle');
+  const body = $('add-times-body');
+  if (toggle && body) {
+    toggle.addEventListener('click', () => {
+      const open = body.hidden;
+      body.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+  }
+}
 
 // §12 R15: the snapshot's CLOSED entries (other than the one being edited) so the picker can
 // paint them gray on its day column and flag overlaps yellow (warn-only). The running/open
@@ -1639,35 +1779,6 @@ function snapshotEntries(excludeId) {
     .filter((e) => e.endUtc !== null && e.id !== excludeId)
     .map((e) => ({ startUtc: e.startUtc, endUtc: e.endUtc, description: e.description }));
 }
-
-function openAddRangePicker(focusField) {
-  const fromInput = $('add-from');
-  const toInput = $('add-to');
-  // Default span = existing values, else last-stop→now (G9). The text fields are already
-  // seeded by openAddForm (last hour), so their current values are the seed.
-  const seedFrom = fromInput.value ? new Date(fromInput.value) : null;
-  const seedTo = toInput.value ? new Date(toInput.value) : null;
-  const overnight =
-    seedFrom && seedTo && seedFrom.toDateString() !== seedTo.toDateString();
-  // Overnight spans, or no picker available, fall back to text entry — focus the field so
-  // the user types the times directly (text entry remains authoritative everywhere).
-  if (overnight || typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-    $(focusField).focus();
-    return;
-  }
-  // §12 R15: open the shared visual picker bound to the two authoritative add inputs. The
-  // picker writes localInputValue strings back into #add-from/#add-to (text stays
-  // authoritative), so the unchanged submit path (fromLocal/toLocal → window.stint.add) is
-  // the single source of truth — no new capability, no IPC change.
-  window.STP.open({
-    startInput: fromInput,
-    endInput: toInput,
-    otherEntries: snapshotEntries(null),
-    onApply: () => {},
-  });
-}
-$('add-from-pick').addEventListener('click', () => openAddRangePicker('add-from'));
-$('add-to-pick').addEventListener('click', () => openAddRangePicker('add-to'));
 
 // §05 R06 / §12 R14/R15: the running entry's Start field carries an INLINE start-only
 // DISCLOSURE of the interval picker — expanded in flow into #le-start-disc below the field

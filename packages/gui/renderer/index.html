@@ -160,36 +160,50 @@
                 <input type="search" id="search" placeholder="Search" autocomplete="off" aria-label="Search entries" />
               </span>
             </div>
-            <form id="add-form" class="start-form" hidden>
-              <!-- §05 R10 — multiline description: a 3-line scrollable textarea keeps the interior
-                   newlines a user types (stored verbatim; the calendar/table display may truncate,
-                   the record never does). -->
-              <textarea id="add-desc" class="desc-field" rows="3" placeholder="Description" autocomplete="off"></textarea>
-              <div class="start-row">
-                <input id="add-client" type="text" placeholder="Client" autocomplete="off" list="add-client-list" />
-                <datalist id="add-client-list"></datalist>
-                <input id="add-project" type="text" placeholder="Project" autocomplete="off" />
+            <!-- §12 R07 (G5/G7): the ONE unified entry form in ADD mode, inline in the Entries
+                 view (no modal). LEFT column = the attribute fields (multiline description,
+                 client + project selects, tag chips, billable); RIGHT column = the inline
+                 interval picker (§12 R15, mounted into #add-picker) over the collapsed Start/Stop
+                 expander (§12 R17) — the exact/overnight escape hatch whose raw text fields the
+                 picker also drives. The picker updates the form's start/stop state LIVE; "Save
+                 entry" is the sole commit. No native datetime-local anywhere on this surface (G1). -->
+            <form id="add-form" class="unified-form" data-mode="add" hidden>
+              <div class="uf-body">
+                <div class="uf-fields">
+                  <!-- §05 R10 — multiline description: a 3-line scrollable textarea keeps the
+                       interior newlines a user types (stored verbatim; the calendar/table display
+                       may truncate, the record never does). -->
+                  <textarea id="add-desc" class="desc-field" rows="3" placeholder="Description" autocomplete="off"></textarea>
+                  <label class="uf-field"><span>Client</span>
+                    <select id="add-client" class="uf-select" aria-label="Client"></select></label>
+                  <label class="uf-field"><span>Project</span>
+                    <select id="add-project" class="uf-select" aria-label="Project" disabled></select></label>
+                  <label class="uf-field uf-tags"><span>Tags</span>
+                    <span class="chips uf-tag-chips" id="add-tag-chips"></span></label>
+                  <label class="uf-bill"><input id="add-bill" type="checkbox" checked /> Billable</label>
+                </div>
+                <div class="uf-picker">
+                  <!-- §12 R15: the inline interval-picker mount — app.js fills it with the month
+                       calendar + single-day column via window.STP.openInline, seeded from the raw
+                       Start/Stop fields below and wired to write them back LIVE on every drag. -->
+                  <div id="add-picker" class="uf-picker-mount"></div>
+                  <!-- §12 R17: the collapsed Start/Stop expander — raw exact-time text fields (the
+                       exact / overnight path). Collapsed by default; both the picker above and the
+                       expander here drive the SAME #add-from/#add-to values. NOT datetime-local. -->
+                  <div class="uf-times ef-times">
+                    <button type="button" id="add-times-toggle" class="ef-times-toggle" aria-expanded="false" aria-controls="add-times-body">Start / Stop (exact times)</button>
+                    <div id="add-times-body" class="ef-times-body" hidden>
+                      <label class="uf-field"><span>Start</span>
+                        <input id="add-from" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>
+                      <label class="uf-field"><span>Stop</span>
+                        <input id="add-to" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div class="start-row">
-                <label class="add-field">From
-                  <span class="range-field">
-                    <input id="add-from" type="datetime-local" />
-                    <button id="add-from-pick" type="button" class="range-pick-btn"
-                            aria-controls="add-from" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button>
-                  </span>
-                </label>
-                <label class="add-field">To
-                  <span class="range-field">
-                    <input id="add-to" type="datetime-local" />
-                    <button id="add-to-pick" type="button" class="range-pick-btn"
-                            aria-controls="add-to" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button>
-                  </span>
-                </label>
-              </div>
-              <input id="add-tags" type="text" placeholder="Tags" autocomplete="off" />
-              <label class="start-bill"><input id="add-bill" type="checkbox" checked /> Billable</label>
               <div id="add-warning" class="add-warning" hidden></div>
-              <div class="start-row">
+              <div class="uf-foot">
+                <span class="uf-foot-spacer"></span>
                 <button id="add-go" type="submit" class="primary">Save entry</button>
                 <button id="add-cancel" type="button" class="ghost">Cancel</button>
               </div>

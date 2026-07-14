@@ -1,11 +1,14 @@
-// §12 R15 (G9) — the visual time-range picker (window.STP). A pure renderer affordance
-// that opens over a pair of authoritative datetime-local text inputs (#add-from/#add-to,
-// the inline .edit-start/.edit-end, or the running #le-start) and lets the user DRAG a
-// span on a single-day calendar column instead of typing it. It adds ZERO capabilities:
-// it only ever writes localInputValue-formatted strings BACK into those existing text
-// inputs (and dispatches an `input` event), so the unchanged add/edit IPC paths stay the
-// single source of truth and the text fields stay authoritative. No new IPC channel, no
-// parity row — the picker never talks to core, the DB, or the network.
+// §12 R15 (G9) — the visual interval picker (window.STP). A pure renderer affordance that
+// binds a pair of authoritative local-time text inputs (`YYYY-MM-DDTHH:mm`) and lets the user
+// DRAG a span on a single-day calendar column instead of typing it. It exposes three forms:
+//   • STP.openInline — the unified entry form's INLINE start+stop picker (mounted in flow into
+//     #add-picker over the raw #add-from/#add-to text fields, add mode §12 R07 / edit mode R06);
+//   • STP.openStartOnly — the running entry's INLINE start-only disclosure (#le-start, §05 R06);
+//   • STP.open — the popover form still used by the closed-entry edit form's .edit-start/.edit-end.
+// It adds ZERO capabilities: it only ever writes localInputValue-formatted strings BACK into those
+// existing text inputs (and dispatches `input`/`change`), so the unchanged add/edit IPC paths stay
+// the single source of truth and the text fields stay authoritative. No new IPC channel, no parity
+// row — the picker never talks to core, the DB, or the network.
 //
 // Classic script (window.STP, no ES modules) so it loads over file:// alongside util.js /
 // editor.js / app.js. Pure DOM: no Node imports, no core-package import, no network (the
@@ -579,31 +582,246 @@ window.STP = (function () {
     return box;
   }
 
-  // Compatibility shim for the existing add-form wiring (app.js openAddRangePicker, the
-  // ADD_FORM_PICKER JUDGE scene). Maps the {fromUtc,toUtc,onConfirm} contract onto STP.open
-  // by binding to the two add-form inputs and translating Apply into onConfirm. The picker
-  // remains the SAME component — this is just the older call shape.
-  function openRangePicker(opts = {}) {
-    const startInput = document.getElementById('add-from');
-    const endInput = document.getElementById('add-to');
-    if (opts.fromUtc && startInput) startInput.value = localInputValue(new Date(opts.fromUtc));
-    if (opts.toUtc && endInput) endInput.value = localInputValue(new Date(opts.toUtc));
-    open({
-      startInput,
-      endInput,
-      otherEntries: Array.isArray(opts.otherEntries) ? opts.otherEntries : [],
-      onApply: () => {
-        if (typeof opts.onConfirm === 'function') {
-          opts.onConfirm({
-            fromUtc: new Date(startInput.value).toISOString(),
-            toUtc: new Date(endInput.value).toISOString(),
-          });
-        }
-      },
+  /**
+   * §12 R07 / §12 R15 (G5/G7) — STP.openInline({ host, startInput, endInput, otherEntries,
+   * settings, onChange }) — the UNIFIED ENTRY FORM's inline interval picker (add + edit modes).
+   * Renders a month calendar + a scrollable single-day column IN FLOW into `host` (no backdrop,
+   * no dialog/modal chrome, no Apply): the edited span is a draggable accent "me" rectangle —
+   * drag the BODY moves start+stop together, drag the BOTTOM grip resizes the stop, both 5-min
+   * snap. Other entries paint gray; the overlapping span paints yellow (warn-only, never blocks).
+   *
+   * Every drag AND every calendar day-pick writes the picked LOCAL instants BACK into the bound
+   * start+stop text inputs LIVE (writeBack fires input+change) AND calls onChange — so the form's
+   * start/stop state tracks the picker live (G7) and "Save entry" (which reads those inputs) is
+   * the sole commit. Text stays authoritative: the picker only ever sets the inputs' `.value`.
+   * Overnight spans can't be dragged on the single-day column — the collapsed Start/Stop expander
+   * (§12 R17) is the exact/overnight path, and it drives the SAME bound inputs. No IPC, no network.
+   *
+   * The default scroll viewport comes from SU.timelineWindow (§14/G16 — the ONE window derivation,
+   * never re-derived here), centered on the seeded interval; the viewport carries the
+   * `data-timeline-track` hook the TIMELINE_WINDOW judge scene probes.
+   */
+  function openInline(opts = {}) {
+    const host = opts.host || null;
+    const startInput = opts.startInput || null;
+    const endInput = opts.endInput || null;
+    if (!host || !startInput) return null;
+    const onChange = typeof opts.onChange === 'function' ? opts.onChange : () => {};
+    const others = Array.isArray(opts.otherEntries) ? opts.otherEntries : [];
+    host.innerHTML = '';
+
+    // Seed the span from the bound inputs, else last-stop→now (the same default open() uses).
+    const now = new Date();
+    let startDate = parseInput(startInput);
+    let endDate = parseInput(endInput);
+    if (!startDate) {
+      let lastStop = null;
+      for (const e of others) {
+        if (!e || e.endUtc == null) continue;
+        const t = new Date(e.endUtc);
+        if (!lastStop || t > lastStop) lastStop = t;
+      }
+      startDate = lastStop && lastStop < now ? lastStop : new Date(now.getTime() - 60 * MS_PER_MIN);
+    }
+    if (!endDate) endDate = new Date(Math.max(startDate.getTime() + 30 * MS_PER_MIN, now.getTime()));
+
+    let columnDay = startOfLocalDay(startDate);
+    let startMin = snapTo5(localMinuteOfDay(startDate));
+    let endMin = snapTo5(localMinuteOfDay(endDate));
+    // A seeded overnight stop clamps to end-of-day on the visible column; the expander owns the
+    // real overnight value. Keep a sane same-day span for dragging.
+    if (!sameLocalDay(startDate, endDate)) endMin = DAY_MIN;
+    if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
+
+    const box = document.createElement('div');
+    box.className = 'stp stp-inline stp-range';
+    box.innerHTML =
+      `<div class="stp-body">` +
+      `<div class="stp-cal">` +
+      `<div class="stp-cal-head"><span class="stp-month"></span>` +
+      `<span class="stp-nav">` +
+      `<button type="button" class="stp-prev" aria-label="Previous month"><svg class="ic" aria-hidden="true"><use href="#i-left" /></svg></button>` +
+      `<button type="button" class="stp-next" aria-label="Next month"><svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></button>` +
+      `</span></div>` +
+      `<div class="stp-grid"></div>` +
+      `</div>` +
+      `<div class="stp-day">` +
+      `<div class="stp-day-lbl"></div>` +
+      `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
+      `</div>` +
+      `</div>` +
+      `<div class="stp-snaphint"><span class="stp-pill">snap · 5 min</span>` +
+      `<span>Drag the span to set start &amp; stop — or type exact times below</span></div>`;
+    host.appendChild(box);
+    const track = box.querySelector('.stp-track');
+    const viewport = box.querySelector('.stp-dayview');
+
+    // The sole write path: push the picked instants into the bound inputs LIVE and notify the
+    // form. Called on mount, on every drag, and on a calendar day change.
+    function commit() {
+      writeBack(startInput, dateAtMinute(columnDay, startMin));
+      if (endInput) writeBack(endInput, dateAtMinute(columnDay, endMin));
+      onChange({ startMin, endMin });
+    }
+
+    // ---- month calendar (pick the day) --------------------------------------------
+    let calMonth = new Date(columnDay.getFullYear(), columnDay.getMonth(), 1);
+    function renderCalendar() {
+      box.querySelector('.stp-month').textContent = calMonth.toLocaleDateString(undefined, {
+        month: 'long',
+        year: 'numeric',
+      });
+      const grid = box.querySelector('.stp-grid');
+      grid.innerHTML = '';
+      for (const dow of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) {
+        const h = document.createElement('span');
+        h.className = 'stp-dow';
+        h.textContent = dow;
+        grid.appendChild(h);
+      }
+      const first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
+      const lead = (first.getDay() + 6) % 7;
+      const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+      for (let i = 0; i < lead; i++) {
+        const blank = document.createElement('span');
+        blank.className = 'stp-d stp-mut';
+        grid.appendChild(blank);
+      }
+      const today = new Date();
+      for (let day = 1; day <= daysInMonth; day++) {
+        const cell = document.createElement('button');
+        cell.type = 'button';
+        cell.className = 'stp-d';
+        const cellDate = new Date(calMonth.getFullYear(), calMonth.getMonth(), day);
+        if (sameLocalDay(cellDate, columnDay)) cell.classList.add('stp-sel');
+        if (sameLocalDay(cellDate, today)) cell.classList.add('stp-today');
+        cell.textContent = String(day);
+        cell.addEventListener('click', () => {
+          columnDay = startOfLocalDay(cellDate);
+          renderCalendar();
+          renderTrack();
+          commit(); // moving the span to another day is a live form-state change
+        });
+        grid.appendChild(cell);
+      }
+    }
+    box.querySelector('.stp-prev').addEventListener('click', () => {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+      renderCalendar();
     });
+    box.querySelector('.stp-next').addEventListener('click', () => {
+      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+      renderCalendar();
+    });
+
+    // ---- single-day column --------------------------------------------------------
+    function overlapsOnDay() {
+      const out = [];
+      for (const o of othersOnDayFor(columnDay, others)) {
+        const from = Math.max(startMin, o.from);
+        const to = Math.min(endMin, o.to);
+        if (to > from) out.push({ from, to });
+      }
+      return out;
+    }
+    function renderTrack() {
+      box.querySelector('.stp-day-lbl').textContent = columnDay.toLocaleDateString(undefined, {
+        weekday: 'long',
+        month: 'long',
+        day: 'numeric',
+      });
+      track.innerHTML = '';
+      paintHourLabels(track);
+      paintOtherBlocks(track, columnDay, others);
+      const me = document.createElement('div');
+      me.className = 'stp-block me';
+      me.style.top = `${minutesToY(startMin)}px`;
+      me.style.height = `${Math.max(6, minutesToY(endMin) - minutesToY(startMin))}px`;
+      me.innerHTML =
+        `<span class="stp-lab-top">${hhmm(startMin)}</span>` +
+        `<span class="stp-lab-bot">${hhmm(endMin)}</span>` +
+        `<span class="stp-resize" aria-label="Resize stop"><i></i></span>`;
+      track.appendChild(me);
+      for (const ov of overlapsOnDay()) {
+        const o = document.createElement('div');
+        o.className = 'stp-overlap';
+        o.style.top = `${minutesToY(ov.from)}px`;
+        o.style.height = `${Math.max(2, minutesToY(ov.to) - minutesToY(ov.from))}px`;
+        o.innerHTML = `<span class="stp-otag">overlap ${Math.round(ov.to - ov.from)}m</span>`;
+        track.appendChild(o);
+      }
+      wireDrag(me);
+    }
+
+    // ---- dragging (5-min snap, live commit) ---------------------------------------
+    function pointerMinutes(clientY) {
+      return yToMinutes(clientY - track.getBoundingClientRect().top);
+    }
+    function wireDrag(me) {
+      const resize = me.querySelector('.stp-resize');
+      const startDrag = (ev) => {
+        if (resize && (ev.target === resize || resize.contains(ev.target))) return;
+        ev.preventDefault();
+        const grabMin = pointerMinutes(ev.clientY);
+        const span = endMin - startMin;
+        const baseStart = startMin;
+        me.setPointerCapture?.(ev.pointerId);
+        const onMove = (mv) => {
+          const delta = pointerMinutes(mv.clientY) - grabMin;
+          let nextStart = snapTo5(baseStart + delta);
+          nextStart = Math.max(0, Math.min(DAY_MIN - span, nextStart));
+          startMin = nextStart;
+          endMin = nextStart + span;
+          renderTrack();
+          commit(); // §12 R07 (G7): the form's start/stop state updates on every drag step
+        };
+        const onUp = () => {
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+        };
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      };
+      me.addEventListener('pointerdown', startDrag);
+      if (resize) {
+        resize.addEventListener('pointerdown', (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          resize.setPointerCapture?.(ev.pointerId);
+          const onMove = (mv) => {
+            let nextEnd = snapTo5(pointerMinutes(mv.clientY));
+            nextEnd = Math.max(startMin + SNAP_MIN, Math.min(DAY_MIN, nextEnd));
+            endMin = nextEnd;
+            renderTrack();
+            commit();
+          };
+          const onUp = () => {
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onUp);
+          };
+          window.addEventListener('pointermove', onMove);
+          window.addEventListener('pointerup', onUp);
+        });
+      }
+    }
+
+    renderCalendar();
+    renderTrack();
+    // Seed the bound inputs from the (snapped) picker span immediately, so the form's start/stop
+    // state reflects the picker before any drag — Save reads exactly what the column shows.
+    commit();
+
+    // Default scroll window (§14/G16): SU.timelineWindow centered on the seeded interval.
+    const win =
+      window.SU && typeof window.SU.timelineWindow === 'function'
+        ? window.SU.timelineWindow(opts.settings || null, new Date().toISOString(), {
+            startUtc: dateAtMinute(columnDay, startMin).toISOString(),
+            endUtc: dateAtMinute(columnDay, endMin).toISOString(),
+          })
+        : { startMin: 7 * 60, endMin: 18 * 60 };
+    viewport.scrollTop = Math.round(minutesToY(win.startMin));
+    return box;
   }
 
-  return { open, openStartOnly, closePicker, openRangePicker, snapTo5, minutesToY, yToMinutes, localInputValue, TRACK_H };
+  return { open, openStartOnly, openInline, closePicker, snapTo5, minutesToY, yToMinutes, localInputValue, TRACK_H };
 })();
-// Expose the compat shim at the top level too (the add-form path calls window.openRangePicker).
-window.openRangePicker = window.STP.openRangePicker;
