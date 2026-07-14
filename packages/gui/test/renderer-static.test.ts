@@ -255,12 +255,12 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/act === 'delete'\)\s*return armDelete/);
     expect(app).toMatch(/function armDelete\(btn, e\)\s*\{[\s\S]*?confirmInline\(btn,/);
 
-    // (b) The Entries control bar (the search / filter / group selections) is present in the
-    // page: the search box, the client/billable filters, and the group-by toggle.
+    // (b) The Entries control bar (the search / filter selections) is present in the
+    // page: the search box and the client/billable filters. There is no group-by toggle
+    // here — grouping moved to Reports (issue #43).
     expect(html).toMatch(/id="search"/);
     expect(html).toMatch(/id="el-client"/);
     expect(html).toMatch(/id="el-billable-seg"/);
-    expect(html).toMatch(/id="el-by-seg"/);
 
     // (c) The live view is DERIVED FROM THE SNAPSHOT — the pure deriveView (util.js mirror of
     // src/liveview.ts) recomputes the list + the report totals with no IPC reload. The filter

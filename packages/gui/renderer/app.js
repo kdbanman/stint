@@ -12,19 +12,21 @@ let state = null;
 // with `tt list --search`). Kept here so load()/onChange re-apply the live query on refresh.
 let searchQuery = '';
 
-// §12 R9: the Entries-view control-bar state. `entryQuery` holds the live control values
-// (range preset/custom, group-by, client/project/tag/billable). `entryGroups` is the
-// grouped result of the last window.stint.listEntries call, or null when the control bar
-// is idle (default Day grouping, This-week-or-wider window, no filters) — in which case
-// render() paints the day-grouped getState exactly as before, so the existing JUDGE and
-// empty-state facts hold. A control change or search keystroke re-queries and repaints.
+// §12 R9: the Entries TOOLBAR state — range/filter/search over the readonly entries
+// calendar (R16). `entryQuery` holds the live control values (range preset/custom,
+// client/project/tag/billable). There is NO grouping here — grouped breakdowns moved to
+// Reports (§09 R02 / `tt report --by`, G11); the toolbar only narrows which entries the
+// calendar lays into its day columns. `entryGroups` is the flat, day-laid result of the
+// last window.stint.listEntries call, or null when the toolbar is idle (This-week-or-wider
+// window, no filters) — in which case render() paints the default getState entries so the
+// existing empty-state facts hold. A control change or search keystroke re-queries + repaints.
 // §09 R01: fromDate/toDate are the custom range's two PLAIN DATES (raw `YYYY-MM-DD` field
 // strings, no time component) — main resolves them to the inclusive-end-day local window.
-const entryQuery = { preset: 'week', by: 'day', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
+const entryQuery = { preset: 'week', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
 let entryGroups = null;
 
-// True once the user touches any control (range/group-by/filter) — the search box alone
-// does not flip it, so a lone search keeps the live day-grouped narrowing it always had.
+// True once the user touches any control (range/filter) — the search box alone does not
+// flip it, so a lone search keeps the live narrowing it always had.
 let entryCtrlActive = false;
 
 // §06 R3: a multi-select of contiguous CLOSED entries that the Merge action folds into
@@ -52,13 +54,14 @@ async function load() {
   // §09 R7: honour the active search on every (re)load so a live refresh (a tt write, a
   // local mutation) keeps the list narrowed to the current query; an empty query is the
   // whole window via getState. The status/timer card + settings always come from getState
-  // (the control-bar query is entries-only), so we always fetch a UiState to paint those.
+  // (the toolbar query is entries-only), so we always fetch a UiState to paint those.
   state = searchQuery && !entryCtrlActive
     ? await window.stint.search({ query: searchQuery })
     : await window.stint.getState();
-  // §12 R9: when the control bar is active, the entries section is the queried groups —
-  // re-run the query on every (re)load so a tt write keeps the grouped/filtered view fresh.
-  // Otherwise entryGroups stays null and render() paints the day-grouped state.days.
+  // §12 R9: when the toolbar is active, the entries calendar shows the queried set —
+  // re-run the range/filter/search query on every (re)load so a tt write keeps the
+  // filtered calendar fresh. Otherwise entryGroups stays null and render() paints the
+  // default state.days.
   if (entryCtrlActive) {
     await applyEntryQuery();
     return;
@@ -130,8 +133,8 @@ function render() {
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
 
-  // §17 R11: the report total reflects the active selection LIVE. When the control bar is
-  // active (a search / filter / group is in play) the total is the snapshot-derived
+  // §17 R11: the report total reflects the active selection LIVE. When the toolbar is
+  // active (a range / filter / search is in play) the total is the snapshot-derived
   // billable-only report sum for that selection (deriveView), so it narrows alongside the
   // list; idle, it is the plain whole-window billable total. Both come from the in-memory
   // snapshot — no IPC round-trip — so the figure tracks the selection on every keystroke.
@@ -142,12 +145,11 @@ function render() {
   renderEntries();
 }
 
-// §12 R9: paint the Entries list. By default (the control bar idle) it paints the
-// day-grouped UiState exactly as before. When the control bar is active (a non-default
-// range / group-by / filter / search), it paints the grouped result of the last
-// window.stint.listEntries query instead — generic group blocks whose header carries the
-// group key + summed billable hours. The default path is byte-identical to the prior
-// render so the existing JUDGE/empty-state facts hold.
+// §12 R9: paint the Entries calendar's entry set. By default (the toolbar idle) it paints
+// the UiState entries exactly as before. When the toolbar is active (a non-default range /
+// filter / search), it paints the flat, day-laid result of the last window.stint.listEntries
+// query instead — range/filter/search over the entries calendar (R16), no grouping. The
+// default path is byte-identical to the prior render so the existing empty-state facts hold.
 function renderEntries() {
   const host = $('entries');
   host.innerHTML = '';
@@ -320,8 +322,8 @@ function cardFlagsHtml(e) {
 
 // Every entry across the painted groups, keyed for the merge flow to look up the
 // selected rows' attributes (clientLabel/billable) without re-resolving anything. When
-// the §12 R9 control bar is active the painted set is the queried groups (an entry can
-// recur across tag groups, so de-dup by id); otherwise it is the day-grouped state.
+// the §12 R9 toolbar is active the painted set is the queried entries (flattened + de-duped
+// by id, defensive); otherwise it is the default state entries.
 function allEntries() {
   const rows = entryGroups
     ? entryGroups.flatMap((g) => g.entries)
@@ -376,10 +378,10 @@ function dayBlock(day) {
   return wrap;
 }
 
-// §12 R9: a generic grouped block for the control-bar query — the same .day section
-// shape dayBlock paints (so the styling and the day-grouped JUDGE facts carry over), but
-// keyed by any group (client / project / day / tag). The header shows the group key and
-// the summed billable hours core returned for the group.
+// §12 R9: a day block for the toolbar query's flat, day-laid result — the same .day section
+// shape dayBlock paints (so the styling and the day-header total facts carry over). The
+// header shows the day key and the summed billable hours core returned for it. (R16 replaces
+// this list rendering with the readonly entries calendar; the query wiring above is R09's.)
 function groupBlock(key, entries, billableSeconds) {
   const wrap = document.createElement('section');
   wrap.className = 'day';
@@ -391,7 +393,7 @@ function groupBlock(key, entries, billableSeconds) {
   return wrap;
 }
 
-// §12 R9: the empty state when the control-bar query matches nothing (a narrow range /
+// §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
 // filter / search excludes everything). Distinct from the never-tracked empty state —
 // here there IS history, just nothing in the current view — so it instructs widening.
 function emptyEntries() {
@@ -1249,21 +1251,21 @@ $('timer-stop').addEventListener('click', async () => {
 const timerStrip = $('timer-strip');
 if (timerStrip) timerStrip.addEventListener('click', () => route('timer'));
 
-// §09 R7 / §12 R9: free-text search over the entry list. Each keystroke updates the active
-// query. When the §12 R9 control bar is idle, search routes through the `search` IPC over
-// the day-grouped window (parity with `tt list --search`, case-insensitive on description /
-// client / project / tag) — the original behaviour. Once the control bar is active (a range
-// / group-by / filter touched), search instead rides inside the `listEntries` query so it
-// composes with the chosen range/grouping/filters (parity with `tt list --search --by …`).
-// The renderer holds no match logic — core filters either way and the list repaints.
+// §09 R7 / §12 R9: free-text search over the entries calendar. Each keystroke updates the
+// active query. When the §12 R9 toolbar is idle, search routes through the `search` IPC over
+// the default window (parity with `tt list --search`, case-insensitive on description /
+// client / project / tag) — the original behaviour. Once the toolbar is active (a range /
+// filter touched), search instead rides inside the `listEntries` query so it composes with
+// the chosen range/filters (parity with `tt list --search`). The renderer holds no match
+// logic — core filters either way and the calendar repaints.
 const searchInput = $('search');
 if (searchInput) {
   searchInput.addEventListener('input', () => {
     searchQuery = searchInput.value.trim();
-    // A search keystroke is itself a control-bar query (parity with `tt list --search`),
-    // so it routes through listEntries and composes with the chosen range/group-by/filters.
-    // It only leaves the bar idle when the box is cleared AND no range/group-by/filter is in
-    // play — then load() restores the plain day-grouped getState view (the default).
+    // A search keystroke is itself a toolbar query (parity with `tt list --search`), so it
+    // routes through listEntries and composes with the chosen range/filters. It only leaves
+    // the bar idle when the box is cleared AND no range/filter is in play — then load()
+    // restores the plain default getState calendar view (the default).
     if (searchQuery || hasEntryFilter()) {
       entryCtrlActive = true;
       void applyEntryQuery();
@@ -1274,12 +1276,11 @@ if (searchInput) {
   });
 }
 
-// True when any non-search Entries control departs from its default (non-Day grouping, a
-// non-default range/preset, or a client/project/tag/billable filter). Used to decide
-// whether clearing the search box reverts to the plain day-grouped getState view.
+// True when any non-search Entries toolbar control departs from its default (a non-default
+// range/preset, or a client/project/tag/billable filter). Used to decide whether clearing
+// the search box reverts to the plain default getState calendar view.
 function hasEntryFilter() {
   return (
-    entryQuery.by !== 'day' ||
     entryQuery.preset !== 'week' ||
     entryQuery.clientId != null ||
     entryQuery.projectId != null ||
@@ -1288,17 +1289,19 @@ function hasEntryFilter() {
   );
 }
 
-// ----------------------------------------------------------- §12 R9 Entries control bar
+// ----------------------------------------------------------- §12 R9 Entries toolbar
 
-// §17 R11: the live control-bar selection as a ViewSelection the pure deriveView consumes.
+// §17 R11: the live toolbar selection as a ViewSelection the pure deriveView consumes.
 // Built from the SAME live control values entryQuery/searchQuery hold, mapped to the
 // snapshot's row shape: the search query, the chosen client by its row label (the
 // #el-client option text is the client name, the prefix of the row's "Name / Project"
-// label), the billable narrowing, and day-vs-client grouping. Used only to keep the totals
-// live off the in-memory snapshot — the authoritative grouped rows still come from
-// listEntries (parity with tt), but the totals never wait on that round-trip.
+// label), and the billable narrowing. There is no user grouping in the entries calendar
+// (grouping moved to Reports, G11), so the selection is always day-laid — the range-total
+// chip + per-day header totals need only day layout. Used only to keep the totals live off
+// the in-memory snapshot — the authoritative flat rows still come from listEntries (parity
+// with tt), but the totals never wait on that round-trip.
 function liveSelection() {
-  const sel = { billable: entryQuery.billable, group: entryQuery.by === 'client' ? 'client' : 'day' };
+  const sel = { billable: entryQuery.billable, group: 'day' };
   if (searchQuery) sel.search = searchQuery;
   if (entryQuery.clientId != null && elClient) {
     const opt = elClient.options[elClient.selectedIndex];
@@ -1322,15 +1325,16 @@ function updateLiveTotal() {
   $('week-total').textContent = fmtHours(derived.reportTotalSeconds);
 }
 
-// Run the current control-bar query through window.stint.listEntries (the read-only entries
-// view, parity with `tt list --range/--client/--project/--tag/--search --by`), store the
-// grouped result, and repaint. Pure read — no write, no refreshAll. The search box rides
-// inside the same query so grouping + filters + search all compose in one core call.
+// Run the current toolbar query through window.stint.listEntries (the read-only entries
+// calendar read, parity with `tt list --range/--client/--project/--tag/--search`), store the
+// flat, day-laid result, and repaint. Pure read — no write, no refreshAll. The search box
+// rides inside the same query so range + filters + search all compose in one core call; the
+// calendar (R16) lays the returned entries into its day columns intrinsically — no grouping.
 async function applyEntryQuery() {
   // §17 R11: reflect the selection in the report total LIVE off the snapshot first, so the
   // total updates on the same keystroke/selection — it never waits on the async list query.
   updateLiveTotal();
-  const q = { by: entryQuery.by, billable: entryQuery.billable };
+  const q = { billable: entryQuery.billable };
   if (entryQuery.preset === 'custom') {
     if (!entryQuery.fromDate || !entryQuery.toDate) return; // wait for a complete date pair
     // §09 R01 (G3): a custom range is a pair of PLAIN DATES — the two fields' raw
@@ -1352,7 +1356,7 @@ async function applyEntryQuery() {
 }
 
 // Mark the bar active (so search composes into listEntries and load() preserves the query
-// on refresh) and run the query. Called by every range/group-by/filter control change.
+// on refresh) and run the query. Called by every range/filter control change.
 function activateEntryQuery() {
   entryCtrlActive = true;
   void applyEntryQuery();
@@ -1398,19 +1402,6 @@ for (const id of ['el-range-from', 'el-range-to']) {
     entryQuery.fromDate = $('el-range-from').value || null;
     entryQuery.toDate = $('el-range-to').value || null;
     if (entryQuery.fromDate && entryQuery.toDate) activateEntryQuery();
-  });
-}
-
-// Group-by (parity with `tt list --by`). Default Day, matching the renderer's day-grouped
-// default — so selecting Day with no other control change reproduces the getState look.
-const elBySeg = $('el-by-seg');
-if (elBySeg) {
-  elBySeg.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('.seg-btn');
-    if (!btn) return;
-    selectSegment(elBySeg, btn);
-    entryQuery.by = btn.dataset.by;
-    activateEntryQuery();
   });
 }
 
