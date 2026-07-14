@@ -1022,6 +1022,86 @@ const RECIPES = {
     },
   },
 
+  // §12 R17 (core entry) — the unified form's collapsed Start/Stop EXPANDER: the exact-entry escape
+  // hatch and the ONLY path for an OVERNIGHT span. The recording opens the unified add form, EXPANDS
+  // the collapsed Start/Stop expander (its raw text fields hidden until then), and TYPES a span that
+  // crosses midnight (2026-06-24T22:00 → 2026-06-25T02:00) directly into the raw fields; the inline
+  // picker column reflects the typed START and its collapsed echo reflects the cross-midnight span
+  // ("22:00 – 02:00") while the raw stop keeps the next-day value verbatim (text authoritative,
+  // never flattened to same-day). "Save entry" is the sole commit — the overnight backfill PERSISTS
+  // over the unchanged `add` IPC and appears on the Entries repaint.
+  //
+  // Pinned to UTC (like §05 R05 / §12 R07) so the typed instants land on deterministic local days; a
+  // scoped window.stint.add override splices the saved overnight row into the injected snapshot so it
+  // SHOWS on the repaint, leaving the renderer's unchanged submit path the single source of truth.
+  '§12 R17': {
+    page: 'index.html',
+    state: addFormState,
+    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
+    drive: async (page) => {
+      await page.waitForSelector('.entry', { state: 'attached' });
+      await page.click('#add-toggle');
+      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+      await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
+      await page.fill('#add-desc', 'overnight deploy');
+      await wait(page, 700);
+      // Expand the collapsed Start/Stop expander — the overnight escape hatch (raw text fields).
+      await page.click('#add-times-toggle');
+      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+      await wait(page, 600);
+      // Type the cross-midnight span into the raw text fields; the picker reflects it LIVE.
+      await page.fill('#add-from', '2026-06-24T22:00');
+      await page.fill('#add-to', '2026-06-25T02:00');
+      // The picker's collapsed echo reflects the typed overnight span (the shared interval updated).
+      await page.waitForFunction(
+        () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
+      );
+      await wait(page, 1400);
+      // Scope an add override so the saved overnight backfill SHOWS on the Entries repaint (mirrors
+      // §05 R05). It records the payload AND splices a completed overnight row into the snapshot; the
+      // unchanged submit path stays the single source of truth.
+      await page.evaluate(() => {
+        window.stint.add = (p) => {
+          window.__ADDED__ = p;
+          const st = window.__STATE__;
+          const fromUtc = new Date(p.fromLocal).toISOString();
+          const toUtc = new Date(p.toLocal).toISOString();
+          const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
+          const day = fromUtc.slice(0, 10);
+          const row = {
+            id: 320,
+            description: p.description || null,
+            clientLabel: null,
+            startUtc: fromUtc,
+            endUtc: toUtc,
+            billableSeconds: sec,
+            billable: p.billable !== false,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: sec,
+            tags: [],
+          };
+          let block = (st.days ||= []).find((d) => d.day === day);
+          if (!block) {
+            block = { day, entries: [] };
+            st.days.unshift(block);
+          }
+          block.entries.unshift(row);
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+      // Save → the unchanged submit path sends the EXACT typed overnight fromLocal/toLocal over `add`;
+      // the form closes and the repaint paints the new completed overnight backfill.
+      await page.click('#add-go');
+      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
+      await page.waitForSelector('text=overnight deploy').catch(() => {});
+      await wait(page, 1500);
+    },
+  },
+
   // §05 R06 / §12 R14 — the RUNNING entry's inline START-ONLY picker disclosure. On the
   // canonical running snapshot (open row 'auth refactor', started 21:35Z, two closed same-day
   // entries painting gray; page pinned to UTC so the geometry is deterministic), the recording

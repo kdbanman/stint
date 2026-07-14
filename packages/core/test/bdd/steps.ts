@@ -266,6 +266,26 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §12 R17 — backfill a CROSS-MIDNIGHT (overnight) span: from HH:MM on DAY to HH:MM the NEXT
+    // local day. The GUI path for overnight is the unified form's collapsed Start/Stop expander
+    // (§12 R17) — the single-day interval picker can't drag across midnight, so the expander's raw
+    // text stop dated a later day is the only way to enter one. This step stays surface-neutral and
+    // runs TWICE (CoreWorld.backfillAt = store.add, CliWorld.backfillAt = `tt add --from --to`),
+    // proving a span that crosses midnight commits IDENTICALLY on both surfaces — one closed entry,
+    // never rejected, blocked, or flattened to the same day. fromIso lands on DAY, toIso on DAY+1.
+    pattern: /^I backfill an entry "([^"]*)" from (\d{1,2}:\d{2}) to (\d{1,2}:\d{2}) the next day$/,
+    run: (w, ctx, desc, from, to) => {
+      const NEXT_DAY = new Date(Date.parse(`${DAY}T00:00:00Z`) + 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const toIso = `${NEXT_DAY}T${to.padStart(5, '0')}:00Z`;
+      const r = w.backfillAt({ desc, fromIso: iso(from), toIso });
+      ctx.lastId = r.id;
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+  {
     // §12 R7 — the GUI Manual-add form carries client/project alongside the explicit
     // from/to (the same attribute set `tt add` accepts). This attribute-bearing backfill
     // is the surface-neutral parity twin: it resolves the client/project by name through

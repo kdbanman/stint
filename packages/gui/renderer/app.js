@@ -1074,11 +1074,13 @@ async function openEntryForm(row, e) {
   form.dataset.mode = 'edit';
   // End is omitted for the open entry (§05 R6/§12 R06): editing the running entry's start must
   // not require an end, so the open row stays open. The Start/Stop expander is the exact /
-  // overnight path (§12 R17); it holds the raw datetime-local fields the picker also writes.
+  // overnight path (§12 R17); it holds RAW text fields (localInputValue format, NOT native
+  // datetime-local, G1) — the same fields the inline picker writes and a typed overnight span uses.
   const endField = running
     ? ''
     : `<label class="edit-field"><span>End</span>` +
-      `<input type="datetime-local" class="edit-end edit-time" /></label>`;
+      `<input type="text" class="edit-end edit-time" autocomplete="off" spellcheck="false" ` +
+      `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>`;
   form.innerHTML =
     `<div class="edit-row">` +
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
@@ -1116,7 +1118,8 @@ async function openEntryForm(row, e) {
     `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
     `<div class="ef-times-body" hidden>` +
     `<label class="edit-field"><span>Start</span>` +
-    `<input type="datetime-local" class="edit-start edit-time" /></label>` +
+    `<input type="text" class="edit-start edit-time" autocomplete="off" spellcheck="false" ` +
+    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>` +
     endField +
     `</div></div>` +
     // §12 R06: the edit-mode footer. Only Save entry carries the accent (§15); Split, Cancel and

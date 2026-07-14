@@ -80,6 +80,22 @@ Feature: Tracking and backfill
     And the entry "spec review" has a billable duration of 90 minutes
     And both entries are flagged overlapped in a report covering the day
 
+  # PRD §12 R17 (core: core data entry) — the unified form's collapsed Start/Stop expander is the
+  # ONLY path for an OVERNIGHT span: the single-day interval picker can't drag across midnight, so a
+  # stop dated a later day is typed exactly into the expander's raw text fields. This scenario is the
+  # surface-neutral core-entry AC for that overnight-capable add: backfilling a span from 22:00 on
+  # DAY to 02:00 the NEXT day yields exactly ONE closed entry crossing midnight — a 240-minute
+  # billable duration — and leaves nothing open. Runs TWICE (CoreWorld.backfillAt = store.add,
+  # CliWorld.backfillAt = `tt add --from --to`), so the cross-midnight span commits identically on
+  # both surfaces. Fails if either surface REJECTS, BLOCKS, or FLATTENS a cross-midnight span to the
+  # same day (a 240-minute duration proves the stop landed on the next day, not wrapped or negative)
+  # — the exact capability the collapsed Start/Stop expander is the GUI path for.
+  Scenario: Backfill creates a completed overnight entry
+    When I backfill an entry "overnight deploy" from 22:00 to 02:00 the next day
+    Then exactly zero entries are open
+    And there are exactly 1 entries
+    And the entry "overnight deploy" has a billable duration of 240 minutes
+
   # PRD §12 R15 — the inline interval picker's 5-minute-snap CONTRACT: every value the picker writes
   # back to the form is aligned to the 5-minute grid, and both surfaces store that picked span
   # VERBATIM — no extra rounding, no drift. Runs TWICE (CoreWorld.backfill = store.add,
