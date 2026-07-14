@@ -145,11 +145,92 @@ function render() {
   renderEntries();
 }
 
-// §12 R9: paint the Entries calendar's entry set. By default (the toolbar idle) it paints
-// the UiState entries exactly as before. When the toolbar is active (a non-default range /
-// filter / search), it paints the flat, day-laid result of the last window.stint.listEntries
-// query instead — range/filter/search over the entries calendar (R16), no grouping. The
-// default path is byte-identical to the prior render so the existing empty-state facts hold.
+// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One fixed comfortable-width day
+// column per day in range over a FULL 24h track: the track is always the whole day so nothing
+// clips; the viewport scrolls to the working-hours default. HOUR_PX drives both the vertical
+// pixels-per-hour and the event positioning, so an entry's top/height is a pure function of its
+// local minutes-of-day — the SAME window math the picker uses (window.SU.timelineWindow), never
+// re-derived here.
+const CAL_HOUR_PX = 44;
+const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never clip)
+const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter spacer (.sp2)
+const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
+const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// An entry's local minutes-of-day (0–1440). Display only — the stored instant is UTC ISO.
+function localMinOf(iso) {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+// 'YYYY-MM-DD' → { dw, dd } via UTC math, so a day column's weekday/date label never depends
+// on the runner timezone (the day key is already the entry's local day, resolved by core).
+function calDayParts(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return { dw: CAL_WEEKDAYS[dt.getUTCDay()], dd: String(d) };
+}
+function calAddDays(dayStr, n) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+// The [start, end] day strings of the week (by the weekStart setting) containing a day. Pure
+// string/UTC math so it is timezone-agnostic — used to pad the default view to a whole week.
+function calWeekBounds(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const startDow = state.settings && state.settings.weekStart === 'sunday' ? 0 : 1;
+  const back = (dow - startDow + 7) % 7;
+  const start = calAddDays(dayStr, -back);
+  return [start, calAddDays(start, 6)];
+}
+function calEnumerateDays(minDay, maxDay) {
+  const out = [];
+  let cur = minDay;
+  let guard = 0;
+  while (cur <= maxDay && guard++ < 400) {
+    out.push(cur);
+    cur = calAddDays(cur, 1);
+  }
+  return out;
+}
+
+// §12 R16 (G13): resolve the ORDERED set of day columns to paint plus each day's entries + its
+// per-day billable total. Every in-range day is present — including EMPTY days (present-but-empty
+// `.dcol`) — so the calendar reads as a continuous range, not a sparse list. The entries come from
+// the SAME two sources render() already distinguishes: the toolbar's day-laid listEntries result
+// when active (R09), else the getState day grouping. The default view pads to the whole week (G13);
+// a custom range spans exactly its two plain dates (§09 R01), so empty in-range days still show.
+function calendarModel() {
+  const present = entryGroups
+    ? entryGroups.map((g) => ({ day: g.key, entries: g.entries }))
+    : state.days.map((d) => ({ day: d.day, entries: d.entries }));
+  const map = new Map(present.map((p) => [p.day, p.entries]));
+  const dayKeys = [...map.keys()].sort();
+  let minDay;
+  let maxDay;
+  if (entryGroups && entryQuery.preset === 'custom' && entryQuery.fromDate && entryQuery.toDate) {
+    minDay = entryQuery.fromDate;
+    maxDay = entryQuery.toDate;
+  } else {
+    const anchor = dayKeys.length ? dayKeys[dayKeys.length - 1] : new Date().toISOString().slice(0, 10);
+    const [ws, we] = calWeekBounds(anchor);
+    minDay = dayKeys.length && dayKeys[0] < ws ? dayKeys[0] : ws;
+    maxDay = dayKeys.length && dayKeys[dayKeys.length - 1] > we ? dayKeys[dayKeys.length - 1] : we;
+  }
+  return calEnumerateDays(minDay, maxDay).map((day) => {
+    const entries = map.get(day) || [];
+    // The day-header total is the billable-only sum (empty day → 0), matching what `tt report`
+    // sums for that day — the same billableSeconds core owns; the renderer never re-derives it.
+    const billableSeconds = entries.reduce((s, e) => s + (e.billable ? e.billableSeconds : 0), 0);
+    return { day, entries, billableSeconds };
+  });
+}
+
+// §12 R9/R16: paint the Entries view. The default (toolbar idle) and the toolbar-active query
+// both flow into the SAME readonly calendar (R16); only the never-tracked / no-match empty states
+// short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
 function renderEntries() {
   const host = $('entries');
   host.innerHTML = '';
@@ -159,7 +240,7 @@ function renderEntries() {
       renderMergeBar();
       return;
     }
-    for (const g of entryGroups) host.appendChild(groupBlock(g.key, g.entries, g.billableSeconds));
+    renderCalendar(host);
     renderMergeBar();
     return;
   }
@@ -168,10 +249,90 @@ function renderEntries() {
     renderMergeBar();
     return;
   }
-  for (const day of state.days) {
-    host.appendChild(dayBlock(day));
-  }
+  renderCalendar(host);
   renderMergeBar();
+}
+
+// §12 R16: build the calendar — a horizontally-scrolling strip of fixed-width day columns over a
+// shared hour gutter, then default the viewport to the working-hours window (scroll, never clip).
+function renderCalendar(host) {
+  const model = calendarModel();
+  const wrap = document.createElement('div');
+  wrap.className = 'calwrap';
+  const strip = document.createElement('div');
+  strip.className = 'cstrip';
+  const grid = document.createElement('div');
+  grid.className = 'cgrid';
+  grid.appendChild(calGutter());
+  model.forEach((d, i) => grid.appendChild(calColumn(d, i === model.length - 1)));
+  strip.appendChild(grid);
+  wrap.appendChild(strip);
+  host.appendChild(wrap);
+  // §14 / G16: the entries calendar ALWAYS defaults to working hours — pass the shared window
+  // helper the picker uses, forcing working_hours mode, and scroll the 24h track to that start.
+  // A scroll, never a clip: every off-hours entry stays in the DOM and is reachable by scrolling.
+  const win = window.SU.timelineWindow(
+    { ...(state.settings || {}), pickerWindowMode: 'working_hours' },
+    new Date().toISOString(),
+    null,
+  );
+  strip.scrollTop = CAL_HEADER_PX + Math.round(win.startMin * CAL_PX_PER_MIN);
+}
+
+// The fixed hour gutter: a header spacer aligned with the day headers, then 00:00–24:00 labels
+// over the full 24h track (so every hour is reachable — the viewport scrolls, the track never clips).
+function calGutter() {
+  const gut = document.createElement('div');
+  gut.className = 'gut';
+  const sp = document.createElement('div');
+  sp.className = 'sp2';
+  gut.appendChild(sp);
+  const gtr = document.createElement('div');
+  gtr.className = 'gtr';
+  gtr.style.height = CAL_DAY_PX + 'px';
+  for (let h = 0; h <= 24; h++) {
+    const lab = document.createElement('span');
+    lab.className = 'hlab';
+    lab.style.top = h * CAL_HOUR_PX + 'px';
+    lab.textContent = String(h).padStart(2, '0') + ':00';
+    gtr.appendChild(lab);
+  }
+  gut.appendChild(gtr);
+  return gut;
+}
+
+// One fixed-width day column: a header carrying the weekday/date + that day's billable total
+// (§12 R16 / G13), then a 24h track holding the day's positioned events + any overlap warn bands.
+function calColumn(d, isEnd) {
+  const col = document.createElement('div');
+  col.className = 'dcol' + (isEnd ? ' end' : '');
+  const { dw, dd } = calDayParts(d.day);
+  const head = document.createElement('div');
+  head.className = 'dh';
+  head.innerHTML =
+    `<span class="dw">${dw}</span><b class="dd">${dd}</b>` +
+    `<span class="ds tnum">${fmtHours(d.billableSeconds)}</span>`;
+  col.appendChild(head);
+  const track = document.createElement('div');
+  track.className = 'dt';
+  track.style.height = CAL_DAY_PX + 'px';
+  // §06 R4 / §12 R10: overlap renders as a yellow warn BAND behind the events (detail lives in
+  // the editor). Painted first so the events sit above it.
+  for (const e of d.entries) if (e.overlapped) track.appendChild(calOverlapBand(e));
+  for (const e of d.entries) track.appendChild(calEvent(e));
+  col.appendChild(track);
+  return col;
+}
+
+// §06 R4 / §12 R10: the yellow overlap warn band, positioned over the overlapping minutes.
+function calOverlapBand(e) {
+  const band = document.createElement('div');
+  band.className = 'ov';
+  band.style.top = localMinOf(e.startUtc) * CAL_PX_PER_MIN + 'px';
+  const mins = e.overlapMinutes || 15;
+  band.style.height = Math.max(mins * CAL_PX_PER_MIN, 8) + 'px';
+  band.innerHTML = `<span class="otag">overlap ${mins}m</span>`;
+  return band;
 }
 
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
@@ -366,32 +527,9 @@ function emptyState() {
   return div;
 }
 
-function dayBlock(day) {
-  const wrap = document.createElement('section');
-  wrap.className = 'day';
-  const total = day.entries.reduce((s, e) => s + e.billableSeconds, 0);
-  const head = document.createElement('div');
-  head.className = 'day-head';
-  head.innerHTML = `<span>${escapeHtml(day.day)}</span><span class="dsum tnum">${fmtHours(total)}</span>`;
-  wrap.appendChild(head);
-  for (const e of day.entries) wrap.appendChild(entryRow(e));
-  return wrap;
-}
-
-// §12 R9: a day block for the toolbar query's flat, day-laid result — the same .day section
-// shape dayBlock paints (so the styling and the day-header total facts carry over). The
-// header shows the day key and the summed billable hours core returned for it. (R16 replaces
-// this list rendering with the readonly entries calendar; the query wiring above is R09's.)
-function groupBlock(key, entries, billableSeconds) {
-  const wrap = document.createElement('section');
-  wrap.className = 'day';
-  const head = document.createElement('div');
-  head.className = 'day-head';
-  head.innerHTML = `<span>${escapeHtml(key)}</span><span class="dsum tnum">${fmtHours(billableSeconds)}</span>`;
-  wrap.appendChild(head);
-  for (const e of entries) wrap.appendChild(entryRow(e));
-  return wrap;
-}
+// (The §12 R09 day-list builders `dayBlock`/`groupBlock` were folded into the readonly entries
+// calendar — §12 R16's calColumn/calEvent above. Grouping left the Entries view entirely; grouped
+// breakdowns live in Reports, G11.)
 
 // §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
 // filter / search excludes everything). Distinct from the never-tracked empty state —
@@ -405,45 +543,58 @@ function emptyEntries() {
   return div;
 }
 
-function entryRow(e) {
-  const row = document.createElement('div');
-  const selectable = e.endUtc !== null; // only a bounded (closed) span joins a merge
-  row.className =
-    'entry' + (e.endUtc === null ? ' running' : '') + (selected.has(e.id) ? ' selected' : '');
-  row.dataset.id = String(e.id);
+// §12 R16: one positioned calendar EVENT for an entry. It is the calendar's visible block
+// (`.bd` description, `.bc` client, `.bt` time label, positioned by local minutes on the 24h
+// track) AND the durable entry surface every editing/merge/flag path targets — so it keeps the
+// `.entry` / `data-id` / `[data-act]` / `.sel` hooks the unified editor (§12 R06), the merge
+// selection (§06 R03), split/delete and the flag readouts (§12 R10) all reach. Hover reveals the
+// corner checkbox (`.ck`) + the ops toolbar (Delete / Split / Edit); a click on the inert body
+// opens the unified editor. The running/open entry gets the future-fade `.run` treatment, a
+// start-only block with no end (§05 R06), and no merge checkbox (only bounded spans merge).
+function calEvent(e) {
+  const running = e.endUtc === null;
+  const startMin = localMinOf(e.startUtc);
+  // The open block extends a fixed span into the future and fades out (no bottom edge, G8); a
+  // closed block runs start→end (min height so a very short span stays legible/clickable).
+  const endMin = running ? Math.min(startMin + 180, 1440) : Math.max(localMinOf(e.endUtc), startMin + 5);
+  const el = document.createElement('div');
+  el.className =
+    'ev entry' + (running ? ' run running' : '') + (selected.has(e.id) ? ' on selected' : '');
+  el.dataset.id = String(e.id);
+  el.style.top = startMin * CAL_PX_PER_MIN + 'px';
+  el.style.height = Math.max((endMin - startMin) * CAL_PX_PER_MIN, 18) + 'px';
 
-  // §06 R3: a checkbox marks a closed entry for the multi-select Merge. The open/running
-  // entry has no end, so it is not offered (merge folds bounded spans); a placeholder
-  // keeps the grid column aligned on those rows.
-  const sel = document.createElement('div');
-  sel.className = 'sel-cell';
-  if (selectable) {
-    sel.innerHTML = '<input type="checkbox" class="sel" data-act="select" />';
-    sel.querySelector('.sel').checked = selected.has(e.id);
-  }
+  const timeLabel = running
+    ? `${localTime(e.startUtc)} –`
+    : `${localTime(e.startUtc)}–${localTime(e.endUtc)}`;
+  const runDot = running ? '<span class="run-dot" aria-hidden="true"></span>' : '';
 
-  const time = document.createElement('div');
-  time.className = 'time tnum';
-  time.textContent = e.endUtc ? `${localTime(e.startUtc)}–${localTime(e.endUtc)}` : `${localTime(e.startUtc)}–now`;
+  let html = '';
+  // §06 R3: the hover-corner checkbox marks a CLOSED span for the multi-select merge; the open
+  // row has no end, so it is not offered. It doubles as the legacy `.sel` selection hook.
+  if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" aria-label="Select entry" />';
+  // Hover ops: Delete / Split / Edit (+ Subtract sleep / Edit tags), the same `data-act` controls
+  // the row affordances and the JUDGE scenes drive; a click opens the unified editor (wire()).
+  html += `<span class="ops actions">${actionButtons(e)}</span>`;
+  html += `<span class="bd desc${e.billable ? '' : ' nonbill'}">${runDot}${escapeHtml(e.description ?? '(no description)')}</span>`;
+  if (e.clientLabel) html += `<span class="bc where">${escapeHtml(e.clientLabel)}</span>`;
+  html += `<span class="bt time tnum">${timeLabel}</span>`;
+  // Compat readouts the flag/duration JUDGE scenes read (kept in the DOM, visually folded away on
+  // the calendar — the calendar shows overlap as `.ov` bands and sleep as the `.zz` hatch): the
+  // struck raw-vs-trimmed duration (§12 R10), the tag chips (§07), the worded flags, and the
+  // detailed overlap banner.
+  html += `<span class="dur cal-compat tnum">${durHtml(e)}</span>`;
+  html += tagsHtml(e);
+  html += flagsHtml(e);
+  html += overlapBannerHtml(e);
+  // §12 R10 (G12): a slept span carries a hatched marker at its foot on the calendar.
+  if (e.sleptThrough) html += '<span class="zz"><svg class="ic" aria-hidden="true"><use href="#i-moon" /></svg></span>';
+  el.innerHTML = html;
 
-  const desc = document.createElement('div');
-  desc.className = 'desc' + (e.billable ? '' : ' nonbill');
-  desc.innerHTML =
-    `${escapeHtml(e.description ?? '(no description)')}` +
-    (e.clientLabel ? `<span class="where">${escapeHtml(e.clientLabel)}</span>` : '') +
-    tagsHtml(e) +
-    flagsHtml(e) +
-    actionsHtml(e) +
-    // §12 R9: the detailed overlap banner sits on the affected row, below the inline flags.
-    overlapBannerHtml(e);
-
-  const dur = document.createElement('div');
-  dur.className = 'dur tnum';
-  dur.innerHTML = durHtml(e);
-
-  row.append(sel, time, desc, dur);
-  wire(row, e);
-  return row;
+  const ck = el.querySelector('.ck');
+  if (ck) ck.checked = selected.has(e.id);
+  wire(el, e);
+  return el;
 }
 
 // §12 R9: the row's duration cell. For a slept entry whose billable was trimmed (excluded
@@ -490,7 +641,11 @@ function overlapBannerHtml(e) {
   return `<div class="banner overlap" title="overlaps another entry">Overlap: ${minutes}m with ${which} entry</div>`;
 }
 
-function actionsHtml(e) {
+// §12 R16: the entry's hover ops — the same `data-act` controls the row affordances exposed,
+// returned as the bare button set so calEvent can host them in the `.ops` corner toolbar. Kept at
+// parity with the tt verbs: Subtract sleep / Restore (§05 R08), Edit (unified form, §12 R06), Edit
+// tags (§07), Split (closed only, §06 R2), Delete (two-step, §06 R1).
+function actionButtons(e) {
   const actions = [];
   if (e.sleptThrough) {
     const restore = e.excludedSeconds > 0;
@@ -514,7 +669,7 @@ function actionsHtml(e) {
   // bounded span). The open/running entry has no end, so it exposes no Split (§06 R2).
   if (e.endUtc !== null) actions.push('<button class="small ghost" data-act="split" aria-label="Split entry">Split</button>');
   actions.push('<button class="small ghost" data-act="delete" aria-label="Delete entry">Delete</button>');
-  return `<span class="actions">${actions.join('')}</span>`;
+  return actions.join('');
 }
 
 function wire(row, e) {
@@ -550,7 +705,10 @@ function toggleSelect(id, on) {
   if (on) selected.add(id);
   else selected.delete(id);
   const row = document.querySelector(`.entry[data-id="${id}"]`);
-  if (row) row.classList.toggle('selected', on);
+  if (row) {
+    row.classList.toggle('selected', on);
+    row.classList.toggle('on', on); // §12 R16: the calendar event's selected lift
+  }
   renderMergeBar();
 }
 

@@ -2324,3 +2324,224 @@ body.popover { background: var(--canvas); margin: 0; }
   box-shadow: var(--sh-pop);
 }
 .fav-empty { color: var(--faint); font-size: 13px; }
+
+/* ============================================================================
+   §12 R16 — the readonly entries CALENDAR (ported from context/mockups/main.html
+   into the app's warm-paper tokens). One fixed comfortable-width day column per day
+   in range over a FULL 24h track: the viewport scrolls to the working-hours default
+   (app.js sets .cstrip scrollTop), it never CLIPS — every off-hours entry stays in the
+   DOM and is reachable. These rules come AFTER the legacy .entry list styles so the
+   calendar event (`.ev.entry`) overrides the old grid row cleanly while keeping the
+   `.entry` hooks the editing/merge/flag JUDGE scenes target.
+   ========================================================================== */
+.calwrap { position: relative; margin-top: 10px; }
+/* Both axes scroll: horizontal for the week's columns, vertical over the 24h track.
+   A fixed max-height bounds the vertical viewport so the working-hours scroll is a real
+   scroll (the track is taller than the viewport) — never a clip. */
+.cstrip { overflow: auto; max-height: 60vh; padding-bottom: 6px; }
+.cgrid { display: flex; min-width: max-content; }
+.gut { width: 48px; flex: none; }
+.gut .sp2 { height: 52px; border-bottom: 1px solid var(--rule); }
+.gut .gtr { position: relative; }
+.hlab {
+  position: absolute;
+  right: 8px;
+  font-size: 10.5px;
+  color: var(--faint);
+  transform: translateY(-6px);
+  font-variant-numeric: tabular-nums;
+}
+/* A FIXED comfortable column width — never stretched to fill, never compressed: the strip
+   scrolls when the range does not fit (the property the JUDGE scene asserts). */
+.dcol { width: 124px; flex: none; border-left: 1px solid var(--rule); }
+.dcol.end { border-right: 1px solid var(--rule); }
+.dh { height: 52px; padding: 9px 10px 0; border-bottom: 1px solid var(--rule); }
+.dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
+.dh .dd { font-size: 13px; font-weight: 640; margin-left: 3px; }
+.dh .ds { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+.dt {
+  position: relative;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 43px,
+    var(--rule) 43px,
+    var(--rule) 44px
+  );
+}
+/* A calendar event: the positioned block, overriding the legacy .entry grid row. Its inner
+   `.bd/.bc/.bt` clip per line, so ops/checkbox at the corners are not clipped away. */
+.dt .ev {
+  display: block;
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  padding: 5px 8px;
+  border: 1px solid #c44c3855;
+  border-radius: 7px;
+  background: var(--accent-weak);
+  color: inherit;
+  cursor: pointer;
+  /* Visible, NOT clipped: the per-line text (.bd/.bc/.bt) clips itself with its own ellipsis, so
+     the block reads clean, while the hover ops and the inline confirm/split/tag affordances — which
+     are wider than a calendar event — extend beyond the block and stay clickable rather than being
+     clipped away (the delete/split/confirm JUDGE scenes drive them on middle-column events). */
+  overflow: visible;
+  grid-template-columns: none;
+  gap: 0;
+  margin: 0;
+  border-bottom: 1px solid #c44c3855;
+}
+.dt .ev:hover { background: var(--accent-weak); box-shadow: var(--sh-raise); border-color: var(--accent); z-index: 3; }
+.dt .ev.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ev .bd { display: block; font-size: 12px; font-weight: 590; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .bd .run-dot { margin-right: 5px; }
+.ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .bt { display: block; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
+.ev .nonbill { color: var(--faint); }
+/* The compat readouts (duration/tag chips/worded flags/overlap banner) stay in the DOM for the
+   flag/duration JUDGE scenes but fold away visually — the calendar shows overlap as `.ov` bands
+   and sleep as the `.zz` hatch. Visually hidden, NOT display:none, so text + computed styles read. */
+.ev .cal-compat,
+.ev > .chips,
+.ev > .flags,
+.ev > .banner.overlap {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The hover-corner checkbox: appears on hover (opacity, so it stays Playwright-checkable at rest)
+   and stays lit once selected. Styled from an <input> so `.check()`/`.sel` still resolve. */
+.ev .ck {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  z-index: 6;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 4px;
+  border: 1.5px solid var(--rule-strong);
+  background: var(--paper);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ev.wck { padding-left: 28px; }
+.ev:hover .ck,
+.ev .ck:checked,
+.ev.on .ck { opacity: 1; }
+.ev .ck:checked {
+  border-color: var(--accent);
+  background: var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
+    center / 11px no-repeat;
+}
+/* The hover ops toolbar (Delete / Split / Edit), revealed on hover; the buttons stay in the DOM
+   (and Playwright-clickable via opacity) so every `data-act` selector is intact at rest. */
+.ev .ops {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 5;
+  display: flex;
+  flex-direction: row-reverse;
+  gap: 2px;
+  padding: 2px;
+  margin: 0;
+  float: none;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+}
+/* The toolbar chrome appears on hover; the BUTTONS carry the reveal (opacity, so they stay
+   Playwright-clickable at rest — the proven pattern the row affordances use). */
+.ev:hover .ops,
+.ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
+.ev:hover { padding-top: 30px; }
+.ev .ops .small { opacity: 0; height: auto; padding: 3px 5px; font-size: 11px; transition: opacity 0.12s ease; }
+.ev:hover .ops .small,
+.ev:focus-within .ops .small { opacity: 1; }
+/* Running/open event: fades into the future, no bottom edge (G8). */
+.dt .ev.run {
+  border: 0;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(
+    180deg,
+    var(--accent-weak) 0%,
+    var(--accent-weak) 35%,
+    rgba(248, 233, 229, 0) 100%
+  );
+}
+.ev.run .bd { display: flex; align-items: center; }
+/* Slept-through hatch at the foot of the event (G12). */
+.ev .zz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-top: 1px dashed var(--rule-strong);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(214, 209, 201, 0.25) 0,
+    rgba(214, 209, 201, 0.25) 6px,
+    rgba(214, 209, 201, 0.5) 6px,
+    rgba(214, 209, 201, 0.5) 12px
+  );
+}
+.ev .zz .ic { width: 12px; height: 12px; }
+/* Overlap warn band + its tag (§06 R4 / §12 R10). */
+.ov {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(45deg, var(--flag-bg), var(--flag-bg) 7px, #f1e3bc 7px, #f1e3bc 14px);
+  border-top: 1px solid var(--warn-line);
+  border-bottom: 1px solid var(--warn-line);
+}
+.ov .otag {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--flag);
+  background: var(--paper);
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+/* Editing in place: the event drops out of the absolute track so the unified form lays out and
+   its fields stay actionable (the form host is position:static — the JUDGE scene asserts this). */
+.dt .ev.editing {
+  position: static;
+  height: auto !important;
+  left: auto;
+  right: auto;
+  top: auto;
+  overflow: visible;
+  padding: 8px;
+  margin: 4px 0;
+  background: var(--paper);
+  border-color: var(--rule-strong);
+  box-shadow: var(--sh-card);
+}
+.ev.editing .ck,
+.ev.editing .ops,
+.ev.editing .zz,
+.ev.editing .bt,
+.ev.editing .bc { display: none; }

@@ -662,6 +662,30 @@ export const steps: StepDef[] = [
       expect(all).not.toContain(desc);
     },
   },
+  // §12 R16 — the per-day + range billable totals the readonly entries calendar presents in its
+  // day-headers and range chip. Derived from the SAME flat listed set both surfaces return, laid
+  // by local day (the day key core already resolves): a day's total is the billable-only sum of
+  // its entries' billableSeconds (an in-range day with no entries totals zero), and the range
+  // total is the whole listed set's billable sum. Proven twice (core store.listEntries + tt list
+  // --json) so the totals the calendar shows are identical on both surfaces.
+  {
+    pattern: /^the day "([^"]*)" has a billable total of (\d+) hours?$/,
+    run: (_w, ctx, day, hours) => {
+      const total = (ctx.listResults ?? [])
+        .filter((e) => e.billable && e.startUtc.slice(0, 10) === day)
+        .reduce((s, e) => s + e.billableSeconds, 0);
+      expect(total).toBe(Number(hours) * 3600);
+    },
+  },
+  {
+    pattern: /^the range billable total is (\d+) hours?$/,
+    run: (_w, ctx, hours) => {
+      const total = (ctx.listResults ?? [])
+        .filter((e) => e.billable)
+        .reduce((s, e) => s + e.billableSeconds, 0);
+      expect(total).toBe(Number(hours) * 3600);
+    },
+  },
 
   // ---- §08 R3 report billable filter (the GUI three-way Billable control / `tt report
   // --all|--non-billable`) ------------------------------------------------------------

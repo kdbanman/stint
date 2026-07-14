@@ -78,6 +78,19 @@ Feature: Entry list — range, filtering & search (§11)
     And the entry list does not show "auth refactor"
     And the entry list does not show "standup"
 
+  Scenario: Per-day and range billable totals over the week — including an empty day
+    # §12 R16 / §17 R8 — the readonly entries calendar presents, per in-range day, that day's
+    # billable total (an empty in-range day totals zero) and a range chip equal to the week's
+    # billable sum. The data the day-headers / range chip present is the flat listed set laid by
+    # day here — proven identical on both surfaces (core store.listEntries + tt list --json). The
+    # Background places day 1 (Jun 24) = "auth refactor" 2h; day 2 (Jun 23) = "deploy pipeline" 1h
+    # + "standup" 1h; Jun 22 has no entries → an empty in-range day.
+    When I list entries this week
+    Then the day "2026-06-24" has a billable total of 2 hours
+    And the day "2026-06-23" has a billable total of 2 hours
+    And the day "2026-06-22" has a billable total of 0 hours
+    And the range billable total is 4 hours
+
   Scenario: A description with embedded newlines is stored and reported verbatim
     # §05 R10 / §17 R8 — a description typed with a line break is kept VERBATIM: the interior
     # newline survives storage and full-fidelity reporting identically on both surfaces (core

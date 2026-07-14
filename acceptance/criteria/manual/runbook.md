@@ -1483,3 +1483,48 @@ the count-up must never stop while the start is being edited.
 > on a real desktop: real drags snap and write live, the block visibly dissolves toward the
 > future with no end affordance, the count-up never stops, and `tt` sees the amended start
 > with the entry still open and its end empty.
+
+## CHECK ENTRIES CALENDAR (§12 R16) — the readonly calendar scrolls, never clips; columns stay fixed; working hours are the default
+
+The §12 R16 Entries view is a **readonly calendar**: one **fixed comfortable-width day column
+per day in range** over a **full 24h track**. The track is a **scroll default, not a clip** — the
+viewport opens on **working hours** but every hour stays reachable; the columns keep their width
+(never stretched/compressed) and the strip **scrolls horizontally** when the range does not fit.
+Grouping is **not** here (it lives in Reports, G11); the day headers carry **per-day billable
+totals** and the toolbar carries a **range chip**.
+
+1. In a real desktop session with a week of entries — including a day with **none**, an entry
+   **before** your working-hours-start and one **after** your working-hours-end — open the main
+   window on the **Entries** view.
+   - [ ] The content is a **calendar**: a **fixed-width day column per day** of the This-week
+         range, over an hour gutter. The columns are a **comfortable fixed width** — they do
+         **not** stretch to fill the window nor compress to cram the week in.
+   - [ ] The viewport **opens on working hours** (the first visible hours are around your
+         `working_hours_start`), **not** at midnight.
+   - [ ] Each **day header** shows that day's **billable total**; the **empty day** shows as a
+         **present-but-empty column** (its total reads `0.00h`); the toolbar shows the **range
+         chip** with the week's billable total.
+2. **Scroll, never clip.**
+   - [ ] **Scroll the track up**: the entry **before** working-hours-start (e.g. an early
+         06:xx block) comes into view — it was present all along, just above the default window.
+   - [ ] **Scroll the track down**: the entry **after** working-hours-end (e.g. a 19:xx block)
+         comes into view — nothing was clipped; the full 24h is reachable.
+3. **Wide range.** Switch the range to **Custom…** and pick a **span of several weeks**.
+   - [ ] The day columns keep the **same fixed comfortable width** and the strip **scrolls
+         horizontally** across them — the columns are never squeezed to fit the range.
+   - [ ] In-range days with **no** entries still show as **empty columns**.
+4. **Reach the editing/merge affordances by hand.**
+   - [ ] **Hover** an event: its **Delete / Split / Edit** ops and a **corner checkbox** appear.
+   - [ ] **Click** an event body: the **unified editor** opens inline (edit mode).
+   - [ ] **Check two events' corner checkboxes**: the **merge bar** appears with the live count.
+   - [ ] The **running** entry shows as a block that **fades into the future** with **no end
+         edge**; an **overlap** shows a yellow **warn band**; a **slept** span shows a **hatch**.
+
+> The fixed/equal-width columns, the horizontal scroll, the working-hours default that scrolls
+> (never clips) with off-hours entries reachable, the per-day header totals + range chip, the
+> empty column, the hover ops + corner checkbox, the click-opens-editor, the running future-fade,
+> the overlap band + slept hatch, and the two-checkbox merge bar are pinned headless under JUDGE
+> (`CALENDAR_LAYOUT`, `main-calendar.png`) driving the real renderer; the per-day + range billable
+> totals are proven twice (core + `tt`) by `features/entry_list.feature`. This runbook confirms the
+> same on a real desktop: the columns hold their width, the strip scrolls both ways, off-hours
+> entries are reachable rather than clipped, and empty days show as empty columns.
