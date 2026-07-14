@@ -265,8 +265,10 @@ header.mast {
   color: var(--muted);
 }
 .liveedit .le-editable { color: var(--faint); }
-.liveedit .le-field input[type='text'],
-.liveedit .le-field input[type='datetime-local'] {
+/* §12 R14 (G1): the running-start field #le-start is a RAW text input (localInputValue
+   format) — there is no native datetime-local on this surface; the calendar affordance is
+   the inline start-only picker disclosure below the field. */
+.liveedit .le-field input[type='text'] {
   display: block;
   width: 100%;
   margin-top: 6px;
