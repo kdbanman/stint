@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -1059,343 +1059,189 @@ async function main() {
     );
   });
 
-  // ADD_FORM — the main window offers a discoverable manual-add (backfill) form with
-  // explicit from/to times and the same attributes tt add accepts (description,
-  // client/project, billable, tags); the Save action carries the accent (§05 R5).
-  await withPage(browser, addFormState(), 'index.html', async (page) => {
-    await page.click('#add-toggle');
-    const probe = await page.evaluate(() => {
-      const form = document.querySelector('#add-form');
-      const visible = !!form && !form.hidden;
-      const has = (id) => !!document.querySelector(`#${id}`);
-      const save = document.querySelector('#add-go');
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      return {
-        visible,
-        fields: {
-          from: has('add-from'),
-          to: has('add-to'),
-          desc: has('add-desc'),
-          client: has('add-client'),
-          project: has('add-project'),
-          bill: has('add-bill'),
-          tags: has('add-tags'),
-        },
-        saveAccent: save ? getComputedStyle(save).backgroundColor === toRgb(accent) : false,
-      };
-    });
-    await page.screenshot({ path: join(EVIDENCE, 'add-form.png') });
-    const f = probe.fields;
-    const allFields = f.from && f.to && f.desc && f.client && f.project && f.bill && f.tags;
-    const ok = probe.visible && allFields && probe.saveAccent;
-    record('ADD_FORM', ok, `add form visible=${probe.visible}, fields=${JSON.stringify(f)}, saveAccent=${probe.saveAccent}`, 'add-form.png');
-  });
-
-  // MANUAL_ADD_FORM — §12 R7 / §06 R4: backfilling a completed entry whose span overlaps an
-  // existing entry is WARNED, not blocked. Open the manual-add form, fill an overlapping
-  // from/to plus the attribute fields, Save, and assert (a) the backfill payload carries the
-  // explicit from/to + attributes the `add` IPC (tt add parity) forwards, (b) the SAME
-  // non-blocking inline overlap banner the other write paths use is raised — the entry still
-  // saved, so the form closed. The overlap-returning add mock makes this deterministic.
-  await withPage(
-    browser,
-    addFormState(),
-    'index.html',
-    async (page) => {
-      const beforeHidden = await page.evaluate(() => !!document.querySelector('#overlap-banner')?.hidden);
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Fill the full field set the form mirrors from `tt add` — an explicit overlapping
-      // span plus description / client / project / tags / billable.
-      await page.fill('#add-desc', 'backfilled call');
-      await page.fill('#add-client', 'Acme');
-      await page.fill('#add-project', 'API');
-      await page.fill('#add-tags', 'deep, urgent');
-      await page.fill('#add-from', '2026-06-24T09:00');
-      await page.fill('#add-to', '2026-06-24T10:00');
-      await page.click('#add-go');
-      await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
-      await page.screenshot({ path: join(EVIDENCE, 'main-add-form.png'), fullPage: true });
-      const probe = await page.evaluate(() => {
-        const added = window.__ADDED__;
-        const banner = document.querySelector('#overlap-banner');
-        const form = document.querySelector('#add-form');
-        return {
-          added,
-          formClosed: !!form && form.hidden, // entry saved → form dismissed (non-blocking)
-          banner: {
-            visible: !!banner && !banner.hidden && getComputedStyle(banner).display !== 'none',
-            text: banner ? banner.textContent.trim() : '',
-            role: banner ? banner.getAttribute('role') : null,
-            ariaLive: banner ? banner.getAttribute('aria-live') : null,
-          },
-        };
-      });
-      const a = probe.added || {};
-      const payloadOk =
-        a.fromLocal === '2026-06-24T09:00' &&
-        a.toLocal === '2026-06-24T10:00' &&
-        a.description === 'backfilled call' &&
-        a.client === 'Acme' &&
-        a.project === 'API' &&
-        Array.isArray(a.tags) &&
-        a.tags.join(',') === 'deep,urgent' &&
-        a.billable === true;
-      const bannerOk =
-        beforeHidden &&
-        probe.banner.visible &&
-        /overlap/i.test(probe.banner.text) &&
-        probe.banner.role === 'status' &&
-        probe.banner.ariaLive === 'polite';
-      const ok = payloadOk && bannerOk && probe.formClosed;
-      record(
-        'MANUAL_ADD_FORM',
-        ok,
-        `backfill payload=${JSON.stringify(a)}; overlap warned-not-blocked (form closed=${probe.formClosed}, banner=${JSON.stringify(probe.banner)})`,
-        'main-add-form.png',
-      );
-    },
-    { overlap: true },
-  );
-
-  // ADD_FORM_PICKER — §12 R07 / §12 R15 (G9): the manual-add form's Start (#add-from) and End
-  // (#add-to) text fields each expose a calendar-icon affordance that opens the shared visual
-  // time-range picker (the REAL window.STP / timepicker.js component R15 ships), AND the picker
-  // only ever WRITES BACK into the text inputs — the typed from/to stay authoritative. This
-  // scene proves the R07 consumer contract: (a) both fields carry a picker-opening trigger;
-  // (b) clicking it opens the picker seeded from the current span (the top echo mirrors the
-  // bound inputs); (c) Apply flows the span back into #add-from/#add-to; (d) the text inputs
-  // remain present and a subsequent Save still sends the explicit fromLocal/toLocal over the
-  // `add` IPC — text entry is authoritative, never bypassed. (The drag/resize geometry +
-  // overlap painting are exercised in TIME_RANGE_PICKER; here we Apply the seeded span to
-  // assert the write-back/authoritative-Save path end to end.)
-  await withPage(browser, addFormState(), 'index.html', async (page) => {
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    // Seed an explicit same-day span so the renderer's overnight-uses-text fallback (G9) does
-    // not fire regardless of the runner's local timezone — the picker path is what we exercise.
-    await page.fill('#add-from', '2026-06-24T13:00');
-    await page.fill('#add-to', '2026-06-24T14:30');
-    // Assert each field has a picker-opening affordance, then open the REAL picker.
-    const affordances = await page.evaluate(() => ({
-      from: !!document.querySelector('#add-from-pick'),
-      to: !!document.querySelector('#add-to-pick'),
-      fromInput: !!document.querySelector('#add-from'),
-      toInput: !!document.querySelector('#add-to'),
-      hint: !!document.querySelector('#add-pickhint'),
-    }));
-    await page.click('#add-from-pick');
-    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-    await page.screenshot({ path: join(EVIDENCE, 'add-form-picker.png'), fullPage: true });
-    // (b) the picker opened seeded from the current span — its top echo mirrors the inputs.
-    const opened = await page.evaluate(() => ({
-      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
-      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    const openedOk = opened.echoStart === '2026-06-24T13:00' && opened.echoEnd === '2026-06-24T14:30';
-    // (c) Apply writes the seeded span back into the authoritative #add-from/#add-to inputs.
-    await page.click('.stp .stp-apply');
-    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-    const written = await page.evaluate(() => ({
-      fromValue: document.querySelector('#add-from')?.value,
-      toValue: document.querySelector('#add-to')?.value,
-    }));
-    const writeBackOk =
-      written.fromValue === '2026-06-24T13:00' && written.toValue === '2026-06-24T14:30';
-    // (d) Save AFTER picker use — the explicit fromLocal/toLocal must still flow over `add`.
-    await page.click('#add-go');
-    await page.waitForSelector('#add-form[hidden]', { state: 'attached' }); // submit done (form closed)
-    const probe = await page.evaluate(() => ({ added: window.__ADDED__ }));
-    const a = probe.added || {};
-    const authoritativeOk =
-      a.fromLocal === written.fromValue && a.toLocal === written.toValue; // Save sent the text values
-    const ok =
-      affordances.from &&
-      affordances.to &&
-      affordances.fromInput &&
-      affordances.toInput &&
-      openedOk &&
-      writeBackOk &&
-      authoritativeOk;
-    record(
-      'ADD_FORM_PICKER',
-      ok,
-      `affordances=${JSON.stringify(affordances)}; opened-echo=${JSON.stringify(opened)}; ` +
-        `wrote-back from=${written.fromValue} to=${written.toValue}; Save sent ${JSON.stringify({ fromLocal: a.fromLocal, toLocal: a.toLocal })} (text authoritative)`,
-      'add-form-picker.png',
-    );
-  });
-
-  // TIME_RANGE_PICKER — §12 R15 (G9): the REAL visual time-range picker (timepicker.js /
-  // window.STP), driven against the real renderer (index.html). Opens from the manual-add
-  // form's #add-from calendar icon; presents a month calendar + a single-day hour-line
-  // track with the bound text inputs echoed at the top. The edited entry is a draggable
-  // accent "me" rectangle: dragging the BODY moves start+stop together (5-min snap), and
-  // dragging the BOTTOM resize handle moves only the stop (5-min snap). Other entries paint
-  // gray; the overlapping span paints a yellow .stp-overlap (warn-only) while Apply still
-  // works. On Apply the authoritative #add-from/#add-to text inputs hold the picked LOCAL
-  // values and the popover closes. ACCENT_DISCIPLINE holds with the picker open (only the
-  // primary "Apply range" button + the "me" rectangle / selected day carry the accent).
+  // UNIFIED_FORM_ADD — §12 R07 (G5/G7): the manual-add surface is the ONE unified entry form in
+  // ADD mode, inline in the Entries view (no modal). Drive the REAL renderer end to end and assert
+  // the requirement's gating facts:
+  //   (a) opening #add-toggle reveals a two-column form — LEFT: a 3-line multiline description
+  //       textarea + client + project SELECTs + a tag chip host + the billable toggle; RIGHT: the
+  //       inline interval picker (month calendar + single-day column) over the COLLAPSED Start/Stop
+  //       expander (raw text fields), and the form carries NO type=datetime-local input (G1);
+  //   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert),
+  //       and only the "me" rectangle + Save entry carry the accent (§15);
+  //   (c) DRAGGING the picker "me" block updates the form's start/stop state LIVE (the raw #add-from
+  //       /#add-to fields change, span preserved) — before any Save (G7);
+  //   (d) clicking Save entry is the SOLE commit — window.__ADDED__ carries the picked (post-drag)
+  //       fromLocal/toLocal PLUS description/client/project/tags/billable over the single `add` IPC,
+  //       the form closes, and the overlapping backfill raises the non-blocking overlap banner (§06 R4).
+  // Fails if the form is not the unified two-column form, still carries a datetime-local, the picker
+  // does not drive form state live, or Save is not the sole commit.
   //
-  // The page is pinned to timezoneId 'UTC' so the seeded UTC otherEntries land on the same
-  // local day as the filled 2026-06-24 span, making the gray/overlap geometry deterministic.
+  // The page is pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
+  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries, making
+  // the gray/overlap geometry deterministic; overlap:true makes the post-save WriteAck carry the
+  // overlap warning the inline banner surfaces.
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
-    await page.addInitScript(initScript(JSON.stringify(pickerState()), {}));
+    await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
     await page.goto(fileUrl('index.html'));
 
+    // Wait for the initial load() so `state` (and thus the picker's snapshotEntries) is populated
+    // before the add form mounts the picker — the two seeded closed entries render as rows first.
+    await page.waitForSelector('.entry', { state: 'attached' });
+
+    // (a) open the unified add form and wait for the inline picker to mount + the client options.
     await page.click('#add-toggle');
     await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-    // single-day column for that day and the dragged "me" rectangle is 13:00–14:30.
-    await page.fill('#add-from', '2026-06-24T13:00');
-    await page.fill('#add-to', '2026-06-24T14:30');
+    await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+    await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'unified-add.png'), fullPage: true });
 
-    // Open the REAL picker from the Start field's calendar icon.
-    await page.click('#add-from-pick');
-    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-
-    // (a) the popover presents the month calendar + the single-day hour-line track, and the
-    // bound text inputs are echoed at the top.
-    const present = await page.evaluate(() => ({
-      cal: !!document.querySelector('.stp .stp-grid .stp-d'),
-      track: !!document.querySelector('.stp .stp-track'),
-      hourLines: document.querySelectorAll('.stp .stp-hour').length,
-      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
-      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
-      me: !!document.querySelector('.stp-block.me'),
-      others: document.querySelectorAll('.stp-block.other').length,
-    }));
-
-    await page.screenshot({ path: join(EVIDENCE, 'time-range-picker.png'), fullPage: true });
-
-    // Helper: read the current #add-from/#add-to values (the authoritative inputs the picker
-    // writes on Apply) and the "me" rectangle geometry.
-    const meBox = async () => page.evaluate(() => {
-      const me = document.querySelector('.stp-block.me');
-      const r = me.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
+    const layout = await page.evaluate(() => {
+      const form = document.querySelector('#add-form');
+      const q = (sel) => form?.querySelector(sel);
+      const desc = q('#add-desc');
+      const client = q('#add-client');
+      const project = q('#add-project');
+      const timesToggle = q('#add-times-toggle');
+      const timesBody = q('#add-times-body');
+      const from = q('#add-from');
+      const to = q('#add-to');
+      return {
+        visible: !!form && !form.hidden,
+        unified: !!form && form.classList.contains('unified-form') && form.dataset.mode === 'add',
+        // LEFT column.
+        descTag: desc ? desc.tagName : null,
+        descRows: desc ? Number(desc.getAttribute('rows')) : null,
+        clientTag: client ? client.tagName : null,
+        projectTag: project ? project.tagName : null,
+        hasTagChips: !!q('#add-tag-chips'),
+        hasBill: !!q('#add-bill'),
+        // RIGHT column: the inline picker (month calendar + single-day column) + the collapsed expander.
+        pickerCal: !!q('#add-picker .stp-cal .stp-grid .stp-d'),
+        pickerTrack: !!q('#add-picker .stp-track'),
+        pickerHours: q('#add-picker') ? q('#add-picker').querySelectorAll('.stp-hour').length : 0,
+        pickerMe: !!q('#add-picker .stp-block.me'),
+        expanderCollapsed: !!timesToggle && timesToggle.getAttribute('aria-expanded') === 'false' && !!timesBody && timesBody.hidden,
+        startText: from ? from.getAttribute('type') : null,
+        stopText: to ? to.getAttribute('type') : null,
+        // G1: no native datetime-local anywhere on the form.
+        noDatetimeLocal: form ? form.querySelectorAll('input[type="datetime-local"]').length === 0 : false,
+      };
     });
 
-    // (b) DRAG THE BODY DOWN by a known pixel delta → BOTH start+stop advance by the snapped
-    // 5-min amount. Geometry: the track is 720px tall for 24h → 0.5px/min → 30px/hour. A
-    // +30px body drag = +60min on both ends, snapped to 5-min. We grab the body centre and
-    // move it down 30px.
-    const before = await meBox();
-    const grabX = Math.round(before.cx);
-    const grabY = Math.round((before.top + before.bottom) / 2);
-    await page.mouse.move(grabX, grabY);
-    await page.mouse.down();
-    await page.mouse.move(grabX, grabY + 30, { steps: 6 });
-    await page.mouse.up();
-    const afterBody = await page.evaluate(() => ({
-      start: document.querySelector('.stp .stp-echo-start')?.value,
-      end: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    // +30px ≈ +60min → 14:00–15:30 (both moved together, 5-min snapped).
-    const bodyMovedTogether =
-      afterBody.start === '2026-06-24T14:00' && afterBody.end === '2026-06-24T15:30';
-
-    // (c) DRAG THE BOTTOM RESIZE HANDLE down by a known delta → only the STOP changes (5-min
-    // snapped); the start is unchanged. +15px ≈ +30min → stop 15:30 → 16:00.
-    const me2 = await meBox();
-    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
-    await page.mouse.down();
-    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 6 });
-    await page.mouse.up();
-    const afterResize = await page.evaluate(() => ({
-      start: document.querySelector('.stp .stp-echo-start')?.value,
-      end: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    const resizeMovedStopOnly =
-      afterResize.start === afterBody.start && afterResize.end === '2026-06-24T16:00';
-
-    // (d) at least one gray .stp-block.other renders, and an overlapping span paints a yellow
-    // .stp-overlap (warn-only) — the 14:00–15:00 other vs the now-14:00–16:00 me span.
-    const warn = await page.evaluate(() => ({
-      others: document.querySelectorAll('.stp-block.other').length,
-      overlaps: document.querySelectorAll('.stp-overlap').length,
-      // the overlap layer never intercepts clicks (warn-only, pointer-events: none).
-      overlapInert: [...document.querySelectorAll('.stp-overlap')].every(
-        (el) => getComputedStyle(el).pointerEvents === 'none',
-      ),
-    }));
-
-    // ACCENT_DISCIPLINE with the picker OPEN: only the primary "Apply range" button + the
-    // "me" rectangle / selected calendar day carry the accent; everything else monochrome.
-    const accentProbe = await page.evaluate(() => {
+    // (b) other entries gray + an overlapping span yellow (warn-only, inert); accent facts.
+    const paint = await page.evaluate(() => {
+      const picker = document.querySelector('#add-picker');
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
       const toRgb = (hex) => {
         const n = parseInt(hex.replace('#', ''), 16);
         return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
       };
       const accentRgb = toRgb(accent);
-      const sanctioned = (el) =>
-        el.matches('button.primary') ||
-        el.closest('button.primary') ||
-        el.closest('.stp-block.me') ||
-        el.closest('.stp-d.stp-sel') ||
-        el.closest('.entry.running') ||
-        el.closest('.timer-strip.running') ||
-        el.closest('.liveedit') ||
-        el.closest('.nav-item.active');
-      const offenders = [];
-      for (const el of document.querySelectorAll('*')) {
-        if (sanctioned(el)) continue;
-        const cs = getComputedStyle(el);
-        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
-          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
-        }
-      }
-      const applyAccent =
-        getComputedStyle(document.querySelector('.stp .stp-apply')).backgroundColor === accentRgb;
-      const meAccent =
-        getComputedStyle(document.querySelector('.stp-block.me')).backgroundColor === accentRgb;
-      return { offenders, applyAccent, meAccent };
+      const overlaps = [...picker.querySelectorAll('.stp-overlap')];
+      return {
+        others: picker.querySelectorAll('.stp-block.other').length,
+        overlaps: overlaps.length,
+        overlapInert: overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
+        meAccent: getComputedStyle(picker.querySelector('.stp-block.me')).backgroundColor === accentRgb,
+        saveAccent: getComputedStyle(document.querySelector('#add-go')).backgroundColor === accentRgb,
+      };
     });
 
-    // (e) Apply → the authoritative #add-from/#add-to text inputs hold the picked LOCAL
-    // values and the popover closes.
-    await page.click('.stp .stp-apply');
-    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-    const applied = await page.evaluate(() => ({
+    // (c) DRAG the "me" body up ~60px → both start+stop move together, 5-min snapped, LIVE into the
+    // raw #add-from/#add-to fields (the form's start/stop state) — before any Save (G7).
+    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+    const seed = await page.evaluate(() => ({
       from: document.querySelector('#add-from')?.value,
       to: document.querySelector('#add-to')?.value,
-      popoverGone: !document.querySelector('.stp-backdrop'),
     }));
-    const appliedOk =
-      applied.from === '2026-06-24T14:00' && applied.to === '2026-06-24T16:00' && applied.popoverGone;
+    const meBox = await page.evaluate(() => {
+      const me = document.querySelector('#add-picker .stp-block.me');
+      const r = me.getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
+    await page.mouse.up();
+    const dragged = await page.evaluate(() => ({
+      from: document.querySelector('#add-from')?.value,
+      to: document.querySelector('#add-to')?.value,
+    }));
+    const liveUpdate =
+      dragged.from !== seed.from &&
+      dragged.to !== seed.to &&
+      spanMin(dragged.from, dragged.to) === spanMin(seed.from, seed.to); // body drag moves both together
 
+    // (d) fill the attribute fields, then Save entry (the SOLE commit).
+    await page.fill('#add-desc', 'design review');
+    await page.selectOption('#add-client', { label: 'Acme' });
+    await page.waitForSelector('#add-project:not([disabled]) option[value="11"]', { state: 'attached' });
+    await page.selectOption('#add-project', { label: 'API' });
+    await page.click('#add-tag-input');
+    await page.fill('#add-tag-input', 'deep');
+    await page.press('#add-tag-input', 'Enter');
+    await page.click('#add-go');
+    await page.waitForFunction(() => !!window.__ADDED__);
+    await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
+    await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' }).catch(() => {});
+    const commit = await page.evaluate(() => {
+      const banner = document.querySelector('#overlap-banner');
+      return {
+        added: window.__ADDED__,
+        formClosed: !!document.querySelector('#add-form')?.hidden,
+        bannerVisible: !!banner && !banner.hidden,
+        bannerText: banner ? banner.textContent.trim() : '',
+      };
+    });
+    const a = commit.added || {};
+    const savePatch =
+      a.fromLocal === dragged.from && // Save sent the LIVE picker-driven span (not the seed, not a re-typed value)
+      a.toLocal === dragged.to &&
+      a.description === 'design review' &&
+      a.client === 'Acme' &&
+      a.project === 'API' &&
+      Array.isArray(a.tags) &&
+      a.tags.includes('deep') &&
+      a.billable === true;
+
+    const layoutOk =
+      layout.visible &&
+      layout.unified &&
+      layout.descTag === 'TEXTAREA' &&
+      layout.descRows === 3 &&
+      layout.clientTag === 'SELECT' &&
+      layout.projectTag === 'SELECT' &&
+      layout.hasTagChips &&
+      layout.hasBill &&
+      layout.pickerCal &&
+      layout.pickerTrack &&
+      layout.pickerHours > 0 &&
+      layout.pickerMe &&
+      layout.expanderCollapsed &&
+      layout.startText === 'text' &&
+      layout.stopText === 'text' &&
+      layout.noDatetimeLocal;
+    const paintOk = paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert && paint.meAccent && paint.saveAccent;
     const ok =
-      present.cal &&
-      present.track &&
-      present.hourLines > 0 &&
-      present.echoStart === '2026-06-24T13:00' &&
-      present.echoEnd === '2026-06-24T14:30' &&
-      present.me &&
-      bodyMovedTogether &&
-      resizeMovedStopOnly &&
-      warn.others >= 1 &&
-      warn.overlaps >= 1 &&
-      warn.overlapInert &&
-      accentProbe.offenders.length === 0 &&
-      accentProbe.applyAccent &&
-      accentProbe.meAccent &&
-      appliedOk;
+      layoutOk &&
+      paintOk &&
+      liveUpdate &&
+      savePatch &&
+      commit.formClosed &&
+      commit.bannerVisible &&
+      /overlap/i.test(commit.bannerText);
     record(
-      'TIME_RANGE_PICKER',
+      'UNIFIED_FORM_ADD',
       ok,
-      `present=${JSON.stringify(present)}; body-drag→${JSON.stringify(afterBody)} (moved-together=${bodyMovedTogether}); ` +
-        `resize→${JSON.stringify(afterResize)} (stop-only=${resizeMovedStopOnly}); ` +
-        `warn=${JSON.stringify(warn)}; accent offenders=[${accentProbe.offenders.join(', ') || 'none'}] ` +
-        `apply=${accentProbe.applyAccent} me=${accentProbe.meAccent}; applied=${JSON.stringify(applied)}`,
-      'time-range-picker.png',
+      `unified add form: layout=${JSON.stringify(layout)}; picker paint=${JSON.stringify(paint)}; ` +
+        `live drag seed=${JSON.stringify(seed)}→${JSON.stringify(dragged)} (live=${liveUpdate}); ` +
+        `Save sole commit added=${JSON.stringify(a)} (patchOk=${savePatch}); ` +
+        `form closed=${commit.formClosed}, overlap banner=${commit.bannerVisible} "${commit.bannerText}"`,
+      'unified-add.png',
     );
     await page.close();
   }

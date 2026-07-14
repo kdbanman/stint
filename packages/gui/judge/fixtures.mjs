@@ -696,9 +696,28 @@ export function startFormState() {
   return emptyState();
 }
 
-/** The empty-state snapshot the ADD_FORM scene drives the manual-backfill form over. */
+/**
+ * §12 R07 (G5/G7) — the UNIFIED_FORM_ADD fixture. The unified add form's inline interval picker
+ * reads the snapshot's CLOSED entries (via app.js snapshotEntries) so it can draw them gray on its
+ * day column and paint overlaps yellow (warn-only). Two closed entries on 2026-06-24, under the
+ * UNIFIED_FORM_ADD page's UTC pin so the pinned-clock default seed (22:00–23:00) lands on the same
+ * local day:
+ *   - 19:00–20:00 — well above the seeded 22:00–23:00 "me" span, a plain gray other (no overlap).
+ *   - 22:15–23:15 — overlaps the seeded span (22:15–23:00 → yellow warn band).
+ * listClients/listProjects (the CLIENTS/PROJECTS mocks) feed the form's client + project selects,
+ * so the scene can pick Acme / API; the `add` mock records the Save payload into __ADDED__.
+ */
 export function addFormState() {
-  return emptyState();
+  const closed = [
+    { id: 1, description: 'morning sync', clientLabel: 'Acme / API', startUtc: '2026-06-24T19:00:00Z', endUtc: '2026-06-24T20:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+    { id: 2, description: 'client call', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T22:15:00Z', endUtc: '2026-06-24T23:15:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+  ];
+  return {
+    status: { running: false, entry: null },
+    days: [{ day: '2026-06-24', entries: closed }],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
 }
 
 /**

@@ -106,40 +106,56 @@ describe('renderer static contract', () => {
     expect(app).not.toMatch(/\$\('switch'\)/);
   });
 
-  it('the Add (backfill) form exposes explicit from/to + attributes and calls add over IPC (§05 R5)', () => {
+  it('the unified entry form (add mode) mounts the inline picker + expander and Saves over add IPC (§12 R07)', () => {
     const html = read('index.html');
-    // The collapsed backfill form and its fields are present — explicit from/to are the
-    // defining shape of a backfill (a completed entry, not a running one)…
-    expect(html).toMatch(/id="add-form"/);
-    for (const id of ['add-desc', 'add-client', 'add-project', 'add-from', 'add-to', 'add-bill', 'add-tags']) {
+    // §12 R07 (G5): the manual-add surface is the ONE unified entry form in ADD mode — a
+    // two-column card (not a modal), the same shell edit mode uses.
+    expect(html).toMatch(/id="add-form"[^>]*class="unified-form"/);
+    expect(html).toMatch(/id="add-form"[^>]*data-mode="add"/);
+    // LEFT column: a 3-line scrollable multiline description textarea (§05 R10), client + project
+    // SELECTS (populated from the same source tt uses), a tag chip host, and the billable toggle.
+    expect(html).toMatch(/<textarea id="add-desc"[^>]*class="desc-field"[^>]*rows="3"/);
+    expect(html).toMatch(/<select id="add-client"/);
+    expect(html).toMatch(/<select id="add-project"[^>]*disabled/);
+    expect(html).toMatch(/id="add-tag-chips"/);
+    expect(html).toMatch(/id="add-bill"[^>]*type="checkbox"/);
+    // RIGHT column: the inline interval-picker MOUNT (§12 R15) over the COLLAPSED Start/Stop
+    // expander (§12 R17) — a disclosure toggle over the raw exact-time text fields.
+    expect(html).toMatch(/id="add-picker"/);
+    expect(html).toMatch(/id="add-times-toggle"[^>]*aria-expanded="false"/);
+    expect(html).toMatch(/id="add-times-body"[^>]*hidden/);
+    for (const id of ['add-from', 'add-to']) {
       expect(html, `index.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
     }
-    expect(html).toMatch(/id="add-from"[^>]*type="datetime-local"/);
-    expect(html).toMatch(/id="add-to"[^>]*type="datetime-local"/);
-    // §05 R05 / §12 R15 (G9): each from/to field also offers a calendar-icon trigger that
-    // opens the shared visual time-range picker — tied to its field via aria-controls and
-    // an aria-label, carrying the neutral .range-pick-btn background (§15 R-clickability).
-    // Text entry stays authoritative; this only adds the picker affordance.
-    expect(html).toMatch(
-      /id="add-from-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-from"[\s\S]*?aria-label="[^"]+"/,
-    );
-    expect(html).toMatch(
-      /id="add-to-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-to"[\s\S]*?aria-label="[^"]+"/,
-    );
-    // …and app.js sends a payload carrying fromLocal/toLocal over window.stint.add
-    // (catching a regression that drops the from/to or never reaches core's add). The
-    // picker write-back lands in the SAME fields, so the IPC payload shape is unchanged.
+    // §12 (G1): NO native datetime-local anywhere on the add-time surface — the picker + the
+    // raw text expander are the only entry-time inputs; the Start/Stop fields are plain text.
+    expect(html).not.toMatch(/id="add-from"[^>]*type="datetime-local"/);
+    expect(html).not.toMatch(/id="add-to"[^>]*type="datetime-local"/);
+    expect(html).toMatch(/id="add-from"[^>]*type="text"/);
+    expect(html).toMatch(/id="add-to"[^>]*type="text"/);
+    // …and the retired standalone picker-modal triggers are gone from the add form (G1).
+    expect(html).not.toMatch(/id="add-from-pick"/);
+    expect(html).not.toMatch(/id="add-to-pick"/);
+
     const app = read('app.js');
+    // Save entry is the SOLE commit: app.js sends a payload carrying fromLocal/toLocal (derived
+    // from the picker/expander form state) over window.stint.add — catching a regression that
+    // drops the from/to or never reaches core's add.
     expect(app).toMatch(/window\.stint\.add\(payload\)/);
-    expect(app).toMatch(/fromLocal:/);
-    expect(app).toMatch(/toLocal:/);
+    expect(app).toMatch(/fromLocal:\s*\$\('add-from'\)\.value/);
+    expect(app).toMatch(/toLocal:\s*\$\('add-to'\)\.value/);
+    // The client/project selects are populated from the same source tt uses.
     expect(app).toMatch(/window\.stint\.listClients\(\)/);
-    // The trigger opens the shared picker (the §12 R15 component, window.STP) bound to the
-    // two add inputs and writes the chosen start/stop back into #add-from/#add-to — it does
-    // not author a second picker.
-    expect(app).toMatch(/add-from-pick'\)\.addEventListener/);
-    expect(app).toMatch(/add-to-pick'\)\.addEventListener/);
-    expect(app).toMatch(/window\.STP\.open\(/);
+    expect(app).toMatch(/window\.stint\.listProjects\(/);
+    // The inline picker (§12 R15's window.STP.openInline) is mounted into #add-picker, seeded from
+    // and writing back the raw Start/Stop fields LIVE — the add form is the consumer, not the owner.
+    expect(app).toMatch(/window\.STP\.openInline\(/);
+    expect(app).toMatch(/\$\('add-picker'\)/);
+    expect(app).toMatch(/startInput:\s*\$\('add-from'\)/);
+    expect(app).toMatch(/endInput:\s*\$\('add-to'\)/);
+    // The obsolete modal-picker wiring (openAddRangePicker + the pick-button listeners) is gone.
+    expect(app).not.toMatch(/openAddRangePicker/);
+    expect(app).not.toMatch(/add-from-pick'\)\.addEventListener/);
   });
 
   it('the popover hosts no dedicated Switch affordance — Stop/Start toggle + Open only (§12 R01)', () => {

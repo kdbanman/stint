@@ -128,34 +128,49 @@ converting local time to UTC through the same core path the CLI uses.
 > parity matrix. This runbook confirms the real app lands the entry in the right day
 > group with the right duration and surfaces the overlap warning.
 
-## CHECK MANUAL ADD FORM (GUI) — full-attribute backfill at parity, overlap warned-not-blocked (§12 R7, §06 R4)
+## CHECK MANUAL ADD FORM (GUI) — the unified entry form (add mode): drag-to-set span, Save as the sole commit, overlap warned-not-blocked (§12 R7, §12 R15/R17, §06 R4)
 
-The §12 R7 Manual-add form must create a *complete* past entry from the form alone —
-every field `tt add` accepts — and treat an overlapping span as warned, not blocked.
+The §12 R7 manual-add surface is the **one unified entry form in ADD mode** — the same
+two-column form edit mode uses. A human must be able to backfill a *complete* past entry
+**with the terminal closed throughout**: drag the inline picker to set the span (the
+Start/Stop values update live), fill the attributes, and click **Save entry** as the
+*only* commit; an overlapping span is warned inline, not blocked.
 
-1. In a real desktop session, open the main window, click **Add entry**, and create a
-   past entry **entirely from the form**: a description, a **client** *and* **project**,
-   one or more **tags**, the **Billable** toggle set, and an explicit **From**/**To** in
-   the past (e.g. 13:00 → 14:30 local). Click **Save entry**.
-   - [ ] The form closes and the entry appears in the correct day group, with its
-         client/project label, tag chips, billable state, and a duration matching the
-         from/to range — all set from the form, no follow-up edit needed.
-   - [ ] `tt list --all` (and `tt report`) show the identical entry — same
-         client/project, tags, billable, and span. The GUI add and `tt add` are the same
-         core write (parity: the `add` IPC channel ↔ `tt add`).
-2. Open the form again and add another entry whose **From**/**To** **overlaps** the one
-   you just created (e.g. 14:00 → 15:00).
-   - [ ] The entry **still saves** (the form closes) — overlap is *not* a block.
-   - [ ] The non-blocking overlap banner appears inline above the list (the same
-         allowed-but-flagged advisory the edit/start paths raise), and both overlapping
-         rows carry the `overlap` flag in the list and in a report covering the day.
+1. In a real desktop session, open the main window and click **Add entry manually** in the
+   Entries toolbar. The **two-column unified form** appears inline (no modal): on the LEFT a
+   multiline **description** field, **client** and **project** selects, a **tag** chip input,
+   and the **Billable** toggle; on the RIGHT the **inline interval picker** (a month calendar
+   + a single-day column) over a collapsed **Start / Stop (exact times)** expander.
+   - [ ] The form is inline in the window (no separate dialog/modal), and there is **no
+         native date-time popover** anywhere on it.
+2. **Drag the picker** to set the span: drag the accent block's **body** to move the whole
+   span, and its **bottom edge** to set the stop (5-minute snap). Then fill a **description**,
+   pick a **client** *and* **project**, add one or more **tags**, and set **Billable**.
+   - [ ] As you drag, the **Start/Stop values update live** (expand the Start/Stop expander
+         to watch them change) — the picker drives the form state; you never opened a second
+         dialog to pick the time.
+3. Click **Save entry** — the *only* commit.
+   - [ ] The form closes and the completed entry appears on the **entries calendar** in the
+         right day, with its client/project label, tag chips, billable state, and a duration
+         matching the dragged span — all from the one form, no follow-up edit needed.
+   - [ ] `tt list --all` (and `tt report`) show the identical entry — same client/project,
+         tags, billable, and span. The GUI add and `tt add` are the same core write (parity:
+         the `add` IPC channel ↔ `tt add`).
+4. Open the form again and set a span that **overlaps** the entry you just created (e.g. drag
+   the block over it). Save.
+   - [ ] The entry **still saves** (the form closes) — overlap is *not* a block; the picker
+         paints the overlap as a **yellow warn band** while the drag proceeds.
+   - [ ] The non-blocking overlap banner appears inline above the calendar (the same
+         allowed-but-flagged advisory the edit/start paths raise), and both overlapping rows
+         carry the `overlap` flag in a report covering the day.
 
 > The warned-not-blocked behaviour is proven surface-neutrally over core+tt by the BDD
 > "Attribute-bearing backfill that overlaps is warned, not blocked" scenario; the GUI
-> form's full field set + the inline overlap banner are screenshotted under JUDGE
-> (`MANUAL_ADD_FORM`, `main-add-form.png`) and bound back to `tt add` by the parity
-> matrix. This runbook confirms the real window lands the full-attribute entry day-grouped
-> at parity with `tt add` and that an overlapping span is warned inline but still saved.
+> unified form (add mode) — its two-column field set, the inline picker driving the span
+> live, Save as the sole commit, and the inline overlap banner — is screenshotted under
+> JUDGE (`UNIFIED_FORM_ADD`, `unified-add.png`) and bound back to `tt add` by the parity
+> matrix. This runbook confirms a human can land the full-attribute entry from the one form,
+> terminal closed, at parity with `tt add`, and that an overlapping span is warned but saved.
 
 ## CHECK UNIFIED ENTRY FORM — EDIT, SPLIT & DELETE (GUI) (§12 R06)
 

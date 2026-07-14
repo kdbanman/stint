@@ -34,8 +34,11 @@ Feature: Every capability reachable by hand
     And the open entry is for "Acme / Billing"
 
   Scenario: Backfill a completed past entry by hand (the Manual-add form)
-    # §12 R7 — the Manual-add form creates a completed past entry from explicit from/to plus
-    # attributes, with no terminal. GUI: #add-form → `add` IPC → core store.add; tt: `tt add`.
+    # §12 R07 — the unified entry form in ADD mode creates a completed past entry from an explicit
+    # span plus attributes, with no terminal. GUI: the two-column unified form (inline interval
+    # picker + collapsed Start/Stop expander drive the span; "Save entry" is the sole commit) →
+    # `add` IPC → core store.add; tt: `tt add`. This surface-neutral scenario runs twice (core
+    # store.add + tt add) and fails if the `add` capability the form's Save commits regresses.
     When I backfill an entry "design review" for "Acme" / "Billing" from 13:00 to 14:00
     Then the backfill succeeds
     And the entry "design review" is for "Acme / Billing"

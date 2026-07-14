@@ -39,6 +39,7 @@ import {
   emptyState,
   runningState,
   multilineDescState,
+  addFormState,
   listState,
   timerViewRunningState,
   timerViewFavoritesState,
@@ -727,87 +728,80 @@ const RECIPES = {
     },
   },
 
-  // §12 R07 (core entry, G9) — the GUI MANUAL-ADD form now drives the visual range picker
-  // (§12 R15) end to end, and the recording shows the FOUR R07-specific beats the requirement
-  // gates: (1) the picker OPENS from the add form's calendar trigger; (2) DRAG-to-set start +
-  // stop on the single-day column (drag body = move start, drag bottom = resize end, 5-min
-  // snap) with other entries painting gray and the overlap region yellow (warn-only); (3) the
-  // picked start/stop WRITE BACK into the authoritative #add-from/#add-to text fields; (4) a
-  // manual TEXT-OVERRIDE of one field afterward — proving text stays authoritative over the
-  // picker — and then the entry SAVES via the SAME unchanged add path (fromLocal/toLocal →
-  // window.stint.add), the new completed backfill row appears in the Entries list, and — because
-  // the chosen span overlaps the seeded 14:00–15:00 'market research' entry — the non-blocking
-  // overlap banner paints (§06 R4: warned, not blocked).
+  // §12 R07 (core entry, G5/G7) — the GUI MANUAL-ADD surface is the ONE unified entry form in ADD
+  // mode, and the recording shows the R07 beats the requirement gates: (1) opening "Add entry
+  // manually" reveals the two-column unified form (left: multiline description + client/project +
+  // tags + billable; right: the inline interval picker over the collapsed Start/Stop expander);
+  // (2) DRAGGING the picker "me" block sets the span and the raw Start/Stop fields update LIVE
+  // (the picker drives the form state, G7) with other entries gray and the overlap band yellow
+  // (warn-only); (3) clicking "Save entry" is the SOLE commit — the entry saves over the same
+  // `add` path (fromLocal/toLocal → window.stint.add), the new completed backfill row appears in
+  // the Entries list, and — because the span overlaps a seeded entry — the non-blocking overlap
+  // banner paints (§06 R4: warned, not blocked).
   //
-  // This is the manual-add twin of the §05 R05 picker scene (same shared component, same
-  // fromLocal/toLocal submit path, same pinned-UTC pickerState so the seeded other-entries land
-  // on the filled 2026-06-24 day). The differences are R07-specific: it (a) sets initOpts
-  // overlap:true so the post-save WriteAck carries an overlap warning and the inline overlap
-  // banner is exercised on camera, and (b) adds the explicit TEXT-OVERRIDE keystroke after the
-  // write-back to demonstrate the durability contract ("Text stays authoritative") the add
-  // form's pickhint states. As in §05 R05, a scoped window.stint.add override splices a completed
-  // row for the chosen span into the injected snapshot so the saved entry SHOWS on the repaint,
-  // and returns the shared window.__ACK__ (now overlap-carrying) so applyAck() raises the banner;
-  // the override is set via page.evaluate on THIS page only — no shared fixture or JUDGE scene is
-  // touched, and the renderer's unchanged submit path stays the single source of truth.
+  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
+  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries,
+  // making the gray/overlap geometry deterministic; initOpts overlap:true makes the post-save
+  // WriteAck carry the overlap warning the inline banner surfaces on camera. As before, a scoped
+  // window.stint.add override splices the saved row into the injected snapshot so it SHOWS on the
+  // repaint, and returns the shared (overlap-carrying) __ACK__ so applyAck() raises the banner;
+  // the override is set on THIS page only — no shared fixture or JUDGE scene is touched, and the
+  // renderer's unchanged submit path stays the single source of truth.
   '§12 R07': {
     page: 'index.html',
-    state: pickerState,
+    state: addFormState,
     initOpts: { overlap: true },
-    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Open the Add-entry disclosure in the Entries view (the default, GUI core-entry surface).
+      // Wait for the initial load() so `state` (and the picker's snapshotEntries) is populated.
+      await page.waitForSelector('.entry', { state: 'attached' });
+      // (1) Open the unified add form; wait for the inline picker to mount and the client options.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-      // single-day column for that day and the "me" rectangle is 13:00–14:30; the attributes make
-      // the saved backfill row legible in the list.
-      await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-client', 'Globex');
-      await page.fill('#add-project', 'Billing');
-      await page.fill('#add-tags', 'admin');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 600);
-
-      // (1) PICKER OPENS FROM THE ADD FORM — click the Start field's calendar-icon trigger.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
-
-      // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
-          const r = me.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        });
-
-      // (2a) DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible on camera.
-      const before = await meBox();
-      const grabX = Math.round(before.cx);
-      const grabY = Math.round((before.top + before.bottom) / 2);
-      await page.mouse.move(grabX, grabY);
-      await page.mouse.down();
-      await page.mouse.move(grabX, grabY + 30, { steps: 20 });
-      await page.mouse.up();
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+      await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
       await wait(page, 700);
 
-      // (2b) DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 other entry.
-      const me2 = await meBox();
+      // Fill the LEFT-column attributes so the saved backfill row is legible in the list.
+      await page.fill('#add-desc', 'invoice prep');
+      await page.selectOption('#add-client', { label: 'Globex' });
+      await page.waitForSelector('#add-project:not([disabled]) option[value="21"]', { state: 'attached' });
+      await page.selectOption('#add-project', { label: 'Onboarding' });
+      await page.click('#add-tag-input');
+      await page.fill('#add-tag-input', 'admin');
+      await page.press('#add-tag-input', 'Enter');
+      await wait(page, 700);
+
+      // (2) DRAG the "me" body up so the span moves earlier and the raw Start/Stop fields update
+      // LIVE — the picker drives the form state (G7). Slow, stepped move so the change is legible.
+      const meBox = () =>
+        page.evaluate(() => {
+          const me = document.querySelector('#add-picker .stp-block.me');
+          const r = me.getBoundingClientRect();
+          return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+        });
+      const before = await meBox();
+      await page.mouse.move(Math.round(before.cx), Math.round(before.cy));
+      await page.mouse.down();
+      await page.mouse.move(Math.round(before.cx), Math.round(before.cy - 40), { steps: 20 });
+      await page.mouse.up();
+      await wait(page, 900);
+
+      // Extend the stop via the bottom resize grip so the span overlaps a seeded entry — the yellow
+      // warn band shows the overlap is warned, not blocked.
+      const me2 = await page.evaluate(() => {
+        const me = document.querySelector('#add-picker .stp-block.me');
+        const r = me.getBoundingClientRect();
+        return { cx: r.left + r.width / 2, bottom: r.bottom };
+      });
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
       await page.mouse.down();
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 16 });
+      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 20), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring: other entries paint gray, the overlap region paints
-      // yellow (warn-only) while Apply still works — the overlap is warned, not blocked.
       await wait(page, 1200);
 
       // Scope a local add override so the saved backfill SHOWS in the list on repaint, and return
-      // the shared (overlap-carrying) __ACK__ so applyAck() raises the inline overlap banner —
-      // mirrors §05 R05's override, with the overlap ack exercising §06 R4 on the manual-add path.
+      // the shared (overlap-carrying) __ACK__ so applyAck() raises the inline overlap banner.
       await page.evaluate(() => {
         window.stint.add = (p) => {
           window.__ADDED__ = p;
@@ -824,10 +818,8 @@ const RECIPES = {
             endUtc: toUtc,
             billableSeconds: sec,
             billable: p.billable !== false,
-            // The chosen span overlaps the seeded 14:00–15:00 entry → flag the durable per-row
-            // overlap badge too, so the saved row carries the same warned-not-blocked signal.
             overlapped: true,
-            overlapMinutes: 60,
+            overlapMinutes: 45,
             overlapRelation: 'overlaps',
             sleptThrough: false,
             excludedSeconds: 0,
@@ -844,29 +836,11 @@ const RECIPES = {
         };
       });
 
-      // (3) WRITE-BACK — Apply the range; the picked start/stop write back into the authoritative
-      // #add-from/#add-to text fields and the popover closes. Dwell so 14:00 / 16:00 are legible.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await page
-        .waitForFunction(() => document.querySelector('#add-to')?.value === '2026-06-24T16:00')
-        .catch(() => {});
-      await wait(page, 1000);
-
-      // (4) TEXT-OVERRIDE — type directly into the Stop field, proving TEXT STAYS AUTHORITATIVE
-      // over the picker's write-back: nudge the stop from 16:00 → 16:30 by keyboard. The submit
-      // path reads the text field, so this typed value is what saves.
-      await page.fill('#add-to', '2026-06-24T16:30');
-      await wait(page, 900);
-
-      // SAVE via the SAME add path — the unchanged submit sends the explicit (text-authoritative)
-      // fromLocal/toLocal over `add`; the form closes, the repaint paints the new completed
-      // backfill row, and applyAck() raises the non-blocking overlap banner (§06 R4).
+      // (3) SAVE — "Save entry" is the sole commit; the form closes, the repaint paints the new
+      // completed backfill row, and applyAck() raises the non-blocking overlap banner (§06 R4).
       await page.click('#add-go');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await page.waitForSelector('text=invoice prep').catch(() => {});
-      // Dwell on (a) the saved 'invoice prep' backfill row in the Entries list and (b) the
-      // non-blocking overlap banner now visible — warned, not blocked.
       await page.waitForSelector('#overlap-banner:not([hidden])').catch(() => {});
       await wait(page, 1600);
     },
