@@ -183,6 +183,26 @@ export interface World {
   split(id: number, atIso: string): { ids: [number, number] };
   merge(ids: number[], opts?: { client?: string }): { id: number; warned: boolean };
   /**
+   * §12 R10 / §05 R08 — seed a CLOSED entry that slept through: the backfilled span plus a
+   * recorded sleep span inside it, so the reversible subtract has something to exclude. Core owns
+   * the recording (store.recordSleepSpan); the CLI has no verb to record a span, so CliWorld opens
+   * a transient Store on its own db file to seed it (like the backup helpers read the db directly).
+   */
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number };
+  /**
+   * §12 R10 / §05 R08 — subtract (exclude) an entry's recorded slept time from its billable
+   * duration; calling it again RESTORES the time (core's store.subtractSleep toggles). The GUI's
+   * unified editor reversible sleep control and `tt sleep subtract <id>` are the two surfaces —
+   * both reach this one core toggle, so a subtract-then-subtract round-trips the billable duration.
+   */
+  subtractSleep(id: number): void;
+  /**
    * §12 R10 — create a client / a project under a client, the Clients view's Add-client /
    * Add-project parity twins. Surface-neutral: CoreWorld store.addClient/addProject (the
    * project's owning client ensured first); CliWorld `tt client add` / `tt project add
@@ -528,6 +548,20 @@ export class CoreWorld implements World {
     const mergeOpts = opts?.client ? { clientId: this.store.ensureClient(opts.client).id } : {};
     const r = this.store.merge(ids, mergeOpts);
     return { id: r.value.id, warned: r.warnings.length > 0 };
+  }
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number } {
+    const r = this.store.add({ description: o.desc, fromUtc: o.from, toUtc: o.to });
+    this.store.recordSleepSpan(r.value.id, o.sleepFrom, o.sleepTo, 'gap');
+    return { id: r.value.id };
+  }
+  subtractSleep(id: number): void {
+    this.store.subtractSleep(id);
   }
   addClient(name: string): void {
     this.store.ensureClient(name);
@@ -1094,6 +1128,29 @@ export class CliWorld implements World {
     const r = this.tt(args);
     const id = Number(/merged into entry (\d+)/.exec(r.out)?.[1]);
     return { id, warned: /warning/.test(r.err) };
+  }
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number } {
+    const r = this.tt(['add', o.desc, '--from', o.from, '--to', o.to]);
+    const id = Number(/added entry (\d+)/.exec(r.out)?.[1]);
+    // No CLI verb records a sleep span (sleep detection is the running app's job), so seed it by
+    // opening a transient Store on the same db file — the same direct-db access the backup helpers
+    // use — then close it before the next `tt` process runs (tt is process-per-command).
+    const store = Store.open({ path: this.db, clock: () => new Date(FIXED_NOW) });
+    try {
+      store.recordSleepSpan(id, o.sleepFrom, o.sleepTo, 'gap');
+    } finally {
+      store.close();
+    }
+    return { id };
+  }
+  subtractSleep(id: number): void {
+    this.tt(['sleep', 'subtract', String(id)]);
   }
   addClient(name: string): void {
     this.tt(['client', 'add', name]);

@@ -302,6 +302,32 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §12 R10 / §05 R08 — seed a closed entry that slept through: a backfilled span from 09:00
+    // lasting `hours`, with a recorded sleep span of `sleepHours` inside it (from 10:00). Core
+    // records the span (store.recordSleepSpan); the CLI seeds it via a transient Store on the db.
+    pattern: /^a slept entry "([^"]*)" of raw (\d+) hours? with a recorded (\d+) hours? sleep span$/,
+    run: (w, ctx, desc, hours, sleepHours) => {
+      const from = iso('09:00');
+      const sleepFrom = iso('10:00');
+      const r = w.seedSleptEntry({
+        desc,
+        from,
+        to: plusHours(from, Number(hours)),
+        sleepFrom,
+        sleepTo: plusHours(sleepFrom, Number(sleepHours)),
+      });
+      ctx.lastClosedId = r.id;
+      ctx.lastId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+  {
+    // §12 R10 / §05 R08 — exclude (or, called again, restore) an entry's recorded slept time. The
+    // same core toggle both the GUI editor's reversible control and `tt sleep subtract` reach.
+    pattern: /^I subtract the slept time from "([^"]*)"$/,
+    run: (w, _c, desc) => w.subtractSleep(byDesc(w, desc).id),
+  },
+  {
     pattern: /^I split it at (\d{1,2}:\d{2})$/,
     run: (w, ctx, at) => {
       ctx.twoIds = w.split(ctx.lastClosedId!, iso(at)).ids;

@@ -99,6 +99,19 @@ Feature: Overlap, split and merge
     And there is still an entry "scratch"
     And there are exactly 2 entries
 
+  Scenario: Subtracting slept time trims billable and is reversible
+    # PRD §12 R10 / §05 R08 — the unified editor's reversible sleep control: subtracting a slept
+    # entry's recorded sleep span excludes it from the billable duration (in the GUI the raw
+    # duration reads struck through beside the trimmed billable), and subtracting again restores it.
+    # Surface-neutral over core store.subtractSleep and `tt sleep subtract` (run TWICE); the
+    # struck-raw rendering + the reversible control are JUDGE evidence on the GUI editor. Regresses
+    # if subtract does not trim billable, or is not reversible, on either surface.
+    Given a slept entry "deep work" of raw 4 hours with a recorded 1 hour sleep span
+    When I subtract the slept time from "deep work"
+    Then the entry "deep work" has a billable duration of 180 minutes
+    When I subtract the slept time from "deep work"
+    Then the entry "deep work" has a billable duration of 240 minutes
+
   Scenario: Editing the running entry's start does not stop it
     # PRD §05 R6 — the open entry is editable, including its start, without closing it.
     Given I start an entry "deep work" at 09:00

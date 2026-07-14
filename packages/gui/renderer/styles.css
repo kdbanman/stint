@@ -376,18 +376,37 @@ header.mast {
 }
 .banner[hidden] { display: none; }
 
-/* §12 R9: the detailed in-context overlap banner on an affected entry row. Reuses the
-   .banner warn chrome but sits inside the row's desc cell. Monochrome --flag tokens only. */
+/* §12 R10: the detailed overlap detail inside the UNIFIED EDITOR's flags region (the readonly
+   calendar shows only the `.ov` warn band; the amount + neighbour detail reads here). Reuses the
+   .banner warn chrome, scoped to the editing entry's form. Monochrome --flag tokens only. */
 .entry .banner.overlap {
   display: block;
-  margin: 6px 0 0;
+  margin: 0;
   font-family: var(--num);
   font-size: 11px;
   letter-spacing: 0.02em;
 }
 
-/* §12 R9: the struck-through raw duration beside a slept entry's trimmed billable. The
-   trimmed value reads as the live figure; the raw one is struck in a faint gray. No accent. */
+/* §12 R10 — the unified editor's in-context flags region: the overlap detail (above) and, for a
+   slept entry, the reversible sleep subtract/restore control beside its raw-vs-trimmed duration. */
+.entry .edit-form .ef-flags {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.entry .edit-form .ef-flags[hidden] { display: none; }
+.entry .edit-form .ef-sleep { display: flex; align-items: center; gap: 10px; }
+.entry .edit-form .ef-dur {
+  font-family: var(--num);
+  font-size: 12.5px;
+  font-weight: 590;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* §12 R10: the struck-through raw duration beside a slept entry's trimmed billable, shown in the
+   editor once the slept time is subtracted. The trimmed value reads as the live figure; the raw
+   one is struck in a faint gray. No accent. */
 .struck,
 s {
   text-decoration: line-through;
@@ -842,8 +861,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
 .entry .time { font-family: var(--num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
-.entry .dur { font-family: var(--num); font-size: 12.5px; font-weight: 590; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
-.entry.running .dur { color: var(--accent); font-weight: 640; }
 .entry .nonbill { color: var(--faint); }
 
 /* §07: tag chips shown in-context on the entry row. Monochrome — the accent stays on the
@@ -2399,13 +2416,11 @@ body.popover { background: var(--canvas); margin: 0; }
 .ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .bt { display: block; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
 .ev .nonbill { color: var(--faint); }
-/* The compat readouts (duration/tag chips/worded flags/overlap banner) stay in the DOM for the
-   flag/duration JUDGE scenes but fold away visually — the calendar shows overlap as `.ov` bands
-   and sleep as the `.zz` hatch. Visually hidden, NOT display:none, so text + computed styles read. */
-.ev .cal-compat,
-.ev > .chips,
-.ev > .flags,
-.ev > .banner.overlap {
+/* §07: the entry's tag chips stay in the DOM but fold away visually on the readonly calendar — the
+   calendar is a calm at-a-glance surface, so tags (like the flag detail) read in the unified editor.
+   Overlap paints as the `.ov` band and sleep as the `.zz` hatch; the flag DETAIL + reversible
+   subtract live in the editor (§12 R10), not on the event. Visually hidden, NOT display:none. */
+.ev > .chips {
   position: absolute;
   width: 1px;
   height: 1px;

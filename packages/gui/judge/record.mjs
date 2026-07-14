@@ -42,6 +42,7 @@ import {
   addFormState,
   listState,
   entriesCalendarState,
+  flaggedState,
   timerViewRunningState,
   timerViewFavoritesState,
   timerViewEmptyFavoritesState,
@@ -1328,6 +1329,55 @@ const RECIPES = {
       await page.hover('.entry[data-id="7"]').catch(() => {});
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox'));
+      await wait(page, 1300);
+    },
+  },
+
+  // §12 R10 (shared shot with §06 R04) — flags in context: MARKERS on the readonly calendar, DETAIL
+  // + reversible control in the unified editor. Over a day carrying an overlap pair (10↔11, 30m)
+  // and a slept entry (12, raw 4h trimmed to 3h), the recording: shows the yellow `.ov` overlap
+  // warn band(s) + the `.zz` slept hatch on the calendar; opens the overlapped event's editor to
+  // reveal the overlap DETAIL ("Overlap: 30m with …"); then opens the slept event's editor and
+  // toggles the reversible sleep control — Restore lifts the exclusion (billable back to the raw
+  // 4h), Subtract slept re-excludes it (the raw 4h reads struck through beside the trimmed 3h).
+  '§12 R10': {
+    page: 'index.html',
+    state: flaggedState,
+    drive: async (page) => {
+      await page.waitForSelector('.dcol .ev');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Flags in context — overlap warn bands + a slept hatch on the calendar (§12 R10)'));
+      await wait(page, 1200);
+      // Open the overlapped event (10 — the larger 2h block, so the click clears the nested 11) →
+      // the editor spells out the overlap detail.
+      await page.click('.entry[data-id="10"] .bt').catch(() => {});
+      await page.waitForSelector('.entry[data-id="10"] .edit-form .ef-flags .banner.overlap');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Open the entry → the overlap detail: amount + which neighbour'));
+      await wait(page, 1300);
+      await page.click('.entry[data-id="10"] .edit-cancel');
+      await page.waitForSelector('.entry[data-id="10"] .edit-form', { state: 'detached' });
+      // Open the slept event → the reversible subtract/restore control + struck raw-vs-trimmed.
+      await page.click('.entry[data-id="12"] .bt').catch(() => {});
+      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-subtract');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Slept entry: raw 4h struck beside the trimmed 3h billable — Restore to reverse'));
+      await wait(page, 1300);
+      // Restore lifts the exclusion (billable back to raw), then Subtract re-excludes it.
+      await page.click('.entry[data-id="12"] .ef-subtract');
+      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-dur s.struck', { state: 'detached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Restore — the slept time is billable again (no strike)'));
+      await wait(page, 1200);
+      await page.click('.entry[data-id="12"] .ef-subtract');
+      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-dur s.struck');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Subtract slept — reversible: the raw duration is struck once more'));
       await wait(page, 1300);
     },
   },

@@ -905,47 +905,12 @@ async function main() {
     );
   });
 
-  // FLAG_IN_CONTEXT — overlap + slept flags on the affected rows, subtract present, plus the
-  // §12 R9 detailed overlap banner ("Overlap: Nm with previous/next entry") on the overlapped
-  // row and the struck-through raw duration beside the trimmed billable on the slept row
-  // (§12 R4, §12 R9, §10 R5).
-  await withPage(browser, flaggedState(), 'index.html', async (page) => {
-    await page.screenshot({ path: join(EVIDENCE, 'main-flags.png'), fullPage: true });
-    const probe = await page.evaluate(() => {
-      const overlapRow = document.querySelector('.entry[data-id="11"]');
-      const sleptRow = document.querySelector('.entry[data-id="12"]');
-      const struck = sleptRow?.querySelector('.dur s.struck');
-      const struckLineThrough = struck
-        ? getComputedStyle(struck).textDecorationLine.includes('line-through')
-        : false;
-      return {
-        overlapFlag: !!overlapRow?.querySelector('.flag'),
-        sleptFlag: !!sleptRow?.querySelector('.flag'),
-        subtractBtn: !!sleptRow && /Subtract|Restore/.test(sleptRow.textContent),
-        // §12 R9: the detailed overlap banner spells out the amount + which neighbour.
-        overlapBannerText: overlapRow?.querySelector('.banner.overlap')?.textContent?.trim() ?? '',
-        // §12 R9: the slept-trimmed row strikes the raw duration beside the trimmed billable.
-        struckText: struck?.textContent?.trim() ?? '',
-        struckLineThrough,
-        durText: sleptRow?.querySelector('.dur')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-      };
-    });
-    const bannerOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(probe.overlapBannerText);
-    // The trimmed billable (3h, 03:00:00) reads as the live duration, the raw 4h (04:00:00)
-    // struck through beside it — so the cut time is visible, not silently dropped.
-    const strikeOk =
-      probe.struckLineThrough &&
-      /04:00:00/.test(probe.struckText) &&
-      /03:00:00/.test(probe.durText);
-    const ok =
-      probe.overlapFlag && probe.sleptFlag && probe.subtractBtn && bannerOk && strikeOk;
-    record(
-      'FLAG_IN_CONTEXT',
-      ok,
-      `overlap flag + detailed banner (${JSON.stringify(probe.overlapBannerText)}) on row, slept flag + subtract + struck raw duration beside trimmed billable on slept row: ${JSON.stringify(probe)}`,
-      'main-flags.png',
-    );
-  });
+  // §12 R10: the flags-in-context scene is retired — the entries list is gone, so flags no longer
+  // live on a row. Overlap + slept now render as MARKERS on the readonly calendar (the `.ov` warn
+  // band w/ amount + the `.zz` hatch w/ the moon marker — asserted by CALENDAR_LAYOUT) and their
+  // DETAIL + the reversible subtract/restore control live in the unified editor (the overlap
+  // detail + Subtract/Restore + struck raw-vs-trimmed billable — asserted by UNIFIED_FORM). No
+  // main-flags.png; the successor evidence is main-calendar.png + main-edit.png.
 
   // START_ATTRIBUTES — the main window's Start offers an optional inline form
   // (description/client/project/tags/billable); the primary Start stays one-tap and the
@@ -1331,6 +1296,59 @@ async function main() {
       calls: window.__REMOVE_CALLS__ || [],
     }));
 
+    // §12 R10 — the flags surface IN THE EDITOR (the list is gone; the calendar shows only the
+    // markers). Open the OVERLAPPED entry (81): the flags region spells out the overlap detail
+    // (amount + which neighbour). Then open the SLEPT entry (82): its reversible Subtract/Restore
+    // control is present, and after subtracting the raw duration reads struck (04:00:00) beside the
+    // trimmed billable (03:00:00); subtracting again restores it (the struck raw disappears).
+    // The delete above removed entry 80 + reloaded; wait for that repaint before opening 81/82.
+    await page.waitForSelector('.entry[data-id="80"]', { state: 'detached' }).catch(() => {});
+    await page.waitForSelector('.entry[data-id="81"] .time', { state: 'attached' });
+    await page.click('.entry[data-id="81"] .time');
+    await page.waitForSelector('.entry[data-id="81"] .edit-form .ef-flags .banner.overlap', { state: 'attached' });
+    const overlapDetail = await page.evaluate(
+      () => document.querySelector('.entry[data-id="81"] .edit-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
+    );
+    await page.click('.entry[data-id="81"] .edit-cancel');
+    await page.waitForSelector('.entry[data-id="81"] .edit-form', { state: 'detached' });
+
+    await page.click('.entry[data-id="82"] .time');
+    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-subtract', { state: 'attached' });
+    const sleptBefore = await page.evaluate(() => {
+      const form = document.querySelector('.entry[data-id="82"] .edit-form');
+      return {
+        subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
+        struckBefore: !!form?.querySelector('.ef-dur s.struck'),
+      };
+    });
+    await page.click('.entry[data-id="82"] .ef-subtract');
+    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-dur s.struck', { state: 'attached' });
+    const sleptAfter = await page.evaluate(() => {
+      const form = document.querySelector('.entry[data-id="82"] .edit-form');
+      const s = form?.querySelector('.ef-dur s.struck');
+      return {
+        subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
+        struckText: s?.textContent?.trim() ?? '',
+        struckLineThrough: s ? getComputedStyle(s).textDecorationLine.includes('line-through') : false,
+        durText: form?.querySelector('.ef-dur')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      };
+    });
+    // Reversible: subtracting again restores — the struck raw duration goes away.
+    await page.click('.entry[data-id="82"] .ef-subtract');
+    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-dur s.struck', { state: 'detached' });
+    const sleptRestored = await page.evaluate(
+      () => !document.querySelector('.entry[data-id="82"] .edit-form .ef-dur s.struck'),
+    );
+    const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
+    const sleptOk =
+      /Subtract/i.test(sleptBefore.subtractLabel) &&
+      !sleptBefore.struckBefore &&
+      sleptAfter.struckLineThrough &&
+      /04:00:00/.test(sleptAfter.struckText) &&
+      /03:00:00/.test(sleptAfter.durText) &&
+      /Restore/i.test(sleptAfter.subtractLabel) &&
+      sleptRestored;
+
     const seeded =
       probe.inContext &&
       probe.noBackdrop &&
@@ -1360,13 +1378,16 @@ async function main() {
       removed.removed &&
       removed.calls.length === 1 &&
       removed.calls[0].id === 80;
-    const ok = clickOpens && seeded && footer && savePatch && deleteGate;
+    const ok = clickOpens && seeded && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
     record(
       'UNIFIED_FORM',
       ok,
-      `unified entry form (edit mode) inline, seeded, footer Split + two-step Delete, save patch: ` +
+      `unified entry form (edit mode) inline, seeded, footer Split + two-step Delete, save patch, ` +
+        `§12 R10 flags (overlap detail + reversible subtract): ` +
         `clickOpens=${clickOpens} probe=${JSON.stringify(probe)} edited=${JSON.stringify(edited)} ` +
-        `armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)}`,
+        `armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
+        `overlapDetail=${JSON.stringify(overlapDetail)} sleptBefore=${JSON.stringify(sleptBefore)} ` +
+        `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored}`,
       'main-edit.png',
     );
   });
@@ -2185,7 +2206,11 @@ async function main() {
           weekTotal: document.querySelector('#week-total')?.textContent?.trim() ?? null,
           emptyCols,
           overlapBands: document.querySelectorAll('.dcol .ov').length,
+          // §12 R10: the overlap warn band carries its amount ("overlap Nm") and the slept hatch
+          // carries the moon marker over the affected event.
+          overlapTag: document.querySelector('.dcol .ov .otag')?.textContent?.trim() ?? '',
           sleptHatch: document.querySelectorAll('.dcol .ev .zz').length,
+          sleptMoon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
           runPresent: !!runEv,
           runFade: /gradient/.test(runBg),
           // The running/open block shows only a START time — no end (no full HH:MM–HH:MM range).
@@ -2247,7 +2272,13 @@ async function main() {
       structure.dayTotals['24'] === '1.00h' &&
       structure.weekTotal === '9.25h';
     const emptyOk = structure.emptyCols >= 1;
-    const flagsOk = structure.overlapBands >= 1 && structure.sleptHatch >= 1;
+    // §12 R10: the overlapped event paints a `.ov` warn band whose `.otag` reads "overlap Nm", and
+    // the slept event paints a `.zz` hatch carrying the `#i-moon` marker over its excluded portion.
+    const flagsOk =
+      structure.overlapBands >= 1 &&
+      /overlap\s*\d+m/.test(structure.overlapTag) &&
+      structure.sleptHatch >= 1 &&
+      structure.sleptMoon;
     const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
     const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
     const ok =
@@ -2855,7 +2886,7 @@ async function main() {
   record(
     'DESKTOP_FEEL',
     null,
-    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
+    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
     'main-running.png',
   );
 
