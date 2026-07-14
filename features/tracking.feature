@@ -80,6 +80,19 @@ Feature: Tracking and backfill
     And the entry "spec review" has a billable duration of 90 minutes
     And both entries are flagged overlapped in a report covering the day
 
+  # PRD §12 R15 — the inline interval picker's 5-minute-snap CONTRACT: every value the picker writes
+  # back to the form is aligned to the 5-minute grid, and both surfaces store that picked span
+  # VERBATIM — no extra rounding, no drift. Runs TWICE (CoreWorld.backfill = store.add,
+  # CliWorld.backfill = `tt add --from --to`), so the values the picker guarantees are honoured
+  # identically by core and tt. The exact end (10:45) plus the exact billable duration (90 minutes)
+  # pin the stored span to 09:15–10:45 to the minute. Fails if a 5-minute-aligned span is rounded,
+  # shifted, or dropped on save on either surface.
+  Scenario: A 5-minute-aligned backfill span is stored exactly
+    When I backfill an entry "planning" from 09:15 to 10:45
+    Then exactly zero entries are open
+    And the entry "planning" is closed with end 10:45
+    And the entry "planning" has a billable duration of 90 minutes
+
   # PRD §05 R06 — the running entry is editable (even its start) and its end does not exist
   # until it is stopped: editing the open row never closes it and never synthesizes an end
   # instant. Runs TWICE (CoreWorld store.edit + CliWorld `tt edit`), proving the amend-start

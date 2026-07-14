@@ -765,8 +765,7 @@ button[hidden] { display: none; }
 .set-update-btn,
 .fav-pin,
 .fav-card .resume,
-.fav-kebab,
-.stp-cancel {
+.fav-kebab {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
@@ -780,8 +779,7 @@ button[hidden] { display: none; }
 .set-update-btn:hover,
 .fav-pin:hover,
 .fav-card .resume:hover,
-.fav-kebab:hover,
-.stp-cancel:hover { background: var(--hover); }
+.fav-kebab:hover { background: var(--hover); }
 
 /* §12 R14: the keyboard-operability focus pass. Every control is reachable by Tab AND shows
    a visible focus ring under keyboard focus. The ring is scoped to :focus-visible so a mouse
@@ -1740,72 +1738,31 @@ button.danger:hover { background: var(--danger-weak); }
 .editor.conflict-prompt .agree .val { margin-left: auto; font-size: 12px; color: var(--muted); }
 
 /* ====================================================================== */
-/* §12 R15 (G9): the visual time-range picker (timepicker.js / window.STP). */
-/* A MODAL popover (the ladder's top rung) over the authoritative time text  */
-/* inputs: a month calendar + a single-day track where the edited entry is a */
-/* DRAGGABLE accent rectangle. Accent discipline: only the primary "Apply    */
-/* range" button (.stp-apply.primary), the dragged "me" rectangle            */
-/* (.stp-block.me), and the selected calendar day carry the accent.          */
+/* §12 R15 (G5/G7): the inline interval picker (timepicker.js / window.STP). */
+/* An IN-FLOW picker column (NO modal, no backdrop, no Apply) over the        */
+/* authoritative time text fields: a month calendar + a single-day track      */
+/* where the edited entry is a DRAGGABLE accent rectangle written back LIVE    */
+/* on every drag (Save entry is the sole commit, G7). Accent discipline: only  */
+/* the dragged "me" rectangle (.stp-block.me) and the selected calendar day    */
+/* (.stp-d.stp-sel) carry the accent — no more Apply-button accent.            */
 
-/* The inline-edit form's time fields reuse the shared .range-pick-btn trigger (defined once
-   above); the bare .range-field only adds the positioning context the picker anchors to. */
+/* The Timer-view running-start disclosure's calendar affordance keeps the shared .range-pick-btn
+   trigger (defined once above); the bare .range-field only adds the positioning context. */
 .range-field { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 
-/* The dim backdrop + centred popover, layered above the editor (z-index 60 > 50). */
-.stp-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px 16px;
-  background: color-mix(in srgb, var(--ink) 38%, transparent);
-  overflow: auto;
-}
+/* §12 R15: the picker renders only IN FLOW — every real mount carries .stp-inline (below), which
+   sets its position / border / shadow / padding. The base .stp just claims the column width; there
+   is no modal backdrop, no centred popover, no top-rung shadow, and the 24h track never clips (G16). */
 .stp {
   width: 100%;
-  max-width: 660px;
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r3);
-  box-shadow: var(--sh-modal);
-  overflow: hidden;
 }
-.stp-head {
-  padding: 16px 22px;
-  border-bottom: 1px solid var(--rule);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stp-head h2 { font-size: 15px; margin: 0; font-weight: 640; color: var(--ink); }
-.stp-head .stp-hint { font-size: 11.5px; color: var(--muted); }
-
-/* The authoritative text fields echoed at the top. */
-.stp-textfields {
-  display: flex;
-  gap: 16px;
-  align-items: flex-end;
-  padding: 16px 22px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--wash);
-}
-.stp-tf { flex: 1; display: flex; flex-direction: column; gap: 5px; }
-.stp-tf span { font-size: 11px; color: var(--muted); }
-.stp-tf input {
-  width: 100%;
-  font-family: var(--num);
-  font-size: 13px;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 10px;
-  background: var(--paper);
-  color: var(--ink);
-}
-.stp-authnote { flex: none; max-width: 160px; font-size: 11px; color: var(--muted); line-height: 1.35; padding-bottom: 6px; }
 
 .stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
+
+/* §12 R06/R15: the inline interval picker mounted inside the unified edit form. The single-column
+   edit form gives the picker its full width; the row is a plain block (not the flex .edit-row). */
+.entry .edit-form .edit-picker-row { display: block; }
+.entry .edit-form .edit-picker { width: 100%; }
 
 /* month calendar */
 .stp-cal { border-right: 1px solid var(--rule); padding: 18px; }
@@ -1832,7 +1789,6 @@ button.danger:hover { background: var(--danger-weak); }
 /* the selected day carries the accent — part of the "me"/primary surface. */
 .stp-d.stp-sel { background: var(--accent); color: #fff; font-weight: 590; border-color: var(--accent); }
 .stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
-.stp-cal-foot { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 /* single-day column with hour lines */
 .stp-day { padding: 16px 20px 16px 8px; }
@@ -1938,23 +1894,6 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 52px; display: flex; align-items: center; gap: 8px; }
 .stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; }
-
-.stp-foot {
-  padding: 14px 22px; border-top: 1px solid var(--rule);
-  display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--wash);
-}
-.stp-overnight { font-size: 11.5px; color: var(--muted); }
-.stp-overnight[hidden] { display: none; }
-.stp-actions { display: flex; gap: 10px; }
-/* the picker's buttons reuse the base button chrome; only .primary carries the accent. */
-.stp-cancel {
-  font-family: inherit; font-size: 13px; font-weight: 590; padding: 8px 16px; color: var(--ink);
-}
-.stp-apply.primary {
-  font-family: inherit; font-size: 13px; font-weight: 590; border-radius: var(--r1); padding: 8px 16px;
-  background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: pointer;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
-}
 
 /* §12 R6: the per-row actions are quiet, borderless glyph/text buttons — the row itself is the
    surface, so each control reads as a bare affordance (a soft hover wash on engage), not a

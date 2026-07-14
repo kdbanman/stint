@@ -1048,8 +1048,8 @@ function openTagEditor(btn, e) {
 // the manual-add uses (add mode is §12 R07), so editing an entry is identical to creating one.
 // It seeds EVERY tt-editable field from the entry — the multiline description (a 3-line
 // textarea, §05 R10), client + project selects (pre-selected), the tag chips (G6), the billable
-// toggle, and the start/stop instants via the collapsed Start/Stop expander (§12 R17, the exact
-// / overnight path) plus the visual picker trigger (§12 R15). On Save it sends ONLY the changed
+// toggle, and the start/stop instants via the inline interval picker (§12 R15) over the collapsed
+// Start/Stop expander (§12 R17, the exact / overnight path). On Save it sends ONLY the changed
 // fields as { id, patch } over the same `edit` IPC tt uses — the sole commit (G7). The edit-mode
 // FOOTER carries a Split control (window.stint.split) and a two-step Delete gate (confirmInline
 // → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
@@ -1078,8 +1078,7 @@ async function openEntryForm(row, e) {
   const endField = running
     ? ''
     : `<label class="edit-field"><span>End</span>` +
-      `<span class="range-field"><input type="datetime-local" class="edit-end" />` +
-      `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>`;
+      `<input type="datetime-local" class="edit-end edit-time" /></label>`;
   form.innerHTML =
     `<div class="edit-row">` +
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
@@ -1107,15 +1106,17 @@ async function openEntryForm(row, e) {
     // reversible sleep subtract/restore control + struck raw-vs-trimmed billable. Always in the DOM
     // (hidden when the entry carries neither flag); filled + rewired by renderFlags() below.
     `<div class="edit-row ef-flags" hidden></div>` +
+    // §12 R15 (G5/G7): the inline interval picker — the primary picking surface. Mounted in flow
+    // into this host (below), bound to THIS form's raw Start/Stop fields (in the expander below).
+    `<div class="edit-row edit-picker-row"><div class="edit-picker uf-picker"></div></div>` +
     // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
-    // for overnight spans. Collapsed by default; the picker trigger (§12 R15) opens the visual
-    // picker bound to the SAME raw fields, so expander and picker drive one set of form values.
+    // for overnight spans. Collapsed by default; the raw fields it holds are the SAME values the
+    // inline picker above writes, so expander and picker drive one set of form values.
     `<div class="edit-row ef-times">` +
     `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
     `<div class="ef-times-body" hidden>` +
     `<label class="edit-field"><span>Start</span>` +
-    `<span class="range-field"><input type="datetime-local" class="edit-start" />` +
-    `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>` +
+    `<input type="datetime-local" class="edit-start edit-time" /></label>` +
     endField +
     `</div></div>` +
     // §12 R06: the edit-mode footer. Only Save entry carries the accent (§15); Split, Cancel and
@@ -1242,28 +1243,6 @@ async function openEntryForm(row, e) {
     ev.stopPropagation();
     armDelete(ev.currentTarget, e);
   });
-  // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's own
-  // time inputs (text stays authoritative). The closed entry's picker carries both start+stop;
-  // the running (open) entry's form has only a Start field (no End), so its picker is seeded
-  // START-ONLY (§05 R06) and never computes or writes a stop — so editing the open row cannot
-  // close it. The picker writes localInputValue strings back into the inputs; the submit path
-  // then sends the same patch over window.stint.edit unchanged.
-  const editStartInput = form.querySelector('.edit-start');
-  const editEndInput = running ? null : form.querySelector('.edit-end');
-  for (const pick of form.querySelectorAll('.edit-pick')) {
-    pick.addEventListener('click', () => {
-      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-        editStartInput.focus();
-        return;
-      }
-      window.STP.open({
-        startInput: editStartInput,
-        endInput: editEndInput, // null for the open row → start-only, no stop written
-        otherEntries: snapshotEntries(e.id),
-        onApply: () => {},
-      });
-    });
-  }
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     addTypedTag(); // fold any half-typed tag still in the add input
@@ -1313,6 +1292,20 @@ async function openEntryForm(row, e) {
   row.innerHTML = '';
   row.appendChild(form);
   form.querySelector('.edit-desc').focus();
+
+  // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
+  // form's Start/Stop fields (the §12 R17 expander inputs) — mounted AFTER the form is in the DOM
+  // so the column geometry measures correctly. A closed entry binds both fields (body-drag moves
+  // the whole span, the bottom grip resizes the stop); the running (open) entry — whose form has
+  // only a Start field — gets the START-ONLY variant, structurally unable to write a stop, so
+  // editing it cannot close the row (§05 R06). The picker writes the fields LIVE; Save entry stays
+  // the sole commit (G7). Text stays authoritative — the picker only ever sets the inputs' value.
+  mountIntervalPicker({
+    host: form.querySelector('.edit-picker'),
+    startInput: form.querySelector('.edit-start'),
+    endInput: running ? null : form.querySelector('.edit-end'),
+    excludeId: e.id,
+  });
 
   // §12 R06 (G6): populate the project select from the same source tt uses, for the given
   // client id, and pre-select the entry's project by name. "(no project)" maps to null.
@@ -1801,21 +1794,42 @@ async function fillAddProjects(clientId) {
   }
 }
 
-// §12 R07 / §12 R15 (G7): mount the inline interval picker into the form's right column. It reads
-// the raw Start/Stop text fields (#add-from/#add-to) as its seed and writes them back LIVE on every
-// drag — those fields are the authoritative form state "Save entry" reads, so the picker updating
-// them IS the form-state update (no separate model). The collapsed Start/Stop expander drives the
-// same fields (§12 R17). Degrades gracefully to text entry when the picker is unavailable.
-function mountAddPicker() {
-  const host = $('add-picker');
-  if (!host || typeof window.STP === 'undefined' || typeof window.STP.openInline !== 'function') return;
-  window.STP.openInline({
+// §12 R15 (G5/G7): the ONE inline-interval-picker mount both unified-form modes (add + edit) and
+// the running variant consume. It renders the picker IN FLOW into `host`, bound to the form's raw
+// Start/Stop text fields — the authoritative form state "Save entry" reads — and writes them back
+// LIVE on every drag (no Apply, no commit of its own). A closed span binds both inputs via
+// STP.openInline (body-drag moves start+stop together; the bottom grip resizes only the stop, both
+// 5-min snap); the running/open case passes endInput null and gets STP.openStartOnly — the
+// START-ONLY variant, structurally incapable of computing or writing a stop (§05 R06 / G8), so it
+// paints the future-fade block with a start grip only. `excludeId` drops the edited entry from the
+// gray other-entry blocks (its own span is the "me" rectangle). Settings feed the ONE window
+// derivation (SU.timelineWindow). Degrades to plain text entry when the picker script is absent.
+function mountIntervalPicker({ host, startInput, endInput, excludeId }) {
+  if (!host || !startInput || typeof window.STP === 'undefined') return;
+  const common = {
     host,
+    startInput,
+    otherEntries: snapshotEntries(excludeId ?? null),
+    settings: state?.settings ?? null,
+  };
+  if (!endInput) {
+    if (typeof window.STP.openStartOnly === 'function') window.STP.openStartOnly(common);
+    return;
+  }
+  if (typeof window.STP.openInline === 'function') window.STP.openInline({ ...common, endInput, onChange: () => {} });
+}
+
+// §12 R07 / §12 R15 (G7): mount the inline interval picker into the add form's right column. It
+// reads the raw Start/Stop text fields (#add-from/#add-to) as its seed and writes them back LIVE on
+// every drag — those fields are the authoritative form state "Save entry" reads, so the picker
+// updating them IS the form-state update (no separate model). The collapsed Start/Stop expander
+// drives the same fields (§12 R17). Consumes the shared mountIntervalPicker helper.
+function mountAddPicker() {
+  mountIntervalPicker({
+    host: $('add-picker'),
     startInput: $('add-from'),
     endInput: $('add-to'),
-    otherEntries: snapshotEntries(null),
-    settings: state?.settings ?? null,
-    onChange: () => {},
+    excludeId: null,
   });
 }
 

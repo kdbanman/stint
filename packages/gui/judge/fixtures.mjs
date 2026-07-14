@@ -353,6 +353,11 @@ export function multilineDescState() {
  * the overlap DETAIL and the reversible sleep subtract/restore control (struck raw-vs-trimmed
  * billable). `sleptSeconds` is the fixture stand-in for core's recorded sleep spans that the
  * subtractSleep mock (initScript) excludes/restores; both start UN-subtracted (excludedSeconds 0).
+ *
+ * §12 R15 — plus a CLOSED entry (83, 15:00–16:00Z) that OVERLAPS entry 80's span (14:00–15:30Z) on
+ * the same UTC-pinned day, so when the UNIFIED_FORM scene opens entry 80's editor the INLINE interval
+ * picker paints entry 83 both as a gray other block AND, where it overlaps the edited "me" span
+ * (15:00–15:30), a yellow inert warn band (warn-only, never blocks Save).
  */
 export function unifiedFormState() {
   return {
@@ -405,6 +410,24 @@ export function unifiedFormState() {
             excludedSeconds: 0,
             rawSeconds: 14400,
             sleptSeconds: 3600,
+            tags: [],
+          },
+          {
+            // §12 R15 — overlaps entry 80 (14:00–15:30Z) at 15:00–15:30, so entry 80's inline
+            // picker paints this both gray (other) and, over the shared minutes, yellow (warn-only).
+            id: 83,
+            description: 'follow-up',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T15:00:00Z',
+            endUtc: '2026-06-24T16:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: 3600,
             tags: [],
           },
         ],
@@ -835,14 +858,13 @@ export function addFormState() {
 }
 
 /**
- * §12 R15 (G9) — the TIME_RANGE_PICKER fixture. The manual-add form reads the snapshot's
- * CLOSED entries (via app.js snapshotEntries) so the visual picker can draw them gray on
- * its day column and paint overlaps yellow (warn-only). Two closed entries on 2026-06-24
- * (the day the scene fills #add-from/#add-to against, under the UTC-pinned picker page):
- *   - 09:00–11:00 — above the dragged span, no overlap.
- *   - 14:00–15:00 — overlaps the seeded 13:00–14:30 "me" span (14:00–14:30 → yellow).
- * The scene runs its page in timezoneId 'UTC' so these UTC instants land on the SAME local
- * day as the filled 2026-06-24T13:00 start, making the gray/overlap geometry deterministic.
+ * §12 R15 — the inline interval-picker RECORDING fixture (record.mjs's §05 R05 / §12 R15 picker
+ * tour). The unified form's inline picker reads the snapshot's CLOSED entries (via app.js
+ * snapshotEntries) so it can draw them gray on its single-day column and paint overlaps yellow
+ * (warn-only). Two closed entries on 2026-06-24, under the recording's UTC-pinned page so these
+ * UTC instants land on a deterministic local day:
+ *   - 09:00–11:00 — 'morning sync', the closed row the EDIT-CLOSED tour beat edits.
+ *   - 14:00–15:00 — 'market research', the gray other the extended stop overlaps (→ yellow).
  */
 export function pickerState() {
   const closed = [
