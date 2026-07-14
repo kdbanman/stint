@@ -1211,6 +1211,113 @@ async function main() {
     await page.close();
   }
 
+  // UNIFIED_FORM_EXPANDER — §12 R17 (core: core data entry): the unified add form's collapsed
+  // Start/Stop expander is the exact-entry escape hatch and the ONLY path for an OVERNIGHT span.
+  // Drive the REAL renderer end to end and assert the requirement's gating facts:
+  //   (a) the expander is COLLAPSED by default — the raw Start/Stop text fields are hidden
+  //       (#add-times-body[hidden], toggle aria-expanded=false) while a tabular ECHO of the current
+  //       interval is shown beneath the calendar (.stp-echo, e.g. "22:00 – 23:00");
+  //   (b) clicking the toggle REVEALS the two raw type=text fields (#add-from/#add-to, NOT native
+  //       datetime-local, G1);
+  //   (c) TYPING an overnight span (start 2026-06-24 22:00, stop 2026-06-25 02:00) into those fields
+  //       feeds the ONE shared interval state — the picker column reflects the typed START (the "me"
+  //       block sits at 22:00) and the collapsed echo reflects the typed cross-midnight span
+  //       ("22:00 – 02:00"), while the raw stop field keeps the next-day value verbatim (authoritative,
+  //       never flattened to same-day);
+  //   (d) Save entry is the SOLE commit — window.__ADDED__ carries those EXACT overnight
+  //       fromLocal/toLocal over the single `add` IPC (parity with `tt add --from --to`).
+  // Fails if the expander fields don't feed the shared interval (the picker/echo stay stale), Save
+  // reads a stale picker-only value, or the overnight stop is dropped / coerced to the start's day.
+  //
+  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → 22:00 on
+  // 2026-06-24) is a deterministic local instant, and the typed 22:00/02:00 map to fixed column
+  // geometry (720px/24h track → 22:00 = 660px from the track top).
+  {
+    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(addFormState())));
+    await page.goto(fileUrl('index.html'));
+    await page.waitForSelector('.entry', { state: 'attached' });
+
+    // (a) open the add form; the inline picker mounts with its collapsed interval echo.
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'unified-form-expander.png'), fullPage: true });
+    const collapsed = await page.evaluate(() => {
+      const toggle = document.querySelector('#add-times-toggle');
+      const body = document.querySelector('#add-times-body');
+      const echo = document.querySelector('#add-picker .stp-echo');
+      return {
+        toggleCollapsed: !!toggle && toggle.getAttribute('aria-expanded') === 'false',
+        fieldsHidden: !!body && body.hidden,
+        echoPresent: !!echo && echo.textContent.trim().length > 0,
+        echoTabular: !!echo && echo.classList.contains('tnum'),
+      };
+    });
+
+    // (b) expand the Start/Stop expander → the two raw text fields are revealed.
+    await page.click('#add-times-toggle');
+    await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+    const fields = await page.evaluate(() => {
+      const from = document.querySelector('#add-from');
+      const to = document.querySelector('#add-to');
+      return {
+        fieldsShown: !document.querySelector('#add-times-body')?.hidden,
+        fromText: from ? from.getAttribute('type') : null,
+        toText: to ? to.getAttribute('type') : null,
+      };
+    });
+
+    // (c) TYPE an overnight span into the raw fields → the shared interval updates so the picker
+    // column reflects the typed start and the collapsed echo reflects the cross-midnight span.
+    await page.fill('#add-from', '2026-06-24T22:00');
+    await page.fill('#add-to', '2026-06-25T02:00');
+    await page.waitForFunction(
+      () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
+    );
+    const reflected = await page.evaluate(() => {
+      const me = document.querySelector('#add-picker .stp-block.me');
+      const TRACK_H = window.STP.TRACK_H; // 720px/24h → the geometry the picker draws
+      const top = me ? parseFloat(me.style.top) : NaN;
+      const startMin = Number.isFinite(top) ? Math.round((top / TRACK_H) * 1440) : null;
+      return {
+        echo: document.querySelector('#add-picker .stp-echo')?.textContent.trim() ?? '',
+        meStartMin: startMin, // the "me" block's top → its start minute-of-day (22:00 = 1320)
+        fromValue: document.querySelector('#add-from')?.value,
+        toValue: document.querySelector('#add-to')?.value, // the next-day stop kept verbatim
+      };
+    });
+
+    // (d) Save entry is the sole commit — __ADDED__ carries the EXACT typed overnight span.
+    await page.fill('#add-desc', 'overnight deploy');
+    await page.click('#add-go');
+    await page.waitForFunction(() => !!window.__ADDED__);
+    const added = await page.evaluate(() => window.__ADDED__);
+
+    const collapsedOk = collapsed.toggleCollapsed && collapsed.fieldsHidden && collapsed.echoPresent && collapsed.echoTabular;
+    const fieldsOk = fields.fieldsShown && fields.fromText === 'text' && fields.toText === 'text';
+    const reflectedOk =
+      reflected.echo === '22:00 – 02:00' &&
+      reflected.meStartMin === 1320 &&
+      reflected.fromValue === '2026-06-24T22:00' &&
+      reflected.toValue === '2026-06-25T02:00';
+    const savedOk = !!added && added.fromLocal === '2026-06-24T22:00' && added.toLocal === '2026-06-25T02:00';
+    const ok = collapsedOk && fieldsOk && reflectedOk && savedOk;
+    record(
+      'UNIFIED_FORM_EXPANDER',
+      ok,
+      `collapsed Start/Stop expander drives the shared interval: ` +
+        `collapsed=${JSON.stringify(collapsed)} (ok=${collapsedOk}); expand→fields=${JSON.stringify(fields)} (ok=${fieldsOk}); ` +
+        `typed overnight reflected=${JSON.stringify(reflected)} (ok=${reflectedOk}); ` +
+        `Save sole commit added=${JSON.stringify(added)} (ok=${savedOk})`,
+      'unified-form-expander.png',
+    );
+    await page.close();
+  }
+
   // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE,
   // INLINE in the Entries view (no modal / backdrop / dialog chrome; the host sits in flow with
   // position:static), the same form add mode uses. Drive the real renderer: both a click on the

@@ -1536,3 +1536,41 @@ totals** and the toolbar carries a **range chip**.
 > totals are proven twice (core + `tt`) by `features/entry_list.feature`. This runbook confirms the
 > same on a real desktop: the columns hold their width, the strip scrolls both ways, off-hours
 > entries are reachable rather than clipped, and empty days show as empty columns.
+
+## CHECK EXACT/OVERNIGHT ENTRY VIA EXPANDER (GUI) (§12 R17)
+
+The unified form's collapsed **Start/Stop expander** is the exact-entry escape hatch and the
+**only path for an overnight span** — the single-day interval picker can't be dragged across
+midnight, so a stop dated the **next day** is *typed* into the expander's raw text fields. A
+human must be able to type an exact cross-midnight span, see the inline picker and the collapsed
+echo reflect the typed values, and Save it as the same entry a drag would produce.
+
+1. In a real desktop session, open the main window, click **Add entry manually**, and give the
+   entry a **description** (e.g. `overnight deploy`).
+   - [ ] The **Start / Stop (exact times)** expander is **collapsed** by default (its raw text
+         fields are hidden) while a **tabular echo** of the current interval (e.g. `22:00 –
+         23:00`) shows beneath the month calendar.
+2. **Expand** the Start / Stop expander and **type an overnight span** into the raw fields — a
+   **Start** of `22:00` today and a **Stop** of `02:00` **the next day** (type the full
+   `YYYY-MM-DDTHH:mm` with the stop on tomorrow's date). These are plain **text** fields — there
+   is **no native date-time popover**.
+   - [ ] As you type, the **inline picker reflects the typed values**: the accent block sits at
+         the typed **start** (22:00) on the start's day, and the **collapsed echo reads
+         `22:00 – 02:00`** — the same shared interval the picker drag would set.
+   - [ ] The **Stop field keeps the next-day value verbatim** — it is *not* rewound to the
+         start's day or flattened to a same-day span.
+3. Click **Save entry** — the *only* commit.
+   - [ ] The form closes and the completed **overnight** entry persists.
+   - [ ] `tt list --json` shows **one** entry whose **start** and **stop** are the exact typed
+         instants **crossing midnight** (start `22:00`, stop `02:00` the next day — a 240-minute
+         span), identical to what a same-day drag commits over the same `add` write (parity: the
+         `add` IPC channel ↔ `tt add --from --to`).
+
+> The overnight-capable add is proven surface-neutrally over core+`tt` by the BDD "Backfill
+> creates a completed overnight entry" scenario (a 22:00→02:00-next-day span → one closed entry,
+> zero open, a 240-minute billable duration, run twice); the GUI expander — collapsed-by-default
+> echo, expand-to-raw-text-fields, the typed overnight updating the shared interval so the picker
+> + echo reflect it, and Save committing the exact typed values — is screenshotted under JUDGE
+> (`UNIFIED_FORM_EXPANDER`, `unified-form-expander.png`) and bound back to `tt add` by the parity
+> matrix. This runbook confirms a human can type an exact cross-midnight span, watch the picker
+> and echo track it, and Save it as the same entry a drag would, at parity with `tt add`.

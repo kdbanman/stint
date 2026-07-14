@@ -156,6 +156,12 @@ window.STP = (function () {
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // §12 R17 — guard so the picker's OWN write-backs don't re-trigger openInline's expander-reflect
+  // listeners (which watch the same bound fields for EXTERNAL edits). True only for the synchronous
+  // span of a writeBack dispatch; the reseed listener ignores events fired while it is set, so a
+  // drag never feeds itself back through the reflect path.
+  let writingBack = false;
+
   // Write a Date back into a bound text input as a local datetime-local string, and fire an
   // `input` event so the surrounding form's listeners (e.g. the running live-edit's change /
   // the add form's submit read) see it exactly as if the user typed it. The text stays
@@ -163,8 +169,10 @@ window.STP = (function () {
   function writeBack(input, date) {
     if (!input) return;
     input.value = localInputValue(date);
+    writingBack = true;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
+    writingBack = false;
   }
 
   /**
@@ -312,9 +320,16 @@ window.STP = (function () {
     let columnDay = startOfLocalDay(startDate);
     let startMin = snapTo5(localMinuteOfDay(startDate));
     let endMin = snapTo5(localMinuteOfDay(endDate));
-    // A seeded overnight stop clamps to end-of-day on the visible column; the expander owns the
-    // real overnight value. Keep a sane same-day span for dragging.
-    if (!sameLocalDay(startDate, endDate)) endMin = DAY_MIN;
+    // §12 R17 — a stop on a LATER local day than the start is an OVERNIGHT span. The single-day
+    // drag column can't draw it, so it stays on the START's day (endMin painted to the column foot)
+    // and the bound stop TEXT field — the collapsed Start/Stop expander — stays authoritative for the
+    // real cross-midnight stop. `overnightActive` tracks that state; commit() then leaves the stop
+    // field untouched (never flattening it to same-day), and a drag (inherently same-day) clears it.
+    let overnightActive = false;
+    if (!sameLocalDay(startDate, endDate)) {
+      endMin = DAY_MIN;
+      overnightActive = true;
+    }
     if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
 
     const box = document.createElement('div');
@@ -340,11 +355,37 @@ window.STP = (function () {
     const track = box.querySelector('.stp-track');
     const viewport = box.querySelector('.stp-dayview');
 
+    // §12 R17 — a tabular ECHO of the current shared interval, mounted beneath the calendar in the
+    // calcol (mockup edit-entry.html .xp): "HH:MM – HH:MM", or "HH:MM –" when the stop is empty (an
+    // open/running entry). It is a passive readout of the ONE shared interval — the SAME values the
+    // collapsed Start/Stop expander's raw text fields and the drag both drive — refreshed by
+    // updateEcho() on every render (below) and on every external edit of the bound fields, so the
+    // collapsed echo, the picker column, and the expander text never disagree.
+    const echoEl = document.createElement('div');
+    echoEl.className = 'stp-echo tnum';
+    box.querySelector('.stp-cal').appendChild(echoEl);
+    function updateEcho() {
+      const startTxt = hhmm(startMin);
+      let stopTxt = '';
+      if (overnightActive) {
+        // The real stop lives in the bound field (a later day than the column); echo it verbatim.
+        const e = parseInput(endInput);
+        stopTxt = e ? hhmm(localMinuteOfDay(e)) : '';
+      } else if (endInput && parseInput(endInput)) {
+        stopTxt = hhmm(endMin);
+      }
+      echoEl.textContent = stopTxt ? `${startTxt} – ${stopTxt}` : `${startTxt} –`;
+    }
+
     // The sole write path: push the picked instants into the bound inputs LIVE and notify the
     // form. Called on mount, on every drag, and on a calendar day change.
     function commit() {
       writeBack(startInput, dateAtMinute(columnDay, startMin));
-      if (endInput) writeBack(endInput, dateAtMinute(columnDay, endMin));
+      // §12 R17: while an OVERNIGHT stop stands in the bound field, the column's same-day endMin is
+      // only a paint — writing it back would flatten the cross-midnight stop, so the stop field is
+      // left untouched (authoritative). A drag clears overnightActive first, so a dragged span
+      // writes BOTH ends and commits identically to a same-day one.
+      if (endInput && !overnightActive) writeBack(endInput, dateAtMinute(columnDay, endMin));
       onChange({ startMin, endMin });
     }
 
@@ -435,6 +476,7 @@ window.STP = (function () {
         track.appendChild(o);
       }
       wireDrag(me);
+      updateEcho(); // keep the collapsed echo in lockstep with the column on every repaint
     }
 
     // ---- dragging (5-min snap, live commit) ---------------------------------------
@@ -456,6 +498,7 @@ window.STP = (function () {
           nextStart = Math.max(0, Math.min(DAY_MIN - span, nextStart));
           startMin = nextStart;
           endMin = nextStart + span;
+          overnightActive = false; // a drag is inherently same-day — it supersedes any typed overnight stop
           renderTrack();
           commit(); // §12 R07 (G7): the form's start/stop state updates on every drag step
         };
@@ -476,6 +519,7 @@ window.STP = (function () {
             let nextEnd = snapTo5(pointerMinutes(mv.clientY));
             nextEnd = Math.max(startMin + SNAP_MIN, Math.min(DAY_MIN, nextEnd));
             endMin = nextEnd;
+            overnightActive = false; // resizing the stop on the single-day column makes it same-day
             renderTrack();
             commit();
           };
@@ -494,6 +538,44 @@ window.STP = (function () {
     // Seed the bound inputs from the (snapped) picker span immediately, so the form's start/stop
     // state reflects the picker before any drag — Save reads exactly what the column shows.
     commit();
+
+    // §12 R17 — reflect an EXTERNAL edit of the bound Start/Stop fields (the collapsed expander's raw
+    // text inputs) back into the picker: re-anchor the single-day column + span on the typed start,
+    // detect an overnight stop (a later local day), and repaint — WITHOUT writing back, so the typed
+    // text stays authoritative and a cross-midnight stop is never flattened. This is the ONE shared
+    // interval state the drag also mutates — there is no second source of truth. A half-typed /
+    // unparseable value contributes nothing (the column simply holds its last valid state).
+    function reseedFromInputs() {
+      const s = parseInput(startInput);
+      if (!s) return; // need a valid start to anchor the single-day column
+      columnDay = startOfLocalDay(s);
+      startMin = snapTo5(localMinuteOfDay(s));
+      const e = parseInput(endInput);
+      if (!e) {
+        overnightActive = false;
+        endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
+      } else if (!sameLocalDay(s, e)) {
+        overnightActive = true; // stop on a later day → overnight; column stays on the start's day
+        endMin = DAY_MIN;
+      } else {
+        overnightActive = false;
+        endMin = snapTo5(localMinuteOfDay(e));
+        if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
+      }
+      calMonth = new Date(columnDay.getFullYear(), columnDay.getMonth(), 1);
+      renderCalendar();
+      renderTrack(); // repaints the column AND refreshes the echo (updateEcho at its foot)
+    }
+    // The picker's own writeBack fires input/change (guarded by `writingBack`); only a GENUINE
+    // external edit — the user typing in the expander — reseeds the column + echo.
+    for (const input of [startInput, endInput]) {
+      if (!input) continue;
+      const reflect = () => {
+        if (!writingBack) reseedFromInputs();
+      };
+      input.addEventListener('input', reflect);
+      input.addEventListener('change', reflect);
+    }
 
     // Default scroll window (§14/G16): SU.timelineWindow centered on the seeded interval.
     const win =
