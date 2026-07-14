@@ -579,14 +579,13 @@ function calEvent(e) {
   html += `<span class="bd desc${e.billable ? '' : ' nonbill'}">${runDot}${escapeHtml(e.description ?? '(no description)')}</span>`;
   if (e.clientLabel) html += `<span class="bc where">${escapeHtml(e.clientLabel)}</span>`;
   html += `<span class="bt time tnum">${timeLabel}</span>`;
-  // Compat readouts the flag/duration JUDGE scenes read (kept in the DOM, visually folded away on
-  // the calendar — the calendar shows overlap as `.ov` bands and sleep as the `.zz` hatch): the
-  // struck raw-vs-trimmed duration (§12 R10), the tag chips (§07), the worded flags, and the
-  // detailed overlap banner.
-  html += `<span class="dur cal-compat tnum">${durHtml(e)}</span>`;
+  // §07: the entry's tags show in-context as chips (kept in the DOM, folded away visually on the
+  // readonly calendar — see the `.ev > .chips` rule). §12 R10 (G12): the flags themselves are NOT
+  // text on the event — overlap paints as the `.ov` warn band (calColumn) and sleep as the `.zz`
+  // hatch below; the amount/neighbour detail, the reversible sleep subtract/restore control and the
+  // struck raw-vs-trimmed duration all live in the unified editor (openEntryForm), not on the
+  // calendar, so the readonly calendar stays a calm at-a-glance surface.
   html += tagsHtml(e);
-  html += flagsHtml(e);
-  html += overlapBannerHtml(e);
   // §12 R10 (G12): a slept span carries a hatched marker at its foot on the calendar.
   if (e.sleptThrough) html += '<span class="zz"><svg class="ic" aria-hidden="true"><use href="#i-moon" /></svg></span>';
   el.innerHTML = html;
@@ -597,11 +596,11 @@ function calEvent(e) {
   return el;
 }
 
-// §12 R9: the row's duration cell. For a slept entry whose billable was trimmed (excluded
-// seconds subtracted, so the raw wall-clock duration differs from the billable one), the
-// raw duration reads STRUCK THROUGH next to the live, trimmed billable duration — the
-// trimmed value is what bills, the struck one shows what was cut. Otherwise the cell is just
-// the billable duration (or, for the open/running row, the live count-up).
+// §12 R10: the unified editor's sleep duration readout. For a slept entry whose billable was
+// trimmed (excluded seconds subtracted, so the raw wall-clock duration differs from the billable
+// one), the raw duration reads STRUCK THROUGH next to the live, trimmed billable duration — the
+// trimmed value is what bills, the struck one shows what was cut. Otherwise it is just the billable
+// duration (or, for the open/running entry, the live count-up). Consumed by editorFlagsInnerHtml.
 function durHtml(e) {
   if (e.endUtc === null) return fmtDur(elapsed(e.startUtc, e.excludedSeconds));
   const raw = e.rawSeconds ?? e.billableSeconds;
@@ -622,18 +621,11 @@ function tagsHtml(e) {
   return `<span class="chips">${chips}</span>`;
 }
 
-function flagsHtml(e) {
-  const flags = [];
-  if (e.overlapped) flags.push('<span class="flag" title="overlaps another entry">overlap</span>');
-  if (e.sleptThrough) flags.push('<span class="flag" title="machine slept during this entry">slept</span>');
-  return flags.length ? `<span class="flags">${flags.join('')}</span>` : '';
-}
-
-// §12 R9: the detailed in-context overlap banner ("Overlap: 15m with previous entry"). It
-// sits on the affected row in addition to the compact "overlap" badge, spelling out the
-// overlapping amount (core-owned minutes) and which neighbour (previous / next) it shares
-// with — so the same time billing twice is visible, not just flagged. Monochrome --flag
-// tokens (no accent, §15). Painted only when the row is overlapped.
+// §12 R10: the unified editor's detailed overlap detail ("Overlap: 15m with previous entry").
+// Where the readonly calendar shows only the `.ov` warn band, the editor spells out the
+// overlapping amount (core-owned minutes) and which neighbour (previous / next) it shares with —
+// so the same time billing twice is visible, not just flagged. Monochrome --flag tokens (no
+// accent, §15). Emitted by editorFlagsInnerHtml only when the edited entry is overlapped.
 function overlapBannerHtml(e) {
   if (!e.overlapped) return '';
   const minutes = e.overlapMinutes ?? 0;
@@ -641,20 +633,37 @@ function overlapBannerHtml(e) {
   return `<div class="banner overlap" title="overlaps another entry">Overlap: ${minutes}m with ${which} entry</div>`;
 }
 
+// §12 R10 (G12): the unified editor's in-context FLAGS region — where the flag DETAIL lives now
+// that the entries list is gone and the readonly calendar shows only the markers (the `.ov` warn
+// band + the `.zz` slept hatch). An overlapped entry shows the overlap detail (amount + neighbour);
+// a slept-through entry shows the reversible sleep subtract/restore control — its label toggles
+// "Subtract slept" ↔ "Restore" off the core-fed excludedSeconds — beside the sleep duration
+// readout, which strikes the raw wall-clock duration through next to the trimmed billable once
+// subtracted (durHtml). Returns '' when the entry carries neither flag, so the region stays empty.
+function editorFlagsInnerHtml(e) {
+  let html = '';
+  if (e.overlapped) html += overlapBannerHtml(e);
+  if (e.sleptThrough) {
+    const restore = (e.excludedSeconds ?? 0) > 0;
+    const label = restore ? 'Restore' : 'Subtract slept';
+    const icon = restore ? 'i-restore' : 'i-moon';
+    html +=
+      `<div class="ef-sleep">` +
+      `<button type="button" class="small ef-subtract" data-act="ef-subtract" aria-label="${label}">` +
+      `<svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>` +
+      `<span class="ef-dur tnum">${durHtml(e)}</span>` +
+      `</div>`;
+  }
+  return html;
+}
+
 // §12 R16: the entry's hover ops — the same `data-act` controls the row affordances exposed,
 // returned as the bare button set so calEvent can host them in the `.ops` corner toolbar. Kept at
-// parity with the tt verbs: Subtract sleep / Restore (§05 R08), Edit (unified form, §12 R06), Edit
-// tags (§07), Split (closed only, §06 R2), Delete (two-step, §06 R1).
+// parity with the tt verbs: Edit (unified form, §12 R06), Edit tags (§07), Split (closed only,
+// §06 R2), Delete (two-step, §06 R1). Sleep subtract/restore is NOT a calendar-hover op — it is the
+// reversible control inside the unified editor (§12 R10), reached by opening the entry.
 function actionButtons(e) {
   const actions = [];
-  if (e.sleptThrough) {
-    const restore = e.excludedSeconds > 0;
-    const label = restore ? 'Restore' : 'Subtract sleep';
-    const icon = restore ? 'i-restore' : 'i-moon';
-    // §12 R14: a discernible aria-label so the action button reads meaningfully in the
-    // accessibility tree (the visible label already does, but keep the hook explicit).
-    actions.push(`<button class="small" data-act="subtract" aria-label="${label}"><svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>`);
-  }
   // §12 R06: the row's Edit affordance opens the UNIFIED ENTRY FORM in edit mode (openEntryForm)
   // inline in the Entries view — one form surfacing EVERY tt-editable field plus the footer Split
   // + two-step Delete, the GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere
@@ -678,7 +687,6 @@ function wire(row, e) {
       ev.stopPropagation();
       const act = btn.dataset.act;
       if (act === 'select') return toggleSelect(e.id, btn.checked); // multi-select for merge
-      else if (act === 'subtract') await window.stint.subtractSleep({ id: e.id });
       else if (act === 'edit') return openEntryForm(row, e); // §12 R06: unified form (edit mode), inline
       else if (act === 'tags') return openTagEditor(btn, e); // inline; resolves on commit
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
@@ -1095,6 +1103,10 @@ async function openEntryForm(row, e) {
     `<span class="chips ef-tag-chips"></span></label>` +
     `<label class="edit-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
     `</div>` +
+    // §12 R10 (G12): the in-context flags region — the overlap detail (amount + neighbour) and the
+    // reversible sleep subtract/restore control + struck raw-vs-trimmed billable. Always in the DOM
+    // (hidden when the entry carries neither flag); filled + rewired by renderFlags() below.
+    `<div class="edit-row ef-flags" hidden></div>` +
     // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
     // for overnight spans. Collapsed by default; the picker trigger (§12 R15) opens the visual
     // picker bound to the SAME raw fields, so expander and picker drive one set of form values.
@@ -1182,6 +1194,36 @@ async function openEntryForm(row, e) {
     timesBody.hidden = !open;
     timesToggle.setAttribute('aria-expanded', String(open));
   });
+
+  // §12 R10 (G12): paint the in-context flags region and (re)bind its reversible sleep control.
+  // Subtracting excludes the recorded slept span from billable; subtracting again restores it —
+  // core owns the toggle (store.subtractSleep, reached over the existing subtractSleep IPC, NO new
+  // channel). After the write we re-read the entry off the fresh snapshot and repaint the region in
+  // place so the editor stays open: the button flips Subtract slept ↔ Restore and durHtml's struck
+  // raw-vs-trimmed billable appears / disappears. Called once on open, then after each toggle.
+  const flagsRow = form.querySelector('.ef-flags');
+  function renderFlags() {
+    flagsRow.innerHTML = editorFlagsInnerHtml(e);
+    flagsRow.hidden = flagsRow.innerHTML === '';
+    const subtractBtn = flagsRow.querySelector('.ef-subtract');
+    if (subtractBtn) {
+      subtractBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        await window.stint.subtractSleep({ id: e.id });
+        // Re-read the toggled entry off core's snapshot (subtractSleep returns nothing; refreshAll
+        // pushes new state in production, getState reads it here) — the editor owns no sleep math.
+        const st = await window.stint.getState();
+        const fresh = (st?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === e.id);
+        if (fresh) {
+          e.excludedSeconds = fresh.excludedSeconds;
+          e.billableSeconds = fresh.billableSeconds;
+          e.rawSeconds = fresh.rawSeconds;
+        }
+        renderFlags();
+      });
+    }
+  }
+  renderFlags();
 
   form.querySelector('.edit-cancel').addEventListener('click', () => render());
   // §12 R06 / §06 R2: the footer Split control cuts a closed span in two. It reuses the same
@@ -1343,11 +1385,11 @@ function tick() {
   $('summary').innerHTML = summaryHtml(e);
   const clock = $('timer-clock');
   if (clock) clock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
-  // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card.
+  // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card. The
+  // readonly calendar's running block carries no duration cell (it shows a start-only time label
+  // and fades into the future, §12 R16/G8), so there is nothing else to tick on the Entries view.
   const stripClock = $('strip-clock');
   if (stripClock) stripClock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
-  const row = document.querySelector(`.entry.running .dur`);
-  if (row) row.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds));
 }
 
 $('toggle').addEventListener('click', async () => {
@@ -2421,6 +2463,12 @@ window.stint.onChange(() => {
   // the in-window timer surface tracks the other surface (parity). load() refreshes `state`
   // (→ render() repaints the card + live-edit strip); renderFavorites repaints the rail.
   else if (activeView === 'timer') void load().then(() => renderFavorites());
+  // §12 R10 / §06 R06: on the Entries view, don't blow away an OPEN unified editor on a refresh.
+  // The form's own writes repaint the affected region in place — the reversible sleep subtract/
+  // restore (§12 R10) re-reads the toggled entry and repaints its flags region without leaving the
+  // editor — and a mid-edit reload would also discard the user's unsaved field edits. Once the form
+  // closes (Cancel / Save / Delete each reload themselves), the next refresh repaints normally.
+  else if (document.querySelector('.entry.editing')) return;
   else void load();
 });
 setInterval(tick, 1000);

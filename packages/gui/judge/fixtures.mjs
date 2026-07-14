@@ -148,6 +148,11 @@ export function taggedState() {
   };
 }
 
+// §12 R10 — the flag-detail fixture the recording (§12 R10 recipe) drives: an OVERLAP pair
+// (10↔11, 30m) and a SLEPT entry (12, raw 4h trimmed to 3h). On the readonly calendar the pair
+// paints `.ov` warn bands and the slept entry the `.zz` hatch; opening each in the unified editor
+// shows the overlap detail and the reversible subtract/restore control (struck raw-vs-trimmed).
+// (No longer a JUDGE-scene fixture — the FLAG_IN_CONTEXT scene is retired; kept for the recording.)
 export function flaggedState() {
   return {
     status: { running: false, entry: null },
@@ -193,8 +198,10 @@ export function flaggedState() {
             clientLabel: 'Client B',
             startUtc: '2026-06-24T13:00:00Z',
             endUtc: '2026-06-24T17:00:00Z',
-            // §12 R9: a slept entry whose billable was trimmed — the raw 4h reads struck
-            // through beside the trimmed 3h billable (rawSeconds > billableSeconds).
+            // §12 R10: a slept entry whose billable was trimmed — in the editor the raw 4h reads
+            // struck through beside the trimmed 3h billable (rawSeconds > billableSeconds), and the
+            // control reads Restore. `sleptSeconds` is the recorded-sleep amount the subtractSleep
+            // mock restores/re-subtracts so the recording can toggle it both ways.
             billableSeconds: 10800,
             billable: true,
             overlapped: false,
@@ -203,6 +210,7 @@ export function flaggedState() {
             sleptThrough: true,
             excludedSeconds: 3600,
             rawSeconds: 14400,
+            sleptSeconds: 3600,
           },
         ],
       },
@@ -333,12 +341,18 @@ export function multilineDescState() {
 }
 
 /**
- * §12 R06 — the UNIFIED_FORM edit-mode fixture. A single CLOSED entry seeding EVERY tt-editable
+ * §12 R06 — the UNIFIED_FORM edit-mode fixture. A CLOSED entry (80) seeding EVERY tt-editable
  * field, whose client/project match the canned reference data (Acme / API → CLIENTS id 1,
  * PROJECTS 11) so the unified entry form opens INLINE (not a modal) in edit mode with its Client
  * + Project selects pre-selectable, the description textarea, the tag chips, the billable toggle
  * and the Start/Stop expander all seeded from the entry. Closed (it has an endUtc), so the form
  * carries End and the footer offers Split (only a bounded span can be cut).
+ *
+ * §12 R10 — plus an OVERLAPPED entry (81, 30m with the previous entry) and a SLEPT entry (82, raw
+ * 4h with a 1h recorded sleep to subtract) so the same scene can open the editor on each and assert
+ * the overlap DETAIL and the reversible sleep subtract/restore control (struck raw-vs-trimmed
+ * billable). `sleptSeconds` is the fixture stand-in for core's recorded sleep spans that the
+ * subtractSleep mock (initScript) excludes/restores; both start UN-subtracted (excludedSeconds 0).
  */
 export function unifiedFormState() {
   return {
@@ -360,10 +374,43 @@ export function unifiedFormState() {
             excludedSeconds: 0,
             tags: ['deep'],
           },
+          {
+            id: 81,
+            description: 'client call',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T08:00:00Z',
+            endUtc: '2026-06-24T09:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: true,
+            overlapMinutes: 30,
+            overlapRelation: 'previous',
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: 3600,
+            tags: [],
+          },
+          {
+            id: 82,
+            description: 'deep work',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T09:30:00Z',
+            endUtc: '2026-06-24T13:30:00Z',
+            billableSeconds: 14400,
+            billable: true,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: true,
+            excludedSeconds: 0,
+            rawSeconds: 14400,
+            sleptSeconds: 3600,
+            tags: [],
+          },
         ],
       },
     ],
-    sleepFlaggedIds: [],
+    sleepFlaggedIds: [82],
     settings: DEFAULT_SETTINGS,
   };
 }
@@ -1410,7 +1457,27 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         })).filter((d) => d.entries.length > 0);
         return Promise.resolve({ ...base, days });
       },
-      subtractSleep: () => Promise.resolve(),
+      // §12 R10: toggle the excluded/slept seconds on the snapshot entry so a re-read (getState)
+      // shows the trimmed then restored billable — the unified editor's reversible sleep control
+      // reads this back after each call (core's store.subtractSleep is the real toggle; the mock
+      // mirrors it). sleptSeconds is the fixture's recorded-sleep stand-in (core sums real spans).
+      subtractSleep: (p) => {
+        const id = p && p.id;
+        if (id != null && window.__STATE__ && Array.isArray(window.__STATE__.days)) {
+          for (const d of window.__STATE__.days)
+            for (const e of d.entries) {
+              if (e.id !== id || !e.sleptThrough) continue;
+              const raw = e.rawSeconds != null ? e.rawSeconds : e.billableSeconds;
+              const slept =
+                e.sleptSeconds != null ? e.sleptSeconds : Math.max(0, raw - e.billableSeconds);
+              const restore = (e.excludedSeconds || 0) > 0;
+              e.rawSeconds = raw;
+              e.excludedSeconds = restore ? 0 : slept;
+              e.billableSeconds = raw - e.excludedSeconds;
+            }
+        }
+        return Promise.resolve();
+      },
       // Records that a removal actually fired, so the DELETE_CONFIRM / CONFIRM_DELETE
       // scenes can assert the first Delete click only ARMS the confirm step and does not
       // remove yet. __REMOVED__ is the boolean the legacy DELETE_CONFIRM reads; __REMOVE_CALLS__
