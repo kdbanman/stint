@@ -564,6 +564,73 @@ export function liveState() {
 }
 
 /**
+ * §12 R16 — the ENTRIES_CALENDAR fixture. A whole Monday-start week (Jun 22–28, containing the
+ * pinned Wednesday JUDGE clock) that exercises every calendar fact the scene asserts. The scene
+ * runs its page in timezoneId 'UTC' so each UTC instant lands on a deterministic local time on
+ * the 24h track:
+ *   Mon 06-22 — an OVERLAP pair (09:00–11:00 vs 10:30–12:00, 30m warn band) plus an OFF-HOURS
+ *               entry BEFORE working-start (06:00–06:45, above the 07:00 default viewport);
+ *   Tue 06-23 — a SLEPT entry (13:00–17:00, raw 4h trimmed to 3h billable → the `.zz` hatch) plus
+ *               an OFF-HOURS entry AFTER working-end (19:00–20:00, below the 18:00 default viewport);
+ *   Wed 06-24 — the RUNNING/open entry (09:00–, future-fade, no end) plus a plain closed entry;
+ *   Thu–Sun   — EMPTY days (present-but-empty `.dcol`).
+ * All entries are billable, so the per-day header totals and the range chip are deterministic:
+ * Mon 4.25h, Tue 4.00h, Wed 1.00h, week 9.25h. The off-hours entries prove the 24h track SCROLLS
+ * (never clips): they are in the DOM and reachable though the viewport opens on working hours.
+ */
+export function entriesCalendarState() {
+  const ev = (o) => ({
+    overlapped: false,
+    overlapMinutes: 0,
+    overlapRelation: null,
+    sleptThrough: false,
+    excludedSeconds: 0,
+    rawSeconds: o.billableSeconds,
+    tags: [],
+    ...o,
+  });
+  const running = {
+    id: 6,
+    description: 'drafting proposals',
+    clientLabel: 'Globex / Ops',
+    startUtc: '2026-06-24T09:00:00Z',
+    billableSeconds: 0,
+    billable: true,
+    sleptThrough: false,
+    tags: [],
+  };
+  return {
+    status: { running: true, entry: running },
+    days: [
+      {
+        day: '2026-06-22',
+        entries: [
+          ev({ id: 3, description: 'early standup', clientLabel: 'Acme / API', startUtc: '2026-06-22T06:00:00Z', endUtc: '2026-06-22T06:45:00Z', billableSeconds: 2700, billable: true }),
+          ev({ id: 1, description: 'client call', clientLabel: 'Acme / API', startUtc: '2026-06-22T09:00:00Z', endUtc: '2026-06-22T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'next' }),
+          ev({ id: 2, description: 'market research', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T10:30:00Z', endUtc: '2026-06-22T12:00:00Z', billableSeconds: 5400, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'previous' }),
+        ],
+      },
+      {
+        day: '2026-06-23',
+        entries: [
+          ev({ id: 4, description: 'deep work', clientLabel: 'Globex / Ops', startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T17:00:00Z', billableSeconds: 10800, billable: true, sleptThrough: true, excludedSeconds: 3600, rawSeconds: 14400 }),
+          ev({ id: 5, description: 'evening wrap', clientLabel: 'Acme / API', startUtc: '2026-06-23T19:00:00Z', endUtc: '2026-06-23T20:00:00Z', billableSeconds: 3600, billable: true }),
+        ],
+      },
+      {
+        day: '2026-06-24',
+        entries: [
+          ev({ id: 6, description: 'drafting proposals', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T09:00:00Z', endUtc: null, billableSeconds: 0, billable: true }),
+          ev({ id: 7, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T14:00:00Z', endUtc: '2026-06-24T15:00:00Z', billableSeconds: 3600, billable: true }),
+        ],
+      },
+    ],
+    sleepFlaggedIds: [4],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * §12 R11 — the Settings-view fixture. The panel renders from getState().settings (the
  * eight §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
  * SETTINGS_VIEW scene opens the panel, asserts a control for every setting, and screenshots

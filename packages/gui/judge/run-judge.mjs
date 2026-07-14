@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2112,6 +2112,156 @@ async function main() {
       'entries-calendar.png',
     );
   });
+
+  // CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
+  // entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
+  // calendar half is ENTRIES_CALENDAR above). Deterministic sub-facts, machine-scored under the
+  // pinned JUDGE clock with the page pinned to timezoneId 'UTC' so the fixture's UTC instants map
+  // to a stable local-time geometry on the 24h track:
+  //   • fixed & EQUAL-width day columns (never stretched to fill) — every `.dcol` measures the same
+  //     comfortable width; the week does not fit, so the strip scrolls horizontally
+  //     (`.cstrip` scrollWidth > clientWidth);
+  //   • the viewport DEFAULTS to working hours (scrollTop lands on the 07:00 offset, > 0) over a
+  //     FULL 24h track (`.dt` ~24h tall) that SCROLLS, never clips — an entry BEFORE working-start
+  //     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
+  //   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
+  //     toolbar range chip (#week-total) shows the week total (9.25h);
+  //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
+  //   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
+  //   • clicking an `.ev` body opens the unified editor inline (`.edit-form.entry-form`);
+  //   • the RUNNING block carries the future-fade gradient with no end edge;
+  //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
+  //   • checking two `.ck` boxes reveals #merge-bar.
+  // Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
+  // regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
+  {
+    const page = await browser.newPage({ viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
+    await page.goto(fileUrl('index.html'));
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+
+    // The 24h track geometry the renderer uses (HOUR_PX=44), replicated to check off-hours
+    // positioning: working-start 07:00 → 420 min → ~308px; working-end 18:00 → 1080 min → ~792px.
+    const pxPerMin = 44 / 60;
+    const workStartPx = 420 * pxPerMin;
+    const workEndPx = 1080 * pxPerMin;
+
+    const structure = await page.evaluate(
+      ({ workStartPx, workEndPx }) => {
+        const cols = [...document.querySelectorAll('.dcol')];
+        const colWidths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+        const strip = document.querySelector('.cstrip');
+        const track = document.querySelector('.dt');
+        const evs = [...document.querySelectorAll('.dcol .ev')];
+        const evTop = (el) => parseFloat(el.style.top) || 0;
+        // A day header's billable total, keyed by its day-of-month label.
+        const dayTotals = {};
+        for (const dh of document.querySelectorAll('.dcol .dh')) {
+          const dd = dh.querySelector('.dd')?.textContent?.trim();
+          dayTotals[dd] = dh.querySelector('.ds')?.textContent?.trim() ?? null;
+        }
+        // An empty day = a `.dcol` whose `.dt` holds no `.ev`.
+        const emptyCols = cols.filter((c) => c.querySelectorAll('.dt .ev').length === 0).length;
+        const runEv = document.querySelector('.dcol .ev.run');
+        const runBg = runEv ? getComputedStyle(runEv).backgroundImage : '';
+        const runBt = runEv ? runEv.querySelector('.bt')?.textContent?.trim() ?? '' : '';
+        return {
+          colCount: cols.length,
+          colWidths,
+          allEqualWidth: colWidths.length > 0 && colWidths.every((w) => w === colWidths[0]),
+          fixedWidth: colWidths[0] ?? 0,
+          hScroll: !!strip && strip.scrollWidth > strip.clientWidth,
+          vScroll: !!strip && strip.scrollHeight > strip.clientHeight,
+          scrollTop: strip ? Math.round(strip.scrollTop) : 0,
+          trackHeight: track ? Math.round(track.getBoundingClientRect().height) : 0,
+          evCount: evs.length,
+          // The off-hours entries are present in the DOM (never clipped): one above the working
+          // window (top < 07:00 offset) and one below it (top > 18:00 offset).
+          hasBeforeWork: evs.some((el) => evTop(el) < workStartPx),
+          hasAfterWork: evs.some((el) => evTop(el) > workEndPx),
+          dayTotals,
+          weekTotal: document.querySelector('#week-total')?.textContent?.trim() ?? null,
+          emptyCols,
+          overlapBands: document.querySelectorAll('.dcol .ov').length,
+          sleptHatch: document.querySelectorAll('.dcol .ev .zz').length,
+          runPresent: !!runEv,
+          runFade: /gradient/.test(runBg),
+          // The running/open block shows only a START time — no end (no full HH:MM–HH:MM range).
+          runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
+        };
+      },
+      { workStartPx, workEndPx },
+    );
+    await page.screenshot({ path: join(EVIDENCE, 'main-calendar.png') });
+
+    // Hover an event → the ops (Delete / Split / Edit) + the corner checkbox reveal.
+    await page.hover('.entry[data-id="7"]');
+    await page.waitForTimeout(250);
+    const hover = await page.evaluate(() => {
+      const ev = document.querySelector('.entry[data-id="7"]');
+      const opsSmall = ev?.querySelector('.ops .small');
+      return {
+        opsRevealed: opsSmall ? parseFloat(getComputedStyle(opsSmall).opacity) > 0.5 : false,
+        hasDelete: !!ev?.querySelector('[data-act="delete"]'),
+        hasSplit: !!ev?.querySelector('[data-act="split"]'),
+        hasEdit: !!ev?.querySelector('[data-act="edit"]'),
+        hasCheckbox: !!ev?.querySelector('.ck'),
+      };
+    });
+
+    // Clicking an event body opens the unified editor inline (an off-hours event, so this also
+    // exercises the scroll-into-view reachability of the never-clipped 24h track).
+    await page.click('.entry[data-id="5"] .bd');
+    await page.waitForSelector('.entry[data-id="5"] .edit-form.entry-form', { state: 'attached' });
+    const editorOpen = await page.evaluate(
+      () => !!document.querySelector('.entry[data-id="5"] .edit-form.entry-form'),
+    );
+
+    // Checking two corner checkboxes enters multi-select and reveals the merge bar.
+    const mergeHiddenBefore = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
+    await page.check('.entry[data-id="7"] .ck');
+    await page.check('.entry[data-id="2"] .ck');
+    await page.waitForFunction(() => !document.querySelector('#merge-bar')?.hidden);
+    const mergeShown = await page.evaluate(() => {
+      const bar = document.querySelector('#merge-bar');
+      return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+    });
+
+    const columnsOk =
+      structure.colCount === 7 &&
+      structure.allEqualWidth &&
+      structure.fixedWidth >= 110 &&
+      structure.fixedWidth <= 140 &&
+      structure.hScroll;
+    const neverClipOk =
+      structure.vScroll &&
+      structure.scrollTop > 200 &&
+      structure.scrollTop < 500 &&
+      structure.trackHeight >= 1000 &&
+      structure.hasBeforeWork &&
+      structure.hasAfterWork;
+    const totalsOk =
+      structure.dayTotals['22'] === '4.25h' &&
+      structure.dayTotals['24'] === '1.00h' &&
+      structure.weekTotal === '9.25h';
+    const emptyOk = structure.emptyCols >= 1;
+    const flagsOk = structure.overlapBands >= 1 && structure.sleptHatch >= 1;
+    const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
+    const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
+    const ok =
+      columnsOk && neverClipOk && totalsOk && emptyOk && flagsOk && runOk && hoverOk &&
+      editorOpen && mergeHiddenBefore && mergeShown;
+    record(
+      'CALENDAR_LAYOUT',
+      ok,
+      `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
+        `editorOpen=${editorOpen}; merge hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown}`,
+      'main-calendar.png',
+    );
+    await page.close();
+  }
 
   // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
   // visible list AND the report total, recomputed from the in-memory snapshot with no IPC

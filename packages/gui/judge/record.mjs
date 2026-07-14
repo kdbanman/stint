@@ -41,6 +41,7 @@ import {
   multilineDescState,
   addFormState,
   listState,
+  entriesCalendarState,
   timerViewRunningState,
   timerViewFavoritesState,
   timerViewEmptyFavoritesState,
@@ -1290,6 +1291,44 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('One merged event remains, spanning earliest start to latest end'));
       await wait(page, 1200);
+    },
+  },
+
+  // §12 R16 — the readonly entries CALENDAR. Over a whole week of fixed-width day columns (each
+  // with its per-day billable header total, plus the range chip), the recording: scrolls the strip
+  // HORIZONTALLY across the columns (the week does not fit — the columns stay a fixed comfortable
+  // width, never stretched/compressed); scrolls the 24h track VERTICALLY to reveal the off-hours
+  // entries (scroll, never clip — every hour is reachable though the viewport opens on working
+  // hours); and hovers an event to reveal its Delete / Split / Edit ops + the corner checkbox. The
+  // empty days sit as present-but-empty columns throughout.
+  '§12 R16': {
+    page: 'index.html',
+    state: entriesCalendarState,
+    drive: async (page) => {
+      await page.waitForSelector('.dcol .ev');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Entries — a readonly week calendar (§12 R16)'));
+      await wait(page, 1100);
+      // Fixed-width day columns with per-day header totals + a range chip; scroll the week.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Fixed-width day columns, per-day totals + a range chip'));
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = s.scrollWidth; });
+      await wait(page, 900);
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = 0; });
+      await wait(page, 800);
+      // The 24h track scrolls — off-hours entries are reachable, never clipped.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('The 24h track scrolls — off-hours entries stay reachable, never clipped'));
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 0; });
+      await wait(page, 800);
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = s.scrollHeight; });
+      await wait(page, 900);
+      // Hover an event to reveal its ops + corner checkbox.
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 240; });
+      await page.hover('.entry[data-id="7"]').catch(() => {});
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox'));
+      await wait(page, 1300);
     },
   },
 

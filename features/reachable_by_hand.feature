@@ -69,13 +69,21 @@ Feature: Every capability reachable by hand
     Then there is one entry from 09:00 to 11:00
     And the merged entry is for "Acme / Billing"
 
-  Scenario: Search and filter the entry list by hand (the Entries control bar)
-    # §12 R9 / §11 — filter + free-text search the entries list from the window; grouping left
-    # this view for Reports (G11). GUI: #entries-ctrl → `listEntries` IPC; tt: `tt list --search`.
+  Scenario: Browse, search and filter the readonly entries calendar by hand (the Entries view)
+    # §12 R16 / §12 R9 / §11 — the Entries view content is a READONLY calendar the freelancer
+    # browses, searches and filters from the window; there is NO grouping here (it left for Reports,
+    # G11). The calendar's day-headers + range chip present per-day and range billable totals, and
+    # the toolbar's search/filter narrow which entries the calendar lays out. GUI: the readonly
+    # calendar over `getState`/`listEntries` IPC; tt: `tt list --search`. (The calendar's on-screen
+    # affordances — hover Delete/Split/Edit, click-opens-editor, corner-checkbox merge — reach the
+    # edit/split/merge capabilities covered by the scenarios above; this asserts the read/narrow set
+    # behind the view is whole and identical on both surfaces.)
     Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
     When I list entries this week
     Then the entry list is exactly "auth refactor,deploy pipeline"
+    And the day "2026-06-24" has a billable total of 2 hours
+    And the range billable total is 3 hours
     When I search the entry list for "auth"
     Then the entry list is exactly "auth refactor"
     And the entry list does not show "deploy pipeline"
