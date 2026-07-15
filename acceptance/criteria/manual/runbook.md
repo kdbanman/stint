@@ -110,7 +110,7 @@ converting local time to UTC through the same core path the CLI uses.
 2. Enter a description, optionally a client/project and tags, then set **From** and
    **To** to a past range earlier today (e.g. 09:00 → 10:30 local) and click **Save
    entry**.
-   - [ ] The form closes and a new completed entry appears in the correct day group
+   - [ ] The form closes and a new completed entry appears in the correct day column
          with the duration matching the from/to range (e.g. 1h 30m).
    - [ ] `tt list --all` shows the same entry with the same client/project, tags, and
          billable flag — the GUI add and `tt add` are the same write through core.
@@ -223,7 +223,8 @@ terminal pointed at the same database.
    that **disagree** on client/billable — e.g.
    `tt add "api work" --from "3h ago" --to "2h ago" --client "Client A" --project API`
    then `tt add "internal sync" --from "2h ago" --to "1h ago" --no-billable` (no client).
-   Confirm both rows show in the day group, each with a leading **select** checkbox.
+   Confirm both events show on the entries calendar (in their day columns), each exposing a
+   hover-corner **select** checkbox.
 2. Tick the first entry's checkbox.
    - [ ] The **Merge** action stays hidden with only one entry selected.
 3. Tick the second entry's checkbox.
@@ -490,26 +491,27 @@ on a real session.
 > Cross-surface agreement: the same queries against `tt list --search <query>` /
 > `tt report --search <query>` return the same entries / totals (full parity, §17 R8).
 
-## CHECK ENTRY LIST GROUPING, FILTERING & SEARCH (GUI) — the §12 R9 control bar at parity (§12 R9, §17 R8)
+## CHECK ENTRIES CALENDAR — RANGE, FILTERING & SEARCH (GUI) — the §12 R9 toolbar at parity (§12 R9, §12 R16, §17 R8)
 
-The grouping/filtering/search model is core's `buildEntryList` + `store.listEntries`, proven
-surface-neutral on core AND tt by `features/entry_list.feature` (group by day/client/project/
-tag, range/client/project/tag filters, free-text search — run TWICE) and pinned by GOLD
-(`core/test/entrylist.test.ts`, `cli/test/gold/cli.test.ts` `tt list --by/--search`). The
-renderer wiring (the Entries control bar re-querying `window.stint.listEntries` and
-repainting the grouped list) is OS-presentation headless CI does not fully assert; this
-confirms it live and cross-checks it against `tt list` with equivalent flags.
+The filtering/search model is core's `buildEntryList` + `store.listEntries`, proven
+surface-neutral on core AND tt by `features/entry_list.feature` (range/client/project/tag
+filters) + `features/search.feature` (free-text search — run TWICE) and pinned by GOLD
+(`core/test/entrylist.test.ts`, `cli/test/gold/cli.test.ts` `tt list --search`). There is
+**no grouping** in the Entries view — grouped breakdowns live in Reports (§09 R2 /
+`tt report --by`, G11); the toolbar only narrows *which* entries the readonly calendar
+(§12 R16) lays into its day columns. The renderer wiring (the Entries toolbar re-querying
+`window.stint.listEntries` and repainting the calendar) is OS-presentation headless CI does
+not fully assert; this confirms it live and cross-checks it against `tt list` with
+equivalent flags.
 
 1. Seed a few entries this week against a known DB, e.g.:
    `tt add "auth refactor" --from "Mon 09:00" --to "Mon 11:00" --client "Acme" --project "Billing" --tag deep`,
    `tt add "deploy pipeline" --from "Tue 11:00" --to "Tue 12:00" --client "Globex" --project "Ops" --tag ci`,
    `tt add "standup" --from "Tue 08:00" --to "Tue 08:30" --client "Acme" --project "Billing" --tag meeting`.
-2. In the running app, on the Entries view, use the **Group by** control to switch between
-   **Day / Client / Project / Tag**.
-   - [ ] The list **regroups live** each time, the group header showing the key + the summed
-         billable hours; a multi-tag entry appears under each of its tags under Tag grouping.
-   - [ ] Each grouping matches `tt list --by <day|client|project|tag>` (the same buckets,
-         the same per-group hours).
+2. In the running app, open the Entries view.
+   - [ ] The content is the **readonly entries calendar** (§12 R16) — fixed-width day columns
+         with per-day billable totals in the headers and a range-total chip — and there is
+         **no Group-by control** (grouping left this view for Reports, §09 R2 / G11).
 3. Pick a **range preset** (e.g. This week), then switch to **Custom…** and enter the **two
    plain dates** (§09 R1 / G3: from-day and to-day, no time component) covering only one day.
    - [ ] The list narrows **live as soon as both dates are set** — there is no Apply button.
@@ -520,15 +522,15 @@ confirms it live and cross-checks it against `tt list` with equivalent flags.
    - [ ] The list narrows to the chosen client / project / tag, matching
          `tt list --client … / --project … / --tag …`.
 5. Type into the **search** box (e.g. `refactor`, then a client name, then a tag).
-   - [ ] The list narrows **live** (no Enter needed) to the matching entries; matching is
-         case-insensitive and hits description / client / project / tag, matching
-         `tt list --search <query>` (composed with the active grouping + filters).
-6. Clear the search and reset the controls to **Day / This week / no filters**.
-   - [ ] The plain day-grouped list is restored, identical to the first load.
+   - [ ] The visible calendar events narrow **live** (no Enter needed) to the matching
+         entries; matching is case-insensitive and hits description / client / project / tag,
+         matching `tt list --search <query>` (composed with the active range + filters).
+6. Clear the search and reset the controls to **This week / no filters**.
+   - [ ] The plain readonly calendar is restored, identical to the first load.
 
-> Cross-surface agreement (full parity, §17 R8): every Entries-view grouping/filter/search
-> reproduces `tt list --by/--range/--client/--project/--tag/--search` exactly — the GUI
-> control bar reaches nothing tt cannot.
+> Cross-surface agreement (full parity, §17 R8): every Entries-view range/filter/search
+> reproduces `tt list --range/--client/--project/--tag/--search` exactly — the GUI
+> toolbar reaches nothing tt cannot.
 
 ## CHECK CONFIRM DESTRUCTIVE (GUI) — a destructive action confirms in the window (§12 R13)
 
@@ -540,9 +542,10 @@ BDD-covered. JUDGE `CONFIRM_DELETE` (`main-confirm-delete.png`) and the renderer
 guard prove the gate in headless CI; this confirms it on a real desktop/DB.
 
 1. Open the main window with at least one entry (or `tt add "design review" --from "2h ago"
-   --to "30m ago" --client "Acme"`). Confirm the row shows in its day group, and note the
+   --to "30m ago" --client "Acme"`). Confirm the event shows in its day column, and note the
    row count in `tt list`.
-2. On the entry's row, click **Delete** (the row's or the consolidated editor's).
+2. On the entry's calendar event, click **Delete** (the event's hover Delete, or the unified
+   editor's footer Delete).
    - [ ] The entry is **not** removed — the button swaps into an in-window confirm
          affordance ("Confirm delete?") with a destructive **Delete** and a **Cancel**.
    - [ ] `tt list` still shows the entry (the stray first click destroyed nothing).
@@ -636,9 +639,10 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    (c) multi-select two adjacent rows and **Merge** them (resolving the conflict prompt if
    the selection disagrees), (d) **Delete** a row through its two-step confirm.
    - [ ] Each of edit / split / merge / delete completes entirely in the window (§12 R6/R13).
-4. In the **Entries** view, switch **group-by** (day/client/project/tag), apply a **range
-   preset** and a **client/project/tag filter**, and type in the **search** box.
-   - [ ] The list regroups, narrows, and searches live — no terminal (§12 R9).
+4. In the **Entries** view, apply a **range preset** (or a Custom plain-date range) and a
+   **client/project/tag filter**, and type in the **search** box — grouping lives in Reports,
+   not here (G11).
+   - [ ] The readonly entries calendar (§12 R16) narrows and searches live — no terminal (§12 R9).
 5. In the **Reports** view, pick a range, choose a **group-by**, toggle **billable** and
    **rounding**, read the on-screen grouped totals, then **Export CSV** and **Export JSON**.
    - [ ] The summary updates and both files are written via the OS save dialog (§12 R8, §09 R6).
@@ -651,7 +655,7 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    - [ ] Each setting persists immediately and the relevant control reflects it (§12 R11).
 9. Final tally:
    - [ ] You completed start-with-attributes → backfill → edit/split/merge/delete →
-         entries grouping/filter/search → report builder + CSV/JSON export → client/project/tag
+         entries range/filter/search → report builder + CSV/JSON export → client/project/tag
          create/rename/archive → every setting **without once opening a terminal**. R10 holds.
 
 ## CHECK DESTRUCTIVE CONFIRM + LIVE FILTER (§17 R11)
@@ -659,8 +663,9 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
 R11 has two halves, both renderer facts the headless JUDGE drives but only the **real
 desktop window** confirms with a real OS theme/DB/dialog: (a) destructive actions
 **confirm before acting** — no entry is destroyed on a single stray click; and (b)
-**search / filter / group** selections are reflected **live in the list AND the report
-total**, recomputed from the in-memory snapshot with no reload. JUDGE proves both headless
+**search / filter** selections on the Entries calendar are reflected **live in the calendar
+AND its total** (and grouping selections live in the Reports totals), recomputed from the
+in-memory snapshot with no reload. JUDGE proves both headless
 (`CONFIRM_DESTRUCTIVE` → `main-confirm.png`, `LIVE_FILTER` → `main-filtered.png`); this is
 the by-hand confirmation on a real window.
 
@@ -681,9 +686,9 @@ the by-hand confirmation on a real window.
    you **type in the search box**.
    - [ ] On each keystroke the visible rows narrow to the matches **and** the total updates
          in lockstep to the billable sum of the surviving rows — instantly, no flicker or reload.
-6. Switch the **group-by** (day ↔ client) and toggle the **billable** filter.
-   - [ ] The list regroups and the total re-sums live, and the figure matches `tt report`
-         run with the equivalent flags for the same selection.
+6. Toggle the **billable** filter on the Entries toolbar.
+   - [ ] The visible calendar events and the total re-sum live, and the figure matches
+         `tt list` / `tt report` run with the equivalent flags for the same selection.
 7. Clear the search and reset the filters.
    - [ ] The list and the total both return to the full week — the live view and the plain
          load agree.
