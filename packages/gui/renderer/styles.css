@@ -513,9 +513,10 @@ s {
   min-width: 200px;
 }
 
-/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets,
-   group-by + billable segments, and client/project/tag filters. Sits on the warm canvas;
-   every control is monochrome (accent stays on the primary action + running state). */
+/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets, the
+   billable segment, and client/project/tag filters (no grouping — grouping left this view
+   for Reports, G11). Sits on the warm canvas; every control is monochrome (accent stays on
+   the primary action + running state). */
 /* The control bar reads as quiet inline controls on the paper canvas, not a heavy nested card
    (design-system: no decorative boxes; surface is signalled by elevation, and these controls
    are flush with the list they filter). A single hairline separates them from the entries. */
@@ -810,7 +811,6 @@ textarea:focus-visible {
    keeping a muted border further below). */
 input[type="text"]:focus:not(:focus-visible),
 input[type="search"]:focus:not(:focus-visible),
-input[type="datetime-local"]:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
 textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 
@@ -893,15 +893,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: 999px;
   padding: 1px 9px;
 }
-.entry .actions { display: inline-flex; flex-direction: row-reverse; gap: 4px; align-items: center; float: right; margin-left: 12px; }
-/* A row reads calm: at rest only the kebab (⋯) shows; the explicit Edit / Split / Delete reveal
-   on hover or keyboard focus. They stay in the DOM (and stay Playwright-clickable
-   via opacity, not display:none) so every affordance and selector is intact — only the visual
-   noise is hidden until the row is engaged. */
-.entry .actions .small:not(.kebab) { opacity: 0; transition: opacity 0.12s ease; }
-.entry:hover .actions .small,
-.entry:focus-within .actions .small { opacity: 1; }
-
 /* §12 R06 (G5): the unified entry form in EDIT MODE — the SAME view-level card add mode uses
    (#entry-form-host), NOT crammed into the calendar event. It sits in the view flow with the
    same paper-on-wash card chrome as the add form (.unified-form). Monochrome; only Save carries
@@ -916,65 +907,11 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: var(--r2);
   background: var(--wash);
 }
-.entry-form .edit-row { display: flex; gap: 10px; }
-.entry-form input[type="text"],
-.entry-form input[type="datetime-local"] {
-  flex: 1;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.entry-form .edit-field {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.entry-form .edit-field > span { white-space: nowrap; }
-.entry-form select {
-  flex: 1;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.entry-form .edit-bill {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--ink);
-}
-/* §12 R06: the unified entry form's project select shares the client select's chrome; a
-   disabled project (no client chosen yet) reads dimmed. */
-.entry-form select:disabled { color: var(--muted); background: var(--wash); }
-/* §12 R06 (G6): the in-form tag chip editor — the removable chips + the add input sit inline in
-   the Tags field, reusing the row chip chrome. */
-.entry-form .ef-tags { align-items: flex-start; }
-.entry-form .ef-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
-.entry-form .ef-tag-add {
-  flex: 1;
-  min-width: 90px;
-  font-family: var(--sans);
-  font-size: 12px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 5px 9px;
-}
-/* §12 R17: the collapsed Start/Stop expander — a quiet disclosure toggle over the raw exact-time
-   fields (the overnight / exact escape hatch). Monochrome; no accent. */
-.entry-form .ef-times { flex-direction: column; align-items: stretch; gap: 8px; }
+/* §12 R06 (G5): the edit form carries `unified-form`, so the two-column `.uf-body` grid and the
+   shared `.uf-*` field / select / tag / billable / expander / footer rules style it identically
+   to add mode — one layout, two seedings. The `.edit-*`/`.ef-*` hooks the JUDGE + tests target
+   ride alongside those `.uf-*` styling classes. The only edit-specific layout that remains is the
+   quiet Start/Stop disclosure toggle (§12 R17) — a monochrome text button, no accent. */
 .entry-form .ef-times-toggle {
   align-self: flex-start;
   font-family: var(--sans);
@@ -986,12 +923,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   cursor: pointer;
 }
 .entry-form .ef-times-toggle:hover { color: var(--ink); }
-.entry-form .ef-times-body { display: flex; gap: 10px; }
-/* §12 R06: the edit-mode footer — Split on the leading edge, then Save entry / Cancel / Delete
-   pushed to the trailing edge by the flexible spacer. Only Save entry carries the accent (§15);
-   Split, Cancel and Delete are quiet ghosts (danger conveyed by the confirm gate, not colour). */
-.entry-form .edit-foot { display: flex; gap: 9px; align-items: center; }
-.entry-form .ef-foot-spacer { flex: 1; }
 
 /* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
    danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */
@@ -1024,7 +955,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 12px;
   color: var(--muted);
 }
-.split-at input[type="datetime-local"] {
+.split-at input[type="text"] {
   font-family: var(--sans);
   font-size: 12px;
   color: var(--ink);
@@ -1488,9 +1419,11 @@ button.danger:hover { background: var(--danger-weak); }
 .builder-note { font-size: 11.5px; color: var(--faint); flex: none; }
 .builder-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 
-/* §12 R6: the consolidated entry editor (window.SE). A centred MODAL dialog (the ladder's top
-   rung, --sh-modal) over a dim backdrop, surfacing every tt-editable field plus Split / Delete.
-   Monochrome — only the primary Save (and Split/Merge confirm) reuse .primary. */
+/* §06 R3: the modal chrome for the merge-conflict prompt (app.js openMergeConflict) — a centred
+   dialog (the ladder's top rung, --sh-modal) over a dim backdrop. The consolidated modal entry
+   only the `.editor.conflict-prompt` merge resolver
+   still rides this chrome — the head / body / foot + the conflict rows below. Monochrome; only the
+   Merge confirm reuses .primary. */
 .editor-backdrop {
   position: fixed;
   inset: 0;
@@ -1556,100 +1489,7 @@ button.danger:hover { background: var(--danger-weak); }
   gap: 14px;
   padding: 20px 22px;
 }
-/* Sections are grouped by a quiet hairline, not a worded heading — the fields name themselves. */
-.editor .ed-divider {
-  margin-top: 4px;
-  border-top: 1px solid var(--rule);
-}
-.editor .ed-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  font-size: 12px;
-  color: var(--muted);
-}
-.editor .ed-desc-field,
-.editor .ed-tags-field { width: 100%; }
-.editor .ed-row { display: flex; gap: 12px; }
-.editor textarea,
-.editor input[type="text"],
-.editor input[type="datetime-local"],
-.editor select {
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.editor textarea { resize: vertical; min-height: 42px; }
-/* billable is the design-system toggle wrapping the checkbox */
-.editor .ed-bill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.editor .ed-sw {
-  position: relative;
-  width: 36px;
-  height: 21px;
-  border-radius: 999px;
-  background: #d7cdba;
-  flex: none;
-  transition: background 0.12s;
-}
-.editor .ed-sw input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  margin: 0;
-  cursor: pointer;
-}
-.editor .ed-sw i {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.25);
-  transition: left 0.12s;
-}
-.editor .ed-sw:has(input:checked) { background: var(--accent); }
-.editor .ed-sw:has(input:checked) i { left: 17px; }
-.editor .ed-sw:has(input:focus-visible) { box-shadow: var(--ring); }
-/* The tags area carries no surface of its own — just the chips on the modal's paper, with the
-   add-tag input reading as an inline continuation (design-system: surfaces aren't tinted boxes). */
-.editor .ed-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-left: 0;
-  padding: 2px 0;
-  min-height: 28px;
-}
-.editor .ed-tag-input {
-  border: 0;
-  outline: 0;
-  min-width: 90px;
-  font-size: 12px;
-  font-family: var(--sans);
-  background: transparent;
-  color: var(--ink);
-}
-.editor .ed-split { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.editor .ed-split-form { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.editor .ed-split-q { font-size: 12px; color: var(--muted); }
-.editor .ed-split-err { font-size: 12px; color: var(--flag); }
-.editor .ed-split-err[hidden] { display: none; }
-/* foot — justified row, hairline top, washed; Cancel+Delete grouped left, Save right */
+/* foot — justified row, hairline top, washed; the conflict prompt's Cancel + Merge live here */
 .editor .ed-foot {
   display: flex;
   align-items: center;
@@ -1659,18 +1499,6 @@ button.danger:hover { background: var(--danger-weak); }
   border-top: 1px solid var(--rule);
   background: var(--wash);
 }
-.editor .ed-gate { display: inline-flex; align-items: center; gap: 10px; }
-/* the armed two-step delete gate — worded, danger-flag icon (danger never steals the accent) */
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--ink);
-}
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q .ic { width: 14px; height: 14px; color: var(--danger); }
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q b { font-weight: 590; }
-
 /* §06 R3 / §12 R6: the in-dialog merge conflict resolver (context/mockups/merge-conflict.html).
    Field-by-field accent radios (the accent here is the field-resolution signal, matching the
    mockup) + auto-kept "agree" rows; reuses the .ed-head / .ed-body / .ed-foot chrome above. */
@@ -1753,9 +1581,8 @@ button.danger:hover { background: var(--danger-weak); }
 
 .stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
 
-/* §12 R06/R15: the inline interval picker mounted inside the unified edit form. The single-column
-   edit form gives the picker its full width; the row is a plain block (not the flex .edit-row). */
-.entry-form .edit-picker-row { display: block; }
+/* §12 R06/R15: the inline interval picker mounted inside the unified edit form's right column
+   (`.uf-picker`) — the same two-column body add mode uses; the mount takes its column's full width. */
 .entry-form .edit-picker { width: 100%; }
 
 /* month calendar */
@@ -1888,24 +1715,6 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 52px; display: flex; align-items: center; gap: 8px; }
 .stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; }
-
-/* §12 R6: the per-row actions are quiet, borderless glyph/text buttons — the row itself is the
-   surface, so each control reads as a bare affordance (a soft hover wash on engage), not a
-   bordered button box. The kebab (⋯) opens the consolidated editor; the rest reveal on hover.
-   No accent (row actions never carry it). */
-.entry .actions .small {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  padding: 6px 8px;
-}
-.entry .actions .small:hover { background: var(--hover); color: var(--ink); }
-.entry .kebab {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-}
-.entry .kebab:hover { color: var(--ink); }
 
 /* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
@@ -2393,31 +2202,50 @@ body.popover { background: var(--canvas); margin: 0; }
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
     center / 11px no-repeat;
 }
-/* The hover ops toolbar (Delete / Split / Edit), revealed on hover; the buttons stay in the DOM
-   (and Playwright-clickable via opacity) so every `data-act` selector is intact at rest. */
+/* §12 R16 (mockup main.html): the hover ops chip — a raised paper chip holding three icon-only
+   22×22 line-icon buttons (Delete · Split · Edit). The chip carries the affordance (paper bg,
+   1px line border, 7px radius, raise shadow) on hover; the buttons stay in the DOM and clickable
+   via opacity at rest so every `data-act` selector is intact. DOM order matches the mockup, so no
+   row-reverse. Icon-only + a fixed 22px width keeps the chip compact (~74px) so it clears the
+   top-left corner checkbox even in a narrow day column — no occlusion. */
 .ev .ops {
   position: absolute;
   top: 4px;
   right: 4px;
   z-index: 5;
   display: flex;
-  flex-direction: row-reverse;
   gap: 2px;
   padding: 2px;
   margin: 0;
   float: none;
   border-radius: 7px;
   border: 1px solid transparent;
-  transition: background 0.12s ease, box-shadow 0.12s ease;
+  transition: background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
 }
-/* The toolbar chrome appears on hover; the BUTTONS carry the reveal (opacity, so they stay
-   Playwright-clickable at rest — the proven pattern the row affordances use). */
+/* The raised paper chip appears on hover; the icon buttons carry the reveal (opacity, so they
+   stay Playwright-clickable at rest — the proven pattern the row affordances use). */
 .ev:hover .ops,
 .ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
 .ev:hover { padding-top: 30px; }
-.ev .ops .small { opacity: 0; height: auto; padding: 3px 5px; font-size: 11px; transition: opacity 0.12s ease; }
-.ev:hover .ops .small,
-.ev:focus-within .ops .small { opacity: 1; }
+.ev .ops .op-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.ev:hover .ops .op-btn,
+.ev:focus-within .ops .op-btn { opacity: 1; }
+.ev .ops .op-btn:hover { background: var(--hover); color: var(--ink); }
+.ev .ops .op-btn .ic { width: 13px; height: 13px; }
 /* Running/open event: fades into the future, no bottom edge (G8). */
 .dt .ev.run {
   border: 0;

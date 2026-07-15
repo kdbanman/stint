@@ -202,6 +202,12 @@ describe('renderer static contract', () => {
     // ISO (catching a regression that drops the split call or stops reaching core).
     expect(app).toMatch(/window\.stint\.split\(\{\s*id:\s*e\.id,\s*atUtc\s*\}\)/);
     expect(app).toMatch(/\.toISOString\(\)/);
+    // §06 R2 / G4 / G1: the split instant is a SIMPLE PLAIN-TEXT field (localInputValue format),
+    // not a native datetime-local — the picker/expander are gone from every entry start/stop
+    // surface. openSplitForm builds a type="text" .split-input and no datetime-local input.
+    expect(app).toMatch(/<input type="text" class="split-input"/);
+    expect(app).not.toMatch(/class="split-input"[^>]*type="datetime-local"/);
+    expect(app).not.toMatch(/type="datetime-local" class="split-input"/);
   });
 
   it('Delete is destructive, so it goes through a confirm step (§06 R1)', () => {
@@ -691,50 +697,39 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/\$\('rep-export-json'\)\.addEventListener/);
   });
 
-  it('the consolidated entry editor is a pure renderer module exposing openEditor + split/merge (§12 R6)', () => {
-    const editor = read('editor.js');
+  it('the consolidated modal editor (editor.js / window.SE) is retired; the richer-fields path opens the unified editor (§12 R06 / §Z)', () => {
     const app = read('app.js');
     const html = read('index.html');
-    // editor.js exposes the window.SE module with the consolidated editor + the merge flow…
-    expect(editor).toMatch(/window\.SE\s*=/);
-    expect(editor).toMatch(/function openEditor\(/);
-    expect(editor).toMatch(/mergeSelected/);
-    // …the editor surfaces every tt-editable field (description / client / project / start /
-    // end / tags / billable) and a Split affordance, sending its writes over the same
-    // edit/split/merge/remove IPC tt uses (no name resolution, no new channel)…
-    for (const cls of ['ed-desc', 'ed-client', 'ed-project', 'ed-start', 'ed-end', 'ed-bill-box', 'ed-chips']) {
-      expect(editor, `editor.js must build the .${cls} field`).toMatch(new RegExp(cls));
-    }
-    expect(editor).toMatch(/ed-split-btn/);
-    expect(editor).toMatch(/window\.stint\.edit\(\{\s*id:\s*entry\.id,\s*patch\s*\}\)/);
-    expect(editor).toMatch(/window\.stint\.split\(\{\s*id:\s*entry\.id,\s*atUtc\s*\}\)/);
-    expect(editor).toMatch(/window\.stint\.merge\(/);
-    expect(editor).toMatch(/window\.stint\.remove\(\{\s*id:\s*entry\.id\s*\}\)/);
-    // …editing the RUNNING entry omits End and never sends endUtc (the open row stays open)…
-    expect(editor).toMatch(/const running = entry\.endUtc === null/);
-    expect(editor).toMatch(/if\s*\(!running\s*&&\s*endLocal\)/);
-    // …it resolves no names: the Client select carries the entity id, and the tag delta goes
-    // through the pure window.SU.tagDiff (not bespoke tag logic in the editor)…
-    expect(editor).toMatch(/window\.SU\.tagDiff\(originalTags,\s*nextTags\)/);
-    // …and the disagreeing merge selection raises a conflict prompt asking which to keep,
-    // sending the winning entry's id (winnerId) + the chosen billable, never a resolved name.
-    expect(editor).toMatch(/winnerId/);
-    expect(editor).toMatch(/which .* keep/i);
-
-    // §12 R06: editing an entry no longer opens the modal editor via a per-row kebab — the
-    // kebab (⋯) and its window.SE.openEditor wiring are removed; editing goes through the
-    // inline unified entry form (openEntryForm). editor.js (window.SE) survives only for the
-    // running-entry live-edit richer fields (le-tags / le-project) and the toolbar
-    // Merge-selected control, until §Z removes the file (its merge-conflict host already moved
-    // to app.js, §06 R3).
+    // editor.js (window.SE) is DELETED: the file is gone, index.html no longer loads it, and
+    // app.js references no window.SE surface anywhere (openEditor / mergeSelected / closeEditor).
+    expect(() => read('editor.js')).toThrow();
+    expect(html).not.toMatch(/editor\.js/);
+    expect(app).not.toMatch(/window\.SE\b/);
+    expect(app).not.toMatch(/SE\.openEditor/);
+    expect(app).not.toMatch(/SE\.mergeSelected/);
+    // Editing an entry goes through the inline unified entry form (openEntryForm) — never a modal
+    // opened via a per-row kebab (⋯), which is also gone…
     expect(app).not.toMatch(/data-act="menu"/);
     expect(app).toMatch(/openEntryForm/);
-    expect(app).toMatch(/window\.SE\.openEditor/); // running live-edit richer-fields path
-    expect(app).toMatch(/window\.stint\.listClients\(\)/);
-    expect(app).toMatch(/window\.SE\.mergeSelected/);
-    expect(html).toMatch(/id="merge-selected"/);
-    // …and index.html loads editor.js before app.js (the surviving window.SE paths depend on it).
-    expect(html).toMatch(/src="editor\.js"[\s\S]*src="app\.js"/);
+    expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch\s*\}\)/);
+    // …and the running strip's richer fields (Tags / Client-project) route into that SAME unified
+    // editor: the handler switches to the Entries view and opens the unified form in edit mode
+    // seeded with the running entry (no separate modal, no window.SE).
+    expect(app).toMatch(/const leTags = \$\('le-tags'\)/);
+    expect(app).toMatch(/const leProject = \$\('le-project'\)/);
+    const runEditorBody = app.match(/const openRunningEditor = \(\) => \{[\s\S]*?\n  \};/)?.[0];
+    expect(runEditorBody, 'the openRunningEditor handler must be present').toBeTruthy();
+    expect(runEditorBody!).toMatch(/route\('entries'\)/);
+    expect(runEditorBody!).toMatch(/openEntryForm\(row, e\)/);
+    // …the retired toolbar Merge-selected button (which called window.SE.mergeSelected) is gone
+    // from both the page and app.js; the ONLY merge entry point is the corner-checkbox → merge-bar
+    // → openMergeConflict path (§06 R3)…
+    expect(html).not.toMatch(/id="merge-selected"/);
+    expect(app).not.toMatch(/merge-selected/);
+    // …and the merge-conflict resolver survives in app.js (moved off editor.js, §06 R3) on the
+    // shared `.editor.conflict-prompt` chrome (the resolver itself is exercised by the §06 R3 test).
+    expect(app).toMatch(/function openMergeConflict\(/);
+    expect(app).toMatch(/conflict-prompt/);
   });
 
   it('the Settings view ships editable controls for every §14 setting wired to setSetting (§12 R11)', () => {
@@ -928,7 +923,7 @@ describe('renderer static contract', () => {
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
-    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       expect(src).not.toMatch(/require\(['"]node:/);
       expect(src).not.toMatch(/@stint\/core/);
@@ -940,7 +935,7 @@ describe('renderer static contract', () => {
     // page; assert it uses none of the browser request APIs. (The no-network backstop
     // now also walks this directory; this keeps the guard close to the renderer.)
     const forbidden = [/\bfetch\s*\(/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /sendBeacon/];
-    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
     }
@@ -967,8 +962,10 @@ describe('renderer static contract', () => {
     expect(stp).toMatch(/snapTo5,\s*minutesToY,\s*yToMinutes/); // exported on window.STP
     // The picker NEVER resolves anything itself — it only writes localInputValue strings back
     // into the bound text inputs and fires input/change so the existing add/edit paths see it
-    // (text stays authoritative). No new IPC channel: it never calls window.stint.*.
-    expect(stp).toMatch(/function localInputValue\(/);
+    // (text stays authoritative). It uses the ONE shared window.SU.localInputValue (util.js) —
+    // no duplicate definition of its own. No new IPC channel: it never calls window.stint.*.
+    expect(stp).toMatch(/window\.SU\.localInputValue/);
+    expect(stp).not.toMatch(/function localInputValue\(/);
     expect(stp).toMatch(/dispatchEvent\(new Event\('input'/);
     expect(stp).not.toMatch(/window\.stint\./);
     // The me-rectangle is dragged: BODY drag moves start+stop together; the BOTTOM resize

@@ -801,7 +801,11 @@ async function main() {
         el.matches('input[type="checkbox"], .sel') ||
         !!el.closest('.chip') ||
         !!el.closest('.seg') ||
-        !!el.closest('.presets');
+        !!el.closest('.presets') ||
+        // §12 R16 (mockup main.html): the calendar event's hover-ops chip is a raised paper chip
+        // (paper bg, 1px line border, 7px radius, raise shadow) — the CHIP carries the affordance,
+        // so its inner icon-only op-btns are sub-affordances, exactly like .chip / .seg / .presets.
+        !!el.closest('.ops');
       const visible = (el) => {
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') return false;
@@ -1730,19 +1734,47 @@ async function main() {
       closedHasSplit: !!document.querySelector('.entry[data-id="30"] [data-act="split"]'),
       openHasSplit: !!document.querySelector('.entry[data-id="31"] [data-act="split"]'),
     }));
-    // Hover to reveal the ops, then click the Split button on its CLEAR right edge: in the narrow
-    // calendar column the hover-corner `.ck` checkbox (top-left, z-6) overlaps the button's centre,
-    // so an offset click reaches the un-occluded part (the same button, real pointer event).
+    // §12 R16 (mockup main.html): the hover-ops chip is now three icon-only 22×22 buttons in a
+    // compact raised paper chip (top-right) — it no longer overlaps the top-left corner checkbox,
+    // so a PLAIN click reaches the Split button (the earlier offset-click occlusion workaround is
+    // gone). Verify the geometry: the ops chip and the `.ck` checkbox do not overlap horizontally.
     await page.hover(closedRow);
-    await page.click(`${closedRow} [data-act="split"]`, { position: { x: 36, y: 10 } });
+    await page.waitForSelector(`${closedRow} .ops .op-btn[data-act="split"]`, { state: 'attached' });
+    const geom = await page.evaluate(() => {
+      const row = document.querySelector('.entry[data-id="30"]');
+      const chip = row?.querySelector('.ops')?.getBoundingClientRect();
+      const ck = row?.querySelector('.ck')?.getBoundingClientRect();
+      const col = row?.closest('.dt')?.getBoundingClientRect();
+      // No horizontal overlap between the ops chip and the corner checkbox, and the chip stays
+      // inside its day column.
+      const noOverlap = !!chip && !!ck && (chip.left >= ck.right || ck.left >= chip.right);
+      const chipInColumn = !!chip && !!col && chip.left >= col.left - 0.5 && chip.right <= col.right + 0.5;
+      return { noOverlap, chipInColumn };
+    });
+    await page.click(`${closedRow} [data-act="split"]`);
     await page.screenshot({ path: join(EVIDENCE, 'main-split.png'), fullPage: true });
-    // The inline picker seeds an instant inside the span (the midpoint) and the confirm
+    // §06 R2 / G4 / G1: the split instant is a SIMPLE PLAIN-TEXT field — the input's type is
+    // text, and the split form carries NO native datetime-local anywhere (mirror the unified
+    // form's startIsText / noDatetimeLocal idioms). Probe the open split form before confirming.
+    const splitForm = await page.evaluate(() => {
+      const wrap = document.querySelector('.entry[data-id="30"] .split-at');
+      const input = wrap?.querySelector('.split-input');
+      return {
+        splitInputIsText: input?.getAttribute('type') === 'text',
+        noDatetimeLocal: wrap ? wrap.querySelectorAll('input[type="datetime-local"]').length === 0 : false,
+      };
+    });
+    // The inline plain-text field seeds an instant inside the span (the midpoint) and the confirm
     // control sends it over the split IPC as a UTC ISO.
     await page.click(`${closedRow} [data-act="confirm-split"]`);
     const split = await page.evaluate(() => window.__SPLIT__);
     const ok =
       before.closedHasSplit &&
       !before.openHasSplit &&
+      geom.noOverlap &&
+      geom.chipInColumn &&
+      splitForm.splitInputIsText &&
+      splitForm.noDatetimeLocal &&
       !!split &&
       split.id === 30 &&
       typeof split.atUtc === 'string' &&
@@ -1751,7 +1783,7 @@ async function main() {
     record(
       'SPLIT_AFFORDANCE',
       ok,
-      `closed row exposes Split (open row none=${!before.openHasSplit}); split IPC: ${JSON.stringify(split)}`,
+      `closed row exposes Split (open row none=${!before.openHasSplit}); ops chip clears the corner checkbox=${geom.noOverlap}, chip in column=${geom.chipInColumn}; split input is plain text=${splitForm.splitInputIsText}, no datetime-local=${splitForm.noDatetimeLocal}; split IPC: ${JSON.stringify(split)}`,
       'main-split.png',
     );
   });
@@ -2510,9 +2542,11 @@ async function main() {
     await page.waitForTimeout(250);
     const hover = await page.evaluate(() => {
       const ev = document.querySelector('.entry[data-id="7"]');
-      const opsSmall = ev?.querySelector('.ops .small');
+      // §12 R16 (mockup main.html): the hover ops are icon-only `.op-btn` buttons in the `.ops`
+      // raised paper chip (they carry the reveal via opacity, so they stay clickable at rest).
+      const opsBtn = ev?.querySelector('.ops .op-btn');
       return {
-        opsRevealed: opsSmall ? parseFloat(getComputedStyle(opsSmall).opacity) > 0.5 : false,
+        opsRevealed: opsBtn ? parseFloat(getComputedStyle(opsBtn).opacity) > 0.5 : false,
         hasDelete: !!ev?.querySelector('[data-act="delete"]'),
         hasSplit: !!ev?.querySelector('[data-act="split"]'),
         hasEdit: !!ev?.querySelector('[data-act="edit"]'),

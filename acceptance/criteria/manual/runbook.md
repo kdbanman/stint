@@ -195,8 +195,9 @@ terminal pointed at the same database.
    - [ ] Only **Save entry** carries the accent; Split, Cancel and Delete are quiet.
    - [ ] `tt list --json` shows **every changed field persisted**; the GUI and the DB agree
          (Save went through the same `edit` path `tt` uses, sending only the changed fields).
-4. Re-open the form and, in the footer, click **Split**; pick an instant **inside** the span
-   and confirm.
+4. Re-open the form and, in the footer, click **Split**; in the plain-text instant field
+   (`YYYY-MM-DDTHH:mm`, seeded to the span's midpoint — a simple text input, **no native
+   date-time picker**, G4/G1), type an instant **inside** the span and confirm.
    - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span (the
          boundary is the picked instant; no time is lost or gained), cross-checking `tt split`.
    - [ ] Picking an instant **outside** the span is rejected (core would reject it too).
@@ -255,8 +256,7 @@ terminal pointed at the same database.
 The merge selection surface is the **readonly entries calendar** (§12 R16): each closed
 event carries a **hover-corner checkbox**, and checking any box enters **multi-select
 mode** — every closed event reveals its checkbox and the per-event hover Delete/Split/Edit
-are suppressed while selecting. The conflict prompt is hosted in `app.js` (the modal moved
-off `editor.js`). Running (open) events have no end, so they offer no checkbox.
+are suppressed while selecting. The conflict prompt is hosted in `app.js`. Running (open) events have no end, so they offer no checkbox.
 
 1. Open the main window (Entries view) with at least two **adjacent closed** entries on the
    same day that **disagree** on client/billable — e.g.
