@@ -1791,8 +1791,7 @@ async function main() {
   // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
   // action; merging entries that DISAGREE on client/billable raises the conflict prompt
   // offering the distinct client choices and a billable choice BEFORE committing
-  // (§06 R3, §12 R6). The prompt is now hosted in app.js (moved off editor.js so the modal
-  // editor can retire, §12 modal-editor / §Z) — it is the `.editor.conflict-prompt` modal.
+  // (§06 R3, §12 R6). The prompt is hosted in app.js — the `.editor.conflict-prompt` modal.
   // The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
   // chosen billable go to the main process, which resolves the names. (The selection surface
   // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until

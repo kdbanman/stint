@@ -489,7 +489,7 @@ export function buildProgram(deps: Deps): Command {
           entryFlags(e, overlaps.has(e.id)),
         ];
         // The human table is a single flat list — one line per entry. Grouped
-        // breakdowns live only in `tt report --by` (§09); `tt list` no longer groups.
+        // grouped breakdowns are the report command's job (§09); `tt list` is a flat table.
         io.out(table(headers, entries.map(toRow)));
       });
     });

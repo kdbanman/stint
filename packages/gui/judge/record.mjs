@@ -1278,8 +1278,8 @@ const RECIPES = {
 
   // §06 R03 — MERGE via multi-select. Two contiguous CLOSED entries that DISAGREE on client
   // (and billable) are armed by checking their corner checkboxes; the selection bar reveals a
-  // live "Merge 2 entries" count, and Merge raises the app.js-hosted conflict prompt (moved off
-  // editor.js so the modal editor can retire, §12 modal-editor / §Z). The prompt resolves the
+  // live "Merge 2 entries" count, and Merge raises the app.js-hosted conflict prompt
+  // (§06 R3, §12 R6). The prompt resolves the
   // disagreeing client/billable field-by-field, then commits { ids, winnerId, billable } over
   // the same merge IPC — no clientId/projectId resolved in the renderer. To SHOW the merged
   // event appear (the IPC is mocked), this recipe scopes a local window.stint.merge override
