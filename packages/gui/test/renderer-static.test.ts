@@ -301,8 +301,7 @@ describe('renderer static contract', () => {
     // …clicking Merge routes through mergeSelected, which calls window.stint.merge…
     expect(app).toMatch(/mergeSelected/);
     expect(app).toMatch(/window\.stint\.merge\(/);
-    // …and disagreeing selections raise the app.js-hosted conflict prompt (openMergeConflict,
-    // moved here off editor.js so the modal editor can retire, §12 modal-editor / §Z): the
+    // …and disagreeing selections raise the app.js-hosted conflict prompt (openMergeConflict): the
     // `.editor.conflict-prompt` modal resolving client/project + billable field-by-field,
     // sending the winning entry's id (winnerId) + the chosen billable, never resolving names
     // in the renderer.
@@ -726,7 +725,7 @@ describe('renderer static contract', () => {
     // → openMergeConflict path (§06 R3)…
     expect(html).not.toMatch(/id="merge-selected"/);
     expect(app).not.toMatch(/merge-selected/);
-    // …and the merge-conflict resolver survives in app.js (moved off editor.js, §06 R3) on the
+    // …and the merge-conflict resolver lives in app.js (§06 R3) on the
     // shared `.editor.conflict-prompt` chrome (the resolver itself is exercised by the §06 R3 test).
     expect(app).toMatch(/function openMergeConflict\(/);
     expect(app).toMatch(/conflict-prompt/);
