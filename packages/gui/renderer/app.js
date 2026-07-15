@@ -232,6 +232,10 @@ function calendarModel() {
 // both flow into the SAME readonly calendar (R16); only the never-tracked / no-match empty states
 // short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
 function renderEntries() {
+  // Repainting the calendar closes any open edit form (its host is view-level, so it would
+  // otherwise outlive the events it edited) — matching the old in-event form, which a re-render
+  // wiped. Save/Delete/Split reloads and external refreshes all funnel through here.
+  closeEntryForm();
   const host = $('entries');
   host.innerHTML = '';
   if (entryGroups) {
@@ -573,8 +577,8 @@ function calEvent(e) {
   // §06 R3: the hover-corner checkbox marks a CLOSED span for the multi-select merge; the open
   // row has no end, so it is not offered. It doubles as the legacy `.sel` selection hook.
   if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" aria-label="Select entry" />';
-  // Hover ops: Delete / Split / Edit (+ Subtract sleep / Edit tags), the same `data-act` controls
-  // the row affordances and the JUDGE scenes drive; a click opens the unified editor (wire()).
+  // Hover ops: Delete / Split / Edit, the same `data-act` controls the row affordances and the
+  // JUDGE scenes drive; a click opens the unified editor (wire()), where tags are edited too.
   html += `<span class="ops actions">${actionButtons(e)}</span>`;
   html += `<span class="bd desc${e.billable ? '' : ' nonbill'}">${runDot}${escapeHtml(e.description ?? '(no description)')}</span>`;
   if (e.clientLabel) html += `<span class="bc where">${escapeHtml(e.clientLabel)}</span>`;
@@ -659,8 +663,9 @@ function editorFlagsInnerHtml(e) {
 
 // §12 R16: the entry's hover ops — the same `data-act` controls the row affordances exposed,
 // returned as the bare button set so calEvent can host them in the `.ops` corner toolbar. Kept at
-// parity with the tt verbs: Edit (unified form, §12 R06), Edit tags (§07), Split (closed only,
-// §06 R2), Delete (two-step, §06 R1). Sleep subtract/restore is NOT a calendar-hover op — it is the
+// parity with the tt verbs: Edit (unified form, §12 R06 — tags edit inside that form, §07/G6),
+// Split (closed only, §06 R2), Delete (two-step, §06 R1). Sleep subtract/restore is NOT a
+// calendar-hover op — it is the
 // reversible control inside the unified editor (§12 R10), reached by opening the entry.
 function actionButtons(e) {
   const actions = [];
@@ -670,11 +675,9 @@ function actionButtons(e) {
   // on the entry opens the same form (wired below), so no separate modal or kebab is needed — the
   // consolidated modal editor (window.SE.openEditor) is retired for editing (§12 modal-editor / §Z).
   actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg>Edit</button>');
-  // §07: an in-context tag editor — chips are editable where they show, without opening
-  // the full edit form. Offered on every row (including the open/running one); tags are
-  // independent of the open/closed state.
-  actions.push('<button class="small ghost" data-act="tags" aria-label="Edit tags">Edit tags</button>');
-  // Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
+  // Tags are edited in the unified form's tag-chips editor (§12 R06/G6), reached by Edit — there
+  // is no separate per-row Edit-tags control (DELETED). Split only makes sense on a CLOSED entry
+  // (it needs an instant strictly inside a
   // bounded span). The open/running entry has no end, so it exposes no Split (§06 R2).
   if (e.endUtc !== null) actions.push('<button class="small ghost" data-act="split" aria-label="Split entry">Split</button>');
   actions.push('<button class="small ghost" data-act="delete" aria-label="Delete entry">Delete</button>');
@@ -688,7 +691,6 @@ function wire(row, e) {
       const act = btn.dataset.act;
       if (act === 'select') return toggleSelect(e.id, btn.checked); // multi-select for merge
       else if (act === 'edit') return openEntryForm(row, e); // §12 R06: unified form (edit mode), inline
-      else if (act === 'tags') return openTagEditor(btn, e); // inline; resolves on commit
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
       else if (act === 'delete') return armDelete(btn, e); // two-step; first click only arms
       else return;
@@ -700,7 +702,7 @@ function wire(row, e) {
   // The action buttons/inputs above stopPropagation, so a click on them never also opens the
   // form; a click on the inert body (time / description / duration) does.
   row.addEventListener('click', (ev) => {
-    if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at, .tag-editor')) return;
+    if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at')) return;
     if (row.classList.contains('editing')) return; // already the form
     void openEntryForm(row, e);
   });
@@ -952,94 +954,17 @@ function openSplitForm(btn, e) {
   });
 }
 
-// §07: the inline tag editor. Tags are editable in-context — where the chips show — so a
-// quick tag fix never needs the full edit form. The current tags become removable chips
-// (a `×` drops one); an `add a tag…` input appends a chip on Enter/comma. On commit
-// (Save / Enter on empty / blur) the editor diffs the resulting chip set against the
-// entry's current tags via the pure window.SU.tagDiff and sends the minimal
-// { addTags, removeTags } over the same `edit` IPC tt uses — the renderer holds no tag
-// logic, only this gathered chip set. Mirrors context/mockups/edit-entry.html's chip UI.
-function openTagEditor(btn, e) {
-  const original = (e.tags ?? []).slice();
-  // The live working set the editor mutates; commit diffs THIS against `original`.
-  const next = original.slice();
-
-  const wrap = document.createElement('span');
-  wrap.className = 'tag-editor';
-  // The chip row (removable chips + the add input) and the commit/cancel controls. Built
-  // empty, then repopulated by renderChips so add/remove re-render from `next` alone.
-  wrap.innerHTML =
-    `<span class="chips tag-edit-chips"></span>` +
-    `<button class="small primary" type="button" data-act="commit-tags">Save</button>` +
-    `<button class="small ghost tag-cancel" type="button">Cancel</button>`;
-  btn.replaceWith(wrap);
-
-  const chips = wrap.querySelector('.tag-edit-chips');
-  function renderChips() {
-    chips.innerHTML = '';
-    for (const t of next) {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
-      chip.querySelector('.chip-x').addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const i = next.indexOf(t);
-        if (i >= 0) next.splice(i, 1);
-        renderChips();
-        input.focus();
-      });
-      chips.appendChild(chip);
-    }
-    chips.appendChild(input);
-  }
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'tag-add-input';
-  input.placeholder = 'add a tag…';
-  input.autocomplete = 'off';
-  // Enter or comma commits the typed tag as a chip; an Enter on an EMPTY input commits
-  // the whole edit (mirrors the Save action). De-dup is case-insensitive — re-adding an
-  // existing tag is a no-op the same way tagDiff treats it.
-  function addTyped() {
-    const name = input.value.trim();
-    input.value = '';
-    if (!name) return false;
-    if (!next.some((t) => t.toLowerCase() === name.toLowerCase())) next.push(name);
-    renderChips();
-    input.focus();
-    return true;
-  }
-  input.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
-      ev.preventDefault();
-      if (input.value.trim()) addTyped();
-      else void commit();
-    } else if (ev.key === ',') {
-      ev.preventDefault();
-      addTyped();
-    }
-  });
-
-  async function commit() {
-    addTyped(); // fold any half-typed tag still in the input
-    const { addTags, removeTags } = tagDiff(original, next);
-    if (addTags.length === 0 && removeTags.length === 0) return render(); // no-op
-    await window.stint.edit({ id: e.id, patch: { addTags, removeTags } });
-    await load();
-  }
-
-  wrap.querySelector('[data-act="commit-tags"]').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    void commit();
-  });
-  wrap.querySelector('.tag-cancel').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    render(); // discard — repaint from state, dropping the editor
-  });
-
-  renderChips();
-  input.focus();
+// §12 R06 (G5): tear down the open edit-mode form. It lives in the view-level #entry-form-host
+// (not inside the calendar event), so closing it means removing the mounted form and dropping the
+// .editing selection state from whichever calendar event carried it. Called on Cancel, whenever the
+// calendar repaints (renderEntries — a Save/Delete/Split reload, or an external refresh, replaces
+// the form the same way the old in-event mount was wiped by a re-render), and before opening a new
+// form so only one unified form (add or edit) is ever on screen. Idempotent when nothing is open.
+function closeEntryForm() {
+  const host = $('entry-form-host');
+  const form = host?.querySelector('.entry-form');
+  if (form) form.remove();
+  document.querySelectorAll('.entry.editing').forEach((el) => el.classList.remove('editing'));
 }
 
 // §12 R06 (G5/G6/G7): the UNIFIED ENTRY FORM in EDIT MODE — the single in-window editor for
@@ -1072,6 +997,9 @@ async function openEntryForm(row, e) {
   // in edit mode so the JUDGE UNIFIED_FORM scene can target it.
   form.className = 'edit-form entry-form';
   form.dataset.mode = 'edit';
+  // The edited entry's id, so the JUDGE/tests can target this form (only one is ever open) and
+  // closeEntryForm can tie it back to the calendar event carrying the .editing selection state.
+  form.dataset.id = String(e.id);
   // End is omitted for the open entry (§05 R6/§12 R06): editing the running entry's start must
   // not require an end, so the open row stays open. The Start/Stop expander is the exact /
   // overnight path (§12 R17); it holds RAW text fields (localInputValue format, NOT native
@@ -1229,7 +1157,7 @@ async function openEntryForm(row, e) {
   }
   renderFlags();
 
-  form.querySelector('.edit-cancel').addEventListener('click', () => render());
+  form.querySelector('.edit-cancel').addEventListener('click', () => closeEntryForm());
   // §12 R06 / §06 R2: the footer Split control cuts a closed span in two. It reuses the same
   // inline instant picker + `split` IPC the (retiring) row affordance used — offered only on a
   // closed entry (an open row has no end to cut). Absent for the running entry.
@@ -1286,14 +1214,19 @@ async function openEntryForm(row, e) {
     applyAck(ack);
   });
 
-  // Swap the row into edit mode in place; the open-state class is preserved so the running
-  // indicator stays put while editing. The form is in the DOM before the async reference-data
-  // fetch, so the seeded fields (description/tags/billable/times) are visible immediately even
-  // while the selects are still populating.
+  // §12 R06 (G5): mount the form in the SAME view-level host add mode uses (#entry-form-host), in
+  // the view flow — NOT inside the clicked calendar event (a ~124px day column would crush the
+  // wide two-column card and push its footer under the neighbouring columns). The event keeps its
+  // content and gains a subtle .editing selection state; only ONE form (add or edit) shows at a
+  // time, so close any open add/edit form first. Scroll the card into view on open. The form is in
+  // the DOM before the async reference-data fetch, so the seeded fields (description/tags/billable/
+  // times) are visible immediately while the selects are still populating.
+  closeAddForm();
+  closeEntryForm();
   row.classList.add('editing');
-  if (running) row.classList.add('running');
-  row.innerHTML = '';
-  row.appendChild(form);
+  const host = $('entry-form-host');
+  host.appendChild(form);
+  host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   form.querySelector('.edit-desc').focus();
 
   // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
@@ -1837,6 +1770,8 @@ function mountAddPicker() {
 }
 
 async function openAddForm() {
+  // One unified form at a time — close any open edit-mode form sharing this host (§12 R06/G5).
+  closeEntryForm();
   // Populate the client select from the same source tt uses; a "(no client)" default keeps the
   // clientless-internal path reachable (§05 R3).
   const clients = (await window.stint.listClients()) || [];

@@ -160,6 +160,11 @@
                 <input type="search" id="search" placeholder="Search" autocomplete="off" aria-label="Search entries" />
               </span>
             </div>
+            <!-- §12 R06/R07 (G5): the ONE view-level host for the unified entry form. BOTH modes
+                 mount here, in the view flow (no modal) — ADD mode is the static #add-form below;
+                 EDIT mode (openEntryForm) appends its seeded form as a sibling here, so editing an
+                 entry uses the SAME host as adding one (never crammed into a calendar day column). -->
+            <div id="entry-form-host">
             <!-- §12 R07 (G5/G7): the ONE unified entry form in ADD mode, inline in the Entries
                  view (no modal). LEFT column = the attribute fields (multiline description,
                  client + project selects, tag chips, billable); RIGHT column = the inline
@@ -208,6 +213,7 @@
                 <button id="add-cancel" type="button" class="ghost">Cancel</button>
               </div>
             </form>
+            </div>
             <div class="entries-ctrl" id="entries-ctrl">
               <span class="report-lab">Range</span>
               <div class="seg presets" id="el-preset-seg" role="group" aria-label="Date range">

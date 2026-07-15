@@ -381,7 +381,7 @@ header.mast {
 /* §12 R10: the detailed overlap detail inside the UNIFIED EDITOR's flags region (the readonly
    calendar shows only the `.ov` warn band; the amount + neighbour detail reads here). Reuses the
    .banner warn chrome, scoped to the editing entry's form. Monochrome --flag tokens only. */
-.entry .banner.overlap {
+.entry-form .banner.overlap {
   display: block;
   margin: 0;
   font-family: var(--num);
@@ -391,14 +391,14 @@ header.mast {
 
 /* §12 R10 — the unified editor's in-context flags region: the overlap detail (above) and, for a
    slept entry, the reversible sleep subtract/restore control beside its raw-vs-trimmed duration. */
-.entry .edit-form .ef-flags {
+.entry-form .ef-flags {
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
 }
-.entry .edit-form .ef-flags[hidden] { display: none; }
-.entry .edit-form .ef-sleep { display: flex; align-items: center; gap: 10px; }
-.entry .edit-form .ef-dur {
+.entry-form .ef-flags[hidden] { display: none; }
+.entry-form .ef-sleep { display: flex; align-items: center; gap: 10px; }
+.entry-form .ef-dur {
   font-family: var(--num);
   font-size: 12.5px;
   font-weight: 590;
@@ -881,17 +881,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
    in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
 .chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
 .chip .chip-x:hover { color: var(--ink); }
-.tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
-.tag-editor .chips { margin-left: 0; }
-.tag-editor .tag-add-input {
-  border: 0;
-  outline: 0;
-  min-width: 90px;
-  font-size: 12px;
-  font-family: var(--sans);
-  background: transparent;
-  color: var(--ink);
-}
 
 .flags { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
 /* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
@@ -905,26 +894,31 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   padding: 1px 9px;
 }
 .entry .actions { display: inline-flex; flex-direction: row-reverse; gap: 4px; align-items: center; float: right; margin-left: 12px; }
-/* A row reads calm: at rest only the kebab (⋯) shows; the explicit Edit / Edit tags / Split /
-   Delete reveal on hover or keyboard focus. They stay in the DOM (and stay Playwright-clickable
+/* A row reads calm: at rest only the kebab (⋯) shows; the explicit Edit / Split / Delete reveal
+   on hover or keyboard focus. They stay in the DOM (and stay Playwright-clickable
    via opacity, not display:none) so every affordance and selector is intact — only the visual
    noise is hidden until the row is engaged. */
 .entry .actions .small:not(.kebab) { opacity: 0; transition: opacity 0.12s ease; }
 .entry:hover .actions .small,
 .entry:focus-within .actions .small { opacity: 1; }
 
-/* Inline edit (§05 R6): the row swaps into an in-place form. Monochrome; only Save carries
-   the accent (button.primary). Editing the running entry keeps .running so the indicator stays. */
-.entry.editing { grid-template-columns: 1fr; }
-.entry .edit-form {
+/* §12 R06 (G5): the unified entry form in EDIT MODE — the SAME view-level card add mode uses
+   (#entry-form-host), NOT crammed into the calendar event. It sits in the view flow with the
+   same paper-on-wash card chrome as the add form (.unified-form). Monochrome; only Save carries
+   the accent (button.primary). */
+.entry-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  background: var(--wash);
 }
-.entry .edit-form .edit-row { display: flex; gap: 10px; }
-.entry .edit-form input[type="text"],
-.entry .edit-form input[type="datetime-local"] {
+.entry-form .edit-row { display: flex; gap: 10px; }
+.entry-form input[type="text"],
+.entry-form input[type="datetime-local"] {
   flex: 1;
   font-family: var(--sans);
   font-size: 13px;
@@ -934,7 +928,7 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: var(--r1);
   padding: 8px 11px;
 }
-.entry .edit-form .edit-field {
+.entry-form .edit-field {
   display: flex;
   flex: 1;
   align-items: center;
@@ -942,8 +936,8 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   font-size: 12px;
   color: var(--muted);
 }
-.entry .edit-form .edit-field > span { white-space: nowrap; }
-.entry .edit-form select {
+.entry-form .edit-field > span { white-space: nowrap; }
+.entry-form select {
   flex: 1;
   font-family: var(--sans);
   font-size: 13px;
@@ -953,7 +947,7 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: var(--r1);
   padding: 8px 11px;
 }
-.entry .edit-form .edit-bill {
+.entry-form .edit-bill {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -962,12 +956,12 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
 }
 /* §12 R06: the unified entry form's project select shares the client select's chrome; a
    disabled project (no client chosen yet) reads dimmed. */
-.entry .edit-form select:disabled { color: var(--muted); background: var(--wash); }
+.entry-form select:disabled { color: var(--muted); background: var(--wash); }
 /* §12 R06 (G6): the in-form tag chip editor — the removable chips + the add input sit inline in
    the Tags field, reusing the row chip chrome. */
-.entry .edit-form .ef-tags { align-items: flex-start; }
-.entry .edit-form .ef-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
-.entry .edit-form .ef-tag-add {
+.entry-form .ef-tags { align-items: flex-start; }
+.entry-form .ef-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; }
+.entry-form .ef-tag-add {
   flex: 1;
   min-width: 90px;
   font-family: var(--sans);
@@ -980,8 +974,8 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
 }
 /* §12 R17: the collapsed Start/Stop expander — a quiet disclosure toggle over the raw exact-time
    fields (the overnight / exact escape hatch). Monochrome; no accent. */
-.entry .edit-form .ef-times { flex-direction: column; align-items: stretch; gap: 8px; }
-.entry .edit-form .ef-times-toggle {
+.entry-form .ef-times { flex-direction: column; align-items: stretch; gap: 8px; }
+.entry-form .ef-times-toggle {
   align-self: flex-start;
   font-family: var(--sans);
   font-size: 12px;
@@ -991,13 +985,13 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   padding: 0;
   cursor: pointer;
 }
-.entry .edit-form .ef-times-toggle:hover { color: var(--ink); }
-.entry .edit-form .ef-times-body { display: flex; gap: 10px; }
+.entry-form .ef-times-toggle:hover { color: var(--ink); }
+.entry-form .ef-times-body { display: flex; gap: 10px; }
 /* §12 R06: the edit-mode footer — Split on the leading edge, then Save entry / Cancel / Delete
    pushed to the trailing edge by the flexible spacer. Only Save entry carries the accent (§15);
    Split, Cancel and Delete are quiet ghosts (danger conveyed by the confirm gate, not colour). */
-.entry .edit-form .edit-foot { display: flex; gap: 9px; align-items: center; }
-.entry .edit-form .ef-foot-spacer { flex: 1; }
+.entry-form .edit-foot { display: flex; gap: 9px; align-items: center; }
+.entry-form .ef-foot-spacer { flex: 1; }
 
 /* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
    danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */
@@ -1761,8 +1755,8 @@ button.danger:hover { background: var(--danger-weak); }
 
 /* §12 R06/R15: the inline interval picker mounted inside the unified edit form. The single-column
    edit form gives the picker its full width; the row is a plain block (not the flex .edit-row). */
-.entry .edit-form .edit-picker-row { display: block; }
-.entry .edit-form .edit-picker { width: 100%; }
+.entry-form .edit-picker-row { display: block; }
+.entry-form .edit-picker { width: 100%; }
 
 /* month calendar */
 .stp-cal { border-right: 1px solid var(--rule); padding: 18px; }
@@ -2481,23 +2475,7 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 0 7px;
   white-space: nowrap;
 }
-/* Editing in place: the event drops out of the absolute track so the unified form lays out and
-   its fields stay actionable (the form host is position:static — the JUDGE scene asserts this). */
-.dt .ev.editing {
-  position: static;
-  height: auto !important;
-  left: auto;
-  right: auto;
-  top: auto;
-  overflow: visible;
-  padding: 8px;
-  margin: 4px 0;
-  background: var(--paper);
-  border-color: var(--rule-strong);
-  box-shadow: var(--sh-card);
-}
-.ev.editing .ck,
-.ev.editing .ops,
-.ev.editing .zz,
-.ev.editing .bt,
-.ev.editing .bc { display: none; }
+/* §12 R06: the event being edited carries a subtle selection state on the calendar (the unified
+   form itself opens in the view-level #entry-form-host, not inside the event). Matches the merge
+   selection lift (.ev.on) — the rationed clay accent as a hairline ring, nothing more. */
+.dt .ev.editing { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }

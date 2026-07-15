@@ -1318,9 +1318,12 @@ async function main() {
     await page.close();
   }
 
-  // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE,
-  // INLINE in the Entries view (no modal / backdrop / dialog chrome; the host sits in flow with
-  // position:static), the same form add mode uses. Drive the real renderer: both a click on the
+  // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE in the
+  // SAME view-level host add mode uses (#entry-form-host) — NOT crammed into the ~124px calendar day
+  // column — in the view flow (no modal / backdrop / dialog chrome; position:static). The scene
+  // asserts host identity explicitly: open add mode + record its host, open edit mode + assert the
+  // edit form mounts in that very same element, and the edited calendar event carries the .editing
+  // selection state (its content preserved). Drive the real renderer: both a click on the
   // entry AND its Edit affordance open it; it seeds EVERY tt-editable field from the entry
   // (multiline description textarea, client + project selects pre-selected, tag chips, billable
   // checkbox, and the Start/Stop expander's Start+Stop), Save sends a patch of ONLY the changed
@@ -1330,7 +1333,33 @@ async function main() {
   // or the two-step Delete gate.
   await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="80"]';
-    // (a) A click on the entry body (an inert cell, not an action control) opens the form inline.
+    // The unified form (edit mode) opens in the SAME view-level host add mode uses (#entry-form-host),
+    // in the view flow — NOT inside the ~124px calendar day column. Only one form is ever open, so its
+    // seeded fields are reachable by the plain `.edit-form.entry-form` selector (no row ancestor).
+    const editForm = '.edit-form.entry-form';
+    // (b0) Host identity: open ADD mode, record its host; then open EDIT mode and assert the edit
+    // form mounts in the very SAME host element (§12 R06/G5 — one host, add + edit). Do this first
+    // (a clean page), then cancel both back to the plain calendar for the field probe below.
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    const addHostIsFormHost = await page.evaluate(
+      () => document.querySelector('#add-form')?.parentElement?.id === 'entry-form-host',
+    );
+    await page.click('#add-cancel');
+    await page.hover(editRow);
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(editForm, { state: 'attached' });
+    const sameHost = await page.evaluate(() => {
+      const form = document.querySelector('.edit-form.entry-form');
+      const host = document.getElementById('entry-form-host');
+      const addForm = document.getElementById('add-form');
+      // The edit form and the add form share the SAME host element, in flow (not a positioned overlay).
+      return !!form && !!host && form.parentElement === host && addForm?.parentElement === host;
+    });
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
+
+    // (a) A click on the entry body (an inert cell, not an action control) opens the form.
     // Entry 83 (15:00–16:00) overlaps entry 80's span (14:00–15:30) on the readonly calendar and,
     // per the mockup's full-width offset-stack layout (main.html §Tue: the later event stacks on
     // top of the earlier one's tail), covers the lower part of entry 80. Reach it the way a user
@@ -1338,22 +1367,22 @@ async function main() {
     // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its description body.
     await page.hover(editRow);
     await page.click(`${editRow} .desc`);
-    await page.waitForSelector(`${editRow} .edit-form.entry-form`, { state: 'attached' });
+    await page.waitForSelector(editForm, { state: 'attached' });
     const clickOpens = await page.evaluate(
-      () => !!document.querySelector('.entry[data-id="80"] .edit-form.entry-form'),
+      () => !!document.querySelector('.edit-form.entry-form') &&
+        document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
     );
     // Cancel back to the list so the Edit-affordance path opens a fresh form for the full probe.
-    await page.click(`${editRow} .edit-cancel`);
-    await page.waitForSelector(`${editRow} .edit-form`, { state: 'detached' });
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
 
     // (b) The Edit affordance opens the same form; wait for the async reference-data to fill both
     // the client (Acme=1) and project (API=11) selects so the seeded-select assertions are stable.
     await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editRow} .edit-form .edit-client option[value="1"]`, { state: 'attached' });
-    await page.waitForSelector(`${editRow} .edit-form .edit-project option[value="11"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-project option[value="11"]`, { state: 'attached' });
     const probe = await page.evaluate(() => {
-      const row = document.querySelector('.entry[data-id="80"]');
-      const form = row?.querySelector('.edit-form.entry-form');
+      const form = document.querySelector('.edit-form.entry-form');
       const v = (sel) => form?.querySelector(sel);
       const desc = v('.edit-desc');
       const start = v('.edit-start');
@@ -1363,7 +1392,10 @@ async function main() {
       const project = v('.edit-project');
       const chips = [...(form?.querySelectorAll('.ef-tag-chips .chip') ?? [])].map((c) => c.textContent.replace('×', '').trim());
       return {
-        inContext: !!form && form.closest('.entry[data-id="80"]') !== null,
+        // The form is in the shared view-level host (not inside the calendar event) and carries the
+        // edited entry's id; the event it edits carries the .editing selection state.
+        inContext: !!form && form.parentElement?.id === 'entry-form-host' && form.dataset.id === '80' &&
+          document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
         // No modal chrome anywhere, and the form host is in normal flow (not a positioned overlay).
         noBackdrop: !document.querySelector('.editor-backdrop'),
         noDialog: !document.querySelector('[role="dialog"]'),
@@ -1398,10 +1430,10 @@ async function main() {
     // G7). The running-entry start-only variant (.stp-block.me.open mask + start grip only, no
     // .stp-resize/end label/echo, no end value) is asserted by the TIMER_VIEW scene, which drives
     // STP.openStartOnly over the same component.
-    await page.waitForSelector(`${editRow} .edit-picker .stp-track`, { state: 'attached' });
-    await page.waitForSelector(`${editRow} .edit-picker .stp-block.me`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-track`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
     const picker = await page.evaluate(() => {
-      const form = document.querySelector('.entry[data-id="80"] .edit-form');
+      const form = document.querySelector('.edit-form.entry-form');
       const host = form.querySelector('.edit-picker');
       const box = host.querySelector('.stp-inline');
       const overlaps = [...host.querySelectorAll('.stp-overlap')];
@@ -1421,12 +1453,12 @@ async function main() {
     // span preserved (LIVE into the form's own start/stop state, before any Save).
     const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
     const seedTimes = await page.evaluate(() => ({
-      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
-      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
     }));
-    await page.locator(`${editRow} .edit-picker .stp-block.me`).scrollIntoViewIfNeeded();
+    await page.locator(`${editForm} .edit-picker .stp-block.me`).scrollIntoViewIfNeeded();
     const meBox = await page.evaluate(() => {
-      const r = document.querySelector('.entry[data-id="80"] .edit-picker .stp-block.me').getBoundingClientRect();
+      const r = document.querySelector('.edit-form .edit-picker .stp-block.me').getBoundingClientRect();
       return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
     });
     await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
@@ -1434,17 +1466,17 @@ async function main() {
     await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
     await page.mouse.up();
     const bodyDrag = await page.evaluate(() => ({
-      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
-      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
     }));
     const bodyOk =
       bodyDrag.from !== seedTimes.from &&
       bodyDrag.to !== seedTimes.to &&
       spanMin(bodyDrag.from, bodyDrag.to) === spanMin(seedTimes.from, seedTimes.to);
     // Bottom .stp-resize drag down ~30px (+60min snapped) — ONLY .edit-end advances; .edit-start holds.
-    await page.locator(`${editRow} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
+    await page.locator(`${editForm} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
     const resizeBox = await page.evaluate(() => {
-      const r = document.querySelector('.entry[data-id="80"] .edit-picker .stp-resize').getBoundingClientRect();
+      const r = document.querySelector('.edit-form .edit-picker .stp-resize').getBoundingClientRect();
       return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
     });
     await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy));
@@ -1452,8 +1484,8 @@ async function main() {
     await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy + 30), { steps: 8 });
     await page.mouse.up();
     const resizeDrag = await page.evaluate(() => ({
-      from: document.querySelector('.entry[data-id="80"] .edit-start')?.value,
-      to: document.querySelector('.entry[data-id="80"] .edit-end')?.value,
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
     }));
     const resizeOk = resizeDrag.from === bodyDrag.from && resizeDrag.to !== bodyDrag.to;
     const pickerOk =
@@ -1463,29 +1495,29 @@ async function main() {
 
     // Discard the dragged times — Cancel and reopen a FRESH form so the Save-patch test below sees
     // the entry's original (unchanged) times and asserts a description-ONLY patch (Save sole commit).
-    await page.click(`${editRow} .edit-cancel`);
-    await page.waitForSelector(`${editRow} .edit-form`, { state: 'detached' });
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
     await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editRow} .edit-form .edit-client option[value="1"]`, { state: 'attached' });
-    await page.waitForSelector(`${editRow} .edit-picker .stp-block.me`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
 
     // (c) Save commits ONLY the changed fields: amend the description, then Save entry.
-    await page.fill(`${editRow} .edit-desc`, 'final draft');
-    await page.click(`${editRow} .edit-form button[type="submit"]`);
+    await page.fill(`${editForm} .edit-desc`, 'final draft');
+    await page.click(`${editForm} button[type="submit"]`);
     await page.waitForFunction(() => !!window.__EDITED__);
     const edited = await page.evaluate(() => window.__EDITED__);
 
-    // (d) The footer's two-step Delete gate: re-open, arm (a worded confirm appears, nothing
-    // removed yet), then confirm (remove fires with the entry id).
+    // (d) The footer's two-step Delete gate: re-open, arm (a worded confirm appears in the form
+    // footer, nothing removed yet), then confirm (remove fires with the entry id).
     await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editRow} .edit-form .ef-delete`, { state: 'attached' });
-    await page.click(`${editRow} .ef-delete`);
+    await page.waitForSelector(`${editForm} .ef-delete`, { state: 'attached' });
+    await page.click(`${editForm} .ef-delete`);
     const armed = await page.evaluate(() => ({
-      confirmShown: !!document.querySelector('.entry[data-id="80"] [data-act="confirm-delete"]'),
-      question: document.querySelector('.entry[data-id="80"] .confirm-q')?.textContent ?? null,
+      confirmShown: !!document.querySelector('.edit-form [data-act="confirm-delete"]'),
+      question: document.querySelector('.edit-form .confirm-q')?.textContent ?? null,
       removedYet: window.__REMOVED__ === true,
     }));
-    await page.click(`${editRow} [data-act="confirm-delete"]`);
+    await page.click(`${editForm} [data-act="confirm-delete"]`);
     await page.waitForFunction(() => window.__REMOVED__ === true);
     const removed = await page.evaluate(() => ({
       removed: window.__REMOVED__ === true,
@@ -1499,28 +1531,32 @@ async function main() {
     // trimmed billable (03:00:00); subtracting again restores it (the struck raw disappears).
     // The delete above removed entry 80 + reloaded; wait for that repaint before opening 81/82.
     await page.waitForSelector('.entry[data-id="80"]', { state: 'detached' }).catch(() => {});
-    await page.waitForSelector('.entry[data-id="81"] .time', { state: 'attached' });
-    await page.click('.entry[data-id="81"] .time');
-    await page.waitForSelector('.entry[data-id="81"] .edit-form .ef-flags .banner.overlap', { state: 'attached' });
+    // Hover first so the target event rises above its overlapping neighbour (`.dt .ev:hover` →
+    // z-index), then open it via its Edit affordance — same overlap-defeating move as step (a).
+    await page.waitForSelector('.entry[data-id="81"] [data-act="edit"]', { state: 'attached' });
+    await page.hover('.entry[data-id="81"]');
+    await page.click('.entry[data-id="81"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form .ef-flags .banner.overlap', { state: 'attached' });
     const overlapDetail = await page.evaluate(
-      () => document.querySelector('.entry[data-id="81"] .edit-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
+      () => document.querySelector('.edit-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
     );
-    await page.click('.entry[data-id="81"] .edit-cancel');
-    await page.waitForSelector('.entry[data-id="81"] .edit-form', { state: 'detached' });
+    await page.click('.edit-form .edit-cancel');
+    await page.waitForSelector('.edit-form', { state: 'detached' });
 
-    await page.click('.entry[data-id="82"] .time');
-    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-subtract', { state: 'attached' });
+    await page.hover('.entry[data-id="82"]');
+    await page.click('.entry[data-id="82"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form .ef-subtract', { state: 'attached' });
     const sleptBefore = await page.evaluate(() => {
-      const form = document.querySelector('.entry[data-id="82"] .edit-form');
+      const form = document.querySelector('.edit-form');
       return {
         subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
         struckBefore: !!form?.querySelector('.ef-dur s.struck'),
       };
     });
-    await page.click('.entry[data-id="82"] .ef-subtract');
-    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-dur s.struck', { state: 'attached' });
+    await page.click('.edit-form .ef-subtract');
+    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'attached' });
     const sleptAfter = await page.evaluate(() => {
-      const form = document.querySelector('.entry[data-id="82"] .edit-form');
+      const form = document.querySelector('.edit-form');
       const s = form?.querySelector('.ef-dur s.struck');
       return {
         subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
@@ -1530,10 +1566,10 @@ async function main() {
       };
     });
     // Reversible: subtracting again restores — the struck raw duration goes away.
-    await page.click('.entry[data-id="82"] .ef-subtract');
-    await page.waitForSelector('.entry[data-id="82"] .edit-form .ef-dur s.struck', { state: 'detached' });
+    await page.click('.edit-form .ef-subtract');
+    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
     const sleptRestored = await page.evaluate(
-      () => !document.querySelector('.entry[data-id="82"] .edit-form .ef-dur s.struck'),
+      () => !document.querySelector('.edit-form .ef-dur s.struck'),
     );
     const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
     const sleptOk =
@@ -1574,15 +1610,18 @@ async function main() {
       removed.removed &&
       removed.calls.length === 1 &&
       removed.calls[0].id === 80;
-    const ok = clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
+    // §12 R06/G5 — add + edit mount in the SAME view-level host, in flow (no modal).
+    const hostShared = addHostIsFormHost && sameHost;
+    const ok = hostShared && clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
     record(
       'UNIFIED_FORM',
       ok,
-      `unified entry form (edit mode) inline, seeded, INLINE picker (in-flow, no backdrop/apply, ` +
+      `unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in ` +
+        `flow), seeded, INLINE picker (in-flow, no backdrop/apply, ` +
         `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
         `gray others + inert yellow overlap), footer Split + two-step Delete, save patch, ` +
         `§12 R10 flags (overlap detail + reversible subtract): ` +
-        `clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
+        `hostShared=${hostShared} clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
         `picker=${JSON.stringify(picker)} seed=${JSON.stringify(seedTimes)}→body=${JSON.stringify(bodyDrag)}` +
         `(bodyOk=${bodyOk})→resize=${JSON.stringify(resizeDrag)}(resizeOk=${resizeOk}) ` +
         `edited=${JSON.stringify(edited)} armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
@@ -1600,10 +1639,10 @@ async function main() {
   await withPage(browser, multilineDescState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="30"]';
     await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editRow} .edit-form .edit-desc`, { state: 'attached' });
+    await page.waitForSelector(`.edit-form .edit-desc`, { state: 'attached' });
     await page.screenshot({ path: join(EVIDENCE, 'main-multiline-desc.png') });
     const probe = await page.evaluate(() => {
-      const el = document.querySelector('.entry[data-id="30"] .edit-form .edit-desc');
+      const el = document.querySelector('.edit-form .edit-desc');
       if (!el) return { present: false };
       const cs = getComputedStyle(el);
       return {
@@ -1651,8 +1690,8 @@ async function main() {
       await page.click(`${editRow} [data-act="edit"]`);
       // Save with no field changes is enough — the mock returns the overlap ack on any
       // edit, exercising the renderer's banner path deterministically.
-      await page.waitForSelector(`${editRow} .edit-form .edit-start`, { state: 'attached' });
-      await page.click(`${editRow} .edit-form button[type="submit"]`);
+      await page.waitForSelector(`.edit-form .edit-start`, { state: 'attached' });
+      await page.click(`.edit-form button[type="submit"]`);
       await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
       await page.screenshot({ path: join(EVIDENCE, 'main-overlap-banner.png'), fullPage: true });
       const probe = await page.evaluate(() => {
@@ -1691,7 +1730,11 @@ async function main() {
       closedHasSplit: !!document.querySelector('.entry[data-id="30"] [data-act="split"]'),
       openHasSplit: !!document.querySelector('.entry[data-id="31"] [data-act="split"]'),
     }));
-    await page.click(`${closedRow} [data-act="split"]`);
+    // Hover to reveal the ops, then click the Split button on its CLEAR right edge: in the narrow
+    // calendar column the hover-corner `.ck` checkbox (top-left, z-6) overlaps the button's centre,
+    // so an offset click reaches the un-occluded part (the same button, real pointer event).
+    await page.hover(closedRow);
+    await page.click(`${closedRow} [data-act="split"]`, { position: { x: 36, y: 10 } });
     await page.screenshot({ path: join(EVIDENCE, 'main-split.png'), fullPage: true });
     // The inline picker seeds an instant inside the span (the midpoint) and the confirm
     // control sends it over the split IPC as a UTC ISO.
@@ -1996,11 +2039,15 @@ async function main() {
     );
   });
 
-  // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its row, and the
-  // running entry's tags show on the summary line; an in-context Edit tags affordance is
-  // present on the rows (§07, §12). Deterministic: the fixture's open row carries 2 tags
-  // and its closed row 1, so the rows paint exactly 3 chips, plus the 2 on the running
-  // summary — five .chip total — and each tag's text appears.
+  // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
+  // running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
+  // (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
+  // asserts both: (a) the display — the fixture's open event carries 2 tags and its closed event 1,
+  // so the events paint exactly 3 chips, plus the 2 on the running summary, each tag's text visible;
+  // and (b) the capability — open the closed entry's unified form, REMOVE a tag chip and ADD a new
+  // one in the form's chip editor, Save, and the `edit` patch carries the minimal
+  // addTags/removeTags (and touches ONLY tags). Fails if a per-row tags control survives, or the
+  // form's chip editor cannot add + remove a tag over the one `edit` commit.
   await withPage(browser, taggedState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-tags.png'), fullPage: true });
     const probe = await page.evaluate(() => {
@@ -2013,24 +2060,60 @@ async function main() {
         openRowChips: chipText(openRow),
         closedRowChips: chipText(closedRow),
         summaryChips: chipText(summary),
-        // Every row offers the in-context edit-tags affordance.
-        openEditTags: !!openRow?.querySelector('[data-act="tags"]'),
-        closedEditTags: !!closedRow?.querySelector('[data-act="tags"]'),
+        // The retired per-row Edit-tags control must NOT survive on any event (tags edit in the form).
+        noPerRowTags: !document.querySelector('[data-act="tags"]'),
         totalRowChips: document.querySelectorAll('#entries .chip').length,
       };
     });
+
+    // (b) Edit tags THROUGH the unified form: open the closed entry (71, tagged 'meeting'), then in
+    // the form's chip editor remove 'meeting' and add 'billing', and Save.
+    await page.hover('.entry[data-id="71"]');
+    await page.click('.entry[data-id="71"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form.entry-form .ef-tag-chips', { state: 'attached' });
+    const seededChips = await page.evaluate(() =>
+      [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+    );
+    // Remove the 'meeting' chip via its in-chip × affordance.
+    await page.evaluate(() => {
+      const chip = [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].find((c) => /meeting/.test(c.textContent));
+      chip?.querySelector('.chip-x')?.click();
+    });
+    // Add 'billing' through the form's add input.
+    await page.fill('.edit-form .ef-tag-add', 'billing');
+    await page.press('.edit-form .ef-tag-add', 'Enter');
+    const workingChips = await page.evaluate(() =>
+      [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+    );
+    await page.click('.edit-form button[type="submit"]');
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+
+    const patch = (edited && edited.patch) || {};
+    // Save patched ONLY the tags: added 'billing', removed 'meeting', and nothing else rode along.
+    const tagsPatchOk =
+      !!edited &&
+      edited.id === 71 &&
+      Array.isArray(patch.addTags) && patch.addTags.join(',') === 'billing' &&
+      Array.isArray(patch.removeTags) && patch.removeTags.join(',') === 'meeting' &&
+      Object.keys(patch).sort().join(',') === 'addTags,removeTags';
     const ok =
       probe.openRowChips.join(',') === 'deep,urgent' &&
       probe.closedRowChips.join(',') === 'meeting' &&
       probe.summaryChips.join(',') === 'deep,urgent' &&
-      probe.openEditTags &&
-      probe.closedEditTags &&
-      // 2 (open row) + 1 (closed row) = 3 chips painted across the entry rows.
-      probe.totalRowChips === 3;
+      probe.noPerRowTags &&
+      // 2 (open event) + 1 (closed event) = 3 chips painted across the entries.
+      probe.totalRowChips === 3 &&
+      seededChips.join(',') === 'meeting' &&
+      workingChips.join(',') === 'billing' &&
+      tagsPatchOk;
     record(
       'TAG_CHIPS',
       ok,
-      `tags render as chips on rows + running summary, in-context edit affordance present: ${JSON.stringify(probe)}`,
+      `tags render as chips on events + running summary; NO per-row tags control; edited via the ` +
+        `unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: ` +
+        `${JSON.stringify(probe)} seeded=${JSON.stringify(seededChips)} working=${JSON.stringify(workingChips)} ` +
+        `edited=${JSON.stringify(edited)} (tagsPatchOk=${tagsPatchOk})`,
       'main-tags.png',
     );
   });
@@ -2349,7 +2432,8 @@ async function main() {
   //     toolbar range chip (#week-total) shows the week total (9.25h);
   //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
   //   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
-  //   • clicking an `.ev` body opens the unified editor inline (`.edit-form.entry-form`);
+  //   • clicking an `.ev` body opens the unified editor in the view-level host (`#entry-form-host
+  //     .edit-form.entry-form`), and the event carries the `.editing` selection state;
   //   • the RUNNING block carries the future-fade gradient with no end edge;
   //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
   //   • checking two `.ck` boxes reveals #merge-bar.
@@ -2436,12 +2520,17 @@ async function main() {
       };
     });
 
-    // Clicking an event body opens the unified editor inline (an off-hours event, so this also
-    // exercises the scroll-into-view reachability of the never-clipped 24h track).
+    // Clicking an event body opens the unified editor (an off-hours event, so this also exercises
+    // the scroll-into-view reachability of the never-clipped 24h track). Hover first so the event
+    // settles into its hovered layout (its `.bd` shifts clear of the revealed ops overlay) before
+    // the body click lands.
+    await page.hover('.entry[data-id="5"]');
     await page.click('.entry[data-id="5"] .bd');
-    await page.waitForSelector('.entry[data-id="5"] .edit-form.entry-form', { state: 'attached' });
+    await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
     const editorOpen = await page.evaluate(
-      () => !!document.querySelector('.entry[data-id="5"] .edit-form.entry-form'),
+      // The form opens in the view-level host (not inside the event); the event carries .editing.
+      () => !!document.querySelector('#entry-form-host .edit-form.entry-form[data-id="5"]') &&
+        document.querySelector('.entry[data-id="5"]')?.classList.contains('editing') === true,
     );
 
     // Checking two corner checkboxes enters multi-select and reveals the merge bar.

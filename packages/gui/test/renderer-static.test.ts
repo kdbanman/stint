@@ -343,23 +343,26 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/e\.sleptThrough && \(e\.excludedSeconds \?\? 0\) > 0/);
   });
 
-  it('tags show as chips in-context and an inline editor edits them over the edit IPC (§07)', () => {
+  it('tags show as chips in-context and are edited in the unified form over the edit IPC (§07, §12 R06)', () => {
     const app = read('app.js');
-    // Every row's tags render as monochrome chips, off an entry tags accessor…
+    // Every event's tags render as monochrome chips, off an entry tags accessor…
     expect(app).toMatch(/function tagsHtml\(e\)/);
     expect(app).toMatch(/e\.tags/);
     expect(app).toMatch(/class="chip"/);
-    // …shown on the entry row and on the running summary line…
+    // …shown on the entry event and on the running summary line…
     expect(app).toMatch(/tagsHtml\(e\)/);
     expect(app).toMatch(/tagsHtml\(running\)/);
-    // …with an in-context edit-tags affordance (not the full edit form)…
-    expect(app).toMatch(/data-act="tags"/);
-    expect(app).toMatch(/openTagEditor/);
-    // …whose commit diffs the edited chip set via the pure window.SU.tagDiff and sends the
-    // minimal { addTags, removeTags } over the same edit IPC tt uses (no tag logic in the
-    // renderer beyond gathering the chips).
-    expect(app).toMatch(/tagDiff\(original,\s*next\)/);
-    expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch:\s*\{\s*addTags,\s*removeTags\s*\}\s*\}\)/);
+    // …with NO per-row Edit-tags control (DELETED) — tags are edited inside the unified form…
+    expect(app).not.toMatch(/data-act="tags"/);
+    expect(app).not.toMatch(/openTagEditor/);
+    // …whose in-form chip editor (removable chips + an "add a tag…" input) diffs the edited chip
+    // set against the entry's original tags via the pure window.SU.tagDiff and folds the minimal
+    // { addTags, removeTags } into the ONE Save patch over the same edit IPC tt uses…
+    expect(app).toMatch(/ef-tag-chips/);
+    expect(app).toMatch(/ef-tag-add/);
+    expect(app).toMatch(/tagDiff\(originalTags,\s*nextTags\)/);
+    expect(app).toMatch(/if \(addTags\.length\) patch\.addTags = addTags;/);
+    expect(app).toMatch(/if \(removeTags\.length\) patch\.removeTags = removeTags;/);
     // The chip text is always escaped (tags are user-controlled)…
     expect(app).toMatch(/escapeHtml\(t\)/);
   });
