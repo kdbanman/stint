@@ -1331,7 +1331,13 @@ async function main() {
   await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="80"]';
     // (a) A click on the entry body (an inert cell, not an action control) opens the form inline.
-    await page.click(`${editRow} .time`);
+    // Entry 83 (15:00–16:00) overlaps entry 80's span (14:00–15:30) on the readonly calendar and,
+    // per the mockup's full-width offset-stack layout (main.html §Tue: the later event stacks on
+    // top of the earlier one's tail), covers the lower part of entry 80. Reach it the way a user
+    // does: move the cursor ONTO the entry first — hover raises it above the overlapping neighbour
+    // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its description body.
+    await page.hover(editRow);
+    await page.click(`${editRow} .desc`);
     await page.waitForSelector(`${editRow} .edit-form.entry-form`, { state: 'attached' });
     const clickOpens = await page.evaluate(
       () => !!document.querySelector('.entry[data-id="80"] .edit-form.entry-form'),
