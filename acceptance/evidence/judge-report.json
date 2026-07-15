@@ -60,7 +60,7 @@
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[button.small ghost, button.small ghost]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
@@ -108,7 +108,7 @@
     {
       "item": "SPLIT_AFFORDANCE",
       "pass": true,
-      "justification": "closed row exposes Split (open row none=true); split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
+      "justification": "closed row exposes Split (open row none=true); ops chip clears the corner checkbox=true, chip in column=true; split input is plain text=true, no datetime-local=true; split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
       "screenshot": "main-split.png"
     },
     {
@@ -162,7 +162,7 @@
     {
       "item": "ENTRIES_CALENDAR",
       "pass": true,
-      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":4,\"weekTotal\":\"5.00h\"} -> search={\"reqSearch\":\"refactor\",\"reqHasBy\":false,\"evCount\":2,\"evText\":[\"EditSplitDeleterefactor testsGlobex / Ops13:00–14:30ci\",\"EditSplitDeleteauth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> custom dates={\"req\":{\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"EditSplitDeletestandupAcme / Web09:00–09:30meetingdeep\",\"EditSplitDeleterefactor testsGlobex / Ops13:00–14:30ci\"]}",
+      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":4,\"weekTotal\":\"5.00h\"} -> search={\"reqSearch\":\"refactor\",\"reqHasBy\":false,\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> custom dates={\"req\":{\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"]}",
       "screenshot": "entries-calendar.png"
     },
     {

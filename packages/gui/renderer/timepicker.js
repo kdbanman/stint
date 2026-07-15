@@ -63,14 +63,10 @@ window.STP = (function () {
   function pad(n) {
     return String(n).padStart(2, '0');
   }
-  // datetime-local wants `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix). Mirrors
-  // app.js / editor.js localInputValue so the picker writes back byte-identical strings.
-  function localInputValue(date) {
-    return (
-      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-    );
-  }
+  // The single local-time seed format (`YYYY-MM-DDTHH:mm`, no timezone) the picker writes back
+  // into the bound text inputs — the ONE shared helper on window.SU (util.js loads first), so the
+  // picker, the raw Start/Stop fields, and the split instant all agree byte-for-byte.
+  const localInputValue = (date) => window.SU.localInputValue(date);
   function hhmm(minutes) {
     const m = Math.round(minutes);
     return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
@@ -149,7 +145,7 @@ window.STP = (function () {
     }
   }
 
-  // Parse a datetime-local text input value into a local Date (null when blank/invalid).
+  // Parse a local YYYY-MM-DDTHH:mm text value into a local Date (null when blank/invalid).
   function parseInput(input) {
     if (!input || !input.value) return null;
     const d = new Date(input.value);
@@ -162,7 +158,7 @@ window.STP = (function () {
   // drag never feeds itself back through the reflect path.
   let writingBack = false;
 
-  // Write a Date back into a bound text input as a local datetime-local string, and fire an
+  // Write a Date back into a bound text input as a local YYYY-MM-DDTHH:mm string, and fire an
   // `input` event so the surrounding form's listeners (e.g. the running live-edit's change /
   // the add form's submit read) see it exactly as if the user typed it. The text stays
   // authoritative — the picker only ever sets `.value` here.
@@ -589,5 +585,5 @@ window.STP = (function () {
     return box;
   }
 
-  return { openStartOnly, openInline, snapTo5, minutesToY, yToMinutes, localInputValue, TRACK_H };
+  return { openStartOnly, openInline, snapTo5, minutesToY, yToMinutes, TRACK_H };
 })();

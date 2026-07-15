@@ -42,6 +42,7 @@
       <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
       <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
       <symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>
+      <symbol id="i-split" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M12 4v5M12 15v5"/></symbol>
     </defs></svg>
     <div class="app">
       <div class="shell">
@@ -154,7 +155,6 @@
             <div class="toolbar">
               <button id="add-toggle" class="ghost" aria-expanded="false" aria-controls="add-form"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add entry</button>
               <button id="report-btn" class="ghost" aria-label="Open this week's report">This week <span id="week-total">0.00h</span></button>
-              <button id="merge-selected" class="ghost" hidden>Merge selected</button>
               <span class="search">
                 <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
                 <input type="search" id="search" placeholder="Search" autocomplete="off" aria-label="Search entries" />
@@ -412,7 +412,6 @@
       </div>
     </div>
     <script src="util.js"></script>
-    <script src="editor.js"></script>
     <script src="timepicker.js"></script>
     <script src="app.js"></script>
     <script src="reports.js"></script>

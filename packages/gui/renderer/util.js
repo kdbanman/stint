@@ -60,6 +60,17 @@ window.SU = (function () {
   function friendlyHotkey(accel) {
     return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
   }
+  // §12 R15/R17 (G1): the ONE local-time seed format the raw Start/Stop text fields, the split
+  // instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm` in *local* time
+  // (no timezone suffix), parsed identically by `new Date(value)`. Hoisted here so app.js and
+  // timepicker.js consume a single definition.
+  function localInputValue(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
+  }
   // §14 / G16 — the ONE default-viewport derivation for the timeline surfaces: the inline
   // interval picker (§12 R15) and the readonly entries calendar (§12 R16) both consume THIS
   // helper and must never re-derive the window math themselves. It returns a scroll window
@@ -153,13 +164,14 @@ window.SU = (function () {
     '<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>' +
     '<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>' +
     '<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>' +
+    '<symbol id="i-split" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M12 4v5M12 15v5"/></symbol>' +
     '</defs></svg>';
   // The set of ids the sprite defines — the canonical icon vocabulary. Renderers
   // pass one of these to icon(); an unknown id is a programming error, not a glyph.
   const ICON_IDS = [
     'clock', 'list', 'users', 'chart', 'settings', 'search', 'play', 'stop', 'swap',
     'plus', 'star', 'cal', 'flag', 'moon', 'check', 'download', 'x', 'down', 'right',
-    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive',
+    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive', 'split',
   ];
   // Render one line icon by id as an <svg class="ic"><use href="#i-<id>"/></svg>
   // string the renderers can drop into innerHTML. Always class="ic" so it picks up
@@ -268,5 +280,5 @@ window.SU = (function () {
     };
   }
 
-  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, timelineWindow, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
+  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, localInputValue, timelineWindow, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
 })();

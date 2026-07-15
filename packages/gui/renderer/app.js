@@ -2,7 +2,7 @@
 // grouped by day with flags in context, a one-tap subtract on slept entries, an
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (util.js, loaded first).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, tagDiff, deriveView } = window.SU;
+const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -34,19 +34,8 @@ let entryCtrlActive = false;
 // — which deletes the originals and inserts a fresh row — never leaves stale ids armed.
 const selected = new Set();
 
-// §12 R6: the client list the consolidated entry editor (window.SE.openEditor) seeds its
-// Client select from, loaded once from the same source tt uses (window.stint.listClients)
-// so the kebab editor opens synchronously with the select populated. Refreshed on load().
-let clientList = [];
-
 async function load() {
   selected.clear();
-  // Keep the editor's client choices current with the active reference data.
-  try {
-    clientList = (await window.stint.listClients()) || [];
-  } catch {
-    clientList = [];
-  }
   // §06 R4: the overlap banner is a transient at-write-time signal. Clear it on every
   // (re)load so it auto-dismisses once the next write/refresh carries no warning; the
   // durable signal is the per-row overlap flag, which render() repaints below.
@@ -511,14 +500,6 @@ function renderMergeBar() {
   const n = selected.size;
   bar.hidden = n < 2;
   if (n >= 2) $('merge-go').textContent = `Merge ${n} entries`;
-  // §12 R6: the toolbar Merge-selected affordance tracks the same selection — hidden until
-  // at least two contiguous closed entries are armed, labelled with the live count. (Retires
-  // with the modal editor, §12 R06 / §Z.)
-  const tb = $('merge-selected');
-  if (tb) {
-    tb.hidden = n < 2;
-    if (n >= 2) tb.textContent = `Merge selected (${n})`;
-  }
 }
 
 function emptyState() {
@@ -579,7 +560,7 @@ function calEvent(e) {
   if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" aria-label="Select entry" />';
   // Hover ops: Delete / Split / Edit, the same `data-act` controls the row affordances and the
   // JUDGE scenes drive; a click opens the unified editor (wire()), where tags are edited too.
-  html += `<span class="ops actions">${actionButtons(e)}</span>`;
+  html += `<span class="ops">${actionButtons(e)}</span>`;
   html += `<span class="bd desc${e.billable ? '' : ' nonbill'}">${runDot}${escapeHtml(e.description ?? '(no description)')}</span>`;
   if (e.clientLabel) html += `<span class="bc where">${escapeHtml(e.clientLabel)}</span>`;
   html += `<span class="bt time tnum">${timeLabel}</span>`;
@@ -661,26 +642,26 @@ function editorFlagsInnerHtml(e) {
   return html;
 }
 
-// §12 R16: the entry's hover ops — the same `data-act` controls the row affordances exposed,
-// returned as the bare button set so calEvent can host them in the `.ops` corner toolbar. Kept at
-// parity with the tt verbs: Edit (unified form, §12 R06 — tags edit inside that form, §07/G6),
-// Split (closed only, §06 R2), Delete (two-step, §06 R1). Sleep subtract/restore is NOT a
-// calendar-hover op — it is the
-// reversible control inside the unified editor (§12 R10), reached by opening the entry.
+// §12 R16 (mockup main.html): the entry's hover ops — three ICON-ONLY 22×22 line-icon buttons in
+// the `.ops` raised paper chip, each carrying a `title` tooltip and the `data-act` hook the row
+// affordances + JUDGE scenes drive. Order matches the mockup: Delete (x) · Split (closed only) ·
+// Edit (pencil). Kept at parity with the tt verbs: Edit (unified form, §12 R06 — tags edit inside
+// that form, §07/G6), Split (closed only, §06 R2), Delete (two-step, §06 R1). Sleep subtract/
+// restore is NOT a calendar-hover op — it is the reversible control inside the unified editor
+// (§12 R10), reached by opening the entry.
 function actionButtons(e) {
   const actions = [];
-  // §12 R06: the row's Edit affordance opens the UNIFIED ENTRY FORM in edit mode (openEntryForm)
-  // inline in the Entries view — one form surfacing EVERY tt-editable field plus the footer Split
-  // + two-step Delete, the GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere
-  // on the entry opens the same form (wired below), so no separate modal or kebab is needed — the
-  // consolidated modal editor (window.SE.openEditor) is retired for editing (§12 modal-editor / §Z).
-  actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg>Edit</button>');
-  // Tags are edited in the unified form's tag-chips editor (§12 R06/G6), reached by Edit — there
-  // is no separate per-row Edit-tags control (DELETED). Split only makes sense on a CLOSED entry
-  // (it needs an instant strictly inside a
-  // bounded span). The open/running entry has no end, so it exposes no Split (§06 R2).
-  if (e.endUtc !== null) actions.push('<button class="small ghost" data-act="split" aria-label="Split entry">Split</button>');
-  actions.push('<button class="small ghost" data-act="delete" aria-label="Delete entry">Delete</button>');
+  // §06 R1: Delete opens the two-step confirm gate (armDelete); the x icon reads as remove.
+  actions.push('<button class="op-btn" type="button" data-act="delete" title="Delete" aria-label="Delete entry"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>');
+  // §06 R2: Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
+  // bounded span). The open/running entry has no end, so it exposes no Split.
+  if (e.endUtc !== null) actions.push('<button class="op-btn" type="button" data-act="split" title="Split" aria-label="Split entry"><svg class="ic" aria-hidden="true"><use href="#i-split" /></svg></button>');
+  // §12 R06: Edit opens the UNIFIED ENTRY FORM in edit mode (openEntryForm) inline in the Entries
+  // view — one form surfacing EVERY tt-editable field plus the footer Split + two-step Delete, the
+  // GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere on the entry opens the
+  // same form (wired below); tags edit inside it (§12 R06/G6), so no separate per-row Edit-tags
+  // control or modal is needed (there is no consolidated modal editor; the unified form owns editing).
+  actions.push('<button class="op-btn" type="button" data-act="edit" title="Edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>');
   return actions.join('');
 }
 
@@ -744,7 +725,7 @@ async function mergeSelected() {
     return;
   }
   // The disagreeing selection resolves field-by-field in the merge-conflict prompt, now
-  // hosted here in app.js (moved off editor.js so the modal editor can retire, §12 modal
+  // hosted here in app.js (§12 modal
   // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
   // overlap ack the fold raised against a third entry (§06 R4).
   openMergeConflict(entries, async (ack) => {
@@ -754,13 +735,13 @@ async function mergeSelected() {
 }
 
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
-// helper so app.js owns the modal's lifecycle without depending on editor.js's closeEditor
+// helper so app.js owns the modal's lifecycle end to end
 // — the two share the `.editor-backdrop` chrome but not the code path.
 function closeMergeConflict() {
   document.querySelector('.editor-backdrop')?.remove();
 }
 
-// The merge-conflict prompt (§06 R3, §12 R6), moved verbatim from editor.js so the modal
+// The merge-conflict prompt (§06 R3, §12 R6) is hosted here so the modal
 // editor can be deleted (§12 modal-editor row / §Z) while the calendar multi-select merge
 // path keeps its resolver. Styled to context/mockups/merge-conflict.html: a modal one rung
 // above content (.editor.conflict-prompt over .editor-backdrop) resolving the disagreeing
@@ -915,11 +896,13 @@ function armDelete(btn, e) {
   });
 }
 
-// Split (PRD §06 R2): a closed entry can be cut at an instant inside its span into two
-// adjacent entries. The renderer stays a thin shell — it offers an inline instant
-// picker defaulting to the span's midpoint and converts the picked local time to a UTC
-// ISO; core (over the same `split` IPC tt uses) enforces the strictly-in-span rule and
-// performs the arithmetic. The open/running entry never reaches here (no Split button).
+// Split (PRD §06 R2 / G4): a closed entry can be cut at an instant inside its span into two
+// adjacent entries. The renderer stays a thin shell — it offers a simple PLAIN-TEXT instant
+// field (G1: no native datetime-local anywhere on an entry start/stop surface), seeded in the
+// SAME local `YYYY-MM-DDTHH:mm` format the unified form's raw Start/Stop fields use and parsed
+// identically, defaulting to the span's midpoint; it converts the typed local time to a UTC ISO,
+// and core (over the same `split` IPC tt uses) enforces the strictly-in-span rule and performs
+// the arithmetic. The open/running entry never reaches here (no Split button).
 function openSplitForm(btn, e) {
   const startMs = Date.parse(e.startUtc);
   const endMs = Date.parse(e.endUtc);
@@ -929,7 +912,8 @@ function openSplitForm(btn, e) {
   wrap.className = 'split-at';
   wrap.innerHTML =
     `<span class="split-q">Split at</span>` +
-    `<input type="datetime-local" class="split-input" />` +
+    `<input type="text" class="split-input" autocomplete="off" spellcheck="false" ` +
+    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Split instant" />` +
     `<button class="small primary" type="button" data-act="confirm-split">Split</button>` +
     `<button class="small ghost split-cancel" type="button">Cancel</button>`;
   btn.replaceWith(wrap);
@@ -993,9 +977,13 @@ async function openEntryForm(row, e) {
       : '';
 
   const form = document.createElement('form');
-  // Keep the `.edit-form` chrome (shared with add mode) and mark it the unified entry form
-  // in edit mode so the JUDGE UNIFIED_FORM scene can target it.
-  form.className = 'edit-form entry-form';
+  // §12 R06 (G5): ONE unified entry form — edit mode uses the SAME two-column `.uf-body`
+  // structure add mode does (mockup edit-entry.html shows the two-column card for BOTH modes),
+  // so the form carries `unified-form` and reuses its `.uf-*` layout CSS verbatim. `edit-form`
+  // + `entry-form` stay as the behavioural hooks the JUDGE UNIFIED_FORM scene and the tests
+  // target; the per-field `.edit-*`/`.ef-*` hooks ride alongside the shared `.uf-*` styling
+  // classes, so the two modes are one layout with two seedings.
+  form.className = 'entry-form unified-form edit-form';
   form.dataset.mode = 'edit';
   // The edited entry's id, so the JUDGE/tests can target this form (only one is ever open) and
   // closeEntryForm can tie it back to the calendar event carrying the .editing selection state.
@@ -1006,57 +994,60 @@ async function openEntryForm(row, e) {
   // datetime-local, G1) — the same fields the inline picker writes and a typed overnight span uses.
   const endField = running
     ? ''
-    : `<label class="edit-field"><span>End</span>` +
-      `<input type="text" class="edit-end edit-time" autocomplete="off" spellcheck="false" ` +
+    : `<label class="uf-field"><span>Stop</span>` +
+      `<input type="text" class="edit-end edit-time uf-time" autocomplete="off" spellcheck="false" ` +
       `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>`;
   form.innerHTML =
-    `<div class="edit-row">` +
+    // §12 R06 (G5): the two-column body — LEFT column = the attribute fields, RIGHT column = the
+    // inline interval picker over the collapsed Start/Stop expander. Identical shape to add mode.
+    `<div class="uf-body">` +
+    `<div class="uf-fields">` +
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
     // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
     // only the OUTER whitespace and preserves every interior newline, so the stored record stays
     // verbatim.
     `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
-    `</div>` +
-    `<div class="edit-row">` +
-    `<label class="edit-field"><span>Client</span>` +
-    `<select class="edit-client"></select></label>` +
+    `<label class="uf-field"><span>Client</span>` +
+    `<select class="edit-client uf-select"></select></label>` +
     // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
     // and pre-selected to the entry's project. Disabled until a client is chosen.
-    `<label class="edit-field"><span>Project</span>` +
-    `<select class="edit-project" disabled></select></label>` +
-    `</div>` +
-    `<div class="edit-row">` +
+    `<label class="uf-field"><span>Project</span>` +
+    `<select class="edit-project uf-select" disabled></select></label>` +
     // §12 R06 (G6): tags edit in the unified form as removable chips + an add input — the same
     // chip UI the retired per-row Edit-tags control used, folded into the one editor.
-    `<label class="edit-field ef-tags"><span>Tags</span>` +
-    `<span class="chips ef-tag-chips"></span></label>` +
-    `<label class="edit-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
-    `</div>` +
+    `<label class="uf-field uf-tags"><span>Tags</span>` +
+    `<span class="chips uf-tag-chips ef-tag-chips"></span></label>` +
+    `<label class="uf-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
     // §12 R10 (G12): the in-context flags region — the overlap detail (amount + neighbour) and the
     // reversible sleep subtract/restore control + struck raw-vs-trimmed billable. Always in the DOM
     // (hidden when the entry carries neither flag); filled + rewired by renderFlags() below.
-    `<div class="edit-row ef-flags" hidden></div>` +
+    `<div class="ef-flags" hidden></div>` +
+    `</div>` +
+    `<div class="uf-picker">` +
     // §12 R15 (G5/G7): the inline interval picker — the primary picking surface. Mounted in flow
     // into this host (below), bound to THIS form's raw Start/Stop fields (in the expander below).
-    `<div class="edit-row edit-picker-row"><div class="edit-picker uf-picker"></div></div>` +
+    `<div class="edit-picker uf-picker-mount"></div>` +
     // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
     // for overnight spans. Collapsed by default; the raw fields it holds are the SAME values the
     // inline picker above writes, so expander and picker drive one set of form values.
-    `<div class="edit-row ef-times">` +
+    `<div class="uf-times ef-times">` +
     `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
     `<div class="ef-times-body" hidden>` +
-    `<label class="edit-field"><span>Start</span>` +
-    `<input type="text" class="edit-start edit-time" autocomplete="off" spellcheck="false" ` +
+    `<label class="uf-field"><span>Start</span>` +
+    `<input type="text" class="edit-start edit-time uf-time" autocomplete="off" spellcheck="false" ` +
     `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>` +
     endField +
     `</div></div>` +
-    // §12 R06: the edit-mode footer. Only Save entry carries the accent (§15); Split, Cancel and
-    // the two-step Delete are quiet. Split + Delete are absent nowhere else the form can reach.
-    `<div class="edit-foot">` +
+    `</div>` +
+    `</div>` +
+    // §12 R06: the edit-mode footer, laid out by the shared `.uf-foot` grid. Only Save entry
+    // carries the accent (§15); Split, Cancel and the two-step Delete are quiet. Split leads, then
+    // a flexible spacer pushes Save / Cancel / Delete to the trailing edge.
+    `<div class="uf-foot edit-foot">` +
     (running
       ? ''
       : `<button type="button" class="small ghost ef-split" data-act="split">Split</button>`) +
-    `<span class="ef-foot-spacer"></span>` +
+    `<span class="uf-foot-spacer ef-foot-spacer"></span>` +
     `<button type="submit" class="small primary">Save entry</button>` +
     `<button type="button" class="small ghost edit-cancel">Cancel</button>` +
     `<button type="button" class="small ghost ef-delete" data-act="delete">Delete</button>` +
@@ -1082,7 +1073,7 @@ async function openEntryForm(row, e) {
   const chipHost = form.querySelector('.ef-tag-chips');
   const tagInput = document.createElement('input');
   tagInput.type = 'text';
-  tagInput.className = 'tag-add-input ef-tag-add';
+  tagInput.className = 'tag-add-input uf-tag-add ef-tag-add';
   tagInput.placeholder = 'add a tag…';
   tagInput.autocomplete = 'off';
   function renderTagChips() {
@@ -1348,12 +1339,18 @@ $('toggle').addEventListener('click', async () => {
     leStart.addEventListener('change', scheduleLiveEdit);
   }
   if (leBill) leBill.addEventListener('change', () => void commitLiveEdit());
-  // Tags + client/project are richer than a single inline field, so they route to the
-  // consolidated editor (window.SE.openEditor) for the OPEN entry — which omits the End field
-  // on the running row for the same §05 R6 reason, so editing it still cannot stop the timer.
+  // §12 R06/R14: Tags + client/project are richer than a single inline field, so they route to
+  // the ONE unified editor — not a separate modal. Switch to the Entries view and open the
+  // unified form in EDIT MODE seeded with the running entry: it already supports the open row
+  // (start-only picker, no End), so the patch never carries endUtc and editing it cannot stop
+  // the timer (§05 R6). One click from the Timer live-edit strip lands the user in the editor
+  // with tags/project editable.
   const openRunningEditor = () => {
     const e = state?.status?.running ? state.status.entry : null;
-    if (e) window.SE.openEditor({ ...e, endUtc: null }, clientList, { onDone: () => load() });
+    if (!e) return;
+    route('entries'); // render() repaints the Entries calendar, including the running event
+    const row = document.querySelector(`.entry[data-id="${e.id}"]`);
+    if (row) void openEntryForm(row, e);
   };
   const leTags = $('le-tags');
   const leProject = $('le-project');
@@ -1654,15 +1651,6 @@ startForm.addEventListener('submit', async (ev) => {
 // renderer stays a thin shell — it resolves nothing itself; client/project names and the
 // local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
 const addForm = $('add-form');
-
-function localInputValue(date) {
-  // The raw Start/Stop text fields hold `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix).
-  const pad = (n) => String(n).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-  );
-}
 
 // §12 R07 (G5/G6): the add form's live tag working set — the chips mutate this array and Save
 // reads it (parity with the edit form's in-form chip editor). Reset on each open so a fresh form
@@ -1967,29 +1955,9 @@ function closeLeStartDisc() {
 
 // §06 R3: the Merge action folds the current contiguous selection. mergeSelected()
 // decides whether the selection agrees (merge directly) or disagrees (raise the app.js-
-// hosted conflict prompt — openMergeConflict, moved here off editor.js — to pick the
+// hosted conflict prompt — openMergeConflict — to pick the
 // winning client/project/billable first).
 $('merge-go').addEventListener('click', () => void mergeSelected());
-
-// §12 R6: the toolbar Merge-selected button routes the current selection through the
-// consolidated editor's merge flow (window.SE.mergeSelected) — the same merge IPC +
-// conflict prompt — reloading on commit. It mirrors the merge bar's button so the action
-// is reachable from the toolbar too. (This editor.js-hosted path retires with the modal
-// editor's deletion, §12 R06 / §Z; until then the merge-bar path above uses the app.js-
-// hosted openMergeConflict.)
-const mergeSelectedBtn = $('merge-selected');
-if (mergeSelectedBtn) {
-  mergeSelectedBtn.addEventListener('click', () => {
-    const entries = selectedEntries();
-    if (entries.length < 2) return;
-    void window.SE.mergeSelected(entries, {
-      onDone: async (ack) => {
-        await load();
-        if (ack) applyAck(ack);
-      },
-    });
-  });
-}
 
 // §12 R3: the window shell's persistent left nav. route() is the client-side router —
 // it shows the picked .view[data-view] section and hides the rest, and marks the matching
