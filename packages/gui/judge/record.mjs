@@ -42,6 +42,7 @@ import {
   addFormState,
   listState,
   entriesCalendarState,
+  unifiedFormState,
   flaggedState,
   timerViewRunningState,
   timerViewFavoritesState,
@@ -579,8 +580,10 @@ const RECIPES = {
       await wait(page, 1400);
 
       // ===== (B) ENTRIES TOOLBAR — the same plain-date pair, applied LIVE (no Apply) =====
+      // The Entries view is now the readonly day-column CALENDAR (the day-grouped list retired),
+      // so wait for its events (.dcol .ev) rather than the old `#entries .day` grouping.
       await page.click('.nav-item[data-view="entries"]');
-      await page.waitForFunction(() => document.querySelectorAll('#entries .day').length > 0);
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
       await page.evaluate(() => window.__recCaption && window.__recCaption('Entries — Custom… is a plain date pair, applied live (no Apply)'));
       await wait(page, 700);
       // Pick the toolbar's Custom… preset → the two plain date fields reveal.
@@ -945,16 +948,19 @@ const RECIPES = {
       await wait(page, 500);
 
       // ===== (2) EDIT-CLOSED — inline edit a closed row; the picker carries start+stop, overlap =====
-      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00); the inline
-      // picker mounts in flow carrying BOTH start+stop.
+      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00). The unified
+      // editor mounts in the shared view-level host (#entry-form-host), NOT nested in the calendar
+      // event (editor rehost, §12 R06) — so the form + its inline picker are read via the plain
+      // `.edit-form` selector (only one form is open). Hover the event first to reveal its ops.
+      await page.hover('.entry[data-id="1"]');
       await page.click('.entry[data-id="1"] [data-act="edit"]');
-      await page.waitForSelector('.entry[data-id="1"] form.edit-form .edit-picker .stp-block.me', { state: 'attached' });
+      await page.waitForSelector('.edit-form.entry-form .edit-picker .stp-block.me', { state: 'attached' });
       await wait(page, 800);
-      await page.locator('.entry[data-id="1"] .edit-picker .stp-resize').scrollIntoViewIfNeeded();
+      await page.locator('.edit-form .edit-picker .stp-resize').scrollIntoViewIfNeeded();
       // The OTHER closed entry ('market research' 14:00–15:00) paints gray. Drag the bottom resize
       // handle DOWN ~+95px (≈ +190min) to extend the stop from 11:00 past 14:00 → the span overlaps
       // it and the yellow warn-only region paints, written LIVE into the form's .edit-end field.
-      const e1 = await meBox('.entry[data-id="1"] .edit-picker');
+      const e1 = await meBox('.edit-form .edit-picker');
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1 + 95), { steps: 24 });
@@ -962,7 +968,8 @@ const RECIPES = {
       // Dwell on the gray other-entry + yellow overlap (warn-only) — the write is already live.
       await wait(page, 1300);
       // Cancel the edit form (the requirement is the picker; the edit submit path is proven elsewhere).
-      await page.click('.entry[data-id="1"] form.edit-form .edit-cancel');
+      await page.click('.edit-form.entry-form .edit-cancel');
+      await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
       await wait(page, 500);
 
       // ===== (3) EDIT-RUNNING-START — the INLINE START-ONLY disclosure (§05 R06, no modal) =====
@@ -1205,6 +1212,10 @@ const RECIPES = {
     state: multilineDescState,
     drive: async (page) => {
       const row = '.entry[data-id="30"]';
+      // The unified editor mounts in the shared view-level host (#entry-form-host), NOT nested in
+      // the calendar event (editor rehost, §12 R06) — so the seeded fields are read via the plain
+      // `.edit-form` selector (only one form is ever open).
+      const form = '.edit-form.entry-form';
       await page.waitForSelector(row);
       await page.evaluate(() =>
         window.__recCaption &&
@@ -1212,9 +1223,10 @@ const RECIPES = {
       await wait(page, 700);
 
       // Open the inline edit form; the description surfaces in the multiline <textarea rows=3>,
-      // seeded with its stored two lines intact.
+      // seeded with its stored two lines intact. Hover the event first to reveal its ops.
+      await page.hover(row);
       await page.click(`${row} [data-act="edit"]`);
-      await page.waitForSelector(`${row} .edit-form .edit-desc`);
+      await page.waitForSelector(`${form} .edit-desc`);
       await wait(page, 900);
 
       // Scope a local edit override that applies the description patch to the injected snapshot
@@ -1236,7 +1248,7 @@ const RECIPES = {
       // Type a fresh TWO-LINE description. Clear the field, type the first line, then a literal
       // Enter (a newline inside a textarea — never a submit) and the second line: the field scrolls
       // and keeps the interior break.
-      const editDesc = page.locator(`${row} .edit-desc`);
+      const editDesc = page.locator(`${form} .edit-desc`);
       await editDesc.fill('');
       await editDesc.click();
       await page.keyboard.type('Refactored the auth layer', { delay: 45 });
@@ -1247,15 +1259,16 @@ const RECIPES = {
       await wait(page, 1000);
 
       // Save; the submit reads .value.trim() (interior newlines preserved) and sends the edit patch.
-      await page.click(`${row} .edit-form button[type="submit"]`);
-      await page.waitForSelector(`${row} .edit-form`, { state: 'detached' }).catch(() => {});
+      await page.click(`${form} button[type="submit"]`);
+      await page.waitForSelector(form, { state: 'detached' }).catch(() => {});
       await wait(page, 700);
 
       // Reopen in edit mode: the textarea now carries the newly-typed multiline text rendered INTACT.
+      await page.hover(row);
       await page.click(`${row} [data-act="edit"]`);
-      await page.waitForSelector(`${row} .edit-form .edit-desc`);
+      await page.waitForSelector(`${form} .edit-desc`);
       await page.waitForFunction(
-        () => (document.querySelector('.entry[data-id="30"] .edit-desc')?.value ?? '').includes('\n'),
+        () => (document.querySelector('.edit-form .edit-desc')?.value ?? '').includes('\n'),
       );
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Reopened — both lines render intact, stored verbatim'));
@@ -1326,9 +1339,15 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Disagreeing selection — resolve the client/billable, then Merge'));
       await wait(page, 1100);
-      // Pick the second offered client as the winner, then commit.
-      const clientRadios = page.locator('.editor.conflict-prompt .mc-client');
-      if ((await clientRadios.count()) > 1) await clientRadios.nth(1).check();
+      // Pick the second offered client as the winner, then commit. The radio <input> is a
+      // custom-styled control (visually hidden: opacity:0 / 0×0), so click the option LABEL
+      // (.mc-row .opts .mc-opt) — clicking it checks the wrapped .mc-client radio via native label
+      // behavior — rather than .check() on the hidden input (which fails Playwright's visibility gate).
+      const clientOpts = page.locator('.editor.conflict-prompt .mc-row .opts .mc-opt');
+      if ((await clientOpts.count()) > 1) await clientOpts.nth(1).click();
+      await page.waitForFunction(
+        () => document.querySelector('.editor.conflict-prompt .mc-client:checked')?.value === '41',
+      );
       await wait(page, 500);
       await page.click('.editor.conflict-prompt .mc-merge');
       await page.waitForSelector('.editor.conflict-prompt', { state: 'detached' }).catch(() => {});
@@ -1378,6 +1397,80 @@ const RECIPES = {
     },
   },
 
+  // §12 R06 / §06 R01 (shared shot) — the readonly calendar's per-event HOVER OPS + the unified
+  // editor as the ONE edit surface, with §06 R01's two-step Delete confirm gate. Over
+  // unifiedFormState (the SAME seeded snapshot the UNIFIED_FORM judge item drives — the closed
+  // 'design review' entry id 80, 14:00–15:30, alongside the seeded neighbours), the recording:
+  //   (1) HOVERs the event → its icon-only ops chip reveals Delete / Split / Edit AND a corner
+  //       checkbox (`.ops .op-btn[data-act=…]` + `.ck`), exactly what §12 R16's calendar exposes.
+  //       (Hovering also raises the event above its overlapping neighbour id 83 so the ops are
+  //       reachable — the same z-index reveal the judge relies on.)
+  //   (2) CLICKs Edit → the ONE unified entry form opens in EDIT MODE in the shared view-level host
+  //       (#entry-form-host, in flow, no modal/backdrop), seeded from every tt-editable field
+  //       (multiline description, client/project, tag chips, billable, the Start/Stop expander) —
+  //       the identical add-mode form, now in edit mode (§12 R06); the edited event carries .editing.
+  //   (3) exercises §06 R01's confirm gate in the edit-mode footer: the first Delete click ARMS a
+  //       worded confirm (nothing removed yet), the explicit confirm then fires window.stint.remove
+  //       with the entry id and the event LEAVES the calendar on the repaint. No scoped override is
+  //       needed — the shared initScript remove mock splices the row and reloads (as the judge's
+  //       CONFIRM_DELETE / UNIFIED_FORM items rely on), so the deletion lands on camera.
+  // No IPC surgery: the whole scene runs over the unmodified renderer + the same window.stint.*
+  // channels tt uses; the shared unifiedFormState keeps the recording 1:1 with the JUDGE scene.
+  '§12 R06': {
+    page: 'index.html',
+    state: unifiedFormState,
+    contextOpts: { viewport: { width: 940, height: 940 } },
+    drive: async (page) => {
+      const row = '.entry[data-id="80"]';
+      await page.waitForSelector('.dcol .ev');
+      await page.waitForSelector(row);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox (§12 R06 / §06 R01)'));
+      await wait(page, 700);
+
+      // (1) HOVER the event → the icon-only ops (Delete / Split / Edit) + the corner checkbox reveal.
+      // Hover raises entry 80 above its overlapping neighbour (83) so the ops are reachable.
+      await page.hover(row);
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="edit"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="split"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="delete"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ck`, { state: 'attached' });
+      await wait(page, 1400);
+
+      // (2) CLICK Edit → the ONE unified editor opens in EDIT MODE in the shared view-level host
+      // (#entry-form-host), in flow (no modal), seeded from every tt-editable field.
+      await page.hover(row);
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="80"]', { state: 'attached' });
+      await page.waitForSelector('.edit-form.entry-form .edit-client option[value="1"]', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Click Edit → the unified editor opens in edit mode, seeded — the same form as add'));
+      await page.evaluate(() =>
+        document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+      await wait(page, 1700);
+
+      // (3) TWO-STEP DELETE in the edit-mode footer: the first click ARMS a worded confirm (nothing
+      // removed yet)…
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Two-step Delete — first arms a worded confirm, nothing removed yet'));
+      await page.click('.edit-form.entry-form .ef-delete');
+      await page.waitForSelector('.edit-form [data-act="confirm-delete"]', { state: 'attached' });
+      await page.waitForSelector('.edit-form .confirm-q', { state: 'attached' });
+      await wait(page, 1500);
+
+      // …then the explicit confirm fires remove({id}); the event leaves the calendar on the repaint.
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Confirm — remove fires with the entry id; the event leaves the calendar'));
+      await page.click('.edit-form [data-act="confirm-delete"]');
+      await page.waitForSelector(row, { state: 'detached' }).catch(() => {});
+      await wait(page, 1600);
+    },
+  },
+
   // §12 R10 (shared shot with §06 R04) — flags in context: MARKERS on the readonly calendar, DETAIL
   // + reversible control in the unified editor. Over a day carrying an overlap pair (10↔11, 30m)
   // and a slept entry (12, raw 4h trimmed to 3h), the recording: shows the yellow `.ov` overlap
@@ -1394,32 +1487,37 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Flags in context — overlap warn bands + a slept hatch on the calendar (§12 R10)'));
       await wait(page, 1200);
-      // Open the overlapped event (10 — the larger 2h block, so the click clears the nested 11) →
-      // the editor spells out the overlap detail.
-      await page.click('.entry[data-id="10"] .bt').catch(() => {});
-      await page.waitForSelector('.entry[data-id="10"] .edit-form .ef-flags .banner.overlap');
+      // Open the overlapped event (10, 09:00–11:00) → the editor spells out the overlap detail. The
+      // editor mounts in the shared view-level host (#entry-form-host), NOT nested in the calendar
+      // event (editor rehost, §12 R06) — so open via hover + its Edit op and read the flags off the
+      // plain `.edit-form` selector. Entry 11 (10:00–10:30) is nested at 10's vertical CENTRE, so
+      // hover 10 near its TOP (the 09:00 edge, clear of 11) to raise it above 11 and reveal its ops.
+      await page.hover('.entry[data-id="10"]', { position: { x: 24, y: 12 } });
+      await page.click('.entry[data-id="10"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form .ef-flags .banner.overlap');
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Open the entry → the overlap detail: amount + which neighbour'));
       await wait(page, 1300);
-      await page.click('.entry[data-id="10"] .edit-cancel');
-      await page.waitForSelector('.entry[data-id="10"] .edit-form', { state: 'detached' });
+      await page.click('.edit-form .edit-cancel');
+      await page.waitForSelector('.edit-form', { state: 'detached' });
       // Open the slept event → the reversible subtract/restore control + struck raw-vs-trimmed.
-      await page.click('.entry[data-id="12"] .bt').catch(() => {});
-      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-subtract');
+      await page.hover('.entry[data-id="12"]');
+      await page.click('.entry[data-id="12"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form .ef-subtract');
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Slept entry: raw 4h struck beside the trimmed 3h billable — Restore to reverse'));
       await wait(page, 1300);
       // Restore lifts the exclusion (billable back to raw), then Subtract re-excludes it.
-      await page.click('.entry[data-id="12"] .ef-subtract');
-      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-dur s.struck', { state: 'detached' });
+      await page.click('.edit-form .ef-subtract');
+      await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Restore — the slept time is billable again (no strike)'));
       await wait(page, 1200);
-      await page.click('.entry[data-id="12"] .ef-subtract');
-      await page.waitForSelector('.entry[data-id="12"] .edit-form .ef-dur s.struck');
+      await page.click('.edit-form .ef-subtract');
+      await page.waitForSelector('.edit-form .ef-dur s.struck');
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Subtract slept — reversible: the raw duration is struck once more'));
@@ -1576,11 +1674,12 @@ const RECIPES = {
       await tickClock(3, 350);
 
       // ---- (2) EDIT THE RUNNING TIMER LIVE — no stop ----------------------------------------
-      // The live-edit strip is seeded from the open entry. Show the "no stop" pill and the
-      // "End time not editable while running" note (the End field is deliberately absent), then
-      // change description + start time + Billable and PROVE the row stays open (still running).
+      // The live-edit strip is seeded from the open entry. The End field is deliberately ABSENT —
+      // there is NO #le-end anywhere (the open row has no stop, §05 R06 / §12 R14, the same
+      // no-end fact the judge asserts) — then change description + start time + Billable and PROVE
+      // the row stays open (still running).
       await page.waitForSelector('#live-edit:not([hidden])');
-      await page.waitForSelector('#live-edit .le-pill');
+      await page.waitForFunction(() => !document.querySelector('#live-edit #le-end'));
       // Make each live edit visibly APPLY on the repaint: scope an `edit` override that applies
       // the patch to the open row in __STATE__ (never an endUtc — the row stays open), faithful
       // to core's edit-on-open-row. The renderer's commitLiveEdit still builds the minimal patch
@@ -1631,8 +1730,8 @@ const RECIPES = {
       await wait(page, 600);
 
       // 2c — toggle BILLABLE off (immediate commit). The patch carries billable, never endUtc;
-      // the timer keeps running. Dwell so the "no stop" pill + note are legible alongside the
-      // still-advancing running card.
+      // the timer keeps running. Dwell so the running strip (with no End field) is legible
+      // alongside the still-advancing running card.
       await page.click('#live-edit #le-bill');
       await page.waitForFunction(() => !!window.__EDITED__ && 'billable' in (window.__EDITED__.patch || {}));
       await page.waitForSelector('#timer-card.running');
@@ -1886,12 +1985,12 @@ const RECIPES = {
       await page.click('#rep-by-seg .seg-btn[data-by="project"]');
       await wait(page, 400);
       // Save the amendment → editReport (parity with `tt report edit`); the card's spec summary
-      // now reads 'grouped by project'.
+      // now reads 'by project' (the specSummary wording the judge REPORTS_VIEW item also asserts).
       await page.click('#rep-save');
       await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
       await page.waitForFunction(
         () =>
-          /grouped by .*project/i.test(
+          /by\s+project/i.test(
             document.querySelector('.def[data-name="Weekly billables — Acme"] .dspec')?.textContent || '',
           ),
       );
