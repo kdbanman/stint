@@ -1,18 +1,19 @@
 ---
 name: qa-gif-authoring
-description: Author clear, annotated QA GIFs from a Playwright-driven page — a visible cursor that follows the mouse, click ripples, and terse on-screen toasts — then convert to an optimized GIF with ffmpeg. Use when recording GUI bug reproductions or demos where the viewer must see WHAT is clicked and WHY. Pairs with the Chromium-over-real-core QA driver used for Stint GUI QA.
+description: Author clear, annotated GIFs from a Playwright-driven page, then convert to an optimized GIF with ffmpeg. Use wherever a screen recording is the deliverable and the viewer must follow what is happening on screen — acceptance evidence, feature walkthroughs, QA runs, demos. Pairs with the Chromium-over-real-core driver.
 ---
 
-# QA GIF authoring
+# GIF authoring
 
 Turn a scripted Playwright interaction into a GIF a human can follow at a glance:
 a **visible cursor** that tracks real mouse moves, a **click ripple** at each press,
 and **terse toasts** that narrate intent. Motion is deliberately unhurried so the eye
-can follow. Built for bug-repro evidence (e.g. sub-issues of a QA sweep).
+can follow. Use it anywhere a screen recording is the artifact — acceptance evidence,
+walkthroughs, QA — not just one kind of recording.
 
 ## Prerequisites
 
-- A Playwright page running the app (see the QA driver below).
+- A Playwright page running the app (see the driver below).
 - `ffmpeg` on PATH (`apt-get install -y ffmpeg`) for the WEBM→GIF conversion.
 - The helper module: `cine.mjs` in this skill directory.
 
@@ -30,19 +31,19 @@ await page.mouse.move(width/2, height/2, { steps: 2 });
 const cine = makeCine(page);         // { move, click, hover, type, toast, wait, moveXY }
 ```
 
-In the Stint QA driver this is already done: `installOverlay` runs in `makePage`, and
+In the driver this is already done: `installOverlay` runs in `makePage`, and
 `record(name, fn)` passes `(recordingPage, cine)` to your recipe and handles the GIF
 conversion. So a recipe is just:
 
 ```js
-await ctx.record('f1-add-client-dead', async (rp, cine) => {
-  await cine.toast("A new user opens <b>Clients</b>", 1500);
-  await cine.click('.nav-item[data-view="clients"]');
-  await cine.toast("Click <b>+ Add client</b>…", 1600);
-  await cine.click('[data-view="clients"] button.primary');
-  await cine.wait(700);
-  await cine.toast("…nothing happens. The button is dead.", 2000);
-  await cine.wait(1400);
+await ctx.record('reports-walkthrough', async (rp, cine) => {
+  await cine.toast("Open <b>Reports</b>", 1500);
+  await cine.click('.nav-item[data-view="reports"]');
+  await cine.toast("Create a new report", 1500);
+  await cine.click('[data-view="reports"] button.primary');
+  await cine.type('#rep-name', 'Weekly');
+  await cine.click('#rep-save');
+  await cine.wait(900);
 }, { viewport: { width: 1000, height: 720 } });
 ```
 
@@ -62,14 +63,13 @@ await ctx.record('f1-add-client-dead', async (rp, cine) => {
 
 ## Authoring tips
 
-- **Toast before you act.** State intent ("Click Save with no edits"), do it, then a
-  short payoff toast ("Times changed 09:07 → 09:05"). 1.5–2 s each; keep them one line.
+- **Toast before you act.** State intent ("Save the report"), do it, then a short
+  payoff toast ("Total: 42h 30m"). 1.5–2 s each; keep them one line.
 - **Let the cursor travel.** The glide itself is the annotation — don't teleport. Add a
-  `wait(600–1000)` after a consequential click so the change is legible.
+  `wait(600–1000)` after a consequential action so the change is legible.
 - **Keep recipes 5–9 s.** Longer GIFs balloon in size and lose the viewer.
 - **Emphasis** with `<b>…</b>` (rendered in the app's clay accent).
-- **Contrast sells a bug**: show the broken path, then the working one (dead "Add client"
-  vs. working "Add tag").
+- **Contrast reads well** — show a before state, then the after, so the change is obvious.
 
 ## WEBM → GIF (repo convention)
 
@@ -82,7 +82,8 @@ ffmpeg -y -i in.webm -i pal.png \
 ```
 
 The driver's `record()` does this automatically. To keep GIFs small, record at
-≤1000×720 and trim dead time; ~5–9 s lands around 0.5–2.5 MB.
+≤1000×720 and trim dead time; ~5–9 s lands around 0.5–2.5 MB. For a busy multi-colour
+frame that still runs large, re-encode at a smaller `scale=` and/or lower `fps`.
 
 ## Verifying a GIF
 
@@ -95,10 +96,10 @@ ffmpeg -y -i out.gif -vf "select=eq(n\,45)" -vframes 1 frame.png   # then view f
 Check the cursor is over the target, a ripple/​toast is visible, and the payoff frame
 shows the change.
 
-## The QA driver (context)
+## The driver (context)
 
 The overlay is engine-agnostic, but it was built alongside a driver that runs the **real
-Stint renderer** (`packages/gui/renderer`) in the pre-installed Chromium, bridged to a
+renderer** (`packages/gui/renderer`) in the pre-installed Chromium, bridged to a
 **real `@stint/core` SQLite store** via the same `window.stint` IPC map `main.ts`
 registers. That driver watches a `commands/` dir for `NNN.mjs` files (each
 `export default async (ctx) => {}` with `ctx.record`, `ctx.page`, `ctx.store`, `ctx.cine`)
