@@ -716,7 +716,7 @@ describe('renderer static contract', () => {
     // seeded with the running entry (no separate modal, no window.SE).
     expect(app).toMatch(/const leTags = \$\('le-tags'\)/);
     expect(app).toMatch(/const leProject = \$\('le-project'\)/);
-    const runEditorBody = app.match(/const openRunningEditor = \(\) => \{[\s\S]*?\n  \};/)?.[0];
+    const runEditorBody = app.match(/const openRunningEditor = \(\) => \{[\s\S]*?\n {2}\};/)?.[0];
     expect(runEditorBody, 'the openRunningEditor handler must be present').toBeTruthy();
     expect(runEditorBody!).toMatch(/route\('entries'\)/);
     expect(runEditorBody!).toMatch(/openEntryForm\(row, e\)/);
