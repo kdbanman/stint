@@ -1,14 +1,13 @@
 ---
 name: bug-report-authoring
-description: Write high-signal bug-report issues after finding a defect (e.g. from an agentic QA sweep) — a repeatable structure, honest severity/confidence, embedded screen-recording evidence, and a mandatory cleanup list so evidence files don't accumulate in the repo. Use when filing GitHub issues for bugs you have reproduced.
+description: Write high-signal bug-report issues after finding a defect (e.g. from an agentic QA sweep). Use when filing GitHub issues for bugs you have reproduced.
 ---
 
 # Bug-report authoring
 
 How to turn a reproduced defect into an issue a maintainer can act on without re-deriving
-your work. One issue per finding. File them as standalone repo issues (not sub-issues)
-unless asked otherwise, and apply a discovery label (e.g. `Agentic QA Discovery`) so the
-batch is findable and prunable later.
+your work. One issue per finding; file them as standalone repo issues (not sub-issues)
+unless asked otherwise.
 
 ## Anatomy of a good bug issue
 
@@ -19,7 +18,8 @@ batch is findable and prunable later.
 - **Why (root cause)** — the minimal mechanism with `file:line` pointers, plus the proof
   you actually reproduced it (the exact call/DOM state, before/after values). Point at the
   real code path the app runs — not a convenient proxy you called with different arguments.
-- **Suggested fix** — one or two concrete options; keep it short.
+- **Suggested fix (optional)** — include only when the fix is obvious. If there's any
+  ambiguity about the right approach, leave it out rather than guess.
 - **Severity + confidence** — state severity, and be honest about confidence. If you could
   not reproduce something end-to-end (e.g. couldn't run the packaged app), say so and say
   what still needs confirming. Never dress up a code-inspection hunch as a reproduction.
@@ -36,26 +36,27 @@ batch is findable and prunable later.
 
 ## Evidence & cleanup
 
-- Commit recordings/stills under a batch-scoped dir, e.g. `acceptance/evidence/<batch>/`,
-  and embed them by raw URL: `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/<branch>/<path>`.
-  When you re-record an existing file, bust GitHub's image cache with `?v=2` (bump N) since
-  the filename is unchanged.
-- **Every bug issue MUST include a `## Cleanup on close` section** listing the evidence
-  artifacts committed for it, so whoever closes the issue can delete them and the repo
-  doesn't accumulate QA GIFs/screenshots. List the issue's own files, and note when the
-  whole batch dir (and its README) can go — once every issue in the batch is closed. Example:
+- Scope evidence **per issue**: commit recordings/stills under
+  `acceptance/evidence/issues/issue-<N>/` (a lone file may sit directly in
+  `acceptance/evidence/issues/` named for the issue). The issue number isn't known until the
+  issue is filed, so file first, then add the evidence and edit the body with its URL.
+- Embed by raw URL:
+  `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/<branch>/<path>`. When you
+  re-record a file in place, bust GitHub's image cache with `?v=2` (bump N) since the
+  filename is unchanged.
+- **Every bug issue MUST include a `## Cleanup on close` section** naming its evidence
+  path(s), so whoever closes the issue deletes them and the repo doesn't accumulate QA
+  GIFs/screenshots. Because evidence is per-issue, cleanup is self-contained. Example:
 
   ```markdown
   ## Cleanup on close
-  Remove the evidence committed for this issue:
-  - `acceptance/evidence/issue-37-qa/f1-add-client-dead.gif`
-
-  Once every `Agentic QA Discovery` issue from this batch is closed, the whole
-  `acceptance/evidence/issue-37-qa/` directory (and its README) can be deleted.
+  Delete this issue's evidence directory: `acceptance/evidence/issues/issue-48/`
   ```
 
-- Keep the driver/harness in your scratchpad, not the repo — only the committed evidence
-  (and any reusable skill) belongs in version control.
+- Keep the throwaway reproduction harness — the local Playwright script that launches and
+  drives the app to reproduce the bug — in your scratchpad, not the repo. Only the committed
+  evidence and reusable skills (e.g. the `qa-gif-authoring` cursor/ripple/toast overlay)
+  belong in version control.
 
 ## Pairs with
 
