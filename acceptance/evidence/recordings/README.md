@@ -17,10 +17,9 @@ This directory holds two kinds of evidence:
 
 ## §W index — the screen-recording QA evidence
 
-The [`requirements-transition.md` §W table](../../../requirements-transition.md) names
-one GIF per row (combined rows share one GIF, referenced from each id). Every row below
-maps to a committed `.gif` and to the JUDGE item that gates the same behavior
-deterministically — the recording is that fact as a moving picture.
+One GIF per requirement row (combined rows share one GIF, referenced from each id).
+Every row below maps to a committed `.gif` and to the JUDGE item that gates the same
+behavior deterministically — the recording is that fact as a moving picture.
 
 | Req id(s) | GIF | What it demonstrates |
 |---|---|---|

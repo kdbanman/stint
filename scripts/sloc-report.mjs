@@ -46,7 +46,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const RULES = [
   // AI context
   [/^CLAUDE\.md$/,                              'AI context',     'Project guide (CLAUDE.md)'],
-  [/^\.claude\//,                               'AI context',     'Skills & workflows'],
+  [/^\.claude\//,                               'AI context',     'Skills'],
 
   // Implementation — the shippable product
   [/^packages\/core\/src\//,                    'Implementation', 'core (@stint/core)'],
