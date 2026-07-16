@@ -1,14 +1,9 @@
 ---
 name: change-requirements
 description: >-
-  Drive a controlled requirements change for Stint. Use whenever the user wants
-  to change, add, modify, or remove product requirements — new features, dropped
-  features, schema/data-model changes, CLI/GUI behavior, packaging, anything that
-  alters context/prd.html / context/concept.html / context/glossary.html / context/acceptance.html. The user
-  LISTS the changes they want; this skill grills the design, then authors the
-  full transition artifact set (renamed *-old.html docs, new docs, a
-  requirements-transition.md work-list, and mockups) and STOPS. Execution is
-  the requirements-transition skill's job, launched by the user.
+  Use when the user wants to add, change, or remove Stint product
+  requirements — anything that alters the context/ spec docs (prd, concept,
+  glossary, acceptance). Designs the change; does not execute it.
 ---
 
 # Change requirements (Stint)

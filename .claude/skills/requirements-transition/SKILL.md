@@ -1,15 +1,9 @@
 ---
 name: requirements-transition
 description: >-
-  Execute a signed-off Stint requirements transition. Consumes the
-  requirements-transition.md work-list (authored by the change-requirements
-  skill) plus the new *-old.html/new doc pair and mockups, and carries the
-  change out end-to-end: plan, implement in file-disjoint waves with
-  checkpoint commits, regenerate all AC evidence, run the two reviews with a
-  bounded improvement loop, capture screen-recording QA GIFs LAST, aggregate
-  everything into one PR on the working branch, and perform the gated old→new
-  swap. Use when the user asks to run/execute a prepared requirements
-  transition. Do NOT use to design the change — that is change-requirements.
+  Use when a signed-off requirements-transition.md work-list exists and the
+  user asks to run/execute the transition. Not for designing the change —
+  that is change-requirements.
 ---
 
 # Requirements transition — execution (Stint)
@@ -54,31 +48,32 @@ Read first:
 ## Choosing subagent model level
 
 Fan work out to subagents (the Agent tool). Each subagent runs at a **model
-level** — `haiku` < `sonnet` < `opus` < *inherit* (omit `model`; the session's
-own model, the strongest available). Decide per task, by this procedure:
+level** — `sonnet` < `opus` < `fable`. Decide per task, by this procedure:
 
-1. **Default is inherit.** Downgrading is a deliberate act, never the reflex.
+1. **Default is `fable`.** Downgrading is a deliberate act, never the reflex.
 2. **Ask the gate question:** *if this subagent does its job subtly wrong,
    what catches it?*
    - A **deterministic gate** catches it — the build, a test, a golden, the
      judge, the evidence-drift comparison, or a later stage that mechanically
      rechecks the output — then the task is downgrade-eligible.
    - Only a **review or a human** would catch it — do not downgrade.
-3. **Downgrade-eligible tasks, by kind:**
-   - `haiku` — mechanical and fully specified, verified by command: run a
+3. **The levels:**
+   - `sonnet` — mechanical and fully specified, verified by command: run a
      suite and report the failures verbatim; regenerate evidence; apply an
      exact rename list; convert a file format; collect an inventory a later
      stage rechecks.
-   - `sonnet` — well-scoped implementation against a precise contract with
-     co-located tests that pin the behavior; scoped searches whose findings a
-     stronger reviewer then verifies.
-4. **Never downgrade:** anything that authors or alters requirements or
-   acceptance criteria; any core (`●`) integrity/data-loss requirement; the
-   two review stages; repair work whose cause is not yet understood; any task
-   that decides what the spec *means* rather than carrying out what it says.
-5. **Reasoning effort follows the same rule** — low for mechanical
-   run-and-report steps, high for reviews and repairs.
-6. **When in doubt, inherit.** A wrong cheap agent costs a diagnose-and-repair
+   - `opus` — well-scoped, gate-checked execution: implementation against a
+     precise contract with co-located tests that pin the behavior; scoped
+     searches whose findings a stronger reviewer then verifies. Never for
+     anything that authors or alters requirements or acceptance criteria, or
+     touches a core (`●`) integrity/data-loss requirement.
+   - `fable` — uncertain or subtle work needing excellent taste, judgement,
+     and wayfinding: authoring or altering requirements/acceptance criteria;
+     core (`●`) integrity/data-loss requirements; the two review stages;
+     repair whose cause is not yet understood; any task that decides what the
+     spec *means* rather than carrying out what it says.
+4. **Reasoning effort is always `high`.**
+5. **When in doubt, `fable`.** A wrong cheap agent costs a diagnose-and-repair
    loop that dwarfs what the downgrade saved.
 
 The same question — *what catches a subtle failure?* — also decides how much
@@ -99,7 +94,7 @@ mockup(s), the relevant new-doc sections, and the standing rules above.
 For each requirement row, produce a short plan: the exact file set it will
 touch, the implementation approach, the AC it must land (per its AC column:
 BDD / PROP / GOLD / JUDGE / MANUAL), and the evidence it must show up in.
-Subagents may research in parallel (read-only; `sonnet` is usually right —
+Subagents may research in parallel (read-only; `opus` is usually right —
 Stage 2's implementers and the gates recheck everything).
 
 Then schedule rows into **file-disjoint waves**: no two requirements in a wave
@@ -111,8 +106,8 @@ docs/criteria). DELETED rows usually land late, next to the swap.
 Per wave: one subagent per requirement (model level per the rubric), each
 owning its declared files exclusively. Every implementer also lands/updates
 the co-located tests its AC column demands. After the wave: run
-`npm run build && npm test`; repair on red (inherit-level subagent — the cause
-is unknown by definition) before the checkpoint commit. Then the next wave.
+`npm run build && npm test`; repair on red (`fable` — the cause is unknown by
+definition) before the checkpoint commit. Then the next wave.
 
 ## Stage 3 — AC verification
 
@@ -124,7 +119,7 @@ its cheap automated mirror (process principle R03).
 
 ## Stage 4 — The two reviews + improvement loop
 
-Run both reviews (§R), each as its own subagent at inherit level:
+Run both reviews (§R), each as its own subagent at `fable`:
 
 1. **AC-evidence-sufficiency review** — an adversarial completeness critic per
    requirement. Defaults to *insufficient*; upgrades only if the requirement
@@ -146,8 +141,8 @@ clean, so the recordings show the shipped UI. Scope (§W): every core (`●`) GU
 row, every Rec `▶` row, and code-change-adjacent requirements demonstrable in
 the GUI.
 
-Conventions (a `haiku`/`sonnet` task once the recipe list is confirmed — the
-output is a visible artifact the PR embeds):
+Conventions (a `sonnet` task once the recipe list is confirmed — the output is
+a visible artifact the PR embeds):
 
 - Drive the real renderer via the record harness:
   `node packages/gui/judge/record.mjs --list` for recipe ids, `npm run record`
