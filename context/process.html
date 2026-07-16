@@ -100,12 +100,12 @@
       <div class="wordmark">stint</div>
       <div class="clock">how it's built · tt v1</div>
     </div>
-    <div class="mast-meta">Process &amp; Verification Requirements · v1 (seed)</div>
+    <div class="mast-meta">Process &amp; Verification Requirements · v1</div>
   </header>
 
   <p class="lede"><a href="prd.html">prd.html</a> specifies the product; this specifies the apparatus that proves it. These are <strong>SDLC requirements</strong> — properties the build, CI, and acceptance system must hold — a different kind of claim from the application requirements, and until now without a home.</p>
 
-  <p>Read with <a href="acceptance.html">acceptance.html</a>, which routes each requirement to the method that proves it. That decides <em>which</em> notation; this constrains how the resulting guard must <em>behave</em>. A violation is a false green, not a user-visible bug, and is orthogonal to the five AC methods: a correct GOLD test can still violate these by running too late or being unprotected. This is a <strong>seed</strong> — the full SDLC spec (the automatic-vs-manual inventory, release governance) is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>.</p>
+  <p>Read with <a href="acceptance.html">acceptance.html</a>, which routes each requirement to the method that proves it. That decides <em>which</em> notation; this constrains how the resulting guard must <em>behave</em>. A violation is a false green, not a user-visible bug, and is orthogonal to the five AC methods: a correct GOLD test can still violate these by running too late or being unprotected. The primary reader is the agent session doing the work (§03): process that lives only in CI config, code comments, or habit cannot bind a fresh session, so it lives here — the repo describes its own construction.</p>
 
   <nav class="toc">
     <h4>Contents</h4>
@@ -113,9 +113,12 @@
       <li><a href="#s1"><span class="tn">01</span>Two kinds of requirement</a></li>
       <li><a href="#s2"><span class="tn">02</span>The principles</a></li>
       <li><a href="#s3"><span class="tn">03</span>The agentic process</a></li>
-      <li><a href="#s4"><span class="tn">04</span>Process glossary</a></li>
-      <li><a href="#s5"><span class="tn">05</span>Not yet specified</a></li>
-      <li><a href="#s6"><span class="tn">06</span>Where requirements live</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Authoring rules</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Automatic vs manual</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Branch, PR, release</a></li>
+      <li><a href="#s7"><span class="tn">07</span>Specified vs convention</a></li>
+      <li><a href="#s8"><span class="tn">08</span>Process glossary</a></li>
+      <li><a href="#s9"><span class="tn">09</span>Where requirements live</a></li>
     </ol>
   </nav>
 
@@ -157,7 +160,7 @@
   <section id="s3">
     <div class="eyebrow"><span class="n">03</span> Execution</div>
     <h2>The agentic process</h2>
-    <p>Stint is built by agent sessions, and the procedures they follow are specified the way everything else here is specified: as reviewable prose. A <strong>skill</strong> (<code>.claude/skills/*/SKILL.md</code>) is a versioned Markdown procedure the session loads and follows — the process twin of a requirement doc. The session holds the run-time judgment between stages; the deterministic gates (<code>npm test</code>, the judge, the evidence-drift comparison, the no-network backstop) supply the certainty. Per R13 this replaces the earlier per-change orchestration scripts, which encoded the same stages as fixed JavaScript control flow.</p>
+    <p>Stint is built by agent sessions, and the procedures they follow are specified the way everything else here is specified: as reviewable prose (R13). A <strong>skill</strong> (<code>.claude/skills/*/SKILL.md</code>) is a versioned Markdown procedure the session loads and follows — the process twin of a requirement doc. The session holds the run-time judgment between stages; the deterministic gates (<code>npm test</code>, the judge, the evidence-drift comparison, the no-network backstop) supply the certainty.</p>
     <h3>The standing skills</h3>
     <table>
       <thead><tr><th>Skill</th><th>Role</th></tr></thead>
@@ -166,15 +169,95 @@
         <tr><td data-l="skill" class="m">requirements-transition</td><td data-l="role"><strong>Execute.</strong> Consumes the work-list: plans file-disjoint waves, implements them with subagents under checkpoint commits, regenerates all AC evidence, runs the two reviews with a bounded improvement loop, captures screen-recording QA last, aggregates one PR, and performs the gated old→new swap. The human gate is the merge.</td></tr>
       </tbody>
     </table>
-    <p>The pair is deliberately asymmetric: authoring wants a conversation (recommendations, sign-off, a synthesis the user approves), execution wants a checklist with gates. A change that needs a stage the execution skill lacks extends the skill itself — the standing procedure improves; it is never forked into a per-change variant.</p>
+    <p>The pair is asymmetric: authoring wants a conversation (recommendations, sign-off, a synthesis the user approves), execution wants a checklist with gates. A change that needs a stage the execution skill lacks extends the skill itself — never a per-change fork. The skills carry <em>application</em> requirement changes; changing this doc is lighter (§06).</p>
     <h3>Subagents and model level</h3>
     <p>The session fans work out to subagents, each run at a chosen <strong>model level</strong> (capability tier). The selection rule is the <em>gate question</em>: <strong>if this subagent does its job subtly wrong, what catches it?</strong> A task whose subtle failure a deterministic gate catches — the build, a golden, the judge, a later stage that mechanically rechecks — may run at a cheap level; a task whose failure only a review or a human would notice runs at the strongest. Model level is set by what the gates <em>cannot</em> catch, never by task size; the default is the strongest available, and downgrading is a deliberate act. The operational rubric — which task kinds are downgrade-eligible, which never are — lives in the <code>requirements-transition</code> skill beside the stages that apply it.</p>
   </section>
 
   <section id="s4">
-    <div class="eyebrow"><span class="n">04</span> Words</div>
+    <div class="eyebrow"><span class="n">04</span> Authoring</div>
+    <h2>Authoring rules</h2>
+    <p>Bind every doc in the repo: the <code>context/</code> specs, the skills, <code>README.md</code>, <code>CLAUDE.md</code>.</p>
+    <ul class="d">
+      <li><strong>Concise over grammatical.</strong> Scannability wins; fragments are fine. Cut every word that doesn't change what the reader does.</li>
+      <li><strong>Common language.</strong> Use the ordinary word. Coin a term only when no common one fits — then define it in a glossary with its rejected synonyms. Invented terminology is a cost paid on every future read.</li>
+      <li><strong>No editorializing.</strong> No hyperbole, no reassurance copy, no prose flourish. These are engineering documents: claims, reasons, tables.</li>
+      <li><strong>Stateless.</strong> Present tense, as if it had always been this way — no change narrative, no responses to dead decisions (R12). History lives in git. One exception: a principle may cite the incident that motivated it.</li>
+      <li><strong>One home per fact.</strong> State a fact in the doc that owns it; everywhere else, point. Duplicated rationale drifts — CI config and code comments keep the mechanics and point here for the why.</li>
+    </ul>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Enforcement</div>
+    <h2>Automatic vs manual</h2>
+    <p>The boundary rule: <strong>a check is manual only where headless CI physically cannot reach</strong> — live network, a real desktop OS, real wall-clock/power events, or the live Actions run itself. Any other manual check is a process defect. Every manual check keeps a cheap automated mirror (R03).</p>
+    <h3>Automatic — every PR and merge to main <span class="tag">ci.yml</span></h3>
+    <table>
+      <thead><tr><th>Check</th><th>Runs as</th></tr></thead>
+      <tbody>
+        <tr><td data-l="check">Build, lint, typecheck</td><td data-l="runs as" class="m">verify job</td></tr>
+        <tr><td data-l="check">Unit · PROP · GOLD · BDD · integration</td><td data-l="runs as" class="m">npm test</td></tr>
+        <tr><td data-l="check">No-network backstop (§17 R09)</td><td data-l="runs as" class="m">npm run verify:no-network</td></tr>
+        <tr><td data-l="check">Auto-publish guard (§19 R05)</td><td data-l="runs as" class="m">npm run verify:no-publish</td></tr>
+        <tr><td data-l="check">Packaging toolchain guard, self-healing (§19 R01)</td><td data-l="runs as" class="m">npm run verify:packaging</td></tr>
+        <tr><td data-l="check">Evidence regen + drift comparison (R08)</td><td data-l="runs as" class="m">npm run evidence</td></tr>
+        <tr><td data-l="check">Source census reconcile (R10)</td><td data-l="runs as" class="m">sloc-report.mjs</td></tr>
+        <tr><td data-l="check">Packaging smoke — a real Linux pack (§19 R01)</td><td data-l="runs as" class="m">pack-smoke job</td></tr>
+        <tr><td data-l="check">GUI presentation judge, headless Chromium (§12/§18)</td><td data-l="runs as" class="m">judge job</td></tr>
+      </tbody>
+    </table>
+    <p>Post-merge (<code>release.yml</code>): stamp the date version (§19 R06) → pack macOS + Linux → publish the GitHub Release (§19 R05). Operator-run per GUI change, not CI-gating: the §W recording GIFs (<code>npm run record</code>) — QA evidence, regenerated so every committed GIF shows the current UI.</p>
+    <h3>Manual — the live residue <span class="tag">runbook.md</span></h3>
+    <p>Most runbook procedures also run headlessly through their JUDGE/GOLD mirrors; a human on a real machine covers only what CI cannot:</p>
+    <table>
+      <thead><tr><th>Check</th><th>Why CI cannot</th></tr></thead>
+      <tbody>
+        <tr><td data-l="check">Live update check against GitHub Releases (§19 R03)</td><td data-l="why">The no-network backstop forbids CI network. Mirrors: the JUDGE software-update scene, GOLD <code>update.test.ts</code>.</td></tr>
+        <tr><td data-l="check">OS-level install, app replacement, Gatekeeper (§19 R02/R04)</td><td data-l="why">Needs a real desktop OS. Mirrors: the bundle/build-matrix GOLD guards, <code>packaging/</code> static checks.</td></tr>
+        <tr><td data-l="check">Tray + global hotkey on a real desktop session (§12 R01/R02)</td><td data-l="why">Needs a real OS shell. Mirrors: <code>tray.test.ts</code>, the JUDGE popover scenes.</td></tr>
+        <tr><td data-l="check">Real sleep/wake spans (§10a)</td><td data-l="why">Needs real power events. Mirrors: BDD/PROP over injected clocks.</td></tr>
+        <tr><td data-l="check">Publish-on-merge actually firing (§19 R05)</td><td data-l="why">Only a real merge on the upstream repo runs it. Mirror: the release-wiring GOLD guard.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Governance</div>
+    <h2>Branch, PR, release</h2>
+    <p>Requirements:</p>
+    <ul class="d">
+      <li><strong>Every change rides a PR.</strong> Issue-anchored branch → ready (not draft) PR → owner merge. No direct pushes to <code>main</code>. The merge is the one human gate (§03).</li>
+      <li><strong>Merge on green only.</strong> The §05 per-PR checks pass before merge; a red check blocks.</li>
+      <li><strong>Every merge to main is a release.</strong> <code>release.yml</code> publishes a GitHub Release versioned <code>YYYY.M.D[.N]</code> with the macOS + Linux artifacts. Two reasons: a release path that runs on every merge cannot rot unseen (R02), and shipping is fast by default.</li>
+      <li><strong>Changing this doc.</strong> Process requirements change by grilled PR: interrogate intent before authoring, author directly, merge gates. None of the transition machinery applies — no <code>*-old.html</code> coexistence, no work-list, no swap; there is no generated evidence to migrate.</li>
+    </ul>
+    <p>Recorded conventions (reasoned, not binding — §07):</p>
+    <ul class="d">
+      <li><strong>Merge commits</strong>, no squash — keeps wave checkpoint commits reachable for bisect.</li>
+      <li><strong>Branch names come from the tooling</strong> and carry the issue number.</li>
+      <li><strong>Commit messages:</strong> imperative subject naming the issue; co-author + session trailers.</li>
+      <li><strong>One issue per change.</strong></li>
+    </ul>
+  </section>
+
+  <section id="s7">
+    <div class="eyebrow"><span class="n">07</span> Line</div>
+    <h2>Specified vs convention</h2>
+    <p>The tier test: <strong>can violating it produce a false green, lose data, or break a shipped promise? → requirement.</strong> Has a reason worth keeping, but violation is visible and cheap to reverse? → recorded convention. Otherwise → unspecified, on purpose.</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Members</th></tr></thead>
+      <tbody>
+        <tr><td data-l="tier" class="m">requirement</td><td data-l="members">The principles (§02); the agentic process + skills (§03); authoring rules (§04); the automatic/manual boundary + inventory (§05); PR-gated main, merge-on-green, release-per-merge, the process-change rule (§06).</td></tr>
+        <tr><td data-l="tier" class="m">recorded convention</td><td data-l="members">Merge commits; tooling branch names; commit-message shape; one issue per change (§06).</td></tr>
+        <tr><td data-l="tier" class="m">unspecified</td><td data-l="members">Code style beyond the linter; PR body shape; issue formatting; anything not named in this doc. Absence is information: an unnamed practice is at most convention.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s8">
+    <div class="eyebrow"><span class="n">08</span> Words</div>
     <h2>Process glossary</h2>
-    <p>The SDLC twin of <a href="glossary.html">glossary.html</a>: one canonical term per process concept, seeded with the terms this doc and the skills already use.</p>
+    <p>The SDLC twin of <a href="glossary.html">glossary.html</a>: one canonical term per process concept.</p>
     <table>
       <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
       <tbody>
@@ -183,6 +266,7 @@
         <tr><td data-l="term" class="m">backstop</td><td data-l="meaning">The guard of last resort behind a promise otherwise held only by convention — the no-network check (R07).</td></tr>
         <tr><td data-l="term" class="m">false green</td><td data-l="meaning">The process defect: a gate passed while a concern its green implies went unchecked (R01).</td></tr>
         <tr><td data-l="term" class="m">smoke</td><td data-l="meaning">A cheap end-to-end run proving a path is alive, not that it is correct — <code>pack-smoke</code>.</td></tr>
+        <tr><td data-l="term" class="m">runbook</td><td data-l="meaning">The ordered procedures for the manual checks (<code>acceptance/criteria/manual/runbook.md</code>); each has an automated mirror (R03), and §05 lists the live residue a human must run.</td></tr>
         <tr><td data-l="term" class="m">self-heal</td><td data-l="meaning">A guard recovering a known-recoverable fault itself; anything else fails loud at the boundary (R04).</td></tr>
         <tr><td data-l="term" class="m">safety valve</td><td data-l="meaning">A deliberate, visible manual bypass of an automated gate (a <code>workflow_dispatch</code> re-run, a runbook override) — allowed, recorded, never silent.</td></tr>
         <tr><td data-l="term" class="m">criteria</td><td data-l="meaning">Hand-authored statements of what must hold (<code>acceptance/criteria/</code>). Reviewed, never generated.</td></tr>
@@ -202,22 +286,10 @@
     </table>
   </section>
 
-  <section id="s5">
-    <div class="eyebrow"><span class="n">05</span> Residue</div>
-    <h2>Not yet specified</h2>
-    <p>This is a seed. The rest of the SDLC remains institutional knowledge, scattered comments, and GitHub config; consolidating it is <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. Pending:</p>
-    <ul class="d">
-      <li>The <strong>automatic-vs-manual inventory</strong> — what CI enforces vs what a human must run, and the boundary.</li>
-      <li><strong>Branch / PR / release governance</strong> — naming, ready-not-draft PRs, publish-on-merge (§19 R05), versioning (§19 R06).</li>
-      <li><strong>How this doc itself is changed</strong> — prd.html changes ride the §03 skills; the equivalent discipline for process.html is unwritten.</li>
-      <li>What <strong>must be specified vs left to convention</strong>, recorded.</li>
-    </ul>
-  </section>
-
-  <section id="s6">
-    <div class="eyebrow"><span class="n">06</span> Map</div>
+  <section id="s9">
+    <div class="eyebrow"><span class="n">09</span> Map</div>
     <h2>Where requirements &amp; context live</h2>
-    <p>The current index, pending #19. <code>CLAUDE.md</code>'s Files table is the front door.</p>
+    <p><code>CLAUDE.md</code>'s Files table is the front door.</p>
     <p>Under <code>acceptance/</code> the two halves of the AC apparatus are kept apart: <code>criteria/</code> holds the <strong>acceptance criteria</strong> (what must hold — the rubric, schemas, parity matrix, runbook, and coverage map), and <code>evidence/</code> holds the <strong>acceptance-criteria satisfaction evidence</strong> (the generated proof those criteria hold). Criteria are hand-authored and reviewed; evidence is regenerated by the suites.</p>
     <table>
       <thead><tr><th>Location</th><th>Specifies</th></tr></thead>
@@ -239,7 +311,7 @@
 
   <div class="foot">
     <span>stint · process &amp; verification requirements</span>
-    <span>v1 · seed · issue #19</span>
+    <span>v1</span>
   </div>
 
 </main>

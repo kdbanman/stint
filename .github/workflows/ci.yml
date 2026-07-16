@@ -37,17 +37,14 @@ jobs:
         run: npm test
       - name: No-network backstop (§17 R9)
         run: npm run verify:no-network
-      # §19 R05 — auto-publish guard. The release `pack` job builds distributables and hands
-      # them to a separate `publish` job; if any electron-builder invocation forgets
-      # `--publish never` it auto-publishes in CI and dies without GH_TOKEN. That only ever
-      # showed post-merge (pack-smoke runs `--dir`, which never publishes), so this static
-      # guard catches it on the PR.
+      # §19 R05 — static guard that every distributable electron-builder invocation keeps
+      # `--publish never`. PR-time because the failure otherwise only shows post-merge
+      # (process.html R02: verify before the gate).
       - name: Auto-publish guard (§19 R05)
         run: npm run verify:no-publish
-      # §19 R01 — cheap, deterministic guard that electron-builder's native helper
-      # (app-builder-bin) is installed AND runnable, so a broken toolchain fails on the PR
-      # instead of only in the post-merge release pack. A reinstall self-heals a genuinely
-      # missing/corrupt install. The end-to-end proof is the pack-smoke job.
+      # §19 R01 — guard that electron-builder's native helper (app-builder-bin) is installed
+      # AND runnable; a reinstall self-heals a missing/corrupt install (process.html R02/R04).
+      # End-to-end proof is the pack-smoke job.
       - name: Packaging toolchain guard (§19 R01)
         run: |
           npm run verify:packaging || {
@@ -59,11 +56,9 @@ jobs:
           }
       - name: Regenerate acceptance evidence
         run: npm run evidence
-      # Vanity metrics — a repeatable SLOC + documentation census. The --check gate
-      # fails the PR if a new file/directory escapes categorization or the line counts
-      # stop reconciling (sloc-report.mjs has no catch-all rule on purpose). The
-      # rendered report ships as a build artifact rather than a committed file, so it
-      # can never go stale relative to the tree it describes.
+      # SLOC + documentation census. Fails the PR if a file escapes categorization or the
+      # sums stop reconciling; the report ships as a build artifact, never committed
+      # (process.html R10).
       - name: Codebase metrics — reconcile & render
         run: node scripts/sloc-report.mjs --out METRICS.md
       - name: Upload codebase metrics
@@ -73,13 +68,10 @@ jobs:
           name: codebase-metrics
           path: METRICS.md
 
-  # §19 R01 — packaging SMOKE on every PR. The release matrix (release.yml) only runs
-  # post-merge, so a broken `pack` (e.g. the app-builder ENOENT) used to land on main
-  # unseen. This job actually drives electron-builder for Linux to a packed app
-  # directory (`--dir`: fast — no AppImage/.deb compression, but it exercises the SAME
-  # native helper + electron download + `files:` glob that the real pack does), so a
-  # packaging regression fails the PR. The full AppImage/.deb artifacts + publish stay in
-  # release.yml.
+  # §19 R01 — packaging smoke on every PR (process.html R02: the release matrix only runs
+  # post-merge). Drives electron-builder for Linux to a packed app directory (`--dir`: fast,
+  # but the SAME native helper + electron download + `files:` glob as the real pack). The
+  # full AppImage/.deb artifacts + publish stay in release.yml.
   pack-smoke:
     name: pack-smoke · Linux (§19 R01)
     runs-on: ubuntu-latest
