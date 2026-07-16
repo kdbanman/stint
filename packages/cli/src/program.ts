@@ -18,11 +18,9 @@ import {
   toCsv,
   toJsonEntries,
   detectOverlaps,
-  buildEntryList,
   SETTING_DESCRIPTORS,
   settingDescriptor,
   type EntryView,
-  type EntryGroupBy,
   type BillableFilter,
   type GroupBy,
   type Settings,
@@ -39,6 +37,7 @@ import {
   reportRangeSpecLine,
   reportDefDetail,
   favoriteRow,
+  descriptionCell,
 } from './format.js';
 import {
   statusJson,
@@ -439,7 +438,6 @@ export function buildProgram(deps: Deps): Command {
     .option('--project <name>', 'filter by project')
     .option('--tag <tag>', 'filter by tag')
     .option('--search <text>', 'free-text query on description/client/project/tag')
-    .option('--by <grouping>', 'group the table: client | project | day | tag')
     .option('--all', 'include non-billable')
     .option('--non-billable', 'only non-billable')
     .option('--json', 'machine-readable output')
@@ -486,28 +484,12 @@ export function buildProgram(deps: Deps): Command {
           shortUtc(e.endUtc),
           formatDuration(e.billableSeconds),
           clientProjectLabel(e),
-          e.description ?? '',
+          descriptionCell(e.description),
           e.billable ? 'yes' : 'no',
           entryFlags(e, overlaps.has(e.id)),
         ];
-        // --by groups the human table exactly as the Entries view does (one core helper,
-        // buildEntryList), with a per-group header carrying the key + summed billable
-        // hours. Without --by the table is the flat list it has always been.
-        if (opts.by) {
-          const by = opts.by as EntryGroupBy;
-          if (!['client', 'project', 'day', 'tag'].includes(by)) {
-            throw new CliError(`unknown --by grouping "${by}"`);
-          }
-          const { groups } = buildEntryList(entries, { by });
-          const blocks = groups.map((g) => {
-            const total = g.entries.reduce((s, e) => s + e.billableSeconds, 0);
-            return (
-              `${g.key}  (${formatHours(total)}h)\n` + table(headers, g.entries.map(toRow))
-            );
-          });
-          io.out(blocks.join('\n\n'));
-          return;
-        }
+        // The human table is a single flat list — one line per entry. Grouped
+        // grouped breakdowns are the report command's job (§09); `tt list` is a flat table.
         io.out(table(headers, entries.map(toRow)));
       });
     });

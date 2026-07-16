@@ -38,11 +38,19 @@ import { fileURLToPath } from 'node:url';
 import {
   emptyState,
   runningState,
+  multilineDescState,
+  addFormState,
+  listState,
+  entriesCalendarState,
+  unifiedFormState,
+  flaggedState,
   timerViewRunningState,
   timerViewFavoritesState,
   timerViewEmptyFavoritesState,
   savedReportsState,
   settingsState,
+  timelineWindowState,
+  mergeConflictState,
   backupsState,
   recoveryState,
   pickerState,
@@ -507,25 +515,106 @@ const RECIPES = {
     },
   },
 
-  // §05 R05 — manual add gains the visual range picker in the GUI (G9, §12 R14/R15). Drives
-  // the REAL renderer end to end: open the Add-entry disclosure, click the From field's
-  // calendar-icon trigger to open the shared visual time-range picker (window.STP /
-  // timepicker.js — month view → single-day hour-line column with the bound text inputs
-  // echoed), DRAG the "me" rectangle body (start+stop move together, 5-min snap) and DRAG the
-  // bottom resize edge (stop only, 5-min snap) into a span that OVERLAPS a seeded other entry
-  // so the gray other-entries + the yellow warn-only overlap region paint on camera, Apply the
-  // range (the picked start/stop write BACK into the authoritative #add-from/#add-to text
-  // fields — text stays authoritative), then Save and SHOW the new completed backfill entry
-  // appear in the Entries list.
+  // §09 R01 (G3) — a CUSTOM range is a pair of PLAIN DATES on BOTH surfaces the requirement
+  // touches: the Reports builder and the Entries toolbar. There is no time-of-day, no
+  // datetime-local, and no standalone visual range-picker modal for the entry-range chrome —
+  // just two `type="date"` fields whose raw YYYY-MM-DD strings ARE the range. This recording
+  // walks both surfaces in one take, driving the SAME selectors the REPORTS_VIEW and
+  // ENTRY_LIST_SEARCH judge scenes gate:
   //
-  // The add form lives in the Entries view (the GUI default view), under the toolbar's "Add
-  // entry" disclosure — the manual-add (backfill) affordance §12 R14 surfaces; the picker is
-  // the SAME shared component the Timer-view/edit paths reuse. The page is pinned to UTC (like
-  // the JUDGE TIME_RANGE_PICKER scene) so the seeded UTC other-entries land on the same local
-  // day as the filled 2026-06-24 span — making the gray/overlap geometry deterministic on
-  // camera. The drag pixel deltas mirror the JUDGE geometry (track = 720px/24h → 0.5px/min):
-  // +30px body ≈ +60min (13:00–14:30 → 14:00–15:30), +15px resize ≈ +30min stop (→ 16:00),
-  // overlapping the seeded 14:00–15:00 other entry → a yellow overlap region.
+  //   (A) REPORTS BUILDER — route to Reports, open + New report, pick the Custom… preset (which
+  //       reveals #rep-custom-range, hidden until chosen), and TYPE the plain-date pair into
+  //       #rep-range-from / #rep-range-to (2026-06-01 → 2026-06-07). Save → the new card lands in
+  //       the saved-defs list with its spec summary printing the verbatim date pair ("Custom:
+  //       2026-06-01 – 2026-06-07"); the captured saveReport payload's rangeSpec is exactly
+  //       { kind:'absolute', fromDate, toDate } — raw dates, no 'T'. Running the fresh custom
+  //       card paints the grouped run-output under a resolved-range header, so the plain-date
+  //       range is shown resolving to real billable lines.
+  //
+  //   (B) ENTRIES TOOLBAR — route to Entries (the default day-grouped calendar), pick the
+  //       toolbar's Custom… preset (revealing #el-custom-range), and TYPE the plain-date pair
+  //       into #el-range-from / #el-range-to (2026-06-23 → 2026-06-23). There is NO Apply
+  //       button — setting both dates drives a LIVE listEntries carrying { fromDate, toDate }
+  //       as raw strings, and the calendar narrows on the spot to the two in-range entries.
+  //
+  // The listState fixture serves both surfaces from one page load: the Entries calendar reads
+  // its day-grouped snapshot while the Reports builder reads the always-seeded SAVED_REPORTS via
+  // the initScript listReports mock (independent of the snapshot), and runReport returns the
+  // canned flag-carrying summary for any card. No write beyond the real saveReport/listEntries
+  // the renderer already issues — no scoped override, no JUDGE scene touched.
+  '§09 R01': {
+    page: 'index.html',
+    state: listState,
+    drive: async (page) => {
+      // ===== (A) REPORTS BUILDER — the custom range is a pair of plain dates =====
+      await page.click('.nav-item[data-view="reports"]');
+      await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Reports — a custom range is a plain date pair (§09 R01)'));
+      await wait(page, 600);
+      // Open the inline builder.
+      await page.click('#rep-new');
+      await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+      await wait(page, 400);
+      // Pick Custom… → the two plain date fields reveal (hidden until chosen).
+      await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+      await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+      await wait(page, 500);
+      // Name the report and TYPE the plain-date pair — no time-of-day anywhere.
+      await page.fill('#rep-name', 'June window');
+      await page.fill('#rep-range-from', '2026-06-01');
+      await page.fill('#rep-range-to', '2026-06-07');
+      await wait(page, 700);
+      // Save → the new card lands with its spec summary printing the verbatim date pair.
+      await page.click('#rep-save');
+      await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length === 3);
+      await page.waitForFunction(
+        () => !!window.__SAVED_REPORT__ && window.__SAVED_REPORT__.rangeSpec?.kind === 'absolute',
+      );
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Saved: Custom 2026-06-01 – 2026-06-07 (plain dates, no time)'));
+      await wait(page, 1200);
+      // Run the fresh custom card → the grouped run-output paints under the resolved-range header.
+      await page.click('#rep-defs .def:last-child .def-run');
+      await page.waitForFunction(
+        () => !document.querySelector('#rep-run')?.hidden && document.querySelectorAll('#rep-run-rows .report-grp').length > 0,
+      );
+      await wait(page, 1400);
+
+      // ===== (B) ENTRIES TOOLBAR — the same plain-date pair, applied LIVE (no Apply) =====
+      // The Entries view is now the readonly day-column CALENDAR (the day-grouped list retired),
+      // so wait for its events (.dcol .ev) rather than the old `#entries .day` grouping.
+      await page.click('.nav-item[data-view="entries"]');
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Entries — Custom… is a plain date pair, applied live (no Apply)'));
+      await wait(page, 700);
+      // Pick the toolbar's Custom… preset → the two plain date fields reveal.
+      await page.click('#el-preset-seg .preset[data-preset="custom"]');
+      await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+      await wait(page, 500);
+      // TYPE the plain-date pair → setting BOTH dates drives a LIVE listEntries carrying the raw
+      // { fromDate, toDate } strings; the calendar narrows on the spot (no Apply button exists).
+      await page.fill('#el-range-from', '2026-06-23');
+      await wait(page, 400);
+      await page.fill('#el-range-to', '2026-06-23');
+      await page.waitForFunction(
+        () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
+      );
+      await wait(page, 1600);
+    },
+  },
+
+  // §05 R05 — manual add by DRAG on the unified form's INLINE interval picker (G5/G7, §12 R07/R15).
+  // Drives the REAL renderer end to end: open the Add-entry disclosure — the unified add form mounts
+  // the inline interval picker IN FLOW (window.STP / timepicker.js — month view → single-day
+  // hour-line column, no modal, no Apply) — DRAG the "me" rectangle body (start+stop move together,
+  // 5-min snap) and DRAG the bottom resize edge (stop only, 5-min snap); every drag writes the
+  // picked span LIVE into the authoritative #add-from/#add-to fields (text stays authoritative),
+  // then Save (the SOLE commit) and SHOW the new completed backfill entry appear in the Entries list.
+  //
+  // The add form lives in the Entries view (the GUI default view), under the toolbar's "Add entry"
+  // disclosure; the picker is the SAME shared component the Timer-view/edit paths reuse. The page is
+  // pinned to UTC so the seeded UTC other-entries land on a deterministic local day, and the drag
+  // pixel deltas ride the shared geometry (track = 720px/24h → 0.5px/min): +30px body ≈ +60min,
+  // +15px resize ≈ +30min stop.
   //
   // To SHOW the saved entry appear, this recipe scopes a local override of window.stint.add
   // (exactly like §05 R02 scopes its toggle override): the override records the backfill and
@@ -539,31 +628,28 @@ const RECIPES = {
     state: pickerState,
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Open the Add-entry disclosure in the Entries view (the default view).
+      // Open the Add-entry disclosure in the Entries view (the default view). The unified add form
+      // mounts the INLINE interval picker in flow (no modal, no calendar-icon trigger) into
+      // #add-picker, seeded from the raw #add-from/#add-to fields; give the backfill a description
+      // so the saved row is legible in the list.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-      // single-day column for that day and the "me" rectangle is 13:00–14:30 — and give the
-      // backfill a description so the saved row is legible in the list.
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 600);
-      // Click the From field's calendar-icon trigger → the REAL visual picker opens.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
+      await wait(page, 700);
+      // Bring the "me" span into the scrollable day viewport so the drag is on camera.
+      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
       // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
       const meBox = () =>
         page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
+          const me = document.querySelector('#add-picker .stp-block.me');
           const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
         });
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible on camera.
+      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
+      // into #add-from/#add-to. Slow, stepped move so the snap is legible on camera.
       const before = await meBox();
       const grabX = Math.round(before.cx);
       const grabY = Math.round((before.top + before.bottom) / 2);
@@ -573,15 +659,14 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 other entry.
+      // DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap), written
+      // LIVE into #add-to. Any seeded other-entries on the day paint gray; if the span lands on one,
+      // the overlap region paints yellow (warn-only, never blocks).
       const me2 = await meBox();
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring: the other entries paint gray, the overlap region
-      // paints yellow (warn-only) while Apply still works.
       await wait(page, 1200);
 
       // Scope a local add override so the saved backfill SHOWS in the list on repaint (mirrors
@@ -621,11 +706,9 @@ const RECIPES = {
         };
       });
 
-      // Apply the range → the picked start/stop write BACK into the authoritative
-      // #add-from/#add-to text fields, and the popover closes.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      // Dwell so the written-back text-field values (14:00 / 16:00) are legible on camera.
+      // No Apply — the picker wrote the picked start/stop into the authoritative #add-from/#add-to
+      // fields LIVE on every drag (Save entry is the sole commit). Dwell so the live-updated span is
+      // legible on camera.
       await wait(page, 1200);
 
       // Save → the unchanged submit path sends the explicit fromLocal/toLocal over `add`; the
@@ -638,87 +721,80 @@ const RECIPES = {
     },
   },
 
-  // §12 R07 (core entry, G9) — the GUI MANUAL-ADD form now drives the visual range picker
-  // (§12 R15) end to end, and the recording shows the FOUR R07-specific beats the requirement
-  // gates: (1) the picker OPENS from the add form's calendar trigger; (2) DRAG-to-set start +
-  // stop on the single-day column (drag body = move start, drag bottom = resize end, 5-min
-  // snap) with other entries painting gray and the overlap region yellow (warn-only); (3) the
-  // picked start/stop WRITE BACK into the authoritative #add-from/#add-to text fields; (4) a
-  // manual TEXT-OVERRIDE of one field afterward — proving text stays authoritative over the
-  // picker — and then the entry SAVES via the SAME unchanged add path (fromLocal/toLocal →
-  // window.stint.add), the new completed backfill row appears in the Entries list, and — because
-  // the chosen span overlaps the seeded 14:00–15:00 'market research' entry — the non-blocking
-  // overlap banner paints (§06 R4: warned, not blocked).
+  // §12 R07 (core entry, G5/G7) — the GUI MANUAL-ADD surface is the ONE unified entry form in ADD
+  // mode, and the recording shows the R07 beats the requirement gates: (1) opening "Add entry
+  // manually" reveals the two-column unified form (left: multiline description + client/project +
+  // tags + billable; right: the inline interval picker over the collapsed Start/Stop expander);
+  // (2) DRAGGING the picker "me" block sets the span and the raw Start/Stop fields update LIVE
+  // (the picker drives the form state, G7) with other entries gray and the overlap band yellow
+  // (warn-only); (3) clicking "Save entry" is the SOLE commit — the entry saves over the same
+  // `add` path (fromLocal/toLocal → window.stint.add), the new completed backfill row appears in
+  // the Entries list, and — because the span overlaps a seeded entry — the non-blocking overlap
+  // banner paints (§06 R4: warned, not blocked).
   //
-  // This is the manual-add twin of the §05 R05 picker scene (same shared component, same
-  // fromLocal/toLocal submit path, same pinned-UTC pickerState so the seeded other-entries land
-  // on the filled 2026-06-24 day). The differences are R07-specific: it (a) sets initOpts
-  // overlap:true so the post-save WriteAck carries an overlap warning and the inline overlap
-  // banner is exercised on camera, and (b) adds the explicit TEXT-OVERRIDE keystroke after the
-  // write-back to demonstrate the durability contract ("Text stays authoritative") the add
-  // form's pickhint states. As in §05 R05, a scoped window.stint.add override splices a completed
-  // row for the chosen span into the injected snapshot so the saved entry SHOWS on the repaint,
-  // and returns the shared window.__ACK__ (now overlap-carrying) so applyAck() raises the banner;
-  // the override is set via page.evaluate on THIS page only — no shared fixture or JUDGE scene is
-  // touched, and the renderer's unchanged submit path stays the single source of truth.
+  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
+  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries,
+  // making the gray/overlap geometry deterministic; initOpts overlap:true makes the post-save
+  // WriteAck carry the overlap warning the inline banner surfaces on camera. As before, a scoped
+  // window.stint.add override splices the saved row into the injected snapshot so it SHOWS on the
+  // repaint, and returns the shared (overlap-carrying) __ACK__ so applyAck() raises the banner;
+  // the override is set on THIS page only — no shared fixture or JUDGE scene is touched, and the
+  // renderer's unchanged submit path stays the single source of truth.
   '§12 R07': {
     page: 'index.html',
-    state: pickerState,
+    state: addFormState,
     initOpts: { overlap: true },
-    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Open the Add-entry disclosure in the Entries view (the default, GUI core-entry surface).
+      // Wait for the initial load() so `state` (and the picker's snapshotEntries) is populated.
+      await page.waitForSelector('.entry', { state: 'attached' });
+      // (1) Open the unified add form; wait for the inline picker to mount and the client options.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-      // single-day column for that day and the "me" rectangle is 13:00–14:30; the attributes make
-      // the saved backfill row legible in the list.
-      await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-client', 'Globex');
-      await page.fill('#add-project', 'Billing');
-      await page.fill('#add-tags', 'admin');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 600);
-
-      // (1) PICKER OPENS FROM THE ADD FORM — click the Start field's calendar-icon trigger.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
-
-      // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
-          const r = me.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        });
-
-      // (2a) DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible on camera.
-      const before = await meBox();
-      const grabX = Math.round(before.cx);
-      const grabY = Math.round((before.top + before.bottom) / 2);
-      await page.mouse.move(grabX, grabY);
-      await page.mouse.down();
-      await page.mouse.move(grabX, grabY + 30, { steps: 20 });
-      await page.mouse.up();
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+      await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
       await wait(page, 700);
 
-      // (2b) DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 other entry.
-      const me2 = await meBox();
+      // Fill the LEFT-column attributes so the saved backfill row is legible in the list.
+      await page.fill('#add-desc', 'invoice prep');
+      await page.selectOption('#add-client', { label: 'Globex' });
+      await page.waitForSelector('#add-project:not([disabled]) option[value="21"]', { state: 'attached' });
+      await page.selectOption('#add-project', { label: 'Onboarding' });
+      await page.click('#add-tag-input');
+      await page.fill('#add-tag-input', 'admin');
+      await page.press('#add-tag-input', 'Enter');
+      await wait(page, 700);
+
+      // (2) DRAG the "me" body up so the span moves earlier and the raw Start/Stop fields update
+      // LIVE — the picker drives the form state (G7). Slow, stepped move so the change is legible.
+      const meBox = () =>
+        page.evaluate(() => {
+          const me = document.querySelector('#add-picker .stp-block.me');
+          const r = me.getBoundingClientRect();
+          return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+        });
+      const before = await meBox();
+      await page.mouse.move(Math.round(before.cx), Math.round(before.cy));
+      await page.mouse.down();
+      await page.mouse.move(Math.round(before.cx), Math.round(before.cy - 40), { steps: 20 });
+      await page.mouse.up();
+      await wait(page, 900);
+
+      // Extend the stop via the bottom resize grip so the span overlaps a seeded entry — the yellow
+      // warn band shows the overlap is warned, not blocked.
+      const me2 = await page.evaluate(() => {
+        const me = document.querySelector('#add-picker .stp-block.me');
+        const r = me.getBoundingClientRect();
+        return { cx: r.left + r.width / 2, bottom: r.bottom };
+      });
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
       await page.mouse.down();
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 16 });
+      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 20), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring: other entries paint gray, the overlap region paints
-      // yellow (warn-only) while Apply still works — the overlap is warned, not blocked.
       await wait(page, 1200);
 
       // Scope a local add override so the saved backfill SHOWS in the list on repaint, and return
-      // the shared (overlap-carrying) __ACK__ so applyAck() raises the inline overlap banner —
-      // mirrors §05 R05's override, with the overlap ack exercising §06 R4 on the manual-add path.
+      // the shared (overlap-carrying) __ACK__ so applyAck() raises the inline overlap banner.
       await page.evaluate(() => {
         window.stint.add = (p) => {
           window.__ADDED__ = p;
@@ -735,10 +811,8 @@ const RECIPES = {
             endUtc: toUtc,
             billableSeconds: sec,
             billable: p.billable !== false,
-            // The chosen span overlaps the seeded 14:00–15:00 entry → flag the durable per-row
-            // overlap badge too, so the saved row carries the same warned-not-blocked signal.
             overlapped: true,
-            overlapMinutes: 60,
+            overlapMinutes: 45,
             overlapRelation: 'overlaps',
             sleptThrough: false,
             excludedSeconds: 0,
@@ -755,70 +829,51 @@ const RECIPES = {
         };
       });
 
-      // (3) WRITE-BACK — Apply the range; the picked start/stop write back into the authoritative
-      // #add-from/#add-to text fields and the popover closes. Dwell so 14:00 / 16:00 are legible.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await page
-        .waitForFunction(() => document.querySelector('#add-to')?.value === '2026-06-24T16:00')
-        .catch(() => {});
-      await wait(page, 1000);
-
-      // (4) TEXT-OVERRIDE — type directly into the Stop field, proving TEXT STAYS AUTHORITATIVE
-      // over the picker's write-back: nudge the stop from 16:00 → 16:30 by keyboard. The submit
-      // path reads the text field, so this typed value is what saves.
-      await page.fill('#add-to', '2026-06-24T16:30');
-      await wait(page, 900);
-
-      // SAVE via the SAME add path — the unchanged submit sends the explicit (text-authoritative)
-      // fromLocal/toLocal over `add`; the form closes, the repaint paints the new completed
-      // backfill row, and applyAck() raises the non-blocking overlap banner (§06 R4).
+      // (3) SAVE — "Save entry" is the sole commit; the form closes, the repaint paints the new
+      // completed backfill row, and applyAck() raises the non-blocking overlap banner (§06 R4).
       await page.click('#add-go');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await page.waitForSelector('text=invoice prep').catch(() => {});
-      // Dwell on (a) the saved 'invoice prep' backfill row in the Entries list and (b) the
-      // non-blocking overlap banner now visible — warned, not blocked.
       await page.waitForSelector('#overlap-banner:not([hidden])').catch(() => {});
       await wait(page, 1600);
     },
   },
 
-  // §12 R15 (G9) — the VISUAL TIME-RANGE PICKER itself, the umbrella requirement the §05 R05 /
-  // §12 R07 manual-add scenes are special cases of. This recording exercises the picker through
-  // ALL THREE of its sanctioned entry points in one take, plus the durability contract:
+  // §12 R15 — the INLINE INTERVAL PICKER itself, the umbrella requirement the §05 R05 / §12 R07
+  // manual-add scenes are special cases of. This recording exercises the picker through ALL THREE
+  // of its sanctioned entry points in one take, plus the durability contract — every one renders IN
+  // FLOW (no modal, no backdrop, no Apply) and writes the picked span LIVE into the authoritative
+  // text fields, with Save entry the sole commit:
   //
-  //   (1) ADD-ENTRY — open the Entries-view Add form, open the picker from the Start field's
-  //       calendar icon, DRAG the accent "me" rectangle body (start+stop move together, 5-min
-  //       snap — the echoed Start/Stop text fields tick as it snaps), DRAG the bottom handle to
-  //       resize the stop, land the span OVER the seeded 14:00–15:00 'market research' entry so
-  //       the other entries paint GRAY and the overlap region paints YELLOW (warn-only — Apply
-  //       stays enabled), then APPLY and SHOW 14:00 / 16:00 land in the authoritative
-  //       #add-from/#add-to text fields. Cancel the add form (this scene is about the picker).
+  //   (1) ADD-ENTRY — open the Entries-view Add form; the inline picker is mounted in flow in the
+  //       form's right column. DRAG the accent "me" rectangle body (start+stop move together, 5-min
+  //       snap — the #add-from/#add-to fields tick LIVE as it snaps), DRAG the bottom handle to
+  //       resize the stop; any seeded other-entry on the day paints GRAY and an overlapping span
+  //       paints YELLOW (warn-only). Close the add form (this beat is about the picker).
   //
-  //   (2) EDIT-CLOSED — click Edit on the closed 'morning sync' row (09:00–11:00); its inline
-  //       form's calendar icon opens the picker carrying BOTH start+stop. The OTHER closed entry
-  //       ('market research', 14:00–15:00) paints gray; drag the bottom handle DOWN to extend the
-  //       stop past 14:00 so the span overlaps it → the yellow warn region paints. Apply writes
-  //       the new stop back into the form's .edit-end text input. Cancel (no commit needed — the
-  //       requirement is the picker, not the edit).
+  //   (2) EDIT-CLOSED — click Edit on the closed 'morning sync' row (09:00–11:00); its inline form
+  //       mounts the picker carrying BOTH start+stop. The OTHER closed entry ('market research',
+  //       14:00–15:00) paints gray; drag the bottom handle DOWN to extend the stop past 14:00 so the
+  //       span overlaps it → the yellow warn region paints, written LIVE into the form's .edit-end
+  //       field. Cancel (no commit needed — the requirement is the picker, not the edit).
   //
   //   (3) EDIT-RUNNING-START — route to the Timer view; the live-edit strip's Start field
-  //       (#le-start) calendar icon opens the picker SEEDED START-ONLY (the open row has no stop,
-  //       so editing it can never close the timer, §05 R6). Only a thin start handle shows — no
-  //       resize, no stop. Drag it to a new start; Apply writes only #le-start.
+  //       (#le-start) calendar affordance DISCLOSES the picker inline SEEDED START-ONLY (the open
+  //       row has no stop, so editing it can never close the timer, §05 R6). Only a thin start
+  //       handle shows — no resize, no stop, the block fading into the future. Drag it to a new
+  //       start; #le-start updates LIVE (no Apply — the text field is the authoritative commit path).
   //
-  //   (4) OVERNIGHT VIA TEXT — back in the add form, TYPE a span that crosses midnight directly
-  //       into the text fields (2026-06-24T22:00 → 2026-06-25T06:00). Clicking the calendar icon
-  //       on an overnight span DEGRADES to a plain field focus (the picker is single-day; the
-  //       footer steers overnight to text) — proving TEXT ENTRY REMAINS and stays authoritative.
+  //   (4) OVERNIGHT VIA THE EXPANDER — back in the add form, expand the Start/Stop expander (§12
+  //       R17) and TYPE a span that crosses midnight directly into the raw text fields
+  //       (2026-06-24T22:00 → 2026-06-25T06:00) — the single-day picker's escape hatch and the only
+  //       overnight path — proving TEXT ENTRY REMAINS and stays authoritative.
   //
   // The page is pinned to UTC (like the §05 R05 scene) and the state carries a running open entry
-  // (id 99, start 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24,
-  // so the picker's single-day column draws the gray other-entries deterministically for every
-  // entry point. Drag pixel deltas mirror the JUDGE/§05 R05 geometry (track 720px/24h → 0.5px/min,
-  // i.e. 30px/hour). No write IPC is needed — this scene demonstrates the picker affordance and
-  // its write-back into the authoritative text fields; the add/edit submit paths are already
-  // proven on camera by §05 R05 and §12 R07.
+  // (id 99, start 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24, so
+  // the picker's single-day column draws the gray other-entries deterministically for every entry
+  // point. Drag pixel deltas ride the shared geometry (track 720px/24h → 0.5px/min, i.e. 30px/hour).
+  // No write IPC is needed — this scene demonstrates the picker affordance and its LIVE write into
+  // the authoritative text fields; the add/edit submit paths are proven on camera by §05 R05 / §12 R07.
   '§12 R15': {
     page: 'index.html',
     // Running open entry (no stop) + the two pickerState closed entries, all on 2026-06-24, so
@@ -850,32 +905,26 @@ const RECIPES = {
     },
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('.stp-block.me');
+      // Helper: the "me" rectangle box within a given picker host, to grab its body centre and
+      // bottom edge for dragging.
+      const meBox = (hostSel) =>
+        page.evaluate((sel) => {
+          const me = document.querySelector(`${sel} .stp-block.me`);
           const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        });
+        }, hostSel);
 
-      // ===== (1) ADD-ENTRY — open from the calendar icon, drag body + resize, overlap, Apply =====
+      // ===== (1) ADD-ENTRY — the inline picker, mounted in flow; drag body + resize LIVE =====
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the column draws that day
-      // and the "me" rectangle is 13:00–14:30.
+      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.fill('#add-desc', 'invoice prep');
-      await page.fill('#add-from', '2026-06-24T13:00');
-      await page.fill('#add-to', '2026-06-24T14:30');
-      await wait(page, 500);
-      // OPEN FROM THE CALENDAR ICON (the Start field's ▦ trigger) → the real visual picker opens.
-      await page.click('#add-from-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      await wait(page, 800);
+      await wait(page, 600);
+      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap):
-      // 13:00–14:30 → 14:00–15:30. Slow, stepped move so the snap is legible and the echoed
-      // Start/Stop text fields tick as it snaps.
-      const a0 = await meBox();
+      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
+      // into the #add-from/#add-to fields. Slow, stepped move so the snap is legible.
+      const a0 = await meBox('#add-picker');
       const aGrabX = Math.round(a0.cx);
       const aGrabY = Math.round((a0.top + a0.bottom) / 2);
       await page.mouse.move(aGrabX, aGrabY);
@@ -884,107 +933,248 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE HANDLE DOWN +15px → only the stop moves (+30min, 5-min snap):
-      // stop 15:30 → 16:00, so the "me" span now overlaps the seeded 14:00–15:00 'market research'
-      // entry → the gray other-entries + the yellow warn-only overlap region paint on camera.
-      const a1 = await meBox();
+      // DRAG THE BOTTOM RESIZE HANDLE DOWN +15px → only the stop moves (+30min, 5-min snap), LIVE.
+      // Any seeded other-entry on the day paints gray; an overlapping span paints yellow (warn-only).
+      const a1 = await meBox('#add-picker');
       await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1 + 15), { steps: 16 });
       await page.mouse.up();
-      // Dwell on the overlap warn-coloring (other entries gray, overlap yellow) while Apply works.
       await wait(page, 1300);
 
-      // APPLY → the picked 14:00 / 16:00 write BACK into the authoritative #add-from/#add-to text
-      // fields and the popover closes; dwell so the written-back values are legible (text-authoritative).
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await page
-        .waitForFunction(() => document.querySelector('#add-to')?.value === '2026-06-24T16:00')
-        .catch(() => {});
-      await wait(page, 1200);
       // Close the add form — this scene is about the picker, not the save (proven by §05 R05).
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await wait(page, 500);
 
-      // ===== (2) EDIT-CLOSED — inline edit a closed row, open picker with start+stop, overlap =====
-      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00).
+      // ===== (2) EDIT-CLOSED — inline edit a closed row; the picker carries start+stop, overlap =====
+      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00). The unified
+      // editor mounts in the shared view-level host (#entry-form-host), NOT nested in the calendar
+      // event (editor rehost, §12 R06) — so the form + its inline picker are read via the plain
+      // `.edit-form` selector (only one form is open). Hover the event first to reveal its ops.
+      await page.hover('.entry[data-id="1"]');
       await page.click('.entry[data-id="1"] [data-act="edit"]');
-      await page.waitForSelector('.entry[data-id="1"] form.edit-form', { state: 'attached' });
-      await wait(page, 600);
-      // Open the picker from the Start field's calendar icon → carries BOTH start+stop (closed row).
-      await page.click('.entry[data-id="1"] form.edit-form .edit-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
+      await page.waitForSelector('.edit-form.entry-form .edit-picker .stp-block.me', { state: 'attached' });
       await wait(page, 800);
+      await page.locator('.edit-form .edit-picker .stp-resize').scrollIntoViewIfNeeded();
       // The OTHER closed entry ('market research' 14:00–15:00) paints gray. Drag the bottom resize
       // handle DOWN ~+95px (≈ +190min) to extend the stop from 11:00 past 14:00 → the span overlaps
-      // it and the yellow warn-only region paints.
-      const e1 = await meBox();
+      // it and the yellow warn-only region paints, written LIVE into the form's .edit-end field.
+      const e1 = await meBox('.edit-form .edit-picker');
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1));
       await page.mouse.down();
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1 + 95), { steps: 24 });
       await page.mouse.up();
-      // Dwell on the gray other-entry + yellow overlap (warn-only) while Apply stays enabled.
+      // Dwell on the gray other-entry + yellow overlap (warn-only) — the write is already live.
       await wait(page, 1300);
-      // APPLY → the picked stop writes back into the form's .edit-end text input (text authoritative).
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-      await wait(page, 1000);
       // Cancel the edit form (the requirement is the picker; the edit submit path is proven elsewhere).
-      await page.click('.entry[data-id="1"] form.edit-form .edit-cancel');
+      await page.click('.edit-form.entry-form .edit-cancel');
+      await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
       await wait(page, 500);
 
-      // ===== (3) EDIT-RUNNING-START — Timer view live-edit, picker seeded START-ONLY (no stop) =====
+      // ===== (3) EDIT-RUNNING-START — the INLINE START-ONLY disclosure (§05 R06, no modal) =====
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
       await wait(page, 600);
-      // Open the picker from the running Start field's calendar icon (#le-start-pick). The open row
-      // has NO stop, so the picker is seeded START-ONLY: only a thin start handle shows — no resize,
-      // no stop — editing the open row can never close the timer (§05 R6).
+      // The running Start field's calendar affordance DISCLOSES the start-only picker inline,
+      // in flow below the field — no modal, no backdrop, no Apply. The open row has NO stop,
+      // so the running block fades into the future with a START grip only — no resize handle,
+      // no end label — editing the open row can never close the timer (§05 R06). (The dedicated
+      // 'running-start-only' recipe below is the §05 R06 QA evidence; this beat keeps the R15
+      // every-surface tour complete.)
       await page.click('#le-start-pick');
-      await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-      // Confirm there is NO resize handle (start-only) on camera.
-      await page.waitForSelector('.stp-block.me .stp-resize', { state: 'detached' }).catch(() => {});
+      await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
       await wait(page, 900);
-      // DRAG the thin start handle UP -20px (≈ -40min, 5-min snap): start 12:00 → ~11:20.
-      const r0 = await meBox();
-      const rGrabX = Math.round(r0.cx);
-      const rGrabY = Math.round((r0.top + r0.bottom) / 2);
+      // DRAG the start grip UP -20px (≈ -40min, 5-min snap): start 12:00 → 11:20, written LIVE
+      // into #le-start (no Apply — the text field is the authoritative commit path).
+      const grip3 = page.locator('#le-start-disc .stp-grip');
+      await grip3.scrollIntoViewIfNeeded();
+      const r0 = await grip3.boundingBox();
+      const rGrabX = Math.round(r0.x + r0.width / 2);
+      const rGrabY = Math.round(r0.y + r0.height / 2);
       await page.mouse.move(rGrabX, rGrabY);
       await page.mouse.down();
       await page.mouse.move(rGrabX, rGrabY - 20, { steps: 16 });
       await page.mouse.up();
       await wait(page, 1000);
-      // APPLY → writes ONLY #le-start (no stop ever written); dwell so the new start is legible.
-      await page.click('.stp .stp-apply');
-      await page.waitForSelector('.stp-backdrop', { state: 'detached' });
+      // Collapse the disclosure — the amended start stands in the Start text field.
+      await page.click('#le-start-pick');
+      await page.waitForSelector('#le-start-disc[hidden]', { state: 'attached' });
       await wait(page, 1200);
 
-      // ===== (4) OVERNIGHT VIA TEXT — text remains authoritative, picker degrades to focus =====
-      // Back to the Entries view and the Add form; TYPE an overnight span directly into the text
-      // fields (crosses midnight). The text is authoritative; the calendar icon on an overnight
-      // span degrades to a plain field focus (single-day picker; overnight steered to text).
+      // ===== (4) OVERNIGHT VIA THE EXPANDER — text remains authoritative (§12 R17) =====
+      // Back to the Entries view and the Add form; expand the collapsed Start/Stop expander — the
+      // single-day picker's exact/overnight escape hatch — and TYPE a span that crosses midnight
+      // directly into the raw text fields. The typed span is authoritative; the inline picker's
+      // single-day column simply shows the start day.
       await page.click('.nav-item[data-view="entries"]');
       await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
       await page.fill('#add-desc', 'overnight deploy');
+      // Expand the Start/Stop expander (the overnight path) and type the overnight span.
+      await page.click('#add-times-toggle');
+      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
       await page.fill('#add-from', '2026-06-24T22:00');
       await page.fill('#add-to', '2026-06-25T06:00');
       await wait(page, 800);
-      // Click the calendar icon on the now-overnight span → NO picker opens (degrades to focus),
-      // proving the overnight case is handled by text entry, which stays authoritative.
-      await page.click('#add-from-pick');
-      await wait(page, 600);
       const overnightHandled = await page.evaluate(
-        () => !document.querySelector('.stp-backdrop'),
+        () => !document.querySelector('.stp-backdrop') && document.querySelector('#add-to')?.value === '2026-06-25T06:00',
       );
       if (!overnightHandled) {
-        throw new Error('overnight span unexpectedly opened the single-day picker (text should stay authoritative)');
+        throw new Error('overnight span not preserved via the Start/Stop expander (text should stay authoritative)');
       }
       // Dwell on the typed overnight text values standing as the authoritative span.
       await wait(page, 1600);
+    },
+  },
+
+  // §12 R17 (core entry) — the unified form's collapsed Start/Stop EXPANDER: the exact-entry escape
+  // hatch and the ONLY path for an OVERNIGHT span. The recording opens the unified add form, EXPANDS
+  // the collapsed Start/Stop expander (its raw text fields hidden until then), and TYPES a span that
+  // crosses midnight (2026-06-24T22:00 → 2026-06-25T02:00) directly into the raw fields; the inline
+  // picker column reflects the typed START and its collapsed echo reflects the cross-midnight span
+  // ("22:00 – 02:00") while the raw stop keeps the next-day value verbatim (text authoritative,
+  // never flattened to same-day). "Save entry" is the sole commit — the overnight backfill PERSISTS
+  // over the unchanged `add` IPC and appears on the Entries repaint.
+  //
+  // Pinned to UTC (like §05 R05 / §12 R07) so the typed instants land on deterministic local days; a
+  // scoped window.stint.add override splices the saved overnight row into the injected snapshot so it
+  // SHOWS on the repaint, leaving the renderer's unchanged submit path the single source of truth.
+  '§12 R17': {
+    page: 'index.html',
+    state: addFormState,
+    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
+    drive: async (page) => {
+      await page.waitForSelector('.entry', { state: 'attached' });
+      await page.click('#add-toggle');
+      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+      await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
+      await page.fill('#add-desc', 'overnight deploy');
+      await wait(page, 700);
+      // Expand the collapsed Start/Stop expander — the overnight escape hatch (raw text fields).
+      await page.click('#add-times-toggle');
+      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+      await wait(page, 600);
+      // Type the cross-midnight span into the raw text fields; the picker reflects it LIVE.
+      await page.fill('#add-from', '2026-06-24T22:00');
+      await page.fill('#add-to', '2026-06-25T02:00');
+      // The picker's collapsed echo reflects the typed overnight span (the shared interval updated).
+      await page.waitForFunction(
+        () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
+      );
+      await wait(page, 1400);
+      // Scope an add override so the saved overnight backfill SHOWS on the Entries repaint (mirrors
+      // §05 R05). It records the payload AND splices a completed overnight row into the snapshot; the
+      // unchanged submit path stays the single source of truth.
+      await page.evaluate(() => {
+        window.stint.add = (p) => {
+          window.__ADDED__ = p;
+          const st = window.__STATE__;
+          const fromUtc = new Date(p.fromLocal).toISOString();
+          const toUtc = new Date(p.toLocal).toISOString();
+          const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
+          const day = fromUtc.slice(0, 10);
+          const row = {
+            id: 320,
+            description: p.description || null,
+            clientLabel: null,
+            startUtc: fromUtc,
+            endUtc: toUtc,
+            billableSeconds: sec,
+            billable: p.billable !== false,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: sec,
+            tags: [],
+          };
+          let block = (st.days ||= []).find((d) => d.day === day);
+          if (!block) {
+            block = { day, entries: [] };
+            st.days.unshift(block);
+          }
+          block.entries.unshift(row);
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+      // Save → the unchanged submit path sends the EXACT typed overnight fromLocal/toLocal over `add`;
+      // the form closes and the repaint paints the new completed overnight backfill.
+      await page.click('#add-go');
+      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
+      await page.waitForSelector('text=overnight deploy').catch(() => {});
+      await wait(page, 1500);
+    },
+  },
+
+  // §05 R06 / §12 R14 — the RUNNING entry's inline START-ONLY picker disclosure. On the
+  // canonical running snapshot (open row 'auth refactor', started 21:35Z, two closed same-day
+  // entries painting gray; page pinned to UTC so the geometry is deterministic), the recording
+  // routes to the Timer view, expands the disclosure from the Start field's calendar
+  // affordance — IN FLOW below the field, no modal/backdrop — showing the running block with a
+  // start grip only and its transparency fade dissolving toward the future (no end grip, no
+  // end label, no end field anywhere). It then drags the grip UP -30px (= -60min on the
+  // 720px/24h track, 5-min snap: 21:35 → 20:35), each step writing the raw #le-start text
+  // LIVE, and finally steps the pinned clock so the count-up visibly keeps ticking — editing
+  // the open row never stops it and never synthesizes an end (§05 R06).
+  'running-start-only': {
+    page: 'index.html',
+    state: timerViewRunningState,
+    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
+      await page.evaluate(() => window.__recCaption && window.__recCaption('Running timer — adjust its start inline (§05 R06)'));
+      await wait(page, 900);
+      // Expand the start-only disclosure — in flow below the Start field, no modal chrome.
+      await page.click('#le-start-pick');
+      await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Start-only picker, in flow: a start grip, no end — the block fades into the future'));
+      await wait(page, 1400);
+      // Make the debounced live-edit commit visibly APPLY on the repaint: scope an `edit`
+      // override that applies the startUtc patch to the open row in __STATE__ (faithful to
+      // core's edit-on-open-row — never an endUtc, the row stays open), so the post-commit
+      // load() does not snap the Start field back to the stale injected snapshot on camera.
+      await page.evaluate(() => {
+        window.stint.edit = (p) => {
+          window.__EDITED__ = p;
+          const st = window.__STATE__;
+          const patch = (p && p.patch) || {};
+          const apply = (e) => {
+            if (e.id === p.id && 'startUtc' in patch) e.startUtc = patch.startUtc;
+            // endUtc is NEVER in a live-edit patch — the open row stays open (§05 R06).
+          };
+          if (st.status?.entry) apply(st.status.entry);
+          for (const d of st.days || []) for (const e of d.entries) apply(e);
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+      // Drag the start grip UP -30px (-60min, 5-min snap): 21:35 → 20:35, written LIVE into
+      // the raw #le-start text field on every step (no Apply anywhere).
+      const grip = page.locator('#le-start-disc .stp-grip');
+      await grip.scrollIntoViewIfNeeded();
+      const g = await grip.boundingBox();
+      const gx = Math.round(g.x + g.width / 2);
+      const gy = Math.round(g.y + g.height / 2);
+      await page.mouse.move(gx, gy);
+      await page.mouse.down();
+      await page.mouse.move(gx, gy - 30, { steps: 20 });
+      await page.mouse.up();
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Drags write Start live (5-min snap) — the end stays empty, never a synthetic now'));
+      await wait(page, 1300);
+      // Step the pinned clock so the count-up visibly keeps ticking after the start edit —
+      // amending the start never stops the open row (§05 R06).
+      for (let i = 1; i <= 3; i++) {
+        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
+        await wait(page, 400);
+      }
+      await wait(page, 900);
     },
   },
 
@@ -1003,105 +1193,335 @@ const RECIPES = {
     },
   },
 
-  // §05 R10 — Resume from favorite: ONE action starts a FRESH timer from a favorite's template,
-  // atomically replacing any already-running timer (CLI parity: `tt fav start <name>` /
-  // `tt start --fav <name>`). The recording opens the Timer view on the favorites-rail snapshot —
-  // a timer is ALREADY RUNNING (the canonical 'auth refactor' open row reading a deterministic
-  // 01:24:07) and three favorites are pinned ('Standup', 'Deep work', 'Admin / email') — so the
-  // scene shows (1) the rail with each pinned template (name + captured description/tags), then
-  // clicks the 'Deep work' favorite's Resume button. To SHOW the requirement actually exercised
-  // (not just the click), this recipe scopes a local override of window.stint.startFavorite
-  // (mirroring §05 R02's toggle / §05 R05's add overrides): the override records the resumed name
-  // AND flips the injected snapshot to a FRESH single open entry built from that favorite's
-  // template (description 'focus block', client/project label, billable, tags) whose startUtc is
-  // the pinned JUDGE_NOW — so the count-up starts fresh at 00:00:00, the previously-running
-  // 'auth refactor' row is gone (atomic replacement → exactly one open entry), and the renderer's
-  // post-resume load() repaints the Active-Timer card from that fresh state. We then step the
-  // pinned clock so the new entry's 00:00:0x visibly TICKS on camera, proving a live fresh timer.
-  // The favorite itself is left untouched in the in-memory FAVORITES list, so the rail still shows
-  // 'Deep work' pinned/unchanged afterward (the §05 R10 'favorite remains pinned' fact).
+  // §05 R10 — Multiline descriptions (G9): a description keeps the line breaks a user types, stored
+  // VERBATIM with no surface flattening it. The GUI half is the entry form's description control —
+  // a 3-line scrollable multiline <textarea>. This recording opens the Entries view on a seeded
+  // CLOSED entry whose description is already two lines ('line one\nline two'), clicks its Edit
+  // affordance to reveal the inline form, and shows the description surfaced in the 3-line textarea
+  // with its interior break intact. It then TYPES a fresh two-line description into the field (a
+  // literal Enter inserts a newline in a textarea — it does not submit the form), Saves, and the
+  // entry repaints. Reopening the form in edit mode shows the newly-typed text rendered INTACT —
+  // proving the field is genuinely multiline and the stored record kept the newline verbatim. To
+  // show the write faithfully (the harness IPC is mocked), this recipe scopes a local
+  // window.stint.edit override — mirroring §05 R06's edit override — that applies the description
+  // patch to the injected snapshot, so the post-commit load() repaints from the new value rather
+  // than snapping back to the stale seed. The CLI-side of R10 (the `tt list` first-line 60-char cap
+  // and the CSV round-trip) is transcript/GOLD evidence, so it is not part of this GIF.
   '§05 R10': {
     page: 'index.html',
-    state: timerViewFavoritesState,
+    state: multilineDescState,
     drive: async (page) => {
-      await page.click('.nav-item[data-view="timer"]');
-      await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
-      // Dwell on the rail (each pinned template) AND the already-running 'auth refactor' card, so
-      // the before-state is legible: a timer running + favorites pinned.
-      await page.waitForSelector('.fav-card .fav-name');
+      const row = '.entry[data-id="30"]';
+      // The unified editor mounts in the shared view-level host (#entry-form-host), NOT nested in
+      // the calendar event (editor rehost, §12 R06) — so the seeded fields are read via the plain
+      // `.edit-form` selector (only one form is ever open).
+      const form = '.edit-form.entry-form';
+      await page.waitForSelector(row);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Multiline description — a 3-line scrollable field, newlines kept verbatim (§05 R10)'));
+      await wait(page, 700);
+
+      // Open the inline edit form; the description surfaces in the multiline <textarea rows=3>,
+      // seeded with its stored two lines intact. Hover the event first to reveal its ops.
+      await page.hover(row);
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector(`${form} .edit-desc`);
       await wait(page, 900);
 
-      // Scope a local startFavorite override: record the resumed name and flip the injected
-      // snapshot to a FRESH open entry from the named favorite's template, starting at JUDGE_NOW
-      // (count-up 00:00:00) and atomically replacing the prior open row (single open entry).
-      await page.evaluate((nowIso) => {
-        window.stint.startFavorite = async (p) => {
-          (window.__RESUMED__ ||= []).push(p);
-          const fav = (window.stint.__FAVORITES__ || []).find((f) => f.name === (p && p.name)) || {};
-          const entry = {
-            id: 500,
-            description: fav.description ?? null,
-            // The favorite carries client/project IDS; core resolves them to a label on start.
-            // Use a faithful label for the seeded 'Deep work' template (Client A / Focus).
-            clientLabel: fav.clientId ? 'Client A / Focus' : null,
-            startUtc: nowIso,
-            billableSeconds: 0,
-            billable: fav.billable !== false,
-            excludedSeconds: 0,
-            sleptThrough: false,
-            tags: Array.isArray(fav.tags) ? fav.tags.slice() : [],
+      // Scope a local edit override that applies the description patch to the injected snapshot
+      // (faithful to core's edit), so the post-Save load() repaints from the freshly-typed value.
+      await page.evaluate(() => {
+        window.stint.edit = (p) => {
+          window.__EDITED__ = p;
+          const st = window.__STATE__;
+          const patch = (p && p.patch) || {};
+          const apply = (e) => {
+            if (e.id === p.id && 'description' in patch) e.description = patch.description;
           };
-          // Atomic replacement: the prior open row is closed; the fresh entry is the ONE open row.
-          window.__STATE__ = {
-            status: { running: true, entry },
-            days: [
-              {
-                day: nowIso.slice(0, 10),
-                entries: [
-                  {
-                    ...entry,
-                    endUtc: null,
-                    clientLabel: entry.clientLabel,
-                    overlapped: false,
-                    overlapMinutes: 0,
-                    overlapRelation: null,
-                    rawSeconds: 0,
-                  },
-                ],
-              },
-            ],
-            sleepFlaggedIds: [],
-            settings: window.__STATE__.settings,
-          };
+          if (st.status?.entry) apply(st.status.entry);
+          for (const d of st.days || []) for (const e of d.entries) apply(e);
           return Promise.resolve(window.__ACK__);
         };
-      }, JUDGE_NOW);
+      });
 
-      // ONE click on the 'Deep work' favorite's Resume button. The renderer fires startFavorite
-      // then load()→render(), repainting the Active-Timer card from the fresh snapshot.
-      const deepWork = page.locator('.fav-card', { hasText: 'Deep work' });
-      await deepWork.locator('[data-act="fav-resume"]').click();
+      // Type a fresh TWO-LINE description. Clear the field, type the first line, then a literal
+      // Enter (a newline inside a textarea — never a submit) and the second line: the field scrolls
+      // and keeps the interior break.
+      const editDesc = page.locator(`${form} .edit-desc`);
+      await editDesc.fill('');
+      await editDesc.click();
+      await page.keyboard.type('Refactored the auth layer', { delay: 45 });
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Press Enter for a second line — the break is preserved, not flattened'));
+      await page.keyboard.press('Enter');
+      await page.keyboard.type('Follow-up: write the regression tests', { delay: 45 });
+      await wait(page, 1000);
 
-      // Repaint the card from the flipped snapshot: in the harness the resume handler only calls
-      // renderFavorites(), so drive the same load() the real `changed` broadcast would, to show
-      // the Active-Timer card now carrying the fresh 'focus block' template.
-      await page.evaluate(() => (typeof load === 'function' ? load() : null));
+      // Save; the submit reads .value.trim() (interior newlines preserved) and sends the edit patch.
+      await page.click(`${form} button[type="submit"]`);
+      await page.waitForSelector(form, { state: 'detached' }).catch(() => {});
+      await wait(page, 700);
+
+      // Reopen in edit mode: the textarea now carries the newly-typed multiline text rendered INTACT.
+      await page.hover(row);
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector(`${form} .edit-desc`);
       await page.waitForFunction(
-        () => document.querySelector('#timer-desc')?.textContent?.trim() === 'focus block',
+        () => (document.querySelector('.edit-form .edit-desc')?.value ?? '').includes('\n'),
       );
-      await page.waitForSelector('#timer-card.running');
-      await wait(page, 500);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Reopened — both lines render intact, stored verbatim'));
+      await wait(page, 1200);
+    },
+  },
 
-      // Step the pinned clock so the FRESH entry's 00:00:0x visibly ticks on camera — a live,
-      // freshly-started timer (not the inherited 01:24:07).
-      for (let i = 1; i <= 4; i++) {
-        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
-        await wait(page, 350);
-      }
-      // Final dwell on (a) the running fresh timer and (b) the 'Deep work' favorite still pinned
-      // and unchanged in the rail.
-      await page.waitForSelector('.fav-card:has(.fav-name >> text=Deep work)').catch(() => {});
+  // §06 R03 — MERGE via multi-select. Two contiguous CLOSED entries that DISAGREE on client
+  // (and billable) are armed by checking their corner checkboxes; the selection bar reveals a
+  // live "Merge 2 entries" count, and Merge raises the app.js-hosted conflict prompt
+  // (§06 R3, §12 R6). The prompt resolves the
+  // disagreeing client/billable field-by-field, then commits { ids, winnerId, billable } over
+  // the same merge IPC — no clientId/projectId resolved in the renderer. To SHOW the merged
+  // event appear (the IPC is mocked), this recipe scopes a local window.stint.merge override
+  // that folds the two source rows into one spanning earliest-start→latest-end on the injected
+  // snapshot, so the post-commit load() repaints the single merged entry.
+  // (Selection is driven from the entry rows' corner checkboxes; those checkboxes ride the
+  // calendar's `.ev` events once §12 R16's readonly entries calendar lands.)
+  '§06 R03': {
+    page: 'index.html',
+    state: mergeConflictState,
+    drive: async (page) => {
+      await page.waitForSelector('.entry[data-id="40"] .sel');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Check two contiguous events to arm the merge (§06 R03)'));
+      await wait(page, 700);
+      await page.check('.entry[data-id="40"] .sel');
+      await wait(page, 400);
+      await page.check('.entry[data-id="41"] .sel');
+      await page.waitForFunction(() => {
+        const bar = document.querySelector('#merge-bar');
+        return bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+      });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('The selection bar shows the live count — Merge 2 entries'));
       await wait(page, 900);
+
+      // Fold the two source rows into one merged entry on the snapshot so the reload SHOWS the
+      // merge (spanning earliest start → latest end), faithful to core's merge; the winnerId
+      // decides the surviving client (resolved by the main process, never in the renderer).
+      await page.evaluate(() => {
+        window.stint.merge = (p) => {
+          window.__MERGED__ = p;
+          const st = window.__STATE__;
+          for (const d of st.days || []) {
+            const kept = d.entries.filter((e) => p.ids.includes(e.id));
+            if (kept.length < 2) continue;
+            const sorted = kept.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+            const winner = kept.find((e) => e.id === p.winnerId) || sorted[0];
+            const merged = {
+              ...sorted[0],
+              endUtc: sorted[sorted.length - 1].endUtc,
+              description: sorted.map((e) => (e.description ?? '').trim()).filter(Boolean).join(' · '),
+              clientLabel: winner.clientLabel,
+              billable: p.billable ?? sorted[0].billable,
+            };
+            d.entries = [merged, ...d.entries.filter((e) => !p.ids.includes(e.id))];
+          }
+          return Promise.resolve(window.__ACK__);
+        };
+      });
+
+      await page.click('#merge-go');
+      await page.waitForSelector('.editor.conflict-prompt');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Disagreeing selection — resolve the client/billable, then Merge'));
+      await wait(page, 1100);
+      // Pick the second offered client as the winner, then commit. The radio <input> is a
+      // custom-styled control (visually hidden: opacity:0 / 0×0), so click the option LABEL
+      // (.mc-row .opts .mc-opt) — clicking it checks the wrapped .mc-client radio via native label
+      // behavior — rather than .check() on the hidden input (which fails Playwright's visibility gate).
+      const clientOpts = page.locator('.editor.conflict-prompt .mc-row .opts .mc-opt');
+      if ((await clientOpts.count()) > 1) await clientOpts.nth(1).click();
+      await page.waitForFunction(
+        () => document.querySelector('.editor.conflict-prompt .mc-client:checked')?.value === '41',
+      );
+      await wait(page, 500);
+      await page.click('.editor.conflict-prompt .mc-merge');
+      await page.waitForSelector('.editor.conflict-prompt', { state: 'detached' }).catch(() => {});
+      await page.waitForSelector('.entry[data-id="41"]', { state: 'detached' }).catch(() => {});
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('One merged event remains, spanning earliest start to latest end'));
+      await wait(page, 1200);
+    },
+  },
+
+  // §12 R16 — the readonly entries CALENDAR. Over a whole week of fixed-width day columns (each
+  // with its per-day billable header total, plus the range chip), the recording: scrolls the strip
+  // HORIZONTALLY across the columns (the week does not fit — the columns stay a fixed comfortable
+  // width, never stretched/compressed); scrolls the 24h track VERTICALLY to reveal the off-hours
+  // entries (scroll, never clip — every hour is reachable though the viewport opens on working
+  // hours); and hovers an event to reveal its Delete / Split / Edit ops + the corner checkbox. The
+  // empty days sit as present-but-empty columns throughout.
+  '§12 R16': {
+    page: 'index.html',
+    state: entriesCalendarState,
+    drive: async (page) => {
+      await page.waitForSelector('.dcol .ev');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Entries — a readonly week calendar (§12 R16)'));
+      await wait(page, 1100);
+      // Fixed-width day columns with per-day header totals + a range chip; scroll the week.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Fixed-width day columns, per-day totals + a range chip'));
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = s.scrollWidth; });
+      await wait(page, 900);
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = 0; });
+      await wait(page, 800);
+      // The 24h track scrolls — off-hours entries are reachable, never clipped.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('The 24h track scrolls — off-hours entries stay reachable, never clipped'));
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 0; });
+      await wait(page, 800);
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = s.scrollHeight; });
+      await wait(page, 900);
+      // Hover an event to reveal its ops + corner checkbox.
+      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 240; });
+      await page.hover('.entry[data-id="7"]').catch(() => {});
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox'));
+      await wait(page, 1300);
+    },
+  },
+
+  // §12 R06 / §06 R01 (shared shot) — the readonly calendar's per-event HOVER OPS + the unified
+  // editor as the ONE edit surface, with §06 R01's two-step Delete confirm gate. Over
+  // unifiedFormState (the SAME seeded snapshot the UNIFIED_FORM judge item drives — the closed
+  // 'design review' entry id 80, 14:00–15:30, alongside the seeded neighbours), the recording:
+  //   (1) HOVERs the event → its icon-only ops chip reveals Delete / Split / Edit AND a corner
+  //       checkbox (`.ops .op-btn[data-act=…]` + `.ck`), exactly what §12 R16's calendar exposes.
+  //       (Hovering also raises the event above its overlapping neighbour id 83 so the ops are
+  //       reachable — the same z-index reveal the judge relies on.)
+  //   (2) CLICKs Edit → the ONE unified entry form opens in EDIT MODE in the shared view-level host
+  //       (#entry-form-host, in flow, no modal/backdrop), seeded from every tt-editable field
+  //       (multiline description, client/project, tag chips, billable, the Start/Stop expander) —
+  //       the identical add-mode form, now in edit mode (§12 R06); the edited event carries .editing.
+  //   (3) exercises §06 R01's confirm gate in the edit-mode footer: the first Delete click ARMS a
+  //       worded confirm (nothing removed yet), the explicit confirm then fires window.stint.remove
+  //       with the entry id and the event LEAVES the calendar on the repaint. No scoped override is
+  //       needed — the shared initScript remove mock splices the row and reloads (as the judge's
+  //       CONFIRM_DELETE / UNIFIED_FORM items rely on), so the deletion lands on camera.
+  // No IPC surgery: the whole scene runs over the unmodified renderer + the same window.stint.*
+  // channels tt uses; the shared unifiedFormState keeps the recording 1:1 with the JUDGE scene.
+  '§12 R06': {
+    page: 'index.html',
+    state: unifiedFormState,
+    contextOpts: { viewport: { width: 940, height: 940 } },
+    drive: async (page) => {
+      const row = '.entry[data-id="80"]';
+      await page.waitForSelector('.dcol .ev');
+      await page.waitForSelector(row);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox (§12 R06 / §06 R01)'));
+      await wait(page, 700);
+
+      // (1) HOVER the event → the icon-only ops (Delete / Split / Edit) + the corner checkbox reveal.
+      // Hover raises entry 80 above its overlapping neighbour (83) so the ops are reachable.
+      await page.hover(row);
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="edit"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="split"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="delete"]`, { state: 'attached' });
+      await page.waitForSelector(`${row} .ck`, { state: 'attached' });
+      await wait(page, 1400);
+
+      // (2) CLICK Edit → the ONE unified editor opens in EDIT MODE in the shared view-level host
+      // (#entry-form-host), in flow (no modal), seeded from every tt-editable field.
+      await page.hover(row);
+      await page.click(`${row} [data-act="edit"]`);
+      await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="80"]', { state: 'attached' });
+      await page.waitForSelector('.edit-form.entry-form .edit-client option[value="1"]', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Click Edit → the unified editor opens in edit mode, seeded — the same form as add'));
+      await page.evaluate(() =>
+        document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+      await wait(page, 1700);
+
+      // (3) TWO-STEP DELETE in the edit-mode footer: the first click ARMS a worded confirm (nothing
+      // removed yet)…
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Two-step Delete — first arms a worded confirm, nothing removed yet'));
+      await page.click('.edit-form.entry-form .ef-delete');
+      await page.waitForSelector('.edit-form [data-act="confirm-delete"]', { state: 'attached' });
+      await page.waitForSelector('.edit-form .confirm-q', { state: 'attached' });
+      await wait(page, 1500);
+
+      // …then the explicit confirm fires remove({id}); the event leaves the calendar on the repaint.
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Confirm — remove fires with the entry id; the event leaves the calendar'));
+      await page.click('.edit-form [data-act="confirm-delete"]');
+      await page.waitForSelector(row, { state: 'detached' }).catch(() => {});
+      await wait(page, 1600);
+    },
+  },
+
+  // §12 R10 (shared shot with §06 R04) — flags in context: MARKERS on the readonly calendar, DETAIL
+  // + reversible control in the unified editor. Over a day carrying an overlap pair (10↔11, 30m)
+  // and a slept entry (12, raw 4h trimmed to 3h), the recording: shows the yellow `.ov` overlap
+  // warn band(s) + the `.zz` slept hatch on the calendar; opens the overlapped event's editor to
+  // reveal the overlap DETAIL ("Overlap: 30m with …"); then opens the slept event's editor and
+  // toggles the reversible sleep control — Restore lifts the exclusion (billable back to the raw
+  // 4h), Subtract slept re-excludes it (the raw 4h reads struck through beside the trimmed 3h).
+  '§12 R10': {
+    page: 'index.html',
+    state: flaggedState,
+    drive: async (page) => {
+      await page.waitForSelector('.dcol .ev');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Flags in context — overlap warn bands + a slept hatch on the calendar (§12 R10)'));
+      await wait(page, 1200);
+      // Open the overlapped event (10, 09:00–11:00) → the editor spells out the overlap detail. The
+      // editor mounts in the shared view-level host (#entry-form-host), NOT nested in the calendar
+      // event (editor rehost, §12 R06) — so open via hover + its Edit op and read the flags off the
+      // plain `.edit-form` selector. Entry 11 (10:00–10:30) is nested at 10's vertical CENTRE, so
+      // hover 10 near its TOP (the 09:00 edge, clear of 11) to raise it above 11 and reveal its ops.
+      await page.hover('.entry[data-id="10"]', { position: { x: 24, y: 12 } });
+      await page.click('.entry[data-id="10"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form .ef-flags .banner.overlap');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Open the entry → the overlap detail: amount + which neighbour'));
+      await wait(page, 1300);
+      await page.click('.edit-form .edit-cancel');
+      await page.waitForSelector('.edit-form', { state: 'detached' });
+      // Open the slept event → the reversible subtract/restore control + struck raw-vs-trimmed.
+      await page.hover('.entry[data-id="12"]');
+      await page.click('.entry[data-id="12"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form .ef-subtract');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Slept entry: raw 4h struck beside the trimmed 3h billable — Restore to reverse'));
+      await wait(page, 1300);
+      // Restore lifts the exclusion (billable back to raw), then Subtract re-excludes it.
+      await page.click('.edit-form .ef-subtract');
+      await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Restore — the slept time is billable again (no strike)'));
+      await wait(page, 1200);
+      await page.click('.edit-form .ef-subtract');
+      await page.waitForSelector('.edit-form .ef-dur s.struck');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Subtract slept — reversible: the raw duration is struck once more'));
+      await wait(page, 1300);
     },
   },
 
@@ -1254,11 +1674,12 @@ const RECIPES = {
       await tickClock(3, 350);
 
       // ---- (2) EDIT THE RUNNING TIMER LIVE — no stop ----------------------------------------
-      // The live-edit strip is seeded from the open entry. Show the "no stop" pill and the
-      // "End time not editable while running" note (the End field is deliberately absent), then
-      // change description + start time + Billable and PROVE the row stays open (still running).
+      // The live-edit strip is seeded from the open entry. The End field is deliberately ABSENT —
+      // there is NO #le-end anywhere (the open row has no stop, §05 R06 / §12 R14, the same
+      // no-end fact the judge asserts) — then change description + start time + Billable and PROVE
+      // the row stays open (still running).
       await page.waitForSelector('#live-edit:not([hidden])');
-      await page.waitForSelector('#live-edit .le-pill');
+      await page.waitForFunction(() => !document.querySelector('#live-edit #le-end'));
       // Make each live edit visibly APPLY on the repaint: scope an `edit` override that applies
       // the patch to the open row in __STATE__ (never an endUtc — the row stays open), faithful
       // to core's edit-on-open-row. The renderer's commitLiveEdit still builds the minimal patch
@@ -1297,17 +1718,20 @@ const RECIPES = {
       await page.waitForSelector('#timer-card.running');
       await wait(page, 600);
 
-      // 2b — change the START TIME via the editable datetime-local; its `change` commits an
-      // `edit` patch carrying startUtc (and never endUtc). The row stays open/running.
+      // 2b — change the START TIME via the raw text Start field (localInputValue format —
+      // §12 R14/G1, no datetime-local); its edits ride the same 500ms debounced commit as the
+      // description (and as the inline start-only picker's live drag writes), so advance the
+      // pinned clock to flush the `edit` patch carrying startUtc (and never endUtc).
       await page.fill('#live-edit #le-start', '2026-06-24T21:15');
       await page.dispatchEvent('#live-edit #le-start', 'change');
+      await tickClock(1, 0);
       await page.waitForFunction(() => !!window.__EDITED__ && 'startUtc' in (window.__EDITED__.patch || {}));
       await page.waitForSelector('#timer-card.running');
       await wait(page, 600);
 
       // 2c — toggle BILLABLE off (immediate commit). The patch carries billable, never endUtc;
-      // the timer keeps running. Dwell so the "no stop" pill + note are legible alongside the
-      // still-advancing running card.
+      // the timer keeps running. Dwell so the running strip (with no End field) is legible
+      // alongside the still-advancing running card.
       await page.click('#live-edit #le-bill');
       await page.waitForFunction(() => !!window.__EDITED__ && 'billable' in (window.__EDITED__.patch || {}));
       await page.waitForSelector('#timer-card.running');
@@ -1561,12 +1985,12 @@ const RECIPES = {
       await page.click('#rep-by-seg .seg-btn[data-by="project"]');
       await wait(page, 400);
       // Save the amendment → editReport (parity with `tt report edit`); the card's spec summary
-      // now reads 'grouped by project'.
+      // now reads 'by project' (the specSummary wording the judge REPORTS_VIEW item also asserts).
       await page.click('#rep-save');
       await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
       await page.waitForFunction(
         () =>
-          /grouped by .*project/i.test(
+          /by\s+project/i.test(
             document.querySelector('.def[data-name="Weekly billables — Acme"] .dspec')?.textContent || '',
           ),
       );
@@ -1646,6 +2070,119 @@ const RECIPES = {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
       await wait(page, 1000);
+    },
+  },
+
+  // §12 R12 / §14 timeline-settings (§W — shared shot) — the Settings → Timeline group (G15)
+  // and the default viewport it drives (G16). The recording routes to Settings, dwells on the
+  // Timeline group (the paired HH:MM working-hours inputs reading the stored 09:00–15:00, the
+  // Picker-window segment, the disabled Around select), then SHOWS the four beats:
+  //   1) edit Working hours start (a valid HH:MM persists over the existing setSetting channel
+  //      and reads back on the repaint);
+  //   2) attempt an INVALID end (06:00 — inverts the start<end pair): the write is REJECTED and
+  //      the re-render reverts the field to stored truth on camera (the recipe scopes a
+  //      setSetting override that validates exactly as core does, so the mock is as strict as
+  //      the real channel — recipe-scoped, no JUDGE behavior touched);
+  //   3) flip Picker window → Around now: the Around select ENABLES (row loses 'off') and a
+  //      12 h span persists;
+  //   4) once §12 R15/R16 land, close on the CONSUMER: the entries calendar / picker opens to
+  //      the configured window as a scroll default over the full 24h track, never a clipped
+  //      one (guarded on the [data-timeline-track] hook; before the consumer rows land the
+  //      recording ends on the Settings beat — re-record in the workflow's last phase).
+  // The tt half of this requirement (config set/ls parity) is CLI evidence and lives in the
+  // transcript (§W: no GIF for CLI surfaces).
+  'timeline-window-settings': {
+    page: 'index.html',
+    state: timelineWindowState,
+    contextOpts: { viewport: { width: 820, height: 900 } },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('[data-view="settings"]:not([hidden])');
+      await page.waitForSelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]');
+      await page.evaluate(() => {
+        window.__recCaption && window.__recCaption('Settings → Timeline: working hours + picker window (§14)');
+        document
+          .querySelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]')
+          ?.scrollIntoView({ block: 'center' });
+      });
+      await wait(page, 1400);
+
+      // Scope a core-faithful setSetting: the injected mock accepts anything, but the REAL
+      // channel rejects a malformed HH:MM / inverted pair / out-of-range span — mirror that
+      // strictness here so the revert-on-reject beat below is honest. Recipe-scoped only.
+      await page.evaluate(() => {
+        const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+        window.stint.setSetting = (p) => {
+          const s = window.__STATE__.settings;
+          const next = { ...s, [p.key]: p.value };
+          const bad =
+            ((p.key === 'workingHoursStart' || p.key === 'workingHoursEnd') &&
+              (!HHMM.test(String(p.value)) || next.workingHoursStart >= next.workingHoursEnd)) ||
+            (p.key === 'pickerAroundHours' &&
+              !(Number.isInteger(p.value) && p.value >= 1 && p.value <= 24)) ||
+            (p.key === 'pickerWindowMode' && p.value !== 'working_hours' && p.value !== 'around_now');
+          if (bad) return Promise.reject(new Error('invalid setting value'));
+          window.__SET_SETTING__ = p;
+          s[p.key] = p.value;
+          return Promise.resolve();
+        };
+      });
+
+      // 1) A valid working-hours edit persists and reads back on the repaint (09:00 → 08:00).
+      await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', '08:00');
+      await page.press('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', 'Tab');
+      // The change persisted over setSetting and the repaint reads it back from stored truth.
+      await page.waitForFunction(
+        () =>
+          window.__SET_SETTING__?.key === 'workingHoursStart' &&
+          document.querySelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]')?.value ===
+            '08:00',
+      );
+      await wait(page, 900);
+
+      // 2) An INVALID end (06:00 < start) is rejected; the re-render reverts to stored truth.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('An inverted pair is rejected — the field reverts to stored truth'),
+      );
+      await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]', '06:00');
+      await page.press('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]', 'Tab');
+      await page.waitForFunction(
+        () =>
+          document.querySelector('#settings-panel input.set-hhmm[data-key="workingHoursEnd"]')?.value ===
+          '15:00',
+      );
+      await wait(page, 1100);
+
+      // 3) Flip the Picker-window mode → Around now: the Around select enables; pick 12 h.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Picker window → Around now: the Around span enables'),
+      );
+      await page.click('#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]');
+      await page.waitForFunction(() => {
+        const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+        return !!around && !around.disabled;
+      });
+      await wait(page, 800);
+      await page.selectOption('#settings-panel select[data-key="pickerAroundHours"]', '12');
+      await page.waitForFunction(() => window.__SET_SETTING__?.key === 'pickerAroundHours');
+      await wait(page, 1000);
+
+      // 4) The consumer beat (post §12 R15/R16): the entries calendar opens to the configured
+      // window — a scroll default over the full 24h track, never clipped (G16). Guarded on the
+      // data-timeline-track hook so this recipe records meaningfully before those rows land.
+      await page.click('.nav-item[data-view="entries"]');
+      await wait(page, 700);
+      const hasTrack = await page.evaluate(() => !!document.querySelector('[data-timeline-track]'));
+      if (hasTrack) {
+        await page.evaluate(() =>
+          window.__recCaption &&
+          window.__recCaption('The calendar opens to the configured window — scroll, never clip (G16)'),
+        );
+        await wait(page, 2000);
+      } else {
+        await page.click('.nav-item[data-view="settings"]');
+        await wait(page, 1100);
+      }
     },
   },
 

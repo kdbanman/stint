@@ -60,6 +60,76 @@ window.SU = (function () {
   function friendlyHotkey(accel) {
     return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
   }
+  // §12 R15/R17 (G1): the ONE local-time seed format the raw Start/Stop text fields, the split
+  // instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm` in *local* time
+  // (no timezone suffix), parsed identically by `new Date(value)`. Hoisted here so app.js and
+  // timepicker.js consume a single definition.
+  function localInputValue(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    return (
+      `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+    );
+  }
+  // §14 / G16 — the ONE default-viewport derivation for the timeline surfaces: the inline
+  // interval picker (§12 R15) and the readonly entries calendar (§12 R16) both consume THIS
+  // helper and must never re-derive the window math themselves. It returns a scroll window
+  // { startMin, endMin } in LOCAL minutes-of-day over the full 24h track (0–1440) — a scroll
+  // default, never a clipped one (the track itself always spans the whole day):
+  //   • editedInterval present ({ startUtc, endUtc|null }) → the window keeps the mode's
+  //     span but re-centers on the edited interval (a running entry centers on its start);
+  //   • else pickerWindowMode 'working_hours' → [workingHoursStart, workingHoursEnd];
+  //   • else 'around_now' → now ± pickerAroundHours/2, clamped to [0, 1440].
+  // The entries calendar always defaults to working hours (§12 R16): it passes settings with
+  // pickerWindowMode forced to 'working_hours'. Display only — core owns and validates the
+  // stored settings; the fallbacks here only shield against a stale/partial snapshot.
+  function timelineWindow(settings, nowUtcIso, editedInterval) {
+    const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+    const toMin = (hhmm, fallback) =>
+      HHMM.test(String(hhmm || ''))
+        ? Number(String(hhmm).slice(0, 2)) * 60 + Number(String(hhmm).slice(3, 5))
+        : fallback;
+    const localMin = (iso) => {
+      const d = new Date(iso);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+    const s = settings || {};
+    let start = toMin(s.workingHoursStart, 7 * 60);
+    let end = toMin(s.workingHoursEnd, 18 * 60);
+    if (end <= start) {
+      start = 7 * 60;
+      end = 18 * 60;
+    }
+    if (s.pickerWindowMode === 'around_now') {
+      const hours =
+        Number.isInteger(s.pickerAroundHours) && s.pickerAroundHours >= 1 && s.pickerAroundHours <= 24
+          ? s.pickerAroundHours
+          : 8;
+      const nowMin = localMin(nowUtcIso);
+      start = nowMin - (hours * 60) / 2;
+      end = nowMin + (hours * 60) / 2;
+    }
+    if (editedInterval && editedInterval.startUtc) {
+      const a = localMin(editedInterval.startUtc);
+      const b = editedInterval.endUtc ? localMin(editedInterval.endUtc) : a;
+      const span = end - start;
+      const mid = (a + b) / 2;
+      start = mid - span / 2;
+      end = mid + span / 2;
+    }
+    // Clamp into the 24h track: the window is a viewport over the day column, so its edges
+    // never leave [0, 1440] (an around-now window near midnight simply meets the day edge).
+    const clamp = (m) => Math.max(0, Math.min(1440, Math.round(m)));
+    let startMin = clamp(start);
+    let endMin = clamp(end);
+    if (endMin <= startMin) {
+      // Degenerate after clamping (should not happen off validated settings) — fall back to
+      // the documented working-hours default rather than a zero-height viewport.
+      startMin = 7 * 60;
+      endMin = 18 * 60;
+    }
+    return { startMin, endMin };
+  }
   // The single line-icon family — the SVG <symbol> sprite from the design system,
   // the one sanctioned icon source for both the main window and the popover. Drawn
   // at 1.6px stroke in currentColor (see the shared `.ic` rule), so an icon inherits
@@ -94,13 +164,14 @@ window.SU = (function () {
     '<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>' +
     '<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>' +
     '<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>' +
+    '<symbol id="i-split" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M12 4v5M12 15v5"/></symbol>' +
     '</defs></svg>';
   // The set of ids the sprite defines — the canonical icon vocabulary. Renderers
   // pass one of these to icon(); an unknown id is a programming error, not a glyph.
   const ICON_IDS = [
     'clock', 'list', 'users', 'chart', 'settings', 'search', 'play', 'stop', 'swap',
     'plus', 'star', 'cal', 'flag', 'moon', 'check', 'download', 'x', 'down', 'right',
-    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive',
+    'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive', 'split',
   ];
   // Render one line icon by id as an <svg class="ic"><use href="#i-<id>"/></svg>
   // string the renderers can drop into innerHTML. Always class="ic" so it picks up
@@ -209,5 +280,5 @@ window.SU = (function () {
     };
   }
 
-  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
+  return { fmtDur, fmtHours, elapsed, localTime, localDateLabel, rangeLabel, lineFlags, friendlyHotkey, localInputValue, timelineWindow, applyDateFormat, tagDiff, deriveView, ICON_SPRITE, ICON_IDS, icon, injectSprite };
 })();

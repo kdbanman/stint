@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, pickerState, editingState, editableState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, savedReportsState, settingsState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -478,39 +478,93 @@ async function main() {
     );
   });
 
-  // TIMER_VIEW (full Timer view, G5) — §12 R14: routing to the Timer view renders the live clock
-  // reading the derived count-up (advances +3s across the pinned-clock step, not reset), a
-  // running/idle state indicator, the running entry's description ('auth refactor') + client/
-  // project ('Client A / API'); the live-edit-running strip is present and its commit sends an
-  // `edit` patch over IPC that carries the start-time/attributes but NEVER endUtc (the row stays
-  // open); a visible Stop (accent) is present while running, with NO Switch control (Switch is
-  // removed — issue #34; the start-with-details form performs the atomic stop-then-start). Drive
-  // the real renderer: route to the Timer view, read the clock, fast-forward 3s, edit the live
-  // strip's start time, and assert the recorded edit payload (window.__EDITED__) has no endUtc.
-  await withPage(browser, timerViewRunningState(), 'index.html', async (page) => {
+  // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
+  // Timer view renders the live clock reading the derived count-up (advances +3s across the
+  // pinned-clock step, not reset) with the live-edit-running strip present (no End input).
+  // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
+  // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
+  // container computes position: static — showing the running block with a START drag grip
+  // ONLY (no .stp-resize end grip, no end label, no end echo field) and the computed future
+  // transparency fade (mask-image gradient) dissolving the block toward the future; the
+  // snapshot's other same-day entries paint gray. Dragging the grip UP by a known pixel delta
+  // (-30px on the 720px/24h track = -60min) advances the raw #le-start text field LIVE by the
+  // snapped 5-min amount (21:35 → 20:35); the debounced commit then sends an `edit` patch over
+  // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
+  // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
+  // instants land on a deterministic local day/track geometry.
+  {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(timerViewRunningState()), {}));
+    await page.goto(fileUrl('index.html'));
+
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
     const t1 = await page.textContent('#timer-clock');
     const before = await page.evaluate(() => ({
       stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
       noEnd: !document.querySelector('#live-edit #le-end'),
+      // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
+      startIsText: document.querySelector('#le-start')?.type === 'text',
       hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-      // Switch is removed — assert NO #timer-switch element survives anywhere (issue #34).
       noSwitch: !document.querySelector('#timer-switch'),
-      desc: document.querySelector('#timer-desc')?.textContent?.trim() ?? null,
-      meta: document.querySelector('#timer-meta')?.textContent?.trim() ?? null,
       state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
     }));
-    await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png') });
-    // Advance the pinned clock +3s — the card's tick() must advance the live count-up.
+    // Advance the pinned clock +3s — the card's tick() must advance the live count-up (the
+    // count-up never stops while the start is being edited, §05 R06).
     await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
     const t2 = await page.textContent('#timer-clock');
-    // Edit the live-edit-running strip's start time (a change event commits immediately) and the
-    // description (debounced); assert the recorded edit patch carries the change but NO endUtc.
-    await page.fill('#live-edit #le-desc', 'auth refactor v2');
-    await page.fill('#live-edit #le-start', '2026-06-24T20:00');
-    await page.dispatchEvent('#live-edit #le-start', 'change');
-    // Let the debounced description commit settle (scheduleLiveEdit waits 500ms).
+
+    // Open the inline start-only disclosure from the Start field's calendar affordance.
+    await page.click('#le-start-pick');
+    await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+    const disc = await page.evaluate(() => {
+      const host = document.querySelector('#le-start-disc');
+      const box = host.querySelector('.stp-inline');
+      const me = host.querySelector('.stp-block.me.open');
+      const cs = me ? getComputedStyle(me) : null;
+      const mask = cs ? cs.maskImage || cs.webkitMaskImage || '' : '';
+      return {
+        // IN FLOW — no modal chrome anywhere: no backdrop, no dialog role, static position.
+        inFlow: !!box && getComputedStyle(box).position === 'static',
+        noBackdrop: !document.querySelector('.stp-backdrop'),
+        noDialog: !host.querySelector('[role="dialog"], [aria-modal]'),
+        expanded: document.querySelector('#le-start-pick')?.getAttribute('aria-expanded') === 'true',
+        // START-ONLY chrome: a start grip, and NO end grip / end label / end echo anywhere.
+        grip: !!host.querySelector('.stp-grip'),
+        noResize: !host.querySelector('.stp-resize'),
+        noEndLabel: !host.querySelector('.stp-lab-bot'),
+        noEndEcho: !host.querySelector('.stp-echo-end'),
+        // The running block dissolves into the future — the computed transparency mask.
+        fade: /gradient/.test(mask),
+        others: host.querySelectorAll('.stp-block.other').length,
+        startBefore: document.querySelector('#le-start')?.value ?? null,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
+
+    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, 5-min
+    // snapped): the raw #le-start text must advance LIVE from 21:35 to 20:35 (UTC page).
+    const grip = page.locator('#le-start-disc .stp-grip');
+    await grip.scrollIntoViewIfNeeded();
+    const g = await grip.boundingBox();
+    const gx = Math.round(g.x + g.width / 2);
+    const gy = Math.round(g.y + g.height / 2);
+    await page.mouse.move(gx, gy);
+    await page.mouse.down();
+    await page.mouse.move(gx, gy - 30, { steps: 6 });
+    await page.mouse.up();
+    const dragged = await page.evaluate(() => ({
+      startLive: document.querySelector('#le-start')?.value ?? null,
+      // Still no end anywhere after the drag — the variant cannot even paint one.
+      stillNoEndChrome: !document.querySelector('#le-start-disc .stp-resize') &&
+        !document.querySelector('#le-start-disc .stp-lab-bot'),
+      noBackdrop: !document.querySelector('.stp-backdrop'),
+    }));
+
+    // Let the debounced live-edit commit settle (scheduleLiveEdit waits 500ms) and assert the
+    // committed patch: startUtc present, NO endUtc key (the load-bearing §05 R06 invariant).
     await page.clock.fastForward(600);
     await page.waitForFunction(() => !!window.__EDITED__);
     const edited = await page.evaluate(() => window.__EDITED__);
@@ -521,24 +575,39 @@ async function main() {
       delta === 3 &&
       before.stripPresent &&
       before.noEnd &&
+      before.startIsText &&
       before.hasStop &&
       before.noSwitch &&
-      before.desc === 'auth refactor' &&
-      /Client A \/ API/.test(before.meta ?? '') &&
       before.state === 'running' &&
+      disc.inFlow &&
+      disc.noBackdrop &&
+      disc.noDialog &&
+      disc.expanded &&
+      disc.grip &&
+      disc.noResize &&
+      disc.noEndLabel &&
+      disc.noEndEcho &&
+      disc.fade &&
+      disc.others >= 1 &&
+      disc.startBefore === '2026-06-24T21:35' &&
+      dragged.startLive === '2026-06-24T20:35' &&
+      dragged.stillNoEndChrome &&
+      dragged.noBackdrop &&
       !!edited &&
       typeof edited.id === 'number' &&
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
-      (edited.patch.startUtc !== undefined || edited.patch.description !== undefined);
+      edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
     record(
       'TIMER_VIEW',
       ok,
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
+        `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
         `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'})`,
       'timer-view-full.png',
     );
-  });
+    await page.close();
+  }
 
   // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
   // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
@@ -732,7 +801,11 @@ async function main() {
         el.matches('input[type="checkbox"], .sel') ||
         !!el.closest('.chip') ||
         !!el.closest('.seg') ||
-        !!el.closest('.presets');
+        !!el.closest('.presets') ||
+        // §12 R16 (mockup main.html): the calendar event's hover-ops chip is a raised paper chip
+        // (paper bg, 1px line border, 7px radius, raise shadow) — the CHIP carries the affordance,
+        // so its inner icon-only op-btns are sub-affordances, exactly like .chip / .seg / .presets.
+        !!el.closest('.ops');
       const visible = (el) => {
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') return false;
@@ -836,47 +909,12 @@ async function main() {
     );
   });
 
-  // FLAG_IN_CONTEXT — overlap + slept flags on the affected rows, subtract present, plus the
-  // §12 R9 detailed overlap banner ("Overlap: Nm with previous/next entry") on the overlapped
-  // row and the struck-through raw duration beside the trimmed billable on the slept row
-  // (§12 R4, §12 R9, §10 R5).
-  await withPage(browser, flaggedState(), 'index.html', async (page) => {
-    await page.screenshot({ path: join(EVIDENCE, 'main-flags.png'), fullPage: true });
-    const probe = await page.evaluate(() => {
-      const overlapRow = document.querySelector('.entry[data-id="11"]');
-      const sleptRow = document.querySelector('.entry[data-id="12"]');
-      const struck = sleptRow?.querySelector('.dur s.struck');
-      const struckLineThrough = struck
-        ? getComputedStyle(struck).textDecorationLine.includes('line-through')
-        : false;
-      return {
-        overlapFlag: !!overlapRow?.querySelector('.flag'),
-        sleptFlag: !!sleptRow?.querySelector('.flag'),
-        subtractBtn: !!sleptRow && /Subtract|Restore/.test(sleptRow.textContent),
-        // §12 R9: the detailed overlap banner spells out the amount + which neighbour.
-        overlapBannerText: overlapRow?.querySelector('.banner.overlap')?.textContent?.trim() ?? '',
-        // §12 R9: the slept-trimmed row strikes the raw duration beside the trimmed billable.
-        struckText: struck?.textContent?.trim() ?? '',
-        struckLineThrough,
-        durText: sleptRow?.querySelector('.dur')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-      };
-    });
-    const bannerOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(probe.overlapBannerText);
-    // The trimmed billable (3h, 03:00:00) reads as the live duration, the raw 4h (04:00:00)
-    // struck through beside it — so the cut time is visible, not silently dropped.
-    const strikeOk =
-      probe.struckLineThrough &&
-      /04:00:00/.test(probe.struckText) &&
-      /03:00:00/.test(probe.durText);
-    const ok =
-      probe.overlapFlag && probe.sleptFlag && probe.subtractBtn && bannerOk && strikeOk;
-    record(
-      'FLAG_IN_CONTEXT',
-      ok,
-      `overlap flag + detailed banner (${JSON.stringify(probe.overlapBannerText)}) on row, slept flag + subtract + struck raw duration beside trimmed billable on slept row: ${JSON.stringify(probe)}`,
-      'main-flags.png',
-    );
-  });
+  // §12 R10: the flags-in-context scene is retired — the entries list is gone, so flags no longer
+  // live on a row. Overlap + slept now render as MARKERS on the readonly calendar (the `.ov` warn
+  // band w/ amount + the `.zz` hatch w/ the moon marker — asserted by CALENDAR_LAYOUT) and their
+  // DETAIL + the reversible subtract/restore control live in the unified editor (the overlap
+  // detail + Subtract/Restore + struck raw-vs-trimmed billable — asserted by UNIFIED_FORM). No
+  // main-flags.png; the successor evidence is main-calendar.png + main-edit.png.
 
   // START_ATTRIBUTES — the main window's Start offers an optional inline form
   // (description/client/project/tags/billable); the primary Start stays one-tap and the
@@ -990,477 +1028,656 @@ async function main() {
     );
   });
 
-  // ADD_FORM — the main window offers a discoverable manual-add (backfill) form with
-  // explicit from/to times and the same attributes tt add accepts (description,
-  // client/project, billable, tags); the Save action carries the accent (§05 R5).
-  await withPage(browser, addFormState(), 'index.html', async (page) => {
-    await page.click('#add-toggle');
-    const probe = await page.evaluate(() => {
-      const form = document.querySelector('#add-form');
-      const visible = !!form && !form.hidden;
-      const has = (id) => !!document.querySelector(`#${id}`);
-      const save = document.querySelector('#add-go');
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      return {
-        visible,
-        fields: {
-          from: has('add-from'),
-          to: has('add-to'),
-          desc: has('add-desc'),
-          client: has('add-client'),
-          project: has('add-project'),
-          bill: has('add-bill'),
-          tags: has('add-tags'),
-        },
-        saveAccent: save ? getComputedStyle(save).backgroundColor === toRgb(accent) : false,
-      };
-    });
-    await page.screenshot({ path: join(EVIDENCE, 'add-form.png') });
-    const f = probe.fields;
-    const allFields = f.from && f.to && f.desc && f.client && f.project && f.bill && f.tags;
-    const ok = probe.visible && allFields && probe.saveAccent;
-    record('ADD_FORM', ok, `add form visible=${probe.visible}, fields=${JSON.stringify(f)}, saveAccent=${probe.saveAccent}`, 'add-form.png');
-  });
-
-  // MANUAL_ADD_FORM — §12 R7 / §06 R4: backfilling a completed entry whose span overlaps an
-  // existing entry is WARNED, not blocked. Open the manual-add form, fill an overlapping
-  // from/to plus the attribute fields, Save, and assert (a) the backfill payload carries the
-  // explicit from/to + attributes the `add` IPC (tt add parity) forwards, (b) the SAME
-  // non-blocking inline overlap banner the other write paths use is raised — the entry still
-  // saved, so the form closed. The overlap-returning add mock makes this deterministic.
-  await withPage(
-    browser,
-    addFormState(),
-    'index.html',
-    async (page) => {
-      const beforeHidden = await page.evaluate(() => !!document.querySelector('#overlap-banner')?.hidden);
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      // Fill the full field set the form mirrors from `tt add` — an explicit overlapping
-      // span plus description / client / project / tags / billable.
-      await page.fill('#add-desc', 'backfilled call');
-      await page.fill('#add-client', 'Acme');
-      await page.fill('#add-project', 'API');
-      await page.fill('#add-tags', 'deep, urgent');
-      await page.fill('#add-from', '2026-06-24T09:00');
-      await page.fill('#add-to', '2026-06-24T10:00');
-      await page.click('#add-go');
-      await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
-      await page.screenshot({ path: join(EVIDENCE, 'main-add-form.png'), fullPage: true });
-      const probe = await page.evaluate(() => {
-        const added = window.__ADDED__;
-        const banner = document.querySelector('#overlap-banner');
-        const form = document.querySelector('#add-form');
-        return {
-          added,
-          formClosed: !!form && form.hidden, // entry saved → form dismissed (non-blocking)
-          banner: {
-            visible: !!banner && !banner.hidden && getComputedStyle(banner).display !== 'none',
-            text: banner ? banner.textContent.trim() : '',
-            role: banner ? banner.getAttribute('role') : null,
-            ariaLive: banner ? banner.getAttribute('aria-live') : null,
-          },
-        };
-      });
-      const a = probe.added || {};
-      const payloadOk =
-        a.fromLocal === '2026-06-24T09:00' &&
-        a.toLocal === '2026-06-24T10:00' &&
-        a.description === 'backfilled call' &&
-        a.client === 'Acme' &&
-        a.project === 'API' &&
-        Array.isArray(a.tags) &&
-        a.tags.join(',') === 'deep,urgent' &&
-        a.billable === true;
-      const bannerOk =
-        beforeHidden &&
-        probe.banner.visible &&
-        /overlap/i.test(probe.banner.text) &&
-        probe.banner.role === 'status' &&
-        probe.banner.ariaLive === 'polite';
-      const ok = payloadOk && bannerOk && probe.formClosed;
-      record(
-        'MANUAL_ADD_FORM',
-        ok,
-        `backfill payload=${JSON.stringify(a)}; overlap warned-not-blocked (form closed=${probe.formClosed}, banner=${JSON.stringify(probe.banner)})`,
-        'main-add-form.png',
-      );
-    },
-    { overlap: true },
-  );
-
-  // ADD_FORM_PICKER — §12 R07 / §12 R15 (G9): the manual-add form's Start (#add-from) and End
-  // (#add-to) text fields each expose a calendar-icon affordance that opens the shared visual
-  // time-range picker (the REAL window.STP / timepicker.js component R15 ships), AND the picker
-  // only ever WRITES BACK into the text inputs — the typed from/to stay authoritative. This
-  // scene proves the R07 consumer contract: (a) both fields carry a picker-opening trigger;
-  // (b) clicking it opens the picker seeded from the current span (the top echo mirrors the
-  // bound inputs); (c) Apply flows the span back into #add-from/#add-to; (d) the text inputs
-  // remain present and a subsequent Save still sends the explicit fromLocal/toLocal over the
-  // `add` IPC — text entry is authoritative, never bypassed. (The drag/resize geometry +
-  // overlap painting are exercised in TIME_RANGE_PICKER; here we Apply the seeded span to
-  // assert the write-back/authoritative-Save path end to end.)
-  await withPage(browser, addFormState(), 'index.html', async (page) => {
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    // Seed an explicit same-day span so the renderer's overnight-uses-text fallback (G9) does
-    // not fire regardless of the runner's local timezone — the picker path is what we exercise.
-    await page.fill('#add-from', '2026-06-24T13:00');
-    await page.fill('#add-to', '2026-06-24T14:30');
-    // Assert each field has a picker-opening affordance, then open the REAL picker.
-    const affordances = await page.evaluate(() => ({
-      from: !!document.querySelector('#add-from-pick'),
-      to: !!document.querySelector('#add-to-pick'),
-      fromInput: !!document.querySelector('#add-from'),
-      toInput: !!document.querySelector('#add-to'),
-      hint: !!document.querySelector('#add-pickhint'),
-    }));
-    await page.click('#add-from-pick');
-    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-    await page.screenshot({ path: join(EVIDENCE, 'add-form-picker.png'), fullPage: true });
-    // (b) the picker opened seeded from the current span — its top echo mirrors the inputs.
-    const opened = await page.evaluate(() => ({
-      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
-      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    const openedOk = opened.echoStart === '2026-06-24T13:00' && opened.echoEnd === '2026-06-24T14:30';
-    // (c) Apply writes the seeded span back into the authoritative #add-from/#add-to inputs.
-    await page.click('.stp .stp-apply');
-    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-    const written = await page.evaluate(() => ({
-      fromValue: document.querySelector('#add-from')?.value,
-      toValue: document.querySelector('#add-to')?.value,
-    }));
-    const writeBackOk =
-      written.fromValue === '2026-06-24T13:00' && written.toValue === '2026-06-24T14:30';
-    // (d) Save AFTER picker use — the explicit fromLocal/toLocal must still flow over `add`.
-    await page.click('#add-go');
-    await page.waitForSelector('#add-form[hidden]', { state: 'attached' }); // submit done (form closed)
-    const probe = await page.evaluate(() => ({ added: window.__ADDED__ }));
-    const a = probe.added || {};
-    const authoritativeOk =
-      a.fromLocal === written.fromValue && a.toLocal === written.toValue; // Save sent the text values
-    const ok =
-      affordances.from &&
-      affordances.to &&
-      affordances.fromInput &&
-      affordances.toInput &&
-      openedOk &&
-      writeBackOk &&
-      authoritativeOk;
-    record(
-      'ADD_FORM_PICKER',
-      ok,
-      `affordances=${JSON.stringify(affordances)}; opened-echo=${JSON.stringify(opened)}; ` +
-        `wrote-back from=${written.fromValue} to=${written.toValue}; Save sent ${JSON.stringify({ fromLocal: a.fromLocal, toLocal: a.toLocal })} (text authoritative)`,
-      'add-form-picker.png',
-    );
-  });
-
-  // TIME_RANGE_PICKER — §12 R15 (G9): the REAL visual time-range picker (timepicker.js /
-  // window.STP), driven against the real renderer (index.html). Opens from the manual-add
-  // form's #add-from calendar icon; presents a month calendar + a single-day hour-line
-  // track with the bound text inputs echoed at the top. The edited entry is a draggable
-  // accent "me" rectangle: dragging the BODY moves start+stop together (5-min snap), and
-  // dragging the BOTTOM resize handle moves only the stop (5-min snap). Other entries paint
-  // gray; the overlapping span paints a yellow .stp-overlap (warn-only) while Apply still
-  // works. On Apply the authoritative #add-from/#add-to text inputs hold the picked LOCAL
-  // values and the popover closes. ACCENT_DISCIPLINE holds with the picker open (only the
-  // primary "Apply range" button + the "me" rectangle / selected day carry the accent).
+  // UNIFIED_FORM_ADD — §12 R07 (G5/G7): the manual-add surface is the ONE unified entry form in
+  // ADD mode, inline in the Entries view (no modal). Drive the REAL renderer end to end and assert
+  // the requirement's gating facts:
+  //   (a) opening #add-toggle reveals a two-column form — LEFT: a 3-line multiline description
+  //       textarea + client + project SELECTs + a tag chip host + the billable toggle; RIGHT: the
+  //       inline interval picker (month calendar + single-day column) over the COLLAPSED Start/Stop
+  //       expander (raw text fields), and the form carries NO type=datetime-local input (G1);
+  //   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert),
+  //       and only the "me" rectangle + Save entry carry the accent (§15);
+  //   (c) DRAGGING the picker "me" block updates the form's start/stop state LIVE (the raw #add-from
+  //       /#add-to fields change, span preserved) — before any Save (G7);
+  //   (d) clicking Save entry is the SOLE commit — window.__ADDED__ carries the picked (post-drag)
+  //       fromLocal/toLocal PLUS description/client/project/tags/billable over the single `add` IPC,
+  //       the form closes, and the overlapping backfill raises the non-blocking overlap banner (§06 R4).
+  // Fails if the form is not the unified two-column form, still carries a datetime-local, the picker
+  // does not drive form state live, or Save is not the sole commit.
   //
-  // The page is pinned to timezoneId 'UTC' so the seeded UTC otherEntries land on the same
-  // local day as the filled 2026-06-24 span, making the gray/overlap geometry deterministic.
+  // The page is pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
+  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries, making
+  // the gray/overlap geometry deterministic; overlap:true makes the post-save WriteAck carry the
+  // overlap warning the inline banner surfaces.
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
-    await page.addInitScript(initScript(JSON.stringify(pickerState()), {}));
+    await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
     await page.goto(fileUrl('index.html'));
 
+    // Wait for the initial load() so `state` (and thus the picker's snapshotEntries) is populated
+    // before the add form mounts the picker — the two seeded closed entries render as rows first.
+    await page.waitForSelector('.entry', { state: 'attached' });
+
+    // (a) open the unified add form and wait for the inline picker to mount + the client options.
     await page.click('#add-toggle');
     await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    // Seed an explicit same-day span (UTC page → 2026-06-24 local) so the picker draws the
-    // single-day column for that day and the dragged "me" rectangle is 13:00–14:30.
-    await page.fill('#add-from', '2026-06-24T13:00');
-    await page.fill('#add-to', '2026-06-24T14:30');
+    await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+    await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'unified-add.png'), fullPage: true });
 
-    // Open the REAL picker from the Start field's calendar icon.
-    await page.click('#add-from-pick');
-    await page.waitForSelector('.stp-backdrop .stp', { state: 'visible' });
-
-    // (a) the popover presents the month calendar + the single-day hour-line track, and the
-    // bound text inputs are echoed at the top.
-    const present = await page.evaluate(() => ({
-      cal: !!document.querySelector('.stp .stp-grid .stp-d'),
-      track: !!document.querySelector('.stp .stp-track'),
-      hourLines: document.querySelectorAll('.stp .stp-hour').length,
-      echoStart: document.querySelector('.stp .stp-echo-start')?.value,
-      echoEnd: document.querySelector('.stp .stp-echo-end')?.value,
-      me: !!document.querySelector('.stp-block.me'),
-      others: document.querySelectorAll('.stp-block.other').length,
-    }));
-
-    await page.screenshot({ path: join(EVIDENCE, 'time-range-picker.png'), fullPage: true });
-
-    // Helper: read the current #add-from/#add-to values (the authoritative inputs the picker
-    // writes on Apply) and the "me" rectangle geometry.
-    const meBox = async () => page.evaluate(() => {
-      const me = document.querySelector('.stp-block.me');
-      const r = me.getBoundingClientRect();
-      return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
+    const layout = await page.evaluate(() => {
+      const form = document.querySelector('#add-form');
+      const q = (sel) => form?.querySelector(sel);
+      const desc = q('#add-desc');
+      const client = q('#add-client');
+      const project = q('#add-project');
+      const timesToggle = q('#add-times-toggle');
+      const timesBody = q('#add-times-body');
+      const from = q('#add-from');
+      const to = q('#add-to');
+      return {
+        visible: !!form && !form.hidden,
+        unified: !!form && form.classList.contains('unified-form') && form.dataset.mode === 'add',
+        // LEFT column.
+        descTag: desc ? desc.tagName : null,
+        descRows: desc ? Number(desc.getAttribute('rows')) : null,
+        clientTag: client ? client.tagName : null,
+        projectTag: project ? project.tagName : null,
+        hasTagChips: !!q('#add-tag-chips'),
+        hasBill: !!q('#add-bill'),
+        // RIGHT column: the inline picker (month calendar + single-day column) + the collapsed expander.
+        pickerCal: !!q('#add-picker .stp-cal .stp-grid .stp-d'),
+        pickerTrack: !!q('#add-picker .stp-track'),
+        pickerHours: q('#add-picker') ? q('#add-picker').querySelectorAll('.stp-hour').length : 0,
+        pickerMe: !!q('#add-picker .stp-block.me'),
+        expanderCollapsed: !!timesToggle && timesToggle.getAttribute('aria-expanded') === 'false' && !!timesBody && timesBody.hidden,
+        startText: from ? from.getAttribute('type') : null,
+        stopText: to ? to.getAttribute('type') : null,
+        // G1: no native datetime-local anywhere on the form.
+        noDatetimeLocal: form ? form.querySelectorAll('input[type="datetime-local"]').length === 0 : false,
+      };
     });
 
-    // (b) DRAG THE BODY DOWN by a known pixel delta → BOTH start+stop advance by the snapped
-    // 5-min amount. Geometry: the track is 720px tall for 24h → 0.5px/min → 30px/hour. A
-    // +30px body drag = +60min on both ends, snapped to 5-min. We grab the body centre and
-    // move it down 30px.
-    const before = await meBox();
-    const grabX = Math.round(before.cx);
-    const grabY = Math.round((before.top + before.bottom) / 2);
-    await page.mouse.move(grabX, grabY);
-    await page.mouse.down();
-    await page.mouse.move(grabX, grabY + 30, { steps: 6 });
-    await page.mouse.up();
-    const afterBody = await page.evaluate(() => ({
-      start: document.querySelector('.stp .stp-echo-start')?.value,
-      end: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    // +30px ≈ +60min → 14:00–15:30 (both moved together, 5-min snapped).
-    const bodyMovedTogether =
-      afterBody.start === '2026-06-24T14:00' && afterBody.end === '2026-06-24T15:30';
-
-    // (c) DRAG THE BOTTOM RESIZE HANDLE down by a known delta → only the STOP changes (5-min
-    // snapped); the start is unchanged. +15px ≈ +30min → stop 15:30 → 16:00.
-    const me2 = await meBox();
-    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
-    await page.mouse.down();
-    await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 6 });
-    await page.mouse.up();
-    const afterResize = await page.evaluate(() => ({
-      start: document.querySelector('.stp .stp-echo-start')?.value,
-      end: document.querySelector('.stp .stp-echo-end')?.value,
-    }));
-    const resizeMovedStopOnly =
-      afterResize.start === afterBody.start && afterResize.end === '2026-06-24T16:00';
-
-    // (d) at least one gray .stp-block.other renders, and an overlapping span paints a yellow
-    // .stp-overlap (warn-only) — the 14:00–15:00 other vs the now-14:00–16:00 me span.
-    const warn = await page.evaluate(() => ({
-      others: document.querySelectorAll('.stp-block.other').length,
-      overlaps: document.querySelectorAll('.stp-overlap').length,
-      // the overlap layer never intercepts clicks (warn-only, pointer-events: none).
-      overlapInert: [...document.querySelectorAll('.stp-overlap')].every(
-        (el) => getComputedStyle(el).pointerEvents === 'none',
-      ),
-    }));
-
-    // ACCENT_DISCIPLINE with the picker OPEN: only the primary "Apply range" button + the
-    // "me" rectangle / selected calendar day carry the accent; everything else monochrome.
-    const accentProbe = await page.evaluate(() => {
+    // (b) other entries gray + an overlapping span yellow (warn-only, inert); accent facts.
+    const paint = await page.evaluate(() => {
+      const picker = document.querySelector('#add-picker');
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
       const toRgb = (hex) => {
         const n = parseInt(hex.replace('#', ''), 16);
         return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
       };
       const accentRgb = toRgb(accent);
-      const sanctioned = (el) =>
-        el.matches('button.primary') ||
-        el.closest('button.primary') ||
-        el.closest('.stp-block.me') ||
-        el.closest('.stp-d.stp-sel') ||
-        el.closest('.entry.running') ||
-        el.closest('.timer-strip.running') ||
-        el.closest('.liveedit') ||
-        el.closest('.nav-item.active');
-      const offenders = [];
-      for (const el of document.querySelectorAll('*')) {
-        if (sanctioned(el)) continue;
-        const cs = getComputedStyle(el);
-        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
-          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
-        }
-      }
-      const applyAccent =
-        getComputedStyle(document.querySelector('.stp .stp-apply')).backgroundColor === accentRgb;
-      const meAccent =
-        getComputedStyle(document.querySelector('.stp-block.me')).backgroundColor === accentRgb;
-      return { offenders, applyAccent, meAccent };
+      const overlaps = [...picker.querySelectorAll('.stp-overlap')];
+      return {
+        others: picker.querySelectorAll('.stp-block.other').length,
+        overlaps: overlaps.length,
+        overlapInert: overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
+        meAccent: getComputedStyle(picker.querySelector('.stp-block.me')).backgroundColor === accentRgb,
+        saveAccent: getComputedStyle(document.querySelector('#add-go')).backgroundColor === accentRgb,
+      };
     });
 
-    // (e) Apply → the authoritative #add-from/#add-to text inputs hold the picked LOCAL
-    // values and the popover closes.
-    await page.click('.stp .stp-apply');
-    await page.waitForSelector('.stp-backdrop', { state: 'detached' });
-    const applied = await page.evaluate(() => ({
+    // (c) DRAG the "me" body up ~60px → both start+stop move together, 5-min snapped, LIVE into the
+    // raw #add-from/#add-to fields (the form's start/stop state) — before any Save (G7).
+    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+    const seed = await page.evaluate(() => ({
       from: document.querySelector('#add-from')?.value,
       to: document.querySelector('#add-to')?.value,
-      popoverGone: !document.querySelector('.stp-backdrop'),
     }));
-    const appliedOk =
-      applied.from === '2026-06-24T14:00' && applied.to === '2026-06-24T16:00' && applied.popoverGone;
+    const meBox = await page.evaluate(() => {
+      const me = document.querySelector('#add-picker .stp-block.me');
+      const r = me.getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
+    await page.mouse.up();
+    const dragged = await page.evaluate(() => ({
+      from: document.querySelector('#add-from')?.value,
+      to: document.querySelector('#add-to')?.value,
+    }));
+    const liveUpdate =
+      dragged.from !== seed.from &&
+      dragged.to !== seed.to &&
+      spanMin(dragged.from, dragged.to) === spanMin(seed.from, seed.to); // body drag moves both together
 
+    // (d) fill the attribute fields, then Save entry (the SOLE commit).
+    await page.fill('#add-desc', 'design review');
+    await page.selectOption('#add-client', { label: 'Acme' });
+    await page.waitForSelector('#add-project:not([disabled]) option[value="11"]', { state: 'attached' });
+    await page.selectOption('#add-project', { label: 'API' });
+    await page.click('#add-tag-input');
+    await page.fill('#add-tag-input', 'deep');
+    await page.press('#add-tag-input', 'Enter');
+    await page.click('#add-go');
+    await page.waitForFunction(() => !!window.__ADDED__);
+    await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
+    await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' }).catch(() => {});
+    const commit = await page.evaluate(() => {
+      const banner = document.querySelector('#overlap-banner');
+      return {
+        added: window.__ADDED__,
+        formClosed: !!document.querySelector('#add-form')?.hidden,
+        bannerVisible: !!banner && !banner.hidden,
+        bannerText: banner ? banner.textContent.trim() : '',
+      };
+    });
+    const a = commit.added || {};
+    const savePatch =
+      a.fromLocal === dragged.from && // Save sent the LIVE picker-driven span (not the seed, not a re-typed value)
+      a.toLocal === dragged.to &&
+      a.description === 'design review' &&
+      a.client === 'Acme' &&
+      a.project === 'API' &&
+      Array.isArray(a.tags) &&
+      a.tags.includes('deep') &&
+      a.billable === true;
+
+    const layoutOk =
+      layout.visible &&
+      layout.unified &&
+      layout.descTag === 'TEXTAREA' &&
+      layout.descRows === 3 &&
+      layout.clientTag === 'SELECT' &&
+      layout.projectTag === 'SELECT' &&
+      layout.hasTagChips &&
+      layout.hasBill &&
+      layout.pickerCal &&
+      layout.pickerTrack &&
+      layout.pickerHours > 0 &&
+      layout.pickerMe &&
+      layout.expanderCollapsed &&
+      layout.startText === 'text' &&
+      layout.stopText === 'text' &&
+      layout.noDatetimeLocal;
+    const paintOk = paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert && paint.meAccent && paint.saveAccent;
     const ok =
-      present.cal &&
-      present.track &&
-      present.hourLines > 0 &&
-      present.echoStart === '2026-06-24T13:00' &&
-      present.echoEnd === '2026-06-24T14:30' &&
-      present.me &&
-      bodyMovedTogether &&
-      resizeMovedStopOnly &&
-      warn.others >= 1 &&
-      warn.overlaps >= 1 &&
-      warn.overlapInert &&
-      accentProbe.offenders.length === 0 &&
-      accentProbe.applyAccent &&
-      accentProbe.meAccent &&
-      appliedOk;
+      layoutOk &&
+      paintOk &&
+      liveUpdate &&
+      savePatch &&
+      commit.formClosed &&
+      commit.bannerVisible &&
+      /overlap/i.test(commit.bannerText);
     record(
-      'TIME_RANGE_PICKER',
+      'UNIFIED_FORM_ADD',
       ok,
-      `present=${JSON.stringify(present)}; body-drag→${JSON.stringify(afterBody)} (moved-together=${bodyMovedTogether}); ` +
-        `resize→${JSON.stringify(afterResize)} (stop-only=${resizeMovedStopOnly}); ` +
-        `warn=${JSON.stringify(warn)}; accent offenders=[${accentProbe.offenders.join(', ') || 'none'}] ` +
-        `apply=${accentProbe.applyAccent} me=${accentProbe.meAccent}; applied=${JSON.stringify(applied)}`,
-      'time-range-picker.png',
+      `unified add form: layout=${JSON.stringify(layout)}; picker paint=${JSON.stringify(paint)}; ` +
+        `live drag seed=${JSON.stringify(seed)}→${JSON.stringify(dragged)} (live=${liveUpdate}); ` +
+        `Save sole commit added=${JSON.stringify(a)} (patchOk=${savePatch}); ` +
+        `form closed=${commit.formClosed}, overlap banner=${commit.bannerVisible} "${commit.bannerText}"`,
+      'unified-add.png',
     );
     await page.close();
   }
 
-  // EDIT_RUNNING — the running entry is editable inline without stopping it (§05 R6).
-  // Click the running row's Edit affordance, assert the inline form appears seeded
-  // from the entry, and that the row stays in the open (.running) state — the edit
-  // path never sends endUtc, so editing cannot close the open row.
-  await withPage(browser, runningState(), 'index.html', async (page) => {
-    const runningRow = '.entry[data-id="1"]';
-    await page.click(`${runningRow} [data-act="edit"]`);
-    const probe = await page.evaluate(() => {
-      const row = document.querySelector('.entry[data-id="1"]');
-      const form = row?.querySelector('.edit-form');
-      const desc = form?.querySelector('.edit-desc');
-      const start = form?.querySelector('.edit-start');
+  // UNIFIED_FORM_EXPANDER — §12 R17 (core: core data entry): the unified add form's collapsed
+  // Start/Stop expander is the exact-entry escape hatch and the ONLY path for an OVERNIGHT span.
+  // Drive the REAL renderer end to end and assert the requirement's gating facts:
+  //   (a) the expander is COLLAPSED by default — the raw Start/Stop text fields are hidden
+  //       (#add-times-body[hidden], toggle aria-expanded=false) while a tabular ECHO of the current
+  //       interval is shown beneath the calendar (.stp-echo, e.g. "22:00 – 23:00");
+  //   (b) clicking the toggle REVEALS the two raw type=text fields (#add-from/#add-to, NOT native
+  //       datetime-local, G1);
+  //   (c) TYPING an overnight span (start 2026-06-24 22:00, stop 2026-06-25 02:00) into those fields
+  //       feeds the ONE shared interval state — the picker column reflects the typed START (the "me"
+  //       block sits at 22:00) and the collapsed echo reflects the typed cross-midnight span
+  //       ("22:00 – 02:00"), while the raw stop field keeps the next-day value verbatim (authoritative,
+  //       never flattened to same-day);
+  //   (d) Save entry is the SOLE commit — window.__ADDED__ carries those EXACT overnight
+  //       fromLocal/toLocal over the single `add` IPC (parity with `tt add --from --to`).
+  // Fails if the expander fields don't feed the shared interval (the picker/echo stay stale), Save
+  // reads a stale picker-only value, or the overnight stop is dropped / coerced to the start's day.
+  //
+  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → 22:00 on
+  // 2026-06-24) is a deterministic local instant, and the typed 22:00/02:00 map to fixed column
+  // geometry (720px/24h track → 22:00 = 660px from the track top).
+  {
+    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(addFormState())));
+    await page.goto(fileUrl('index.html'));
+    await page.waitForSelector('.entry', { state: 'attached' });
+
+    // (a) open the add form; the inline picker mounts with its collapsed interval echo.
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+    await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'unified-form-expander.png'), fullPage: true });
+    const collapsed = await page.evaluate(() => {
+      const toggle = document.querySelector('#add-times-toggle');
+      const body = document.querySelector('#add-times-body');
+      const echo = document.querySelector('#add-picker .stp-echo');
       return {
-        formVisible: !!form,
-        descSeeded: desc ? desc.value : null,
-        startSeeded: start ? start.value.length > 0 : false,
-        stillRunning: !!row && row.classList.contains('running'),
+        toggleCollapsed: !!toggle && toggle.getAttribute('aria-expanded') === 'false',
+        fieldsHidden: !!body && body.hidden,
+        echoPresent: !!echo && echo.textContent.trim().length > 0,
+        echoTabular: !!echo && echo.classList.contains('tnum'),
       };
     });
-    await page.screenshot({ path: join(EVIDENCE, 'main-edit-running.png') });
-    const ok =
-      probe.formVisible &&
-      probe.descSeeded === 'auth refactor' &&
-      probe.startSeeded &&
-      probe.stillRunning;
-    record(
-      'EDIT_RUNNING',
-      ok,
-      `inline edit form on running row: ${JSON.stringify(probe)}`,
-      'main-edit-running.png',
-    );
-  });
 
-  // EDIT_INLINE — any field of a (closed) entry is editable in-context (§06 R1). Open
-  // the row's inline Edit form and assert it appears in place — not a separate page —
-  // seeded from the entry: description, start, end, billable, and a client select.
-  await withPage(browser, editingState(), 'index.html', async (page) => {
-    const editRow = '.entry[data-id="20"]';
+    // (b) expand the Start/Stop expander → the two raw text fields are revealed.
+    await page.click('#add-times-toggle');
+    await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+    const fields = await page.evaluate(() => {
+      const from = document.querySelector('#add-from');
+      const to = document.querySelector('#add-to');
+      return {
+        fieldsShown: !document.querySelector('#add-times-body')?.hidden,
+        fromText: from ? from.getAttribute('type') : null,
+        toText: to ? to.getAttribute('type') : null,
+      };
+    });
+
+    // (c) TYPE an overnight span into the raw fields → the shared interval updates so the picker
+    // column reflects the typed start and the collapsed echo reflects the cross-midnight span.
+    await page.fill('#add-from', '2026-06-24T22:00');
+    await page.fill('#add-to', '2026-06-25T02:00');
+    await page.waitForFunction(
+      () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
+    );
+    const reflected = await page.evaluate(() => {
+      const me = document.querySelector('#add-picker .stp-block.me');
+      const TRACK_H = window.STP.TRACK_H; // 720px/24h → the geometry the picker draws
+      const top = me ? parseFloat(me.style.top) : NaN;
+      const startMin = Number.isFinite(top) ? Math.round((top / TRACK_H) * 1440) : null;
+      return {
+        echo: document.querySelector('#add-picker .stp-echo')?.textContent.trim() ?? '',
+        meStartMin: startMin, // the "me" block's top → its start minute-of-day (22:00 = 1320)
+        fromValue: document.querySelector('#add-from')?.value,
+        toValue: document.querySelector('#add-to')?.value, // the next-day stop kept verbatim
+      };
+    });
+
+    // (d) Save entry is the sole commit — __ADDED__ carries the EXACT typed overnight span.
+    await page.fill('#add-desc', 'overnight deploy');
+    await page.click('#add-go');
+    await page.waitForFunction(() => !!window.__ADDED__);
+    const added = await page.evaluate(() => window.__ADDED__);
+
+    const collapsedOk = collapsed.toggleCollapsed && collapsed.fieldsHidden && collapsed.echoPresent && collapsed.echoTabular;
+    const fieldsOk = fields.fieldsShown && fields.fromText === 'text' && fields.toText === 'text';
+    const reflectedOk =
+      reflected.echo === '22:00 – 02:00' &&
+      reflected.meStartMin === 1320 &&
+      reflected.fromValue === '2026-06-24T22:00' &&
+      reflected.toValue === '2026-06-25T02:00';
+    const savedOk = !!added && added.fromLocal === '2026-06-24T22:00' && added.toLocal === '2026-06-25T02:00';
+    const ok = collapsedOk && fieldsOk && reflectedOk && savedOk;
+    record(
+      'UNIFIED_FORM_EXPANDER',
+      ok,
+      `collapsed Start/Stop expander drives the shared interval: ` +
+        `collapsed=${JSON.stringify(collapsed)} (ok=${collapsedOk}); expand→fields=${JSON.stringify(fields)} (ok=${fieldsOk}); ` +
+        `typed overnight reflected=${JSON.stringify(reflected)} (ok=${reflectedOk}); ` +
+        `Save sole commit added=${JSON.stringify(added)} (ok=${savedOk})`,
+      'unified-form-expander.png',
+    );
+    await page.close();
+  }
+
+  // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE in the
+  // SAME view-level host add mode uses (#entry-form-host) — NOT crammed into the ~124px calendar day
+  // column — in the view flow (no modal / backdrop / dialog chrome; position:static). The scene
+  // asserts host identity explicitly: open add mode + record its host, open edit mode + assert the
+  // edit form mounts in that very same element, and the edited calendar event carries the .editing
+  // selection state (its content preserved). Drive the real renderer: both a click on the
+  // entry AND its Edit affordance open it; it seeds EVERY tt-editable field from the entry
+  // (multiline description textarea, client + project selects pre-selected, tag chips, billable
+  // checkbox, and the Start/Stop expander's Start+Stop), Save sends a patch of ONLY the changed
+  // fields over `edit`, and the edit-mode FOOTER carries a Split control plus a two-step Delete
+  // gate that ARMS (a worded confirm appears, nothing removed) then CONFIRMS (remove fires with
+  // the entry id). Fails if edit mode is a modal, omits a seeded field, or the footer lacks Split
+  // or the two-step Delete gate.
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    const editRow = '.entry[data-id="80"]';
+    // The unified form (edit mode) opens in the SAME view-level host add mode uses (#entry-form-host),
+    // in the view flow — NOT inside the ~124px calendar day column. Only one form is ever open, so its
+    // seeded fields are reachable by the plain `.edit-form.entry-form` selector (no row ancestor).
+    const editForm = '.edit-form.entry-form';
+    // (b0) Host identity: open ADD mode, record its host; then open EDIT mode and assert the edit
+    // form mounts in the very SAME host element (§12 R06/G5 — one host, add + edit). Do this first
+    // (a clean page), then cancel both back to the plain calendar for the field probe below.
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+    const addHostIsFormHost = await page.evaluate(
+      () => document.querySelector('#add-form')?.parentElement?.id === 'entry-form-host',
+    );
+    await page.click('#add-cancel');
+    await page.hover(editRow);
     await page.click(`${editRow} [data-act="edit"]`);
-    // The form is appended before the async client fetch; wait for the select to fill
-    // so the seeded-client assertion is deterministic.
-    await page.waitForSelector(`${editRow} .edit-form .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(editForm, { state: 'attached' });
+    const sameHost = await page.evaluate(() => {
+      const form = document.querySelector('.edit-form.entry-form');
+      const host = document.getElementById('entry-form-host');
+      const addForm = document.getElementById('add-form');
+      // The edit form and the add form share the SAME host element, in flow (not a positioned overlay).
+      return !!form && !!host && form.parentElement === host && addForm?.parentElement === host;
+    });
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
+
+    // (a) A click on the entry body (an inert cell, not an action control) opens the form.
+    // Entry 83 (15:00–16:00) overlaps entry 80's span (14:00–15:30) on the readonly calendar and,
+    // per the mockup's full-width offset-stack layout (main.html §Tue: the later event stacks on
+    // top of the earlier one's tail), covers the lower part of entry 80. Reach it the way a user
+    // does: move the cursor ONTO the entry first — hover raises it above the overlapping neighbour
+    // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its description body.
+    await page.hover(editRow);
+    await page.click(`${editRow} .desc`);
+    await page.waitForSelector(editForm, { state: 'attached' });
+    const clickOpens = await page.evaluate(
+      () => !!document.querySelector('.edit-form.entry-form') &&
+        document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
+    );
+    // Cancel back to the list so the Edit-affordance path opens a fresh form for the full probe.
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
+
+    // (b) The Edit affordance opens the same form; wait for the async reference-data to fill both
+    // the client (Acme=1) and project (API=11) selects so the seeded-select assertions are stable.
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-project option[value="11"]`, { state: 'attached' });
     const probe = await page.evaluate(() => {
-      const row = document.querySelector('.entry[data-id="20"]');
-      const form = row?.querySelector('.edit-form');
+      const form = document.querySelector('.edit-form.entry-form');
       const v = (sel) => form?.querySelector(sel);
       const desc = v('.edit-desc');
       const start = v('.edit-start');
       const end = v('.edit-end');
       const bill = v('.edit-bill-box');
       const client = v('.edit-client');
+      const project = v('.edit-project');
+      const chips = [...(form?.querySelectorAll('.ef-tag-chips .chip') ?? [])].map((c) => c.textContent.replace('×', '').trim());
       return {
-        inContext: !!form && form.closest('.entry[data-id="20"]') !== null,
+        // The form is in the shared view-level host (not inside the calendar event) and carries the
+        // edited entry's id; the event it edits carries the .editing selection state.
+        inContext: !!form && form.parentElement?.id === 'entry-form-host' && form.dataset.id === '80' &&
+          document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
+        // No modal chrome anywhere, and the form host is in normal flow (not a positioned overlay).
+        noBackdrop: !document.querySelector('.editor-backdrop'),
+        noDialog: !document.querySelector('[role="dialog"]'),
+        hostStatic: form ? getComputedStyle(form).position === 'static' : false,
+        descTag: desc ? desc.tagName : null,
         descSeeded: desc ? desc.value : null,
+        clientSeeded: client ? client.value : null,
+        projectSeeded: project ? project.value : null,
+        tagChips: chips,
+        billSeeded: bill ? bill.checked : null,
         startSeeded: start ? start.value.length > 0 : false,
         endPresent: !!end,
         endSeeded: end ? end.value.length > 0 : false,
-        billSeeded: bill ? bill.checked : null,
-        // The select offers the client list and pre-selects the entry's client.
-        clientOptions: client ? client.options.length : 0,
-        clientSeeded: client ? client.value : null,
+        // The edit-mode footer's two reachability controls.
+        hasSplit: !!v('.ef-split'),
+        hasDelete: !!v('.ef-delete'),
+        // Only Save entry carries the accent (§15) — it is the single .primary in the footer.
+        footAccent: form ? form.querySelectorAll('.edit-foot .primary').length : 0,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-edit.png') });
-    const ok =
-      probe.inContext &&
-      probe.descSeeded === 'design review' &&
-      probe.startSeeded &&
-      probe.endPresent &&
-      probe.endSeeded &&
-      probe.billSeeded === true &&
-      probe.clientOptions >= 2 &&
-      probe.clientSeeded === '1';
-    record('EDIT_INLINE', ok, `inline edit form seeded in-context: ${JSON.stringify(probe)}`, 'main-edit.png');
-  });
 
-  // INLINE_EDITOR — §12 R6: the per-entry kebab (⋯) opens the CONSOLIDATED entry editor
-  // (window.SE.openEditor) — one modal surfacing EVERY tt-editable field (description,
-  // client, project, start, end, tags, billable) in one place, the GUI counterpart to
-  // `tt edit`, plus the Split and Merge affordances. Drive the real renderer: click the
-  // closed row's kebab, assert the editor dialog appears with an input/control for each
-  // tt-editable field (the 'done when' bar) and that the Split control and the Merge
-  // selection affordance are reachable; screenshot main-editor.png for visual review.
-  await withPage(browser, editableState(), 'index.html', async (page) => {
-    const row = '.entry[data-id="80"]';
-    // The kebab opens the modal; the Client/Project selects fill from the async
-    // listClients/listProjects mocks, so wait for the dialog + a populated client option.
-    await page.click(`${row} [data-act="menu"]`);
-    await page.waitForSelector('.editor[role="dialog"]', { state: 'attached' });
-    await page.waitForSelector('.editor .ed-client option[value="1"]', { state: 'attached' });
-    await page.screenshot({ path: join(EVIDENCE, 'main-editor.png'), fullPage: true });
-    const probe = await page.evaluate(() => {
-      const dialog = document.querySelector('.editor[role="dialog"]');
-      const has = (sel) => !!dialog?.querySelector(sel);
-      // Every tt-editable field is present as its own control (the 'done when' bar).
-      const fields = {
-        description: has('.ed-desc'),
-        client: has('.ed-client'),
-        project: has('.ed-project'),
-        start: has('.ed-start'),
-        end: has('.ed-end'),
-        tags: has('.ed-chips'),
-        billable: has('.ed-bill-box'),
+    // §12 R15 — the INLINE interval picker mounted in the edit form (successor to the retired
+    // picker-modal judge scene). It renders IN FLOW (no .stp-backdrop, no .stp-apply anywhere;
+    // the .stp-inline host computes position:static) as a month calendar + a single-day .stp-track
+    // with hour lines. Entry 83 (15:00–16:00Z) paints as a gray other block AND, over the shared
+    // 15:00–15:30 minutes with entry 80's edited "me" span (14:00–15:30Z), an inert yellow warn band
+    // (pointer-events:none — warn-only, never blocks Save). A known BODY drag advances BOTH bound
+    // form fields (.edit-start/.edit-end) by the snapped 5-min amount (span preserved); a bottom
+    // .stp-resize drag advances ONLY .edit-end. Every write is LIVE into the form's own fields — no
+    // commit fires here (the Cancel below discards them; Save entry is the sole commit, tested next,
+    // G7). The running-entry start-only variant (.stp-block.me.open mask + start grip only, no
+    // .stp-resize/end label/echo, no end value) is asserted by the TIMER_VIEW scene, which drives
+    // STP.openStartOnly over the same component.
+    await page.waitForSelector(`${editForm} .edit-picker .stp-track`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
+    const picker = await page.evaluate(() => {
+      const form = document.querySelector('.edit-form.entry-form');
+      const host = form.querySelector('.edit-picker');
+      const box = host.querySelector('.stp-inline');
+      const overlaps = [...host.querySelectorAll('.stp-overlap')];
+      return {
+        inFlow: !!box && getComputedStyle(box).position === 'static',
+        noBackdrop: !document.querySelector('.stp-backdrop'),
+        noApply: !document.querySelector('.stp-apply'),
+        hasCal: !!host.querySelector('.stp-cal .stp-grid .stp-d'),
+        hasTrack: !!host.querySelector('.stp-track'),
+        hours: host.querySelectorAll('.stp-hour').length,
+        others: host.querySelectorAll('.stp-block.other').length,
+        overlaps: overlaps.length,
+        overlapInert: overlaps.length > 0 && overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
       };
-      // Seeded from the entry so the modal opens ready to edit (not blank).
-      const descSeeded = dialog?.querySelector('.ed-desc')?.value ?? null;
-      const clientSeeded = dialog?.querySelector('.ed-client')?.value ?? null;
-      // Split and Merge affordances are reachable: the modal's Split control, and the row
-      // multi-select that arms the toolbar/merge-bar Merge action.
-      const splitReachable = has('.ed-split-btn');
-      const rowSelect = !!document.querySelector('.entry[data-id="80"] [data-act="select"]');
-      const mergeWiring = typeof window.SE?.mergeSelected === 'function';
-      return { fields, descSeeded, clientSeeded, splitReachable, rowSelect, mergeWiring };
     });
-    const f = probe.fields;
-    const allFields = f.description && f.client && f.project && f.start && f.end && f.tags && f.billable;
-    const ok =
-      allFields &&
+    // BODY drag up ~60px (720px/24h track → 0.5px/min → −120min, 5-min snapped) — BOTH fields move,
+    // span preserved (LIVE into the form's own start/stop state, before any Save).
+    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
+    const seedTimes = await page.evaluate(() => ({
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
+    }));
+    await page.locator(`${editForm} .edit-picker .stp-block.me`).scrollIntoViewIfNeeded();
+    const meBox = await page.evaluate(() => {
+      const r = document.querySelector('.edit-form .edit-picker .stp-block.me').getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
+    await page.mouse.up();
+    const bodyDrag = await page.evaluate(() => ({
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
+    }));
+    const bodyOk =
+      bodyDrag.from !== seedTimes.from &&
+      bodyDrag.to !== seedTimes.to &&
+      spanMin(bodyDrag.from, bodyDrag.to) === spanMin(seedTimes.from, seedTimes.to);
+    // Bottom .stp-resize drag down ~30px (+60min snapped) — ONLY .edit-end advances; .edit-start holds.
+    await page.locator(`${editForm} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
+    const resizeBox = await page.evaluate(() => {
+      const r = document.querySelector('.edit-form .edit-picker .stp-resize').getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy + 30), { steps: 8 });
+    await page.mouse.up();
+    const resizeDrag = await page.evaluate(() => ({
+      from: document.querySelector('.edit-form .edit-start')?.value,
+      to: document.querySelector('.edit-form .edit-end')?.value,
+    }));
+    const resizeOk = resizeDrag.from === bodyDrag.from && resizeDrag.to !== bodyDrag.to;
+    const pickerOk =
+      picker.inFlow && picker.noBackdrop && picker.noApply && picker.hasCal && picker.hasTrack &&
+      picker.hours > 0 && picker.others >= 1 && picker.overlaps >= 1 && picker.overlapInert &&
+      bodyOk && resizeOk;
+
+    // Discard the dragged times — Cancel and reopen a FRESH form so the Save-patch test below sees
+    // the entry's original (unchanged) times and asserts a description-ONLY patch (Save sole commit).
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
+
+    // (c) Save commits ONLY the changed fields: amend the description, then Save entry.
+    await page.fill(`${editForm} .edit-desc`, 'final draft');
+    await page.click(`${editForm} button[type="submit"]`);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+
+    // (d) The footer's two-step Delete gate: re-open, arm (a worded confirm appears in the form
+    // footer, nothing removed yet), then confirm (remove fires with the entry id).
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editForm} .ef-delete`, { state: 'attached' });
+    await page.click(`${editForm} .ef-delete`);
+    const armed = await page.evaluate(() => ({
+      confirmShown: !!document.querySelector('.edit-form [data-act="confirm-delete"]'),
+      question: document.querySelector('.edit-form .confirm-q')?.textContent ?? null,
+      removedYet: window.__REMOVED__ === true,
+    }));
+    await page.click(`${editForm} [data-act="confirm-delete"]`);
+    await page.waitForFunction(() => window.__REMOVED__ === true);
+    const removed = await page.evaluate(() => ({
+      removed: window.__REMOVED__ === true,
+      calls: window.__REMOVE_CALLS__ || [],
+    }));
+
+    // §12 R10 — the flags surface IN THE EDITOR (the list is gone; the calendar shows only the
+    // markers). Open the OVERLAPPED entry (81): the flags region spells out the overlap detail
+    // (amount + which neighbour). Then open the SLEPT entry (82): its reversible Subtract/Restore
+    // control is present, and after subtracting the raw duration reads struck (04:00:00) beside the
+    // trimmed billable (03:00:00); subtracting again restores it (the struck raw disappears).
+    // The delete above removed entry 80 + reloaded; wait for that repaint before opening 81/82.
+    await page.waitForSelector('.entry[data-id="80"]', { state: 'detached' }).catch(() => {});
+    // Hover first so the target event rises above its overlapping neighbour (`.dt .ev:hover` →
+    // z-index), then open it via its Edit affordance — same overlap-defeating move as step (a).
+    await page.waitForSelector('.entry[data-id="81"] [data-act="edit"]', { state: 'attached' });
+    await page.hover('.entry[data-id="81"]');
+    await page.click('.entry[data-id="81"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form .ef-flags .banner.overlap', { state: 'attached' });
+    const overlapDetail = await page.evaluate(
+      () => document.querySelector('.edit-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
+    );
+    await page.click('.edit-form .edit-cancel');
+    await page.waitForSelector('.edit-form', { state: 'detached' });
+
+    await page.hover('.entry[data-id="82"]');
+    await page.click('.entry[data-id="82"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form .ef-subtract', { state: 'attached' });
+    const sleptBefore = await page.evaluate(() => {
+      const form = document.querySelector('.edit-form');
+      return {
+        subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
+        struckBefore: !!form?.querySelector('.ef-dur s.struck'),
+      };
+    });
+    await page.click('.edit-form .ef-subtract');
+    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'attached' });
+    const sleptAfter = await page.evaluate(() => {
+      const form = document.querySelector('.edit-form');
+      const s = form?.querySelector('.ef-dur s.struck');
+      return {
+        subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
+        struckText: s?.textContent?.trim() ?? '',
+        struckLineThrough: s ? getComputedStyle(s).textDecorationLine.includes('line-through') : false,
+        durText: form?.querySelector('.ef-dur')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      };
+    });
+    // Reversible: subtracting again restores — the struck raw duration goes away.
+    await page.click('.edit-form .ef-subtract');
+    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
+    const sleptRestored = await page.evaluate(
+      () => !document.querySelector('.edit-form .ef-dur s.struck'),
+    );
+    const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
+    const sleptOk =
+      /Subtract/i.test(sleptBefore.subtractLabel) &&
+      !sleptBefore.struckBefore &&
+      sleptAfter.struckLineThrough &&
+      /04:00:00/.test(sleptAfter.struckText) &&
+      /03:00:00/.test(sleptAfter.durText) &&
+      /Restore/i.test(sleptAfter.subtractLabel) &&
+      sleptRestored;
+
+    const seeded =
+      probe.inContext &&
+      probe.noBackdrop &&
+      probe.noDialog &&
+      probe.hostStatic &&
+      probe.descTag === 'TEXTAREA' &&
       probe.descSeeded === 'design review' &&
       probe.clientSeeded === '1' &&
-      probe.splitReachable &&
-      probe.rowSelect &&
-      probe.mergeWiring;
+      probe.projectSeeded === '11' &&
+      probe.tagChips.join(',') === 'deep' &&
+      probe.billSeeded === true &&
+      probe.startSeeded &&
+      probe.endPresent &&
+      probe.endSeeded;
+    const footer = probe.hasSplit && probe.hasDelete && probe.footAccent === 1;
+    // Save patched ONLY the changed field (description), nothing else.
+    const savePatch =
+      !!edited &&
+      edited.id === 80 &&
+      edited.patch &&
+      edited.patch.description === 'final draft' &&
+      Object.keys(edited.patch).length === 1;
+    const deleteGate =
+      armed.confirmShown &&
+      /confirm/i.test(armed.question || '') &&
+      !armed.removedYet &&
+      removed.removed &&
+      removed.calls.length === 1 &&
+      removed.calls[0].id === 80;
+    // §12 R06/G5 — add + edit mount in the SAME view-level host, in flow (no modal).
+    const hostShared = addHostIsFormHost && sameHost;
+    const ok = hostShared && clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
     record(
-      'INLINE_EDITOR',
+      'UNIFIED_FORM',
       ok,
-      `kebab opens the consolidated editor with every tt-editable field + Split/Merge reachable: ${JSON.stringify(probe)}`,
-      'main-editor.png',
+      `unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in ` +
+        `flow), seeded, INLINE picker (in-flow, no backdrop/apply, ` +
+        `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
+        `gray others + inert yellow overlap), footer Split + two-step Delete, save patch, ` +
+        `§12 R10 flags (overlap detail + reversible subtract): ` +
+        `hostShared=${hostShared} clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
+        `picker=${JSON.stringify(picker)} seed=${JSON.stringify(seedTimes)}→body=${JSON.stringify(bodyDrag)}` +
+        `(bodyOk=${bodyOk})→resize=${JSON.stringify(resizeDrag)}(resizeOk=${resizeOk}) ` +
+        `edited=${JSON.stringify(edited)} armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
+        `overlapDetail=${JSON.stringify(overlapDetail)} sleptBefore=${JSON.stringify(sleptBefore)} ` +
+        `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored}`,
+      'main-edit.png',
     );
   });
+
+  // MULTILINE_DESC — §05 R10 / §12 R07: the entry form's description control is a 3-line
+  // scrollable <textarea>, and a stored description that carries an embedded newline renders
+  // VERBATIM (not flattened to one line). Open the multiline entry's edit form and assert the
+  // .edit-desc control is a textarea with rows=3, is vertically scrollable (overflow-y:auto), and
+  // its .value contains the seeded interior '\n' byte-for-byte.
+  await withPage(browser, multilineDescState(), 'index.html', async (page) => {
+    const editRow = '.entry[data-id="30"]';
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`.edit-form .edit-desc`, { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-multiline-desc.png') });
+    const probe = await page.evaluate(() => {
+      const el = document.querySelector('.edit-form .edit-desc');
+      if (!el) return { present: false };
+      const cs = getComputedStyle(el);
+      return {
+        present: true,
+        tag: el.tagName,
+        rows: Number(el.getAttribute('rows')),
+        value: el.value,
+        hasInteriorNewline: el.value.includes('\n'),
+        overflowY: cs.overflowY,
+        resize: cs.resize,
+      };
+    });
+    const ok =
+      probe.present &&
+      probe.tag === 'TEXTAREA' &&
+      probe.rows === 3 &&
+      probe.value === 'line one\nline two' &&
+      probe.hasInteriorNewline &&
+      (probe.overflowY === 'auto' || probe.overflowY === 'scroll');
+    record(
+      'MULTILINE_DESC',
+      ok,
+      `description control is a 3-line scrollable textarea rendering the stored newline verbatim: ${JSON.stringify(probe)}`,
+      'main-multiline-desc.png',
+    );
+  });
+
+  // §12 R06: the consolidated modal editor (the old INLINE_EDITOR / kebab scene) is retired —
+  // editing is the UNIFIED_FORM inline edit-mode form above (every tt-editable field in one
+  // place, no modal), and the merge selection stays the corner-checkbox path exercised by the
+  // MERGE_CONFLICT / MERGE_NOCONFLICT scenes. No kebab, no modal-editor scene here.
 
   // OVERLAP_BANNER — a write that creates an overlap surfaces a non-blocking inline
   // banner AT THE MOMENT of the edit, not only the per-row flag (§06 R4, §12). Drive the
@@ -1477,8 +1694,8 @@ async function main() {
       await page.click(`${editRow} [data-act="edit"]`);
       // Save with no field changes is enough — the mock returns the overlap ack on any
       // edit, exercising the renderer's banner path deterministically.
-      await page.waitForSelector(`${editRow} .edit-form .edit-start`, { state: 'attached' });
-      await page.click(`${editRow} .edit-form button[type="submit"]`);
+      await page.waitForSelector(`.edit-form .edit-start`, { state: 'attached' });
+      await page.click(`.edit-form button[type="submit"]`);
       await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
       await page.screenshot({ path: join(EVIDENCE, 'main-overlap-banner.png'), fullPage: true });
       const probe = await page.evaluate(() => {
@@ -1517,15 +1734,47 @@ async function main() {
       closedHasSplit: !!document.querySelector('.entry[data-id="30"] [data-act="split"]'),
       openHasSplit: !!document.querySelector('.entry[data-id="31"] [data-act="split"]'),
     }));
+    // §12 R16 (mockup main.html): the hover-ops chip is now three icon-only 22×22 buttons in a
+    // compact raised paper chip (top-right) — it no longer overlaps the top-left corner checkbox,
+    // so a PLAIN click reaches the Split button (the earlier offset-click occlusion workaround is
+    // gone). Verify the geometry: the ops chip and the `.ck` checkbox do not overlap horizontally.
+    await page.hover(closedRow);
+    await page.waitForSelector(`${closedRow} .ops .op-btn[data-act="split"]`, { state: 'attached' });
+    const geom = await page.evaluate(() => {
+      const row = document.querySelector('.entry[data-id="30"]');
+      const chip = row?.querySelector('.ops')?.getBoundingClientRect();
+      const ck = row?.querySelector('.ck')?.getBoundingClientRect();
+      const col = row?.closest('.dt')?.getBoundingClientRect();
+      // No horizontal overlap between the ops chip and the corner checkbox, and the chip stays
+      // inside its day column.
+      const noOverlap = !!chip && !!ck && (chip.left >= ck.right || ck.left >= chip.right);
+      const chipInColumn = !!chip && !!col && chip.left >= col.left - 0.5 && chip.right <= col.right + 0.5;
+      return { noOverlap, chipInColumn };
+    });
     await page.click(`${closedRow} [data-act="split"]`);
     await page.screenshot({ path: join(EVIDENCE, 'main-split.png'), fullPage: true });
-    // The inline picker seeds an instant inside the span (the midpoint) and the confirm
+    // §06 R2 / G4 / G1: the split instant is a SIMPLE PLAIN-TEXT field — the input's type is
+    // text, and the split form carries NO native datetime-local anywhere (mirror the unified
+    // form's startIsText / noDatetimeLocal idioms). Probe the open split form before confirming.
+    const splitForm = await page.evaluate(() => {
+      const wrap = document.querySelector('.entry[data-id="30"] .split-at');
+      const input = wrap?.querySelector('.split-input');
+      return {
+        splitInputIsText: input?.getAttribute('type') === 'text',
+        noDatetimeLocal: wrap ? wrap.querySelectorAll('input[type="datetime-local"]').length === 0 : false,
+      };
+    });
+    // The inline plain-text field seeds an instant inside the span (the midpoint) and the confirm
     // control sends it over the split IPC as a UTC ISO.
     await page.click(`${closedRow} [data-act="confirm-split"]`);
     const split = await page.evaluate(() => window.__SPLIT__);
     const ok =
       before.closedHasSplit &&
       !before.openHasSplit &&
+      geom.noOverlap &&
+      geom.chipInColumn &&
+      splitForm.splitInputIsText &&
+      splitForm.noDatetimeLocal &&
       !!split &&
       split.id === 30 &&
       typeof split.atUtc === 'string' &&
@@ -1534,16 +1783,19 @@ async function main() {
     record(
       'SPLIT_AFFORDANCE',
       ok,
-      `closed row exposes Split (open row none=${!before.openHasSplit}); split IPC: ${JSON.stringify(split)}`,
+      `closed row exposes Split (open row none=${!before.openHasSplit}); ops chip clears the corner checkbox=${geom.noOverlap}, chip in column=${geom.chipInColumn}; split input is plain text=${splitForm.splitInputIsText}, no datetime-local=${splitForm.noDatetimeLocal}; split IPC: ${JSON.stringify(split)}`,
       'main-split.png',
     );
   });
 
   // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
-  // action; merging entries that DISAGREE on client/billable raises an inline conflict
-  // prompt offering the distinct client choices and a billable choice BEFORE committing
-  // (§06 R3, §12 R6). The renderer sends no clientId/projectId — the winning entry's id
-  // (winnerId) plus the chosen billable go to the main process, which resolves the names.
+  // action; merging entries that DISAGREE on client/billable raises the conflict prompt
+  // offering the distinct client choices and a billable choice BEFORE committing
+  // (§06 R3, §12 R6). The prompt is hosted in app.js — the `.editor.conflict-prompt` modal.
+  // The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
+  // chosen billable go to the main process, which resolves the names. (The selection surface
+  // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
+  // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
     const barHiddenInitially = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
@@ -1554,13 +1806,13 @@ async function main() {
       const bar = document.querySelector('#merge-bar');
       return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
     });
-    // Click Merge: the selection disagrees, so a conflict prompt must appear rather than
-    // a silent merge.
+    // Click Merge: the selection disagrees, so the app.js-hosted conflict prompt must appear
+    // rather than a silent merge.
     await page.click('#merge-go');
-    await page.waitForSelector('.merge-conflict', { state: 'attached' });
+    await page.waitForSelector('.editor.conflict-prompt', { state: 'attached' });
     await page.screenshot({ path: join(EVIDENCE, 'main-merge-conflict.png'), fullPage: true });
     const probe = await page.evaluate(() => {
-      const panel = document.querySelector('.merge-conflict');
+      const panel = document.querySelector('.editor.conflict-prompt');
       const clientOpts = [...(panel?.querySelectorAll('.mc-client') ?? [])];
       const clientLabels = clientOpts.map((r) => r.closest('.mc-opt')?.textContent?.trim());
       const billOpts = [...(panel?.querySelectorAll('.mc-bill') ?? [])];
@@ -1602,7 +1854,7 @@ async function main() {
     await page.check('.entry[data-id="51"] .sel');
     await page.click('#merge-go');
     const probe = await page.evaluate(() => ({
-      promptShown: !!document.querySelector('.merge-conflict'),
+      promptShown: !!document.querySelector('.editor.conflict-prompt'),
       merged: window.__MERGED__,
     }));
     const ok =
@@ -1818,11 +2070,15 @@ async function main() {
     );
   });
 
-  // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its row, and the
-  // running entry's tags show on the summary line; an in-context Edit tags affordance is
-  // present on the rows (§07, §12). Deterministic: the fixture's open row carries 2 tags
-  // and its closed row 1, so the rows paint exactly 3 chips, plus the 2 on the running
-  // summary — five .chip total — and each tag's text appears.
+  // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
+  // running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
+  // (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
+  // asserts both: (a) the display — the fixture's open event carries 2 tags and its closed event 1,
+  // so the events paint exactly 3 chips, plus the 2 on the running summary, each tag's text visible;
+  // and (b) the capability — open the closed entry's unified form, REMOVE a tag chip and ADD a new
+  // one in the form's chip editor, Save, and the `edit` patch carries the minimal
+  // addTags/removeTags (and touches ONLY tags). Fails if a per-row tags control survives, or the
+  // form's chip editor cannot add + remove a tag over the one `edit` commit.
   await withPage(browser, taggedState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-tags.png'), fullPage: true });
     const probe = await page.evaluate(() => {
@@ -1835,24 +2091,60 @@ async function main() {
         openRowChips: chipText(openRow),
         closedRowChips: chipText(closedRow),
         summaryChips: chipText(summary),
-        // Every row offers the in-context edit-tags affordance.
-        openEditTags: !!openRow?.querySelector('[data-act="tags"]'),
-        closedEditTags: !!closedRow?.querySelector('[data-act="tags"]'),
+        // The retired per-row Edit-tags control must NOT survive on any event (tags edit in the form).
+        noPerRowTags: !document.querySelector('[data-act="tags"]'),
         totalRowChips: document.querySelectorAll('#entries .chip').length,
       };
     });
+
+    // (b) Edit tags THROUGH the unified form: open the closed entry (71, tagged 'meeting'), then in
+    // the form's chip editor remove 'meeting' and add 'billing', and Save.
+    await page.hover('.entry[data-id="71"]');
+    await page.click('.entry[data-id="71"] [data-act="edit"]');
+    await page.waitForSelector('.edit-form.entry-form .ef-tag-chips', { state: 'attached' });
+    const seededChips = await page.evaluate(() =>
+      [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+    );
+    // Remove the 'meeting' chip via its in-chip × affordance.
+    await page.evaluate(() => {
+      const chip = [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].find((c) => /meeting/.test(c.textContent));
+      chip?.querySelector('.chip-x')?.click();
+    });
+    // Add 'billing' through the form's add input.
+    await page.fill('.edit-form .ef-tag-add', 'billing');
+    await page.press('.edit-form .ef-tag-add', 'Enter');
+    const workingChips = await page.evaluate(() =>
+      [...document.querySelectorAll('.edit-form .ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+    );
+    await page.click('.edit-form button[type="submit"]');
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+
+    const patch = (edited && edited.patch) || {};
+    // Save patched ONLY the tags: added 'billing', removed 'meeting', and nothing else rode along.
+    const tagsPatchOk =
+      !!edited &&
+      edited.id === 71 &&
+      Array.isArray(patch.addTags) && patch.addTags.join(',') === 'billing' &&
+      Array.isArray(patch.removeTags) && patch.removeTags.join(',') === 'meeting' &&
+      Object.keys(patch).sort().join(',') === 'addTags,removeTags';
     const ok =
       probe.openRowChips.join(',') === 'deep,urgent' &&
       probe.closedRowChips.join(',') === 'meeting' &&
       probe.summaryChips.join(',') === 'deep,urgent' &&
-      probe.openEditTags &&
-      probe.closedEditTags &&
-      // 2 (open row) + 1 (closed row) = 3 chips painted across the entry rows.
-      probe.totalRowChips === 3;
+      probe.noPerRowTags &&
+      // 2 (open event) + 1 (closed event) = 3 chips painted across the entries.
+      probe.totalRowChips === 3 &&
+      seededChips.join(',') === 'meeting' &&
+      workingChips.join(',') === 'billing' &&
+      tagsPatchOk;
     record(
       'TAG_CHIPS',
       ok,
-      `tags render as chips on rows + running summary, in-context edit affordance present: ${JSON.stringify(probe)}`,
+      `tags render as chips on events + running summary; NO per-row tags control; edited via the ` +
+        `unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: ` +
+        `${JSON.stringify(probe)} seeded=${JSON.stringify(seededChips)} working=${JSON.stringify(workingChips)} ` +
+        `edited=${JSON.stringify(edited)} (tagsPatchOk=${tagsPatchOk})`,
       'main-tags.png',
     );
   });
@@ -1869,7 +2161,12 @@ async function main() {
   //       flags ON the affected rows (reusing the REPORT_SUMMARY shape) plus the resolved-range
   //       header;
   //   (d) Export CSV / Export JSON drive a real exportEntries call carrying the saved ref;
-  //   (e) the sidebar nav is present with Reports active.
+  //   (e) the sidebar nav is present with Reports active;
+  //   (f) §09 R01 (G3): the builder's CUSTOM range is a pair of PLAIN DATES — the two range
+  //       inputs are type="date" (zero datetime-local anywhere in the builder), the Custom…
+  //       chip reveals them, and saving a filled custom def fires a saveReport whose captured
+  //       rangeSpec is exactly { kind:'absolute', fromDate, toDate } (raw YYYY-MM-DD strings,
+  //       no time component, no 'T'), with the new card's spec summary printing the date pair.
   // Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
   // output) for rubric review.
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
@@ -1914,6 +2211,12 @@ async function main() {
       name: !!document.querySelector('#rep-name'),
       range: !!document.querySelector('#rep-preset-seg'),
       custom: !!document.querySelector('#rep-custom-range'),
+      customHidden: !!document.querySelector('#rep-custom-range')?.hidden,
+      // §09 R01 (G3): the custom range is a pair of PLAIN DATE fields — type="date", no
+      // time component, and ZERO datetime-local inputs anywhere in the builder.
+      fromType: document.querySelector('#rep-range-from')?.type ?? '',
+      toType: document.querySelector('#rep-range-to')?.type ?? '',
+      datetimeLocals: document.querySelectorAll('#rep-builder input[type="datetime-local"]').length,
       by: !!document.querySelector('#rep-by-seg'),
       client: !!document.querySelector('#rep-client'),
       project: !!document.querySelector('#rep-project'),
@@ -1924,7 +2227,25 @@ async function main() {
       presets: [...document.querySelectorAll('#rep-preset-seg .preset')].map((c) => c.dataset.preset),
       bys: [...document.querySelectorAll('#rep-by-seg .seg-btn')].map((b) => b.dataset.by),
     }));
-    await page.click('#rep-cancel');
+    // (f) §09 R01: clicking Custom… reveals the two plain date fields; filling the pair and
+    // saving fires a real saveReport whose captured rangeSpec is EXACTLY the plain-date
+    // absolute arm { kind:'absolute', fromDate, toDate } — raw YYYY-MM-DD strings, no 'T'.
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#rep-name', 'June window');
+    await page.fill('#rep-range-from', '2026-06-01');
+    await page.fill('#rep-range-to', '2026-06-07');
+    await page.click('#rep-save');
+    await page.waitForFunction(() => !!window.__SAVED_REPORT__);
+    await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length === 3);
+    const customSave = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll('#rep-defs .def')].map((d) => ({
+        name: d.querySelector('.dname')?.textContent.trim() ?? '',
+        spec: d.querySelector('.dspec')?.textContent.replace(/\s+/g, ' ').trim() ?? '',
+      }));
+      return { payload: window.__SAVED_REPORT__ ?? null, cards };
+    });
+    // Save closes the builder itself (closeBuilder), so no Cancel is needed here.
     await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
     // Edit the first card → the builder re-opens populated for that def (showReport).
     await page.click('#rep-defs .def:first-child .def-edit');
@@ -1981,6 +2302,21 @@ async function main() {
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
       ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
       ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b));
+    // (f) §09 R01 (G3): the custom range is a pair of PLAIN DATE fields (no time component,
+    // zero datetime-local in the builder), revealed by Custom…, and the captured saveReport
+    // payload's rangeSpec is EXACTLY { kind:'absolute', fromDate, toDate } — plain dates,
+    // no 'T', no fromUtc/toUtc instant — with the saved card's summary printing the pair.
+    const savedSpec = customSave.payload && customSave.payload.rangeSpec;
+    const customOk =
+      builder.fromType === 'date' && builder.toType === 'date' && builder.datetimeLocals === 0 &&
+      builder.customHidden && // the date pair stays tucked behind Custom… until chosen
+      !!savedSpec && savedSpec.kind === 'absolute' &&
+      savedSpec.fromDate === '2026-06-01' && savedSpec.toDate === '2026-06-07' &&
+      Object.keys(savedSpec).sort().join(',') === 'fromDate,kind,toDate' &&
+      !String(savedSpec.fromDate).includes('T') && !String(savedSpec.toDate).includes('T') &&
+      customSave.cards.some(
+        (c) => c.name === 'June window' && c.spec.includes('2026-06-01') && c.spec.includes('2026-06-07'),
+      );
     const editOk = /Weekly billables/.test(editOpen.title) && /Weekly billables/.test(editOpen.name) && editOpen.deleteVisible;
     const runOk =
       !!run.ranReport && /Weekly billables/.test(String(run.ranReport.ref)) && // Run sent the card's name
@@ -1996,92 +2332,289 @@ async function main() {
       afterJson.format === 'json' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
       afterJson.savedReportRef === 'Weekly billables — Globex';
-    const ok = listOk && sidebarOk && accentOk && builderOk && editOk && runOk && exportOk;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
       'reports-list.png',
     );
   });
 
-  // ENTRY_LIST_SEARCH — §12 R9: the Entries-view control bar. Loading the multi-entry
-  // fixture paints the default day-grouped list; typing in the search box drives a real
-  // window.stint.listEntries query that narrows the visible rows (only matches remain), and
-  // switching the Group-by control to Client regroups the same set into client buckets. The
-  // deterministic sub-facts are machine-scored under the pinned JUDGE clock; the grouped and
-  // searched looks are captured (entries-grouped.png / entries-search.png) for rubric review.
+  // ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
+  // readonly entries calendar. There is NO grouping control here — grouped breakdowns moved to
+  // Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT. The surviving toolbar
+  // controls (range presets, the plain-date custom pair, client/project/tag filters, the search
+  // box) apply LIVE to the calendar: each drives a real window.stint.listEntries query and the
+  // visible calendar events (.dcol .ev) narrow to the matching set, with #week-total tracking the
+  // selection live. §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields —
+  // #el-range-from/#el-range-to are input[type="date"] (no time component), there is NO
+  // #el-range-apply button, and setting both dates drives a listEntries call carrying the raw
+  // { fromDate, toDate } strings (no derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE.
+  // R16 supplies the calendar-structure half of this scene (the day columns + events); R09 owns
+  // the toolbar-drives-calendar facts below. Deterministic sub-facts are machine-scored under the
+  // pinned JUDGE clock; the calendar looks are captured (entries-search.png / entries-calendar.png).
   await withPage(browser, listState(), 'index.html', async (page) => {
-    // The default load paints the day-grouped getState (no control touched yet).
-    await page.waitForFunction(() => document.querySelectorAll('#entries .day').length > 0);
+    // The default load paints the readonly entries calendar (R16) — no toolbar control touched yet.
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
     const before = await page.evaluate(() => ({
-      // The control bar's four group-by options + default-active Day.
-      byOptions: [...document.querySelectorAll('#el-by-seg .seg-btn')].map((b) => b.dataset.by),
-      byActive: [...document.querySelectorAll('#el-by-seg .seg-btn.on')].map((b) => b.dataset.by),
-      // The control bar is present and discoverable.
+      // §12 R09 / G11: the group-by control left the Entries view entirely (no grouping here).
+      hasByControl: !!document.querySelector('#el-by-seg'),
+      // The surviving toolbar controls are present and discoverable.
       hasPresets: !!document.querySelector('#el-preset-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
       hasTagFilter: !!document.querySelector('#el-tag'),
       hasSearch: !!document.querySelector('#search'),
-      // The default day-grouped list shows every entry (4) under its day headers.
-      rowCount: document.querySelectorAll('#entries .entry').length,
-      groupHeads: [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim()),
+      // §09 R01 (G3): the two custom-range fields are PLAIN DATE inputs and the toolbar
+      // ships NO Apply button (the pair applies live).
+      fromType: document.querySelector('#el-range-from')?.type ?? '',
+      toType: document.querySelector('#el-range-to')?.type ?? '',
+      hasApply: !!document.querySelector('#el-range-apply'),
+      // The default calendar lays every entry (4) into its day columns.
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
-    // Type a query that matches exactly the two "refactor" rows (auth refactor / refactor
-    // tests). The search drives a real listEntries call; the visible rows narrow to 2.
+    // Type a query that matches exactly the two "refactor" events (auth refactor / refactor
+    // tests). The search drives a real listEntries call; the visible calendar events narrow to 2
+    // and #week-total tracks the narrowing live (off the in-memory snapshot, no reload).
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
     const onSearch = await page.evaluate(() => ({
       reqSearch: window.__LIST_REQ__?.search ?? null,
-      rowCount: document.querySelectorAll('#entries .entry').length,
-      descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
+      // The toolbar query carries NO group-by (grouping left this view, G11).
+      reqHasBy: window.__LIST_REQ__?.by !== undefined,
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
+      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
-    // Clear the search, then switch the Group-by control to Client — the same set regroups
-    // into client buckets (Acme / Globex) while every row returns.
+    // Clear the search — every event returns to the calendar and the total returns to the full set.
     await page.fill('#search', '');
-    await page.click('#el-by-seg .seg-btn[data-by="client"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.by === 'client');
-    await page.waitForFunction(() => {
-      const heads = [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim());
-      return heads.includes('Acme') && heads.includes('Globex');
-    });
-    await page.screenshot({ path: join(EVIDENCE, 'entries-grouped.png'), fullPage: true });
-    const onClient = await page.evaluate(() => ({
-      reqBy: window.__LIST_REQ__?.by ?? null,
-      byActive: [...document.querySelectorAll('#el-by-seg .seg-btn.on')].map((b) => b.dataset.by),
-      groupHeads: [...document.querySelectorAll('#entries .day-head span:first-child')].map((s) => s.textContent.trim()),
-      rowCount: document.querySelectorAll('#entries .entry').length,
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 4);
+
+    // §09 R01 (G3): pick Custom… and fill the two plain date fields with the fixture's
+    // earlier day (2026-06-23). Setting BOTH dates drives a real listEntries call carrying
+    // the raw { fromDate, toDate } strings LIVE — no Apply click exists — and the visible
+    // calendar narrows to the two in-range events (standup / refactor tests).
+    await page.click('#el-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#el-range-from', '2026-06-23');
+    await page.fill('#el-range-to', '2026-06-23');
+    await page.waitForFunction(
+      () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
+    );
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
+    await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
+    const onCustom = await page.evaluate(() => ({
+      req: { ...(window.__LIST_REQ__ || {}) },
+      evCount: document.querySelectorAll('.dcol .ev').length,
+      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
     }));
 
+    // §12 R09 / G11: the group-by control is gone; the surviving toolbar controls are all present.
     const controlsOk =
-      before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch &&
-      before.byOptions.length === 4 &&
-      ['day', 'client', 'project', 'tag'].every((b) => before.byOptions.includes(b)) &&
-      before.byActive.length === 1 && before.byActive[0] === 'day';
-    const defaultOk = before.rowCount === 4; // all four entries visible under the day groups
+      !before.hasByControl &&
+      before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch;
+    const defaultOk = before.evCount === 4; // all four events laid into the calendar
     const searchOk =
       onSearch.reqSearch === 'refactor' &&
-      onSearch.rowCount === 2 && // narrowed to the two "refactor" rows…
-      onSearch.descs.some((d) => /auth refactor/.test(d)) &&
-      onSearch.descs.some((d) => /refactor tests/.test(d)) &&
-      !onSearch.descs.some((d) => /deploy pipeline/.test(d)); // …non-matches excluded
-    const groupOk =
-      onClient.reqBy === 'client' &&
-      onClient.byActive.length === 1 && onClient.byActive[0] === 'client' &&
-      onClient.groupHeads.includes('Acme') && onClient.groupHeads.includes('Globex') &&
-      onClient.rowCount === 4; // every row returns once the search is cleared
-    const ok = controlsOk && defaultOk && searchOk && groupOk;
+      !onSearch.reqHasBy && // the toolbar query never carries a group-by
+      onSearch.evCount === 2 && // narrowed to the two "refactor" events…
+      onSearch.evText.some((t) => /auth refactor/.test(t)) &&
+      onSearch.evText.some((t) => /refactor tests/.test(t)) &&
+      !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded
+      onSearch.weekTotal !== before.weekTotal; // #week-total tracked the narrowing live
+    // §09 R01 (G3): plain date fields, no Apply, and the live plain-date query narrowed the
+    // calendar to the 2026-06-23 pair — the payload carries the raw strings (fromDate/toDate,
+    // no 'T', no derived fromUtc/toUtc instant).
+    const customRangeOk =
+      before.fromType === 'date' && before.toType === 'date' && !before.hasApply &&
+      onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
+      onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
+      !String(onCustom.req.fromDate).includes('T') &&
+      onCustom.evCount === 2 &&
+      onCustom.evText.some((t) => /standup/.test(t)) &&
+      onCustom.evText.some((t) => /refactor tests/.test(t)) &&
+      !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
+    const ok = controlsOk && defaultOk && searchOk && customRangeOk;
     record(
-      'ENTRY_LIST_SEARCH',
+      'ENTRIES_CALENDAR',
       ok,
-      `entry list: default=${JSON.stringify(before)} → search=${JSON.stringify(onSearch)} → by client=${JSON.stringify(onClient)}`,
-      'entries-grouped.png',
+      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} -> custom dates=${JSON.stringify(onCustom)}`,
+      'entries-calendar.png',
     );
   });
+
+  // CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
+  // entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
+  // calendar half is ENTRIES_CALENDAR above). Deterministic sub-facts, machine-scored under the
+  // pinned JUDGE clock with the page pinned to timezoneId 'UTC' so the fixture's UTC instants map
+  // to a stable local-time geometry on the 24h track:
+  //   • fixed & EQUAL-width day columns (never stretched to fill) — every `.dcol` measures the same
+  //     comfortable width; the week does not fit, so the strip scrolls horizontally
+  //     (`.cstrip` scrollWidth > clientWidth);
+  //   • the viewport DEFAULTS to working hours (scrollTop lands on the 07:00 offset, > 0) over a
+  //     FULL 24h track (`.dt` ~24h tall) that SCROLLS, never clips — an entry BEFORE working-start
+  //     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
+  //   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
+  //     toolbar range chip (#week-total) shows the week total (9.25h);
+  //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
+  //   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
+  //   • clicking an `.ev` body opens the unified editor in the view-level host (`#entry-form-host
+  //     .edit-form.entry-form`), and the event carries the `.editing` selection state;
+  //   • the RUNNING block carries the future-fade gradient with no end edge;
+  //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
+  //   • checking two `.ck` boxes reveals #merge-bar.
+  // Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
+  // regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
+  {
+    const page = await browser.newPage({ viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
+    await page.goto(fileUrl('index.html'));
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+
+    // The 24h track geometry the renderer uses (HOUR_PX=44), replicated to check off-hours
+    // positioning: working-start 07:00 → 420 min → ~308px; working-end 18:00 → 1080 min → ~792px.
+    const pxPerMin = 44 / 60;
+    const workStartPx = 420 * pxPerMin;
+    const workEndPx = 1080 * pxPerMin;
+
+    const structure = await page.evaluate(
+      ({ workStartPx, workEndPx }) => {
+        const cols = [...document.querySelectorAll('.dcol')];
+        const colWidths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+        const strip = document.querySelector('.cstrip');
+        const track = document.querySelector('.dt');
+        const evs = [...document.querySelectorAll('.dcol .ev')];
+        const evTop = (el) => parseFloat(el.style.top) || 0;
+        // A day header's billable total, keyed by its day-of-month label.
+        const dayTotals = {};
+        for (const dh of document.querySelectorAll('.dcol .dh')) {
+          const dd = dh.querySelector('.dd')?.textContent?.trim();
+          dayTotals[dd] = dh.querySelector('.ds')?.textContent?.trim() ?? null;
+        }
+        // An empty day = a `.dcol` whose `.dt` holds no `.ev`.
+        const emptyCols = cols.filter((c) => c.querySelectorAll('.dt .ev').length === 0).length;
+        const runEv = document.querySelector('.dcol .ev.run');
+        const runBg = runEv ? getComputedStyle(runEv).backgroundImage : '';
+        const runBt = runEv ? runEv.querySelector('.bt')?.textContent?.trim() ?? '' : '';
+        return {
+          colCount: cols.length,
+          colWidths,
+          allEqualWidth: colWidths.length > 0 && colWidths.every((w) => w === colWidths[0]),
+          fixedWidth: colWidths[0] ?? 0,
+          hScroll: !!strip && strip.scrollWidth > strip.clientWidth,
+          vScroll: !!strip && strip.scrollHeight > strip.clientHeight,
+          scrollTop: strip ? Math.round(strip.scrollTop) : 0,
+          trackHeight: track ? Math.round(track.getBoundingClientRect().height) : 0,
+          evCount: evs.length,
+          // The off-hours entries are present in the DOM (never clipped): one above the working
+          // window (top < 07:00 offset) and one below it (top > 18:00 offset).
+          hasBeforeWork: evs.some((el) => evTop(el) < workStartPx),
+          hasAfterWork: evs.some((el) => evTop(el) > workEndPx),
+          dayTotals,
+          weekTotal: document.querySelector('#week-total')?.textContent?.trim() ?? null,
+          emptyCols,
+          overlapBands: document.querySelectorAll('.dcol .ov').length,
+          // §12 R10: the overlap warn band carries its amount ("overlap Nm") and the slept hatch
+          // carries the moon marker over the affected event.
+          overlapTag: document.querySelector('.dcol .ov .otag')?.textContent?.trim() ?? '',
+          sleptHatch: document.querySelectorAll('.dcol .ev .zz').length,
+          sleptMoon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
+          runPresent: !!runEv,
+          runFade: /gradient/.test(runBg),
+          // The running/open block shows only a START time — no end (no full HH:MM–HH:MM range).
+          runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
+        };
+      },
+      { workStartPx, workEndPx },
+    );
+    await page.screenshot({ path: join(EVIDENCE, 'main-calendar.png') });
+
+    // Hover an event → the ops (Delete / Split / Edit) + the corner checkbox reveal.
+    await page.hover('.entry[data-id="7"]');
+    await page.waitForTimeout(250);
+    const hover = await page.evaluate(() => {
+      const ev = document.querySelector('.entry[data-id="7"]');
+      // §12 R16 (mockup main.html): the hover ops are icon-only `.op-btn` buttons in the `.ops`
+      // raised paper chip (they carry the reveal via opacity, so they stay clickable at rest).
+      const opsBtn = ev?.querySelector('.ops .op-btn');
+      return {
+        opsRevealed: opsBtn ? parseFloat(getComputedStyle(opsBtn).opacity) > 0.5 : false,
+        hasDelete: !!ev?.querySelector('[data-act="delete"]'),
+        hasSplit: !!ev?.querySelector('[data-act="split"]'),
+        hasEdit: !!ev?.querySelector('[data-act="edit"]'),
+        hasCheckbox: !!ev?.querySelector('.ck'),
+      };
+    });
+
+    // Clicking an event body opens the unified editor (an off-hours event, so this also exercises
+    // the scroll-into-view reachability of the never-clipped 24h track). Hover first so the event
+    // settles into its hovered layout (its `.bd` shifts clear of the revealed ops overlay) before
+    // the body click lands.
+    await page.hover('.entry[data-id="5"]');
+    await page.click('.entry[data-id="5"] .bd');
+    await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
+    const editorOpen = await page.evaluate(
+      // The form opens in the view-level host (not inside the event); the event carries .editing.
+      () => !!document.querySelector('#entry-form-host .edit-form.entry-form[data-id="5"]') &&
+        document.querySelector('.entry[data-id="5"]')?.classList.contains('editing') === true,
+    );
+
+    // Checking two corner checkboxes enters multi-select and reveals the merge bar.
+    const mergeHiddenBefore = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
+    await page.check('.entry[data-id="7"] .ck');
+    await page.check('.entry[data-id="2"] .ck');
+    await page.waitForFunction(() => !document.querySelector('#merge-bar')?.hidden);
+    const mergeShown = await page.evaluate(() => {
+      const bar = document.querySelector('#merge-bar');
+      return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+    });
+
+    const columnsOk =
+      structure.colCount === 7 &&
+      structure.allEqualWidth &&
+      structure.fixedWidth >= 110 &&
+      structure.fixedWidth <= 140 &&
+      structure.hScroll;
+    const neverClipOk =
+      structure.vScroll &&
+      structure.scrollTop > 200 &&
+      structure.scrollTop < 500 &&
+      structure.trackHeight >= 1000 &&
+      structure.hasBeforeWork &&
+      structure.hasAfterWork;
+    const totalsOk =
+      structure.dayTotals['22'] === '4.25h' &&
+      structure.dayTotals['24'] === '1.00h' &&
+      structure.weekTotal === '9.25h';
+    const emptyOk = structure.emptyCols >= 1;
+    // §12 R10: the overlapped event paints a `.ov` warn band whose `.otag` reads "overlap Nm", and
+    // the slept event paints a `.zz` hatch carrying the `#i-moon` marker over its excluded portion.
+    const flagsOk =
+      structure.overlapBands >= 1 &&
+      /overlap\s*\d+m/.test(structure.overlapTag) &&
+      structure.sleptHatch >= 1 &&
+      structure.sleptMoon;
+    const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
+    const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
+    const ok =
+      columnsOk && neverClipOk && totalsOk && emptyOk && flagsOk && runOk && hoverOk &&
+      editorOpen && mergeHiddenBefore && mergeShown;
+    record(
+      'CALENDAR_LAYOUT',
+      ok,
+      `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
+        `editorOpen=${editorOpen}; merge hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown}`,
+      'main-calendar.png',
+    );
+    await page.close();
+  }
 
   // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
   // visible list AND the report total, recomputed from the in-memory snapshot with no IPC
@@ -2213,6 +2746,177 @@ async function main() {
       ok,
       `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
+    );
+  });
+
+  // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
+  // and the ONE viewport derivation they drive. Three machine-scored fact groups:
+  //   (a) The Settings → Timeline group renders controls for all four data-keys
+  //       (workingHoursStart / workingHoursEnd / pickerWindowMode / pickerAroundHours),
+  //       the HH:MM inputs read the STORED (non-default) 09:00 / 15:00, and the Around
+  //       select is disabled (row class 'off') while the mode is working_hours; flipping
+  //       the Picker-window segment fires setSetting({key:'pickerWindowMode',
+  //       value:'around_now'}) over the EXISTING channel (no new IPC) and the re-render
+  //       enables the Around select.
+  //   (b) SU.timelineWindow — the single source of the window math (G16; §12 R15's picker
+  //       and §12 R16's calendar must consume it, never re-derive it) — evaluated in-page
+  //       under the pinned JUDGE_NOW clock: the working-hours fixture yields exactly
+  //       540–900 minutes (09:00–15:00) and the around_now/8 fixture yields the page-local
+  //       JUDGE_NOW ± 4h clamped to the 24h track (deterministic, consumer-independent).
+  //   (c) The timeline consumers (§12 R15 picker / §12 R16 calendar) open as a FULL-24h
+  //       scrollable track — scrollHeight > clientHeight, scrollTop matching the configured
+  //       window: a scroll default, never a clipped one. The consumers mark their scroll
+  //       container with the `data-timeline-track` hook; until §12 R15/R16 land there is no
+  //       track in the DOM, so (c) reports "pending" WITHOUT failing — it is re-verified in
+  //       the post-wave AC pass once the consumer rows land (this scene is their dependency,
+  //       not the reverse).
+  await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#settings-panel [data-key="pickerWindowMode"]', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'timeline-window.png'), fullPage: true });
+
+    // (a) the Timeline group's four controls, stored values, and the off/disabled Around row.
+    const probe = await page.evaluate(() => {
+      const panel = document.querySelector('#settings-panel');
+      const keys = [...panel.querySelectorAll('[data-key]')].map((el) => el.dataset.key);
+      const start = panel.querySelector('input.set-hhmm[data-key="workingHoursStart"]');
+      const end = panel.querySelector('input.set-hhmm[data-key="workingHoursEnd"]');
+      const around = panel.querySelector('select[data-key="pickerAroundHours"]');
+      const aroundRow = around ? around.closest('.set-row') : null;
+      return {
+        allFour: ['workingHoursStart', 'workingHoursEnd', 'pickerWindowMode', 'pickerAroundHours'].every(
+          (k) => keys.includes(k),
+        ),
+        startValue: start ? start.value : null,
+        endValue: end ? end.value : null,
+        aroundDisabled: !!(around && around.disabled),
+        aroundRowOff: !!(aroundRow && aroundRow.classList.contains('off')),
+      };
+    });
+
+    // (a, continued) flipping the Picker-window segment persists over the EXISTING setSetting
+    // channel and the re-render enables the Around select (row no longer 'off').
+    await page.click('#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]');
+    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'pickerWindowMode');
+    const set = await page.evaluate(() => window.__SET_SETTING__);
+    await page.waitForFunction(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      return !!around && !around.disabled;
+    });
+    const afterFlip = await page.evaluate(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      const row = around ? around.closest('.set-row') : null;
+      return { aroundEnabled: !!around && !around.disabled, rowOff: !!(row && row.classList.contains('off')) };
+    });
+
+    // (b) SU.timelineWindow, evaluated in-page under the pinned clock. The working-hours
+    // fixture is exact (540–900); the around_now/8 expectation is computed from the SAME
+    // page-local rendering of JUDGE_NOW the helper sees (now ± 240min, clamped to [0,1440]),
+    // so the fact holds in any runner timezone.
+    const windows = await page.evaluate(() => {
+      const nowIso = window.__JUDGE_NOW__;
+      const working = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'working_hours', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      const around = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'around_now', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      const now = new Date(nowIso);
+      const nowMin = now.getHours() * 60 + now.getMinutes();
+      const clamp = (m) => Math.max(0, Math.min(1440, Math.round(m)));
+      const expectedAround = { startMin: clamp(nowMin - 240), endMin: clamp(nowMin + 240) };
+      // The entries calendar always defaults to working hours (§12 R16): forcing the mode
+      // on an around_now snapshot must reproduce the working-hours window.
+      const calendar = window.SU.timelineWindow(
+        { workingHoursStart: '09:00', workingHoursEnd: '15:00', pickerWindowMode: 'working_hours', pickerAroundHours: 8 },
+        nowIso,
+        null,
+      );
+      return {
+        working,
+        around,
+        expectedAround,
+        workingOk: working.startMin === 540 && working.endMin === 900,
+        aroundOk: around.startMin === expectedAround.startMin && around.endMin === expectedAround.endMin,
+        calendarOk: calendar.startMin === 540 && calendar.endMin === 900,
+      };
+    });
+
+    // (c) the consumer track — present only once §12 R15/R16 land (data-timeline-track hook).
+    const track = await page.evaluate(() => {
+      const el = document.querySelector('[data-timeline-track]');
+      if (!el) return { present: false, ok: false };
+      const scrollable = el.scrollHeight > el.clientHeight;
+      // The scroll window sits at the configured start: scrollTop/scrollHeight ≈ startMin/1440.
+      const expected = window.SU.timelineWindow(window.__STATE__.settings, window.__JUDGE_NOW__, null);
+      const frac = el.scrollTop / el.scrollHeight;
+      const ok = scrollable && Math.abs(frac - expected.startMin / 1440) < 0.02;
+      return { present: true, ok, scrollable, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    });
+
+    const ok =
+      probe.allFour &&
+      probe.startValue === '09:00' &&
+      probe.endValue === '15:00' &&
+      probe.aroundDisabled &&
+      probe.aroundRowOff &&
+      !!set &&
+      set.key === 'pickerWindowMode' &&
+      set.value === 'around_now' &&
+      afterFlip.aroundEnabled &&
+      !afterFlip.rowOff &&
+      windows.workingOk &&
+      windows.aroundOk &&
+      windows.calendarOk &&
+      (track.present ? track.ok : true);
+    record(
+      'TIMELINE_WINDOW',
+      ok,
+      `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
+        `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
+        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}); mode flip fired ` +
+        `setSetting=${JSON.stringify(set)} and enabled Around (${afterFlip.aroundEnabled}); ` +
+        `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
+        `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
+        `(${windows.aroundOk}), calendar-forced-working-hours ok=${windows.calendarOk}; ` +
+        (track.present
+          ? `consumer track scrollable+positioned=${track.ok} (scrollTop=${track.scrollTop}/${track.scrollHeight})`
+          : `consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)`),
+      'timeline-window.png',
+    );
+  });
+
+  // TIMELINE_WINDOW around_now snapshot — the Settings view painted FROM an around_now
+  // fixture: the Around select renders enabled with the stored span selected (the inverse
+  // of the working_hours-disabled fact above), proving the off/disabled state follows the
+  // STORED mode, not a hardcoded default. Folded into the TIMELINE_WINDOW rubric row.
+  await withPage(browser, timelineAroundState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#settings-panel select[data-key="pickerAroundHours"]', { state: 'attached' });
+    const probe = await page.evaluate(() => {
+      const around = document.querySelector('#settings-panel select[data-key="pickerAroundHours"]');
+      const row = around ? around.closest('.set-row') : null;
+      const seg = document.querySelector(
+        '#settings-panel .set-seg[data-key="pickerWindowMode"] .seg-btn[data-value="around_now"]',
+      );
+      return {
+        aroundEnabled: !!around && !around.disabled,
+        rowOff: !!(row && row.classList.contains('off')),
+        aroundValue: around ? around.value : null,
+        modeOn: !!(seg && seg.classList.contains('on')),
+      };
+    });
+    const ok = probe.aroundEnabled && !probe.rowOff && probe.aroundValue === '8' && probe.modeOn;
+    record(
+      'TIMELINE_WINDOW',
+      ok,
+      `around_now fixture paints the mode segment on (${probe.modeOn}) with the Around select ` +
+        `enabled (${probe.aroundEnabled}, row off=${probe.rowOff}) reading the stored span (${probe.aroundValue}h)`,
+      'timeline-window.png',
     );
   });
 
@@ -2504,7 +3208,7 @@ async function main() {
   record(
     'DESKTOP_FEEL',
     null,
-    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-editor, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
+    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
     'main-running.png',
   );
 

@@ -3,7 +3,7 @@
  * binds to the World interface, so it runs identically against @stint/core and tt.
  */
 import { expect } from 'vitest';
-import type { World, EntryRec, ExportRowRec, EntryGroupRec, ListViewReq, FavoriteRec } from './world.js';
+import type { World, EntryRec, ExportRowRec, ListFilterReq, FavoriteRec } from './world.js';
 
 /** Scenario-scoped scratch shared across steps. */
 export interface Ctx {
@@ -20,10 +20,10 @@ export interface Ctx {
   searchResults?: EntryRec[];
   /** §09 R6 — the rows returned by the most recent `When I export the range …`. */
   exportRows?: ExportRowRec[];
-  /** §12 R9 — the accumulating Entries-view query the control-bar clauses build up. */
-  listQuery?: ListViewReq;
-  /** §12 R9 — the grouped result of the most recent Entries-view query. */
-  listGroups?: EntryGroupRec[];
+  /** §11 — the accumulating entry-list query the range/filter/search clauses build up. */
+  listReq?: ListFilterReq;
+  /** §11 — the flat, ungrouped result of the most recent entry-list query. */
+  listResults?: EntryRec[];
   /** §09 R09 — the grand total seconds of the most recent saved-report run. */
   runTotalSeconds?: number;
   /** §09 R09 — the grand total captured before a re-grouping edit, to prove regroup-invariance. */
@@ -45,6 +45,12 @@ export interface StepDef {
 
 const DAY = '2026-06-24';
 const iso = (hhmm: string): string => `${DAY}T${hhmm.padStart(5, '0')}:00Z`;
+
+// §05 R10 — a description carrying an interior newline. The line break lives HERE, in the step
+// definition, not in the Gherkin cell, so the .feature stays single-line while the stored/reported
+// value is genuinely multiline. Read back on BOTH surfaces to prove verbatim storage + full-fidelity
+// reporting identically (§17 R8).
+const MULTILINE_DESC = 'line one\nline two';
 
 // §09 R1 — fixed midday UTC anchors for the range scenarios. The clock (FIXED_NOW) is a
 // Wednesday; an entry at midday on this Wednesday is unambiguously "this week", and one a
@@ -179,6 +185,33 @@ export const steps: StepDef[] = [
     },
   },
 
+  // §09 R1 — place a closed, client-attributed entry at an explicit LOCAL day + wall-clock
+  // time (new Date(y, m-1, d, h, m), the same local calendar the GUI's plain date fields
+  // resolve against), so a plain-date range's local-midnight boundaries are exercised: an
+  // entry ending 23:30 LOCAL on the range's to-date must still fall INSIDE the window,
+  // and one in the small hours of the next local day must fall outside it.
+  {
+    pattern:
+      /^a closed entry "([^"]*)" for "([^"]*)" on local day (\d{4})-(\d{2})-(\d{2}) at (\d{2}):(\d{2}) lasting (\d+) minutes$/,
+    run: (w, ctx, desc, client, y, mo, d, hh, mm, minutes) => {
+      const fromIso = new Date(
+        Number(y),
+        Number(mo) - 1,
+        Number(d),
+        Number(hh),
+        Number(mm),
+      ).toISOString();
+      const r = w.backfillAt({
+        desc,
+        client,
+        fromIso,
+        toIso: plusMinutes(fromIso, Number(minutes)),
+      });
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+
   // §09 R4 — place a closed, client/project-attributed entry of a given length in MINUTES
   // (not whole hours) on day 1 of this week, so a rounding scenario can use a duration that
   // is NOT a clean multiple of the rounding increment and observe nearest-not-always-up.
@@ -233,6 +266,26 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §12 R17 — backfill a CROSS-MIDNIGHT (overnight) span: from HH:MM on DAY to HH:MM the NEXT
+    // local day. The GUI path for overnight is the unified form's collapsed Start/Stop expander
+    // (§12 R17) — the single-day interval picker can't drag across midnight, so the expander's raw
+    // text stop dated a later day is the only way to enter one. This step stays surface-neutral and
+    // runs TWICE (CoreWorld.backfillAt = store.add, CliWorld.backfillAt = `tt add --from --to`),
+    // proving a span that crosses midnight commits IDENTICALLY on both surfaces — one closed entry,
+    // never rejected, blocked, or flattened to the same day. fromIso lands on DAY, toIso on DAY+1.
+    pattern: /^I backfill an entry "([^"]*)" from (\d{1,2}:\d{2}) to (\d{1,2}:\d{2}) the next day$/,
+    run: (w, ctx, desc, from, to) => {
+      const NEXT_DAY = new Date(Date.parse(`${DAY}T00:00:00Z`) + 86_400_000)
+        .toISOString()
+        .slice(0, 10);
+      const toIso = `${NEXT_DAY}T${to.padStart(5, '0')}:00Z`;
+      const r = w.backfillAt({ desc, fromIso: iso(from), toIso });
+      ctx.lastId = r.id;
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+  {
     // §12 R7 — the GUI Manual-add form carries client/project alongside the explicit
     // from/to (the same attribute set `tt add` accepts). This attribute-bearing backfill
     // is the surface-neutral parity twin: it resolves the client/project by name through
@@ -244,6 +297,55 @@ export const steps: StepDef[] = [
       ctx.lastId = r.id;
       ctx.lastWarned = r.warned;
     },
+  },
+  {
+    // §05 R10 — backfill a closed entry whose description spans two lines (the newline is in
+    // MULTILINE_DESC, not the Gherkin cell). Surface-neutral over the same `backfill`/`add`
+    // capability the other manual-add steps use.
+    pattern: /^I add a closed entry with a two-line description$/,
+    run: (w, ctx) => {
+      const r = w.backfill({ desc: MULTILINE_DESC, from: iso('09:00'), to: iso('10:00') });
+      ctx.lastId = r.id;
+      ctx.lastWarned = r.warned;
+    },
+  },
+  {
+    // §05 R10 / §17 R8 — read the description back over the World `list` capability (CoreWorld
+    // store.listEntries description, CliWorld `tt list --all --json` description) and prove the
+    // interior newline survived storage + reporting byte-for-byte, identically on both surfaces.
+    pattern: /^the stored description keeps both lines verbatim$/,
+    run: (w) => {
+      const e = w.list().find((x) => x.description === MULTILINE_DESC);
+      expect(e, 'an entry with the two-line description exists').toBeTruthy();
+      expect(e!.description).toBe(MULTILINE_DESC);
+      expect(e!.description).toContain('\n');
+    },
+  },
+  {
+    // §12 R10 / §05 R08 — seed a closed entry that slept through: a backfilled span from 09:00
+    // lasting `hours`, with a recorded sleep span of `sleepHours` inside it (from 10:00). Core
+    // records the span (store.recordSleepSpan); the CLI seeds it via a transient Store on the db.
+    pattern: /^a slept entry "([^"]*)" of raw (\d+) hours? with a recorded (\d+) hours? sleep span$/,
+    run: (w, ctx, desc, hours, sleepHours) => {
+      const from = iso('09:00');
+      const sleepFrom = iso('10:00');
+      const r = w.seedSleptEntry({
+        desc,
+        from,
+        to: plusHours(from, Number(hours)),
+        sleepFrom,
+        sleepTo: plusHours(sleepFrom, Number(sleepHours)),
+      });
+      ctx.lastClosedId = r.id;
+      ctx.lastId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
+  {
+    // §12 R10 / §05 R08 — exclude (or, called again, restore) an entry's recorded slept time. The
+    // same core toggle both the GUI editor's reversible control and `tt sleep subtract` reach.
+    pattern: /^I subtract the slept time from "([^"]*)"$/,
+    run: (w, _c, desc) => w.subtractSleep(byDesc(w, desc).id),
   },
   {
     pattern: /^I split it at (\d{1,2}:\d{2})$/,
@@ -365,6 +467,20 @@ export const steps: StepDef[] = [
   {
     pattern: /^the open entry starts at (\d{1,2}:\d{2})$/,
     run: (w, _c, at) => expect(open(w)?.startUtc).toBe(iso(at)),
+  },
+  // §05 R06 — the amended open row still has NO end instant: status (a second, independent
+  // capability — core store.status / `tt status --json`) still reports it running, and the
+  // listed row's end is null (core: endUtc null; tt: `list --json` end null). Fails if any
+  // surface's edit path stopped the open row or wrote/synthesized an end (e.g. an edit that
+  // defaults the missing end to "now").
+  {
+    pattern: /^the open entry has no end$/,
+    run: (w) => {
+      expect(w.status().running).toBe(true);
+      const o = open(w);
+      expect(o).toBeDefined();
+      expect(o!.endUtc).toBeNull();
+    },
   },
   {
     pattern: /^the entry "([^"]*)" is for "([^"]*)"$/,
@@ -528,88 +644,92 @@ export const steps: StepDef[] = [
     },
   },
 
-  // ---- §12 R9 Entries-view grouping / filtering / search ------------------
-  // The control bar the GUI Entries view drives (window.stint.listEntries) and `tt list
-  // --by/--search/--range/--client/--project/--tag`. Each clause mutates an accumulating
-  // ListViewReq and re-runs World.listView (CoreWorld store.listEntries+buildEntryList,
-  // CliWorld `tt list … --json` then the SAME buildEntryList), so the surfaces are compared
-  // on identical grouping. The assertions read the latest grouped result.
+  // ---- §11 entry list: range / filter / free-text search (flat, ungrouped) --
+  // `tt list` (and core store.listEntries) return ONE flat set for a range, narrowed by
+  // client / project / tag and free-text search — no grouping (that left the list for
+  // Reports, G11). Each clause accumulates a ListFilterReq and re-runs World.listFiltered
+  // (CoreWorld store.listEntries, CliWorld `tt list … --json`), so the two surfaces are
+  // compared on the identical flat set (§17 R8). The assertions read the latest result.
   {
-    pattern: /^I view entries grouped by (day|client|project|tag)$/,
-    run: (w, ctx, by) => {
-      ctx.listQuery = { ...(ctx.listQuery ?? {}), by: by as ListViewReq['by'] };
-      ctx.listGroups = w.listView(ctx.listQuery);
+    pattern: /^I list entries this week$/,
+    run: (w, ctx) => {
+      ctx.listReq = { ...(ctx.listReq ?? {}), preset: 'week' };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
-    pattern: /^I view entries this week grouped by (day|client|project|tag)$/,
-    run: (w, ctx, by) => {
-      ctx.listQuery = { ...(ctx.listQuery ?? {}), by: by as ListViewReq['by'], preset: 'week' };
-      ctx.listGroups = w.listView(ctx.listQuery);
-    },
-  },
-  {
-    pattern:
-      /^I view entries grouped by (day|client|project|tag) for the range (\S+) to (\S+)$/,
-    run: (w, ctx, by, from, to) => {
-      ctx.listQuery = {
-        ...(ctx.listQuery ?? {}),
-        by: by as ListViewReq['by'],
-        fromUtc: from,
-        toUtc: to,
-      };
-      delete ctx.listQuery.preset;
-      ctx.listGroups = w.listView(ctx.listQuery);
+    pattern: /^I list entries for the range (\S+) to (\S+)$/,
+    run: (w, ctx, from, to) => {
+      ctx.listReq = { ...(ctx.listReq ?? {}), fromUtc: from, toUtc: to };
+      delete ctx.listReq.preset;
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to client "([^"]*)"$/,
     run: (w, ctx, client) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), client };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), client };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to project "([^"]*)"$/,
     run: (w, ctx, project) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), project };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), project };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I filter the entry list to tag "([^"]*)"$/,
     run: (w, ctx, tag) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), tag };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), tag };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
     pattern: /^I search the entry list for "([^"]*)"$/,
     run: (w, ctx, query) => {
-      ctx.listQuery = { by: 'day', ...(ctx.listQuery ?? {}), search: query };
-      ctx.listGroups = w.listView(ctx.listQuery);
+      ctx.listReq = { ...(ctx.listReq ?? {}), search: query };
+      ctx.listResults = w.listFiltered(ctx.listReq);
     },
   },
   {
-    pattern: /^the entry list shows "([^"]*)" under group "([^"]*)"$/,
-    run: (_w, ctx, desc, key) => {
-      const group = (ctx.listGroups ?? []).find((g) => g.key === key);
-      expect(group, `expected a group "${key}" in the entry list`).toBeDefined();
-      expect(group!.descriptions).toContain(desc);
+    pattern: /^the entry list is exactly "([^"]*)"$/,
+    run: (_w, ctx, descs) => {
+      const expected = descs.split(',').map((d) => d.trim()).sort();
+      const got = (ctx.listResults ?? []).map((e) => e.description ?? '').sort();
+      expect(got).toEqual(expected);
     },
   },
   {
     pattern: /^the entry list does not show "([^"]*)"$/,
     run: (_w, ctx, desc) => {
-      const all = (ctx.listGroups ?? []).flatMap((g) => g.descriptions);
+      const all = (ctx.listResults ?? []).map((e) => e.description);
       expect(all).not.toContain(desc);
     },
   },
+  // §12 R16 — the per-day + range billable totals the readonly entries calendar presents in its
+  // day-headers and range chip. Derived from the SAME flat listed set both surfaces return, laid
+  // by local day (the day key core already resolves): a day's total is the billable-only sum of
+  // its entries' billableSeconds (an in-range day with no entries totals zero), and the range
+  // total is the whole listed set's billable sum. Proven twice (core store.listEntries + tt list
+  // --json) so the totals the calendar shows are identical on both surfaces.
   {
-    pattern: /^the entry list has groups exactly "([^"]*)"$/,
-    run: (_w, ctx, keys) => {
-      const expected = keys.split(',').map((k) => k.trim());
-      expect((ctx.listGroups ?? []).map((g) => g.key)).toEqual(expected);
+    pattern: /^the day "([^"]*)" has a billable total of (\d+) hours?$/,
+    run: (_w, ctx, day, hours) => {
+      const total = (ctx.listResults ?? [])
+        .filter((e) => e.billable && e.startUtc.slice(0, 10) === day)
+        .reduce((s, e) => s + e.billableSeconds, 0);
+      expect(total).toBe(Number(hours) * 3600);
+    },
+  },
+  {
+    pattern: /^the range billable total is (\d+) hours?$/,
+    run: (_w, ctx, hours) => {
+      const total = (ctx.listResults ?? [])
+        .filter((e) => e.billable)
+        .reduce((s, e) => s + e.billableSeconds, 0);
+      expect(total).toBe(Number(hours) * 3600);
     },
   },
 
@@ -668,6 +788,27 @@ export const steps: StepDef[] = [
     run: (w, _c, from, to, client) => {
       const r = w.report({ fromUtc: from, toUtc: to, by: 'client', billableFilter: 'billable' });
       expect(r.lines.map((l) => l.key)).not.toContain(client);
+    },
+  },
+
+  // §09 R1 — a report over a PLAIN-DATE pair (no time component, G3). The step resolves
+  // the day pair with the SAME rule the GUI side applies (gui/src/reportview.ts
+  // resolveDateRange): local Date(y, m-1, d) construction → the half-open local window
+  // [from 00:00, day-after-to 00:00), the day-after by CALENDAR arithmetic (never +24h,
+  // so a DST-transition to-day still ends at true local midnight). It then drives the
+  // same World `report` capability the other range scenarios use — CoreWorld store.report
+  // over the resolved bounds, CliWorld `tt report --range FROM TO --json` — so the
+  // plain-date window is proven identical on both logic surfaces (§17 R8). Decimal hours
+  // let the half-hour boundary entry register (e.g. 2.5h = Mon 2h + late-Tue 0.5h).
+  {
+    pattern:
+      /^a report for the plain-date range (\d{4})-(\d{2})-(\d{2}) through (\d{4})-(\d{2})-(\d{2}) totals ([\d.]+) billable hours?$/,
+    run: (w, _c, y1, m1, d1, y2, m2, d2, hours) => {
+      const fromUtc = new Date(Number(y1), Number(m1) - 1, Number(d1)).toISOString();
+      // The inclusive end day: the window closes at 00:00 local the day AFTER the to-date.
+      const toUtc = new Date(Number(y2), Number(m2) - 1, Number(d2) + 1).toISOString();
+      const r = w.report({ fromUtc, toUtc, by: 'client', billableFilter: 'billable' });
+      expect(r.grandTotalSeconds).toBe(Number(hours) * 3600);
     },
   },
 
@@ -784,6 +925,16 @@ export const steps: StepDef[] = [
     pattern: /^the configured (.+?) is "?([^"]*?)"?$/,
     run: (w, _c, setting, value) => {
       expect(w.getConfig(settingKey(setting))).toBe(value);
+    },
+  },
+  {
+    // §14 — an INVALID setting write is rejected on this surface (a malformed HH:MM, an
+    // inverted working-hours pair, an out-of-range around span), storing nothing. Runs over
+    // the World attemptSetConfig capability so the strictness is proven identical on core
+    // AND tt (§17 R8); a follow-up "the configured … is …" step asserts the default survived.
+    pattern: /^setting (?:the )?(.+?) to "([^"]*)" is rejected$/,
+    run: (w, _c, setting, value) => {
+      expect(w.attemptSetConfig(settingKey(setting), value).rejected).toBe(true);
     },
   },
 
@@ -1244,6 +1395,12 @@ function settingKey(spoken: string): string {
     'check-in interval': 'checkin_interval_min',
     'global hotkey': 'global_hotkey',
     'date format': 'date_format',
+    // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
+    // default-window mode, and the around-now span.
+    'working hours start': 'working_hours_start',
+    'working hours end': 'working_hours_end',
+    'picker window mode': 'picker_window_mode',
+    'picker around hours': 'picker_around_hours',
   };
   const key = KEYS[spoken.trim().toLowerCase()];
   if (!key) throw new Error(`unknown setting name "${spoken}"`);

@@ -176,6 +176,64 @@ Reference-data management is a CLI surface too.
 The full GUI↔CLI capability matrix is `acceptance/criteria/parity-matrix.json`, asserted complete by
 `packages/gui/test/parity.test.ts` (each GUI IPC channel maps to a real `tt` command).
 
+## §14 — timeline-window settings reach tt config automatically (R8 parity)
+
+The Timeline group the GUI Settings view edits (working hours, picker window mode, around-now span — G15) is four key-value rows in `@stint/core`’s descriptor list, so `tt config` exposes and validates them with ZERO CLI edits (§17 R8 — parity by construction). Writes round-trip through `config ls --json`; an invalid write (here an inverted working-hours pair) exits non-zero with a diagnostic and stores nothing.
+
+```console
+$ tt config ls
+SETTING                 VALUE
+rounding                false
+rounding_increment_min  15
+week_start              monday
+first_checkin_min       60
+checkin_interval_min    30
+global_hotkey           CommandOrControl+Alt+T
+date_format             system
+working_hours_start     07:00
+working_hours_end       18:00
+picker_window_mode      working_hours
+picker_around_hours     8
+backup_retention        5
+# exit 0
+```
+
+The four timeline keys ship with their documented defaults: 07:00–18:00, working_hours, 8.
+
+```console
+$ tt config set working_hours_start 08:30
+set working_hours_start = 08:30
+# exit 0
+```
+
+```console
+$ tt config set working_hours_end 16:30
+set working_hours_end = 16:30
+# exit 0
+```
+
+```console
+$ tt config set picker_window_mode around_now
+set picker_window_mode = around_now
+# exit 0
+```
+
+```console
+$ tt config set working_hours_end 06:00
+working hours start must be before end
+# exit 2
+```
+
+Rejected — the pair must satisfy start<end (core validation, identical on both surfaces); nothing was stored.
+
+```console
+$ tt config ls --json
+{"rounding":false,"roundingIncrementMin":15,"weekStart":"monday","firstCheckinMin":60,"checkinIntervalMin":30,"globalHotkey":"CommandOrControl+Alt+T","dateFormat":"system","workingHoursStart":"08:30","workingHoursEnd":"16:30","pickerWindowMode":"around_now","pickerAroundHours":8,"backupRetention":5}
+# exit 0
+```
+
+Read-back: the three valid writes round-tripped; `working_hours_end` still reads `16:30` — the rejected write left it untouched.
+
 ## R9 — no network connections
 
 ```console

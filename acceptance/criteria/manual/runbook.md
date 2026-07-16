@@ -110,7 +110,7 @@ converting local time to UTC through the same core path the CLI uses.
 2. Enter a description, optionally a client/project and tags, then set **From** and
    **To** to a past range earlier today (e.g. 09:00 → 10:30 local) and click **Save
    entry**.
-   - [ ] The form closes and a new completed entry appears in the correct day group
+   - [ ] The form closes and a new completed entry appears in the correct day column
          with the duration matching the from/to range (e.g. 1h 30m).
    - [ ] `tt list --all` shows the same entry with the same client/project, tags, and
          billable flag — the GUI add and `tt add` are the same write through core.
@@ -128,91 +128,95 @@ converting local time to UTC through the same core path the CLI uses.
 > parity matrix. This runbook confirms the real app lands the entry in the right day
 > group with the right duration and surfaces the overlap warning.
 
-## CHECK MANUAL ADD FORM (GUI) — full-attribute backfill at parity, overlap warned-not-blocked (§12 R7, §06 R4)
+## CHECK MANUAL ADD FORM (GUI) — the unified entry form (add mode): drag-to-set span, Save as the sole commit, overlap warned-not-blocked (§12 R7, §12 R15/R17, §06 R4)
 
-The §12 R7 Manual-add form must create a *complete* past entry from the form alone —
-every field `tt add` accepts — and treat an overlapping span as warned, not blocked.
+The §12 R7 manual-add surface is the **one unified entry form in ADD mode** — the same
+two-column form edit mode uses. A human must be able to backfill a *complete* past entry
+**with the terminal closed throughout**: drag the inline picker to set the span (the
+Start/Stop values update live), fill the attributes, and click **Save entry** as the
+*only* commit; an overlapping span is warned inline, not blocked.
 
-1. In a real desktop session, open the main window, click **Add entry**, and create a
-   past entry **entirely from the form**: a description, a **client** *and* **project**,
-   one or more **tags**, the **Billable** toggle set, and an explicit **From**/**To** in
-   the past (e.g. 13:00 → 14:30 local). Click **Save entry**.
-   - [ ] The form closes and the entry appears in the correct day group, with its
-         client/project label, tag chips, billable state, and a duration matching the
-         from/to range — all set from the form, no follow-up edit needed.
-   - [ ] `tt list --all` (and `tt report`) show the identical entry — same
-         client/project, tags, billable, and span. The GUI add and `tt add` are the same
-         core write (parity: the `add` IPC channel ↔ `tt add`).
-2. Open the form again and add another entry whose **From**/**To** **overlaps** the one
-   you just created (e.g. 14:00 → 15:00).
-   - [ ] The entry **still saves** (the form closes) — overlap is *not* a block.
-   - [ ] The non-blocking overlap banner appears inline above the list (the same
-         allowed-but-flagged advisory the edit/start paths raise), and both overlapping
-         rows carry the `overlap` flag in the list and in a report covering the day.
+1. In a real desktop session, open the main window and click **Add entry manually** in the
+   Entries toolbar. The **two-column unified form** appears inline (no modal): on the LEFT a
+   multiline **description** field, **client** and **project** selects, a **tag** chip input,
+   and the **Billable** toggle; on the RIGHT the **inline interval picker** (a month calendar
+   + a single-day column) over a collapsed **Start / Stop (exact times)** expander.
+   - [ ] The form is inline in the window (no separate dialog/modal), and there is **no
+         native date-time popover** anywhere on it.
+2. **Drag the picker** to set the span: drag the accent block's **body** to move the whole
+   span, and its **bottom edge** to set the stop (5-minute snap). Then fill a **description**,
+   pick a **client** *and* **project**, add one or more **tags**, and set **Billable**.
+   - [ ] As you drag, the **Start/Stop values update live** (expand the Start/Stop expander
+         to watch them change) — the picker drives the form state; you never opened a second
+         dialog to pick the time.
+3. Click **Save entry** — the *only* commit.
+   - [ ] The form closes and the completed entry appears on the **entries calendar** in the
+         right day, with its client/project label, tag chips, billable state, and a duration
+         matching the dragged span — all from the one form, no follow-up edit needed.
+   - [ ] `tt list --all` (and `tt report`) show the identical entry — same client/project,
+         tags, billable, and span. The GUI add and `tt add` are the same core write (parity:
+         the `add` IPC channel ↔ `tt add`).
+4. Open the form again and set a span that **overlaps** the entry you just created (e.g. drag
+   the block over it). Save.
+   - [ ] The entry **still saves** (the form closes) — overlap is *not* a block; the picker
+         paints the overlap as a **yellow warn band** while the drag proceeds.
+   - [ ] The non-blocking overlap banner appears inline above the calendar (the same
+         allowed-but-flagged advisory the edit/start paths raise), and both overlapping rows
+         carry the `overlap` flag in a report covering the day.
 
 > The warned-not-blocked behaviour is proven surface-neutrally over core+tt by the BDD
 > "Attribute-bearing backfill that overlaps is warned, not blocked" scenario; the GUI
-> form's full field set + the inline overlap banner are screenshotted under JUDGE
-> (`MANUAL_ADD_FORM`, `main-add-form.png`) and bound back to `tt add` by the parity
-> matrix. This runbook confirms the real window lands the full-attribute entry day-grouped
-> at parity with `tt add` and that an overlapping span is warned inline but still saved.
+> unified form (add mode) — its two-column field set, the inline picker driving the span
+> live, Save as the sole commit, and the inline overlap banner — is screenshotted under
+> JUDGE (`UNIFIED_FORM_ADD`, `unified-add.png`) and bound back to `tt add` by the parity
+> matrix. This runbook confirms a human can land the full-attribute entry from the one form,
+> terminal closed, at parity with `tt add`, and that an overlapping span is warned but saved.
 
-## CHECK EDIT RUNNING ENTRY (GUI) — amend the open timer without stopping it (§05 R6)
+## CHECK UNIFIED ENTRY FORM — EDIT, SPLIT & DELETE (GUI) (§12 R06)
 
-1. Start a live timer in the GUI (or `tt start "auth refactor" --client "Client A"`).
-   Confirm the running row shows a live count-up.
-2. On the running entry's row, click **Edit**. The row swaps into an inline edit
-   form seeded with the current description and start time.
-   - [ ] While the form is open the entry is still shown as running (the running
-         indicator/accent stays on the row; the timer has not stopped).
-3. Change the **description** and nudge the **start time** a few minutes earlier,
-   then click **Save**.
-   - [ ] The row returns to display mode with the new description and start time;
-         the count-up continues — the entry was **not** closed.
-   - [ ] `tt status` still reports the timer as running (no `endUtc`), and
-         `tt list` shows the amended description and start time.
-4. Click **Edit** again, then **Cancel**.
-   - [ ] The form closes with no change; the entry is unchanged and still running.
+Confirms the §12 R06 unified entry form (**edit mode**) end-to-end on a **real desktop**
+against a **real DB**: one form — the same one add mode uses — surfaces every `tt`-editable
+field **inline** in the Entries view (no modal), and its edit-mode footer reaches Split and a
+two-step Delete. Every change round-trips to the same DB `tt` reads (the Electron host + the
+OS-level DB round-trip have no Playwright host, so this is MANUAL). Run with `tt` in a second
+terminal pointed at the same database.
 
-> The edit-running semantics are proven surface-neutrally over core+tt by the BDD
-> scenarios "Editing amends a field without disturbing the open state" and "Editing
-> the running entry's start does not stop it"; the GUI affordance is screenshotted
-> under JUDGE (`EDIT_RUNNING`, `main-edit-running.png`) and guarded statically
-> (`renderer-static.test.ts`: the edit path never sends `endUtc`). This runbook
-> confirms the real app keeps the timer open and round-trips the change to `tt`.
+1. Seed a closed entry: `tt add "design review" --from "2h ago" --to "1h ago" --client "Acme" --project API --tag deep`.
+2. In the running main window, on the entries calendar **hover the event and click its Edit
+   affordance** — then repeat, this time **clicking the event itself**.
+   - [ ] **Both** open the **same unified entry form in edit mode**, and it opens **INLINE in
+         the Entries view — no modal, no backdrop/dim** (the form sits in the view, in flow).
+   - [ ] The form is **seeded from the entry**: a multiline **Description**, **Client** +
+         **Project** selects (pre-selected), the **tag chips** (`deep`), the **Billable**
+         toggle, and — under the collapsed **Start / Stop (exact times)** expander — the
+         seeded **Start** and **Stop**.
+3. Amend **each** field — edit the description, pick a different client/project, add and remove
+   a tag, flip Billable, expand Start/Stop and nudge a time — then click **Save entry**.
+   - [ ] Only **Save entry** carries the accent; Split, Cancel and Delete are quiet.
+   - [ ] `tt list --json` shows **every changed field persisted**; the GUI and the DB agree
+         (Save went through the same `edit` path `tt` uses, sending only the changed fields).
+4. Re-open the form and, in the footer, click **Split**; in the plain-text instant field
+   (`YYYY-MM-DDTHH:mm`, seeded to the span's midpoint — a simple text input, **no native
+   date-time picker**, G4/G1), type an instant **inside** the span and confirm.
+   - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span (the
+         boundary is the picked instant; no time is lost or gained), cross-checking `tt split`.
+   - [ ] Picking an instant **outside** the span is rejected (core would reject it too).
+5. Open the form on the **open (running)** entry and nudge its **Start**, then Save.
+   - [ ] The open entry stays open — `tt status` still reports it running (the running variant
+         has **no End**, so the patch never carries `endUtc`).
+6. Re-open the form on any entry and, in the footer, click **Delete**.
+   - [ ] The first click does **not** remove the entry — it **arms** a "Confirm delete?"
+         affordance with a **Cancel**.
+   - [ ] Click **Cancel**: the entry survives, the control returns to **Delete**.
+   - [ ] Click **Delete** then the explicit **confirm**: the entry disappears from the GUI
+         **and** from `tt list` — cross-checking `tt rm` (a stray first click never deletes).
 
-## CHECK EDIT/DELETE ENTRIES (GUI) — amend any field in-context, two-step delete (§06 R1)
-
-1. Open the main window with at least one **closed** entry (or `tt add "design
-   review" --from "2h ago" --to "30m ago" --client "Acme"`). Confirm the row shows in
-   its day group.
-2. On the closed entry's row, click **Edit**. The row swaps into an inline edit form
-   (not a separate window) seeded from the entry.
-   - [ ] The form shows description, **Start**, **End**, **Billable**, and a **client
-         select** — all pre-filled from the entry (any field is editable in-context).
-3. Change the **description** and nudge the **Start** time a few minutes, optionally
-   pick a different **client**, then click **Save**.
-   - [ ] The row returns to display mode showing the new values.
-   - [ ] `tt list` shows the amended description/start/client — the GUI and the DB
-         agree (the edit went through the same `edit` path `tt` uses).
-4. Now edit the **open** (running) entry's **Start** and Save (parity with the BDD
-   scenario "Editing the running entry's start does not stop it").
-   - [ ] The open entry stays open — `tt status` still reports it running (the form
-         has no End field for the open row, so the patch never carries `endUtc`).
-5. On any row, click **Delete** (the row's or the form's).
-   - [ ] The first click does **not** remove the entry — it swaps into a "Confirm
-         delete?" affordance with a **Cancel**.
-   - [ ] Click **Cancel**: the entry survives, the button returns to **Delete**.
-   - [ ] Click **Delete** then **confirm**: the entry disappears from the GUI **and**
-         from `tt list`.
-
-> The edit/delete *behaviour* is proven surface-neutrally over core+tt by the BDD
-> scenarios in `features/overlap_and_editing.feature`; the GUI affordances are
-> screenshotted under JUDGE (`EDIT_INLINE` / `DELETE_CONFIRM`, `main-edit.png`) and
-> guarded statically (`renderer-static.test.ts`: an Edit control wired to
-> `window.stint.edit`, every field seeded, and Delete routed through a confirm step).
-> This runbook confirms real keyboard input, the client select, and the two-step
-> delete on a real desktop — the OS residual the headless harness cannot cover.
+> The edit/split/delete *behaviour* is proven surface-neutrally over core+tt by the BDD
+> scenarios in `features/reachable_by_hand.feature` + `features/overlap_and_editing.feature`;
+> the unified form (edit mode) is screenshotted headless under JUDGE (`UNIFIED_FORM`,
+> `main-edit.png`) and guarded statically (`renderer-static.test.ts`). This runbook confirms
+> the real inline form (no modal), the client/project selects, the footer Split, the two-step
+> Delete, and the round-trip to `tt` on a real desktop — the OS residual no headless host covers.
 
 ## CHECK MERGE (GUI) — multi-select + conflict prompt folds entries into one (§06 R3, §12 R6)
 
@@ -220,7 +224,8 @@ every field `tt add` accepts — and treat an overlapping span as warned, not bl
    that **disagree** on client/billable — e.g.
    `tt add "api work" --from "3h ago" --to "2h ago" --client "Client A" --project API`
    then `tt add "internal sync" --from "2h ago" --to "1h ago" --no-billable` (no client).
-   Confirm both rows show in the day group, each with a leading **select** checkbox.
+   Confirm both events show on the entries calendar (in their day columns), each exposing a
+   hover-corner **select** checkbox.
 2. Tick the first entry's checkbox.
    - [ ] The **Merge** action stays hidden with only one entry selected.
 3. Tick the second entry's checkbox.
@@ -246,48 +251,41 @@ every field `tt add` accepts — and treat an overlapping span as warned, not bl
 > runbook confirms the real checkboxes, the live prompt, and the round-trip to `tt` on a
 > real desktop.
 
-## CHECK INLINE EDIT, SPLIT & MERGE (GUI) — the consolidated entry editor (§12 R6)
+## CHECK MERGE VIA CALENDAR CHECKBOXES (GUI) — corner-checkbox selection on the entries calendar (§06 R03, §12 R16)
 
-Confirms the §12 R6 editor surface end-to-end on a **real desktop** against a **real DB**:
-the per-entry kebab opens one modal exposing every `tt`-editable field, plus Split and
-Merge, and every change round-trips to the same DB `tt` reads (the Electron host and the
-OS-level DB round-trip have no Playwright host, so this is MANUAL). Run with `tt` in a
-second terminal pointed at the same database.
+The merge selection surface is the **readonly entries calendar** (§12 R16): each closed
+event carries a **hover-corner checkbox**, and checking any box enters **multi-select
+mode** — every closed event reveals its checkbox and the per-event hover Delete/Split/Edit
+are suppressed while selecting. The conflict prompt is hosted in `app.js`. Running (open) events have no end, so they offer no checkbox.
 
-1. Seed a closed entry: `tt add "design review" --from "2h ago" --to "1h ago" --client "Acme" --project API --tag deep`.
-2. In the running main window, click the entry row's **⋯ (kebab)** button.
-   - [ ] A modal **editor** opens showing **Description**, **Client**, **Project**,
-         **Start**, **End**, **Tags** (chips), and a **Billable** toggle — every field
-         `tt edit` accepts, all seeded from the entry.
-3. Change **each** field — edit the description, pick a different client/project, nudge
-   Start/End, add and remove a tag, flip Billable — then click **Save**.
-   - [ ] `tt list --json` shows the entry with **every changed field persisted**; the GUI
-         and the DB agree (the editor went through the same `edit` path `tt` uses).
-4. Re-open the editor and click **Split at instant…**, pick an instant **inside** the span,
-   confirm **Split**.
-   - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span
-         (the split boundary is the picked instant; no time is lost or gained).
-   - [ ] Picking an instant **outside** the span is rejected (the editor refuses it and
-         core would reject it too).
-5. With two **adjacent closed** entries that **disagree** on client/billable selected via
-   their row checkboxes, click the toolbar **Merge selected** (or the merge bar).
-   - [ ] A **conflict prompt** asks which **client/project** and which **billable** value
-         to keep **before** merging; pick the winners and confirm.
-   - [ ] `tt list` shows **one merged row** with the **chosen** client/project/billable,
-         the two **descriptions concatenated**, and the **tags unioned** (§06 R3) — GUI
-         and DB agree.
-6. Re-open the editor on any entry, click **Delete**, and confirm the two-step prompt.
-   - [ ] The entry is gone from both the GUI and `tt list` — and only after the explicit
-         confirm tap (a stray first click never deletes).
+1. Open the main window (Entries view) with at least two **adjacent closed** entries on the
+   same day that **disagree** on client/billable — e.g.
+   `tt add "api work" --from "3h ago" --to "2h ago" --client "Client A" --project API`
+   then `tt add "internal sync" --from "2h ago" --to "1h ago" --no-billable` (no client).
+2. Hover the first event and **check its corner checkbox**.
+   - [ ] The calendar enters **multi-select mode**: every closed event now shows its corner
+         checkbox, and the hover Delete/Split/Edit affordances are suppressed.
+   - [ ] The selection bar's **Merge** action stays hidden with only one event checked.
+3. Check the second (contiguous) event's corner checkbox.
+   - [ ] The selection bar appears and reads **"Merge 2 entries"** (the live count).
+4. Click **Merge**.
+   - [ ] Because the two entries disagree, the **conflict prompt** (a modal, not an inline
+         panel) appears asking which **client / project** to keep and which **billable**
+         value to keep — *before* anything is merged.
+5. Pick the winning client/project and billable, then confirm **Merge**.
+   - [ ] Exactly **one merged event** replaces the two on the calendar, spanning
+         **earliest start → latest end**.
+   - [ ] `tt list` shows the merged entry with the **chosen** client/project/billable, the
+         two **descriptions concatenated**, and the **tags unioned** — the GUI and the DB
+         agree (the merge went through the same `merge` path `tt` uses).
+6. Uncheck all boxes (or complete the merge): the calendar **exits multi-select mode** and
+   the per-event hover affordances return.
 
-> The edit/split/merge/delete *behaviour* is proven surface-neutrally over core+tt by the
-> BDD scenarios in `features/overlap_and_editing.feature` and the GOLD merge-override
-> contract; the consolidated editor modal is screenshotted headless under JUDGE
-> (`INLINE_EDITOR`, `main-editor.png`) and guarded statically (`renderer-static.test.ts`:
-> `editor.js` is a pure renderer exposing `openEditor` + the split/merge paths, every
-> `tt`-editable field present, no name resolution). This runbook confirms the real kebab,
-> the live modal, and the round-trip to `tt` on a real desktop — the parts no headless host
-> can drive.
+> The corner-checkbox selection + app.js-hosted prompt is screenshotted under JUDGE
+> (`MERGE_CONFLICT` / `MERGE_NOCONFLICT`) and recorded under §W (`§06 R03`); the merge
+> *arithmetic* (concatenated descriptions, unioned tags, winner override) is proven
+> surface-neutrally over core+tt by the BDD merge scenarios in
+> `features/overlap_and_editing.feature`.
 
 ## CHECK OVERLAP BANNER (GUI) (§06 R4, §12)
 
@@ -367,16 +365,26 @@ parity, R8, that JUDGE's canned `report` mock cannot exercise).
 4. Click **Today**, **This month**, **Last month** in turn.
    - [ ] Each repaints the resolved-range header + rows to match the corresponding
          `tt report --today` / `--month` / `--last-month` output.
-5. Click **Custom…**, enter an explicit **from**/**to** spanning only the last-week entry,
-   and click **Apply**.
-   - [ ] The resolved-range header echoes the entered window and the total/rows match
-         `tt report --range <FROM> <TO>` for the same bounds.
+5. Click **Custom…** and enter the **two plain dates** (§09 R1 / G3: a from-day and a
+   to-day, `YYYY-MM-DD`, **no time component** — the two fields are date pickers, not
+   datetime inputs) covering only the last-week entry's day(s), then Save and **Run** the
+   definition.
+   - [ ] The resolved-range header covers **the from-day from 00:00 local through the END
+         of the to-day** (the window closes at 00:00 local the day *after* the to-day —
+         the to-day is included in full), and the total/rows match
+         `tt report --range <FROM> <TO>` for those same resolved local-midnight bounds.
+   - [ ] An entry late in the evening of the to-day is **included**; one on the following
+         day is **excluded** (inclusive end day, half-open window).
 
 > The preset→window resolution lives in core's `resolveRange` (BDD `features/reports.feature`
-> runs the same This-week / Last-week / custom / group-by-client contract over core AND tt);
-> this runbook confirms the GUI picker calls into it and agrees with `tt report --<preset>` /
+> runs the same This-week / Last-week / custom / group-by-client contract over core AND tt),
+> and the plain-date pair → local-midnight window rule lives once in `gui/src/reportview.ts`
+> `resolveDateRange` (BDD `features/reporting.feature` "A custom range is a pair of plain
+> dates covering both boundary days" proves the window surface-neutrally; GOLD
+> `gui/test/reportview.test.ts` pins the local-midnight/inclusive-end-day/DST math); this
+> runbook confirms the GUI picker calls into it and agrees with `tt report --<preset>` /
 > `--range` on a real session. JUDGE screenshots the affordance headless
-> (`REPORT_RANGE_PICKER`, `reports-default.png` / `reports-custom.png`).
+> (`REPORTS_VIEW`, `reports-list.png` / `reports-run.png`).
 
 ## CHECK REPORT EXPORT (GUI) — Export CSV / JSON writes a file matching `tt export` (§09 R6, §12 R8)
 
@@ -483,43 +491,46 @@ on a real session.
 > Cross-surface agreement: the same queries against `tt list --search <query>` /
 > `tt report --search <query>` return the same entries / totals (full parity, §17 R8).
 
-## CHECK ENTRY LIST GROUPING, FILTERING & SEARCH (GUI) — the §12 R9 control bar at parity (§12 R9, §17 R8)
+## CHECK ENTRIES CALENDAR — RANGE, FILTERING & SEARCH (GUI) — the §12 R9 toolbar at parity (§12 R9, §12 R16, §17 R8)
 
-The grouping/filtering/search model is core's `buildEntryList` + `store.listEntries`, proven
-surface-neutral on core AND tt by `features/entry_list.feature` (group by day/client/project/
-tag, range/client/project/tag filters, free-text search — run TWICE) and pinned by GOLD
-(`core/test/entrylist.test.ts`, `cli/test/gold/cli.test.ts` `tt list --by/--search`). The
-renderer wiring (the Entries control bar re-querying `window.stint.listEntries` and
-repainting the grouped list) is OS-presentation headless CI does not fully assert; this
-confirms it live and cross-checks it against `tt list` with equivalent flags.
+The filtering/search model is core's `buildEntryList` + `store.listEntries`, proven
+surface-neutral on core AND tt by `features/entry_list.feature` (range/client/project/tag
+filters) + `features/search.feature` (free-text search — run TWICE) and pinned by GOLD
+(`core/test/entrylist.test.ts`, `cli/test/gold/cli.test.ts` `tt list --search`). There is
+**no grouping** in the Entries view — grouped breakdowns live in Reports (§09 R2 /
+`tt report --by`, G11); the toolbar only narrows *which* entries the readonly calendar
+(§12 R16) lays into its day columns. The renderer wiring (the Entries toolbar re-querying
+`window.stint.listEntries` and repainting the calendar) is OS-presentation headless CI does
+not fully assert; this confirms it live and cross-checks it against `tt list` with
+equivalent flags.
 
 1. Seed a few entries this week against a known DB, e.g.:
    `tt add "auth refactor" --from "Mon 09:00" --to "Mon 11:00" --client "Acme" --project "Billing" --tag deep`,
    `tt add "deploy pipeline" --from "Tue 11:00" --to "Tue 12:00" --client "Globex" --project "Ops" --tag ci`,
    `tt add "standup" --from "Tue 08:00" --to "Tue 08:30" --client "Acme" --project "Billing" --tag meeting`.
-2. In the running app, on the Entries view, use the **Group by** control to switch between
-   **Day / Client / Project / Tag**.
-   - [ ] The list **regroups live** each time, the group header showing the key + the summed
-         billable hours; a multi-tag entry appears under each of its tags under Tag grouping.
-   - [ ] Each grouping matches `tt list --by <day|client|project|tag>` (the same buckets,
-         the same per-group hours).
-3. Pick a **range preset** (e.g. This week), then switch to **Custom…** and enter an explicit
-   from/to covering only one day, and Apply.
-   - [ ] Only the in-range entries remain; the preset/custom window matches
-         `tt list --week` / `tt list --range FROM TO`.
+2. In the running app, open the Entries view.
+   - [ ] The content is the **readonly entries calendar** (§12 R16) — fixed-width day columns
+         with per-day billable totals in the headers and a range-total chip — and there is
+         **no Group-by control** (grouping left this view for Reports, §09 R2 / G11).
+3. Pick a **range preset** (e.g. This week), then switch to **Custom…** and enter the **two
+   plain dates** (§09 R1 / G3: from-day and to-day, no time component) covering only one day.
+   - [ ] The list narrows **live as soon as both dates are set** — there is no Apply button.
+   - [ ] Only the in-range entries remain (the to-day included in full, the next day
+         excluded); the preset/custom window matches `tt list --week` /
+         `tt list --range FROM TO` over the same resolved local-midnight bounds.
 4. Apply a **client**, then a **project**, then a **tag** filter.
    - [ ] The list narrows to the chosen client / project / tag, matching
          `tt list --client … / --project … / --tag …`.
 5. Type into the **search** box (e.g. `refactor`, then a client name, then a tag).
-   - [ ] The list narrows **live** (no Enter needed) to the matching entries; matching is
-         case-insensitive and hits description / client / project / tag, matching
-         `tt list --search <query>` (composed with the active grouping + filters).
-6. Clear the search and reset the controls to **Day / This week / no filters**.
-   - [ ] The plain day-grouped list is restored, identical to the first load.
+   - [ ] The visible calendar events narrow **live** (no Enter needed) to the matching
+         entries; matching is case-insensitive and hits description / client / project / tag,
+         matching `tt list --search <query>` (composed with the active range + filters).
+6. Clear the search and reset the controls to **This week / no filters**.
+   - [ ] The plain readonly calendar is restored, identical to the first load.
 
-> Cross-surface agreement (full parity, §17 R8): every Entries-view grouping/filter/search
-> reproduces `tt list --by/--range/--client/--project/--tag/--search` exactly — the GUI
-> control bar reaches nothing tt cannot.
+> Cross-surface agreement (full parity, §17 R8): every Entries-view range/filter/search
+> reproduces `tt list --range/--client/--project/--tag/--search` exactly — the GUI
+> toolbar reaches nothing tt cannot.
 
 ## CHECK CONFIRM DESTRUCTIVE (GUI) — a destructive action confirms in the window (§12 R13)
 
@@ -531,9 +542,10 @@ BDD-covered. JUDGE `CONFIRM_DELETE` (`main-confirm-delete.png`) and the renderer
 guard prove the gate in headless CI; this confirms it on a real desktop/DB.
 
 1. Open the main window with at least one entry (or `tt add "design review" --from "2h ago"
-   --to "30m ago" --client "Acme"`). Confirm the row shows in its day group, and note the
+   --to "30m ago" --client "Acme"`). Confirm the event shows in its day column, and note the
    row count in `tt list`.
-2. On the entry's row, click **Delete** (the row's or the consolidated editor's).
+2. On the entry's calendar event, click **Delete** (the event's hover Delete, or the unified
+   editor's footer Delete).
    - [ ] The entry is **not** removed — the button swaps into an in-window confirm
          affordance ("Confirm delete?") with a destructive **Delete** and a **Cancel**.
    - [ ] `tt list` still shows the entry (the stray first click destroyed nothing).
@@ -627,9 +639,10 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    (c) multi-select two adjacent rows and **Merge** them (resolving the conflict prompt if
    the selection disagrees), (d) **Delete** a row through its two-step confirm.
    - [ ] Each of edit / split / merge / delete completes entirely in the window (§12 R6/R13).
-4. In the **Entries** view, switch **group-by** (day/client/project/tag), apply a **range
-   preset** and a **client/project/tag filter**, and type in the **search** box.
-   - [ ] The list regroups, narrows, and searches live — no terminal (§12 R9).
+4. In the **Entries** view, apply a **range preset** (or a Custom plain-date range) and a
+   **client/project/tag filter**, and type in the **search** box — grouping lives in Reports,
+   not here (G11).
+   - [ ] The readonly entries calendar (§12 R16) narrows and searches live — no terminal (§12 R9).
 5. In the **Reports** view, pick a range, choose a **group-by**, toggle **billable** and
    **rounding**, read the on-screen grouped totals, then **Export CSV** and **Export JSON**.
    - [ ] The summary updates and both files are written via the OS save dialog (§12 R8, §09 R6).
@@ -642,7 +655,7 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    - [ ] Each setting persists immediately and the relevant control reflects it (§12 R11).
 9. Final tally:
    - [ ] You completed start-with-attributes → backfill → edit/split/merge/delete →
-         entries grouping/filter/search → report builder + CSV/JSON export → client/project/tag
+         entries range/filter/search → report builder + CSV/JSON export → client/project/tag
          create/rename/archive → every setting **without once opening a terminal**. R10 holds.
 
 ## CHECK DESTRUCTIVE CONFIRM + LIVE FILTER (§17 R11)
@@ -650,8 +663,9 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
 R11 has two halves, both renderer facts the headless JUDGE drives but only the **real
 desktop window** confirms with a real OS theme/DB/dialog: (a) destructive actions
 **confirm before acting** — no entry is destroyed on a single stray click; and (b)
-**search / filter / group** selections are reflected **live in the list AND the report
-total**, recomputed from the in-memory snapshot with no reload. JUDGE proves both headless
+**search / filter** selections on the Entries calendar are reflected **live in the calendar
+AND its total** (and grouping selections live in the Reports totals), recomputed from the
+in-memory snapshot with no reload. JUDGE proves both headless
 (`CONFIRM_DESTRUCTIVE` → `main-confirm.png`, `LIVE_FILTER` → `main-filtered.png`); this is
 the by-hand confirmation on a real window.
 
@@ -672,9 +686,9 @@ the by-hand confirmation on a real window.
    you **type in the search box**.
    - [ ] On each keystroke the visible rows narrow to the matches **and** the total updates
          in lockstep to the billable sum of the surviving rows — instantly, no flicker or reload.
-6. Switch the **group-by** (day ↔ client) and toggle the **billable** filter.
-   - [ ] The list regroups and the total re-sums live, and the figure matches `tt report`
-         run with the equivalent flags for the same selection.
+6. Toggle the **billable** filter on the Entries toolbar.
+   - [ ] The visible calendar events and the total re-sum live, and the figure matches
+         `tt list` / `tt report` run with the equivalent flags for the same selection.
 7. Clear the search and reset the filters.
    - [ ] The list and the total both return to the full week — the live view and the plain
          load agree.
@@ -1386,46 +1400,182 @@ release** artifact, with `tt` available in a terminal on the same database (find
 > replacement + Gatekeeper, and the relaunch across a running timer — awaits a real desktop operator's
 > screen recording in `acceptance/evidence/recordings/` (see that directory's `README.md`).
 
-## CHECK VISUAL TIME-RANGE PICKER (GUI) (§12 R15)
+## CHECK INLINE INTERVAL PICKER (GUI) (§12 R15)
 
-The §12 R15 visual time-range picker (G9) must let the user pick a **start + stop together**
-on a single-day calendar column — drag the body to move, drag the bottom to resize, with
-5-min snapping — while the **text fields stay authoritative** everywhere it appears
-(add-entry, edit-closed-entry, edit-running-start). Overnight spans stay text-only.
+The §12 R15 interval picker (G5/G7) is an **inline, in-flow** component of the unified entry
+form — **no modal, no dimmed backdrop, no Apply button**. It lets the user pick a **start +
+stop together** on a single-day calendar column (drag the body to move, drag the bottom grip
+to resize the stop, both 5-min snapping); every drag writes the form's **Start/Stop fields
+LIVE**, and **Save entry is the only commit**. The text fields stay authoritative everywhere
+it appears (add-entry, edit-closed-entry, edit-running-start). Overnight spans use the
+collapsed **Start/Stop expander** (§12 R17), not the single-day column.
 
-1. In a real desktop session, open the main window and click **Add entry**. Click the
-   **calendar icon** (▦) beside the **From** field.
-   - [ ] A picker popover opens with a **month calendar** on the left and a **single-day
-         column with hour lines** on the right; the **Start/Stop text values are echoed at
-         the top**. It **defaults to the form's current span** (else last-stop → now).
-   - [ ] **Drag the body** of the accent rectangle up/down: **both** Start and Stop move
-         together, with a visible **5-minute snap** (the echoed times jump in 5-min steps).
-   - [ ] **Drag the bottom handle**: only the **Stop** moves (also 5-min-snapped); the Start
-         stays put.
-   - [ ] Any **other entries** on that day render **gray**; where your span **overlaps** one,
-         the overlap region renders **yellow** — and **Apply is never blocked** by it.
-   - [ ] Click **Apply range**: the popover closes and the chosen times appear in the **From**
-         /**To** text fields. Click **Save entry** — the entry lands with exactly those times.
-2. **Text stays authoritative.** Re-open the picker, then instead of dragging, **type**
-   directly into the **From**/**To** fields (or into the picker's bound fields) — your typed
-   times win; the picker only ever *writes* the fields, it never overrides a manual edit.
-3. **Edit a closed entry.** Open the inline edit form for a completed entry and click the
-   calendar icon beside **Start** (or **End**).
-   - [ ] The same picker opens, seeded from that entry's span, and dragging/Apply writes the
-         `.edit-start`/`.edit-end` fields; Save commits the amended span.
-4. **Edit the running timer's start.** With a timer running, open the Timer view's live-edit
-   strip and click the calendar icon beside **Start time**.
-   - [ ] The picker opens **start-only** (no Stop handle, no end label) — it **never writes a
-         stop**, so editing the open row cannot close it (§05 R6). Apply writes only the start.
-5. **Overnight span.** Set a **From** today and a **To** tomorrow by **typing** the dates.
-   - [ ] The span is accepted via text; the picker's day column stays **single-day** and shows
-         a footer note that **overnight spans use text entry** (the visual column does not span
-         days).
+1. In a real desktop session, open the main window and click **Add entry**.
+   - [ ] The unified form opens **inline** (the Entries content moves down to make room — **no
+         modal, no dimmed backdrop**), with the interval picker already mounted in the form's
+         right column: a **month calendar** beside a **single-day column with hour lines**.
+   - [ ] There is **no "Apply"/"Apply range" button** and **no separate calendar-icon trigger**
+         — the picker is simply present in flow.
+2. **Body-drag moves the whole interval.** Drag the body of the accent rectangle up/down.
+   - [ ] **Both** Start and Stop move together with a visible **5-minute snap**, and the
+         form's Start/Stop values (in the Start/Stop expander) **update live on every drag**.
+3. **Bottom grip resizes only the stop.** Drag the rectangle's **bottom grip** up/down.
+   - [ ] Only the **Stop** moves (also 5-min-snapped); the Start stays put, updating the
+         Stop field live.
+4. **Others gray, overlap yellow (warn-only).** Ensure another entry exists on that day.
+   - [ ] Other entries on the day render **gray**; where your span **overlaps** one, the
+         overlap region renders **yellow** — and it **never blocks** (Save stays enabled).
+5. **Save is the sole commit.** Click **Save entry**.
+   - [ ] The entry lands with exactly the dragged times — no separate Apply step was needed,
+         and nothing committed until Save.
+6. **Edit a closed entry.** Open the inline edit form for a completed entry.
+   - [ ] The same inline picker is mounted in the edit form, seeded from that entry's span;
+         body-drag/grip-resize write the `.edit-start`/`.edit-end` fields live, and **Save
+         entry** commits the amended span (nothing commits until Save).
+7. **Running entry — start grip only, future fade, no end.** With a timer running, open the
+   Timer view's Start field disclosure.
+   - [ ] The running block shows a **start grip only** with the block **fading into the
+         future** and **no end control at all** (§05 R06). That surface has its own dedicated
+         procedure: run **CHECK RUNNING START-ONLY PICKER** below.
+8. **Overnight via the expander.** Expand the **Start/Stop (exact times)** disclosure and
+   **type** a span crossing midnight (From today, To tomorrow).
+   - [ ] The typed overnight span is accepted and authoritative; the single-day column simply
+         shows the start day (the overnight path is the expander, not the column).
 
-> The drag-to-move / drag-to-resize geometry, 5-min snap, gray-others / yellow-overlap
-> painting, the top text-echo, Apply write-back, and accent discipline with the picker open
-> are pinned headless under JUDGE (`TIME_RANGE_PICKER`, `time-range-picker.png`) driving the
-> real renderer; the add-form trigger + authoritative-Save path is also covered by
-> `ADD_FORM_PICKER`. This runbook confirms, on a real build, that the picker opens on every
-> R15 surface, that dragging snaps and writes the authoritative text fields, that overlaps
-> warn without blocking, and that overnight spans round-trip through text entry.
+> The in-flow chrome (no `.stp-backdrop`, no `.stp-apply`, `position:static` host), the
+> month calendar + `.stp-track` with hour lines, the body-drag-moves-both / grip-resizes-stop
+> 5-min-snapped LIVE writes into the bound form fields, the gray-others / inert-yellow-overlap
+> painting, and Save-as-sole-commit are pinned headless under JUDGE (`UNIFIED_FORM`,
+> `main-edit.png`; add mode under `UNIFIED_FORM_ADD`, `unified-add.png`; the running start-only
+> variant under `TIMER_VIEW`, `timer-view-full.png`) driving the real renderer. This runbook
+> confirms, on a real build, that the picker is inline on every R15 surface, that dragging
+> snaps and writes the form fields live, that overlaps warn without blocking, that Save is the
+> only commit, and that overnight spans go through the exact-time expander.
+
+## CHECK RUNNING START-ONLY PICKER (§05 R06, §12 R14)
+
+The running entry's start is adjusted through the **inline, start-only disclosure** of the
+interval picker below the Timer view's Start field — in flow, no modal — and the running
+entry's **end does not exist until it is stopped**: no surface may render or write one, and
+the count-up must never stop while the start is being edited.
+
+1. In a real desktop session, start a timer (`tt start "disclosure check"` or the Timer
+   view's Start form) and let it run a few minutes. Open the **Timer view**.
+   - [ ] The live-edit strip shows the **Start** field as a plain text value
+         (`YYYY-MM-DDTHH:mm`) with a **calendar affordance** beside it — the field is **not**
+         a native `datetime-local` control (no OS date popover on click).
+2. Click the calendar affordance beside **Start**.
+   - [ ] The day timeline expands **inline, in flow below the Start field** — the page
+         content moves down to make room; there is **no modal, no dimmed backdrop, no
+         Apply/Cancel**, and the rest of the window stays fully interactive.
+   - [ ] The running entry renders as an accent block that **dissolves into the future** —
+         its lower edge fades to transparent (a gradient, not a hard end edge) — with a
+         **start drag grip** at its top edge and **no end control anywhere**: no bottom
+         resize grip, no end time label, no end text field.
+   - [ ] Any other entries from that day render **gray** on the track; the viewport opens
+         scrolled to the configured §14 window (scrollable across the full 24 h — the track
+         is never clipped).
+3. **Drag the grip earlier** (upward), watching the Start field and the running clock.
+   - [ ] The grip and block edge move with a visible **5-minute snap**, and every drag step
+         writes the **Start text field live** (no Apply — the field is the commit path).
+   - [ ] The **count-up never stops or resets** while dragging — it keeps ticking and
+         grows to reflect the earlier start after the edit settles.
+4. Collapse the disclosure (click the calendar affordance again), then verify from the
+   other surface:
+   - [ ] `tt status` shows the entry **still running**, with the **amended start** and the
+         larger derived elapsed.
+   - [ ] `tt list --json` shows the amended `start` and `"end": null` — **empty, never a
+         synthetic "now"**; exactly one entry is open.
+
+> The in-flow/no-modal chrome, start-grip-only rendering, computed future-fade mask, the
+> live 5-min-snapped write into `#le-start`, and the committed edit patch carrying `startUtc`
+> with **no `endUtc` key** are pinned headless under JUDGE (`TIMER_VIEW`,
+> `timer-view-full.png`) driving the real renderer; the cross-surface no-close/no-end
+> behavior is proven twice (core + `tt`) by `features/tracking.feature` "Editing the running
+> entry start never closes it and never synthesizes an end". This runbook confirms the same
+> on a real desktop: real drags snap and write live, the block visibly dissolves toward the
+> future with no end affordance, the count-up never stops, and `tt` sees the amended start
+> with the entry still open and its end empty.
+
+## CHECK ENTRIES CALENDAR (§12 R16) — the readonly calendar scrolls, never clips; columns stay fixed; working hours are the default
+
+The §12 R16 Entries view is a **readonly calendar**: one **fixed comfortable-width day column
+per day in range** over a **full 24h track**. The track is a **scroll default, not a clip** — the
+viewport opens on **working hours** but every hour stays reachable; the columns keep their width
+(never stretched/compressed) and the strip **scrolls horizontally** when the range does not fit.
+Grouping is **not** here (it lives in Reports, G11); the day headers carry **per-day billable
+totals** and the toolbar carries a **range chip**.
+
+1. In a real desktop session with a week of entries — including a day with **none**, an entry
+   **before** your working-hours-start and one **after** your working-hours-end — open the main
+   window on the **Entries** view.
+   - [ ] The content is a **calendar**: a **fixed-width day column per day** of the This-week
+         range, over an hour gutter. The columns are a **comfortable fixed width** — they do
+         **not** stretch to fill the window nor compress to cram the week in.
+   - [ ] The viewport **opens on working hours** (the first visible hours are around your
+         `working_hours_start`), **not** at midnight.
+   - [ ] Each **day header** shows that day's **billable total**; the **empty day** shows as a
+         **present-but-empty column** (its total reads `0.00h`); the toolbar shows the **range
+         chip** with the week's billable total.
+2. **Scroll, never clip.**
+   - [ ] **Scroll the track up**: the entry **before** working-hours-start (e.g. an early
+         06:xx block) comes into view — it was present all along, just above the default window.
+   - [ ] **Scroll the track down**: the entry **after** working-hours-end (e.g. a 19:xx block)
+         comes into view — nothing was clipped; the full 24h is reachable.
+3. **Wide range.** Switch the range to **Custom…** and pick a **span of several weeks**.
+   - [ ] The day columns keep the **same fixed comfortable width** and the strip **scrolls
+         horizontally** across them — the columns are never squeezed to fit the range.
+   - [ ] In-range days with **no** entries still show as **empty columns**.
+4. **Reach the editing/merge affordances by hand.**
+   - [ ] **Hover** an event: its **Delete / Split / Edit** ops and a **corner checkbox** appear.
+   - [ ] **Click** an event body: the **unified editor** opens inline (edit mode).
+   - [ ] **Check two events' corner checkboxes**: the **merge bar** appears with the live count.
+   - [ ] The **running** entry shows as a block that **fades into the future** with **no end
+         edge**; an **overlap** shows a yellow **warn band**; a **slept** span shows a **hatch**.
+
+> The fixed/equal-width columns, the horizontal scroll, the working-hours default that scrolls
+> (never clips) with off-hours entries reachable, the per-day header totals + range chip, the
+> empty column, the hover ops + corner checkbox, the click-opens-editor, the running future-fade,
+> the overlap band + slept hatch, and the two-checkbox merge bar are pinned headless under JUDGE
+> (`CALENDAR_LAYOUT`, `main-calendar.png`) driving the real renderer; the per-day + range billable
+> totals are proven twice (core + `tt`) by `features/entry_list.feature`. This runbook confirms the
+> same on a real desktop: the columns hold their width, the strip scrolls both ways, off-hours
+> entries are reachable rather than clipped, and empty days show as empty columns.
+
+## CHECK EXACT/OVERNIGHT ENTRY VIA EXPANDER (GUI) (§12 R17)
+
+The unified form's collapsed **Start/Stop expander** is the exact-entry escape hatch and the
+**only path for an overnight span** — the single-day interval picker can't be dragged across
+midnight, so a stop dated the **next day** is *typed* into the expander's raw text fields. A
+human must be able to type an exact cross-midnight span, see the inline picker and the collapsed
+echo reflect the typed values, and Save it as the same entry a drag would produce.
+
+1. In a real desktop session, open the main window, click **Add entry manually**, and give the
+   entry a **description** (e.g. `overnight deploy`).
+   - [ ] The **Start / Stop (exact times)** expander is **collapsed** by default (its raw text
+         fields are hidden) while a **tabular echo** of the current interval (e.g. `22:00 –
+         23:00`) shows beneath the month calendar.
+2. **Expand** the Start / Stop expander and **type an overnight span** into the raw fields — a
+   **Start** of `22:00` today and a **Stop** of `02:00` **the next day** (type the full
+   `YYYY-MM-DDTHH:mm` with the stop on tomorrow's date). These are plain **text** fields — there
+   is **no native date-time popover**.
+   - [ ] As you type, the **inline picker reflects the typed values**: the accent block sits at
+         the typed **start** (22:00) on the start's day, and the **collapsed echo reads
+         `22:00 – 02:00`** — the same shared interval the picker drag would set.
+   - [ ] The **Stop field keeps the next-day value verbatim** — it is *not* rewound to the
+         start's day or flattened to a same-day span.
+3. Click **Save entry** — the *only* commit.
+   - [ ] The form closes and the completed **overnight** entry persists.
+   - [ ] `tt list --json` shows **one** entry whose **start** and **stop** are the exact typed
+         instants **crossing midnight** (start `22:00`, stop `02:00` the next day — a 240-minute
+         span), identical to what a same-day drag commits over the same `add` write (parity: the
+         `add` IPC channel ↔ `tt add --from --to`).
+
+> The overnight-capable add is proven surface-neutrally over core+`tt` by the BDD "Backfill
+> creates a completed overnight entry" scenario (a 22:00→02:00-next-day span → one closed entry,
+> zero open, a 240-minute billable duration, run twice); the GUI expander — collapsed-by-default
+> echo, expand-to-raw-text-fields, the typed overnight updating the shared interval so the picker
+> + echo reflect it, and Save committing the exact typed values — is screenshotted under JUDGE
+> (`UNIFIED_FORM_EXPANDER`, `unified-form-expander.png`) and bound back to `tt add` by the parity
+> matrix. This runbook confirms a human can type an exact cross-midnight span, watch the picker
+> and echo track it, and Save it as the same entry a drag would, at parity with `tt add`.

@@ -1,7 +1,7 @@
 export const meta = {
   name: 'remove-accent-setting',
   description:
-    'Remove the configurable "accent" setting/feature from Stint entirely and make the clay brand accent (--accent #C8623E from the design system) unconditional. Colour becomes the design system\'s job, not a product requirement or user setting. Removes the accent setting across core/CLI/GUI/judge/tests and strips the accent requirement from the PRD/glossary/acceptance/COVERAGE/parity/runbook and the settings mockup — while KEEPING the clay token and the rationed-accent discipline checks. Then regenerates evidence, runs a consistency review, RE-RECORDS the GUI flows in the new clay style as committed GIFs (installing a full ffmpeg), and updates the existing branch PR. Stays green throughout.',
+    'Remove the configurable "accent" setting/feature from Stint entirely and make the clay brand accent (--accent from the design system) unconditional. Colour becomes the design system\'s job, not a product requirement or user setting. Removes the accent setting across core/CLI/GUI/judge/tests and strips the accent requirement from the PRD/glossary/acceptance/COVERAGE/parity/runbook and the settings mockup — while KEEPING the clay token and the rationed-accent discipline checks. Then regenerates evidence, runs a consistency review, RE-RECORDS the GUI flows in the new clay style as committed GIFs (installing a full ffmpeg), and updates the existing branch PR. Stays green throughout.',
   whenToUse: 'When the accent is to be fixed to the brand clay and the accent setting/requirement removed.',
   phases: [
     { title: 'Code', detail: 'Remove the accent setting across core/CLI/GUI/judge/tests (keep the clay token + rationed-accent discipline)' },
@@ -22,7 +22,7 @@ evidence · npm run record. Node ≥22.5; NO network for the app itself.`;
 // The airtight keep-vs-remove contract every agent shares — the crux of this change.
 const SPEC = `CHANGE: remove the configurable "accent" setting/feature ENTIRELY. Colour is the design system's
 job (context/mockups/design-system.html + the mockups), NOT a product requirement or a user setting. The
-brand accent is the clay token --accent:#C8623E defined in packages/gui/renderer/styles.css; it now stands
+brand accent is the clay token --accent defined in packages/gui/renderer/styles.css; it now stands
 UNCONDITIONALLY (no runtime override, no system accent, no monochrome mode).
 
 KEEP — do NOT touch or remove:

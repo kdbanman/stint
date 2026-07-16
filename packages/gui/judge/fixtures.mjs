@@ -11,6 +11,13 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
   dateFormat: 'system',
+  // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
+  // default-window mode, and the around-now span. The Settings → Timeline group edits them;
+  // SU.timelineWindow derives the picker/calendar default viewport from them (G16).
+  workingHoursStart: '07:00',
+  workingHoursEnd: '18:00',
+  pickerWindowMode: 'working_hours',
+  pickerAroundHours: 8,
   // §20 R04 — how many automatic backups to keep; the Settings → Backups retention picker
   // paints this and changes it over the same setSetting channel `tt config set backup_retention`.
   backupRetention: 5,
@@ -141,6 +148,11 @@ export function taggedState() {
   };
 }
 
+// §12 R10 — the flag-detail fixture the recording (§12 R10 recipe) drives: an OVERLAP pair
+// (10↔11, 30m) and a SLEPT entry (12, raw 4h trimmed to 3h). On the readonly calendar the pair
+// paints `.ov` warn bands and the slept entry the `.zz` hatch; opening each in the unified editor
+// shows the overlap detail and the reversible subtract/restore control (struck raw-vs-trimmed).
+// (No longer a JUDGE-scene fixture — the FLAG_IN_CONTEXT scene is retired; kept for the recording.)
 export function flaggedState() {
   return {
     status: { running: false, entry: null },
@@ -186,8 +198,10 @@ export function flaggedState() {
             clientLabel: 'Client B',
             startUtc: '2026-06-24T13:00:00Z',
             endUtc: '2026-06-24T17:00:00Z',
-            // §12 R9: a slept entry whose billable was trimmed — the raw 4h reads struck
-            // through beside the trimmed 3h billable (rawSeconds > billableSeconds).
+            // §12 R10: a slept entry whose billable was trimmed — in the editor the raw 4h reads
+            // struck through beside the trimmed 3h billable (rawSeconds > billableSeconds), and the
+            // control reads Restore. `sleptSeconds` is the recorded-sleep amount the subtractSleep
+            // mock restores/re-subtracts so the recording can toggle it both ways.
             billableSeconds: 10800,
             billable: true,
             overlapped: false,
@@ -196,6 +210,7 @@ export function flaggedState() {
             sleptThrough: true,
             excludedSeconds: 3600,
             rawSeconds: 14400,
+            sleptSeconds: 3600,
           },
         ],
       },
@@ -260,9 +275,9 @@ export function splittableState() {
 }
 
 /**
- * A single closed entry on the pinned day, so the EDIT_INLINE scene can open the
- * inline edit form deterministically and assert the seeded field values. Closed (it
- * has an endUtc) so the form shows the full field set including End.
+ * A single closed entry on the pinned day, so the delete-gate scenes (DELETE_CONFIRM /
+ * CONFIRM_DELETE) can open the entry's row affordances deterministically. Closed (it has
+ * an endUtc) so it offers the full field set including End when opened.
  */
 export function editingState() {
   return {
@@ -292,14 +307,59 @@ export function editingState() {
 }
 
 /**
- * §12 R6 — the INLINE_EDITOR fixture. A single CLOSED entry whose client/project match the
- * canned reference data (Acme / API → CLIENTS id 1, PROJECTS 11) so the consolidated editor
- * modal (window.SE.openEditor) opens with its Client + Project selects pre-selectable and
- * every tt-editable field present (description, client, project, start, end, tags, billable)
- * plus the Split affordance. Closed (it has an endUtc), so the editor shows the full field
- * set including End and offers Split (only a bounded span can be cut).
+ * §05 R10 — the MULTILINE_DESC fixture. A single CLOSED entry whose description carries an
+ * embedded newline (two lines), so the judge can open the entry's edit form and assert the
+ * description control is a 3-line scrollable <textarea> rendering the stored newline VERBATIM
+ * (not flattened to one line). The interior '\n' lives here, in the fixture, not in any DOM
+ * markup, so a surface that flattened stored text would be caught.
  */
-export function editableState() {
+export function multilineDescState() {
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-24',
+        entries: [
+          {
+            id: 30,
+            description: 'line one\nline two',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T14:00:00Z',
+            endUtc: '2026-06-24T15:30:00Z',
+            billableSeconds: 5400,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+        ],
+      },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
+ * §12 R06 — the UNIFIED_FORM edit-mode fixture. A CLOSED entry (80) seeding EVERY tt-editable
+ * field, whose client/project match the canned reference data (Acme / API → CLIENTS id 1,
+ * PROJECTS 11) so the unified entry form opens INLINE (not a modal) in edit mode with its Client
+ * + Project selects pre-selectable, the description textarea, the tag chips, the billable toggle
+ * and the Start/Stop expander all seeded from the entry. Closed (it has an endUtc), so the form
+ * carries End and the footer offers Split (only a bounded span can be cut).
+ *
+ * §12 R10 — plus an OVERLAPPED entry (81, 30m with the previous entry) and a SLEPT entry (82, raw
+ * 4h with a 1h recorded sleep to subtract) so the same scene can open the editor on each and assert
+ * the overlap DETAIL and the reversible sleep subtract/restore control (struck raw-vs-trimmed
+ * billable). `sleptSeconds` is the fixture stand-in for core's recorded sleep spans that the
+ * subtractSleep mock (initScript) excludes/restores; both start UN-subtracted (excludedSeconds 0).
+ *
+ * §12 R15 — plus a CLOSED entry (83, 15:00–16:00Z) that OVERLAPS entry 80's span (14:00–15:30Z) on
+ * the same UTC-pinned day, so when the UNIFIED_FORM scene opens entry 80's editor the INLINE interval
+ * picker paints entry 83 both as a gray other block AND, where it overlaps the edited "me" span
+ * (15:00–15:30), a yellow inert warn band (warn-only, never blocks Save).
+ */
+export function unifiedFormState() {
   return {
     status: { running: false, entry: null },
     days: [
@@ -319,10 +379,61 @@ export function editableState() {
             excludedSeconds: 0,
             tags: ['deep'],
           },
+          {
+            id: 81,
+            description: 'client call',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T08:00:00Z',
+            endUtc: '2026-06-24T09:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: true,
+            overlapMinutes: 30,
+            overlapRelation: 'previous',
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: 3600,
+            tags: [],
+          },
+          {
+            id: 82,
+            description: 'deep work',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T09:30:00Z',
+            endUtc: '2026-06-24T13:30:00Z',
+            billableSeconds: 14400,
+            billable: true,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: true,
+            excludedSeconds: 0,
+            rawSeconds: 14400,
+            sleptSeconds: 3600,
+            tags: [],
+          },
+          {
+            // §12 R15 — overlaps entry 80 (14:00–15:30Z) at 15:00–15:30, so entry 80's inline
+            // picker paints this both gray (other) and, over the shared minutes, yellow (warn-only).
+            id: 83,
+            description: 'follow-up',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T15:00:00Z',
+            endUtc: '2026-06-24T16:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: 3600,
+            tags: [],
+          },
         ],
       },
     ],
-    sleepFlaggedIds: [],
+    sleepFlaggedIds: [82],
     settings: DEFAULT_SETTINGS,
   };
 }
@@ -523,6 +634,73 @@ export function liveState() {
 }
 
 /**
+ * §12 R16 — the ENTRIES_CALENDAR fixture. A whole Monday-start week (Jun 22–28, containing the
+ * pinned Wednesday JUDGE clock) that exercises every calendar fact the scene asserts. The scene
+ * runs its page in timezoneId 'UTC' so each UTC instant lands on a deterministic local time on
+ * the 24h track:
+ *   Mon 06-22 — an OVERLAP pair (09:00–11:00 vs 10:30–12:00, 30m warn band) plus an OFF-HOURS
+ *               entry BEFORE working-start (06:00–06:45, above the 07:00 default viewport);
+ *   Tue 06-23 — a SLEPT entry (13:00–17:00, raw 4h trimmed to 3h billable → the `.zz` hatch) plus
+ *               an OFF-HOURS entry AFTER working-end (19:00–20:00, below the 18:00 default viewport);
+ *   Wed 06-24 — the RUNNING/open entry (09:00–, future-fade, no end) plus a plain closed entry;
+ *   Thu–Sun   — EMPTY days (present-but-empty `.dcol`).
+ * All entries are billable, so the per-day header totals and the range chip are deterministic:
+ * Mon 4.25h, Tue 4.00h, Wed 1.00h, week 9.25h. The off-hours entries prove the 24h track SCROLLS
+ * (never clips): they are in the DOM and reachable though the viewport opens on working hours.
+ */
+export function entriesCalendarState() {
+  const ev = (o) => ({
+    overlapped: false,
+    overlapMinutes: 0,
+    overlapRelation: null,
+    sleptThrough: false,
+    excludedSeconds: 0,
+    rawSeconds: o.billableSeconds,
+    tags: [],
+    ...o,
+  });
+  const running = {
+    id: 6,
+    description: 'drafting proposals',
+    clientLabel: 'Globex / Ops',
+    startUtc: '2026-06-24T09:00:00Z',
+    billableSeconds: 0,
+    billable: true,
+    sleptThrough: false,
+    tags: [],
+  };
+  return {
+    status: { running: true, entry: running },
+    days: [
+      {
+        day: '2026-06-22',
+        entries: [
+          ev({ id: 3, description: 'early standup', clientLabel: 'Acme / API', startUtc: '2026-06-22T06:00:00Z', endUtc: '2026-06-22T06:45:00Z', billableSeconds: 2700, billable: true }),
+          ev({ id: 1, description: 'client call', clientLabel: 'Acme / API', startUtc: '2026-06-22T09:00:00Z', endUtc: '2026-06-22T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'next' }),
+          ev({ id: 2, description: 'market research', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T10:30:00Z', endUtc: '2026-06-22T12:00:00Z', billableSeconds: 5400, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'previous' }),
+        ],
+      },
+      {
+        day: '2026-06-23',
+        entries: [
+          ev({ id: 4, description: 'deep work', clientLabel: 'Globex / Ops', startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T17:00:00Z', billableSeconds: 10800, billable: true, sleptThrough: true, excludedSeconds: 3600, rawSeconds: 14400 }),
+          ev({ id: 5, description: 'evening wrap', clientLabel: 'Acme / API', startUtc: '2026-06-23T19:00:00Z', endUtc: '2026-06-23T20:00:00Z', billableSeconds: 3600, billable: true }),
+        ],
+      },
+      {
+        day: '2026-06-24',
+        entries: [
+          ev({ id: 6, description: 'drafting proposals', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T09:00:00Z', endUtc: null, billableSeconds: 0, billable: true }),
+          ev({ id: 7, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T14:00:00Z', endUtc: '2026-06-24T15:00:00Z', billableSeconds: 3600, billable: true }),
+        ],
+      },
+    ],
+    sleepFlaggedIds: [4],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * §12 R11 — the Settings-view fixture. The panel renders from getState().settings (the
  * eight §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
  * SETTINGS_VIEW scene opens the panel, asserts a control for every setting, and screenshots
@@ -530,6 +708,31 @@ export function liveState() {
  */
 export function settingsState() {
   return emptyState();
+}
+
+/**
+ * §14 / §12 R12 — the TIMELINE_WINDOW fixtures. Non-default working hours (09:00–15:00,
+ * mode working_hours) so the scene can assert SU.timelineWindow returns exactly 540–900
+ * minutes AND that the Settings → Timeline group renders the stored values (not the
+ * defaults); plus an around_now/8 variant whose window is JUDGE_NOW ± 4h (clamped to the
+ * 24h track), deterministic under the pinned page clock.
+ */
+export function timelineWindowState() {
+  const s = emptyState();
+  s.settings = {
+    ...DEFAULT_SETTINGS,
+    workingHoursStart: '09:00',
+    workingHoursEnd: '15:00',
+    pickerWindowMode: 'working_hours',
+    pickerAroundHours: 8,
+  };
+  return s;
+}
+
+export function timelineAroundState() {
+  const s = timelineWindowState();
+  s.settings = { ...s.settings, pickerWindowMode: 'around_now', pickerAroundHours: 8 };
+  return s;
 }
 
 /**
@@ -630,20 +833,38 @@ export function startFormState() {
   return emptyState();
 }
 
-/** The empty-state snapshot the ADD_FORM scene drives the manual-backfill form over. */
+/**
+ * §12 R07 (G5/G7) — the UNIFIED_FORM_ADD fixture. The unified add form's inline interval picker
+ * reads the snapshot's CLOSED entries (via app.js snapshotEntries) so it can draw them gray on its
+ * day column and paint overlaps yellow (warn-only). Two closed entries on 2026-06-24, under the
+ * UNIFIED_FORM_ADD page's UTC pin so the pinned-clock default seed (22:00–23:00) lands on the same
+ * local day:
+ *   - 19:00–20:00 — well above the seeded 22:00–23:00 "me" span, a plain gray other (no overlap).
+ *   - 22:15–23:15 — overlaps the seeded span (22:15–23:00 → yellow warn band).
+ * listClients/listProjects (the CLIENTS/PROJECTS mocks) feed the form's client + project selects,
+ * so the scene can pick Acme / API; the `add` mock records the Save payload into __ADDED__.
+ */
 export function addFormState() {
-  return emptyState();
+  const closed = [
+    { id: 1, description: 'morning sync', clientLabel: 'Acme / API', startUtc: '2026-06-24T19:00:00Z', endUtc: '2026-06-24T20:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+    { id: 2, description: 'client call', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T22:15:00Z', endUtc: '2026-06-24T23:15:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+  ];
+  return {
+    status: { running: false, entry: null },
+    days: [{ day: '2026-06-24', entries: closed }],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
 }
 
 /**
- * §12 R15 (G9) — the TIME_RANGE_PICKER fixture. The manual-add form reads the snapshot's
- * CLOSED entries (via app.js snapshotEntries) so the visual picker can draw them gray on
- * its day column and paint overlaps yellow (warn-only). Two closed entries on 2026-06-24
- * (the day the scene fills #add-from/#add-to against, under the UTC-pinned picker page):
- *   - 09:00–11:00 — above the dragged span, no overlap.
- *   - 14:00–15:00 — overlaps the seeded 13:00–14:30 "me" span (14:00–14:30 → yellow).
- * The scene runs its page in timezoneId 'UTC' so these UTC instants land on the SAME local
- * day as the filled 2026-06-24T13:00 start, making the gray/overlap geometry deterministic.
+ * §12 R15 — the inline interval-picker RECORDING fixture (record.mjs's §05 R05 / §12 R15 picker
+ * tour). The unified form's inline picker reads the snapshot's CLOSED entries (via app.js
+ * snapshotEntries) so it can draw them gray on its single-day column and paint overlaps yellow
+ * (warn-only). Two closed entries on 2026-06-24, under the recording's UTC-pinned page so these
+ * UTC instants land on a deterministic local day:
+ *   - 09:00–11:00 — 'morning sync', the closed row the EDIT-CLOSED tour beat edits.
+ *   - 14:00–15:00 — 'market research', the gray other the extended stop overlaps (→ yellow).
  */
 export function pickerState() {
   const closed = [
@@ -724,15 +945,22 @@ export function roundingState() {
 }
 
 /**
- * §12 R14 (G5) — the TIMER_VIEW fixture. The same canonical runningState (a single open entry
- * 'auth refactor' for 'Client A / API', started a fixed 01:24:07 before the pinned JUDGE clock),
- * so the Timer view's live clock reads a deterministic 01:24:07 that advances +3s on a pinned-
- * clock step, the running state shows, and the live-edit-running strip seeds from this entry. The
- * scene asserts the strip's Save sends an `edit` patch carrying the start-time/attributes but
- * NEVER endUtc (window.__EDITED__ recorded by the edit mock), so the row stays open.
+ * §12 R14 (G5) / §05 R06 — the TIMER_VIEW fixture. The canonical runningState (a single open
+ * entry 'auth refactor' for 'Client A / API', started a fixed 01:24:07 before the pinned JUDGE
+ * clock), so the Timer view's live clock reads a deterministic 01:24:07 that advances +3s on a
+ * pinned-clock step, plus two CLOSED same-day entries so the inline START-ONLY picker
+ * disclosure has other entries to paint gray on its track (the scene runs its page in
+ * timezoneId 'UTC' so these UTC instants land on the same local day as the running start).
+ * The scene drags the disclosure's start grip and asserts the recorded `edit` patch
+ * (window.__EDITED__) carries startUtc but NEVER endUtc, so the row stays open.
  */
 export function timerViewRunningState() {
-  return runningState();
+  const s = runningState();
+  s.days[0].entries.unshift(
+    { id: 2, description: 'morning sync', clientLabel: 'Client A / API', startUtc: '2026-06-24T19:00:00Z', endUtc: '2026-06-24T20:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+    { id: 3, description: 'inbox triage', clientLabel: null, startUtc: '2026-06-24T20:30:00Z', endUtc: '2026-06-24T21:00:00Z', billableSeconds: 0, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: [] },
+  );
+  return s;
 }
 
 /** §05 R09 — three seeded favorites for the FAVORITES_RAIL scene (name + client/project/billable
@@ -1119,6 +1347,17 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       listEntries: function (q) {
         window.__LIST_REQ__ = q;
         let rows = this.__LIST_ENTRIES__.slice();
+        // §09 R01 (G3): a custom range arrives as a PAIR OF PLAIN DATES (fromDate/toDate,
+        // the raw YYYY-MM-DD strings of the two toolbar date fields — never a derived
+        // instant). The mock narrows to the entries whose day falls inside the INCLUSIVE
+        // day pair, standing in for main's resolveDateRange half-open local window, so the
+        // ENTRY_LIST_SEARCH scene can assert the fields apply LIVE and narrow the rows.
+        if (q && q.fromDate && q.toDate) {
+          rows = rows.filter((e) => {
+            const day = e.startUtc.slice(0, 10);
+            return day >= q.fromDate && day <= q.toDate;
+          });
+        }
         if (q && q.billable === 'billable') rows = rows.filter((e) => e.billable);
         if (q && q.billable === 'non-billable') rows = rows.filter((e) => !e.billable);
         if (q && q.search) {
@@ -1240,7 +1479,27 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         })).filter((d) => d.entries.length > 0);
         return Promise.resolve({ ...base, days });
       },
-      subtractSleep: () => Promise.resolve(),
+      // §12 R10: toggle the excluded/slept seconds on the snapshot entry so a re-read (getState)
+      // shows the trimmed then restored billable — the unified editor's reversible sleep control
+      // reads this back after each call (core's store.subtractSleep is the real toggle; the mock
+      // mirrors it). sleptSeconds is the fixture's recorded-sleep stand-in (core sums real spans).
+      subtractSleep: (p) => {
+        const id = p && p.id;
+        if (id != null && window.__STATE__ && Array.isArray(window.__STATE__.days)) {
+          for (const d of window.__STATE__.days)
+            for (const e of d.entries) {
+              if (e.id !== id || !e.sleptThrough) continue;
+              const raw = e.rawSeconds != null ? e.rawSeconds : e.billableSeconds;
+              const slept =
+                e.sleptSeconds != null ? e.sleptSeconds : Math.max(0, raw - e.billableSeconds);
+              const restore = (e.excludedSeconds || 0) > 0;
+              e.rawSeconds = raw;
+              e.excludedSeconds = restore ? 0 : slept;
+              e.billableSeconds = raw - e.excludedSeconds;
+            }
+        }
+        return Promise.resolve();
+      },
       // Records that a removal actually fired, so the DELETE_CONFIRM / CONFIRM_DELETE
       // scenes can assert the first Delete click only ARMS the confirm step and does not
       // remove yet. __REMOVED__ is the boolean the legacy DELETE_CONFIRM reads; __REMOVE_CALLS__

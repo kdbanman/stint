@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
+import { descriptionCell } from '../../src/format.js';
 // ajv-formats ships a CJS default export; cast to its callable shape for NodeNext.
 const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
 
@@ -294,68 +295,15 @@ describe('GOLD: tt --search filters list and report (§09 R7)', () => {
   });
 });
 
-describe('GOLD: tt list --by / --search grouping (§12 R9, §11)', () => {
+describe('GOLD: tt list has no --by grouping flag (§11, §12 R9)', () => {
   const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
-  function seedGroups(): void {
-    tt(['client', 'add', 'Acme']);
-    tt(['project', 'add', 'Billing', '--client', 'Acme']);
-    tt(['client', 'add', 'Globex']);
-    tt(['project', 'add', 'Ops', '--client', 'Globex']);
-    tt(['add', 'auth refactor', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T11:00:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'deep']);
-    tt(['add', 'deploy pipeline', '--from', '2026-06-24T11:00:00Z', '--to', '2026-06-24T12:00:00Z', '--client', 'Globex', '--project', 'Ops', '--tag', 'ci']);
-    tt(['add', 'standup', '--from', '2026-06-24T08:00:00Z', '--to', '2026-06-24T08:30:00Z', '--client', 'Acme', '--project', 'Billing', '--tag', 'meeting']);
-  }
 
-  it('--by client groups the human table with a per-group header carrying summed hours', () => {
-    seedGroups();
+  it('--by is an unknown option — grouping moved to `tt report --by` (G11)', () => {
+    tt(['add', 'work', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:00:00Z']);
     const r = tt(['list', ...RANGE, '--all', '--by', 'client']);
-    expect(r.code).toBe(0);
-    // Group headers in ASC order, each with the summed billable hours; the matching rows
-    // sit under their client header.
-    const acme = r.out.indexOf('Acme  (2.50h)');
-    const globex = r.out.indexOf('Globex  (1.00h)');
-    expect(acme).toBeGreaterThanOrEqual(0);
-    expect(globex).toBeGreaterThan(acme); // Acme before Globex (ASC)
-    expect(r.out).toContain('auth refactor');
-    expect(r.out).toContain('standup');
-    expect(r.out).toContain('deploy pipeline');
-  });
-
-  it('--by tag fans a multi-axis list into tag groups (ASC)', () => {
-    seedGroups();
-    const r = tt(['list', ...RANGE, '--all', '--by', 'tag']);
-    expect(r.out.indexOf('ci  (')).toBeGreaterThanOrEqual(0);
-    expect(r.out.indexOf('deep  (')).toBeGreaterThan(r.out.indexOf('ci  ('));
-    expect(r.out.indexOf('meeting  (')).toBeGreaterThan(r.out.indexOf('deep  ('));
-  });
-
-  it('--by rejects an unknown grouping', () => {
-    seedGroups();
-    const r = tt(['list', ...RANGE, '--all', '--by', 'nope']);
+    // Grouping left `tt list` entirely: commander rejects the removed option, non-zero.
     expect(r.code).not.toBe(0);
-    expect(r.err).toMatch(/unknown --by grouping/);
-  });
-
-  it('--json stays the flat row contract regardless of --by (search only filters rows)', () => {
-    seedGroups();
-    // --by does not change the --json shape: it is still the flat array, schema-valid.
-    const rows = JSON.parse(tt(['list', ...RANGE, '--all', '--json', '--by', 'client']).out);
-    const validate = validator('list.schema.json');
-    expect(validate(rows) || validate.errors).toBe(true);
-    expect(rows.map((e: { description: string }) => e.description).sort()).toEqual([
-      'auth refactor',
-      'deploy pipeline',
-      'standup',
-    ]);
-  });
-
-  it('--by composes with --search: only matching rows are grouped', () => {
-    seedGroups();
-    const r = tt(['list', ...RANGE, '--all', '--by', 'client', '--search', 'refactor']);
-    expect(r.out).toContain('Acme');
-    expect(r.out).toContain('auth refactor');
-    expect(r.out).not.toContain('Globex');
-    expect(r.out).not.toContain('deploy pipeline');
+    expect(r.err).toMatch(/unknown option|--by/);
   });
 });
 
@@ -440,6 +388,45 @@ describe('GOLD: config set validates (§14)', () => {
     expect(r.code).not.toBe(0);
     expect(r.err).toMatch(/one of/);
   });
+
+  // §14 timeline-window keys — tt parity arrived automatically from the descriptor list
+  // (the config block is fully descriptor-driven), so the CLI must expose AND validate the
+  // four keys exactly as core does. Each rejection exits non-zero with a diagnostic and
+  // leaves `config ls --json` reading the documented default.
+  it('rejects a malformed working_hours_start (not zero-padded HH:MM)', () => {
+    const r = tt(['config', 'set', 'working_hours_start', '7am']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/invalid value for working_hours_start/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).workingHoursStart).toBe('07:00');
+  });
+
+  it('rejects a working-hours pair that violates start<end', () => {
+    // Against the default start 07:00, an end of 06:00 inverts the pair.
+    const r = tt(['config', 'set', 'working_hours_end', '06:00']);
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/start must be before end/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).workingHoursEnd).toBe('18:00');
+  });
+
+  it('rejects picker_around_hours outside 1–24', () => {
+    for (const bad of ['0', '25']) {
+      const r = tt(['config', 'set', 'picker_around_hours', bad]);
+      expect(r.code).not.toBe(0);
+      expect(r.err).toMatch(/1 to 24/);
+    }
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerAroundHours).toBe(8);
+  });
+
+  it('round-trips picker_window_mode through config set / ls --json', () => {
+    const set = tt(['config', 'set', 'picker_window_mode', 'around_now']);
+    expect(set.code).toBe(0);
+    expect(set.out).toBe('set picker_window_mode = around_now');
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerWindowMode).toBe('around_now');
+    // …and an unknown mode is rejected, leaving the stored choice intact.
+    const bad = tt(['config', 'set', 'picker_window_mode', 'sometimes']);
+    expect(bad.code).not.toBe(0);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerWindowMode).toBe('around_now');
+  });
 });
 
 describe('GOLD: tt report (§09)', () => {
@@ -488,6 +475,10 @@ describe('GOLD: settings defaults (§14)', () => {
       checkin_interval_min    30
       global_hotkey           CommandOrControl+Alt+T
       date_format             system
+      working_hours_start     07:00
+      working_hours_end       18:00
+      picker_window_mode      working_hours
+      picker_around_hours     8
       backup_retention        5"
     `);
   });
@@ -502,6 +493,10 @@ describe('GOLD: settings defaults (§14)', () => {
       checkinIntervalMin: 30,
       globalHotkey: 'CommandOrControl+Alt+T',
       dateFormat: 'system',
+      workingHoursStart: '07:00',
+      workingHoursEnd: '18:00',
+      pickerWindowMode: 'working_hours',
+      pickerAroundHours: 8,
       backupRetention: 5,
     });
   });
@@ -655,13 +650,16 @@ describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
     }
   });
 
-  it('the report-save / fav rows stay new-only, never core (§09, §05 parity rows)', () => {
+  it('the report-save / fav rows are present and never core (§09, §05 parity rows)', () => {
+    // The timeless-docs principle (process.html §02) removed the change-narrative
+    // "new" badges from the PRD entirely; what must still hold is that these
+    // parity rows exist and never gain a core badge.
     const rows = rowsByCommand();
     for (const cmd of ['tt report save <name>', 'tt report ls / show <name> / rm <name>', 'tt report run <name>', 'tt fav …']) {
       const does = rows.get(cmd);
       expect(does, `missing §11 row: ${cmd}`).toBeDefined();
       expect(hasCoreBadge(does!), `${cmd} should NOT be badged core`).toBe(false);
-      expect(/<span class="new">new<\/span>/.test(does!), `${cmd} should stay new`).toBe(true);
+      expect(/<span class="new">new<\/span>/.test(does!), `${cmd} must not carry change-narrative badges (timeless docs)`).toBe(false);
     }
   });
 });
@@ -1086,5 +1084,74 @@ describe('GOLD: merge conflict override (§06, §16)', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].client).toBe('Client B');
     expect(rows[0].description).toBe('part one / part two');
+  });
+});
+
+describe('GOLD: tt list description cell (§11, §05 R10)', () => {
+  const RANGE = ['--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z'] as const;
+  // The human-table cap: `tt list`'s table shows only the FIRST line of a description, capped at
+  // 60 chars, and appends '…' whenever content was dropped (a long first line OR a multiline
+  // description). The cap lives ONLY here — the machine read-side keeps full fidelity.
+  it('null / empty → empty cell', () => {
+    expect(descriptionCell(null)).toBe('');
+    expect(descriptionCell('')).toBe('');
+  });
+
+  it('a short single line passes through unchanged', () => {
+    expect(descriptionCell('auth refactor')).toBe('auth refactor');
+  });
+
+  it('a multiline description keeps only its first line + ellipsis', () => {
+    expect(descriptionCell('line one\nline two')).toBe('line one…');
+    expect(descriptionCell('first\r\nsecond\r\nthird')).toBe('first…');
+  });
+
+  it('a first line longer than 60 chars is capped at 60 + ellipsis', () => {
+    const long = 'x'.repeat(80);
+    const capped = descriptionCell(long);
+    expect(capped).toBe(`${'x'.repeat(60)}…`);
+    // Exactly 60 on a single line is unchanged (the cap only bites past 60, no dropped content).
+    expect(descriptionCell('y'.repeat(60))).toBe('y'.repeat(60));
+  });
+
+  it('caps by the first line only, then ellipsis (never the whole multiline blob)', () => {
+    // A short first line followed by more lines shows only line one + '…' (content was dropped).
+    expect(descriptionCell(`short\n${'z'.repeat(80)}`)).toBe('short…');
+  });
+
+  it('tt list (human) prints exactly the first 60 chars + … for a long single-line description', () => {
+    const long = 'x'.repeat(80);
+    tt(['add', long, '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T09:30:00Z']);
+    const r = tt(['list', ...RANGE, '--all']);
+    expect(r.code).toBe(0);
+    // The DESCRIPTION cell is the first 60 chars + ellipsis — never the full 80.
+    expect(r.out).toContain(`${'x'.repeat(60)}…`);
+    expect(r.out).not.toContain('x'.repeat(61));
+  });
+
+  it('tt list (human) prints only line 1 + … for a multiline description', () => {
+    tt(['add', 'line one\nline two', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T09:30:00Z']);
+    const r = tt(['list', ...RANGE, '--all']);
+    expect(r.code).toBe(0);
+    // Only the first line (with the truncation ellipsis) shows; the second line never appears.
+    expect(r.out).toContain('line one…');
+    expect(r.out).not.toContain('line two');
+  });
+
+  it('tt list --json carries the full untruncated description verbatim (full fidelity)', () => {
+    // The machine read-side never truncates or flattens: the interior newline survives byte-for-byte
+    // and the row still validates against the published list schema.
+    const multiline = 'line one\nline two';
+    const long = 'x'.repeat(80);
+    tt(['add', multiline, '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T09:30:00Z']);
+    tt(['add', long, '--from', '2026-06-24T11:00:00Z', '--to', '2026-06-24T11:30:00Z']);
+    const r = tt(['list', ...RANGE, '--all', '--json']);
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('list.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    const descriptions = json.map((e: { description: string }) => e.description);
+    expect(descriptions).toContain(multiline); // interior newline intact, full fidelity
+    expect(descriptions).toContain(long); // full 80 chars, never capped at 60
   });
 });

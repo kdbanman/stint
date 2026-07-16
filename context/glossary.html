@@ -138,7 +138,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Saved report</td>
-          <td data-l="Definition">A named, persistent <strong>report definition</strong>: a preset of {range-spec, group-by, filters, rounding}. Stored in its own <code>report</code> table; the range is held as a <strong>relative spec</strong> (e.g. <code>this-week</code>) or an absolute range. The <em>definition</em>, not its output — running it (§03 "report run") resolves it against current data. See §09 — "report" now carries two senses.</td>
+          <td data-l="Definition">A named, persistent <strong>report definition</strong>: a preset of {range-spec, group-by, filters, rounding}. Stored in its own <code>report</code> table; the range is held as a <strong>relative spec</strong> (e.g. <code>this-week</code>) or an absolute range. The <em>definition</em>, not its output — running it (§03 "report run") resolves it against current data. See §09 — "report" carries two senses.</td>
           <td class="avoid" data-l="Avoid"><s>report</s> (unqualified — see §09), <s>view</s>, <s>filter set</s>, <s>query</s></td>
         </tr>
         <tr>
@@ -153,7 +153,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Setting</td>
-          <td data-l="Definition">A key/value pair of app configuration (rounding, week start, check-in cadence, hotkey, …). Shared by both surfaces through the same database.</td>
+          <td data-l="Definition">A key/value pair of app configuration (rounding, week start, check-in cadence, hotkey, the timeline window, …). Shared by both surfaces through the same database.</td>
           <td class="avoid" data-l="Avoid"><s>preference</s>, <s>config flag</s></td>
         </tr>
         <tr>
@@ -209,17 +209,17 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Backfill</td>
-          <td data-l="Definition">Create a closed entry from explicit <code>from</code>/<code>to</code> times, after the fact (<code>tt add</code>). Backfilled entries are <strong>first-class</strong> — indistinguishable from tracked ones except by their timestamps.</td>
+          <td data-l="Definition">Create a closed entry from explicit <code>from</code>/<code>to</code> times, after the fact (<code>tt add</code>). Backfilled entries are <strong>first-class</strong> — indistinguishable from tracked ones except by their timestamps. In the GUI, backfill is the <strong>unified entry form</strong> in add mode (§12 R07): from/to chosen on the <strong>interval picker</strong>, exact and overnight spans typed in the <strong>Start/Stop expander</strong> (§06).</td>
           <td class="avoid" data-l="Avoid"><s>manual entry</s> (the act is "backfill"), <s>import</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Split</td>
-          <td data-l="Definition">Cut one entry into two at a chosen instant within its span. Both halves inherit the original's client/project/tags/billable; the user adjusts from there.</td>
-          <td class="avoid" data-l="Avoid"><s>divide</s>, <s>cut</s></td>
+          <td data-l="Definition">Cut one entry into two at a chosen instant within its span. Both halves inherit the original's client/project/tags/billable; the user adjusts from there. The control is labelled <strong>Split</strong> — in the GUI it lives in the unified entry form's edit-mode footer and takes the instant as plain text (§06 R02).</td>
+          <td class="avoid" data-l="Avoid"><s>divide</s>, <s>cut</s>, <s>split at instant</s> (as the control's name)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Merge</td>
-          <td data-l="Definition">Combine a contiguous selection of entries into one spanning earliest start to latest end. On attribute conflict: GUI prompts; <code>tt</code> uses the first entry unless overridden. Descriptions concatenate, tags union.</td>
+          <td data-l="Definition">Combine a contiguous selection of entries into one spanning earliest start to latest end. In the GUI the selection is checked on the <strong>entries calendar</strong> (§06): each event's hover-corner checkbox; any check enters multi-select mode and raises a merge bar (§12 R16). On attribute conflict: GUI prompts; <code>tt</code> uses the first entry unless overridden. Descriptions concatenate, tags union.</td>
           <td class="avoid" data-l="Avoid"><s>combine</s>, <s>join</s></td>
         </tr>
         <tr>
@@ -275,7 +275,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Group key</td>
-          <td data-l="Definition">The value a <strong>report run</strong>'s rows are bucketed under when grouping is on: a local-date token <code>YYYY-MM-DD</code> (by day), or a client / project / tag name. An entry lacking a value for the grouped dimension falls under a canonical <strong>empty-dimension bucket</strong> — exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — which sorts first. Grouping by tag <strong>fans out</strong>: a multi-tag entry appears under each of its tags, so per-tag lines may sum to more than the grand total — which stays the de-duplicated sum of distinct entries and is identical under every grouping.</td>
+          <td data-l="Definition">The value a <strong>report run</strong>'s rows are bucketed under when grouping is on: a local-date token <code>YYYY-MM-DD</code> (by day), or a client / project / tag name. An entry lacking a value for the grouped dimension falls under a canonical <strong>empty-dimension bucket</strong> — exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — which sorts first. Grouping by tag <strong>fans out</strong>: a multi-tag entry appears under each of its tags, so per-tag lines may sum to more than the grand total — which stays the de-duplicated sum of distinct entries and is identical under every grouping. Grouping is a <strong>Reports</strong> concept: grouped breakdowns live in <code>tt report --by</code> and the GUI Reports view (§09 R02), while the entries calendar and <code>tt list</code> render entries ungrouped.</td>
           <td class="avoid" data-l="Avoid"><s>bucket</s> (reserve that for the empty-dimension label), <s>segment</s>, <s>category</s></td>
         </tr>
       </tbody>
@@ -310,7 +310,7 @@
   <section id="s5">
     <div class="eyebrow"><span class="n">05</span> Hygiene &amp; integrity</div>
     <h2>Keeping the hours honest</h2>
-    <p>The mechanisms that catch a number before it lands, wrong, on an invoice — and, newly, the mechanisms that keep the file itself intact. All surface the problem; none silently fixes the hours.</p>
+    <p>The mechanisms that catch a number before it lands, wrong, on an invoice — and the mechanisms that keep the file itself intact. All surface the problem; none silently fixes the hours.</p>
     <table>
       <thead><tr><th>Term</th><th>Definition</th><th>Aliases to avoid</th></tr></thead>
       <tbody>
@@ -456,9 +456,29 @@
           <td class="avoid" data-l="Avoid"><s>build number</s>, <s>git sha</s>, <s>tag</s> (that's the release tag)</td>
         </tr>
         <tr>
-          <td class="term" data-l="Term">Time-range picker</td>
-          <td data-l="Definition">The GUI's <strong>visual start+stop selection surface</strong>: a single-day calendar column with hour lines on which the entry is a draggable rectangle (drag body moves start, drag bottom resizes end; 5-min snap; other entries gray, overlaps yellow, warn-only). Opens on click of a time text field or its calendar icon. Used in add-entry, edit-closed-entry, and edit-running-start (not split); overnight spans use text. <strong>Text entry remains everywhere and stays authoritative</strong> — the picker is a convenience over it, never a replacement.</td>
-          <td class="avoid" data-l="Avoid"><s>calendar picker</s>, <s>timeline</s>, <s>scheduler</s>, <s>date picker</s></td>
+          <td class="term" data-l="Term">Unified entry form</td>
+          <td data-l="Definition">The <strong>single add/edit surface for entries</strong>, inline in the Entries view — never a modal. One form serves <strong>add mode</strong> (backfill, §12 R07) and <strong>edit mode</strong> (§12 R06): left column a three-line, scrollable <strong>multiline description</strong> (§05 R10), client, project below client, tags, and billable; right half the inline <strong>interval picker</strong> with its collapsed <strong>Start/Stop expander</strong>. The picker updates the form state live; <strong>Save entry</strong> is the only commit (§12 R07). Edit mode adds the footer: <strong>Split</strong> and the two-step <strong>Delete</strong>.</td>
+          <td class="avoid" data-l="Avoid"><s>editor modal</s>, <s>edit dialog</s>, <s>add form</s> / <s>edit form</s> (as two surfaces)</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Interval picker</td>
+          <td data-l="Definition">The <strong>inline start+stop selection surface</strong> in the unified entry form's right half: a month calendar drills to a <strong>single-day column</strong> with hour lines, where the entry is a draggable rectangle — drag the body to move the whole interval, drag the bottom grip to resize the stop, both on a <strong>5-minute snap</strong>. Other entries render gray; overlaps render yellow, warn-only (§06 R04). Every drag updates the form state <strong>live</strong>; <strong>Save entry</strong> is the only commit. The default viewport follows the <strong>timeline window</strong> (§14) — a scroll window over the full 24-hour track, never a clipped one — and centers on the edited interval when editing. For a <strong>running</strong> entry the picker is <strong>start-only</strong>: a start drag handle, an empty end, the block fading into the future via a transparency gradient (§05 R06). Exact times and overnight spans enter through the <strong>Start/Stop expander</strong>. §12 R15.</td>
+          <td class="avoid" data-l="Avoid"><s>time-range picker</s>, <s>calendar picker</s>, <s>date-time picker</s>, <s>range picker</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Start/Stop expander</td>
+          <td data-l="Definition">The unified form's <strong>collapsed disclosure</strong> holding raw Start and Stop text fields beneath the interval picker — the <strong>exact-entry escape hatch</strong> (type a precise instant rather than drag) and the <strong>only path for overnight spans</strong>. Expander and picker <strong>drive the same form values</strong>, so both write identical entries; <strong>Save entry</strong> commits either way, and the picker reflects typed edits. <strong>Core</strong> (§12 R17): it is the only path for overnight backfill.</td>
+          <td class="avoid" data-l="Avoid"><s>exact-time fields</s>, <s>raw fields</s> (unqualified), <s>text mode</s>, <s>advanced mode</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Entries calendar</td>
+          <td data-l="Definition">The Entries view's content: a <strong>readonly day-column rendering</strong> of the selected range — one <strong>fixed, comfortable-width</strong> column per day (never stretched or compressed; the calendar scrolls horizontally when the range doesn't fit), a <strong>working-hours</strong> scroll viewport over the full 24-hour track (never clipped), per-day <strong>billable totals</strong> in the column headers, empty days as empty columns. Hovering an event reveals <strong>Delete / Split / Edit</strong> and a <strong>corner checkbox</strong> — checking any box enters multi-select mode with a merge bar (§06 R03) — and <strong>clicking an event opens the unified entry form</strong> in edit mode. The running entry renders start-only, fading into the future. Readonly means nothing on the calendar mutates an entry directly: every edit goes through the form. §12 R16.</td>
+          <td class="avoid" data-l="Avoid"><s>entry list</s>, <s>list view</s>, <s>agenda</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Timeline window</td>
+          <td data-l="Definition">The <strong>Timeline group</strong> of settings (§14, §12 R12) shaping the default viewport of the time surfaces: <strong>working hours</strong> (<code>working_hours_start</code> / <code>working_hours_end</code>, an <code>HH:MM</code> pair with start strictly before end; defaults 07:00–18:00), the <strong>picker window mode</strong> (<code>picker_window_mode</code>: <code>working_hours</code> or <code>around_now</code>), and the <strong>around-now span</strong> (<code>picker_around_hours</code>, total hours centered on now, 1–24). Shared by both surfaces (<code>tt config</code> edits the same keys). A <strong>scroll default, never clipping</strong>: the full 24-hour track stays reachable in a scrollable viewport. The interval picker follows the configured mode (and centers on the edited interval when editing); the entries calendar always defaults to working hours. A display preference — deliberately <em>not</em> core (§03).</td>
+          <td class="avoid" data-l="Avoid"><s>viewport settings</s>, <s>working hours</s> (as the umbrella — that's one setting within), <s>zoom</s>, <s>day window</s></td>
         </tr>
       </tbody>
     </table>
@@ -514,6 +534,10 @@
       <p><span class="who">Dev</span>"Reconcile added a two-hour <strong>SleepSpan</strong> on launch — do we trust it?"</p>
       <p><span class="who">Owner</span>"That one's <code>source = gap</code> — a <em>suspicion</em> from the <strong>heartbeat</strong> gap, not a live power <code>event</code>. Flag it for review; don't subtract it automatically. Only the user's <strong>subtract</strong> moves seconds into <code>excluded_seconds</code>."</p>
     </div>
+    <div class="dlg">
+      <p><span class="who">Dev</span>"She wants to backfill 22:00 to 01:30 — can she drag that in the picker?"</p>
+      <p><span class="who">Owner</span>"No — the <strong>interval picker</strong> shows one day column; an overnight span goes through the <strong>Start/Stop expander</strong>, the exact-entry escape hatch. It writes the <em>same form values</em> a drag would, and <strong>Save entry</strong> is the only commit either way. And she edits from the <strong>entries calendar</strong> — click the event, the <strong>unified entry form</strong> opens; the calendar itself is readonly."</p>
+    </div>
   </section>
 
   <section id="s9">
@@ -532,8 +556,8 @@
           <td data-l="Resolution"><strong>Resume</strong> (unqualified) copies the <strong>most recent entry</strong>. <strong>Resume from favorite</strong> instantiates a <strong>named, pinned template</strong> (the <code>favorite</code> table). A favorite is not an entry and holds no times. Don't say "resume" when a favorite is meant.</td>
         </tr>
         <tr>
-          <td data-l="Ambiguity"><strong>Visual range picker vs text entry</strong> — which is the source of truth for an entry's start/stop?</td>
-          <td data-l="Resolution"><strong>Text entry is authoritative</strong> and remains everywhere. The <strong>time-range picker</strong> is a visual convenience layered over it (and the only path for some interactions, but never the canonical store). Overnight spans use text; the picker covers same-day add/edit-closed/edit-running-start, not split.</td>
+          <td data-l="Ambiguity"><strong>Interval picker vs Start/Stop expander</strong> — two ways to set an entry's start/stop; which one is the truth?</td>
+          <td data-l="Resolution"><strong>Neither outranks the other.</strong> Picker and expander <strong>drive the same form values</strong> (§12 R17): the picker is the picking surface (drag, 5-min snap), the expander the exact-entry escape hatch and the <strong>only path for overnight spans</strong> — and <strong>Save entry</strong> is the only commit for both. One form state, two ways to set it, identical entries written either way; there is no authority hierarchy and no separate "text truth." (Split is its own control and takes its instant as plain text — §06 R02.)</td>
         </tr>
         <tr>
           <td data-l="Ambiguity"><strong>"Backup" vs "export" vs "archive"</strong> — three ways something is "saved."</td>
@@ -577,7 +601,7 @@
         </tr>
       </tbody>
     </table>
-    <div class="note"><span class="lbl">Process</span>This glossary follows the <em>grill-with-docs</em> approach: fuzzy language gets sharpened through interview, then formalized here. New terms and refinements land in this file as the design tree is walked. It is the thinnest useful documentation layer — a glossary of non-obvious terms plus decisions already made — meant to be read alongside, and to stay consistent with, the concept and the PRD. Most recently extended via the <strong>issue&nbsp;#27</strong> grill, which canonicalized domain that emerged during implementation: <strong>SleepSpan</strong> (with its <code>event</code>/<code>gap</code> source), <strong>App state</strong> / <strong>Heartbeat</strong> / <strong>Check-in schedule</strong>, the <strong>quarantined</strong>/<strong>replaced</strong> recovery files, <strong>group key</strong> &amp; empty-dimension buckets, <strong>range preset</strong>/<strong>spec</strong>, and the packaging terms (<strong>tt launcher</strong>, <strong>offline guarantee</strong>, <strong>version stamp</strong>). "Switch" was deliberately <em>not</em> added and has since been <em>removed</em> (issue&nbsp;#34) — it was a redundant alias of <strong>Start</strong>, which already stops any open entry first as one atomic stop-then-start. Switching tasks <em>is</em> starting; attribute carry-forward is what <strong>Resume</strong> does.</div>
+    <div class="note"><span class="lbl">Process</span>This glossary follows the <em>grill-with-docs</em> approach: fuzzy language gets sharpened through interview, then formalized here. New terms and refinements land in this file as the design tree is walked. It is the thinnest useful documentation layer — a glossary of non-obvious terms plus decisions already made — meant to be read alongside, and to stay consistent with, the concept and the PRD. One standing rejection worth recording so it isn't relitigated: "Switch" is deliberately <em>not</em> a term — it would be a redundant alias of <strong>Start</strong>, which already stops any open entry first as one atomic stop-then-start. Switching tasks <em>is</em> starting; attribute carry-forward is what <strong>Resume</strong> does.</div>
   </section>
 
   <div class="foot">

@@ -25,6 +25,7 @@ import {
   CSV_COLUMNS,
   openDb,
   readSettings,
+  writeSetting,
   describeOverlaps,
   resolveRange,
   resolveSavedRange,
@@ -74,9 +75,13 @@ describe('GOLD: settings defaults (§14)', () => {
         "dateFormat": "system",
         "firstCheckinMin": 60,
         "globalHotkey": "CommandOrControl+Alt+T",
+        "pickerAroundHours": 8,
+        "pickerWindowMode": "working_hours",
         "rounding": false,
         "roundingIncrementMin": 15,
         "weekStart": "monday",
+        "workingHoursEnd": "18:00",
+        "workingHoursStart": "07:00",
       }
     `);
     expect(store.settings()).toEqual(DEFAULT_SETTINGS);
@@ -92,9 +97,75 @@ describe('GOLD: settings defaults (§14)', () => {
     // Inject values the write path would have rejected, straight into the table.
     db.prepare("INSERT INTO setting(key, value) VALUES('rounding_increment_min', '999')").run();
     db.prepare("INSERT INTO setting(key, value) VALUES('checkin_interval_min', 'NaN')").run();
+    // §14 — a malformed HH:MM start (never a valid write) likewise falls back on read.
+    db.prepare("INSERT INTO setting(key, value) VALUES('working_hours_start', '99:99')").run();
     const s = readSettings(db);
     expect(s.roundingIncrementMin).toBe(DEFAULT_SETTINGS.roundingIncrementMin);
     expect(s.checkinIntervalMin).toBe(DEFAULT_SETTINGS.checkinIntervalMin);
+    expect(s.workingHoursStart).toBe(DEFAULT_SETTINGS.workingHoursStart);
+    db.close();
+  });
+
+  // §14 — the timeline-window keys (G15): writeSetting is exactly as strict as the CLI's
+  // `config set` because both run the SAME descriptor validation; each rejection leaves the
+  // stored value at its documented default. These fail if a key, a default, or any
+  // validation rule (HH:MM shape, the cross-field start<end pair, the 1–24 around span,
+  // the two-mode enum) regresses.
+  it('writeSetting rejects malformed HH:MM working-hours values, keeping the defaults', () => {
+    const db = openDb(':memory:');
+    expect(() => writeSetting(db, 'workingHoursStart', '7:00')).toThrow(/HH:MM/);
+    expect(() => writeSetting(db, 'workingHoursStart', '25:00')).toThrow(/HH:MM/);
+    expect(() => writeSetting(db, 'workingHoursEnd', '18:60')).toThrow(/HH:MM/);
+    const s = readSettings(db);
+    expect(s.workingHoursStart).toBe('07:00');
+    expect(s.workingHoursEnd).toBe('18:00');
+    db.close();
+  });
+
+  it('writeSetting rejects a start>=end working-hours pair (cross-field, either key)', () => {
+    const db = openDb(':memory:');
+    // Against the default start 07:00, an earlier (or equal) end inverts the pair.
+    expect(() => writeSetting(db, 'workingHoursEnd', '06:00')).toThrow(/start must be before end/);
+    expect(() => writeSetting(db, 'workingHoursEnd', '07:00')).toThrow(/start must be before end/);
+    // Against the default end 18:00, a later (or equal) start inverts it too.
+    expect(() => writeSetting(db, 'workingHoursStart', '19:00')).toThrow(/start must be before end/);
+    const s = readSettings(db);
+    expect(s.workingHoursStart).toBe('07:00');
+    expect(s.workingHoursEnd).toBe('18:00');
+    // A valid re-narrowing still writes (the rule is start<end, not immutability).
+    writeSetting(db, 'workingHoursStart', '09:00');
+    writeSetting(db, 'workingHoursEnd', '15:00');
+    expect(readSettings(db)).toMatchObject({ workingHoursStart: '09:00', workingHoursEnd: '15:00' });
+    db.close();
+  });
+
+  it('writeSetting rejects out-of-domain picker_around_hours and an unknown mode', () => {
+    const db = openDb(':memory:');
+    expect(() => writeSetting(db, 'pickerAroundHours', 0)).toThrow(/1 to 24/);
+    expect(() => writeSetting(db, 'pickerAroundHours', 25)).toThrow(/1 to 24/);
+    expect(() => writeSetting(db, 'pickerAroundHours', 2.5)).toThrow(/whole number/);
+    expect(() => writeSetting(db, 'pickerWindowMode', 'sometimes' as never)).toThrow(
+      /working_hours or around_now/,
+    );
+    const s = readSettings(db);
+    expect(s.pickerAroundHours).toBe(DEFAULT_SETTINGS.pickerAroundHours);
+    expect(s.pickerWindowMode).toBe(DEFAULT_SETTINGS.pickerWindowMode);
+    // The valid domain round-trips.
+    writeSetting(db, 'pickerWindowMode', 'around_now');
+    writeSetting(db, 'pickerAroundHours', 12);
+    expect(readSettings(db)).toMatchObject({ pickerWindowMode: 'around_now', pickerAroundHours: 12 });
+    db.close();
+  });
+
+  it('an inverted stored working-hours pair falls back to BOTH defaults on read', () => {
+    const db = openDb(':memory:');
+    // Individually valid HH:MM values that violate the cross-field start<end rule,
+    // injected straight into the table (the write path would have rejected the pair).
+    db.prepare("INSERT INTO setting(key, value) VALUES('working_hours_start', '18:00')").run();
+    db.prepare("INSERT INTO setting(key, value) VALUES('working_hours_end', '07:00')").run();
+    const s = readSettings(db);
+    expect(s.workingHoursStart).toBe(DEFAULT_SETTINGS.workingHoursStart);
+    expect(s.workingHoursEnd).toBe(DEFAULT_SETTINGS.workingHoursEnd);
     db.close();
   });
 });
@@ -342,6 +413,41 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
     });
     const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
     expect(csv.split('\n')[1]).toContain('"wrote ""the, report"""');
+    store.close();
+  });
+
+  it('a description with an embedded newline is quoted and round-trips byte-for-byte (§05 R10)', () => {
+    // §05 R10 / §17 R8 — multiline descriptions are stored VERBATIM and the CSV escape hatch
+    // must round-trip them: the embedded newline forces RFC-4180 quoting so the field survives
+    // whole, and parsing the emitted cell back yields the original byte-for-byte. This fails if
+    // csvCell stops quoting \n, or any surface flattens the stored text.
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const original = 'line one\nline two';
+    store.add({
+      description: original,
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T09:30:00Z',
+    });
+    const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
+    // The interior newline is preserved inside a single quoted field — not split across rows.
+    expect(csv).toContain('"line one\nline two"');
+    // Parse the quoted description cell back out (unescaping doubled quotes) and prove it is
+    // byte-identical to the stored value.
+    const open = csv.indexOf('"');
+    let roundTripped = '';
+    for (let i = open + 1; i < csv.length; i++) {
+      const ch = csv[i];
+      if (ch === '"') {
+        if (csv[i + 1] === '"') {
+          roundTripped += '"';
+          i++;
+          continue;
+        }
+        break;
+      }
+      roundTripped += ch;
+    }
+    expect(roundTripped).toBe(original);
     store.close();
   });
 });

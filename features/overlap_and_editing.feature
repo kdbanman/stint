@@ -1,12 +1,22 @@
 Feature: Overlap, split and merge
-  # PRD §06 — editing; overlap warns-not-blocks; split/merge.
+  # PRD §06 — editing; overlap warns-not-blocks; split/merge. Overlap is never blocked:
+  # the write commits, a non-blocking warning is surfaced, and the overlap is flagged
+  # downstream. In the GUI that flag reaches three warn-only surfaces — a yellow warn band
+  # on the entries calendar (§12 R16), a warn-only band in the inline interval picker
+  # (§12 R15), and the amount+neighbour detail in the unified editor (§12 R10) — while the
+  # authoritative overlapped flag stays core-fed. These scenarios prove the surface-neutral
+  # core behaviour (warn, allow, flag) that every one of those surfaces renders, run twice
+  # (core + tt); the warn-band/detail painting itself is JUDGE evidence on the GUI.
 
   Background:
     Given an empty database
     And a client "Client A" with project "API"
 
   Scenario: Backfill that overlaps an existing entry is warned, not blocked
-    # PRD §06 R4 — overlap is allowed if meant, and flagged downstream.
+    # PRD §06 R4 — overlap is allowed if meant, and flagged downstream: the backfill lands,
+    # a non-blocking warning is surfaced (the GUI's transient overlap banner / picker +
+    # calendar warn bands, tt's stderr note), and both spans read overlapped in a report.
+    # Regresses if any surface silently blocks the write or drops the flag.
     Given a closed entry "morning" from 09:00 to 11:00
     When I backfill an entry "call" from 10:00 to 10:30
     Then the backfill succeeds
@@ -14,10 +24,12 @@ Feature: Overlap, split and merge
     And both entries are flagged overlapped in a report covering the day
 
   Scenario: Attribute-bearing backfill that overlaps is warned, not blocked
-    # PRD §12 R7 / §06 R4 — the GUI Manual-add form backfills a completed entry carrying
-    # client/project alongside its explicit from/to (the same attribute set tt add accepts);
-    # an overlapping span is warned, not blocked, and the entry is first-class (billable by
-    # the client rule, labelled, flagged). The surface-neutral parity twin of the GUI form.
+    # PRD §12 R7 / §06 R4 — the GUI's unified entry form (add mode) backfills a completed
+    # entry carrying client/project alongside its explicit from/to picked on the inline
+    # interval picker (the same attribute set tt add accepts); an overlapping span is warned,
+    # not blocked, and the entry is first-class (billable by the client rule, labelled,
+    # flagged overlapped — a warn band on the calendar/picker, the amount+neighbour detail in
+    # the editor). The surface-neutral parity twin of that form.
     Given a closed entry "morning" from 09:00 to 11:00
     When I backfill an entry "design review" for "Client A" / "API" from 10:00 to 10:30
     Then the backfill succeeds
@@ -50,17 +62,21 @@ Feature: Overlap, split and merge
     And the merged entry is for "Client B"
 
   Scenario: Editing amends a field without disturbing the open state
-    # PRD §05 R6, §06 R1 — any field is editable; the entry stays as it was otherwise.
+    # PRD §05 R6, §06 R1 — any field is editable; the entry stays as it was otherwise. In the
+    # GUI this edit runs through the unified entry form (§12 R06) opened in edit mode from the
+    # entries calendar (§12 R16) — no separate modal, no row-inline form; this scenario proves
+    # the edit arithmetic is identical on core and tt, whichever surface hosts the form.
     Given I start an entry "draft" at 09:00
     When I edit the entry "draft" description to "final draft"
     Then exactly one entry is open
     And the open entry is "final draft"
 
   Scenario: Deleting an entry removes it and its time from the list
-    # PRD §06 R1 — an entry can be deleted outright; the row is gone and the surviving
-    # entries are exactly the rest (the deleted entry's time no longer counts). The
-    # confirmation gate is a surface concern (GOLD/JUDGE); this proves the underlying
-    # delete arithmetic is identical on core and tt.
+    # PRD §06 R1 — an entry can be deleted outright; it is gone from the entries calendar
+    # (§12 R16) and the surviving entries are exactly the rest (the deleted entry's time no
+    # longer counts). The confirmation gate is a surface concern (GOLD/JUDGE) — in the GUI it
+    # is the unified editor's edit-mode footer two-step Delete (§12 R06/R13); here we prove the
+    # underlying delete arithmetic is identical on core and tt.
     Given a closed entry "keep" from 09:00 to 10:00
     And a closed entry "scratch" from 10:00 to 11:00
     When I delete the entry "scratch"
@@ -72,14 +88,29 @@ Feature: Overlap, split and merge
     # PRD §06 R1 — the confirm gate IS the loss-protection (a core requirement): a
     # destructive delete that is NOT confirmed never destroys data. Surface-neutral over
     # the World `removeUnconfirmed` capability — core never auto-confirms a destructive
-    # delete, and `tt rm` (no --force) refuses on stderr with a non-zero exit — so the gate
-    # behaves identically on both surfaces. Regresses if either surface deletes unconfirmed.
+    # delete, `tt rm` (no --force) refuses on stderr with a non-zero exit, and the GUI's
+    # unified editor requires the edit-mode footer's two-step Delete (arm then confirm,
+    # §12 R06/R13) before any remove fires — so the gate behaves identically on every
+    # surface. Regresses if any surface deletes unconfirmed.
     Given a closed entry "keep" from 09:00 to 10:00
     And a closed entry "scratch" from 10:00 to 11:00
     When I attempt to delete the entry "scratch" without confirming
     Then the delete is refused
     And there is still an entry "scratch"
     And there are exactly 2 entries
+
+  Scenario: Subtracting slept time trims billable and is reversible
+    # PRD §12 R10 / §05 R08 — the unified editor's reversible sleep control: subtracting a slept
+    # entry's recorded sleep span excludes it from the billable duration (in the GUI the raw
+    # duration reads struck through beside the trimmed billable), and subtracting again restores it.
+    # Surface-neutral over core store.subtractSleep and `tt sleep subtract` (run TWICE); the
+    # struck-raw rendering + the reversible control are JUDGE evidence on the GUI editor. Regresses
+    # if subtract does not trim billable, or is not reversible, on either surface.
+    Given a slept entry "deep work" of raw 4 hours with a recorded 1 hour sleep span
+    When I subtract the slept time from "deep work"
+    Then the entry "deep work" has a billable duration of 180 minutes
+    When I subtract the slept time from "deep work"
+    Then the entry "deep work" has a billable duration of 240 minutes
 
   Scenario: Editing the running entry's start does not stop it
     # PRD §05 R6 — the open entry is editable, including its start, without closing it.

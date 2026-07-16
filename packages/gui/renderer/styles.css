@@ -5,7 +5,7 @@
  * numerals, a 4px grid with the fixed radius trio (8 controls / 12 cards / 16 window &
  * overlays), and one strict elevation ladder: canvas → card → raised → popover → modal.
  *
- * ONE RATIONED ACCENT (--accent, the clay #C8623E, unconditional — not a setting and never
+ * ONE RATIONED ACCENT (--accent, the design system's clay, unconditional — not a setting and never
  * overridden at runtime): only each view's single primary action (button.primary), the active nav item,
  * the running-state indicator, and the keyboard focus ring carry it — never decoratively.
  *
@@ -265,8 +265,10 @@ header.mast {
   color: var(--muted);
 }
 .liveedit .le-editable { color: var(--faint); }
-.liveedit .le-field input[type='text'],
-.liveedit .le-field input[type='datetime-local'] {
+/* §12 R14 (G1): the running-start field #le-start is a RAW text input (localInputValue
+   format) — there is no native datetime-local on this surface; the calendar affordance is
+   the inline start-only picker disclosure below the field. */
+.liveedit .le-field input[type='text'] {
   display: block;
   width: 100%;
   margin-top: 6px;
@@ -376,18 +378,37 @@ header.mast {
 }
 .banner[hidden] { display: none; }
 
-/* §12 R9: the detailed in-context overlap banner on an affected entry row. Reuses the
-   .banner warn chrome but sits inside the row's desc cell. Monochrome --flag tokens only. */
-.entry .banner.overlap {
+/* §12 R10: the detailed overlap detail inside the UNIFIED EDITOR's flags region (the readonly
+   calendar shows only the `.ov` warn band; the amount + neighbour detail reads here). Reuses the
+   .banner warn chrome, scoped to the editing entry's form. Monochrome --flag tokens only. */
+.entry-form .banner.overlap {
   display: block;
-  margin: 6px 0 0;
+  margin: 0;
   font-family: var(--num);
   font-size: 11px;
   letter-spacing: 0.02em;
 }
 
-/* §12 R9: the struck-through raw duration beside a slept entry's trimmed billable. The
-   trimmed value reads as the live figure; the raw one is struck in a faint gray. No accent. */
+/* §12 R10 — the unified editor's in-context flags region: the overlap detail (above) and, for a
+   slept entry, the reversible sleep subtract/restore control beside its raw-vs-trimmed duration. */
+.entry-form .ef-flags {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.entry-form .ef-flags[hidden] { display: none; }
+.entry-form .ef-sleep { display: flex; align-items: center; gap: 10px; }
+.entry-form .ef-dur {
+  font-family: var(--num);
+  font-size: 12.5px;
+  font-weight: 590;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* §12 R10: the struck-through raw duration beside a slept entry's trimmed billable, shown in the
+   editor once the slept time is subtracted. The trimmed value reads as the live figure; the raw
+   one is struck in a faint gray. No accent. */
 .struck,
 s {
   text-decoration: line-through;
@@ -492,9 +513,10 @@ s {
   min-width: 200px;
 }
 
-/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets,
-   group-by + billable segments, and client/project/tag filters. Sits on the warm canvas;
-   every control is monochrome (accent stays on the primary action + running state). */
+/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets, the
+   billable segment, and client/project/tag filters (no grouping — grouping left this view
+   for Reports, G11). Sits on the warm canvas; every control is monochrome (accent stays on
+   the primary action + running state). */
 /* The control bar reads as quiet inline controls on the paper canvas, not a heavy nested card
    (design-system: no decorative boxes; surface is signalled by elevation, and these controls
    are flush with the list they filter). A single hairline separates them from the entries. */
@@ -562,20 +584,57 @@ s {
   font-size: 13px;
   color: var(--ink);
 }
+
+/* §05 R10 — the multiline description control (add form #add-desc + the inline editor's
+   .edit-desc). A 3-line-tall, vertically scrollable textarea that shares the text-field chrome
+   but keeps the interior newlines a user types: it scrolls past three lines (never clips) and
+   the user may drag it taller. Mirrors the edit-entry.html mockup's `textarea.field{resize:vertical}`
+   + `.dayview` scroll idiom. */
+.desc-field {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 8px 11px;
+  min-height: calc(3 * 1.4em + 16px);
+  overflow-y: auto;
+  resize: vertical;
+}
 .start-form button.primary { align-self: flex-start; }
 
-/* The manual-backfill form reuses .start-form chrome; its datetime fields + inline warning
-   stay monochrome (only Save reuses .primary). */
-.start-form .add-field {
+/* §12 R07 (G5): the ONE unified entry form in ADD mode — a two-column card (attribute fields
+   on the left, the inline interval picker + collapsed Start/Stop expander on the right). It sits
+   in flow in the Entries view (no modal), and only "Save entry" carries the accent (§15). */
+.unified-form {
   display: flex;
-  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  background: var(--wash);
+}
+.unified-form[hidden] { display: none; }
+.unified-form .uf-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; }
+.unified-form .uf-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.unified-form .uf-picker { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.unified-form .uf-field {
+  display: flex;
   align-items: center;
   gap: 8px;
   font-size: 12px;
   color: var(--muted);
 }
-.start-form input[type="datetime-local"] {
+.unified-form .uf-field > span { white-space: nowrap; }
+.unified-form .uf-select,
+.unified-form .uf-time {
   flex: 1;
+  min-width: 0;
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
@@ -584,9 +643,36 @@ s {
   border-radius: var(--r1);
   padding: 8px 11px;
 }
+.unified-form .uf-select:disabled { color: var(--muted); background: var(--wash); }
+.unified-form .uf-tags { align-items: flex-start; }
+.unified-form .uf-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.unified-form .uf-tag-add {
+  flex: 1;
+  min-width: 90px;
+  font-family: var(--sans);
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 5px 9px;
+}
+.unified-form .uf-bill {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  color: var(--ink);
+}
+/* §12 R17: the collapsed Start/Stop expander under the picker — a quiet disclosure over the raw
+   exact-time fields (the exact / overnight escape hatch). Monochrome; no accent. */
+.unified-form .uf-times { display: flex; flex-direction: column; gap: 8px; }
+.unified-form .uf-times .ef-times-body { display: flex; gap: 10px; }
+.unified-form .uf-foot { display: flex; gap: 9px; align-items: center; }
+.unified-form .uf-foot-spacer { flex: 1; }
 
-/* §05 R05 / §12 R15 (G9): each from/to field pairs its text input with a calendar-icon
-   trigger that opens the shared visual time-range picker. */
+/* Legacy add-form range-field chrome (kept for other surfaces that still pair a text input with
+   a picker trigger). */
 .start-form .range-field {
   display: flex;
   flex: 1;
@@ -615,13 +701,6 @@ s {
    action — it carries the NEUTRAL keyboard ring (only button.primary / .nav-item.active take the
    accent ring). Matches the input/select :focus-visible ring. */
 .range-pick-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
-
-/* §12 R07 (G9): the picker hint under the from/to row — muted, inert helper copy. */
-.start-form .pickhint {
-  font-size: 11.5px;
-  color: var(--faint);
-  margin: -2px 0 2px;
-}
 
 .add-warning {
   font-size: 12px;
@@ -687,8 +766,7 @@ button[hidden] { display: none; }
 .set-update-btn,
 .fav-pin,
 .fav-card .resume,
-.fav-kebab,
-.stp-cancel {
+.fav-kebab {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
@@ -702,8 +780,7 @@ button[hidden] { display: none; }
 .set-update-btn:hover,
 .fav-pin:hover,
 .fav-card .resume:hover,
-.fav-kebab:hover,
-.stp-cancel:hover { background: var(--hover); }
+.fav-kebab:hover { background: var(--hover); }
 
 /* §12 R14: the keyboard-operability focus pass. Every control is reachable by Tab AND shows
    a visible focus ring under keyboard focus. The ring is scoped to :focus-visible so a mouse
@@ -734,7 +811,6 @@ textarea:focus-visible {
    keeping a muted border further below). */
 input[type="text"]:focus:not(:focus-visible),
 input[type="search"]:focus:not(:focus-visible),
-input[type="datetime-local"]:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
 textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 
@@ -785,8 +861,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
 .entry .time { font-family: var(--num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
-.entry .dur { font-family: var(--num); font-size: 12.5px; font-weight: 590; color: var(--ink); text-align: right; font-variant-numeric: tabular-nums; }
-.entry.running .dur { color: var(--accent); font-weight: 640; }
 .entry .nonbill { color: var(--faint); }
 
 /* §07: tag chips shown in-context on the entry row. Monochrome — the accent stays on the
@@ -807,17 +881,6 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
    in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
 .chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
 .chip .chip-x:hover { color: var(--ink); }
-.tag-editor { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-left: 8px; }
-.tag-editor .chips { margin-left: 0; }
-.tag-editor .tag-add-input {
-  border: 0;
-  outline: 0;
-  min-width: 90px;
-  font-size: 12px;
-  font-family: var(--sans);
-  background: transparent;
-  color: var(--ink);
-}
 
 .flags { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
 /* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
@@ -830,66 +893,36 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   border-radius: 999px;
   padding: 1px 9px;
 }
-.entry .actions { display: inline-flex; flex-direction: row-reverse; gap: 4px; align-items: center; float: right; margin-left: 12px; }
-/* A row reads calm: at rest only the kebab (⋯) shows; the explicit Edit / Edit tags / Split /
-   Delete reveal on hover or keyboard focus. They stay in the DOM (and stay Playwright-clickable
-   via opacity, not display:none) so every affordance and selector is intact — only the visual
-   noise is hidden until the row is engaged. */
-.entry .actions .small:not(.kebab) { opacity: 0; transition: opacity 0.12s ease; }
-.entry:hover .actions .small,
-.entry:focus-within .actions .small { opacity: 1; }
-
-/* Inline edit (§05 R6): the row swaps into an in-place form. Monochrome; only Save carries
-   the accent (button.primary). Editing the running entry keeps .running so the indicator stays. */
-.entry.editing { grid-template-columns: 1fr; }
-.entry .edit-form {
+/* §12 R06 (G5): the unified entry form in EDIT MODE — the SAME view-level card add mode uses
+   (#entry-form-host), NOT crammed into the calendar event. It sits in the view flow with the
+   same paper-on-wash card chrome as the add form (.unified-form). Monochrome; only Save carries
+   the accent (button.primary). */
+.entry-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 8px 0;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  background: var(--wash);
 }
-.entry .edit-form .edit-row { display: flex; gap: 10px; }
-.entry .edit-form input[type="text"],
-.entry .edit-form input[type="datetime-local"] {
-  flex: 1;
+/* §12 R06 (G5): the edit form carries `unified-form`, so the two-column `.uf-body` grid and the
+   shared `.uf-*` field / select / tag / billable / expander / footer rules style it identically
+   to add mode — one layout, two seedings. The `.edit-*`/`.ef-*` hooks the JUDGE + tests target
+   ride alongside those `.uf-*` styling classes. The only edit-specific layout that remains is the
+   quiet Start/Stop disclosure toggle (§12 R17) — a monochrome text button, no accent. */
+.entry-form .ef-times-toggle {
+  align-self: flex-start;
   font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.entry .edit-form .edit-field {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
   font-size: 12px;
   color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
 }
-.entry .edit-form .edit-field > span { white-space: nowrap; }
-.entry .edit-form select {
-  flex: 1;
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.entry .edit-form .edit-bill {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--ink);
-}
-.entry .edit-form .edit-actions { display: flex; gap: 9px; align-items: center; }
-/* Delete from within the form is pushed to the trailing edge — destructive, kept distinct
-   (a quiet danger ghost) but NOT given the accent (only Save reuses .primary). */
-.entry .edit-form .edit-delete { margin-left: auto; }
+.entry-form .ef-times-toggle:hover { color: var(--ink); }
 
 /* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
    danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */
@@ -922,7 +955,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 12px;
   color: var(--muted);
 }
-.split-at input[type="datetime-local"] {
+.split-at input[type="text"] {
   font-family: var(--sans);
   font-size: 12px;
   color: var(--ink);
@@ -947,34 +980,9 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .merge-bar[hidden] { display: none; }
 
-/* The inline conflict prompt (§06 R3, §12 R6). Monochrome; only Merge (confirm) reuses .primary. */
-.merge-conflict {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--rule);
-}
-.merge-conflict .mc-title { font-size: 13px; font-weight: 590; color: var(--ink); }
-.merge-conflict .mc-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px;
-}
-.merge-conflict .mc-q {
-  font-size: 12px;
-  color: var(--muted);
-  min-width: 96px;
-}
-.merge-conflict .mc-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  color: var(--ink);
-}
-.merge-conflict .mc-actions { display: flex; gap: 9px; align-items: center; }
+/* §06 R3: the disagreeing-merge conflict prompt is the modal `.editor.conflict-prompt`
+   (hosted in app.js, styled below with the shared editor chrome) — no longer an inline
+   panel under the merge bar. */
 
 /* §07/§12: the Clients view. A quiet list of active clients with their projects and
    in-place rename/archive/add. Monochrome — only the create/rename/add (.primary) confirms. */
@@ -1411,9 +1419,11 @@ button.danger:hover { background: var(--danger-weak); }
 .builder-note { font-size: 11.5px; color: var(--faint); flex: none; }
 .builder-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
 
-/* §12 R6: the consolidated entry editor (window.SE). A centred MODAL dialog (the ladder's top
-   rung, --sh-modal) over a dim backdrop, surfacing every tt-editable field plus Split / Delete.
-   Monochrome — only the primary Save (and Split/Merge confirm) reuse .primary. */
+/* §06 R3: the modal chrome for the merge-conflict prompt (app.js openMergeConflict) — a centred
+   dialog (the ladder's top rung, --sh-modal) over a dim backdrop. The consolidated modal entry
+   only the `.editor.conflict-prompt` merge resolver
+   still rides this chrome — the head / body / foot + the conflict rows below. Monochrome; only the
+   Merge confirm reuses .primary. */
 .editor-backdrop {
   position: fixed;
   inset: 0;
@@ -1479,100 +1489,7 @@ button.danger:hover { background: var(--danger-weak); }
   gap: 14px;
   padding: 20px 22px;
 }
-/* Sections are grouped by a quiet hairline, not a worded heading — the fields name themselves. */
-.editor .ed-divider {
-  margin-top: 4px;
-  border-top: 1px solid var(--rule);
-}
-.editor .ed-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  font-size: 12px;
-  color: var(--muted);
-}
-.editor .ed-desc-field,
-.editor .ed-tags-field { width: 100%; }
-.editor .ed-row { display: flex; gap: 12px; }
-.editor textarea,
-.editor input[type="text"],
-.editor input[type="datetime-local"],
-.editor select {
-  font-family: var(--sans);
-  font-size: 13px;
-  color: var(--ink);
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 11px;
-}
-.editor textarea { resize: vertical; min-height: 42px; }
-/* billable is the design-system toggle wrapping the checkbox */
-.editor .ed-bill {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--ink);
-  cursor: pointer;
-}
-.editor .ed-sw {
-  position: relative;
-  width: 36px;
-  height: 21px;
-  border-radius: 999px;
-  background: #d7cdba;
-  flex: none;
-  transition: background 0.12s;
-}
-.editor .ed-sw input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  margin: 0;
-  cursor: pointer;
-}
-.editor .ed-sw i {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 17px;
-  height: 17px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.25);
-  transition: left 0.12s;
-}
-.editor .ed-sw:has(input:checked) { background: var(--accent); }
-.editor .ed-sw:has(input:checked) i { left: 17px; }
-.editor .ed-sw:has(input:focus-visible) { box-shadow: var(--ring); }
-/* The tags area carries no surface of its own — just the chips on the modal's paper, with the
-   add-tag input reading as an inline continuation (design-system: surfaces aren't tinted boxes). */
-.editor .ed-chips {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-  margin-left: 0;
-  padding: 2px 0;
-  min-height: 28px;
-}
-.editor .ed-tag-input {
-  border: 0;
-  outline: 0;
-  min-width: 90px;
-  font-size: 12px;
-  font-family: var(--sans);
-  background: transparent;
-  color: var(--ink);
-}
-.editor .ed-split { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.editor .ed-split-form { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.editor .ed-split-q { font-size: 12px; color: var(--muted); }
-.editor .ed-split-err { font-size: 12px; color: var(--flag); }
-.editor .ed-split-err[hidden] { display: none; }
-/* foot — justified row, hairline top, washed; Cancel+Delete grouped left, Save right */
+/* foot — justified row, hairline top, washed; the conflict prompt's Cancel + Merge live here */
 .editor .ed-foot {
   display: flex;
   align-items: center;
@@ -1582,18 +1499,6 @@ button.danger:hover { background: var(--danger-weak); }
   border-top: 1px solid var(--rule);
   background: var(--wash);
 }
-.editor .ed-gate { display: inline-flex; align-items: center; gap: 10px; }
-/* the armed two-step delete gate — worded, danger-flag icon (danger never steals the accent) */
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  color: var(--ink);
-}
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q .ic { width: 14px; height: 14px; color: var(--danger); }
-.editor .ed-gate.ed-confirm-delete .ed-confirm-q b { font-weight: 590; }
-
 /* §06 R3 / §12 R6: the in-dialog merge conflict resolver (context/mockups/merge-conflict.html).
    Field-by-field accent radios (the accent here is the field-resolution signal, matching the
    mockup) + auto-kept "agree" rows; reuses the .ed-head / .ed-body / .ed-foot chrome above. */
@@ -1655,72 +1560,30 @@ button.danger:hover { background: var(--danger-weak); }
 .editor.conflict-prompt .agree .val { margin-left: auto; font-size: 12px; color: var(--muted); }
 
 /* ====================================================================== */
-/* §12 R15 (G9): the visual time-range picker (timepicker.js / window.STP). */
-/* A MODAL popover (the ladder's top rung) over the authoritative time text  */
-/* inputs: a month calendar + a single-day track where the edited entry is a */
-/* DRAGGABLE accent rectangle. Accent discipline: only the primary "Apply    */
-/* range" button (.stp-apply.primary), the dragged "me" rectangle            */
-/* (.stp-block.me), and the selected calendar day carry the accent.          */
+/* §12 R15 (G5/G7): the inline interval picker (timepicker.js / window.STP). */
+/* An IN-FLOW picker column (NO modal, no backdrop, no Apply) over the        */
+/* authoritative time text fields: a month calendar + a single-day track      */
+/* where the edited entry is a DRAGGABLE accent rectangle written back LIVE    */
+/* on every drag (Save entry is the sole commit, G7). Accent discipline: only  */
+/* the dragged "me" rectangle (.stp-block.me) and the selected calendar day    */
+/* (.stp-d.stp-sel) carry the accent — no more Apply-button accent.            */
 
-/* The inline-edit form's time fields reuse the shared .range-pick-btn trigger (defined once
-   above); the bare .range-field only adds the positioning context the picker anchors to. */
+/* The Timer-view running-start disclosure's calendar affordance keeps the shared .range-pick-btn
+   trigger (defined once above); the bare .range-field only adds the positioning context. */
 .range-field { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 
-/* The dim backdrop + centred popover, layered above the editor (z-index 60 > 50). */
-.stp-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 40px 16px;
-  background: color-mix(in srgb, var(--ink) 38%, transparent);
-  overflow: auto;
-}
+/* §12 R15: the picker renders only IN FLOW — every real mount carries .stp-inline (below), which
+   sets its position / border / shadow / padding. The base .stp just claims the column width; there
+   is no modal backdrop, no centred popover, no top-rung shadow, and the 24h track never clips (G16). */
 .stp {
   width: 100%;
-  max-width: 660px;
-  background: var(--paper);
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r3);
-  box-shadow: var(--sh-modal);
-  overflow: hidden;
 }
-.stp-head {
-  padding: 16px 22px;
-  border-bottom: 1px solid var(--rule);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.stp-head h2 { font-size: 15px; margin: 0; font-weight: 640; color: var(--ink); }
-.stp-head .stp-hint { font-size: 11.5px; color: var(--muted); }
-
-/* The authoritative text fields echoed at the top. */
-.stp-textfields {
-  display: flex;
-  gap: 16px;
-  align-items: flex-end;
-  padding: 16px 22px;
-  border-bottom: 1px solid var(--rule);
-  background: var(--wash);
-}
-.stp-tf { flex: 1; display: flex; flex-direction: column; gap: 5px; }
-.stp-tf span { font-size: 11px; color: var(--muted); }
-.stp-tf input {
-  width: 100%;
-  font-family: var(--num);
-  font-size: 13px;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--r1);
-  padding: 8px 10px;
-  background: var(--paper);
-  color: var(--ink);
-}
-.stp-authnote { flex: none; max-width: 160px; font-size: 11px; color: var(--muted); line-height: 1.35; padding-bottom: 6px; }
 
 .stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
+
+/* §12 R06/R15: the inline interval picker mounted inside the unified edit form's right column
+   (`.uf-picker`) — the same two-column body add mode uses; the mount takes its column's full width. */
+.entry-form .edit-picker { width: 100%; }
 
 /* month calendar */
 .stp-cal { border-right: 1px solid var(--rule); padding: 18px; }
@@ -1747,7 +1610,6 @@ button.danger:hover { background: var(--danger-weak); }
 /* the selected day carries the accent — part of the "me"/primary surface. */
 .stp-d.stp-sel { background: var(--accent); color: #fff; font-weight: 590; border-color: var(--accent); }
 .stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
-.stp-cal-foot { margin-top: 12px; font-size: 11px; color: var(--muted); line-height: 1.4; }
 
 /* single-day column with hour lines */
 .stp-day { padding: 16px 20px 16px 8px; }
@@ -1786,6 +1648,60 @@ button.danger:hover { background: var(--danger-weak); }
   cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
 }
 .stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); display: block; }
+/* §05 R06 (G8) — the RUNNING entry on the picker track: a start with no end yet. The block
+   dissolves into the future via a transparency mask (mockups/timer.html .block.me.open) —
+   nothing paints an end edge, because no end exists until the timer is stopped. */
+.stp-block.me.open {
+  -webkit-mask-image: linear-gradient(to bottom, #000 0, #000 15%, rgba(0, 0, 0, 0.5) 48%, transparent 78%);
+  mask-image: linear-gradient(to bottom, #000 0, #000 15%, rgba(0, 0, 0, 0.5) 48%, transparent 78%);
+  cursor: default;
+}
+/* the start GRIP and time label live at TRACK level so the fade never hides them; the grip
+   is the one drag affordance of the start-only variant (no bottom resize grip anywhere). */
+.stp-grip {
+  position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: 999px;
+  background: var(--paper); border: 1.5px solid var(--accent);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  cursor: ns-resize; z-index: 7; touch-action: none;
+}
+.stp-tlabel {
+  position: absolute; left: 8px; font-size: 11px; font-weight: 590;
+  font-variant-numeric: tabular-nums; color: var(--ink);
+  background: var(--wash); border-radius: 6px; padding: 1px 8px; z-index: 7;
+}
+/* §05 R06 / §12 R14 — the Timer view's IN-FLOW start-only disclosure (#le-start-disc):
+   plain block flow below the Start field — no backdrop, no positioning, no modal chrome.
+   The picker renders inline (.stp-inline) with a scrollable day viewport (G16: a scroll
+   window over the full 24h track, never a clipped one). */
+.le-start-disc { margin-top: 10px; }
+.le-start-disc[hidden] { display: none; }
+.stp-inline {
+  position: static; width: auto; max-width: 420px;
+  border: 1px solid var(--rule); border-radius: var(--r1); background: var(--paper);
+  box-shadow: none; /* in flow — none of the popover's modal chrome */
+  padding: 12px 16px 10px;
+}
+.stp-inline .stp-dayview {
+  position: relative; height: 352px; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px 4px 6px 0;
+}
+.stp-inline .stp-snaphint { margin-left: 52px; }
+
+/* §12 R07 / §12 R15 (G5/G7) — the unified entry form's INLINE interval picker (start+stop):
+   a month calendar beside a scrollable single-day column, rendered in flow (no modal chrome).
+   Reuses the popover's .stp-cal / .stp-track / .stp-block visuals; the .stp-dayview is the
+   scroll window (G16: a scroll window over the full 24h track, never a clipped one). */
+.stp-range { max-width: none; padding: 12px 14px 10px; }
+.stp-range .stp-body { display: grid; grid-template-columns: 196px 1fr; gap: 0; }
+.stp-range .stp-cal { border-right: 1px solid var(--rule); padding: 4px 14px 4px 0; }
+.stp-range .stp-day { padding: 0 0 0 16px; }
+.stp-range .stp-dayview {
+  position: relative; height: 300px; overflow-y: auto; overscroll-behavior: contain;
+  padding: 6px 4px 6px 0;
+}
+.stp-range .stp-day-lbl { margin-left: 52px; }
+.stp-range .stp-snaphint { margin-left: 0; margin-top: 8px; }
+
 /* overlap region — warn hatch, never blocks Apply */
 .stp-overlap {
   position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;
@@ -1799,41 +1715,6 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 52px; display: flex; align-items: center; gap: 8px; }
 .stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; }
-
-.stp-foot {
-  padding: 14px 22px; border-top: 1px solid var(--rule);
-  display: flex; justify-content: space-between; align-items: center; gap: 12px; background: var(--wash);
-}
-.stp-overnight { font-size: 11.5px; color: var(--muted); }
-.stp-overnight[hidden] { display: none; }
-.stp-actions { display: flex; gap: 10px; }
-/* the picker's buttons reuse the base button chrome; only .primary carries the accent. */
-.stp-cancel {
-  font-family: inherit; font-size: 13px; font-weight: 590; padding: 8px 16px; color: var(--ink);
-}
-.stp-apply.primary {
-  font-family: inherit; font-size: 13px; font-weight: 590; border-radius: var(--r1); padding: 8px 16px;
-  background: var(--accent); border: 1px solid var(--accent); color: #fff; cursor: pointer;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 34%, transparent);
-}
-
-/* §12 R6: the per-row actions are quiet, borderless glyph/text buttons — the row itself is the
-   surface, so each control reads as a bare affordance (a soft hover wash on engage), not a
-   bordered button box. The kebab (⋯) opens the consolidated editor; the rest reveal on hover.
-   No accent (row actions never carry it). */
-.entry .actions .small {
-  border-color: transparent;
-  background: transparent;
-  color: var(--muted);
-  padding: 6px 8px;
-}
-.entry .actions .small:hover { background: var(--hover); color: var(--ink); }
-.entry .kebab {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--faint);
-}
-.entry .kebab:hover { color: var(--ink); }
 
 /* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
@@ -1951,6 +1832,22 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 7px 10px;
   min-width: 160px;
 }
+/* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
+   row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM") and
+   tabular so the two times line up; they reuse the .set-field chrome via the shared class. */
+.set-hhmm {
+  min-width: 0;
+  width: 68px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.set-hhmm-sep { color: var(--muted); font-size: 13px; }
+/* §14 — a row whose control is inapplicable under the current mode (the Around span while the
+   picker window is working_hours) dims and stops interacting; the control itself also carries
+   `disabled`, this is the visual half. The dim never hides the row — it stays legible. */
+.set-row.off { opacity: 0.5; }
+.set-row.off .set-ctrl { pointer-events: none; }
 /* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }
 /* The rounding toggle: a monochrome track that fills inked when on. The knob slides; the ON
@@ -2188,3 +2085,225 @@ body.popover { background: var(--canvas); margin: 0; }
   box-shadow: var(--sh-pop);
 }
 .fav-empty { color: var(--faint); font-size: 13px; }
+
+/* ============================================================================
+   §12 R16 — the readonly entries CALENDAR (ported from context/mockups/main.html
+   into the app's warm-paper tokens). One fixed comfortable-width day column per day
+   in range over a FULL 24h track: the viewport scrolls to the working-hours default
+   (app.js sets .cstrip scrollTop), it never CLIPS — every off-hours entry stays in the
+   DOM and is reachable. These rules come AFTER the legacy .entry list styles so the
+   calendar event (`.ev.entry`) overrides the old grid row cleanly while keeping the
+   `.entry` hooks the editing/merge/flag JUDGE scenes target.
+   ========================================================================== */
+.calwrap { position: relative; margin-top: 10px; }
+/* Both axes scroll: horizontal for the week's columns, vertical over the 24h track.
+   A fixed max-height bounds the vertical viewport so the working-hours scroll is a real
+   scroll (the track is taller than the viewport) — never a clip. */
+.cstrip { overflow: auto; max-height: 60vh; padding-bottom: 6px; }
+.cgrid { display: flex; min-width: max-content; }
+.gut { width: 48px; flex: none; }
+.gut .sp2 { height: 52px; border-bottom: 1px solid var(--rule); }
+.gut .gtr { position: relative; }
+.hlab {
+  position: absolute;
+  right: 8px;
+  font-size: 10.5px;
+  color: var(--faint);
+  transform: translateY(-6px);
+  font-variant-numeric: tabular-nums;
+}
+/* A FIXED comfortable column width — never stretched to fill, never compressed: the strip
+   scrolls when the range does not fit (the property the JUDGE scene asserts). */
+.dcol { width: 124px; flex: none; border-left: 1px solid var(--rule); }
+.dcol.end { border-right: 1px solid var(--rule); }
+.dh { height: 52px; padding: 9px 10px 0; border-bottom: 1px solid var(--rule); }
+.dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
+.dh .dd { font-size: 13px; font-weight: 640; margin-left: 3px; }
+.dh .ds { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+.dt {
+  position: relative;
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 43px,
+    var(--rule) 43px,
+    var(--rule) 44px
+  );
+}
+/* A calendar event: the positioned block, overriding the legacy .entry grid row. Its inner
+   `.bd/.bc/.bt` clip per line, so ops/checkbox at the corners are not clipped away. */
+.dt .ev {
+  display: block;
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  padding: 5px 8px;
+  border: 1px solid #c44c3855;
+  border-radius: 7px;
+  background: var(--accent-weak);
+  color: inherit;
+  cursor: pointer;
+  /* Visible, NOT clipped: the per-line text (.bd/.bc/.bt) clips itself with its own ellipsis, so
+     the block reads clean, while the hover ops and the inline confirm/split/tag affordances — which
+     are wider than a calendar event — extend beyond the block and stay clickable rather than being
+     clipped away (the delete/split/confirm JUDGE scenes drive them on middle-column events). */
+  overflow: visible;
+  grid-template-columns: none;
+  gap: 0;
+  margin: 0;
+  border-bottom: 1px solid #c44c3855;
+}
+.dt .ev:hover { background: var(--accent-weak); box-shadow: var(--sh-raise); border-color: var(--accent); z-index: 3; }
+.dt .ev.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.ev .bd { display: block; font-size: 12px; font-weight: 590; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .bd .run-dot { margin-right: 5px; }
+.ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .bt { display: block; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
+.ev .nonbill { color: var(--faint); }
+/* §07: the entry's tag chips stay in the DOM but fold away visually on the readonly calendar — the
+   calendar is a calm at-a-glance surface, so tags (like the flag detail) read in the unified editor.
+   Overlap paints as the `.ov` band and sleep as the `.zz` hatch; the flag DETAIL + reversible
+   subtract live in the editor (§12 R10), not on the event. Visually hidden, NOT display:none. */
+.ev > .chips {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  pointer-events: none;
+}
+/* The hover-corner checkbox: appears on hover (opacity, so it stays Playwright-checkable at rest)
+   and stays lit once selected. Styled from an <input> so `.check()`/`.sel` still resolve. */
+.ev .ck {
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  z-index: 6;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 4px;
+  border: 1.5px solid var(--rule-strong);
+  background: var(--paper);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.ev.wck { padding-left: 28px; }
+.ev:hover .ck,
+.ev .ck:checked,
+.ev.on .ck { opacity: 1; }
+.ev .ck:checked {
+  border-color: var(--accent);
+  background: var(--accent)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
+    center / 11px no-repeat;
+}
+/* §12 R16 (mockup main.html): the hover ops chip — a raised paper chip holding three icon-only
+   22×22 line-icon buttons (Delete · Split · Edit). The chip carries the affordance (paper bg,
+   1px line border, 7px radius, raise shadow) on hover; the buttons stay in the DOM and clickable
+   via opacity at rest so every `data-act` selector is intact. DOM order matches the mockup, so no
+   row-reverse. Icon-only + a fixed 22px width keeps the chip compact (~74px) so it clears the
+   top-left corner checkbox even in a narrow day column — no occlusion. */
+.ev .ops {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 5;
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  margin: 0;
+  float: none;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  transition: background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
+}
+/* The raised paper chip appears on hover; the icon buttons carry the reveal (opacity, so they
+   stay Playwright-clickable at rest — the proven pattern the row affordances use). */
+.ev:hover .ops,
+.ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
+.ev:hover { padding-top: 30px; }
+.ev .ops .op-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: none;
+  color: var(--muted);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.12s ease, background 0.12s ease, color 0.12s ease;
+}
+.ev:hover .ops .op-btn,
+.ev:focus-within .ops .op-btn { opacity: 1; }
+.ev .ops .op-btn:hover { background: var(--hover); color: var(--ink); }
+.ev .ops .op-btn .ic { width: 13px; height: 13px; }
+/* Running/open event: fades into the future, no bottom edge (G8). */
+.dt .ev.run {
+  border: 0;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(
+    180deg,
+    var(--accent-weak) 0%,
+    var(--accent-weak) 35%,
+    rgba(248, 233, 229, 0) 100%
+  );
+}
+.ev.run .bd { display: flex; align-items: center; }
+/* Slept-through hatch at the foot of the event (G12). */
+.ev .zz {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  border-top: 1px dashed var(--rule-strong);
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(214, 209, 201, 0.25) 0,
+    rgba(214, 209, 201, 0.25) 6px,
+    rgba(214, 209, 201, 0.5) 6px,
+    rgba(214, 209, 201, 0.5) 12px
+  );
+}
+.ev .zz .ic { width: 12px; height: 12px; }
+/* Overlap warn band + its tag (§06 R4 / §12 R10). */
+.ov {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  z-index: 4;
+  pointer-events: none;
+  background: repeating-linear-gradient(45deg, var(--flag-bg), var(--flag-bg) 7px, #f1e3bc 7px, #f1e3bc 14px);
+  border-top: 1px solid var(--warn-line);
+  border-bottom: 1px solid var(--warn-line);
+}
+.ov .otag {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--flag);
+  background: var(--paper);
+  border: 1px solid var(--warn-line);
+  border-radius: 999px;
+  padding: 0 7px;
+  white-space: nowrap;
+}
+/* §12 R06: the event being edited carries a subtle selection state on the calendar (the unified
+   form itself opens in the view-level #entry-form-host, not inside the event). Matches the merge
+   selection lift (.ev.on) — the rationed clay accent as a hairline ring, nothing more. */
+.dt .ev.editing { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }

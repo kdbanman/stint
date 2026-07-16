@@ -34,6 +34,10 @@ const baseSettings = {
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
   dateFormat: 'system',
+  workingHoursStart: '07:00',
+  workingHoursEnd: '18:00',
+  pickerWindowMode: 'working_hours',
+  pickerAroundHours: 8,
   backupRetention: 7,
 };
 

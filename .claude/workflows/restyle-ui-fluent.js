@@ -42,7 +42,7 @@ Node ≥22.5; NO network ever.`;
 // The Fluent / Calm subtleties to emphasize — the points the human cared about.
 const DESIGN = `Apply the design system FAITHFULLY, emphasizing these subtle points (all documented in
 design-system.html):
-  - ONE RATIONED CLAY ACCENT (#C8623E): only the single primary action per view, the active nav item,
+  - ONE RATIONED CLAY ACCENT: only the single primary action per view, the active nav item,
     and focus rings. Never decorative, never a highlighter.
   - SELECTION ≠ ACCENT: a chosen segmented-control option is a RAISED CHIP (surface lift + shadow),
     NOT a colored fill. The accent stays a signal.

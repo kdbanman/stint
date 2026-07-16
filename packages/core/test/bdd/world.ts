@@ -22,14 +22,11 @@ import {
   Store,
   joinClientProject,
   resolveRange,
-  buildEntryList,
   openDb,
   RecoveryError,
   toCsv,
   toJsonEntries,
   settingDescriptor,
-  type EntryView,
-  type EntryGroupBy,
   type Clock,
 } from '@stint/core';
 
@@ -102,24 +99,14 @@ export interface ExportRowRec {
 }
 
 /**
- * §12 R9 — a grouped Entries-view bucket, surface-neutral. The group key plus the
- * descriptions of the entries that fall under it (enough to assert membership/exclusion).
+ * §11 — an entry-list query. EITHER a named preset (resolved through core's resolveRange —
+ * the same rule the GUI toolbar drives) OR explicit from/to, narrowed by client / project /
+ * tag / billable and a free-text search; every narrowing field is optional. There is NO
+ * grouping (grouping left the list entirely for Reports, G11). Surface-neutral: CoreWorld
+ * store.listEntries, CliWorld `tt list --search/--range/--client/--project/--tag --json` —
+ * so the two surfaces are compared on the identical FLAT, ungrouped set (§17 R8).
  */
-export interface EntryGroupRec {
-  key: string;
-  descriptions: string[];
-}
-
-/**
- * §12 R9 — an Entries-view query. EITHER a named preset (resolved through core's
- * resolveRange — the same rule the GUI control bar drives) OR explicit from/to. The
- * grouping + client/project/tag/billable + free-text search mirror the control bar; every
- * narrowing field is optional. Surface-neutral: CoreWorld store.listEntries+buildEntryList,
- * CliWorld `tt list --by/--search/--range/--client/--project/--tag --json` then the SAME
- * core buildEntryList — so the two surfaces are compared on identical grouping (§17 R8).
- */
-export interface ListViewReq {
-  by: EntryGroupBy;
+export interface ListFilterReq {
   preset?: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
   fromUtc?: string;
   toUtc?: string;
@@ -196,6 +183,26 @@ export interface World {
   split(id: number, atIso: string): { ids: [number, number] };
   merge(ids: number[], opts?: { client?: string }): { id: number; warned: boolean };
   /**
+   * §12 R10 / §05 R08 — seed a CLOSED entry that slept through: the backfilled span plus a
+   * recorded sleep span inside it, so the reversible subtract has something to exclude. Core owns
+   * the recording (store.recordSleepSpan); the CLI has no verb to record a span, so CliWorld opens
+   * a transient Store on its own db file to seed it (like the backup helpers read the db directly).
+   */
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number };
+  /**
+   * §12 R10 / §05 R08 — subtract (exclude) an entry's recorded slept time from its billable
+   * duration; calling it again RESTORES the time (core's store.subtractSleep toggles). The GUI's
+   * unified editor reversible sleep control and `tt sleep subtract <id>` are the two surfaces —
+   * both reach this one core toggle, so a subtract-then-subtract round-trips the billable duration.
+   */
+  subtractSleep(id: number): void;
+  /**
    * §12 R10 — create a client / a project under a client, the Clients view's Add-client /
    * Add-project parity twins. Surface-neutral: CoreWorld store.addClient/addProject (the
    * project's owning client ensured first); CliWorld `tt client add` / `tt project add
@@ -229,6 +236,15 @@ export interface World {
    */
   setConfig(key: string, value: string): void;
   getConfig(key: string): string;
+  /**
+   * §14 — attempt a config write that may be INVALID (a malformed HH:MM, an inverted
+   * working-hours pair, an out-of-range around span) and report whether it was rejected
+   * WITHOUT storing anything. Surface-neutral: CoreWorld runs the same descriptor parse +
+   * store.setSetting the happy path uses and catches the validation throw; CliWorld checks
+   * the non-zero exit of `tt config set`. Both leave the stored value untouched on a
+   * rejection — the same strictness on BOTH surfaces (§17 R8).
+   */
+  attemptSetConfig(key: string, value: string): { rejected: boolean };
   list(): EntryRec[];
   /**
    * §09 R7 — free-text search over the entries. Surface-neutral: CoreWorld drives
@@ -237,12 +253,12 @@ export interface World {
    */
   search(query: string): EntryRec[];
   /**
-   * §12 R9 — the grouped/filtered/searched Entries view. Surface-neutral: CoreWorld lists
-   * via store.listEntries(filter) then groups via core's buildEntryList; CliWorld lists via
-   * `tt list … --json` then groups via the SAME buildEntryList — so both surfaces are
-   * compared on identical grouping. Returns the grouped buckets (key + member descriptions).
+   * §11 — the filtered/searched entry list, FLAT and ungrouped. Surface-neutral: CoreWorld
+   * lists via store.listEntries(filter); CliWorld lists via `tt list … --json` (no `--by`,
+   * grouping moved to Reports) — so both surfaces are compared on the identical flat set of
+   * entries. Returns the surviving entries in list order (the same shape `list` returns).
    */
-  listView(req: ListViewReq): EntryGroupRec[];
+  listFiltered(req: ListFilterReq): EntryRec[];
   status(): StatusRec;
   reportOverlaps(fromIso: string, toIso: string): number[];
   /**
@@ -406,19 +422,6 @@ export interface World {
 
 const label = joinClientProject;
 
-/**
- * §12 R9 — group a set of EntryViews via core's buildEntryList and project to the
- * surface-neutral group-rec shape (key + member descriptions). Shared by BOTH worlds so the
- * grouping compared across surfaces is byte-for-byte the same core helper — the GUI Entries
- * view and `tt list --by` reach nothing the other cannot.
- */
-function groupRecs(entries: EntryView[], by: EntryGroupBy): EntryGroupRec[] {
-  return buildEntryList(entries, { by }).groups.map((g) => ({
-    key: g.key,
-    descriptions: g.entries.map((e) => e.description ?? '(no description)'),
-  }));
-}
-
 /** A fixed clock so derived elapsed is deterministic. */
 const FIXED_NOW = '2026-06-24T23:59:00Z';
 
@@ -546,6 +549,20 @@ export class CoreWorld implements World {
     const r = this.store.merge(ids, mergeOpts);
     return { id: r.value.id, warned: r.warnings.length > 0 };
   }
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number } {
+    const r = this.store.add({ description: o.desc, fromUtc: o.from, toUtc: o.to });
+    this.store.recordSleepSpan(r.value.id, o.sleepFrom, o.sleepTo, 'gap');
+    return { id: r.value.id };
+  }
+  subtractSleep(id: number): void {
+    this.store.subtractSleep(id);
+  }
   addClient(name: string): void {
     this.store.ensureClient(name);
   }
@@ -609,6 +626,17 @@ export class CoreWorld implements World {
     if (!d) throw new Error(`unknown setting "${key}"`);
     return String((this.store.settings() as unknown as Record<string, unknown>)[d.key]);
   }
+  attemptSetConfig(key: string, value: string): { rejected: boolean } {
+    // §14 — the same descriptor parse + store.setSetting the happy path uses; a parse miss
+    // or a validation throw (including the cross-field start<end pair) IS the rejection,
+    // and nothing was stored.
+    try {
+      this.setConfig(key, value);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
   list(): EntryRec[] {
     return this.store.listEntries().map((e) => ({
       id: e.id,
@@ -633,10 +661,10 @@ export class CoreWorld implements World {
       clientLabel: label(e.clientName, e.projectName),
     }));
   }
-  listView(req: ListViewReq): EntryGroupRec[] {
-    // §12 R9: resolve the range (preset through core's resolveRange, or explicit), narrow
-    // through store.listEntries (client/project/tag/billable/search all resolve there), then
-    // group via core's buildEntryList — the SAME helper the CLI path below groups with.
+  listFiltered(req: ListFilterReq): EntryRec[] {
+    // §11: resolve the range (preset through core's resolveRange, or explicit), narrow through
+    // store.listEntries (client/project/tag/billable/search all resolve there) — the SAME flat
+    // set `tt list` returns below. No grouping: grouping left the list for Reports (G11).
     const bounds = req.preset
       ? resolveRange(req.preset, this.store.settings().weekStart, this.clock())
       : req.fromUtc && req.toUtc
@@ -661,8 +689,15 @@ export class CoreWorld implements World {
     }
     if (req.tag) filter.tag = req.tag;
     if (req.search) filter.search = req.search;
-    const entries = this.store.listEntries(filter);
-    return groupRecs(entries, req.by);
+    return this.store.listEntries(filter).map((e) => ({
+      id: e.id,
+      description: e.description,
+      startUtc: e.startUtc,
+      endUtc: e.endUtc,
+      billableSeconds: e.billableSeconds,
+      billable: e.billable,
+      clientLabel: label(e.clientName, e.projectName),
+    }));
   }
   status(): StatusRec {
     const s = this.store.status();
@@ -1094,6 +1129,29 @@ export class CliWorld implements World {
     const id = Number(/merged into entry (\d+)/.exec(r.out)?.[1]);
     return { id, warned: /warning/.test(r.err) };
   }
+  seedSleptEntry(o: {
+    desc: string;
+    from: string;
+    to: string;
+    sleepFrom: string;
+    sleepTo: string;
+  }): { id: number } {
+    const r = this.tt(['add', o.desc, '--from', o.from, '--to', o.to]);
+    const id = Number(/added entry (\d+)/.exec(r.out)?.[1]);
+    // No CLI verb records a sleep span (sleep detection is the running app's job), so seed it by
+    // opening a transient Store on the same db file — the same direct-db access the backup helpers
+    // use — then close it before the next `tt` process runs (tt is process-per-command).
+    const store = Store.open({ path: this.db, clock: () => new Date(FIXED_NOW) });
+    try {
+      store.recordSleepSpan(id, o.sleepFrom, o.sleepTo, 'gap');
+    } finally {
+      store.close();
+    }
+    return { id };
+  }
+  subtractSleep(id: number): void {
+    this.tt(['sleep', 'subtract', String(id)]);
+  }
   addClient(name: string): void {
     this.tt(['client', 'add', name]);
   }
@@ -1148,6 +1206,12 @@ export class CliWorld implements World {
     const obj = JSON.parse(this.tt(['config', 'ls', '--json']).out || '{}') as Record<string, unknown>;
     return String(obj[d.key]);
   }
+  attemptSetConfig(key: string, value: string): { rejected: boolean } {
+    // §14 — an invalid `tt config set` exits non-zero with a diagnostic on stderr and
+    // stores nothing; that non-zero exit is the surface's rejection signal.
+    const r = this.tt(['config', 'set', key, value]);
+    return { rejected: r.code !== 0 };
+  }
   list(): EntryRec[] {
     return this.listRows(['list', '--all', '--json']);
   }
@@ -1155,20 +1219,18 @@ export class CliWorld implements World {
     // §09 R7: full parity for the flag — the GUI search box's query is `tt list --search`.
     return this.listRows(['list', '--all', '--json', '--search', query]);
   }
-  listView(req: ListViewReq): EntryGroupRec[] {
-    // §12 R9: list through `tt list … --json` (range/client/project/tag/search/billable all
-    // narrow there), parse the rows back to EntryViews, then group via the SAME core
-    // buildEntryList CoreWorld uses — proving the GUI Entries view's grouping is reachable
-    // from tt and identical on both surfaces. The --by flag groups tt's OWN human table; the
-    // --json scripting shape stays the flat row array, which is what we re-group here.
-    const PRESET_FLAG: Record<NonNullable<ListViewReq['preset']>, string> = {
+  listFiltered(req: ListFilterReq): EntryRec[] {
+    // §11: list through `tt list … --json` (range/client/project/tag/search/billable all narrow
+    // there) — the flat row array, NO `--by` (grouping moved to `tt report`, G11). Parsed back to
+    // the surface-neutral EntryRec so the flat set is compared identical to CoreWorld's (§17 R8).
+    const PRESET_FLAG: Record<NonNullable<ListFilterReq['preset']>, string> = {
       today: '--today',
       week: '--week',
       'last-week': '--last-week',
       month: '--month',
       'last-month': '--last-month',
     };
-    const args = ['list', '--json', '--by', req.by];
+    const args = ['list', '--json'];
     if (req.preset) args.push(PRESET_FLAG[req.preset]);
     else if (req.fromUtc && req.toUtc) args.push('--range', req.fromUtc, req.toUtc);
     if (req.billable === 'all' || req.billable === undefined) args.push('--all');
@@ -1177,38 +1239,7 @@ export class CliWorld implements World {
     if (req.project) args.push('--project', req.project);
     if (req.tag) args.push('--tag', req.tag);
     if (req.search) args.push('--search', req.search);
-    const r = this.tt(args);
-    const rows = JSON.parse(r.out || '[]') as {
-      id: number;
-      client: string | null;
-      project: string | null;
-      tags: string[];
-      description: string | null;
-      start_utc: string;
-      end_utc: string | null;
-      raw_duration_s: number;
-      excluded_s: number;
-      billable: boolean;
-    }[];
-    // Reconstruct enough of an EntryView for the grouping (the fields buildEntryList reads).
-    const entries: EntryView[] = rows.map((e) => ({
-      id: e.id,
-      clientId: null,
-      projectId: null,
-      description: e.description,
-      startUtc: e.start_utc,
-      endUtc: e.end_utc,
-      billable: e.billable,
-      excludedSeconds: e.excluded_s,
-      clientName: e.client,
-      projectName: e.project,
-      tags: e.tags,
-      sleepSpans: [],
-      sleptThrough: false,
-      rawSeconds: e.raw_duration_s,
-      billableSeconds: e.raw_duration_s - e.excluded_s,
-    }));
-    return groupRecs(entries, req.by);
+    return this.listRows(args);
   }
   private listRows(args: string[]): EntryRec[] {
     const r = this.tt(args);

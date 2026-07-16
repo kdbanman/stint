@@ -89,6 +89,12 @@ export function buildUiState(
       globalHotkey: settings.globalHotkey,
       // §12 R11: the editable date-format mode the Settings view edits.
       dateFormat: settings.dateFormat,
+      // §14: the timeline-window settings the Settings → Timeline group edits and the
+      // picker/calendar default viewports read (via SU.timelineWindow, G16).
+      workingHoursStart: settings.workingHoursStart,
+      workingHoursEnd: settings.workingHoursEnd,
+      pickerWindowMode: settings.pickerWindowMode,
+      pickerAroundHours: settings.pickerAroundHours,
       // §20 R04: the current backup-retention count the Settings → Backups picker paints; it
       // changes over the same setSetting channel `tt config set backup_retention` drives.
       backupRetention: settings.backupRetention,
