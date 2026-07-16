@@ -123,14 +123,18 @@ export interface EntryRowView {
 
 /**
  * §12 R9 — a read-only Entries-view query. EITHER a named preset (resolved through
- * core's resolveRange, the same rule the report picker drives) OR explicit from/to.
- * The grouping + client/project/tag/billable + free-text search mirror what the
- * control bar offers; every narrowing field is optional ("no filter" when omitted).
+ * core's resolveRange, the same rule the report picker drives) OR an explicit custom
+ * range as a PAIR OF PLAIN DATES (§09 R01 / G3: `YYYY-MM-DD`, no time component — the
+ * raw values of the toolbar's two date fields). Main resolves the pair to the half-open
+ * local window [from 00:00, day-after-to 00:00) via reportview.ts's resolveDateRange —
+ * the renderer derives no window. The grouping + client/project/tag/billable + free-text
+ * search mirror what the control bar offers; every narrowing field is optional ("no
+ * filter" when omitted).
  */
 export interface ListEntriesQuery {
   preset?: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-  fromUtc?: string;
-  toUtc?: string;
+  fromDate?: string;
+  toDate?: string;
   by: 'day' | 'client' | 'project' | 'tag';
   clientId?: number;
   projectId?: number;
@@ -175,6 +179,17 @@ export interface UiState {
     globalHotkey: string;
     /** §12 R11 — date rendering mode ('system' | 'iso'). */
     dateFormat: string;
+    /**
+     * §14 — the timeline-window settings (G15) the Settings → Timeline group edits and
+     * `SU.timelineWindow` derives the picker/calendar default viewport from (G16). Strict
+     * zero-padded HH:MM pair (start<end, core-validated), the picker's default-window mode
+     * ('working_hours' | 'around_now'), and the around-now span in whole hours (1–24). All
+     * four persist over the existing `setSetting` channel — parity with `tt config set`.
+     */
+    workingHoursStart: string;
+    workingHoursEnd: string;
+    pickerWindowMode: string;
+    pickerAroundHours: number;
     /**
      * §20 R04 — how many automatic timestamped backups to keep beside the database. The
      * Settings → Backups retention picker paints this and changes it over the existing
@@ -246,11 +261,15 @@ export interface FavoriteInputView {
 
 /**
  * §09 R08 — a saved report's range spec in a renderer-safe shape (no core import in the
- * page): either a relative preset (re-resolved on each run) or an absolute UTC window.
+ * page): either a relative preset (re-resolved on each run) or an absolute custom range
+ * as a PAIR OF PLAIN DATES (§09 R01 / G3: `YYYY-MM-DD`, no time component — exactly what
+ * the builder's two date fields hold). Core's RangeSpec keeps absolute UTC instants;
+ * reportview.ts's rangeSpecFromView/ToView convert through resolveDateRange /
+ * utcWindowToDatePair, so the renderer never sees (or derives) an instant.
  */
 export type SavedReportRangeView =
   | { kind: 'preset'; preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month' }
-  | { kind: 'absolute'; fromUtc: string; toUtc: string };
+  | { kind: 'absolute'; fromDate: string; toDate: string };
 
 /**
  * §09 R08 — the renderer-safe projection of a saved report definition the Reports view's

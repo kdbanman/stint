@@ -66,6 +66,26 @@ Feature: Report grouping (group by client / project / day / tag)
     And a report for this week totals 5 billable hours grouped by day
     And a report for this week totals 5 billable hours grouped by tag
 
+  # PRD §09 R1 — a CUSTOM range is a pair of PLAIN DATES, no time component (G3): the GUI's
+  # two date fields (the Reports builder §12 R08, the Entries toolbar §12 R09) resolve to
+  # the half-open LOCAL window [from 00:00, day-after-to 00:00) — the to-day is included IN
+  # FULL (its late evening still counts) and the day after is excluded, the same inclusive-
+  # end-day convention core's resolveRange presets use. Surface-neutral over the World
+  # `report` capability: the step resolves the day pair with the SAME local-midnight rule
+  # the GUI side applies (gui/src/reportview.ts resolveDateRange), then drives CoreWorld
+  # store.report and CliWorld `tt report --range FROM TO --json` over the resolved bounds —
+  # so the plain-date window totals identically on both logic surfaces (§17 R8). Fails if
+  # the window stops covering the to-date's evening or leaks into the next day.
+  Scenario: A custom range is a pair of plain dates covering both boundary days
+    # Under the pinned Wednesday clock: 2h on Mon local, 30 min ENDING 23:30 LOCAL on Tue
+    # (the range's to-date), and 1h in the small hours of Wed local (the day after). The
+    # plain-date range Mon..Tue totals exactly 2.5h — the late-Tuesday entry IS included
+    # (inclusive end day), the Wednesday entry is NOT (half-open window).
+    Given a closed entry "monday build" for "Acme" on local day 2026-06-22 at 10:00 lasting 120 minutes
+    And a closed entry "late tuesday call" for "Acme" on local day 2026-06-23 at 23:00 lasting 30 minutes
+    And a closed entry "wednesday sync" for "Acme" on local day 2026-06-24 at 01:00 lasting 60 minutes
+    Then a report for the plain-date range 2026-06-22 through 2026-06-23 totals 2.5 billable hours
+
   # PRD §09 R4 — the report's Rounding control (the GUI report builder's Off/On toggle +
   # 6/10/15/30-min increment picker, gui/renderer/reports.js #rounding). Rounding applies to
   # the grouped BILLABLE LINE nearest the chosen increment (NOT always up), and never alters

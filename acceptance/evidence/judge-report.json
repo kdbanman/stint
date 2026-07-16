@@ -18,7 +18,7 @@
     {
       "item": "KEYBOARD_FOCUS",
       "pass": true,
-      "justification": "Tab-walk reached 24/24 controls (empty) and 28/28 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "justification": "Tab-walk reached 20/20 controls (empty) and 22/22 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
@@ -42,7 +42,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"hasStop\":true,\"noSwitch\":true,\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"state\":\"running\"}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:00:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\"}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24T21:35\"}; grip drag → {\"startLive\":\"2026-06-24T20:35\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -60,14 +60,8 @@
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[button.small ghost kebab, button.small ghost, button.small ghost, button.small ghost]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
-    },
-    {
-      "item": "FLAG_IN_CONTEXT",
-      "pass": true,
-      "justification": "overlap flag + detailed banner (\"Overlap: 30m with previous entry\") on row, slept flag + subtract + struck raw duration beside trimmed billable on slept row: {\"overlapFlag\":true,\"sleptFlag\":true,\"subtractBtn\":true,\"overlapBannerText\":\"Overlap: 30m with previous entry\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"}",
-      "screenshot": "main-flags.png"
     },
     {
       "item": "START_ATTRIBUTES",
@@ -82,46 +76,28 @@
       "screenshot": "main-start-form.png"
     },
     {
-      "item": "ADD_FORM",
+      "item": "UNIFIED_FORM_ADD",
       "pass": true,
-      "justification": "add form visible=true, fields={\"from\":true,\"to\":true,\"desc\":true,\"client\":true,\"project\":true,\"bill\":true,\"tags\":true}, saveAccent=true",
-      "screenshot": "add-form.png"
+      "justification": "unified add form: layout={\"visible\":true,\"unified\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"clientTag\":\"SELECT\",\"projectTag\":\"SELECT\",\"hasTagChips\":true,\"hasBill\":true,\"pickerCal\":true,\"pickerTrack\":true,\"pickerHours\":25,\"pickerMe\":true,\"expanderCollapsed\":true,\"startText\":\"text\",\"stopText\":\"text\",\"noDatetimeLocal\":true}; picker paint={\"others\":2,\"overlaps\":1,\"overlapInert\":true,\"meAccent\":true,\"saveAccent\":true}; live drag seed={\"from\":\"2026-06-24T22:00\",\"to\":\"2026-06-24T23:00\"}→{\"from\":\"2026-06-24T20:00\",\"to\":\"2026-06-24T21:00\"} (live=true); Save sole commit added={\"fromLocal\":\"2026-06-24T20:00\",\"toLocal\":\"2026-06-24T21:00\",\"billable\":true,\"description\":\"design review\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (patchOk=true); form closed=true, overlap banner=true \"This entry overlaps 1 other entry — allowed, but flagged in reports.\"",
+      "screenshot": "unified-add.png"
     },
     {
-      "item": "MANUAL_ADD_FORM",
+      "item": "UNIFIED_FORM_EXPANDER",
       "pass": true,
-      "justification": "backfill payload={\"fromLocal\":\"2026-06-24T09:00\",\"toLocal\":\"2026-06-24T10:00\",\"billable\":true,\"description\":\"backfilled call\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}; overlap warned-not-blocked (form closed=true, banner={\"visible\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"role\":\"status\",\"ariaLive\":\"polite\"})",
-      "screenshot": "main-add-form.png"
+      "justification": "collapsed Start/Stop expander drives the shared interval: collapsed={\"toggleCollapsed\":true,\"fieldsHidden\":true,\"echoPresent\":true,\"echoTabular\":true} (ok=true); expand→fields={\"fieldsShown\":true,\"fromText\":\"text\",\"toText\":\"text\"} (ok=true); typed overnight reflected={\"echo\":\"22:00 – 02:00\",\"meStartMin\":1320,\"fromValue\":\"2026-06-24T22:00\",\"toValue\":\"2026-06-25T02:00\"} (ok=true); Save sole commit added={\"fromLocal\":\"2026-06-24T22:00\",\"toLocal\":\"2026-06-25T02:00\",\"billable\":true,\"description\":\"overnight deploy\"} (ok=true)",
+      "screenshot": "unified-form-expander.png"
     },
     {
-      "item": "ADD_FORM_PICKER",
+      "item": "UNIFIED_FORM",
       "pass": true,
-      "justification": "affordances={\"from\":true,\"to\":true,\"fromInput\":true,\"toInput\":true,\"hint\":false}; opened-echo={\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\"}; wrote-back from=2026-06-24T13:00 to=2026-06-24T14:30; Save sent {\"fromLocal\":\"2026-06-24T13:00\",\"toLocal\":\"2026-06-24T14:30\"} (text authoritative)",
-      "screenshot": "add-form-picker.png"
-    },
-    {
-      "item": "TIME_RANGE_PICKER",
-      "pass": true,
-      "justification": "present={\"cal\":true,\"track\":true,\"hourLines\":25,\"echoStart\":\"2026-06-24T13:00\",\"echoEnd\":\"2026-06-24T14:30\",\"me\":true,\"others\":2}; body-drag→{\"start\":\"2026-06-24T14:00\",\"end\":\"2026-06-24T15:30\"} (moved-together=true); resize→{\"start\":\"2026-06-24T14:00\",\"end\":\"2026-06-24T16:00\"} (stop-only=true); warn={\"others\":2,\"overlaps\":1,\"overlapInert\":true}; accent offenders=[none] apply=true me=true; applied={\"from\":\"2026-06-24T14:00\",\"to\":\"2026-06-24T16:00\",\"popoverGone\":true}",
-      "screenshot": "time-range-picker.png"
-    },
-    {
-      "item": "EDIT_RUNNING",
-      "pass": true,
-      "justification": "inline edit form on running row: {\"formVisible\":true,\"descSeeded\":\"auth refactor\",\"startSeeded\":true,\"stillRunning\":true}",
-      "screenshot": "main-edit-running.png"
-    },
-    {
-      "item": "EDIT_INLINE",
-      "pass": true,
-      "justification": "inline edit form seeded in-context: {\"inContext\":true,\"descSeeded\":\"design review\",\"startSeeded\":true,\"endPresent\":true,\"endSeeded\":true,\"billSeeded\":true,\"clientOptions\":3,\"clientSeeded\":\"1\"}",
+      "justification": "unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in flow), seeded, INLINE picker (in-flow, no backdrop/apply, month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, gray others + inert yellow overlap), footer Split + two-step Delete, save patch, §12 R10 flags (overlap detail + reversible subtract): hostShared=true clickOpens=true probe={\"inContext\":true,\"noBackdrop\":true,\"noDialog\":true,\"hostStatic\":true,\"descTag\":\"TEXTAREA\",\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"projectSeeded\":\"11\",\"tagChips\":[\"deep\"],\"billSeeded\":true,\"startSeeded\":true,\"endPresent\":true,\"endSeeded\":true,\"hasSplit\":true,\"hasDelete\":true,\"footAccent\":1} picker={\"inFlow\":true,\"noBackdrop\":true,\"noApply\":true,\"hasCal\":true,\"hasTrack\":true,\"hours\":25,\"others\":3,\"overlaps\":1,\"overlapInert\":true} seed={\"from\":\"2026-06-24T14:00\",\"to\":\"2026-06-24T15:30\"}→body={\"from\":\"2026-06-24T12:00\",\"to\":\"2026-06-24T13:30\"}(bodyOk=true)→resize={\"from\":\"2026-06-24T12:00\",\"to\":\"2026-06-24T14:20\"}(resizeOk=true) edited={\"id\":80,\"patch\":{\"description\":\"final draft\"}} armed={\"confirmShown\":true,\"question\":\"Confirm delete?\",\"removedYet\":false} removed={\"removed\":true,\"calls\":[{\"id\":80}]} overlapDetail=\"Overlap: 30m with previous entry\" sleptBefore={\"subtractLabel\":\"Subtract slept\",\"struckBefore\":false} sleptAfter={\"subtractLabel\":\"Restore\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"} sleptRestored=true",
       "screenshot": "main-edit.png"
     },
     {
-      "item": "INLINE_EDITOR",
+      "item": "MULTILINE_DESC",
       "pass": true,
-      "justification": "kebab opens the consolidated editor with every tt-editable field + Split/Merge reachable: {\"fields\":{\"description\":true,\"client\":true,\"project\":true,\"start\":true,\"end\":true,\"tags\":true,\"billable\":true},\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"splitReachable\":true,\"rowSelect\":true,\"mergeWiring\":true}",
-      "screenshot": "main-editor.png"
+      "justification": "description control is a 3-line scrollable textarea rendering the stored newline verbatim: {\"present\":true,\"tag\":\"TEXTAREA\",\"rows\":3,\"value\":\"line one\\nline two\",\"hasInteriorNewline\":true,\"overflowY\":\"auto\",\"resize\":\"vertical\"}",
+      "screenshot": "main-multiline-desc.png"
     },
     {
       "item": "OVERLAP_BANNER",
@@ -132,7 +108,7 @@
     {
       "item": "SPLIT_AFFORDANCE",
       "pass": true,
-      "justification": "closed row exposes Split (open row none=true); split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
+      "justification": "closed row exposes Split (open row none=true); ops chip clears the corner checkbox=true, chip in column=true; split input is plain text=true, no datetime-local=true; split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
       "screenshot": "main-split.png"
     },
     {
@@ -174,20 +150,26 @@
     {
       "item": "TAG_CHIPS",
       "pass": true,
-      "justification": "tags render as chips on rows + running summary, in-context edit affordance present: {\"openRowChips\":[\"deep\",\"urgent\"],\"closedRowChips\":[\"meeting\"],\"summaryChips\":[\"deep\",\"urgent\"],\"openEditTags\":true,\"closedEditTags\":true,\"totalRowChips\":3}",
+      "justification": "tags render as chips on events + running summary; NO per-row tags control; edited via the unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: {\"openRowChips\":[\"deep\",\"urgent\"],\"closedRowChips\":[\"meeting\"],\"summaryChips\":[\"deep\",\"urgent\"],\"noPerRowTags\":true,\"totalRowChips\":3} seeded=[\"meeting\"] working=[\"billing\"] edited={\"id\":71,\"patch\":{\"addTags\":[\"billing\"],\"removeTags\":[\"meeting\"]}} (tagsPatchOk=true)",
       "screenshot": "main-tags.png"
     },
     {
       "item": "REPORTS_VIEW",
       "pass": true,
-      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export CSV={\"format\":\"csv\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"savedReportRef\":\"Weekly billables — Globex\"}",
+      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"customHidden\":true,\"fromType\":\"date\",\"toType\":\"date\",\"datetimeLocals\":0,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} customSave={\"payload\":{\"name\":\"June window\",\"rangeSpec\":{\"kind\":\"absolute\",\"fromDate\":\"2026-06-01\",\"toDate\":\"2026-06-07\"},\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\"},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\"},{\"name\":\"June window\",\"spec\":\"Custom: 2026-06-01 – 2026-06-07 · by client · billable only · no rounding\"}]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export CSV={\"format\":\"csv\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"savedReportRef\":\"Weekly billables — Globex\"}",
       "screenshot": "reports-list.png"
     },
     {
-      "item": "ENTRY_LIST_SEARCH",
+      "item": "ENTRIES_CALENDAR",
       "pass": true,
-      "justification": "entry list: default={\"byOptions\":[\"day\",\"client\",\"project\",\"tag\"],\"byActive\":[\"day\"],\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"rowCount\":4,\"groupHeads\":[\"2026-06-24\",\"2026-06-23\"]} → search={\"reqSearch\":\"refactor\",\"rowCount\":2,\"descs\":[\"auth refactorAcme / APIdeepEditEdit tagsSplitDelete\",\"refactor testsGlobex / OpsciEditEdit tagsSplitDelete\"]} → by client={\"reqBy\":\"client\",\"byActive\":[\"client\"],\"groupHeads\":[\"Acme\",\"Globex\"],\"rowCount\":4}",
-      "screenshot": "entries-grouped.png"
+      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":4,\"weekTotal\":\"5.00h\"} -> search={\"reqSearch\":\"refactor\",\"reqHasBy\":false,\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> custom dates={\"req\":{\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"]}",
+      "screenshot": "entries-calendar.png"
+    },
+    {
+      "item": "CALENDAR_LAYOUT",
+      "pass": true,
+      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":360,\"trackHeight\":1056,\"evCount\":7,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"4.25h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"weekTotal\":\"9.25h\",\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"runNoEnd\":true}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; editorOpen=true; merge hidden-before=true shown-after-2=true",
+      "screenshot": "main-calendar.png"
     },
     {
       "item": "LIVE_FILTER",
@@ -198,8 +180,20 @@
     {
       "item": "SETTINGS_VIEW",
       "pass": true,
-      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
+      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
       "screenshot": "main-settings.png"
+    },
+    {
+      "item": "TIMELINE_WINDOW",
+      "pass": true,
+      "justification": "Timeline group renders all four keys (allFour=true) with stored 09:00–15:00 (09:00–15:00); Around disabled while working_hours (disabled=true, row off=true); mode flip fired setSetting={\"key\":\"pickerWindowMode\",\"value\":\"around_now\"} and enabled Around (true); SU.timelineWindow working={\"startMin\":540,\"endMin\":900} (exact 540–900: true), around_now/8={\"startMin\":1140,\"endMin\":1440} vs expected {\"startMin\":1140,\"endMin\":1440} (true), calendar-forced-working-hours ok=true; consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)",
+      "screenshot": "timeline-window.png"
+    },
+    {
+      "item": "TIMELINE_WINDOW",
+      "pass": true,
+      "justification": "around_now fixture paints the mode segment on (true) with the Around select enabled (true, row off=false) reading the stored span (8h)",
+      "screenshot": "timeline-window.png"
     },
     {
       "item": "SOFTWARE_UPDATE",
@@ -228,7 +222,7 @@
     {
       "item": "DESKTOP_FEEL",
       "pass": null,
-      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-flags, main-edit, main-editor, main-tags, main-report-client, main-report-day, main-focus, popover-running)",
+      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)",
       "screenshot": "main-running.png"
     }
   ]

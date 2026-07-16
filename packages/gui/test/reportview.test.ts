@@ -9,13 +9,17 @@
  * to store.report.
  */
 import { describe, it, expect } from 'vitest';
-import { Store, resolveRange, toCsv, toJsonEntries } from '@stint/core';
+import { Store, resolveRange, toCsv, toJsonEntries, toUtc } from '@stint/core';
 import {
   buildReportView,
   buildSavedReportView,
+  resolveDateRange,
+  utcWindowToDatePair,
   resolveExportRange,
   exportPayload,
   exportFileName,
+  savedReportToView,
+  savedReportInputFromView,
 } from '../src/reportview.js';
 
 const NOW = new Date('2026-06-24T18:00:00Z'); // a Wednesday
@@ -73,6 +77,150 @@ describe('resolveExportRange — preset/custom range resolution', () => {
   it('defaults to This week when neither preset nor custom range is given', () => {
     const r = resolveExportRange({}, 'monday', NOW);
     expect(r).toEqual(resolveRange('week', 'monday', NOW));
+  });
+});
+
+// §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). The GUI-side
+// resolveDateRange is the ONE home of the plain-date → window rule: [from 00:00 local,
+// day-after-to 00:00 local) — inclusive end day, half-open — the same convention core's
+// resolveRange presets produce. utcWindowToDatePair is its inverse (painting a stored
+// absolute spec back into the two date fields, tolerant of legacy arbitrary instants).
+describe('resolveDateRange / utcWindowToDatePair — plain-date custom ranges (§09 R01)', () => {
+  it('resolves the pair to local midnights: from 00:00 on the from-day, 00:00 the day AFTER the to-day', () => {
+    const r = resolveDateRange('2026-06-22', '2026-06-23');
+    // Local Date(y, m-1, d) construction — the expected bounds are true local midnights
+    // in whatever timezone the test host runs, so the assertion is TZ-independent.
+    expect(r.fromUtc).toBe(toUtc(new Date(2026, 5, 22)));
+    expect(r.toUtc).toBe(toUtc(new Date(2026, 5, 24))); // inclusive end day → next midnight
+  });
+
+  it('a single-day pair (from == to) covers exactly that local calendar day', () => {
+    const r = resolveDateRange('2026-06-23', '2026-06-23');
+    expect(r.fromUtc).toBe(toUtc(new Date(2026, 5, 23)));
+    expect(r.toUtc).toBe(toUtc(new Date(2026, 5, 24)));
+  });
+
+  it('rolls the day-after across month/year boundaries by calendar arithmetic', () => {
+    expect(resolveDateRange('2026-06-01', '2026-06-30').toUtc).toBe(toUtc(new Date(2026, 6, 1)));
+    expect(resolveDateRange('2026-12-15', '2026-12-31').toUtc).toBe(toUtc(new Date(2027, 0, 1)));
+  });
+
+  it('a DST-transition to-day still ends at the true next local midnight (calendar day-after, never +24h)', () => {
+    // 2026-03-08 / 2026-10-25 are DST-change days in the US / EU respectively; on such a
+    // 23- or 25-hour day a naive `+ 24h` lands an hour off local midnight. The expected
+    // value is the local-Date construction itself, so this holds in ANY host timezone —
+    // and on a DST host it differs from the +24h result, pinning the calendar arithmetic.
+    for (const [y, m, d] of [[2026, 2, 8], [2026, 9, 25]] as const) {
+      const date = `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      expect(resolveDateRange(date, date).toUtc).toBe(toUtc(new Date(y, m, d + 1)));
+    }
+  });
+
+  it('the window is half-open: the to-day is included IN FULL, the next day excluded (store.report proof)', () => {
+    const store = mem();
+    const { clientId } = store.resolveClientProjectByName({ client: 'Acme' });
+    const add = (fromLocal: Date, toLocal: Date, description: string) =>
+      store.add({
+        description,
+        clientId,
+        fromUtc: toUtc(fromLocal),
+        toUtc: toUtc(toLocal),
+        billable: true,
+      });
+    // 2h on Mon local, 30 min ENDING 23:30 LOCAL on Tue (the to-day's late evening), and
+    // 1h in the small hours of Wed local (all safely before the pinned NOW).
+    add(new Date(2026, 5, 22, 10, 0), new Date(2026, 5, 22, 12, 0), 'monday build');
+    add(new Date(2026, 5, 23, 23, 0), new Date(2026, 5, 23, 23, 30), 'late tuesday call');
+    add(new Date(2026, 5, 24, 1, 0), new Date(2026, 5, 24, 2, 0), 'wednesday sync');
+    const range = resolveDateRange('2026-06-22', '2026-06-23');
+    const report = store.report({
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+      fromUtc: range.fromUtc,
+      toUtc: range.toUtc,
+    });
+    // 2h + 0.5h — the late-evening entry on the to-date IS in; the day-after entry is NOT.
+    expect(report.grandTotalSeconds).toBe(2.5 * 3600);
+    store.close();
+  });
+
+  it('utcWindowToDatePair inverts resolveDateRange (the two date fields round-trip)', () => {
+    const r = resolveDateRange('2026-06-22', '2026-06-23');
+    expect(utcWindowToDatePair(r.fromUtc, r.toUtc)).toEqual({
+      fromDate: '2026-06-22',
+      toDate: '2026-06-23',
+    });
+    const single = resolveDateRange('2026-02-28', '2026-02-28');
+    expect(utcWindowToDatePair(single.fromUtc, single.toUtc)).toEqual({
+      fromDate: '2026-02-28',
+      toDate: '2026-02-28',
+    });
+  });
+
+  it('a LEGACY arbitrary-instant window rounds OUTWARD to its covering day pair', () => {
+    // A pre-transition saved def could carry mid-day bounds; the pair must still cover the
+    // whole stored window so nothing silently drops out of a repainted/re-saved def.
+    const pair = utcWindowToDatePair(
+      toUtc(new Date(2026, 5, 22, 9, 0)),
+      toUtc(new Date(2026, 5, 24, 15, 30)),
+    );
+    expect(pair).toEqual({ fromDate: '2026-06-22', toDate: '2026-06-24' });
+  });
+
+  it('rejects a malformed plain date loudly (never a silent NaN window)', () => {
+    expect(() => resolveDateRange('22/06/2026', '2026-06-23')).toThrow(/invalid plain date/);
+    expect(() => resolveDateRange('2026-06-22', '2026-06-23T00:00')).toThrow(/invalid plain date/);
+  });
+});
+
+// §09 R01 / R08 — the saved-report range-spec view speaks PLAIN DATES while core's
+// RangeSpec keeps UTC instants; the two conversions must round-trip through the one
+// resolveDateRange rule so a saved custom def re-opens with the same two dates.
+describe('saved-report rangeSpec ⇄ view — plain-date absolute arm (§09 R01/R08)', () => {
+  it('savedReportInputFromView resolves the date pair to the half-open local window', () => {
+    const input = savedReportInputFromView({
+      name: 'June window',
+      rangeSpec: { kind: 'absolute', fromDate: '2026-06-01', toDate: '2026-06-07' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    expect(input.rangeSpec).toEqual({
+      kind: 'absolute',
+      ...resolveDateRange('2026-06-01', '2026-06-07'),
+    });
+  });
+
+  it('a saved custom def paints back the SAME plain date pair (store round-trip)', () => {
+    const store = mem();
+    const def = store.saveReport(
+      savedReportInputFromView({
+        name: 'June window',
+        rangeSpec: { kind: 'absolute', fromDate: '2026-06-01', toDate: '2026-06-07' },
+        by: 'client',
+        billableFilter: 'billable',
+        rounding: false,
+        roundingIncrementMin: 15,
+      }),
+    );
+    const view = savedReportToView(def);
+    expect(view.rangeSpec).toEqual({ kind: 'absolute', fromDate: '2026-06-01', toDate: '2026-06-07' });
+    store.close();
+  });
+
+  it('the preset arm is untouched by the plain-date conversion', () => {
+    const input = savedReportInputFromView({
+      name: 'Weekly',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    expect(input.rangeSpec).toEqual({ kind: 'preset', preset: 'week' });
   });
 });
 

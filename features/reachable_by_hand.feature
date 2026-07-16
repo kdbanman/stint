@@ -34,46 +34,58 @@ Feature: Every capability reachable by hand
     And the open entry is for "Acme / Billing"
 
   Scenario: Backfill a completed past entry by hand (the Manual-add form)
-    # §12 R7 — the Manual-add form creates a completed past entry from explicit from/to plus
-    # attributes, with no terminal. GUI: #add-form → `add` IPC → core store.add; tt: `tt add`.
+    # §12 R07 — the unified entry form in ADD mode creates a completed past entry from an explicit
+    # span plus attributes, with no terminal. GUI: the two-column unified form (inline interval
+    # picker + collapsed Start/Stop expander drive the span; "Save entry" is the sole commit) →
+    # `add` IPC → core store.add; tt: `tt add`. This surface-neutral scenario runs twice (core
+    # store.add + tt add) and fails if the `add` capability the form's Save commits regresses.
     When I backfill an entry "design review" for "Acme" / "Billing" from 13:00 to 14:00
     Then the backfill succeeds
     And the entry "design review" is for "Acme / Billing"
     And the entry "design review" has a billable duration of 60 minutes
 
-  Scenario: Edit any field of an entry by hand (the consolidated editor)
-    # §12 R6 — the per-entry editor amends any tt-editable field in the window. GUI: the
-    # editor → `edit` IPC → core store.edit; tt: `tt edit`.
+  Scenario: Edit any field of an entry by hand (the unified entry form)
+    # §12 R06 — the unified entry form (edit mode) amends any tt-editable field in the window,
+    # inline in the Entries view (no modal). GUI: the unified form → `edit` IPC → core
+    # store.edit; tt: `tt edit`.
     Given I start an entry "draft" at 09:00
     When I edit the entry "draft" description to "final draft"
     Then exactly one entry is open
     And the open entry is "final draft"
 
-  Scenario: Split an entry by hand (the editor's Split-at-instant)
-    # §12 R6 / §06 R2 — split a span in two from the window. GUI: editor Split → `split` IPC
-    # → core store.split; tt: `tt split`.
+  Scenario: Split an entry by hand (the unified form's edit-mode footer)
+    # §12 R06 / §06 R2 — split a span in two from the window. GUI: the unified form's edit-mode
+    # footer Split → `split` IPC → core store.split; tt: `tt split`.
     Given a closed entry "block" from 09:00 to 12:00
     When I split it at 10:30
     Then there are two entries covering 09:00 to 12:00
 
-  Scenario: Merge a contiguous selection by hand (the editor's Merge-selected)
-    # §12 R6 / §06 R3 — fold an adjacent selection into one entry from the window. GUI:
-    # Merge selected → `merge` IPC → core store.merge; tt: `tt merge`.
+  Scenario: Merge a contiguous selection by hand (the calendar corner-checkbox merge)
+    # §12 R06 / §06 R3 — fold an adjacent selection into one entry from the window. GUI:
+    # the corner-checkbox multi-select Merge → `merge` IPC → core store.merge; tt: `tt merge`.
     Given a closed entry "part one" for "Acme" / "Billing" from 09:00 to 10:00
     And a closed entry "part two" from 10:00 to 11:00
     When I merge those two entries
     Then there is one entry from 09:00 to 11:00
     And the merged entry is for "Acme / Billing"
 
-  Scenario: Search and group the entry list by hand (the Entries control bar)
-    # §12 R9 / §09 R7 — group the list and free-text search it from the window. GUI:
-    # #entries-ctrl → `listEntries` IPC → core buildEntryList; tt: `tt list --by/--search`.
+  Scenario: Browse, search and filter the readonly entries calendar by hand (the Entries view)
+    # §12 R16 / §12 R9 / §11 — the Entries view content is a READONLY calendar the freelancer
+    # browses, searches and filters from the window; there is NO grouping here (it left for Reports,
+    # G11). The calendar's day-headers + range chip present per-day and range billable totals, and
+    # the toolbar's search/filter narrow which entries the calendar lays out. GUI: the readonly
+    # calendar over `getState`/`listEntries` IPC; tt: `tt list --search`. (The calendar's on-screen
+    # affordances — hover Delete/Split/Edit, click-opens-editor, corner-checkbox merge — reach the
+    # edit/split/merge capabilities covered by the scenarios above; this asserts the read/narrow set
+    # behind the view is whole and identical on both surfaces.)
     Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
-    When I view entries this week grouped by client
-    Then the entry list has groups exactly "Acme,Globex"
+    When I list entries this week
+    Then the entry list is exactly "auth refactor,deploy pipeline"
+    And the day "2026-06-24" has a billable total of 2 hours
+    And the range billable total is 3 hours
     When I search the entry list for "auth"
-    Then the entry list shows "auth refactor" under group "Acme"
+    Then the entry list is exactly "auth refactor"
     And the entry list does not show "deploy pipeline"
 
   Scenario: Build a grouped report by hand (the Reports view)

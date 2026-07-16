@@ -102,6 +102,7 @@
   .timefield .field{padding-right:32px;font-family:var(--num);font-size:12.5px}
   .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted);cursor:pointer}
   .timefield .cal .ic{width:15px;height:15px}
+  .timefield .cal.on{color:var(--ink);background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);border-radius:6px;padding:3px;right:6px;bottom:6px}
   .r-row2{display:flex;align-items:center;gap:18px;margin-top:15px;flex-wrap:wrap}
   .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
   .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
@@ -121,6 +122,31 @@
   .fav .fm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
   .fav .kebab{color:var(--faint);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
   .favfoot{margin-top:14px;padding-top:13px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+  /* start disclosure — the calendar affordance expands the day timeline inline, in
+     flow below the Start field; the viewport rests on working hours (07:00–18:00)
+     and scrolls the full 24 h */
+  .startdisc{grid-column:3;margin-top:2px}
+  /* while the disclosure is open, Billable + tags sit in the freed left columns */
+  .r-edit .r-row2{grid-column:1/3;grid-row:2;align-self:start;margin-top:2px}
+  .daywrap{position:relative}
+  .dayview{height:352px;overflow-y:auto;overscroll-behavior:contain}
+  .dayview::-webkit-scrollbar{width:6px}
+  .dayview::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
+  .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
+  .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
+  .track{position:relative;height:768px;border-left:1px solid var(--line);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--line) 31px,var(--line) 32px)}
+  .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
+  .block{position:absolute;left:6px;right:10px;border-radius:7px}
+  .block.other{background:var(--sunken);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
+  .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);z-index:3}
+  /* a running entry has a start and no stop yet: the block dissolves into the future */
+  .block.me.open{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
+  /* the time label & start grip live at track level so nothing hides them */
+  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
+  .phint{margin-top:10px;display:flex;justify-content:flex-end}
+  .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
 </style>
 </head>
 <body>
@@ -184,11 +210,29 @@
         <div class="r-edit">
           <div><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
           <div><label class="lab">Client</label><input class="field" value="Globex Corp"></div>
-          <div class="timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-27 09:00"><span class="cal" title="Open time-range picker"><svg class="ic"><use href="#i-cal"/></svg></span></div>
-        </div>
-        <div class="r-row2">
-          <span class="toggle"><span class="sw on"><i></i></span> Billable</span>
-          <div class="tagchips"><span class="tag">admin <b>×</b></span><span class="tag">proposal <b>×</b></span><input placeholder="add a tag…"></div>
+          <div class="timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-27 09:00"><span class="cal on" title="Adjust start"><svg class="ic"><use href="#i-cal"/></svg></span></div>
+          <div class="r-row2">
+            <span class="toggle"><span class="sw on"><i></i></span> Billable</span>
+            <div class="tagchips"><span class="tag">admin <b>×</b></span><span class="tag">proposal <b>×</b></span><input placeholder="add a tag…"></div>
+          </div>
+          <!-- the calendar affordance discloses the day timeline inline, in flow (no
+               popover, no modal); a running entry has a draggable start edge only —
+               no bottom grip, no end label — and dissolves into the future -->
+          <div class="startdisc">
+            <div class="daywrap">
+              <div class="dayview">
+                <div class="track">
+                  <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:32px">01:00</span><span class="hour tnum" style="top:64px">02:00</span><span class="hour tnum" style="top:96px">03:00</span><span class="hour tnum" style="top:128px">04:00</span><span class="hour tnum" style="top:160px">05:00</span><span class="hour tnum" style="top:192px">06:00</span><span class="hour tnum" style="top:224px">07:00</span><span class="hour tnum" style="top:256px">08:00</span><span class="hour tnum" style="top:288px">09:00</span><span class="hour tnum" style="top:320px">10:00</span><span class="hour tnum" style="top:352px">11:00</span><span class="hour tnum" style="top:384px">12:00</span><span class="hour tnum" style="top:416px">13:00</span><span class="hour tnum" style="top:448px">14:00</span><span class="hour tnum" style="top:480px">15:00</span><span class="hour tnum" style="top:512px">16:00</span><span class="hour tnum" style="top:544px">17:00</span><span class="hour tnum" style="top:576px">18:00</span><span class="hour tnum" style="top:608px">19:00</span><span class="hour tnum" style="top:640px">20:00</span><span class="hour tnum" style="top:672px">21:00</span><span class="hour tnum" style="top:704px">22:00</span><span class="hour tnum" style="top:736px">23:00</span>
+                  <div class="block other" style="top:240px;height:40px">Email + standup</div>
+                  <div class="block me open" style="top:288px;height:320px"></div>
+                  <span class="tlabel tnum" style="top:293px">09:00</span>
+                  <span class="grip" style="top:285px"></span>
+                </div>
+              </div>
+              <i class="fade t"></i><i class="fade b"></i>
+            </div>
+            <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
+          </div>
         </div>
       </div>
 
@@ -234,5 +278,7 @@
     </div>
   </div>
 </div>
+<!-- rest the timeline viewport on working hours (07:00–18:00); the track scrolls the full 24 h -->
+<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=224</script>
 </body>
 </html>

@@ -2,7 +2,7 @@
 // grouped by day with flags in context, a one-tap subtract on slept entries, an
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (util.js, loaded first).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, tagDiff, deriveView } = window.SU;
+const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -12,17 +12,21 @@ let state = null;
 // with `tt list --search`). Kept here so load()/onChange re-apply the live query on refresh.
 let searchQuery = '';
 
-// §12 R9: the Entries-view control-bar state. `entryQuery` holds the live control values
-// (range preset/custom, group-by, client/project/tag/billable). `entryGroups` is the
-// grouped result of the last window.stint.listEntries call, or null when the control bar
-// is idle (default Day grouping, This-week-or-wider window, no filters) — in which case
-// render() paints the day-grouped getState exactly as before, so the existing JUDGE and
-// empty-state facts hold. A control change or search keystroke re-queries and repaints.
-const entryQuery = { preset: 'week', by: 'day', billable: 'all', clientId: null, projectId: null, tag: '', fromUtc: null, toUtc: null };
+// §12 R9: the Entries TOOLBAR state — range/filter/search over the readonly entries
+// calendar (R16). `entryQuery` holds the live control values (range preset/custom,
+// client/project/tag/billable). There is NO grouping here — grouped breakdowns moved to
+// Reports (§09 R02 / `tt report --by`, G11); the toolbar only narrows which entries the
+// calendar lays into its day columns. `entryGroups` is the flat, day-laid result of the
+// last window.stint.listEntries call, or null when the toolbar is idle (This-week-or-wider
+// window, no filters) — in which case render() paints the default getState entries so the
+// existing empty-state facts hold. A control change or search keystroke re-queries + repaints.
+// §09 R01: fromDate/toDate are the custom range's two PLAIN DATES (raw `YYYY-MM-DD` field
+// strings, no time component) — main resolves them to the inclusive-end-day local window.
+const entryQuery = { preset: 'week', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
 let entryGroups = null;
 
-// True once the user touches any control (range/group-by/filter) — the search box alone
-// does not flip it, so a lone search keeps the live day-grouped narrowing it always had.
+// True once the user touches any control (range/filter) — the search box alone does not
+// flip it, so a lone search keeps the live narrowing it always had.
 let entryCtrlActive = false;
 
 // §06 R3: a multi-select of contiguous CLOSED entries that the Merge action folds into
@@ -30,19 +34,8 @@ let entryCtrlActive = false;
 // — which deletes the originals and inserts a fresh row — never leaves stale ids armed.
 const selected = new Set();
 
-// §12 R6: the client list the consolidated entry editor (window.SE.openEditor) seeds its
-// Client select from, loaded once from the same source tt uses (window.stint.listClients)
-// so the kebab editor opens synchronously with the select populated. Refreshed on load().
-let clientList = [];
-
 async function load() {
   selected.clear();
-  // Keep the editor's client choices current with the active reference data.
-  try {
-    clientList = (await window.stint.listClients()) || [];
-  } catch {
-    clientList = [];
-  }
   // §06 R4: the overlap banner is a transient at-write-time signal. Clear it on every
   // (re)load so it auto-dismisses once the next write/refresh carries no warning; the
   // durable signal is the per-row overlap flag, which render() repaints below.
@@ -50,13 +43,14 @@ async function load() {
   // §09 R7: honour the active search on every (re)load so a live refresh (a tt write, a
   // local mutation) keeps the list narrowed to the current query; an empty query is the
   // whole window via getState. The status/timer card + settings always come from getState
-  // (the control-bar query is entries-only), so we always fetch a UiState to paint those.
+  // (the toolbar query is entries-only), so we always fetch a UiState to paint those.
   state = searchQuery && !entryCtrlActive
     ? await window.stint.search({ query: searchQuery })
     : await window.stint.getState();
-  // §12 R9: when the control bar is active, the entries section is the queried groups —
-  // re-run the query on every (re)load so a tt write keeps the grouped/filtered view fresh.
-  // Otherwise entryGroups stays null and render() paints the day-grouped state.days.
+  // §12 R9: when the toolbar is active, the entries calendar shows the queried set —
+  // re-run the range/filter/search query on every (re)load so a tt write keeps the
+  // filtered calendar fresh. Otherwise entryGroups stays null and render() paints the
+  // default state.days.
   if (entryCtrlActive) {
     await applyEntryQuery();
     return;
@@ -128,8 +122,8 @@ function render() {
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
 
-  // §17 R11: the report total reflects the active selection LIVE. When the control bar is
-  // active (a search / filter / group is in play) the total is the snapshot-derived
+  // §17 R11: the report total reflects the active selection LIVE. When the toolbar is
+  // active (a range / filter / search is in play) the total is the snapshot-derived
   // billable-only report sum for that selection (deriveView), so it narrows alongside the
   // list; idle, it is the plain whole-window billable total. Both come from the in-memory
   // snapshot — no IPC round-trip — so the figure tracks the selection on every keystroke.
@@ -140,13 +134,97 @@ function render() {
   renderEntries();
 }
 
-// §12 R9: paint the Entries list. By default (the control bar idle) it paints the
-// day-grouped UiState exactly as before. When the control bar is active (a non-default
-// range / group-by / filter / search), it paints the grouped result of the last
-// window.stint.listEntries query instead — generic group blocks whose header carries the
-// group key + summed billable hours. The default path is byte-identical to the prior
-// render so the existing JUDGE/empty-state facts hold.
+// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One fixed comfortable-width day
+// column per day in range over a FULL 24h track: the track is always the whole day so nothing
+// clips; the viewport scrolls to the working-hours default. HOUR_PX drives both the vertical
+// pixels-per-hour and the event positioning, so an entry's top/height is a pure function of its
+// local minutes-of-day — the SAME window math the picker uses (window.SU.timelineWindow), never
+// re-derived here.
+const CAL_HOUR_PX = 44;
+const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never clip)
+const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter spacer (.sp2)
+const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
+const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// An entry's local minutes-of-day (0–1440). Display only — the stored instant is UTC ISO.
+function localMinOf(iso) {
+  const d = new Date(iso);
+  return d.getHours() * 60 + d.getMinutes();
+}
+// 'YYYY-MM-DD' → { dw, dd } via UTC math, so a day column's weekday/date label never depends
+// on the runner timezone (the day key is already the entry's local day, resolved by core).
+function calDayParts(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return { dw: CAL_WEEKDAYS[dt.getUTCDay()], dd: String(d) };
+}
+function calAddDays(dayStr, n) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().slice(0, 10);
+}
+// The [start, end] day strings of the week (by the weekStart setting) containing a day. Pure
+// string/UTC math so it is timezone-agnostic — used to pad the default view to a whole week.
+function calWeekBounds(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const startDow = state.settings && state.settings.weekStart === 'sunday' ? 0 : 1;
+  const back = (dow - startDow + 7) % 7;
+  const start = calAddDays(dayStr, -back);
+  return [start, calAddDays(start, 6)];
+}
+function calEnumerateDays(minDay, maxDay) {
+  const out = [];
+  let cur = minDay;
+  let guard = 0;
+  while (cur <= maxDay && guard++ < 400) {
+    out.push(cur);
+    cur = calAddDays(cur, 1);
+  }
+  return out;
+}
+
+// §12 R16 (G13): resolve the ORDERED set of day columns to paint plus each day's entries + its
+// per-day billable total. Every in-range day is present — including EMPTY days (present-but-empty
+// `.dcol`) — so the calendar reads as a continuous range, not a sparse list. The entries come from
+// the SAME two sources render() already distinguishes: the toolbar's day-laid listEntries result
+// when active (R09), else the getState day grouping. The default view pads to the whole week (G13);
+// a custom range spans exactly its two plain dates (§09 R01), so empty in-range days still show.
+function calendarModel() {
+  const present = entryGroups
+    ? entryGroups.map((g) => ({ day: g.key, entries: g.entries }))
+    : state.days.map((d) => ({ day: d.day, entries: d.entries }));
+  const map = new Map(present.map((p) => [p.day, p.entries]));
+  const dayKeys = [...map.keys()].sort();
+  let minDay;
+  let maxDay;
+  if (entryGroups && entryQuery.preset === 'custom' && entryQuery.fromDate && entryQuery.toDate) {
+    minDay = entryQuery.fromDate;
+    maxDay = entryQuery.toDate;
+  } else {
+    const anchor = dayKeys.length ? dayKeys[dayKeys.length - 1] : new Date().toISOString().slice(0, 10);
+    const [ws, we] = calWeekBounds(anchor);
+    minDay = dayKeys.length && dayKeys[0] < ws ? dayKeys[0] : ws;
+    maxDay = dayKeys.length && dayKeys[dayKeys.length - 1] > we ? dayKeys[dayKeys.length - 1] : we;
+  }
+  return calEnumerateDays(minDay, maxDay).map((day) => {
+    const entries = map.get(day) || [];
+    // The day-header total is the billable-only sum (empty day → 0), matching what `tt report`
+    // sums for that day — the same billableSeconds core owns; the renderer never re-derives it.
+    const billableSeconds = entries.reduce((s, e) => s + (e.billable ? e.billableSeconds : 0), 0);
+    return { day, entries, billableSeconds };
+  });
+}
+
+// §12 R9/R16: paint the Entries view. The default (toolbar idle) and the toolbar-active query
+// both flow into the SAME readonly calendar (R16); only the never-tracked / no-match empty states
+// short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
 function renderEntries() {
+  // Repainting the calendar closes any open edit form (its host is view-level, so it would
+  // otherwise outlive the events it edited) — matching the old in-event form, which a re-render
+  // wiped. Save/Delete/Split reloads and external refreshes all funnel through here.
+  closeEntryForm();
   const host = $('entries');
   host.innerHTML = '';
   if (entryGroups) {
@@ -155,7 +233,7 @@ function renderEntries() {
       renderMergeBar();
       return;
     }
-    for (const g of entryGroups) host.appendChild(groupBlock(g.key, g.entries, g.billableSeconds));
+    renderCalendar(host);
     renderMergeBar();
     return;
   }
@@ -164,10 +242,90 @@ function renderEntries() {
     renderMergeBar();
     return;
   }
-  for (const day of state.days) {
-    host.appendChild(dayBlock(day));
-  }
+  renderCalendar(host);
   renderMergeBar();
+}
+
+// §12 R16: build the calendar — a horizontally-scrolling strip of fixed-width day columns over a
+// shared hour gutter, then default the viewport to the working-hours window (scroll, never clip).
+function renderCalendar(host) {
+  const model = calendarModel();
+  const wrap = document.createElement('div');
+  wrap.className = 'calwrap';
+  const strip = document.createElement('div');
+  strip.className = 'cstrip';
+  const grid = document.createElement('div');
+  grid.className = 'cgrid';
+  grid.appendChild(calGutter());
+  model.forEach((d, i) => grid.appendChild(calColumn(d, i === model.length - 1)));
+  strip.appendChild(grid);
+  wrap.appendChild(strip);
+  host.appendChild(wrap);
+  // §14 / G16: the entries calendar ALWAYS defaults to working hours — pass the shared window
+  // helper the picker uses, forcing working_hours mode, and scroll the 24h track to that start.
+  // A scroll, never a clip: every off-hours entry stays in the DOM and is reachable by scrolling.
+  const win = window.SU.timelineWindow(
+    { ...(state.settings || {}), pickerWindowMode: 'working_hours' },
+    new Date().toISOString(),
+    null,
+  );
+  strip.scrollTop = CAL_HEADER_PX + Math.round(win.startMin * CAL_PX_PER_MIN);
+}
+
+// The fixed hour gutter: a header spacer aligned with the day headers, then 00:00–24:00 labels
+// over the full 24h track (so every hour is reachable — the viewport scrolls, the track never clips).
+function calGutter() {
+  const gut = document.createElement('div');
+  gut.className = 'gut';
+  const sp = document.createElement('div');
+  sp.className = 'sp2';
+  gut.appendChild(sp);
+  const gtr = document.createElement('div');
+  gtr.className = 'gtr';
+  gtr.style.height = CAL_DAY_PX + 'px';
+  for (let h = 0; h <= 24; h++) {
+    const lab = document.createElement('span');
+    lab.className = 'hlab';
+    lab.style.top = h * CAL_HOUR_PX + 'px';
+    lab.textContent = String(h).padStart(2, '0') + ':00';
+    gtr.appendChild(lab);
+  }
+  gut.appendChild(gtr);
+  return gut;
+}
+
+// One fixed-width day column: a header carrying the weekday/date + that day's billable total
+// (§12 R16 / G13), then a 24h track holding the day's positioned events + any overlap warn bands.
+function calColumn(d, isEnd) {
+  const col = document.createElement('div');
+  col.className = 'dcol' + (isEnd ? ' end' : '');
+  const { dw, dd } = calDayParts(d.day);
+  const head = document.createElement('div');
+  head.className = 'dh';
+  head.innerHTML =
+    `<span class="dw">${dw}</span><b class="dd">${dd}</b>` +
+    `<span class="ds tnum">${fmtHours(d.billableSeconds)}</span>`;
+  col.appendChild(head);
+  const track = document.createElement('div');
+  track.className = 'dt';
+  track.style.height = CAL_DAY_PX + 'px';
+  // §06 R4 / §12 R10: overlap renders as a yellow warn BAND behind the events (detail lives in
+  // the editor). Painted first so the events sit above it.
+  for (const e of d.entries) if (e.overlapped) track.appendChild(calOverlapBand(e));
+  for (const e of d.entries) track.appendChild(calEvent(e));
+  col.appendChild(track);
+  return col;
+}
+
+// §06 R4 / §12 R10: the yellow overlap warn band, positioned over the overlapping minutes.
+function calOverlapBand(e) {
+  const band = document.createElement('div');
+  band.className = 'ov';
+  band.style.top = localMinOf(e.startUtc) * CAL_PX_PER_MIN + 'px';
+  const mins = e.overlapMinutes || 15;
+  band.style.height = Math.max(mins * CAL_PX_PER_MIN, 8) + 'px';
+  band.innerHTML = `<span class="otag">overlap ${mins}m</span>`;
+  return band;
 }
 
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
@@ -212,7 +370,12 @@ function renderLiveEdit(running) {
   const strip = $('live-edit');
   if (!strip) return;
   strip.hidden = !running;
-  if (!running) return;
+  if (!running) {
+    // §05 R06: collapse the inline start-only disclosure with the strip, so a later timer
+    // never resumes a stale expanded state (the toggle's aria-expanded resets with it).
+    closeLeStartDisc();
+    return;
+  }
   // Seed the fields from the running entry, but only when not focused — so a debounced commit
   // mid-typing (or a 1s tick repaint) never clobbers what the user is editing.
   const desc = $('le-desc');
@@ -242,8 +405,13 @@ function liveEditPatch(strip) {
   }
   const start = $('le-start');
   if (start && start.value) {
-    const nextIso = new Date(start.value).toISOString();
-    if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+    // §12 R14 (G1): #le-start is a RAW text field (localInputValue format) — a half-typed
+    // value can be unparseable, so an invalid instant contributes nothing to the patch.
+    const parsed = new Date(start.value);
+    if (!isNaN(parsed.getTime())) {
+      const nextIso = parsed.toISOString();
+      if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+    }
   }
   const bill = $('le-bill');
   if (bill && String(bill.checked) !== strip.dataset.seedBill) patch.billable = bill.checked;
@@ -308,8 +476,8 @@ function cardFlagsHtml(e) {
 
 // Every entry across the painted groups, keyed for the merge flow to look up the
 // selected rows' attributes (clientLabel/billable) without re-resolving anything. When
-// the §12 R9 control bar is active the painted set is the queried groups (an entry can
-// recur across tag groups, so de-dup by id); otherwise it is the day-grouped state.
+// the §12 R9 toolbar is active the painted set is the queried entries (flattened + de-duped
+// by id, defensive); otherwise it is the default state entries.
 function allEntries() {
   const rows = entryGroups
     ? entryGroups.flatMap((g) => g.entries)
@@ -332,13 +500,6 @@ function renderMergeBar() {
   const n = selected.size;
   bar.hidden = n < 2;
   if (n >= 2) $('merge-go').textContent = `Merge ${n} entries`;
-  // §12 R6: the toolbar Merge-selected affordance tracks the same selection — hidden until
-  // at least two contiguous closed entries are armed, labelled with the live count.
-  const tb = $('merge-selected');
-  if (tb) {
-    tb.hidden = n < 2;
-    if (n >= 2) tb.textContent = `Merge selected (${n})`;
-  }
 }
 
 function emptyState() {
@@ -351,34 +512,11 @@ function emptyState() {
   return div;
 }
 
-function dayBlock(day) {
-  const wrap = document.createElement('section');
-  wrap.className = 'day';
-  const total = day.entries.reduce((s, e) => s + e.billableSeconds, 0);
-  const head = document.createElement('div');
-  head.className = 'day-head';
-  head.innerHTML = `<span>${escapeHtml(day.day)}</span><span class="dsum tnum">${fmtHours(total)}</span>`;
-  wrap.appendChild(head);
-  for (const e of day.entries) wrap.appendChild(entryRow(e));
-  return wrap;
-}
+// (The §12 R09 day-list builders `dayBlock`/`groupBlock` were folded into the readonly entries
+// calendar — §12 R16's calColumn/calEvent above. Grouping left the Entries view entirely; grouped
+// breakdowns live in Reports, G11.)
 
-// §12 R9: a generic grouped block for the control-bar query — the same .day section
-// shape dayBlock paints (so the styling and the day-grouped JUDGE facts carry over), but
-// keyed by any group (client / project / day / tag). The header shows the group key and
-// the summed billable hours core returned for the group.
-function groupBlock(key, entries, billableSeconds) {
-  const wrap = document.createElement('section');
-  wrap.className = 'day';
-  const head = document.createElement('div');
-  head.className = 'day-head';
-  head.innerHTML = `<span>${escapeHtml(key)}</span><span class="dsum tnum">${fmtHours(billableSeconds)}</span>`;
-  wrap.appendChild(head);
-  for (const e of entries) wrap.appendChild(entryRow(e));
-  return wrap;
-}
-
-// §12 R9: the empty state when the control-bar query matches nothing (a narrow range /
+// §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
 // filter / search excludes everything). Distinct from the never-tracked empty state —
 // here there IS history, just nothing in the current view — so it instructs widening.
 function emptyEntries() {
@@ -390,52 +528,64 @@ function emptyEntries() {
   return div;
 }
 
-function entryRow(e) {
-  const row = document.createElement('div');
-  const selectable = e.endUtc !== null; // only a bounded (closed) span joins a merge
-  row.className =
-    'entry' + (e.endUtc === null ? ' running' : '') + (selected.has(e.id) ? ' selected' : '');
-  row.dataset.id = String(e.id);
+// §12 R16: one positioned calendar EVENT for an entry. It is the calendar's visible block
+// (`.bd` description, `.bc` client, `.bt` time label, positioned by local minutes on the 24h
+// track) AND the durable entry surface every editing/merge/flag path targets — so it keeps the
+// `.entry` / `data-id` / `[data-act]` / `.sel` hooks the unified editor (§12 R06), the merge
+// selection (§06 R03), split/delete and the flag readouts (§12 R10) all reach. Hover reveals the
+// corner checkbox (`.ck`) + the ops toolbar (Delete / Split / Edit); a click on the inert body
+// opens the unified editor. The running/open entry gets the future-fade `.run` treatment, a
+// start-only block with no end (§05 R06), and no merge checkbox (only bounded spans merge).
+function calEvent(e) {
+  const running = e.endUtc === null;
+  const startMin = localMinOf(e.startUtc);
+  // The open block extends a fixed span into the future and fades out (no bottom edge, G8); a
+  // closed block runs start→end (min height so a very short span stays legible/clickable).
+  const endMin = running ? Math.min(startMin + 180, 1440) : Math.max(localMinOf(e.endUtc), startMin + 5);
+  const el = document.createElement('div');
+  el.className =
+    'ev entry' + (running ? ' run running' : '') + (selected.has(e.id) ? ' on selected' : '');
+  el.dataset.id = String(e.id);
+  el.style.top = startMin * CAL_PX_PER_MIN + 'px';
+  el.style.height = Math.max((endMin - startMin) * CAL_PX_PER_MIN, 18) + 'px';
 
-  // §06 R3: a checkbox marks a closed entry for the multi-select Merge. The open/running
-  // entry has no end, so it is not offered (merge folds bounded spans); a placeholder
-  // keeps the grid column aligned on those rows.
-  const sel = document.createElement('div');
-  sel.className = 'sel-cell';
-  if (selectable) {
-    sel.innerHTML = '<input type="checkbox" class="sel" data-act="select" />';
-    sel.querySelector('.sel').checked = selected.has(e.id);
-  }
+  const timeLabel = running
+    ? `${localTime(e.startUtc)} –`
+    : `${localTime(e.startUtc)}–${localTime(e.endUtc)}`;
+  const runDot = running ? '<span class="run-dot" aria-hidden="true"></span>' : '';
 
-  const time = document.createElement('div');
-  time.className = 'time tnum';
-  time.textContent = e.endUtc ? `${localTime(e.startUtc)}–${localTime(e.endUtc)}` : `${localTime(e.startUtc)}–now`;
+  let html = '';
+  // §06 R3: the hover-corner checkbox marks a CLOSED span for the multi-select merge; the open
+  // row has no end, so it is not offered. It doubles as the legacy `.sel` selection hook.
+  if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" aria-label="Select entry" />';
+  // Hover ops: Delete / Split / Edit, the same `data-act` controls the row affordances and the
+  // JUDGE scenes drive; a click opens the unified editor (wire()), where tags are edited too.
+  html += `<span class="ops">${actionButtons(e)}</span>`;
+  html += `<span class="bd desc${e.billable ? '' : ' nonbill'}">${runDot}${escapeHtml(e.description ?? '(no description)')}</span>`;
+  if (e.clientLabel) html += `<span class="bc where">${escapeHtml(e.clientLabel)}</span>`;
+  html += `<span class="bt time tnum">${timeLabel}</span>`;
+  // §07: the entry's tags show in-context as chips (kept in the DOM, folded away visually on the
+  // readonly calendar — see the `.ev > .chips` rule). §12 R10 (G12): the flags themselves are NOT
+  // text on the event — overlap paints as the `.ov` warn band (calColumn) and sleep as the `.zz`
+  // hatch below; the amount/neighbour detail, the reversible sleep subtract/restore control and the
+  // struck raw-vs-trimmed duration all live in the unified editor (openEntryForm), not on the
+  // calendar, so the readonly calendar stays a calm at-a-glance surface.
+  html += tagsHtml(e);
+  // §12 R10 (G12): a slept span carries a hatched marker at its foot on the calendar.
+  if (e.sleptThrough) html += '<span class="zz"><svg class="ic" aria-hidden="true"><use href="#i-moon" /></svg></span>';
+  el.innerHTML = html;
 
-  const desc = document.createElement('div');
-  desc.className = 'desc' + (e.billable ? '' : ' nonbill');
-  desc.innerHTML =
-    `${escapeHtml(e.description ?? '(no description)')}` +
-    (e.clientLabel ? `<span class="where">${escapeHtml(e.clientLabel)}</span>` : '') +
-    tagsHtml(e) +
-    flagsHtml(e) +
-    actionsHtml(e) +
-    // §12 R9: the detailed overlap banner sits on the affected row, below the inline flags.
-    overlapBannerHtml(e);
-
-  const dur = document.createElement('div');
-  dur.className = 'dur tnum';
-  dur.innerHTML = durHtml(e);
-
-  row.append(sel, time, desc, dur);
-  wire(row, e);
-  return row;
+  const ck = el.querySelector('.ck');
+  if (ck) ck.checked = selected.has(e.id);
+  wire(el, e);
+  return el;
 }
 
-// §12 R9: the row's duration cell. For a slept entry whose billable was trimmed (excluded
-// seconds subtracted, so the raw wall-clock duration differs from the billable one), the
-// raw duration reads STRUCK THROUGH next to the live, trimmed billable duration — the
-// trimmed value is what bills, the struck one shows what was cut. Otherwise the cell is just
-// the billable duration (or, for the open/running row, the live count-up).
+// §12 R10: the unified editor's sleep duration readout. For a slept entry whose billable was
+// trimmed (excluded seconds subtracted, so the raw wall-clock duration differs from the billable
+// one), the raw duration reads STRUCK THROUGH next to the live, trimmed billable duration — the
+// trimmed value is what bills, the struck one shows what was cut. Otherwise it is just the billable
+// duration (or, for the open/running entry, the live count-up). Consumed by editorFlagsInnerHtml.
 function durHtml(e) {
   if (e.endUtc === null) return fmtDur(elapsed(e.startUtc, e.excludedSeconds));
   const raw = e.rawSeconds ?? e.billableSeconds;
@@ -456,18 +606,11 @@ function tagsHtml(e) {
   return `<span class="chips">${chips}</span>`;
 }
 
-function flagsHtml(e) {
-  const flags = [];
-  if (e.overlapped) flags.push('<span class="flag" title="overlaps another entry">overlap</span>');
-  if (e.sleptThrough) flags.push('<span class="flag" title="machine slept during this entry">slept</span>');
-  return flags.length ? `<span class="flags">${flags.join('')}</span>` : '';
-}
-
-// §12 R9: the detailed in-context overlap banner ("Overlap: 15m with previous entry"). It
-// sits on the affected row in addition to the compact "overlap" badge, spelling out the
-// overlapping amount (core-owned minutes) and which neighbour (previous / next) it shares
-// with — so the same time billing twice is visible, not just flagged. Monochrome --flag
-// tokens (no accent, §15). Painted only when the row is overlapped.
+// §12 R10: the unified editor's detailed overlap detail ("Overlap: 15m with previous entry").
+// Where the readonly calendar shows only the `.ov` warn band, the editor spells out the
+// overlapping amount (core-owned minutes) and which neighbour (previous / next) it shares with —
+// so the same time billing twice is visible, not just flagged. Monochrome --flag tokens (no
+// accent, §15). Emitted by editorFlagsInnerHtml only when the edited entry is overlapped.
 function overlapBannerHtml(e) {
   if (!e.overlapped) return '';
   const minutes = e.overlapMinutes ?? 0;
@@ -475,31 +618,51 @@ function overlapBannerHtml(e) {
   return `<div class="banner overlap" title="overlaps another entry">Overlap: ${minutes}m with ${which} entry</div>`;
 }
 
-function actionsHtml(e) {
-  const actions = [];
+// §12 R10 (G12): the unified editor's in-context FLAGS region — where the flag DETAIL lives now
+// that the entries list is gone and the readonly calendar shows only the markers (the `.ov` warn
+// band + the `.zz` slept hatch). An overlapped entry shows the overlap detail (amount + neighbour);
+// a slept-through entry shows the reversible sleep subtract/restore control — its label toggles
+// "Subtract slept" ↔ "Restore" off the core-fed excludedSeconds — beside the sleep duration
+// readout, which strikes the raw wall-clock duration through next to the trimmed billable once
+// subtracted (durHtml). Returns '' when the entry carries neither flag, so the region stays empty.
+function editorFlagsInnerHtml(e) {
+  let html = '';
+  if (e.overlapped) html += overlapBannerHtml(e);
   if (e.sleptThrough) {
-    const restore = e.excludedSeconds > 0;
-    const label = restore ? 'Restore' : 'Subtract sleep';
+    const restore = (e.excludedSeconds ?? 0) > 0;
+    const label = restore ? 'Restore' : 'Subtract slept';
     const icon = restore ? 'i-restore' : 'i-moon';
-    // §12 R14: a discernible aria-label so the action button reads meaningfully in the
-    // accessibility tree (the visible label already does, but keep the hook explicit).
-    actions.push(`<button class="small" data-act="subtract" aria-label="${label}"><svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>`);
+    html +=
+      `<div class="ef-sleep">` +
+      `<button type="button" class="small ef-subtract" data-act="ef-subtract" aria-label="${label}">` +
+      `<svg class="ic" aria-hidden="true"><use href="#${icon}" /></svg>${label}</button>` +
+      `<span class="ef-dur tnum">${durHtml(e)}</span>` +
+      `</div>`;
   }
-  // §12 R6: the per-row kebab opens the consolidated entry editor (window.SE.openEditor) —
-  // one modal surfacing every tt-editable field plus Split, the GUI counterpart to
-  // `tt edit`/`tt split`. The inline Edit/tags/split/delete affordances below stay too, so
-  // a quick single-field fix never needs the modal; the kebab is the all-fields entry point.
-  actions.push('<button class="small ghost kebab" data-act="menu" aria-label="Edit entry"><svg class="ic" aria-hidden="true"><use href="#i-dots" /></svg></button>');
-  actions.push('<button class="small ghost" data-act="edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg>Edit</button>');
-  // §07: an in-context tag editor — chips are editable where they show, without opening
-  // the full edit form. Offered on every row (including the open/running one); tags are
-  // independent of the open/closed state.
-  actions.push('<button class="small ghost" data-act="tags" aria-label="Edit tags">Edit tags</button>');
-  // Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
-  // bounded span). The open/running entry has no end, so it exposes no Split (§06 R2).
-  if (e.endUtc !== null) actions.push('<button class="small ghost" data-act="split" aria-label="Split entry">Split</button>');
-  actions.push('<button class="small ghost" data-act="delete" aria-label="Delete entry">Delete</button>');
-  return `<span class="actions">${actions.join('')}</span>`;
+  return html;
+}
+
+// §12 R16 (mockup main.html): the entry's hover ops — three ICON-ONLY 22×22 line-icon buttons in
+// the `.ops` raised paper chip, each carrying a `title` tooltip and the `data-act` hook the row
+// affordances + JUDGE scenes drive. Order matches the mockup: Delete (x) · Split (closed only) ·
+// Edit (pencil). Kept at parity with the tt verbs: Edit (unified form, §12 R06 — tags edit inside
+// that form, §07/G6), Split (closed only, §06 R2), Delete (two-step, §06 R1). Sleep subtract/
+// restore is NOT a calendar-hover op — it is the reversible control inside the unified editor
+// (§12 R10), reached by opening the entry.
+function actionButtons(e) {
+  const actions = [];
+  // §06 R1: Delete opens the two-step confirm gate (armDelete); the x icon reads as remove.
+  actions.push('<button class="op-btn" type="button" data-act="delete" title="Delete" aria-label="Delete entry"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>');
+  // §06 R2: Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
+  // bounded span). The open/running entry has no end, so it exposes no Split.
+  if (e.endUtc !== null) actions.push('<button class="op-btn" type="button" data-act="split" title="Split" aria-label="Split entry"><svg class="ic" aria-hidden="true"><use href="#i-split" /></svg></button>');
+  // §12 R06: Edit opens the UNIFIED ENTRY FORM in edit mode (openEntryForm) inline in the Entries
+  // view — one form surfacing EVERY tt-editable field plus the footer Split + two-step Delete, the
+  // GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere on the entry opens the
+  // same form (wired below); tags edit inside it (§12 R06/G6), so no separate per-row Edit-tags
+  // control or modal is needed (there is no consolidated modal editor; the unified form owns editing).
+  actions.push('<button class="op-btn" type="button" data-act="edit" title="Edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>');
+  return actions.join('');
 }
 
 function wire(row, e) {
@@ -508,15 +671,21 @@ function wire(row, e) {
       ev.stopPropagation();
       const act = btn.dataset.act;
       if (act === 'select') return toggleSelect(e.id, btn.checked); // multi-select for merge
-      else if (act === 'menu') return window.SE.openEditor(e, clientList, { onDone: () => load() }); // §12 R6 modal
-      else if (act === 'subtract') await window.stint.subtractSleep({ id: e.id });
-      else if (act === 'edit') return openEditForm(row, e); // stays open; resolves on Save
-      else if (act === 'tags') return openTagEditor(btn, e); // inline; resolves on commit
+      else if (act === 'edit') return openEntryForm(row, e); // §12 R06: unified form (edit mode), inline
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
       else if (act === 'delete') return armDelete(btn, e); // two-step; first click only arms
       else return;
       await load();
     });
+  });
+  // §12 R06 (R16 wiring): a click anywhere on the entry — not on one of its action controls —
+  // opens the unified entry form in edit mode INLINE, the same form the Edit affordance opens.
+  // The action buttons/inputs above stopPropagation, so a click on them never also opens the
+  // form; a click on the inert body (time / description / duration) does.
+  row.addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at')) return;
+    if (row.classList.contains('editing')) return; // already the form
+    void openEntryForm(row, e);
   });
 }
 
@@ -527,7 +696,10 @@ function toggleSelect(id, on) {
   if (on) selected.add(id);
   else selected.delete(id);
   const row = document.querySelector(`.entry[data-id="${id}"]`);
-  if (row) row.classList.toggle('selected', on);
+  if (row) {
+    row.classList.toggle('selected', on);
+    row.classList.toggle('on', on); // §12 R16: the calendar event's selected lift
+  }
   renderMergeBar();
 }
 
@@ -552,19 +724,44 @@ async function mergeSelected() {
     applyAck(ack);
     return;
   }
-  openConflictPrompt(entries);
+  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, now
+  // hosted here in app.js (§12 modal
+  // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
+  // overlap ack the fold raised against a third entry (§06 R4).
+  openMergeConflict(entries, async (ack) => {
+    await load();
+    if (ack) applyAck(ack);
+  });
 }
 
-// The inline conflict panel (§06 R3, §12 R6). It offers, for the disagreeing attributes,
-// which entry's client/project to keep and which billable value to keep — before any
-// merge commits. On confirm it sends { ids, winnerId, billable }: winnerId selects the
-// entry whose client/project win (the main process resolves it to clientId/projectId,
-// which the renderer never sees), and billable is the chosen flag.
-function openConflictPrompt(entries) {
-  const bar = $('merge-bar');
-  // Re-clicking Merge re-raises a single prompt rather than stacking panels.
-  bar.querySelector('.merge-conflict')?.remove();
-  // Distinct client choices, each mapped back to a representative entry id (the winner).
+// Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
+// helper so app.js owns the modal's lifecycle end to end
+// — the two share the `.editor-backdrop` chrome but not the code path.
+function closeMergeConflict() {
+  document.querySelector('.editor-backdrop')?.remove();
+}
+
+// The merge-conflict prompt (§06 R3, §12 R6) is hosted here so the modal
+// editor can be deleted (§12 modal-editor row / §Z) while the calendar multi-select merge
+// path keeps its resolver. Styled to context/mockups/merge-conflict.html: a modal one rung
+// above content (.editor.conflict-prompt over .editor-backdrop) resolving the disagreeing
+// attributes field-by-field with accent radios, then listing the unconditionally-kept
+// fields (description, tags, span) as auto-kept "agree" rows so the user sees exactly what
+// merges. It sends { ids, winnerId, billable } — the winning entry's id, never a resolved
+// name — over the same window.stint.merge IPC (no new channel, no parity row); the main
+// process maps winnerId to core's MergeOptions. `onDone(ack)` reloads after the commit.
+function openMergeConflict(entries, onDone = () => {}) {
+  closeMergeConflict();
+  const { icon } = window.SU;
+  const backdrop = document.createElement('div');
+  backdrop.className = 'editor-backdrop';
+  const dialog = document.createElement('div');
+  dialog.className = 'editor conflict-prompt';
+  dialog.setAttribute('role', 'dialog');
+  dialog.setAttribute('aria-modal', 'true');
+  dialog.setAttribute('aria-label', 'Resolve merge conflict');
+
+  // Distinct client choices, each mapped to a representative (winning) entry id.
   const seen = new Map();
   for (const e of entries) {
     const label = e.clientLabel ?? '(no client)';
@@ -573,45 +770,80 @@ function openConflictPrompt(entries) {
   const clientChoices = [...seen.entries()];
   const billableConflict = new Set(entries.map((e) => !!e.billable)).size > 1;
 
-  const panel = document.createElement('div');
-  panel.className = 'merge-conflict';
+  // The merged span runs from the earliest start to the latest end.
+  const sorted = entries.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const spanLabel =
+    last.endUtc != null ? `${localTime(first.startUtc)} – ${localTime(last.endUtc)}` : localTime(first.startUtc);
+
   const clientOpts = clientChoices
     .map(
       ([label, id], i) =>
-        `<label class="mc-opt"><input type="radio" name="mc-client" class="mc-client" ` +
-        `value="${id}"${i === 0 ? ' checked' : ''} /> ${escapeHtml(label)}</label>`,
+        `<label class="mc-opt${i === 0 ? ' on' : ''}"><input type="radio" name="ed-mc-client" class="mc-client" ` +
+        `value="${id}"${i === 0 ? ' checked' : ''} /><span class="rad"></span>` +
+        `<span class="ot"><b>${escapeHtml(label)}</b></span></label>`,
     )
     .join('');
-  // Billable is a single yes/no; offer it only when the selection disagrees on it.
   const billRow = billableConflict
-    ? `<div class="mc-row mc-bill-row"><span class="mc-q">Billable?</span>` +
-      `<label class="mc-opt"><input type="radio" name="mc-bill" class="mc-bill" value="1" checked /> Billable</label>` +
-      `<label class="mc-opt"><input type="radio" name="mc-bill" class="mc-bill" value="0" /> Non-billable</label></div>`
+    ? `<div class="conf mc-bill-row"><div class="mc-q">Billable</div><div class="opts">` +
+      `<label class="mc-opt on"><input type="radio" name="ed-mc-bill" class="mc-bill" value="1" checked /><span class="rad"></span><span class="ot"><b>Billable</b></span></label>` +
+      `<label class="mc-opt"><input type="radio" name="ed-mc-bill" class="mc-bill" value="0" /><span class="rad"></span><span class="ot"><b>Non-billable</b></span></label></div></div>`
     : '';
-  panel.innerHTML =
-    `<div class="mc-title">Which should the merged entry keep?</div>` +
-    `<div class="mc-row"><span class="mc-q">Client / project</span>${clientOpts}</div>` +
-    billRow +
-    `<div class="mc-actions">` +
-    `<button type="button" class="small primary" data-act="confirm-merge">Merge</button>` +
-    `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
-    `</div>`;
-  bar.appendChild(panel);
 
-  panel.querySelector('[data-act="confirm-merge"]').addEventListener('click', async (ev) => {
-    ev.stopPropagation();
-    const winnerId = Number(panel.querySelector('.mc-client:checked').value);
+  // Auto-kept rows: the fields core merges unconditionally, shown so nothing is a surprise.
+  const keptDesc = sorted
+    .map((e) => (e.description ?? '').trim())
+    .filter(Boolean)
+    .join(' · ');
+  const keptTags = [...new Set(entries.flatMap((e) => e.tags ?? []))].join(' · ');
+  const agreeRow = (label, value) =>
+    value
+      ? `<div class="agree">${icon('check')}<b>${label}</b><span class="val tnum">${escapeHtml(value)}</span></div>`
+      : '';
+
+  dialog.innerHTML =
+    `<div class="ed-head"><div class="ed-title">Merge ${entries.length} entries</div>` +
+    `<button type="button" class="iconbtn mc-close" aria-label="Close">${icon('x')}</button></div>` +
+    `<div class="ed-body">` +
+    `<div class="conf mc-row"><div class="mc-q">Client / project</div><div class="opts">${clientOpts}</div></div>` +
+    billRow +
+    agreeRow('Description', keptDesc) +
+    agreeRow('Tags', keptTags) +
+    agreeRow('Span', spanLabel) +
+    `</div>` +
+    `<div class="ed-foot">` +
+    `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
+    `<button type="button" class="small primary mc-merge">${icon('swap')}Merge</button>` +
+    `</div>`;
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+
+  // The accent rides the selected radio's row; clicking a radio moves the .on lift.
+  function syncRadioRows(name) {
+    for (const r of dialog.querySelectorAll(`input[name="${name}"]`)) {
+      r.closest('.mc-opt')?.classList.toggle('on', r.checked);
+    }
+  }
+  dialog.querySelectorAll('.mc-client, .mc-bill').forEach((r) => {
+    r.addEventListener('change', () => syncRadioRows(r.name));
+  });
+
+  dialog.querySelector('.mc-merge').addEventListener('click', async () => {
+    const winnerId = Number(dialog.querySelector('.mc-client:checked').value);
     const payload = { ids: entries.map((e) => e.id), winnerId };
-    const billChoice = panel.querySelector('.mc-bill:checked');
+    const billChoice = dialog.querySelector('.mc-bill:checked');
     if (billChoice) payload.billable = billChoice.value === '1';
     const ack = await window.stint.merge(payload);
-    await load();
-    applyAck(ack);
+    closeMergeConflict();
+    onDone(ack);
   });
-  panel.querySelector('.mc-cancel').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    panel.remove();
+  dialog.querySelector('.mc-cancel').addEventListener('click', () => closeMergeConflict());
+  dialog.querySelector('.mc-close').addEventListener('click', () => closeMergeConflict());
+  backdrop.addEventListener('click', (ev) => {
+    if (ev.target === backdrop) closeMergeConflict();
   });
+  return dialog;
 }
 
 // §12 R13: the generic in-window confirm gate for a destructive action. A destructive
@@ -664,11 +896,13 @@ function armDelete(btn, e) {
   });
 }
 
-// Split (PRD §06 R2): a closed entry can be cut at an instant inside its span into two
-// adjacent entries. The renderer stays a thin shell — it offers an inline instant
-// picker defaulting to the span's midpoint and converts the picked local time to a UTC
-// ISO; core (over the same `split` IPC tt uses) enforces the strictly-in-span rule and
-// performs the arithmetic. The open/running entry never reaches here (no Split button).
+// Split (PRD §06 R2 / G4): a closed entry can be cut at an instant inside its span into two
+// adjacent entries. The renderer stays a thin shell — it offers a simple PLAIN-TEXT instant
+// field (G1: no native datetime-local anywhere on an entry start/stop surface), seeded in the
+// SAME local `YYYY-MM-DDTHH:mm` format the unified form's raw Start/Stop fields use and parsed
+// identically, defaulting to the span's midpoint; it converts the typed local time to a UTC ISO,
+// and core (over the same `split` IPC tt uses) enforces the strictly-in-span rule and performs
+// the arithmetic. The open/running entry never reaches here (no Split button).
 function openSplitForm(btn, e) {
   const startMs = Date.parse(e.startUtc);
   const endMs = Date.parse(e.endUtc);
@@ -678,7 +912,8 @@ function openSplitForm(btn, e) {
   wrap.className = 'split-at';
   wrap.innerHTML =
     `<span class="split-q">Split at</span>` +
-    `<input type="datetime-local" class="split-input" />` +
+    `<input type="text" class="split-input" autocomplete="off" spellcheck="false" ` +
+    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Split instant" />` +
     `<button class="small primary" type="button" data-act="confirm-split">Split</button>` +
     `<button class="small ghost split-cancel" type="button">Cancel</button>`;
   btn.replaceWith(wrap);
@@ -703,138 +938,119 @@ function openSplitForm(btn, e) {
   });
 }
 
-// §07: the inline tag editor. Tags are editable in-context — where the chips show — so a
-// quick tag fix never needs the full edit form. The current tags become removable chips
-// (a `×` drops one); an `add a tag…` input appends a chip on Enter/comma. On commit
-// (Save / Enter on empty / blur) the editor diffs the resulting chip set against the
-// entry's current tags via the pure window.SU.tagDiff and sends the minimal
-// { addTags, removeTags } over the same `edit` IPC tt uses — the renderer holds no tag
-// logic, only this gathered chip set. Mirrors context/mockups/edit-entry.html's chip UI.
-function openTagEditor(btn, e) {
-  const original = (e.tags ?? []).slice();
-  // The live working set the editor mutates; commit diffs THIS against `original`.
-  const next = original.slice();
-
-  const wrap = document.createElement('span');
-  wrap.className = 'tag-editor';
-  // The chip row (removable chips + the add input) and the commit/cancel controls. Built
-  // empty, then repopulated by renderChips so add/remove re-render from `next` alone.
-  wrap.innerHTML =
-    `<span class="chips tag-edit-chips"></span>` +
-    `<button class="small primary" type="button" data-act="commit-tags">Save</button>` +
-    `<button class="small ghost tag-cancel" type="button">Cancel</button>`;
-  btn.replaceWith(wrap);
-
-  const chips = wrap.querySelector('.tag-edit-chips');
-  function renderChips() {
-    chips.innerHTML = '';
-    for (const t of next) {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
-      chip.querySelector('.chip-x').addEventListener('click', (ev) => {
-        ev.stopPropagation();
-        const i = next.indexOf(t);
-        if (i >= 0) next.splice(i, 1);
-        renderChips();
-        input.focus();
-      });
-      chips.appendChild(chip);
-    }
-    chips.appendChild(input);
-  }
-
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'tag-add-input';
-  input.placeholder = 'add a tag…';
-  input.autocomplete = 'off';
-  // Enter or comma commits the typed tag as a chip; an Enter on an EMPTY input commits
-  // the whole edit (mirrors the Save action). De-dup is case-insensitive — re-adding an
-  // existing tag is a no-op the same way tagDiff treats it.
-  function addTyped() {
-    const name = input.value.trim();
-    input.value = '';
-    if (!name) return false;
-    if (!next.some((t) => t.toLowerCase() === name.toLowerCase())) next.push(name);
-    renderChips();
-    input.focus();
-    return true;
-  }
-  input.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
-      ev.preventDefault();
-      if (input.value.trim()) addTyped();
-      else void commit();
-    } else if (ev.key === ',') {
-      ev.preventDefault();
-      addTyped();
-    }
-  });
-
-  async function commit() {
-    addTyped(); // fold any half-typed tag still in the input
-    const { addTags, removeTags } = tagDiff(original, next);
-    if (addTags.length === 0 && removeTags.length === 0) return render(); // no-op
-    await window.stint.edit({ id: e.id, patch: { addTags, removeTags } });
-    await load();
-  }
-
-  wrap.querySelector('[data-act="commit-tags"]').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    void commit();
-  });
-  wrap.querySelector('.tag-cancel').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    render(); // discard — repaint from state, dropping the editor
-  });
-
-  renderChips();
-  input.focus();
+// §12 R06 (G5): tear down the open edit-mode form. It lives in the view-level #entry-form-host
+// (not inside the calendar event), so closing it means removing the mounted form and dropping the
+// .editing selection state from whichever calendar event carried it. Called on Cancel, whenever the
+// calendar repaints (renderEntries — a Save/Delete/Split reload, or an external refresh, replaces
+// the form the same way the old in-event mount was wiped by a re-render), and before opening a new
+// form so only one unified form (add or edit) is ever on screen. Idempotent when nothing is open.
+function closeEntryForm() {
+  const host = $('entry-form-host');
+  const form = host?.querySelector('.entry-form');
+  if (form) form.remove();
+  document.querySelectorAll('.entry.editing').forEach((el) => el.classList.remove('editing'));
 }
 
-// Inline edit (PRD §06 R1, §05 R6): ANY field of an entry — including the RUNNING one
-// — is editable in-context. The form seeds every field (description, start, end,
-// billable, client) from the entry and sends only the changed ones over the same
-// `edit` IPC tt uses, never a separate page. Editing the running entry must NOT stop
-// it: the open row's form omits End, so the patch never carries endUtc and the open
-// row stays open (mirrors the §05 R6 BDD guarantee).
-async function openEditForm(row, e) {
+// §12 R06 (G5/G6/G7): the UNIFIED ENTRY FORM in EDIT MODE — the single in-window editor for
+// an existing entry, opened INLINE in the Entries view (no modal, no backdrop, position:static
+// in flow) from an entry's Edit affordance OR a click on the entry itself. It is the same form
+// the manual-add uses (add mode is §12 R07), so editing an entry is identical to creating one.
+// It seeds EVERY tt-editable field from the entry — the multiline description (a 3-line
+// textarea, §05 R10), client + project selects (pre-selected), the tag chips (G6), the billable
+// toggle, and the start/stop instants via the inline interval picker (§12 R15) over the collapsed
+// Start/Stop expander (§12 R17, the exact / overnight path). On Save it sends ONLY the changed
+// fields as { id, patch } over the same `edit` IPC tt uses — the sole commit (G7). The edit-mode
+// FOOTER carries a Split control (window.stint.split) and a two-step Delete gate (confirmInline
+// → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
+// merge stays the corner-checkbox multi-select path (§06 R3). Editing the RUNNING entry must NOT
+// stop it: the open row's form omits End (start-only), so the patch never carries endUtc and the
+// row stays open (§05 R6). Successor to the row-inline edit form, the per-row Edit-tags control,
+// and the modal editor (the §12 R06 / DELETED rows).
+async function openEntryForm(row, e) {
   const running = e.endUtc === null;
-  // The current client (the leading name in "Client / Project") so the select can
-  // pre-select it without the renderer ever resolving names itself.
+  // The current client / project (the two halves of "Client / Project") so the selects can
+  // pre-select them without the renderer ever resolving names itself.
   const currentClient = e.clientLabel ? e.clientLabel.split(' / ')[0] : '';
+  const currentProject =
+    e.clientLabel && e.clientLabel.includes(' / ')
+      ? e.clientLabel.split(' / ').slice(1).join(' / ')
+      : '';
 
   const form = document.createElement('form');
-  form.className = 'edit-form';
-  // End is omitted for the open entry (§05 R6/§06 R1): editing the running entry's
-  // start must not require an end, so the open row stays open.
-  // §12 R15: each time field gets a calendar-icon trigger that opens the shared visual
-  // picker bound to the form's own .edit-start/.edit-end inputs (text stays authoritative).
+  // §12 R06 (G5): ONE unified entry form — edit mode uses the SAME two-column `.uf-body`
+  // structure add mode does (mockup edit-entry.html shows the two-column card for BOTH modes),
+  // so the form carries `unified-form` and reuses its `.uf-*` layout CSS verbatim. `edit-form`
+  // + `entry-form` stay as the behavioural hooks the JUDGE UNIFIED_FORM scene and the tests
+  // target; the per-field `.edit-*`/`.ef-*` hooks ride alongside the shared `.uf-*` styling
+  // classes, so the two modes are one layout with two seedings.
+  form.className = 'entry-form unified-form edit-form';
+  form.dataset.mode = 'edit';
+  // The edited entry's id, so the JUDGE/tests can target this form (only one is ever open) and
+  // closeEntryForm can tie it back to the calendar event carrying the .editing selection state.
+  form.dataset.id = String(e.id);
+  // End is omitted for the open entry (§05 R6/§12 R06): editing the running entry's start must
+  // not require an end, so the open row stays open. The Start/Stop expander is the exact /
+  // overnight path (§12 R17); it holds RAW text fields (localInputValue format, NOT native
+  // datetime-local, G1) — the same fields the inline picker writes and a typed overnight span uses.
   const endField = running
     ? ''
-    : `<label class="edit-field"><span>End</span>` +
-      `<span class="range-field"><input type="datetime-local" class="edit-end" />` +
-      `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>`;
+    : `<label class="uf-field"><span>Stop</span>` +
+      `<input type="text" class="edit-end edit-time uf-time" autocomplete="off" spellcheck="false" ` +
+      `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>`;
   form.innerHTML =
-    `<div class="edit-row">` +
-    `<input type="text" class="edit-desc" placeholder="(no description)" />` +
+    // §12 R06 (G5): the two-column body — LEFT column = the attribute fields, RIGHT column = the
+    // inline interval picker over the collapsed Start/Stop expander. Identical shape to add mode.
+    `<div class="uf-body">` +
+    `<div class="uf-fields">` +
+    // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
+    // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
+    // only the OUTER whitespace and preserves every interior newline, so the stored record stays
+    // verbatim.
+    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
+    `<label class="uf-field"><span>Client</span>` +
+    `<select class="edit-client uf-select"></select></label>` +
+    // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
+    // and pre-selected to the entry's project. Disabled until a client is chosen.
+    `<label class="uf-field"><span>Project</span>` +
+    `<select class="edit-project uf-select" disabled></select></label>` +
+    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input — the same
+    // chip UI the retired per-row Edit-tags control used, folded into the one editor.
+    `<label class="uf-field uf-tags"><span>Tags</span>` +
+    `<span class="chips uf-tag-chips ef-tag-chips"></span></label>` +
+    `<label class="uf-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
+    // §12 R10 (G12): the in-context flags region — the overlap detail (amount + neighbour) and the
+    // reversible sleep subtract/restore control + struck raw-vs-trimmed billable. Always in the DOM
+    // (hidden when the entry carries neither flag); filled + rewired by renderFlags() below.
+    `<div class="ef-flags" hidden></div>` +
     `</div>` +
-    `<div class="edit-row">` +
-    `<label class="edit-field"><span>Start</span>` +
-    `<span class="range-field"><input type="datetime-local" class="edit-start" />` +
-    `<button type="button" class="range-pick-btn edit-pick" aria-label="Open visual time-range picker"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button></span></label>` +
+    `<div class="uf-picker">` +
+    // §12 R15 (G5/G7): the inline interval picker — the primary picking surface. Mounted in flow
+    // into this host (below), bound to THIS form's raw Start/Stop fields (in the expander below).
+    `<div class="edit-picker uf-picker-mount"></div>` +
+    // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
+    // for overnight spans. Collapsed by default; the raw fields it holds are the SAME values the
+    // inline picker above writes, so expander and picker drive one set of form values.
+    `<div class="uf-times ef-times">` +
+    `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
+    `<div class="ef-times-body" hidden>` +
+    `<label class="uf-field"><span>Start</span>` +
+    `<input type="text" class="edit-start edit-time uf-time" autocomplete="off" spellcheck="false" ` +
+    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>` +
     endField +
+    `</div></div>` +
     `</div>` +
-    `<div class="edit-row">` +
-    `<label class="edit-field"><span>Client</span>` +
-    `<select class="edit-client"></select></label>` +
-    `<label class="edit-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
     `</div>` +
-    `<div class="edit-actions">` +
-    `<button type="submit" class="small primary">Save</button>` +
+    // §12 R06: the edit-mode footer, laid out by the shared `.uf-foot` grid. Only Save entry
+    // carries the accent (§15); Split, Cancel and the two-step Delete are quiet. Split leads, then
+    // a flexible spacer pushes Save / Cancel / Delete to the trailing edge.
+    `<div class="uf-foot edit-foot">` +
+    (running
+      ? ''
+      : `<button type="button" class="small ghost ef-split" data-act="split">Split</button>`) +
+    `<span class="uf-foot-spacer ef-foot-spacer"></span>` +
+    `<button type="submit" class="small primary">Save entry</button>` +
     `<button type="button" class="small ghost edit-cancel">Cancel</button>` +
-    `<button type="button" class="small ghost edit-delete" data-act="delete">Delete</button>` +
+    `<button type="button" class="small ghost ef-delete" data-act="delete">Delete</button>` +
     `</div>`;
   form.querySelector('.edit-desc').value = e.description ?? '';
   form.querySelector('.edit-start').value = localInputValue(new Date(e.startUtc));
@@ -842,48 +1058,125 @@ async function openEditForm(row, e) {
   form.querySelector('.edit-bill-box').checked = !!e.billable;
 
   const select = form.querySelector('.edit-client');
-  // currentClientId is filled once the client list resolves; it stays null until then,
-  // and the save handler reads it lazily (the user cannot submit before it populates).
+  const projectSelect = form.querySelector('.edit-project');
+  // currentClientId/currentProjectId are filled once the reference data resolves; they stay
+  // null until then, and the save handler reads them lazily (the user cannot submit before the
+  // selects populate).
   let currentClientId = null;
+  let currentProjectId = null;
 
-  form.querySelector('.edit-cancel').addEventListener('click', () => render());
-  // Delete from within the form is the same two-step confirm as the row affordance.
-  form.querySelector('.edit-delete').addEventListener('click', (ev) => {
+  // §12 R06 (G6): the in-form tag chip editor. `nextTags` is the working set the chips mutate;
+  // Save diffs it against the entry's original tags via the pure window.SU.tagDiff and sends the
+  // minimal { addTags, removeTags } inside the one patch — the renderer holds no tag logic.
+  const originalTags = (e.tags ?? []).slice();
+  const nextTags = originalTags.slice();
+  const chipHost = form.querySelector('.ef-tag-chips');
+  const tagInput = document.createElement('input');
+  tagInput.type = 'text';
+  tagInput.className = 'tag-add-input uf-tag-add ef-tag-add';
+  tagInput.placeholder = 'add a tag…';
+  tagInput.autocomplete = 'off';
+  function renderTagChips() {
+    chipHost.innerHTML = '';
+    for (const t of nextTags) {
+      const chip = document.createElement('span');
+      chip.className = 'chip';
+      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+      chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const i = nextTags.indexOf(t);
+        if (i >= 0) nextTags.splice(i, 1);
+        renderTagChips();
+        tagInput.focus();
+      });
+      chipHost.appendChild(chip);
+    }
+    chipHost.appendChild(tagInput);
+  }
+  function addTypedTag() {
+    const name = tagInput.value.trim();
+    tagInput.value = '';
+    if (!name) return;
+    if (!nextTags.some((t) => t.toLowerCase() === name.toLowerCase())) nextTags.push(name);
+    renderTagChips();
+    tagInput.focus();
+  }
+  tagInput.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      addTypedTag();
+    }
+  });
+  renderTagChips();
+
+  // §12 R17: the Start/Stop expander toggle reveals / hides the raw exact-time fields in flow.
+  const timesToggle = form.querySelector('.ef-times-toggle');
+  const timesBody = form.querySelector('.ef-times-body');
+  timesToggle.addEventListener('click', () => {
+    const open = timesBody.hidden;
+    timesBody.hidden = !open;
+    timesToggle.setAttribute('aria-expanded', String(open));
+  });
+
+  // §12 R10 (G12): paint the in-context flags region and (re)bind its reversible sleep control.
+  // Subtracting excludes the recorded slept span from billable; subtracting again restores it —
+  // core owns the toggle (store.subtractSleep, reached over the existing subtractSleep IPC, NO new
+  // channel). After the write we re-read the entry off the fresh snapshot and repaint the region in
+  // place so the editor stays open: the button flips Subtract slept ↔ Restore and durHtml's struck
+  // raw-vs-trimmed billable appears / disappears. Called once on open, then after each toggle.
+  const flagsRow = form.querySelector('.ef-flags');
+  function renderFlags() {
+    flagsRow.innerHTML = editorFlagsInnerHtml(e);
+    flagsRow.hidden = flagsRow.innerHTML === '';
+    const subtractBtn = flagsRow.querySelector('.ef-subtract');
+    if (subtractBtn) {
+      subtractBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        await window.stint.subtractSleep({ id: e.id });
+        // Re-read the toggled entry off core's snapshot (subtractSleep returns nothing; refreshAll
+        // pushes new state in production, getState reads it here) — the editor owns no sleep math.
+        const st = await window.stint.getState();
+        const fresh = (st?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === e.id);
+        if (fresh) {
+          e.excludedSeconds = fresh.excludedSeconds;
+          e.billableSeconds = fresh.billableSeconds;
+          e.rawSeconds = fresh.rawSeconds;
+        }
+        renderFlags();
+      });
+    }
+  }
+  renderFlags();
+
+  form.querySelector('.edit-cancel').addEventListener('click', () => closeEntryForm());
+  // §12 R06 / §06 R2: the footer Split control cuts a closed span in two. It reuses the same
+  // inline instant picker + `split` IPC the (retiring) row affordance used — offered only on a
+  // closed entry (an open row has no end to cut). Absent for the running entry.
+  const splitBtn = form.querySelector('.ef-split');
+  if (splitBtn) {
+    splitBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openSplitForm(ev.currentTarget, e);
+    });
+  }
+  // §12 R06 / §06 R1 / §12 R13: the footer's two-step Delete gate. The first click ARMS an
+  // explicit confirm affordance; only the explicit confirm removes the entry (window.stint.remove).
+  form.querySelector('.ef-delete').addEventListener('click', (ev) => {
     ev.stopPropagation();
     armDelete(ev.currentTarget, e);
   });
-  // §12 R15: the calendar-icon triggers open the shared visual picker bound to THIS form's
-  // own time inputs. The closed entry's picker carries both start+stop; the running (open)
-  // entry's form has only a Start field (no End), so its picker is seeded start-only and
-  // never writes a stop — editing the open row cannot close it (§05 R6). The picker writes
-  // localInputValue strings back into the inputs (text stays authoritative) — the submit
-  // path then sends the same patch over window.stint.edit unchanged.
-  const editStartInput = form.querySelector('.edit-start');
-  const editEndInput = running ? null : form.querySelector('.edit-end');
-  for (const pick of form.querySelectorAll('.edit-pick')) {
-    pick.addEventListener('click', () => {
-      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-        editStartInput.focus();
-        return;
-      }
-      window.STP.open({
-        startInput: editStartInput,
-        endInput: editEndInput, // null for the open row → start-only, no stop written
-        otherEntries: snapshotEntries(e.id),
-        onApply: () => {},
-      });
-    });
-  }
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
+    addTypedTag(); // fold any half-typed tag still in the add input
     const desc = form.querySelector('.edit-desc').value.trim();
     const startLocal = form.querySelector('.edit-start').value;
     const endLocal = running ? '' : form.querySelector('.edit-end').value;
     const billable = form.querySelector('.edit-bill-box').checked;
     const clientSel = select.value === '' ? null : Number(select.value);
+    const projectSel = projectSelect.value === '' ? null : Number(projectSelect.value);
 
-    // Send only changed fields. For the open entry the form has no End input, so the
-    // patch never carries endUtc and editing cannot close it.
+    // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
+    // the form has no End input, so the patch never carries endUtc and editing cannot close it.
     const patch = {};
     const nextDesc = desc || null;
     if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
@@ -897,27 +1190,79 @@ async function openEditForm(row, e) {
     }
     if (billable !== !!e.billable) patch.billable = billable;
     if (clientSel !== currentClientId) patch.clientId = clientSel;
+    // Project only rides along when the client is unchanged or the project actually differs;
+    // a null clears it. (Changing the client resets the project select, so a stale id never leaks.)
+    if (projectSel !== currentProjectId) patch.projectId = projectSel;
+    const { addTags, removeTags } = tagDiff(originalTags, nextTags);
+    if (addTags.length) patch.addTags = addTags;
+    if (removeTags.length) patch.removeTags = removeTags;
 
-    // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck,
-    // reload to repaint the per-row flags, then raise the inline banner (after load(),
-    // which clears it). The write already committed — the banner is advisory.
+    // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck, reload
+    // to repaint the per-row flags, then raise the inline banner (after load(), which clears it).
+    // The write already committed — the banner is advisory.
     const ack = await window.stint.edit({ id: e.id, patch });
     await load();
     applyAck(ack);
   });
 
-  // Swap the row into edit mode in place; the open-state class is preserved so the
-  // running indicator stays put while editing. The form is in the DOM before the
-  // async client fetch, so the seeded fields (description/start/billable) are visible
-  // immediately even while the select is still populating.
+  // §12 R06 (G5): mount the form in the SAME view-level host add mode uses (#entry-form-host), in
+  // the view flow — NOT inside the clicked calendar event (a ~124px day column would crush the
+  // wide two-column card and push its footer under the neighbouring columns). The event keeps its
+  // content and gains a subtle .editing selection state; only ONE form (add or edit) shows at a
+  // time, so close any open add/edit form first. Scroll the card into view on open. The form is in
+  // the DOM before the async reference-data fetch, so the seeded fields (description/tags/billable/
+  // times) are visible immediately while the selects are still populating.
+  closeAddForm();
+  closeEntryForm();
   row.classList.add('editing');
-  if (running) row.classList.add('running');
-  row.innerHTML = '';
-  row.appendChild(form);
+  const host = $('entry-form-host');
+  host.appendChild(form);
+  host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   form.querySelector('.edit-desc').focus();
 
-  // Populate the client select from the same source tt uses; pre-select the current
-  // client by name. "(no client)" maps to a null clientId on save.
+  // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
+  // form's Start/Stop fields (the §12 R17 expander inputs) — mounted AFTER the form is in the DOM
+  // so the column geometry measures correctly. A closed entry binds both fields (body-drag moves
+  // the whole span, the bottom grip resizes the stop); the running (open) entry — whose form has
+  // only a Start field — gets the START-ONLY variant, structurally unable to write a stop, so
+  // editing it cannot close the row (§05 R06). The picker writes the fields LIVE; Save entry stays
+  // the sole commit (G7). Text stays authoritative — the picker only ever sets the inputs' value.
+  mountIntervalPicker({
+    host: form.querySelector('.edit-picker'),
+    startInput: form.querySelector('.edit-start'),
+    endInput: running ? null : form.querySelector('.edit-end'),
+    excludeId: e.id,
+  });
+
+  // §12 R06 (G6): populate the project select from the same source tt uses, for the given
+  // client id, and pre-select the entry's project by name. "(no project)" maps to null.
+  async function fillProjects(clientId, preselectName) {
+    projectSelect.innerHTML = '';
+    const none = document.createElement('option');
+    none.value = '';
+    none.textContent = '(no project)';
+    projectSelect.appendChild(none);
+    currentProjectId = null;
+    if (clientId == null) {
+      projectSelect.disabled = true;
+      projectSelect.value = '';
+      return;
+    }
+    projectSelect.disabled = false;
+    const projects = (await window.stint.listProjects({ clientId })) || [];
+    for (const p of projects) {
+      const opt = document.createElement('option');
+      opt.value = String(p.id);
+      opt.textContent = p.name;
+      if (preselectName && p.name === preselectName) currentProjectId = p.id;
+      projectSelect.appendChild(opt);
+    }
+    projectSelect.value = currentProjectId === null ? '' : String(currentProjectId);
+  }
+
+  // Populate the client select from the same source tt uses; pre-select the current client by
+  // name. "(no client)" maps to a null clientId on save. Changing the client repopulates the
+  // project select (dropping any stale pre-selection).
   const clients = await window.stint.listClients();
   const none = document.createElement('option');
   none.value = '';
@@ -931,6 +1276,11 @@ async function openEditForm(row, e) {
     select.appendChild(opt);
   }
   select.value = currentClientId === null ? '' : String(currentClientId);
+  await fillProjects(currentClientId, currentProject);
+  select.addEventListener('change', () => {
+    const cid = select.value === '' ? null : Number(select.value);
+    void fillProjects(cid, null); // a client change resets the project (no stale pre-selection)
+  });
 }
 
 function weekTotal() {
@@ -955,11 +1305,11 @@ function tick() {
   $('summary').innerHTML = summaryHtml(e);
   const clock = $('timer-clock');
   if (clock) clock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
-  // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card.
+  // §12 R04: advance the Entries-view compact strip's count-up in lockstep with the card. The
+  // readonly calendar's running block carries no duration cell (it shows a start-only time label
+  // and fades into the future, §12 R16/G8), so there is nothing else to tick on the Entries view.
   const stripClock = $('strip-clock');
   if (stripClock) stripClock.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds ?? 0));
-  const row = document.querySelector(`.entry.running .dur`);
-  if (row) row.textContent = fmtDur(elapsed(e.startUtc, e.excludedSeconds));
 }
 
 $('toggle').addEventListener('click', async () => {
@@ -980,14 +1330,27 @@ $('toggle').addEventListener('click', async () => {
   const leStart = $('le-start');
   const leBill = $('le-bill');
   if (leDesc) leDesc.addEventListener('input', scheduleLiveEdit);
-  if (leStart) leStart.addEventListener('change', () => void commitLiveEdit());
+  // §05 R06: the Start text field rides the DEBOUNCED commit — typing settles into one
+  // patch, and the inline start-only picker's live per-drag writes (each firing input +
+  // change) coalesce the same way. Every commit is commitLiveEdit → liveEditPatch, whose
+  // patch NEVER carries endUtc, so amending the start can never stop the open row.
+  if (leStart) {
+    leStart.addEventListener('input', scheduleLiveEdit);
+    leStart.addEventListener('change', scheduleLiveEdit);
+  }
   if (leBill) leBill.addEventListener('change', () => void commitLiveEdit());
-  // Tags + client/project are richer than a single inline field, so they route to the
-  // consolidated editor (window.SE.openEditor) for the OPEN entry — which omits the End field
-  // on the running row for the same §05 R6 reason, so editing it still cannot stop the timer.
+  // §12 R06/R14: Tags + client/project are richer than a single inline field, so they route to
+  // the ONE unified editor — not a separate modal. Switch to the Entries view and open the
+  // unified form in EDIT MODE seeded with the running entry: it already supports the open row
+  // (start-only picker, no End), so the patch never carries endUtc and editing it cannot stop
+  // the timer (§05 R6). One click from the Timer live-edit strip lands the user in the editor
+  // with tags/project editable.
   const openRunningEditor = () => {
     const e = state?.status?.running ? state.status.entry : null;
-    if (e) window.SE.openEditor({ ...e, endUtc: null }, clientList, { onDone: () => load() });
+    if (!e) return;
+    route('entries'); // render() repaints the Entries calendar, including the running event
+    const row = document.querySelector(`.entry[data-id="${e.id}"]`);
+    if (row) void openEntryForm(row, e);
   };
   const leTags = $('le-tags');
   const leProject = $('le-project');
@@ -1014,21 +1377,21 @@ $('timer-stop').addEventListener('click', async () => {
 const timerStrip = $('timer-strip');
 if (timerStrip) timerStrip.addEventListener('click', () => route('timer'));
 
-// §09 R7 / §12 R9: free-text search over the entry list. Each keystroke updates the active
-// query. When the §12 R9 control bar is idle, search routes through the `search` IPC over
-// the day-grouped window (parity with `tt list --search`, case-insensitive on description /
-// client / project / tag) — the original behaviour. Once the control bar is active (a range
-// / group-by / filter touched), search instead rides inside the `listEntries` query so it
-// composes with the chosen range/grouping/filters (parity with `tt list --search --by …`).
-// The renderer holds no match logic — core filters either way and the list repaints.
+// §09 R7 / §12 R9: free-text search over the entries calendar. Each keystroke updates the
+// active query. When the §12 R9 toolbar is idle, search routes through the `search` IPC over
+// the default window (parity with `tt list --search`, case-insensitive on description /
+// client / project / tag) — the original behaviour. Once the toolbar is active (a range /
+// filter touched), search instead rides inside the `listEntries` query so it composes with
+// the chosen range/filters (parity with `tt list --search`). The renderer holds no match
+// logic — core filters either way and the calendar repaints.
 const searchInput = $('search');
 if (searchInput) {
   searchInput.addEventListener('input', () => {
     searchQuery = searchInput.value.trim();
-    // A search keystroke is itself a control-bar query (parity with `tt list --search`),
-    // so it routes through listEntries and composes with the chosen range/group-by/filters.
-    // It only leaves the bar idle when the box is cleared AND no range/group-by/filter is in
-    // play — then load() restores the plain day-grouped getState view (the default).
+    // A search keystroke is itself a toolbar query (parity with `tt list --search`), so it
+    // routes through listEntries and composes with the chosen range/filters. It only leaves
+    // the bar idle when the box is cleared AND no range/filter is in play — then load()
+    // restores the plain default getState calendar view (the default).
     if (searchQuery || hasEntryFilter()) {
       entryCtrlActive = true;
       void applyEntryQuery();
@@ -1039,12 +1402,11 @@ if (searchInput) {
   });
 }
 
-// True when any non-search Entries control departs from its default (non-Day grouping, a
-// non-default range/preset, or a client/project/tag/billable filter). Used to decide
-// whether clearing the search box reverts to the plain day-grouped getState view.
+// True when any non-search Entries toolbar control departs from its default (a non-default
+// range/preset, or a client/project/tag/billable filter). Used to decide whether clearing
+// the search box reverts to the plain default getState calendar view.
 function hasEntryFilter() {
   return (
-    entryQuery.by !== 'day' ||
     entryQuery.preset !== 'week' ||
     entryQuery.clientId != null ||
     entryQuery.projectId != null ||
@@ -1053,17 +1415,19 @@ function hasEntryFilter() {
   );
 }
 
-// ----------------------------------------------------------- §12 R9 Entries control bar
+// ----------------------------------------------------------- §12 R9 Entries toolbar
 
-// §17 R11: the live control-bar selection as a ViewSelection the pure deriveView consumes.
+// §17 R11: the live toolbar selection as a ViewSelection the pure deriveView consumes.
 // Built from the SAME live control values entryQuery/searchQuery hold, mapped to the
 // snapshot's row shape: the search query, the chosen client by its row label (the
 // #el-client option text is the client name, the prefix of the row's "Name / Project"
-// label), the billable narrowing, and day-vs-client grouping. Used only to keep the totals
-// live off the in-memory snapshot — the authoritative grouped rows still come from
-// listEntries (parity with tt), but the totals never wait on that round-trip.
+// label), and the billable narrowing. There is no user grouping in the entries calendar
+// (grouping moved to Reports, G11), so the selection is always day-laid — the range-total
+// chip + per-day header totals need only day layout. Used only to keep the totals live off
+// the in-memory snapshot — the authoritative flat rows still come from listEntries (parity
+// with tt), but the totals never wait on that round-trip.
 function liveSelection() {
-  const sel = { billable: entryQuery.billable, group: entryQuery.by === 'client' ? 'client' : 'day' };
+  const sel = { billable: entryQuery.billable, group: 'day' };
   if (searchQuery) sel.search = searchQuery;
   if (entryQuery.clientId != null && elClient) {
     const opt = elClient.options[elClient.selectedIndex];
@@ -1087,19 +1451,23 @@ function updateLiveTotal() {
   $('week-total').textContent = fmtHours(derived.reportTotalSeconds);
 }
 
-// Run the current control-bar query through window.stint.listEntries (the read-only entries
-// view, parity with `tt list --range/--client/--project/--tag/--search --by`), store the
-// grouped result, and repaint. Pure read — no write, no refreshAll. The search box rides
-// inside the same query so grouping + filters + search all compose in one core call.
+// Run the current toolbar query through window.stint.listEntries (the read-only entries
+// calendar read, parity with `tt list --range/--client/--project/--tag/--search`), store the
+// flat, day-laid result, and repaint. Pure read — no write, no refreshAll. The search box
+// rides inside the same query so range + filters + search all compose in one core call; the
+// calendar (R16) lays the returned entries into its day columns intrinsically — no grouping.
 async function applyEntryQuery() {
   // §17 R11: reflect the selection in the report total LIVE off the snapshot first, so the
   // total updates on the same keystroke/selection — it never waits on the async list query.
   updateLiveTotal();
-  const q = { by: entryQuery.by, billable: entryQuery.billable };
+  const q = { billable: entryQuery.billable };
   if (entryQuery.preset === 'custom') {
-    if (!entryQuery.fromUtc || !entryQuery.toUtc) return; // wait for a complete custom range
-    q.fromUtc = entryQuery.fromUtc;
-    q.toUtc = entryQuery.toUtc;
+    if (!entryQuery.fromDate || !entryQuery.toDate) return; // wait for a complete date pair
+    // §09 R01 (G3): a custom range is a pair of PLAIN DATES — the two fields' raw
+    // `YYYY-MM-DD` strings travel verbatim; main resolves the inclusive-end-day local
+    // window (the renderer constructs no Date and derives no window).
+    q.fromDate = entryQuery.fromDate;
+    q.toDate = entryQuery.toDate;
   } else {
     q.preset = entryQuery.preset;
   }
@@ -1114,7 +1482,7 @@ async function applyEntryQuery() {
 }
 
 // Mark the bar active (so search composes into listEntries and load() preserves the query
-// on refresh) and run the query. Called by every range/group-by/filter control change.
+// on refresh) and run the query. Called by every range/filter control change.
 function activateEntryQuery() {
   entryCtrlActive = true;
   void applyEntryQuery();
@@ -1131,8 +1499,9 @@ function selectSegment(group, btn) {
 }
 
 // Range presets (parity with `tt list --today/--week/…/--range`). A preset sends its name
-// (resolved through core's resolveRange in main); Custom reveals the from/to inputs whose
-// Apply sends explicit UTC bounds. This-week is the default active chip.
+// (resolved through core's resolveRange in main); Custom reveals the two plain date
+// fields (§09 R01 / G3) which apply LIVE once both are set — there is no Apply button.
+// This-week is the default active chip.
 const elPresetSeg = $('el-preset-seg');
 const elCustomRange = $('el-custom-range');
 if (elPresetSeg) {
@@ -1143,33 +1512,22 @@ if (elPresetSeg) {
     entryQuery.preset = btn.dataset.preset;
     const custom = entryQuery.preset === 'custom';
     if (elCustomRange) elCustomRange.hidden = !custom;
-    // A named preset queries immediately; Custom waits for Apply (a complete from/to).
-    if (!custom) activateEntryQuery();
-    else entryCtrlActive = true;
-  });
-}
-const elRangeApply = $('el-range-apply');
-if (elRangeApply) {
-  elRangeApply.addEventListener('click', () => {
-    const from = $('el-range-from').value;
-    const to = $('el-range-to').value;
-    if (!from || !to) return;
-    entryQuery.fromUtc = new Date(from).toISOString();
-    entryQuery.toUtc = new Date(to).toISOString();
+    // A named preset queries immediately; Custom marks the bar active and waits for a
+    // complete date pair (the two date fields below apply live) — applyEntryQuery no-ops
+    // until both dates are set.
     activateEntryQuery();
   });
 }
-
-// Group-by (parity with `tt list --by`). Default Day, matching the renderer's day-grouped
-// default — so selecting Day with no other control change reproduces the getState look.
-const elBySeg = $('el-by-seg');
-if (elBySeg) {
-  elBySeg.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('.seg-btn');
-    if (!btn) return;
-    selectSegment(elBySeg, btn);
-    entryQuery.by = btn.dataset.by;
-    activateEntryQuery();
+// §09 R01: the two plain date fields. Each change stores the field's raw `YYYY-MM-DD`
+// string (no Date construction — main owns the plain-date → window rule) and re-queries
+// LIVE once both dates are populated.
+for (const id of ['el-range-from', 'el-range-to']) {
+  const field = $(id);
+  if (!field) continue;
+  field.addEventListener('change', () => {
+    entryQuery.fromDate = $('el-range-from').value || null;
+    entryQuery.toDate = $('el-range-to').value || null;
+    if (entryQuery.fromDate && entryQuery.toDate) activateEntryQuery();
   });
 }
 
@@ -1285,32 +1643,145 @@ startForm.addEventListener('submit', async (ev) => {
   applyAck(ack);
 });
 
-// Manual backfill (PRD §05 R5): a discoverable inline form that creates a completed
-// entry from explicit from/to times, with the same attributes `tt add` accepts. The
-// renderer stays a thin shell — it resolves nothing itself; client/project names and
-// the local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
+// §12 R07 (G5/G7) — manual backfill through the ONE unified entry form in ADD mode: an inline,
+// two-column form (no modal) in the Entries view. The left column holds the same attributes
+// `tt add` accepts (multiline description, client/project, tags, billable); the right column
+// mounts the inline interval picker (§12 R15) over the collapsed Start/Stop expander (§12 R17).
+// The picker updates the form's start/stop state LIVE and "Save entry" is the SOLE commit. The
+// renderer stays a thin shell — it resolves nothing itself; client/project names and the
+// local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
 const addForm = $('add-form');
 
-function localInputValue(date) {
-  // datetime-local wants `YYYY-MM-DDTHH:mm` in *local* time (no timezone suffix).
-  const pad = (n) => String(n).padStart(2, '0');
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
-  );
+// §12 R07 (G5/G6): the add form's live tag working set — the chips mutate this array and Save
+// reads it (parity with the edit form's in-form chip editor). Reset on each open so a fresh form
+// never inherits a prior draft's tags.
+let addFormTags = [];
+
+function renderAddTagChips() {
+  const host = $('add-tag-chips');
+  if (!host) return;
+  host.innerHTML = '';
+  for (const t of addFormTags) {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+    chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const i = addFormTags.indexOf(t);
+      if (i >= 0) addFormTags.splice(i, 1);
+      renderAddTagChips();
+      $('add-tag-input')?.focus();
+    });
+    host.appendChild(chip);
+  }
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = 'add-tag-input';
+  input.className = 'tag-add-input uf-tag-add';
+  input.placeholder = 'add a tag…';
+  input.autocomplete = 'off';
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Enter' || ev.key === ',') {
+      ev.preventDefault();
+      const name = input.value.trim();
+      input.value = '';
+      if (name && !addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
+      renderAddTagChips();
+      $('add-tag-input')?.focus();
+    }
+  });
+  host.appendChild(input);
+}
+
+// §12 R06 (G6): fill the add form's project select for the chosen client, from the same source
+// tt uses (window.stint.listProjects). Disabled with a "(no project)" default until a client is
+// chosen — the renderer resolves no names itself; Save sends the chosen project NAME.
+async function fillAddProjects(clientId) {
+  const sel = $('add-project');
+  sel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(no project)';
+  sel.appendChild(none);
+  if (clientId == null) {
+    sel.disabled = true;
+    sel.value = '';
+    return;
+  }
+  sel.disabled = false;
+  const projects = (await window.stint.listProjects({ clientId })) || [];
+  for (const p of projects) {
+    const opt = document.createElement('option');
+    opt.value = String(p.id);
+    opt.textContent = p.name;
+    sel.appendChild(opt);
+  }
+}
+
+// §12 R15 (G5/G7): the ONE inline-interval-picker mount both unified-form modes (add + edit) and
+// the running variant consume. It renders the picker IN FLOW into `host`, bound to the form's raw
+// Start/Stop text fields — the authoritative form state "Save entry" reads — and writes them back
+// LIVE on every drag (no Apply, no commit of its own). A closed span binds both inputs via
+// STP.openInline (body-drag moves start+stop together; the bottom grip resizes only the stop, both
+// 5-min snap); the running/open case passes endInput null and gets STP.openStartOnly — the
+// START-ONLY variant, structurally incapable of computing or writing a stop (§05 R06 / G8), so it
+// paints the future-fade block with a start grip only. `excludeId` drops the edited entry from the
+// gray other-entry blocks (its own span is the "me" rectangle). Settings feed the ONE window
+// derivation (SU.timelineWindow). Degrades to plain text entry when the picker script is absent.
+function mountIntervalPicker({ host, startInput, endInput, excludeId }) {
+  if (!host || !startInput || typeof window.STP === 'undefined') return;
+  const common = {
+    host,
+    startInput,
+    otherEntries: snapshotEntries(excludeId ?? null),
+    settings: state?.settings ?? null,
+  };
+  if (!endInput) {
+    if (typeof window.STP.openStartOnly === 'function') window.STP.openStartOnly(common);
+    return;
+  }
+  if (typeof window.STP.openInline === 'function') window.STP.openInline({ ...common, endInput, onChange: () => {} });
+}
+
+// §12 R07 / §12 R15 (G7): mount the inline interval picker into the add form's right column. It
+// reads the raw Start/Stop text fields (#add-from/#add-to) as its seed and writes them back LIVE on
+// every drag — those fields are the authoritative form state "Save entry" reads, so the picker
+// updating them IS the form-state update (no separate model). The collapsed Start/Stop expander
+// drives the same fields (§12 R17). Consumes the shared mountIntervalPicker helper.
+function mountAddPicker() {
+  mountIntervalPicker({
+    host: $('add-picker'),
+    startInput: $('add-from'),
+    endInput: $('add-to'),
+    excludeId: null,
+  });
 }
 
 async function openAddForm() {
-  // Populate the client datalist from the same source tt uses, and default the
-  // from/to to a sensible recent hour the user can adjust.
-  const clients = await window.stint.listClients();
-  const list = $('add-client-list');
-  list.innerHTML = '';
+  // One unified form at a time — close any open edit-mode form sharing this host (§12 R06/G5).
+  closeEntryForm();
+  // Populate the client select from the same source tt uses; a "(no client)" default keeps the
+  // clientless-internal path reachable (§05 R3).
+  const clients = (await window.stint.listClients()) || [];
+  const clientSel = $('add-client');
+  clientSel.innerHTML = '';
+  const none = document.createElement('option');
+  none.value = '';
+  none.textContent = '(no client)';
+  clientSel.appendChild(none);
   for (const c of clients) {
     const opt = document.createElement('option');
-    opt.value = c.name;
-    list.appendChild(opt);
+    opt.value = String(c.id);
+    opt.textContent = c.name;
+    clientSel.appendChild(opt);
   }
+  clientSel.value = '';
+  await fillAddProjects(null);
+  // A fresh attribute draft each open.
+  addFormTags = [];
+  renderAddTagChips();
+  $('add-bill').checked = true;
+  // Default the span to a sensible recent hour the user can adjust by dragging or typing.
   const now = new Date();
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   $('add-from').value = localInputValue(hourAgo);
@@ -1318,35 +1789,67 @@ async function openAddForm() {
   const warn = $('add-warning');
   warn.hidden = true;
   warn.textContent = '';
+  // Collapse the Start/Stop expander — the inline picker is the primary picking surface (G2).
+  const timesBody = $('add-times-body');
+  if (timesBody) timesBody.hidden = true;
+  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
   addForm.hidden = false;
   $('add-toggle').setAttribute('aria-expanded', 'true');
+  // Mount the inline picker AFTER the form is visible so its column geometry measures correctly.
+  mountAddPicker();
   $('add-desc').focus();
 }
 
 function closeAddForm() {
-  addForm.reset();
   addForm.hidden = true;
   $('add-toggle').setAttribute('aria-expanded', 'false');
+  $('add-desc').value = '';
+  $('add-from').value = '';
+  $('add-to').value = '';
+  $('add-bill').checked = true;
+  addFormTags = [];
+  const chips = $('add-tag-chips');
+  if (chips) chips.innerHTML = '';
+  const picker = $('add-picker');
+  if (picker) picker.innerHTML = ''; // drop the mounted inline picker
+  const timesBody = $('add-times-body');
+  if (timesBody) timesBody.hidden = true;
+  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
   const warn = $('add-warning');
   warn.hidden = true;
   warn.textContent = '';
 }
 
 async function submitAddForm() {
-  const trimmed = (id) => $(id).value.trim();
-  const tags = $('add-tags').value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
+  const desc = $('add-desc').value.trim();
+  const clientSel = $('add-client');
+  const projectSel = $('add-project');
+  // The selects carry the entity id as value + the NAME as option text; Save sends the NAME, so
+  // core resolves it through the SAME single rule tt add uses (the renderer resolves nothing).
+  const clientName =
+    clientSel.value === '' ? '' : (clientSel.options[clientSel.selectedIndex]?.textContent || '').trim();
+  const projectName =
+    projectSel.value === '' ? '' : (projectSel.options[projectSel.selectedIndex]?.textContent || '').trim();
+  // Fold any half-typed tag still in the add input into the working set before Save.
+  const pending = $('add-tag-input');
+  if (pending && pending.value.trim()) {
+    const name = pending.value.trim();
+    pending.value = '';
+    if (!addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
+    renderAddTagChips();
+  }
   const payload = {
+    // §12 R07 (G7): Save entry is the SOLE commit — the from/to come from the raw Start/Stop
+    // fields the inline picker (and the expander) keep in sync, so the `add` IPC payload shape
+    // is unchanged (fromLocal/toLocal + attributes), exactly what `tt add` sends.
     fromLocal: $('add-from').value,
     toLocal: $('add-to').value,
     billable: $('add-bill').checked,
   };
-  if (trimmed('add-desc')) payload.description = trimmed('add-desc');
-  if (trimmed('add-client')) payload.client = trimmed('add-client');
-  if (trimmed('add-project')) payload.project = trimmed('add-project');
-  if (tags.length) payload.tags = tags;
+  if (desc) payload.description = desc;
+  if (clientName) payload.client = clientName;
+  if (projectName) payload.project = projectName;
+  if (addFormTags.length) payload.tags = addFormTags.slice();
 
   const warn = $('add-warning');
   try {
@@ -1377,15 +1880,24 @@ addForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   await submitAddForm();
 });
-
-// §05 R05 / §12 R15 (G9): the from/to calendar icons open the shared visual time-range
-// picker (window.STP, timepicker.js) for the add-form's span. TEXT ENTRY REMAINS
-// AUTHORITATIVE — the picker only writes a chosen start/stop BACK into the existing
-// #add-from/#add-to datetime-local fields (5-min snapping lives inside the picker), so the
-// unchanged submit path (fromLocal/toLocal → window.stint.add) is the one source of truth
-// and the add IPC payload shape never changes. When the picker is unavailable, or the span
-// crosses midnight (overnight spans use text entry per G9), the click degrades to a plain
-// focus on the field so the user just types — text entry is always reachable.
+// §12 R06 (G6): the client select drives the project options for the chosen client (same source
+// tt uses); changing the client refills the projects and clears any stale selection.
+$('add-client').addEventListener('change', () =>
+  void fillAddProjects($('add-client').value === '' ? null : Number($('add-client').value)),
+);
+// §12 R17: the collapsed Start/Stop expander toggle reveals / hides the raw exact-time fields in
+// flow — the exact / overnight escape hatch. Both the picker and these fields drive the same span.
+{
+  const toggle = $('add-times-toggle');
+  const body = $('add-times-body');
+  if (toggle && body) {
+    toggle.addEventListener('click', () => {
+      const open = body.hidden;
+      body.hidden = !open;
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+  }
+}
 
 // §12 R15: the snapshot's CLOSED entries (other than the one being edited) so the picker can
 // paint them gray on its day column and flag overlaps yellow (warn-only). The running/open
@@ -1399,81 +1911,53 @@ function snapshotEntries(excludeId) {
     .map((e) => ({ startUtc: e.startUtc, endUtc: e.endUtc, description: e.description }));
 }
 
-function openAddRangePicker(focusField) {
-  const fromInput = $('add-from');
-  const toInput = $('add-to');
-  // Default span = existing values, else last-stop→now (G9). The text fields are already
-  // seeded by openAddForm (last hour), so their current values are the seed.
-  const seedFrom = fromInput.value ? new Date(fromInput.value) : null;
-  const seedTo = toInput.value ? new Date(toInput.value) : null;
-  const overnight =
-    seedFrom && seedTo && seedFrom.toDateString() !== seedTo.toDateString();
-  // Overnight spans, or no picker available, fall back to text entry — focus the field so
-  // the user types the times directly (text entry remains authoritative everywhere).
-  if (overnight || typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-    $(focusField).focus();
-    return;
+// §05 R06 / §12 R14/R15: the running entry's Start field carries an INLINE start-only
+// DISCLOSURE of the interval picker — expanded in flow into #le-start-disc below the field
+// (no modal, no backdrop, no Apply). The picker renders the running block with a start grip
+// only, fading into the future (G8); every grip drag 5-min-snaps and writes #le-start LIVE
+// (input+change), riding the strip's debounced commitLiveEdit → window.stint.edit path whose
+// liveEditPatch NEVER carries endUtc — so amending the start can never stop the open row or
+// synthesize an end. Text stays authoritative: the picker only ever writes the text field.
+function closeLeStartDisc() {
+  const disc = $('le-start-disc');
+  const toggle = $('le-start-pick');
+  if (disc) {
+    disc.hidden = true;
+    disc.innerHTML = '';
   }
-  // §12 R15: open the shared visual picker bound to the two authoritative add inputs. The
-  // picker writes localInputValue strings back into #add-from/#add-to (text stays
-  // authoritative), so the unchanged submit path (fromLocal/toLocal → window.stint.add) is
-  // the single source of truth — no new capability, no IPC change.
-  window.STP.open({
-    startInput: fromInput,
-    endInput: toInput,
-    otherEntries: snapshotEntries(null),
-    onApply: () => {},
-  });
+  if (toggle) toggle.setAttribute('aria-expanded', 'false');
 }
-$('add-from-pick').addEventListener('click', () => openAddRangePicker('add-from'));
-$('add-to-pick').addEventListener('click', () => openAddRangePicker('add-to'));
-
-// §12 R15: the running entry's live-edit start (#le-start) opens the picker SEEDED START-ONLY
-// — there is no End input on the open row (editing it must never close the timer, §05 R6), so
-// the picker shows only a start handle and never writes a stop. The picker writes the start
-// back into #le-start and fires its `change` event, which the live-edit strip already commits
-// over window.stint.edit with a patch that never carries endUtc.
 {
   const leStartPick = $('le-start-pick');
-  if (leStartPick) {
+  const leStartDisc = $('le-start-disc');
+  if (leStartPick && leStartDisc) {
     leStartPick.addEventListener('click', () => {
       const leStart = $('le-start');
-      if (typeof window.STP === 'undefined' || typeof window.STP.open !== 'function') {
-        leStart.focus();
+      if (leStartPick.getAttribute('aria-expanded') === 'true') {
+        closeLeStartDisc(); // second click collapses the disclosure
         return;
       }
-      window.STP.open({
-        startInput: leStart,
-        endInput: null, // start-only: the open row has no stop
+      if (typeof window.STP === 'undefined' || typeof window.STP.openStartOnly !== 'function') {
+        leStart.focus(); // picker unavailable — text entry is always reachable
+        return;
+      }
+      window.STP.openStartOnly({
+        host: leStartDisc,
+        startInput: leStart, // the ONLY binding — this variant takes no end input at all
         otherEntries: snapshotEntries(state?.status?.entry?.id ?? null),
-        onApply: () => {},
+        settings: state?.settings ?? null,
       });
+      leStartDisc.hidden = false;
+      leStartPick.setAttribute('aria-expanded', 'true');
     });
   }
 }
 
 // §06 R3: the Merge action folds the current contiguous selection. mergeSelected()
-// decides whether the selection agrees (merge directly) or disagrees (raise the inline
-// conflict prompt to pick the winning client/project/billable first).
+// decides whether the selection agrees (merge directly) or disagrees (raise the app.js-
+// hosted conflict prompt — openMergeConflict — to pick the
+// winning client/project/billable first).
 $('merge-go').addEventListener('click', () => void mergeSelected());
-
-// §12 R6: the toolbar Merge-selected button routes the current selection through the
-// consolidated editor's merge flow (window.SE.mergeSelected) — the same merge IPC +
-// conflict prompt — reloading on commit. It mirrors the merge bar's button so the action
-// is reachable from the toolbar too.
-const mergeSelectedBtn = $('merge-selected');
-if (mergeSelectedBtn) {
-  mergeSelectedBtn.addEventListener('click', () => {
-    const entries = selectedEntries();
-    if (entries.length < 2) return;
-    void window.SE.mergeSelected(entries, {
-      onDone: async (ack) => {
-        await load();
-        if (ack) applyAck(ack);
-      },
-    });
-  });
-}
 
 // §12 R3: the window shell's persistent left nav. route() is the client-side router —
 // it shows the picked .view[data-view] section and hides the rest, and marks the matching
@@ -1899,6 +2383,12 @@ window.stint.onChange(() => {
   // the in-window timer surface tracks the other surface (parity). load() refreshes `state`
   // (→ render() repaints the card + live-edit strip); renderFavorites repaints the rail.
   else if (activeView === 'timer') void load().then(() => renderFavorites());
+  // §12 R10 / §06 R06: on the Entries view, don't blow away an OPEN unified editor on a refresh.
+  // The form's own writes repaint the affected region in place — the reversible sleep subtract/
+  // restore (§12 R10) re-reads the toggled entry and repaints its flags region without leaving the
+  // editor — and a mid-edit reload would also discard the user's unsaved field edits. Once the form
+  // closes (Cancel / Save / Delete each reload themselves), the next refresh repaints normally.
+  else if (document.querySelector('.entry.editing')) return;
   else void load();
 });
 setInterval(tick, 1000);

@@ -1,10 +1,13 @@
 Feature: Free-text search (§09 R7)
-  # PRD §09 R7 — a free-text query narrows the entry list to those whose description,
-  # client name, project name, or any tag contains the query (case-insensitive substring).
-  # This locks the search CONTRACT the GUI search box drives (gui/renderer/index.html
-  # #search → window.stint.search({ query }) → core listEntries({ search })). It runs TWICE
-  # — once over @stint/core (store.listEntries({ search })) and once over tt
-  # (`tt list --all --json --search <query>`) — so the surfaces are proven identical (§17 R8).
+  # PRD §09 R7 — a free-text query narrows the entries to those whose description, client
+  # name, project name, or any tag contains the query (case-insensitive substring). This
+  # locks the search CONTRACT the GUI search box (gui/renderer/index.html #search) composes
+  # into the live entries-calendar query (§12 R09): with the toolbar idle it routes through
+  # window.stint.search({ query }); once the toolbar is active (a range/filter is in play) the
+  # same query rides INSIDE listEntries so it composes with the chosen range/filters. Both
+  # paths land on core listEntries({ search }). It runs TWICE — once over @stint/core
+  # (store.listEntries({ search })) and once over tt (`tt list --all --json --search <query>`)
+  # — so the surfaces are proven identical (§17 R8).
   # The fixed clock is a Wednesday (2026-06-24); the entries below all fall in that week.
 
   Background:

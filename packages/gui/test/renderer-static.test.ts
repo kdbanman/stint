@@ -106,40 +106,56 @@ describe('renderer static contract', () => {
     expect(app).not.toMatch(/\$\('switch'\)/);
   });
 
-  it('the Add (backfill) form exposes explicit from/to + attributes and calls add over IPC (§05 R5)', () => {
+  it('the unified entry form (add mode) mounts the inline picker + expander and Saves over add IPC (§12 R07)', () => {
     const html = read('index.html');
-    // The collapsed backfill form and its fields are present — explicit from/to are the
-    // defining shape of a backfill (a completed entry, not a running one)…
-    expect(html).toMatch(/id="add-form"/);
-    for (const id of ['add-desc', 'add-client', 'add-project', 'add-from', 'add-to', 'add-bill', 'add-tags']) {
+    // §12 R07 (G5): the manual-add surface is the ONE unified entry form in ADD mode — a
+    // two-column card (not a modal), the same shell edit mode uses.
+    expect(html).toMatch(/id="add-form"[^>]*class="unified-form"/);
+    expect(html).toMatch(/id="add-form"[^>]*data-mode="add"/);
+    // LEFT column: a 3-line scrollable multiline description textarea (§05 R10), client + project
+    // SELECTS (populated from the same source tt uses), a tag chip host, and the billable toggle.
+    expect(html).toMatch(/<textarea id="add-desc"[^>]*class="desc-field"[^>]*rows="3"/);
+    expect(html).toMatch(/<select id="add-client"/);
+    expect(html).toMatch(/<select id="add-project"[^>]*disabled/);
+    expect(html).toMatch(/id="add-tag-chips"/);
+    expect(html).toMatch(/id="add-bill"[^>]*type="checkbox"/);
+    // RIGHT column: the inline interval-picker MOUNT (§12 R15) over the COLLAPSED Start/Stop
+    // expander (§12 R17) — a disclosure toggle over the raw exact-time text fields.
+    expect(html).toMatch(/id="add-picker"/);
+    expect(html).toMatch(/id="add-times-toggle"[^>]*aria-expanded="false"/);
+    expect(html).toMatch(/id="add-times-body"[^>]*hidden/);
+    for (const id of ['add-from', 'add-to']) {
       expect(html, `index.html must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
     }
-    expect(html).toMatch(/id="add-from"[^>]*type="datetime-local"/);
-    expect(html).toMatch(/id="add-to"[^>]*type="datetime-local"/);
-    // §05 R05 / §12 R15 (G9): each from/to field also offers a calendar-icon trigger that
-    // opens the shared visual time-range picker — tied to its field via aria-controls and
-    // an aria-label, carrying the neutral .range-pick-btn background (§15 R-clickability).
-    // Text entry stays authoritative; this only adds the picker affordance.
-    expect(html).toMatch(
-      /id="add-from-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-from"[\s\S]*?aria-label="[^"]+"/,
-    );
-    expect(html).toMatch(
-      /id="add-to-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="add-to"[\s\S]*?aria-label="[^"]+"/,
-    );
-    // …and app.js sends a payload carrying fromLocal/toLocal over window.stint.add
-    // (catching a regression that drops the from/to or never reaches core's add). The
-    // picker write-back lands in the SAME fields, so the IPC payload shape is unchanged.
+    // §12 (G1): NO native datetime-local anywhere on the add-time surface — the picker + the
+    // raw text expander are the only entry-time inputs; the Start/Stop fields are plain text.
+    expect(html).not.toMatch(/id="add-from"[^>]*type="datetime-local"/);
+    expect(html).not.toMatch(/id="add-to"[^>]*type="datetime-local"/);
+    expect(html).toMatch(/id="add-from"[^>]*type="text"/);
+    expect(html).toMatch(/id="add-to"[^>]*type="text"/);
+    // …and the retired standalone picker-modal triggers are gone from the add form (G1).
+    expect(html).not.toMatch(/id="add-from-pick"/);
+    expect(html).not.toMatch(/id="add-to-pick"/);
+
     const app = read('app.js');
+    // Save entry is the SOLE commit: app.js sends a payload carrying fromLocal/toLocal (derived
+    // from the picker/expander form state) over window.stint.add — catching a regression that
+    // drops the from/to or never reaches core's add.
     expect(app).toMatch(/window\.stint\.add\(payload\)/);
-    expect(app).toMatch(/fromLocal:/);
-    expect(app).toMatch(/toLocal:/);
+    expect(app).toMatch(/fromLocal:\s*\$\('add-from'\)\.value/);
+    expect(app).toMatch(/toLocal:\s*\$\('add-to'\)\.value/);
+    // The client/project selects are populated from the same source tt uses.
     expect(app).toMatch(/window\.stint\.listClients\(\)/);
-    // The trigger opens the shared picker (the §12 R15 component, window.STP) bound to the
-    // two add inputs and writes the chosen start/stop back into #add-from/#add-to — it does
-    // not author a second picker.
-    expect(app).toMatch(/add-from-pick'\)\.addEventListener/);
-    expect(app).toMatch(/add-to-pick'\)\.addEventListener/);
-    expect(app).toMatch(/window\.STP\.open\(/);
+    expect(app).toMatch(/window\.stint\.listProjects\(/);
+    // The inline picker (§12 R15's window.STP.openInline) is mounted into #add-picker, seeded from
+    // and writing back the raw Start/Stop fields LIVE — the add form is the consumer, not the owner.
+    expect(app).toMatch(/window\.STP\.openInline\(/);
+    expect(app).toMatch(/\$\('add-picker'\)/);
+    expect(app).toMatch(/startInput:\s*\$\('add-from'\)/);
+    expect(app).toMatch(/endInput:\s*\$\('add-to'\)/);
+    // The obsolete modal-picker wiring (openAddRangePicker + the pick-button listeners) is gone.
+    expect(app).not.toMatch(/openAddRangePicker/);
+    expect(app).not.toMatch(/add-from-pick'\)\.addEventListener/);
   });
 
   it('the popover hosts no dedicated Switch affordance — Stop/Start toggle + Open only (§12 R01)', () => {
@@ -155,9 +171,9 @@ describe('renderer static contract', () => {
     const app = read('app.js');
     // Every row (including the open one) exposes an inline Edit affordance…
     expect(app).toMatch(/data-act="edit"/);
-    // …handled into an inline edit form (not a separate page) that calls
-    // window.stint.edit with {id, patch}…
-    expect(app).toMatch(/openEditForm/);
+    // …handled into the unified entry form in edit mode (openEntryForm), inline in the Entries
+    // view (not a separate page / modal), that calls window.stint.edit with {id, patch}…
+    expect(app).toMatch(/openEntryForm/);
     expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch\s*\}\)/);
     // …the form seeds every field from the entry: description, start, end, billable,
     // and a client select populated from the same source tt uses (§06 R1: any field).
@@ -186,6 +202,12 @@ describe('renderer static contract', () => {
     // ISO (catching a regression that drops the split call or stops reaching core).
     expect(app).toMatch(/window\.stint\.split\(\{\s*id:\s*e\.id,\s*atUtc\s*\}\)/);
     expect(app).toMatch(/\.toISOString\(\)/);
+    // §06 R2 / G4 / G1: the split instant is a SIMPLE PLAIN-TEXT field (localInputValue format),
+    // not a native datetime-local — the picker/expander are gone from every entry start/stop
+    // surface. openSplitForm builds a type="text" .split-input and no datetime-local input.
+    expect(app).toMatch(/<input type="text" class="split-input"/);
+    expect(app).not.toMatch(/class="split-input"[^>]*type="datetime-local"/);
+    expect(app).not.toMatch(/type="datetime-local" class="split-input"/);
   });
 
   it('Delete is destructive, so it goes through a confirm step (§06 R1)', () => {
@@ -239,12 +261,12 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/act === 'delete'\)\s*return armDelete/);
     expect(app).toMatch(/function armDelete\(btn, e\)\s*\{[\s\S]*?confirmInline\(btn,/);
 
-    // (b) The Entries control bar (the search / filter / group selections) is present in the
-    // page: the search box, the client/billable filters, and the group-by toggle.
+    // (b) The Entries control bar (the search / filter selections) is present in the
+    // page: the search box and the client/billable filters. There is no group-by toggle
+    // here — grouping moved to Reports (issue #43).
     expect(html).toMatch(/id="search"/);
     expect(html).toMatch(/id="el-client"/);
     expect(html).toMatch(/id="el-billable-seg"/);
-    expect(html).toMatch(/id="el-by-seg"/);
 
     // (c) The live view is DERIVED FROM THE SNAPSHOT — the pure deriveView (util.js mirror of
     // src/liveview.ts) recomputes the list + the report totals with no IPC reload. The filter
@@ -279,11 +301,12 @@ describe('renderer static contract', () => {
     // …clicking Merge routes through mergeSelected, which calls window.stint.merge…
     expect(app).toMatch(/mergeSelected/);
     expect(app).toMatch(/window\.stint\.merge\(/);
-    // …and disagreeing selections raise a conflict prompt asking which value to keep,
-    // sending the winning entry's id (winnerId) + the chosen billable, never resolving
-    // names in the renderer.
-    expect(app).toMatch(/openConflictPrompt/);
-    expect(app).toMatch(/which .* keep/i);
+    // …and disagreeing selections raise the app.js-hosted conflict prompt (openMergeConflict): the
+    // `.editor.conflict-prompt` modal resolving client/project + billable field-by-field,
+    // sending the winning entry's id (winnerId) + the chosen billable, never resolving names
+    // in the renderer.
+    expect(app).toMatch(/function openMergeConflict\(/);
+    expect(app).toMatch(/conflict-prompt/);
     expect(app).toMatch(/winnerId/);
   });
 
@@ -325,23 +348,26 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/e\.sleptThrough && \(e\.excludedSeconds \?\? 0\) > 0/);
   });
 
-  it('tags show as chips in-context and an inline editor edits them over the edit IPC (§07)', () => {
+  it('tags show as chips in-context and are edited in the unified form over the edit IPC (§07, §12 R06)', () => {
     const app = read('app.js');
-    // Every row's tags render as monochrome chips, off an entry tags accessor…
+    // Every event's tags render as monochrome chips, off an entry tags accessor…
     expect(app).toMatch(/function tagsHtml\(e\)/);
     expect(app).toMatch(/e\.tags/);
     expect(app).toMatch(/class="chip"/);
-    // …shown on the entry row and on the running summary line…
+    // …shown on the entry event and on the running summary line…
     expect(app).toMatch(/tagsHtml\(e\)/);
     expect(app).toMatch(/tagsHtml\(running\)/);
-    // …with an in-context edit-tags affordance (not the full edit form)…
-    expect(app).toMatch(/data-act="tags"/);
-    expect(app).toMatch(/openTagEditor/);
-    // …whose commit diffs the edited chip set via the pure window.SU.tagDiff and sends the
-    // minimal { addTags, removeTags } over the same edit IPC tt uses (no tag logic in the
-    // renderer beyond gathering the chips).
-    expect(app).toMatch(/tagDiff\(original,\s*next\)/);
-    expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch:\s*\{\s*addTags,\s*removeTags\s*\}\s*\}\)/);
+    // …with NO per-row Edit-tags control (DELETED) — tags are edited inside the unified form…
+    expect(app).not.toMatch(/data-act="tags"/);
+    expect(app).not.toMatch(/openTagEditor/);
+    // …whose in-form chip editor (removable chips + an "add a tag…" input) diffs the edited chip
+    // set against the entry's original tags via the pure window.SU.tagDiff and folds the minimal
+    // { addTags, removeTags } into the ONE Save patch over the same edit IPC tt uses…
+    expect(app).toMatch(/ef-tag-chips/);
+    expect(app).toMatch(/ef-tag-add/);
+    expect(app).toMatch(/tagDiff\(originalTags,\s*nextTags\)/);
+    expect(app).toMatch(/if \(addTags\.length\) patch\.addTags = addTags;/);
+    expect(app).toMatch(/if \(removeTags\.length\) patch\.removeTags = removeTags;/);
     // The chip text is always escaped (tags are user-controlled)…
     expect(app).toMatch(/escapeHtml\(t\)/);
   });
@@ -585,14 +611,59 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/draft\.clientId\s*=\s*v === ''\s*\?\s*null\s*:\s*Number\(v\)/);
     expect(js).toMatch(/window\.stint\.listProjects\(\{\s*clientId:\s*draft\.clientId\s*\}\)/);
     expect(js).toMatch(/window\.stint\.listClients\(\)/);
-    // …the range-spec is a relative preset OR an absolute custom window (kind preset/absolute)…
+    // …the range-spec is a relative preset OR an absolute custom range (kind preset/absolute)…
     expect(js).toMatch(/kind:\s*'preset'/);
     expect(js).toMatch(/kind:\s*'absolute'/);
+    // §09 R01 (G3): the custom range is a pair of PLAIN DATES — the two builder range
+    // inputs are type="date" (no time component; never datetime-local)…
+    expect(html).toMatch(/id="rep-range-from"[^>]*type="date"/);
+    expect(html).toMatch(/id="rep-range-to"[^>]*type="date"/);
+    // …the absolute arm carries the raw field strings as fromDate/toDate (never a UTC
+    // instant), and reports.js constructs no Date and derives no window — the plain-date →
+    // window rule lives once in gui/src (resolveDateRange), main-process side.
+    expect(js).toMatch(/fromDate:\s*draft\.fromDate/);
+    expect(js).toMatch(/toDate:\s*draft\.toDate/);
+    expect(js).not.toMatch(/new Date\(/);
+    expect(js).not.toMatch(/toISOString/);
     // …rounding rides the saved DEFINITION (no setSetting from the builder — it is per-def)…
     expect(js).not.toMatch(/setSetting/);
     // …and the renderer re-derives no preset date math (core owns resolveRange).
     expect(js).not.toMatch(/setHours\(0, 0, 0, 0\)/);
     expect(js).not.toMatch(/thisWeekRange/);
+  });
+
+  it('the custom range is a pair of plain date fields on BOTH range surfaces, applied live in Entries (§09 R01 / G3)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    const js = read('reports.js');
+    // The four RANGE inputs — the Reports builder pair and the Entries toolbar pair — are
+    // plain type="date" fields (no time component); no range input is a datetime-local.
+    for (const id of ['rep-range-from', 'rep-range-to', 'el-range-from', 'el-range-to']) {
+      expect(html, `#${id} must be a plain date input`).toMatch(
+        new RegExp(`id="${id}"[^>]*type="date"`),
+      );
+      expect(html, `#${id} must not be a datetime-local`).not.toMatch(
+        new RegExp(`id="${id}"[^>]*type="datetime-local"`),
+      );
+    }
+    // The Entries toolbar has NO Apply button — the two date fields apply LIVE once both
+    // are populated (matching the main.html mockup toolbar), driving activateEntryQuery.
+    expect(html).not.toMatch(/id="el-range-apply"/);
+    expect(app).not.toMatch(/el-range-apply/);
+    expect(app).toMatch(/entryQuery\.fromDate/);
+    expect(app).toMatch(/entryQuery\.toDate/);
+    expect(app).toMatch(/if \(entryQuery\.fromDate && entryQuery\.toDate\) activateEntryQuery\(\)/);
+    // The listEntries query carries the RAW date strings (fromDate/toDate, never a derived
+    // fromUtc/toUtc instant) — main resolves the pair via gui/src resolveDateRange.
+    expect(app).toMatch(/q\.fromDate = entryQuery\.fromDate/);
+    expect(app).toMatch(/q\.toDate = entryQuery\.toDate/);
+    expect(app).not.toMatch(/fromUtc/);
+    expect(app).not.toMatch(/toUtc/);
+    // Neither range surface converts a field value through the Date constructor — the two
+    // raw strings travel verbatim over IPC (reports.js is fully Date-free; app.js keeps
+    // Date only off the range path, so the range fields' handlers stay string-only).
+    expect(js).not.toMatch(/new Date\(/);
+    expect(app).not.toMatch(/new Date\(\$\('el-range/);
   });
 
   it('the Reports run-output paints grouped totals with flags in context + Export CSV/JSON from the saved report (§09 R09 / R06)', () => {
@@ -625,45 +696,39 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/\$\('rep-export-json'\)\.addEventListener/);
   });
 
-  it('the consolidated entry editor is a pure renderer module exposing openEditor + split/merge (§12 R6)', () => {
-    const editor = read('editor.js');
+  it('the consolidated modal editor (editor.js / window.SE) is retired; the richer-fields path opens the unified editor (§12 R06 / §Z)', () => {
     const app = read('app.js');
     const html = read('index.html');
-    // editor.js exposes the window.SE module with the consolidated editor + the merge flow…
-    expect(editor).toMatch(/window\.SE\s*=/);
-    expect(editor).toMatch(/function openEditor\(/);
-    expect(editor).toMatch(/mergeSelected/);
-    // …the editor surfaces every tt-editable field (description / client / project / start /
-    // end / tags / billable) and a Split affordance, sending its writes over the same
-    // edit/split/merge/remove IPC tt uses (no name resolution, no new channel)…
-    for (const cls of ['ed-desc', 'ed-client', 'ed-project', 'ed-start', 'ed-end', 'ed-bill-box', 'ed-chips']) {
-      expect(editor, `editor.js must build the .${cls} field`).toMatch(new RegExp(cls));
-    }
-    expect(editor).toMatch(/ed-split-btn/);
-    expect(editor).toMatch(/window\.stint\.edit\(\{\s*id:\s*entry\.id,\s*patch\s*\}\)/);
-    expect(editor).toMatch(/window\.stint\.split\(\{\s*id:\s*entry\.id,\s*atUtc\s*\}\)/);
-    expect(editor).toMatch(/window\.stint\.merge\(/);
-    expect(editor).toMatch(/window\.stint\.remove\(\{\s*id:\s*entry\.id\s*\}\)/);
-    // …editing the RUNNING entry omits End and never sends endUtc (the open row stays open)…
-    expect(editor).toMatch(/const running = entry\.endUtc === null/);
-    expect(editor).toMatch(/if\s*\(!running\s*&&\s*endLocal\)/);
-    // …it resolves no names: the Client select carries the entity id, and the tag delta goes
-    // through the pure window.SU.tagDiff (not bespoke tag logic in the editor)…
-    expect(editor).toMatch(/window\.SU\.tagDiff\(originalTags,\s*nextTags\)/);
-    // …and the disagreeing merge selection raises a conflict prompt asking which to keep,
-    // sending the winning entry's id (winnerId) + the chosen billable, never a resolved name.
-    expect(editor).toMatch(/winnerId/);
-    expect(editor).toMatch(/which .* keep/i);
-
-    // app.js wires the per-row kebab (⋯) to open the consolidated editor, loads the client
-    // list once for it, and exposes a toolbar Merge-selected control over window.SE…
-    expect(app).toMatch(/data-act="menu"/);
-    expect(app).toMatch(/act === 'menu'\)\s*return window\.SE\.openEditor/);
-    expect(app).toMatch(/window\.stint\.listClients\(\)/);
-    expect(app).toMatch(/window\.SE\.mergeSelected/);
-    expect(html).toMatch(/id="merge-selected"/);
-    // …and index.html loads editor.js before app.js (the kebab handler depends on window.SE).
-    expect(html).toMatch(/src="editor\.js"[\s\S]*src="app\.js"/);
+    // editor.js (window.SE) is DELETED: the file is gone, index.html no longer loads it, and
+    // app.js references no window.SE surface anywhere (openEditor / mergeSelected / closeEditor).
+    expect(() => read('editor.js')).toThrow();
+    expect(html).not.toMatch(/editor\.js/);
+    expect(app).not.toMatch(/window\.SE\b/);
+    expect(app).not.toMatch(/SE\.openEditor/);
+    expect(app).not.toMatch(/SE\.mergeSelected/);
+    // Editing an entry goes through the inline unified entry form (openEntryForm) — never a modal
+    // opened via a per-row kebab (⋯), which is also gone…
+    expect(app).not.toMatch(/data-act="menu"/);
+    expect(app).toMatch(/openEntryForm/);
+    expect(app).toMatch(/window\.stint\.edit\(\{\s*id:\s*e\.id,\s*patch\s*\}\)/);
+    // …and the running strip's richer fields (Tags / Client-project) route into that SAME unified
+    // editor: the handler switches to the Entries view and opens the unified form in edit mode
+    // seeded with the running entry (no separate modal, no window.SE).
+    expect(app).toMatch(/const leTags = \$\('le-tags'\)/);
+    expect(app).toMatch(/const leProject = \$\('le-project'\)/);
+    const runEditorBody = app.match(/const openRunningEditor = \(\) => \{[\s\S]*?\n {2}\};/)?.[0];
+    expect(runEditorBody, 'the openRunningEditor handler must be present').toBeTruthy();
+    expect(runEditorBody!).toMatch(/route\('entries'\)/);
+    expect(runEditorBody!).toMatch(/openEntryForm\(row, e\)/);
+    // …the retired toolbar Merge-selected button (which called window.SE.mergeSelected) is gone
+    // from both the page and app.js; the ONLY merge entry point is the corner-checkbox → merge-bar
+    // → openMergeConflict path (§06 R3)…
+    expect(html).not.toMatch(/id="merge-selected"/);
+    expect(app).not.toMatch(/merge-selected/);
+    // …and the merge-conflict resolver lives in app.js (§06 R3) on the
+    // shared `.editor.conflict-prompt` chrome (the resolver itself is exercised by the §06 R3 test).
+    expect(app).toMatch(/function openMergeConflict\(/);
+    expect(app).toMatch(/conflict-prompt/);
   });
 
   it('the Settings view ships editable controls for every §14 setting wired to setSetting (§12 R11)', () => {
@@ -824,8 +889,7 @@ describe('renderer static contract', () => {
   it('the Timer view ships a live-edit-running strip whose edit never carries endUtc (§12 R14)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    // The live-edit-running strip lives in the Timer view, with the no-stop pill + the
-    // "End time not editable while running" note that make the no-close contract explicit…
+    // The live-edit-running strip lives in the Timer view…
     const timerView = html.match(
       /<section class="view" data-view="timer"[\s\S]*?<\/section>\s*\n\s*<!-- §12 R3: the Entries view/,
     )?.[0];
@@ -834,6 +898,10 @@ describe('renderer static contract', () => {
     expect(timerView!).toMatch(/id="le-desc"/);
     expect(timerView!).toMatch(/id="le-start"/);
     expect(timerView!).toMatch(/id="le-bill"/);
+    // …the Start field is a RAW text field in localInputValue format (§12 R14 / G1 — the
+    // native datetime-local popover is gone from this entry-time surface)…
+    expect(timerView!).toMatch(/id="le-start"[^>]*type="text"/);
+    expect(timerView!).not.toMatch(/id="le-start"[^>]*type="datetime-local"/);
     // …the strip carries NO End-time input (editing the open row must not close it)…
     const strip = timerView!.match(/<section class="liveedit"[\s\S]*?<\/section>/)?.[0];
     expect(strip, 'the live-edit strip must be present').toBeTruthy();
@@ -848,10 +916,13 @@ describe('renderer static contract', () => {
     expect(patchBody!).toMatch(/patch\.startUtc/);
     expect(patchBody!).toMatch(/patch\.description/);
     expect(patchBody!).toMatch(/patch\.billable/);
+    // …and the raw text field's value goes through a validity guard before it can patch
+    // (a half-typed instant contributes nothing — never a NaN toISOString crash).
+    expect(patchBody!).toMatch(/isNaN\(parsed\.getTime\(\)\)/);
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
-    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       expect(src).not.toMatch(/require\(['"]node:/);
       expect(src).not.toMatch(/@stint\/core/);
@@ -863,29 +934,37 @@ describe('renderer static contract', () => {
     // page; assert it uses none of the browser request APIs. (The no-network backstop
     // now also walks this directory; this keeps the guard close to the renderer.)
     const forbidden = [/\bfetch\s*\(/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /sendBeacon/];
-    for (const f of ['app.js', 'editor.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
     }
   });
 
-  it('the visual time-range picker is a pure renderer component (window.STP) wired on every R15 surface (§12 R15)', () => {
+  it('the interval picker is a pure INLINE renderer component (window.STP) wired on every R15 surface (§12 R15)', () => {
     const stp = read('timepicker.js');
     const app = read('app.js');
     const html = read('index.html');
-    // timepicker.js exposes the window.STP module with STP.open + the pure geometry/snap
-    // helpers (snapTo5 / minutesToY / yToMinutes) so the guard + JUDGE can drive the math
-    // deterministically. It is a classic script (no ES module export, loads over file://).
+    // timepicker.js exposes the window.STP module with the two INLINE mount forms (openInline +
+    // openStartOnly) and the pure geometry/snap helpers (snapTo5 / minutesToY / yToMinutes) so the
+    // guard + JUDGE can drive the math deterministically. There is NO modal open() — the picker only
+    // ever renders IN FLOW. It is a classic script (no ES module export, loads over file://).
     expect(stp).toMatch(/window\.STP\s*=/);
-    expect(stp).toMatch(/function open\(/);
+    expect(stp).toMatch(/function openInline\(/);
+    expect(stp).toMatch(/function openStartOnly\(/);
+    // The retired modal open() + its backdrop/Apply chrome are gone from timepicker.js.
+    expect(stp).not.toMatch(/function open\(/);
+    expect(stp).not.toMatch(/stp-backdrop/);
+    expect(stp).not.toMatch(/stp-apply/);
     for (const fn of ['snapTo5', 'minutesToY', 'yToMinutes']) {
       expect(stp, `timepicker.js must define the pure helper ${fn}`).toMatch(new RegExp(`function ${fn}\\b`));
     }
     expect(stp).toMatch(/snapTo5,\s*minutesToY,\s*yToMinutes/); // exported on window.STP
     // The picker NEVER resolves anything itself — it only writes localInputValue strings back
     // into the bound text inputs and fires input/change so the existing add/edit paths see it
-    // (text stays authoritative). No new IPC channel: it never calls window.stint.*.
-    expect(stp).toMatch(/function localInputValue\(/);
+    // (text stays authoritative). It uses the ONE shared window.SU.localInputValue (util.js) —
+    // no duplicate definition of its own. No new IPC channel: it never calls window.stint.*.
+    expect(stp).toMatch(/window\.SU\.localInputValue/);
+    expect(stp).not.toMatch(/function localInputValue\(/);
     expect(stp).toMatch(/dispatchEvent\(new Event\('input'/);
     expect(stp).not.toMatch(/window\.stint\./);
     // The me-rectangle is dragged: BODY drag moves start+stop together; the BOTTOM resize
@@ -896,20 +975,53 @@ describe('renderer static contract', () => {
     // Other entries render gray and overlaps render yellow (warn-only).
     expect(stp).toMatch(/stp-block other/);
     expect(stp).toMatch(/stp-overlap/);
-    // index.html loads timepicker.js BEFORE app.js (the triggers depend on window.STP)…
+    // index.html loads timepicker.js BEFORE app.js (the mounts depend on window.STP)…
     expect(html).toMatch(/src="timepicker\.js"[\s\S]*src="app\.js"/);
-    // …and the running-edit Start field carries its own calendar trigger (#le-start-pick).
-    expect(html).toMatch(/id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-controls="le-start"/);
-    // app.js wires the picker on EVERY R15 surface: the add form (#add-from/#add-to), the
-    // inline closed-entry edit form (.edit-pick over .edit-start/.edit-end), and the
-    // running-entry start (#le-start-pick → start-only, endInput null so no stop is written).
-    expect(app).toMatch(/window\.STP\.open\(/);
+    // …and the running-edit Start field's calendar affordance is a DISCLOSURE toggle
+    // (aria-expanded) over the IN-FLOW start-only host below the field — no modal (§05 R06):
+    expect(html).toMatch(
+      /id="le-start-pick"[^>]*class="range-pick-btn"[\s\S]*?aria-expanded="false"[\s\S]*?aria-controls="le-start-disc"/,
+    );
+    expect(html).toMatch(/id="le-start-disc"/);
+    // §12 R15: app.js mounts the picker IN FLOW on every R15 surface through ONE shared helper
+    // (mountIntervalPicker): the add form (#add-picker over #add-from/#add-to), the inline edit
+    // form (.edit-picker over .edit-start/.edit-end), and the running-entry start (#le-start-pick →
+    // the inline START-ONLY disclosure). There is NO modal picker: app.js never calls window.STP.open
+    // and has no .edit-pick trigger (the retired modal chrome).
+    expect(app).toMatch(/function mountIntervalPicker\(/);
+    expect(app).toMatch(/window\.STP\.openInline\(/);
+    expect(app).toMatch(/host:\s*form\.querySelector\('\.edit-picker'\)/);
     expect(app).toMatch(/le-start-pick'\)/);
-    expect(app).toMatch(/\.edit-pick/);
-    // The running-start case opens start-only (endInput: null) so editing the open row can
-    // never write a stop (§05 R6) — the picker only writes #le-start.
-    expect(app).toMatch(/endInput:\s*null/);
-    // The closed-entry inline form binds both inputs; the open row's editEndInput is null.
-    expect(app).toMatch(/const editEndInput = running \? null : form\.querySelector\('\.edit-end'\)/);
+    expect(app).not.toMatch(/window\.STP\.open\(/);
+    expect(app).not.toMatch(/edit-pick['"]/);
+    // §05 R06 — the running surface opens STP.openStartOnly (host + startInput ONLY): the
+    // variant takes no end binding at all, so its write path is structurally incapable of
+    // producing an end value. The disclosure wiring block never mentions an end input or endUtc.
+    expect(stp).toMatch(/function openStartOnly\(/);
+    expect(app).toMatch(/window\.STP\.openStartOnly\(/);
+    const discBlock = app.match(/function closeLeStartDisc[\s\S]*?leStartPick\.setAttribute\('aria-expanded', 'true'\);[\s\S]*?\n\}/)?.[0];
+    expect(discBlock, 'the start-only disclosure wiring must be present').toBeTruthy();
+    expect(discBlock!).not.toMatch(/endInput/);
+    expect(discBlock!).not.toMatch(/endUtc/);
+    expect(discBlock!).not.toMatch(/STP\.open\(/); // the modal never opens on the running surface
+    // The start-only variant renders the RUNNING block: future-fade class + start grip only —
+    // no bottom resize grip, no end label, no end echo (timepicker.js builds them only when an
+    // end binding exists; the fade mask lives on .stp-block.me.open).
+    expect(stp).toMatch(/stp-block me open/);
+    expect(stp).toMatch(/stp-grip/);
+    const css = read('styles.css');
+    expect(css).toMatch(/\.stp-block\.me\.open\s*\{[\s\S]*?mask-image:\s*linear-gradient/);
+    expect(css).toMatch(/\.stp-grip\s*\{/);
+    // The inline disclosure is IN FLOW: .stp-inline is position: static (no backdrop, no
+    // fixed/absolute chrome) with a scrollable day viewport (G16 — scroll, never clip).
+    expect(css).toMatch(/\.stp-inline\s*\{\s*\n?\s*position:\s*static/);
+    expect(css).toMatch(/\.stp-inline\s+\.stp-dayview\s*\{[\s\S]*?overflow-y:\s*auto/);
+    // The modal backdrop / Apply chrome is gone from the stylesheet entirely.
+    expect(css).not.toMatch(/\.stp-backdrop/);
+    expect(css).not.toMatch(/\.stp-apply/);
+    // The inline edit mount binds the START-ONLY variant for the open row (endInput null → no stop
+    // is ever written) and both inputs for a closed entry — the shared helper switches on the
+    // presence of an end field.
+    expect(app).toMatch(/endInput:\s*running \? null : form\.querySelector\('\.edit-end'\)/);
   });
 });

@@ -51,9 +51,75 @@ Feature: Tracking and backfill
   # PRD §05 R05 (core: core data entry) — manual backfill creates a COMPLETED entry from
   # explicit from/to. Runs twice (CoreWorld.backfill = store.add, CliWorld.backfill =
   # `tt add --from --to`), proving the core-entry behaviour is identical and reachable on
-  # both surfaces. The GUI from/to fields also open the §12 R15 range picker, but text
-  # entry stays authoritative, so this surface-neutral scenario is the core-entry AC.
+  # both surfaces. In the GUI the from/to span is chosen on the unified entry form's
+  # inline interval picker (§12 R07/R15) — or typed exactly in the collapsed Start/Stop
+  # expander (§12 R17), the overnight path — both writing the same shared form values that
+  # "Save entry" commits over the same add capability; this surface-neutral scenario stays
+  # the core-entry AC regardless of which input drove the values.
   Scenario: Backfill creates a completed entry
     When I backfill an entry "spec review" from 13:00 to 14:30
     Then exactly zero entries are open
     And the entry "spec review" has a billable duration of 90 minutes
+
+  # PRD §05 R05 + §06 R04 (core: core data entry) — a manual backfill that lands ON an
+  # existing span is WARNED, not blocked: the completed entry still PERSISTS. Runs TWICE
+  # (CoreWorld.backfill = store.add, CliWorld.backfill = `tt add --from --to`), proving the
+  # core-entry behaviour is identical and reachable on both surfaces. In the GUI the
+  # overlapping from/to is chosen on the unified entry form's inline interval picker — whose
+  # yellow overlap band is advisory, never a block — or typed exactly in the collapsed
+  # Start/Stop expander (§12 R07/R15/R17), both writing the same shared form values that
+  # "Save entry" commits over this same add capability. This surface-neutral scenario is the
+  # core-entry AC whichever GUI input drove the values. Fails if add BLOCKS on overlap, leaves
+  # an entry open, or the two surfaces diverge — the exact regressions a warn-not-block
+  # backfill must never introduce.
+  Scenario: Backfill overlapping an existing entry is allowed
+    Given a closed entry "morning sync" from 13:00 to 14:00
+    When I backfill an entry "spec review" from 13:00 to 14:30
+    Then exactly zero entries are open
+    And a non-blocking overlap warning is surfaced
+    And the entry "spec review" has a billable duration of 90 minutes
+    And both entries are flagged overlapped in a report covering the day
+
+  # PRD §12 R17 (core: core data entry) — the unified form's collapsed Start/Stop expander is the
+  # ONLY path for an OVERNIGHT span: the single-day interval picker can't drag across midnight, so a
+  # stop dated a later day is typed exactly into the expander's raw text fields. This scenario is the
+  # surface-neutral core-entry AC for that overnight-capable add: backfilling a span from 22:00 on
+  # DAY to 02:00 the NEXT day yields exactly ONE closed entry crossing midnight — a 240-minute
+  # billable duration — and leaves nothing open. Runs TWICE (CoreWorld.backfillAt = store.add,
+  # CliWorld.backfillAt = `tt add --from --to`), so the cross-midnight span commits identically on
+  # both surfaces. Fails if either surface REJECTS, BLOCKS, or FLATTENS a cross-midnight span to the
+  # same day (a 240-minute duration proves the stop landed on the next day, not wrapped or negative)
+  # — the exact capability the collapsed Start/Stop expander is the GUI path for.
+  Scenario: Backfill creates a completed overnight entry
+    When I backfill an entry "overnight deploy" from 22:00 to 02:00 the next day
+    Then exactly zero entries are open
+    And there are exactly 1 entries
+    And the entry "overnight deploy" has a billable duration of 240 minutes
+
+  # PRD §12 R15 — the inline interval picker's 5-minute-snap CONTRACT: every value the picker writes
+  # back to the form is aligned to the 5-minute grid, and both surfaces store that picked span
+  # VERBATIM — no extra rounding, no drift. Runs TWICE (CoreWorld.backfill = store.add,
+  # CliWorld.backfill = `tt add --from --to`), so the values the picker guarantees are honoured
+  # identically by core and tt. The exact end (10:45) plus the exact billable duration (90 minutes)
+  # pin the stored span to 09:15–10:45 to the minute. Fails if a 5-minute-aligned span is rounded,
+  # shifted, or dropped on save on either surface.
+  Scenario: A 5-minute-aligned backfill span is stored exactly
+    When I backfill an entry "planning" from 09:15 to 10:45
+    Then exactly zero entries are open
+    And the entry "planning" is closed with end 10:45
+    And the entry "planning" has a billable duration of 90 minutes
+
+  # PRD §05 R06 — the running entry is editable (even its start) and its end does not exist
+  # until it is stopped: editing the open row never closes it and never synthesizes an end
+  # instant. Runs TWICE (CoreWorld store.edit + CliWorld `tt edit`), proving the amend-start
+  # path is identical on both surfaces. In the GUI the same amendment is made by dragging the
+  # start grip of the START-ONLY interval-picker variant (§12 R14/R15) — an affordance that is
+  # structurally incapable of producing an end value — riding the same edit capability with a
+  # patch that never carries an end. Fails if any surface's edit path stops the open row or
+  # writes/synthesizes an end instant (e.g. defaulting the end to "now" on edit).
+  Scenario: Editing the running entry start never closes it and never synthesizes an end
+    Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
+    When I edit the open entry start to 08:30
+    Then exactly one entry is open
+    And the open entry starts at 08:30
+    And the open entry has no end
