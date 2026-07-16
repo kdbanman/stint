@@ -26,6 +26,9 @@ skill is what later does that work, consuming the work-list you author here.
 
 Read first for house style and the target shape:
 - `CLAUDE.md` — repo doc map and conventions.
+- `context/process.html` §04 — the authoring rules every doc you write here
+  must follow (concise over grammatical, common language, no editorializing,
+  stateless, one home per fact).
 - An existing `requirements-transition.md` if one is present (study its shape:
   §0 consumption legend, §1 global decisions, §C core labeling, §2
   section-by-section new/modified/deleted tables, §19/§20 new sections, §W
@@ -107,7 +110,8 @@ workflow's swap stage. Only rename docs that actually change.
 ### 2b. Author the new docs
 
 Author the new `context/prd.html` / `context/concept.html` / `context/glossary.html` / `context/acceptance.html`
-in the legacy house style, reflecting every signed-off decision:
+in the house style (per the `context/process.html` §04 authoring rules),
+reflecting every signed-off decision:
 
 - `context/prd.html` — full requirements including new sections and the `core` badges
   (Step 3). Renumber within each section as needed; the transition doc's
