@@ -105,15 +105,17 @@
 
   <p class="lede"><a href="prd.html">prd.html</a> specifies the product; this specifies the apparatus that proves it. These are <strong>SDLC requirements</strong> — properties the build, CI, and acceptance system must hold — a different kind of claim from the application requirements, and until now without a home.</p>
 
-  <p>Read with <a href="acceptance.html">acceptance.html</a>, which routes each requirement to the method that proves it. That decides <em>which</em> notation; this constrains how the resulting guard must <em>behave</em>. A violation is a false green, not a user-visible bug, and is orthogonal to the five AC methods: a correct GOLD test can still violate these by running too late or being unprotected. This is a <strong>seed</strong> — the full SDLC spec (process glossary, automatic-vs-manual inventory, release governance, the requirements-change process) is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>.</p>
+  <p>Read with <a href="acceptance.html">acceptance.html</a>, which routes each requirement to the method that proves it. That decides <em>which</em> notation; this constrains how the resulting guard must <em>behave</em>. A violation is a false green, not a user-visible bug, and is orthogonal to the five AC methods: a correct GOLD test can still violate these by running too late or being unprotected. This is a <strong>seed</strong> — the full SDLC spec (the automatic-vs-manual inventory, release governance) is tracked in <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>.</p>
 
   <nav class="toc">
     <h4>Contents</h4>
     <ol>
       <li><a href="#s1"><span class="tn">01</span>Two kinds of requirement</a></li>
       <li><a href="#s2"><span class="tn">02</span>The principles</a></li>
-      <li><a href="#s3"><span class="tn">03</span>Not yet specified</a></li>
-      <li><a href="#s4"><span class="tn">04</span>Where requirements live</a></li>
+      <li><a href="#s3"><span class="tn">03</span>The agentic process</a></li>
+      <li><a href="#s4"><span class="tn">04</span>Process glossary</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Not yet specified</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Where requirements live</a></li>
     </ol>
   </nav>
 
@@ -134,7 +136,7 @@
   <section id="s2">
     <div class="eyebrow"><span class="n">02</span> Requirements</div>
     <h2>The principles</h2>
-    <p>Each is normative. The reference names the concern that motivated it; the first surfaced from the release-packaging failure (the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while CI stayed green), and the later ones generalize the same discipline to the offline guarantee, evidence integrity, build-time source transforms, the source census that measures the codebase, how visual style is verified, and how the docs themselves speak about change.</p>
+    <p>Each is normative. The reference names the concern that motivated it; the first surfaced from the release-packaging failure (the <code>pack</code> job failed on every merge with <code>spawn … app-builder ENOENT</code> while CI stayed green), and the later ones generalize the same discipline to the offline guarantee, evidence integrity, build-time source transforms, the source census that measures the codebase, how visual style is verified, how the docs themselves speak about change, and how the process itself is encoded.</p>
     <ol class="req">
       <li><strong>Green is meaningful.</strong> A passing check must cover every concern its presence implies; a gate with a blind spot is a false guarantee, worse than none because it reassures. <em>(§19 R01: packaging was broken while CI was green — no check exercised it.)</em></li>
       <li><strong>Verify before the gate.</strong> A check that runs only after the merge it protects cannot prevent a regression, only discover it. Every release-gating concern has a check on the PR path. <em>(§19 R01: the real pack ran post-merge only.)</em></li>
@@ -148,24 +150,72 @@
       <li><strong>The codebase census is exhaustive and reconciles.</strong> Any tool that measures the source — SLOC, documentation, per-category breakdowns — classifies <em>every</em> tracked file with no catch-all bucket, and asserts its arithmetic reconciles: each file's lines sum to its parts, the parts sum to the whole, and files counted equals files tracked. A new directory or unforeseen file matches nothing and <em>fails the run</em> rather than vanishing from the tally; a total that does not add up fails rather than misleading. The report is generated, never committed, so it cannot drift from the tree it describes. <em>(<code>scripts/sloc-report.mjs</code>, gated by <code>--check</code> in CI. A measurement that quietly drops files or fudges its sums is a false green of a subtler kind — it reassures with a number that is wrong.)</em></li>
       <li><strong>The mockups are the source of truth for style.</strong> The prototypes in <code>context/mockups/</code> (and the design system they share) define the app's visual style; the renderer conforms to them, not the reverse. Style is therefore verified by <em>looking</em> — comparing rendered output to the mock, by eye or by an LLM over the captured screenshots — never by pinning CSS in source assertions (exact px, hex, or token usage on named selectors). Such pins fight every restyle and prove nothing about how the app looks: a green that survives an ugly screen is a false green of presentation. The deterministic gates stay on behavior, structure, and parity; the acceptance harness captures the screenshots the visual comparison reads. <em>(§12/§18; issue&nbsp;#25 — code-pinned style checks were removed for exactly this reason.)</em></li>
       <li><strong>The docs are timeless.</strong> A requirement or spec doc describes the present as if it had always been this way. Change narrative — "new", "changed", "previously", "no longer", transition notes, status remarks that lag what shipped — does not belong in the doc: it dates the moment the next change lands, and a stale note reads as current specification. History lives in git, where every prior state is recoverable with its date and reason. Artifacts that map an old state to a new one — a requirements-transition work-list, renamed <code>*-old.html</code> docs — are scaffolding of the change, not spec: they exist while the change is carried out and are deleted when consumed. <em>(A lingering change-note is the spec's false green — it reassures the reader with text about a product that no longer exists; the old→new swap (§Z) that ends a requirements change deletes its own scaffolding for exactly this reason.)</em></li>
+      <li><strong>Procedure is prose; judgment stays in the operator.</strong> A repeatable multi-step process is specified as a <strong>skill</strong> — versioned prose an agent session reads and follows — never compiled into an orchestration script. A script fixes control flow at authoring time, freezing every judgment call at the moment it was least informed; the run-time state of the tree — what failed, what a review found — is what should steer the next step. Determinism belongs in the <em>gates</em> a procedure invokes, not in the driver. And a per-change script is scaffolding by construction: consumed by its one run, it lingers as process knowledge compiled into code nobody will run again (R12). <em>(issue&nbsp;#46: the per-change agent-workflow scripts were retired in favor of the standing skills in §03.)</em></li>
     </ol>
   </section>
 
   <section id="s3">
-    <div class="eyebrow"><span class="n">03</span> Residue</div>
+    <div class="eyebrow"><span class="n">03</span> Execution</div>
+    <h2>The agentic process</h2>
+    <p>Stint is built by agent sessions, and the procedures they follow are specified the way everything else here is specified: as reviewable prose. A <strong>skill</strong> (<code>.claude/skills/*/SKILL.md</code>) is a versioned Markdown procedure the session loads and follows — the process twin of a requirement doc. The session holds the run-time judgment between stages; the deterministic gates (<code>npm test</code>, the judge, the evidence-drift comparison, the no-network backstop) supply the certainty. Per R13 this replaces the earlier per-change orchestration scripts, which encoded the same stages as fixed JavaScript control flow.</p>
+    <h3>The standing skills</h3>
+    <table>
+      <thead><tr><th>Skill</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td data-l="skill" class="m">change-requirements</td><td data-l="role"><strong>Author.</strong> Grills the design one question-cluster at a time, then authors the transition artifact set — renamed <code>*-old.html</code> docs, new docs, the <code>requirements-transition.md</code> work-list, mockups for every new/changed GUI requirement — and stops. It never executes.</td></tr>
+        <tr><td data-l="skill" class="m">requirements-transition</td><td data-l="role"><strong>Execute.</strong> Consumes the work-list: plans file-disjoint waves, implements them with subagents under checkpoint commits, regenerates all AC evidence, runs the two reviews with a bounded improvement loop, captures screen-recording QA last, aggregates one PR, and performs the gated old→new swap. The human gate is the merge.</td></tr>
+      </tbody>
+    </table>
+    <p>The pair is deliberately asymmetric: authoring wants a conversation (recommendations, sign-off, a synthesis the user approves), execution wants a checklist with gates. A change that needs a stage the execution skill lacks extends the skill itself — the standing procedure improves; it is never forked into a per-change variant.</p>
+    <h3>Subagents and model level</h3>
+    <p>The session fans work out to subagents, each run at a chosen <strong>model level</strong> (capability tier). The selection rule is the <em>gate question</em>: <strong>if this subagent does its job subtly wrong, what catches it?</strong> A task whose subtle failure a deterministic gate catches — the build, a golden, the judge, a later stage that mechanically rechecks — may run at a cheap level; a task whose failure only a review or a human would notice runs at the strongest. Model level is set by what the gates <em>cannot</em> catch, never by task size; the default is the strongest available, and downgrading is a deliberate act. The operational rubric — which task kinds are downgrade-eligible, which never are — lives in the <code>requirements-transition</code> skill beside the stages that apply it.</p>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Words</div>
+    <h2>Process glossary</h2>
+    <p>The SDLC twin of <a href="glossary.html">glossary.html</a>: one canonical term per process concept, seeded with the terms this doc and the skills already use.</p>
+    <table>
+      <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td data-l="term" class="m">gate</td><td data-l="meaning">A check that blocks the path it protects (the PR, the release) when red. A check that merely reports is not a gate.</td></tr>
+        <tr><td data-l="term" class="m">guard</td><td data-l="meaning">The automated mirror of a concern otherwise confirmed by hand; makes the common regression fail CI instead of the next manual pass (R03).</td></tr>
+        <tr><td data-l="term" class="m">backstop</td><td data-l="meaning">The guard of last resort behind a promise otherwise held only by convention — the no-network check (R07).</td></tr>
+        <tr><td data-l="term" class="m">false green</td><td data-l="meaning">The process defect: a gate passed while a concern its green implies went unchecked (R01).</td></tr>
+        <tr><td data-l="term" class="m">smoke</td><td data-l="meaning">A cheap end-to-end run proving a path is alive, not that it is correct — <code>pack-smoke</code>.</td></tr>
+        <tr><td data-l="term" class="m">self-heal</td><td data-l="meaning">A guard recovering a known-recoverable fault itself; anything else fails loud at the boundary (R04).</td></tr>
+        <tr><td data-l="term" class="m">safety valve</td><td data-l="meaning">A deliberate, visible manual bypass of an automated gate (a <code>workflow_dispatch</code> re-run, a runbook override) — allowed, recorded, never silent.</td></tr>
+        <tr><td data-l="term" class="m">criteria</td><td data-l="meaning">Hand-authored statements of what must hold (<code>acceptance/criteria/</code>). Reviewed, never generated.</td></tr>
+        <tr><td data-l="term" class="m">evidence</td><td data-l="meaning">Generated proof the criteria hold (<code>acceptance/evidence/</code>). Regenerated by the suites and compared against what is committed (R08), never hand-edited.</td></tr>
+        <tr><td data-l="term" class="m">surface</td><td data-l="meaning">Anything shipped that a promise must hold over: the CLI, the GUI, assets outside <code>packages/*/src</code>.</td></tr>
+        <tr><td data-l="term" class="m">parity</td><td data-l="meaning">The requirement that both surfaces expose the same capability over the same core.</td></tr>
+        <tr><td data-l="term" class="m">skill</td><td data-l="meaning">A versioned prose procedure under <code>.claude/skills/</code> that an agent session follows; the unit of process (R13). Rejected: <em>workflow</em> — that word now names GitHub Actions (<code>.github/workflows/</code>) only.</td></tr>
+        <tr><td data-l="term" class="m">operator</td><td data-l="meaning">The agent session following a skill; holds the run-time judgment between gates.</td></tr>
+        <tr><td data-l="term" class="m">subagent</td><td data-l="meaning">A scoped agent the operator spawns for one unit of work; owns its declared files for the duration of its wave.</td></tr>
+        <tr><td data-l="term" class="m">model level</td><td data-l="meaning">The capability tier a subagent runs at; chosen by the gate question (§03), never by task size.</td></tr>
+        <tr><td data-l="term" class="m">wave</td><td data-l="meaning">A set of file-disjoint work units executed in parallel, verified green and checkpointed before the next begins.</td></tr>
+        <tr><td data-l="term" class="m">checkpoint</td><td data-l="meaning">The per-wave commit that keeps a long run resumable and bisectable.</td></tr>
+        <tr><td data-l="term" class="m">work-list</td><td data-l="meaning"><code>requirements-transition.md</code> — the map from old spec to new that the transition consumes; scaffolding.</td></tr>
+        <tr><td data-l="term" class="m">scaffolding</td><td data-l="meaning">An artifact that exists only while a change is carried out and is deleted when consumed (R12): the work-list, the <code>*-old.html</code> docs.</td></tr>
+        <tr><td data-l="term" class="m">swap</td><td data-l="meaning">A transition's gated final stage: old docs and scaffolding deleted, front-door docs updated — inside the same PR, whose merge is the human gate.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Residue</div>
     <h2>Not yet specified</h2>
     <p>This is a seed. The rest of the SDLC remains institutional knowledge, scattered comments, and GitHub config; consolidating it is <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. Pending:</p>
     <ul class="d">
-      <li>A <strong>process glossary</strong> — the SDLC twin of glossary.html (gate, guard, safety valve, backstop, evidence, surface, parity, smoke, self-heal…).</li>
       <li>The <strong>automatic-vs-manual inventory</strong> — what CI enforces vs what a human must run, and the boundary.</li>
       <li><strong>Branch / PR / release governance</strong> — naming, ready-not-draft PRs, publish-on-merge (§19 R05), versioning (§19 R06).</li>
-      <li>The <strong>requirements-change process</strong> — the <code>change-requirements</code> skill, the <code>requirements-transition</code> workflow, the old→new swap (§Z); and how this doc is changed vs prd.html.</li>
+      <li><strong>How this doc itself is changed</strong> — prd.html changes ride the §03 skills; the equivalent discipline for process.html is unwritten.</li>
       <li>What <strong>must be specified vs left to convention</strong>, recorded.</li>
     </ul>
   </section>
 
-  <section id="s4">
-    <div class="eyebrow"><span class="n">04</span> Map</div>
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Map</div>
     <h2>Where requirements &amp; context live</h2>
     <p>The current index, pending #19. <code>CLAUDE.md</code>'s Files table is the front door.</p>
     <p>Under <code>acceptance/</code> the two halves of the AC apparatus are kept apart: <code>criteria/</code> holds the <strong>acceptance criteria</strong> (what must hold — the rubric, schemas, parity matrix, runbook, and coverage map), and <code>evidence/</code> holds the <strong>acceptance-criteria satisfaction evidence</strong> (the generated proof those criteria hold). Criteria are hand-authored and reviewed; evidence is regenerated by the suites.</p>
@@ -181,7 +231,7 @@
         <tr><td data-l="location" class="m">acceptance/criteria/</td><td data-l="specifies">The acceptance criteria — what must hold. <code>COVERAGE.md</code> (PRD→proof index), <code>parity-matrix.json</code>, <code>manual/runbook.md</code>, <code>schemas/</code>, <code>judge-rubric.md</code>.</td></tr>
         <tr><td data-l="location" class="m">acceptance/evidence/</td><td data-l="specifies">The acceptance-criteria satisfaction evidence — proof they hold, generated by the suites. Judge report, screenshots, recordings, CLI transcript.</td></tr>
         <tr><td data-l="location" class="m">features/</td><td data-l="specifies">Gherkin specs, run against both surfaces.</td></tr>
-        <tr><td data-l="location" class="m">.claude/skills/, .claude/workflows/</td><td data-l="specifies">The requirements-change machinery.</td></tr>
+        <tr><td data-l="location" class="m">.claude/skills/</td><td data-l="specifies">The agentic process (§03) — the standing skills that author and execute requirements change.</td></tr>
         <tr><td data-l="location" class="m">.github/workflows/, scripts/</td><td data-l="specifies">The enforcement apparatus these principles constrain.</td></tr>
       </tbody>
     </table>
