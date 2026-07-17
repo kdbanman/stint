@@ -162,7 +162,7 @@
     {
       "item": "ENTRIES_CALENDAR",
       "pass": true,
-      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasClientFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":4,\"weekTotal\":\"5.00h\"} -> search={\"reqSearch\":\"refactor\",\"reqHasBy\":false,\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> custom dates={\"req\":{\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"]}",
+      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":7,\"weekTotal\":\"5.00h\"} -> search={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"preset\":\"week\",\"search\":\"refactor\"},\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> presets month=6/7.00h lastWeek=1/2.00h lastMonth=1/1.00h today=3/3.00h -> billable=4/5.00h nonBillable=1/0.00h -> client=3/2.50h project=1/2.00h -> tag=2/2.50h -> custom dates={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"],\"weekTotal\":\"2.00h\"} -> wire={\"errors\":0,\"reqCount\":15,\"allCarryBy\":true}",
       "screenshot": "entries-calendar.png"
     },
     {
@@ -174,7 +174,7 @@
     {
       "item": "LIVE_FILTER",
       "pass": true,
-      "justification": "live filter: list 4→2→4 rows, report total 5.00h→3.50h→5.00h (both reflect the selection live; getState unchanged during the keystroke: true)",
+      "justification": "live filter: list 7→2→7 rows, report total 5.00h→3.50h→5.00h (week-bounded idle, range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0)",
       "screenshot": "main-filtered.png"
     },
     {

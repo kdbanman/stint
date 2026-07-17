@@ -273,17 +273,45 @@ describe('renderer static contract', () => {
     // handlers repaint the report total off the snapshot, never re-fetching getState.
     expect(util).toMatch(/function deriveView\(state, sel\)/);
     expect(app).toMatch(/deriveView/);
-    // The report total tracks the selection: render() picks the snapshot-derived report sum
-    // when the control bar is active, and updateLiveTotal repaints #week-total off the
-    // snapshot synchronously on each control change — neither path calls getState.
+    // The report total tracks the selection: while a toolbar query is in flight render()
+    // paints the snapshot-derived report sum (deriveView) and updateLiveTotal repaints
+    // #week-total off the snapshot synchronously on each control change — neither path
+    // calls getState. Once the queried set is in hand (entryGroups), render() paints its
+    // billable-only sum — the SELECTED RANGE's total (issue #55 Part B); idle, it paints
+    // the week-bounded weekTotal.
     expect(app).toMatch(/function updateLiveTotal\(\)/);
-    expect(app).toMatch(/entryCtrlActive\s*\?\s*deriveView\(state,\s*liveSelection\(\)\)\.reportTotalSeconds/);
-    // render() sets #week-total to the snapshot-derived report sum when the bar is active.
-    expect(app).toMatch(/\$\('week-total'\)\.textContent\s*=\s*fmtHours\(\s*\n?\s*entryCtrlActive\s*\?\s*deriveView\(state,\s*liveSelection\(\)\)\.reportTotalSeconds/);
+    expect(app).toMatch(/deriveView\(state,\s*liveSelection\(\)\)\.reportTotalSeconds/);
+    expect(app).toMatch(
+      /\$\('week-total'\)\.textContent\s*=\s*fmtHours\(\s*\n?\s*entryCtrlActive\s*\n?\s*\?\s*entryGroups\s*\n?\s*\?\s*entryGroupsTotal\(\)\s*\n?\s*:\s*deriveView\(state,\s*liveSelection\(\)\)\.reportTotalSeconds\s*\n?\s*:\s*weekTotal\(\)/,
+    );
     // updateLiveTotal derives from the snapshot only — it must NOT reach for getState.
     const liveBody = app.slice(app.indexOf('function updateLiveTotal()'), app.indexOf('async function applyEntryQuery'));
     expect(liveBody).toMatch(/deriveView\(state,/);
     expect(liveBody).not.toMatch(/getState/);
+  });
+
+  it('the Entries toolbar query always carries the required by grouping and never fails silently (§12 R9 / issue #55)', () => {
+    const app = read('app.js');
+    // applyEntryQuery seeds the listEntries payload with the REQUIRED grouping key
+    // (ListEntriesQuery.by) — the Entries calendar's 'day' layout. Without it every
+    // toolbar query used to throw in core and the calendar silently showed everything.
+    const queryBody = app.slice(
+      app.indexOf('async function applyEntryQuery'),
+      app.indexOf('function activateEntryQuery'),
+    );
+    expect(queryBody).toMatch(/const q = \{ by: 'day', billable: entryQuery\.billable \}/);
+    // The awaited query is guarded — a rejected listEntries logs and paints the explicit
+    // no-match empty state (entryGroups = []) instead of silently leaving stale rows.
+    expect(queryBody).toMatch(/try \{\s*\n\s*view = await window\.stint\.listEntries\(q\);\s*\n\s*\} catch/);
+    expect(queryBody).toMatch(/catch \(err\) \{[\s\S]*?console\.error[\s\S]*?entryGroups = \[\];[\s\S]*?render\(\);/);
+    // …and the ONLY listEntries call site in app.js sits inside that guarded body, so no
+    // other path can regress to an unguarded / by-less query.
+    expect([...app.matchAll(/window\.stint\.listEntries\(/g)].length).toBe(1);
+    // Part B: the idle "This week" chip is WEEK-BOUNDED (calWeekBounds over the weekStart
+    // setting, today's local day) — never the whole in-memory window's billable sum.
+    const weekBody = app.slice(app.indexOf('function weekTotal()'), app.indexOf('function escapeHtml'));
+    expect(weekBody).toMatch(/calWeekBounds\(localTodayDay\(\)\)/);
+    expect(weekBody).toMatch(/d\.day >= ws && d\.day <= we/);
   });
 
   it('a contiguous multi-select exposes a Merge action with a conflict prompt (§06 R3)', () => {

@@ -56,6 +56,14 @@ function keysOf(e: EntryView, by: EntryGroupBy): string[] {
       // An entry with multiple tags lands in each of its tag groups (and untagged once),
       // exactly like the report's by-tag grouping.
       return e.tags.length > 0 ? e.tags : ['(untagged)'];
+    default:
+      // Issue #55: a missing/unknown grouping is a caller bug (`by` is required on every
+      // list query). Fail loudly with a clear message instead of falling through to
+      // undefined — which used to surface as an opaque "keysOf … is not iterable"
+      // TypeError deep inside groupInto.
+      throw new Error(
+        `unknown entry grouping '${String(by)}' — expected 'day', 'client', 'project' or 'tag'`,
+      );
   }
 }
 
