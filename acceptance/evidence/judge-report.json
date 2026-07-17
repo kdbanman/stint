@@ -40,6 +40,12 @@
       "screenshot": "timer-view.png"
     },
     {
+      "item": "CROSS_VIEW_FRESHNESS",
+      "pass": true,
+      "justification": "Entries toolbar latched (listEntries query {\"by\":\"day\",\"billable\":\"all\",\"preset\":\"today\"}); Timer card before Start {\"state\":\"idle\",\"toggle\":\"Start\",\"clock\":\"00:00:00\"}; after Start (no reload) {\"state\":\"running\",\"panelHidden\":true,\"startVisible\":false,\"stopVisible\":true,\"running\":true,\"clock\":\"00:00:00\",\"noReload\":true}; count-up then advanced 00:00:00 → 00:00:03 across a +3s pinned-clock step",
+      "screenshot": "timer-cross-view.png"
+    },
+    {
       "item": "TIMER_VIEW",
       "pass": true,
       "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\"}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24T21:35:53\"}; grip drag → {\"startLive\":\"2026-06-24T20:35\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
