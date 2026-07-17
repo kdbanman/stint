@@ -61,14 +61,18 @@ window.SU = (function () {
     return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
   }
   // §12 R15/R17 (G1): the ONE local-time seed format the raw Start/Stop text fields, the split
-  // instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm` in *local* time
-  // (no timezone suffix), parsed identically by `new Date(value)`. Hoisted here so app.js and
+  // instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm[:ss]` in *local*
+  // time (no timezone suffix), parsed identically by `new Date(value)`. Seconds are emitted only
+  // when NON-ZERO, so a stored instant like 09:07:33 renders (and round-trips) exactly to the
+  // second (§12 R15 / issue #49 — opening an entry must show its exact stored times), while the
+  // common whole-minute instants keep the familiar short form. Hoisted here so app.js and
   // timepicker.js consume a single definition.
   function localInputValue(date) {
     const pad = (n) => String(n).padStart(2, '0');
+    const secs = date.getSeconds();
     return (
       `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-      `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+      `T${pad(date.getHours())}:${pad(date.getMinutes())}${secs ? `:${pad(secs)}` : ''}`
     );
   }
   // §14 / G16 — the ONE default-viewport derivation for the timeline surfaces: the inline

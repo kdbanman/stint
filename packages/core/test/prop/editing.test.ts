@@ -87,6 +87,34 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
     store.close();
   });
 
+  // §12 R15 / glossary "Stored truth" (issue #49) — an edit that changes NO field is the
+  // IDENTITY on start/end. The generated spans are second-granular (deliberately not
+  // 5-minute-aligned), so any snap, rounding, or truncation smuggled into the edit path —
+  // e.g. an editor that rewrites times it merely displayed — fails the byte-for-byte round-trip.
+  test.prop([fc.integer({ min: 0, max: 43_199 }), fc.integer({ min: 1, max: 43_200 })])(
+    'an edit that changes no field is the identity on start/end, to the second',
+    (startS, durS) => {
+      const store = mem();
+      try {
+        const base = Date.parse('2026-05-10T00:00:00Z');
+        const isoNoMs = (ms: number) => new Date(ms).toISOString().replace('.000Z', 'Z');
+        const { value: e } = store.add({
+          description: 'exact span',
+          fromUtc: isoNoMs(base + startS * 1000),
+          toUtc: isoNoMs(base + (startS + durS) * 1000),
+        });
+        const before = store.getEntry(e.id)!;
+        store.edit(e.id, {}); // the no-op patch — an "open then save" that touched nothing
+        store.edit(e.id, { description: 'exact span (renamed)' }); // an unrelated-field edit
+        const after = store.getEntry(e.id)!;
+        expect(after.startUtc).toBe(before.startUtc);
+        expect(after.endUtc).toBe(before.endUtc);
+      } finally {
+        store.close();
+      }
+    },
+  );
+
   test.prop([fc.constantFrom('description', 'startUtc', 'billable'), fc.integer({ min: 0, max: 7200 })])(
     'editing one field changes only that field; the others are intact',
     (field, shiftS) => {
