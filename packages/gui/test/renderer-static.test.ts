@@ -63,10 +63,10 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/payload\.client/);
     expect(app).toMatch(/payload\.project/);
     expect(app).toMatch(/payload\.tags/);
-    expect(app).toMatch(/billable:/);
+    expect(app).toMatch(/payload\.billable/);
   });
 
-  it('the start surface is the Timer-view core-entry form and stays available while running, with no Switch (§12 R5)', () => {
+  it('the start surface is the Timer-view core-entry form, idle-only while a timer runs, with no Switch (§12 R5)', () => {
     const html = read('index.html');
     const app = read('app.js');
     // §12 R05 (core): the inline Start form exposes every attribute control (the
@@ -81,8 +81,8 @@ describe('renderer static contract', () => {
     expect(timerView!).toMatch(/id="start-toggle"/);
     expect(timerView!).toMatch(/id="toggle"/);
     // §12 R05 / issue #34: Switch is removed entirely — the start surface carries NO #switch
-    // button. Starting while running IS the atomic stop-then-start, so the form simply stays
-    // available; there is no separate Switch affordance to flip to.
+    // button. There is no separate Switch affordance; core's start remains the atomic
+    // stop-then-start for tt and programmatic callers (§05 R01).
     expect(timerView!).not.toMatch(/id="switch"/);
     for (const id of ['start-desc', 'start-client', 'start-project', 'start-tags', 'start-bill']) {
       expect(timerView!, `the Timer view must expose #${id}`).toMatch(new RegExp(`id="${id}"`));
@@ -94,16 +94,54 @@ describe('renderer static contract', () => {
     expect(entriesView, 'index.html must declare the Entries view section').toBeTruthy();
     expect(entriesView!).not.toMatch(/id="start-form"/);
     expect(entriesView!).not.toMatch(/id="start-toggle"/);
+    // §12 R05 (issue #51): the start surface is IDLE-ONLY — while a timer runs the whole
+    // start panel is hidden (renderTimerCard toggles it off the running state) and the open
+    // disclosure collapses with it, so no start affordance survives while running.
+    expect(app).toMatch(/startPanel\.hidden = !!running/);
+    const cardBody = app.slice(
+      app.indexOf('function renderTimerCard(running)'),
+      app.indexOf('function renderLiveEdit(running)'),
+    );
+    expect(cardBody).toMatch(/startPanel\.hidden = !!running/);
+    expect(cardBody).toMatch(/startForm\.hidden = true/);
+    expect(cardBody).toMatch(/\$\('start-toggle'\)\.setAttribute\('aria-expanded', 'false'\)/);
+    // The panel's flex display would silently defeat the [hidden] attribute — the explicit
+    // display:none override must stay in styles.css (a real regression the JUDGE run caught).
+    expect(read('styles.css')).toMatch(/\.start-panel\[hidden\]\s*\{\s*display:\s*none;?\s*\}/);
     // …app.js builds the payload (resolving client/project + splitting tags) and starts
-    // immediately over the same start IPC tt uses, defaulting the billable from the form…
+    // immediately over the same start IPC tt uses, with the tri-state billable riding the
+    // payload only when the user explicitly set it (§05 R07)…
     expect(app).toMatch(/window\.stint\.start\(\s*payload\s*\)/);
-    expect(app).toMatch(/billable:\s*\$\('start-bill'\)\.checked/);
+    expect(app).toMatch(/if \(startBillTouched\) payload\.billable = \$\('start-bill'\)\.checked/);
     expect(app).toMatch(/payload\.tags/);
     // …and NO #switch element / wiring survives anywhere in the page (issue #34): no Switch
     // button in the HTML and no $('switch') render/handler in app.js.
     expect(html).not.toMatch(/>Switch<\/button>/);
     expect(html).not.toMatch(/id="switch"/);
     expect(app).not.toMatch(/\$\('switch'\)/);
+  });
+
+  it('both start controls default billable per the client-keyed rule (§05 R07 / issue #51)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    // The Details form's Billable box carries NO static `checked` — a pre-checked box would
+    // silently override core's client-keyed default on every attributed start.
+    expect(html).toMatch(/id="start-bill"[^>]*type="checkbox"/);
+    expect(html).not.toMatch(/id="start-bill"[^>]*checked/);
+    // app.js mirrors the §05 R07 default onto the box live — checked iff the Client field is
+    // non-empty — until the user explicitly touches it (their choice then wins)…
+    expect(app).toMatch(/let startBillTouched = false/);
+    expect(app).toMatch(
+      /if \(!startBillTouched\) \$\('start-bill'\)\.checked = \$\('start-client'\)\.value\.trim\(\) !== ''/,
+    );
+    // …and submit forwards billable ONLY when touched, so an untouched box falls through to
+    // core's client-keyed default (store.start: billable ?? clientId !== null) — the same
+    // rule the one-tap #toggle start reaches by sending no payload at all.
+    expect(app).toMatch(/if \(startBillTouched\) payload\.billable = \$\('start-bill'\)\.checked/);
+    expect(app).not.toMatch(/payload = \{ billable:/);
+    expect(app).toMatch(/const ack = await window\.stint\.toggle\(\)/);
+    // The touched flag resets with the form so the next open defaults cleanly again.
+    expect(app).toMatch(/startForm\.reset\(\);\s*\n\s*startBillTouched = false/);
   });
 
   it('the unified entry form (add mode) mounts the inline picker + expander and Saves over add IPC (§12 R07)', () => {

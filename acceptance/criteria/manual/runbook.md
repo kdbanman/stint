@@ -80,11 +80,15 @@ tray host headless, so this is the gating evidence for the tray's own click beha
 
 ## CHECK START WITH ATTRIBUTES (§05 R1, §12 R1, §17 R8)
 
-1. In the running app, open the main window and reveal the Start form ("+ with
-   details"). Enter a description, a **new** client and **new** project name, two
-   comma-separated tags, and uncheck Billable. Submit.
+1. In the running app **with no timer running** (the start panel is idle-only — while a
+   timer runs the Timer view offers only edit-or-stop, §12 R5 / issue #51), open the main
+   window and reveal the Start form ("+ with details"). Enter a description, a **new**
+   client and **new** project name, and two comma-separated tags.
    - [ ] The primary Start above stays a one-tap action (the form is opt-in, collapsed
          by default).
+   - [ ] The **Billable** box was unchecked when the form opened and **checked itself as
+         the client name landed** (the §05 R7 client-keyed default). Now **uncheck** it
+         (the explicit override) and Submit.
    - [ ] A new entry opens immediately carrying the description, client/project label,
          and tags; it shows as non-billable.
    - [ ] The named client and project were created on demand (they appear in
@@ -629,9 +633,12 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    form** to start a timer with a **description**, a **client created on the fly**, a
    **project** scoped to that client, a **tag**, and the **billable** toggle — then Start.
    - [ ] The timer starts immediately fully attributed; no later edit was needed (§12 R5).
-     Then **start a second entry** from the same Start form (new description) while the
-     first is running — starting *is* the atomic stop-then-start (§05 R01).
-   - [ ] The previous entry closes and the new one opens in one action — no separate switch.
+     With the timer now running, look for a start control.
+   - [ ] The Timer view offers **only edit-or-stop of the running entry** — the start
+         panel (one-tap Start + the form) is hidden and exactly one Description field
+         (the live-edit strip's) paints (§12 R5 / issue #51). Press **Stop**, then start
+         a **second entry** from the reappeared Start form (new description) — switching
+         by hand is stop, then start; no separate switch verb exists.
 2. Open the **Manual-add** form and **backfill** a completed past entry from explicit
    from/to times plus a description + client/project + tag.
    - [ ] The completed entry appears in the list, fully attributed, no terminal used (§12 R7).

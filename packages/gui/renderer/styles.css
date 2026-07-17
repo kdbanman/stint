@@ -553,6 +553,9 @@ s {
   color: var(--faint);
 }
 .start-panel .sp-actions { display: flex; gap: 9px; align-items: center; }
+/* §12 R05 (issue #51): the start panel is idle-only — renderTimerCard sets [hidden] while a
+   timer runs, and the explicit display:none keeps it winning over the flex display above. */
+.start-panel[hidden] { display: none; }
 
 /* The optional attributed-start form — collapsed by default; the submit reuses .primary. */
 .start-form {

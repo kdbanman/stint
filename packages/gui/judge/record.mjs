@@ -357,16 +357,17 @@ function ffmpegAvailable() {
  * `reqId` is used verbatim as the output filename (<reqId>.webm); keep it filesystem-safe.
  */
 const RECIPES = {
-  // §05 R01 — Start as the GUI core-entry surface (`core` badge; behavior unchanged). With a
-  // timer already running (the canonical runningState open row 'auth refactor', reading a
-  // deterministic 01:24:07), the recording routes to the Timer view, opens the inline
-  // Start-with-details disclosure, fills the fresh entry's attributes, and submits. The start
-  // mock runs core's atomic stop-then-start ON the injected snapshot (startStopsOpen), so the
-  // subsequent load()/getState repaint SHOWS the previously-running timer being stopped and the
-  // new entry becoming the single live count-up — starting while a timer runs IS the atomic
-  // stop-then-start (§05 R01; no separate switch verb). The pinned JUDGE_NOW clock keeps the
-  // count-ups deterministic; we then step the clock so the new entry's 00:00:0x visibly ticks
-  // while the just-stopped row holds its frozen duration.
+  // §05 R01 — Start as the GUI core-entry surface (`core` badge). With a timer already running
+  // (the canonical runningState open row 'auth refactor', reading a deterministic 01:24:07),
+  // the recording routes to the Timer view and dwells on the NEW running surface (issue #51):
+  // the view offers ONLY edit-or-stop — the start panel is hidden, no start affordance exists
+  // while running. It then presses Stop (closing the open row), the start panel appears, and it
+  // opens the Start-with-details disclosure, fills the fresh entry's attributes, and submits —
+  // so switching by hand in the window is stop, then start, as two visible steps. Core's
+  // `start` verb itself remains the atomic stop-then-start for tt and programmatic callers
+  // (§05 R01, proven surface-neutrally by BDD); only the GUI surfacing of a start control
+  // while running is removed. The pinned JUDGE_NOW clock keeps the count-ups deterministic;
+  // we then step the clock so the new entry's 00:00:0x visibly ticks.
   '§05 R01': {
     page: 'index.html',
     state: runningState,
@@ -374,8 +375,26 @@ const RECIPES = {
     drive: async (page) => {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
-      // Dwell on the previously-running timer (auth refactor, 01:24:07) so the stop-then-start is legible.
+      // Dwell on the running surface: only edit-or-stop — the start panel is hidden (issue #51).
+      await page.waitForFunction(() => !!document.querySelector('#start-panel')?.hidden);
       await wait(page, 800);
+      // Stop the open row (a scoped toggle override flips the snapshot idle, faithful to
+      // core's stop, so the post-stop load() repaints the idle card + the start panel).
+      await page.evaluate(() => {
+        const prevToggle = window.stint.toggle;
+        window.stint.toggle = () => {
+          const st = window.__STATE__;
+          const now = window.__JUDGE_NOW__;
+          for (const d of st.days || []) for (const e of d.entries) if (e.endUtc == null) e.endUtc = now;
+          window.__STATE__ = { status: { running: false, entry: null }, days: st.days, sleepFlaggedIds: [], settings: st.settings };
+          return prevToggle();
+        };
+      });
+      await page.click('[data-view="timer"]:not([hidden]) #timer-stop');
+      await page.waitForSelector('#timer-card.idle');
+      await page.waitForSelector('#start-panel:not([hidden])');
+      await wait(page, 600);
+      // The start panel is back: open the disclosure and start the next task with details.
       await page.click('#start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await page.fill('#start-desc', 'invoice prep');
@@ -384,8 +403,8 @@ const RECIPES = {
       await page.fill('#start-tags', 'admin');
       await wait(page, 600);
       await page.click('#start-go');
-      // The repaint now shows the fresh entry as the single live count-up; step the pinned clock
-      // so its 00:00:0x ticks on camera (the previous row holds its frozen stopped duration).
+      // The repaint shows the fresh entry as the single live count-up; step the pinned clock
+      // so its 00:00:0x ticks on camera (the stopped row holds its frozen duration).
       await page.waitForSelector('#timer-card.running');
       await wait(page, 400);
       for (let i = 1; i <= 3; i++) {
@@ -441,25 +460,28 @@ const RECIPES = {
     },
   },
 
-  // §12 R05 (core) — the GUI CORE-ENTRY surface, the Start form, now lives in the Timer view
-  // (relocated from the Entries toolbar) and STAYS AVAILABLE WHILE A TIMER RUNS (issue #34 —
-  // Switch is removed; the form no longer flips to a separate Switch affordance). This recording
-  // PROVES the §W contract: the Timer view WHILE RUNNING shows Stop + the start-with-details form
-  // (no Switch button); filling the form and submitting closes the open entry and opens the new
-  // one in ONE action — starting IS the atomic stop-then-start.
+  // §12 R05 (core) — the GUI CORE-ENTRY surface, the Start form, lives in the Timer view
+  // (relocated from the Entries toolbar) and is IDLE-ONLY (issue #51): while a timer runs the
+  // Timer view offers ONLY edit-or-stop of the running entry — the start panel (one-tap Start,
+  // the `Details` disclosure and its form) is hidden until the entry is stopped, and there is
+  // no Switch button either (issue #34). This recording PROVES the contract: the Timer view
+  // WHILE RUNNING shows Stop + the live-edit strip with NO start affordance and exactly one
+  // Description field; pressing Stop closes the open entry and the start panel appears; the
+  // disclosure then opens the inline attribute form, whose Billable box DEFAULTS per the
+  // §05 R07 client-keyed rule (typing a client visibly checks it — no static pre-check); and
+  // submitting starts the new entry with its attributes in one step.
   //
   // It opens on the canonical runningState (the 'auth refactor' open row, deterministic
-  // 01:24:07), routes to the Timer view, and dwells on the RUNNING surface: the Active-Timer card
-  // shows Stop, and the relocated 'Start a new timer' panel still offers the `+ with details`
-  // disclosure — there is NO #switch button anywhere. It opens the disclosure (#start-toggle) and
-  // fills the full core-entry attribute set the form carries — description / client / project / a
-  // tag — and sets Billable, so the new start carries its attributes in ONE step. Pressing
-  // 'Start with details' (#start-go) sends the whole payload over the SAME `start` IPC tt uses
-  // (window.stint.start → core startWithAttributes); with startStopsOpen the injected snapshot
-  // closes the previously-open row and gains a single fresh open row built from that payload, so
-  // the getState repaint paints the Timer card RUNNING with the entered description/label — the
-  // previous timer visibly STOPPED and the new one became the single live count-up (start IS
-  // switch). We step the pinned clock so the fresh entry's 00:00:0x visibly ticks on camera.
+  // 01:24:07), routes to the Timer view, and dwells on the RUNNING surface: the Active-Timer
+  // card shows Stop and the live-edit strip — the start panel is HIDDEN. Stop (via a scoped
+  // toggle override that flips the snapshot idle, faithful to core's stop) repaints the idle
+  // card and reveals the start panel. It opens the disclosure (#start-toggle), fills
+  // description / client / project / a tag — the Billable box auto-checks as the client lands
+  // (§05 R07; left untouched so core derives the default) — and presses 'Start' (#start-go),
+  // sending the payload over the SAME `start` IPC tt uses (window.stint.start → core
+  // startWithAttributes); with startStopsOpen the injected snapshot gains the fresh open row,
+  // so the getState repaint paints the Timer card RUNNING with the entered description/label.
+  // We step the pinned clock so the fresh entry's 00:00:0x visibly ticks on camera.
   // startStopsOpen is the same scoped snapshot emulation §05 R01 uses; no JUDGE scene is touched.
   '§12 R05': {
     page: 'index.html',
@@ -467,37 +489,53 @@ const RECIPES = {
     initOpts: { startStopsOpen: true },
     drive: async (page) => {
       // Route to the Timer view and dwell on the RUNNING surface: the Active-Timer card shows
-      // Stop, the relocated 'Start a new timer' panel offers the `+ with details` disclosure, and
-      // there is NO Switch button — the start-with-details form stays available while running.
+      // Stop + the live-edit strip, the start panel is HIDDEN (no start affordance while
+      // running — issue #51), and there is NO Switch button.
       await page.click('.nav-item[data-view="timer"]');
-      await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-panel');
       await page.waitForSelector('#timer-card.running');
       await page.waitForSelector('#timer-stop:not([hidden])');
+      await page.waitForFunction(() => !!document.querySelector('#start-panel')?.hidden);
       await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 800);
 
-      // Open the `+ with details` disclosure → the inline attribute form reveals (while running).
+      // STOP the open row → idle. A scoped toggle override flips the snapshot idle (faithful
+      // to core's stop) so the post-stop load() repaints the idle card AND the start panel.
+      await page.evaluate(() => {
+        const prevToggle = window.stint.toggle;
+        window.stint.toggle = () => {
+          const st = window.__STATE__;
+          const now = window.__JUDGE_NOW__;
+          for (const d of st.days || []) for (const e of d.entries) if (e.endUtc == null) e.endUtc = now;
+          window.__STATE__ = { status: { running: false, entry: null }, days: st.days, sleepFlaggedIds: [], settings: st.settings };
+          return prevToggle();
+        };
+      });
+      await page.click('[data-view="timer"]:not([hidden]) #timer-stop');
+      await page.waitForSelector('#timer-card.idle');
+      await page.waitForSelector('#start-panel:not([hidden])');
+      await wait(page, 600);
+
+      // Open the `Details` disclosure → the inline attribute form reveals (idle-only surface).
       await page.click('#start-panel #start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await wait(page, 400);
 
-      // Fill the full core-entry attribute set the form carries, then set the Billable toggle —
-      // proving the new start carries description / client / project / tags / billable in ONE step.
+      // Fill the core-entry attribute set the form carries. The Billable box starts UNCHECKED
+      // (clientless ⇒ non-billable) and AUTO-CHECKS as the client lands — the §05 R07
+      // client-keyed default, visibly exercised; we leave it untouched so the payload omits
+      // billable and core derives the default.
       await page.fill('#start-desc', 'invoice prep');
+      await wait(page, 300);
       await page.fill('#start-client', 'Globex');
+      await page.waitForFunction(() => document.querySelector('#start-bill')?.checked === true);
+      await wait(page, 500);
       await page.fill('#start-project', 'Billing');
       await page.fill('#start-tags', 'admin');
       await wait(page, 500);
-      // Toggle Billable off then on so the control is visibly exercised, ending checked (billable).
-      await page.click('#start-bill');
-      await wait(page, 300);
-      await page.click('#start-bill');
-      await wait(page, 400);
 
-      // Press 'Start with details' → the whole payload goes over `start`; startStopsOpen closes
-      // the previously-open 'auth refactor' row and makes the submitted attributes the single
-      // fresh open row, so the repaint SHOWS the open entry close and the new one open in ONE
-      // action — starting while a timer runs IS the atomic stop-then-start.
+      // Press 'Start' → the whole payload goes over `start`; startStopsOpen makes the
+      // submitted attributes the single fresh open row, so the repaint paints the running
+      // card with the entered description/label.
       await page.click('#start-go');
       await page.waitForSelector('#timer-card.running');
       await page.waitForFunction(
@@ -505,12 +543,14 @@ const RECIPES = {
       );
       await wait(page, 400);
 
-      // Step the pinned clock so the fresh entry's 00:00:0x visibly ticks — the start carried its
-      // attributes into a LIVE timer, with still no Switch button anywhere.
+      // Step the pinned clock so the fresh entry's 00:00:0x visibly ticks — the start carried
+      // its attributes into a LIVE timer; with it running again the start panel hides once
+      // more (only edit-or-stop), and still no Switch button anywhere.
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
       }
+      await page.waitForFunction(() => !!document.querySelector('#start-panel')?.hidden);
       await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 1200);
     },
@@ -1801,9 +1841,9 @@ const RECIPES = {
   // running-state dot; (2) EDIT THE RUNNING TIMER LIVE — change the description AND the start
   // time AND toggle Billable — and SHOW the row stays running (no stop), with the End time
   // deliberately absent ("no stop" pill + "End time not editable while running" note);
-  // (3) STOP, then START a NEW timer with details from the Start form (which stays available
-  // across run states — starting while a timer runs IS the atomic stop-then-start, issue #34, no
-  // separate switch verb); (4) the pinned FAVORITES rail — PIN the running timer as a favorite,
+  // (3) STOP, then START a NEW timer with details from the Start form (the idle-only start
+  // surface — while a timer runs the view offers only edit-or-stop, issue #51; there is no
+  // separate switch verb either, issue #34); (4) the pinned FAVORITES rail — PIN the running timer as a favorite,
   // one-click RESUME a favorite to start a fresh timer, and RENAME / UNPIN via the kebab
   // (§05 R09–R10) — confirming no Switch verb survives anywhere in the view.
   //
@@ -1945,11 +1985,10 @@ const RECIPES = {
       );
       await wait(page, 700);
 
-      // START A NEW TIMER WITH DETAILS from the Start form (the relocated core-entry surface,
-      // which stays available across run states — issue #34, no Switch verb). startStopsOpen makes
-      // the submitted attributes the single fresh open row, so the repaint paints the running card
-      // with the entered description and the count-up begins. (Starting while a timer is running
-      // would close the open row first — the atomic stop-then-start — but here we start from idle.)
+      // START A NEW TIMER WITH DETAILS from the Start form (the relocated core-entry surface —
+      // idle-only, so it reappears now the timer is stopped; issue #51, and no Switch verb,
+      // issue #34). startStopsOpen makes the submitted attributes the single fresh open row, so
+      // the repaint paints the running card with the entered description and the count-up begins.
       await page.click('#start-panel #start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await page.fill('#start-desc', 'invoice prep');
