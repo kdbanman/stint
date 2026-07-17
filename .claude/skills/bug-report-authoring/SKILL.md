@@ -23,7 +23,7 @@ unless asked otherwise.
 - **Severity + confidence** — state severity, and be honest about confidence. If you could
   not reproduce something end-to-end (e.g. couldn't run the packaged app), say so and say
   what still needs confirming. Never dress up a code-inspection hunch as a reproduction.
-- **Cleanup on close** — required; see below.
+- **Evidence line** — required: name the issue's `qa-evidence` directory; see below.
 
 ## Verify before you file
 
@@ -36,27 +36,27 @@ unless asked otherwise.
 
 ## Evidence & cleanup
 
-- Scope evidence **per issue**: commit recordings/stills under
-  `acceptance/evidence/issues/issue-<N>/` (a lone file may sit directly in
-  `acceptance/evidence/issues/` named for the issue). The issue number isn't known until the
-  issue is filed, so file first, then add the evidence and edit the body with its URL.
+- Repro evidence lives on the **`qa-evidence` branch** — an orphan branch that is never
+  merged (see `context/process.html`, QA discovery). One `issue-<N>/` directory per issue
+  at the branch root. Main's tree and history never carry repro artifacts. The issue
+  number isn't known until the issue is filed, so file first, then commit the evidence to
+  the branch and edit the body with its URLs.
 - Embed by raw URL:
-  `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/<branch>/<path>`. When you
-  re-record a file in place, bust GitHub's image cache with `?v=2` (bump N) since the
-  filename is unchanged.
-- **Every bug issue MUST include a `## Cleanup on close` section** naming its evidence
-  path(s), so whoever closes the issue deletes them and the repo doesn't accumulate QA
-  GIFs/screenshots. Because evidence is per-issue, cleanup is self-contained. Example:
+  `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/qa-evidence/issue-<N>/<file>`.
+  When you re-record a file in place, bust GitHub's image cache with `?v=2` (bump N) since
+  the filename is unchanged.
+- **Every bug issue includes one evidence line** naming its directory so the branch can be
+  tidied after the issue closes (pruning 404s the images in the closed issue — optional,
+  not mandated). Example:
 
   ```markdown
-  ## Cleanup on close
-  Delete this issue's evidence directory: `acceptance/evidence/issues/issue-48/`
+  ## Evidence
+  Lives on the `qa-evidence` branch at `issue-48/`; prune after close if desired.
   ```
 
-- Keep the throwaway reproduction harness — the local Playwright script that launches and
-  drives the app to reproduce the bug — in your scratchpad, not the repo. Only the committed
-  evidence and reusable skills (e.g. the `qa-gif-authoring` cursor/ripple/toast overlay)
-  belong in version control.
+- The reproduction driver is committed apparatus (`packages/gui/qa/driver.mjs` — the real
+  renderer over a real core store, guarded by a channel-parity test). The **per-sweep
+  recipes** that steer it are scratch: they're consumed by the run and never committed.
 
 ## Pairs with
 

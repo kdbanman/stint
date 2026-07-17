@@ -60,6 +60,7 @@ const RULES = [
 
   // Verification system — the acceptance-criteria + build-check apparatus
   [/^packages\/gui\/judge\//,                   'Verification',   'GUI judge harness'],
+  [/^packages\/gui\/qa\//,                      'Verification',   'QA discovery driver'],
   [/^acceptance\/criteria\//,                   'Verification',   'AC criteria (what must hold)'],
   [/^acceptance\/evidence\//,                   'Verification',   'AC evidence (proof)'],
   [/^scripts\//,                                'Verification',   'build & check scripts'],

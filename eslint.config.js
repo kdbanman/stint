@@ -12,6 +12,9 @@ export default tseslint.config(
       'coverage/**',
       'packages/gui/renderer/**',
       'packages/gui/judge/**',
+      // The QA discovery driver — like the judge, a Playwright harness whose page-context
+      // snippets need browser globals; excluded on the same grounds.
+      'packages/gui/qa/**',
       '.claude/**',
     ],
   },
