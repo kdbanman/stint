@@ -48,6 +48,7 @@ its JUDGE scene.
 | §05 R09 | `05-r09.gif` | Favorites rail: pin the running timer, list, rename in place, unpin — all via the rail + kebab. |
 | §05 R09/R10 | `favorites-rail.gif`, `favorites-rail-empty.gif` | One-click Resume starts a favorite (`favorites-rail`); the empty-rail instructional state mentioning `tt fav` (`favorites-rail-empty`). |
 | §12 R14 | `timer-view.gif` | Timer-view tour: live count-up ticking, running state, live-edit strip. |
+| §07 R01 | `07-r01.gif` | Clients-view reference-data CREATE driven end to end (issue #48): + Add client opens the inline New-client field and the committed name lands in the active list; + Add project nests the new project under its client; + Add tag lands in the active tag strip — each over the same IPC its `tt` subcommand uses. |
 | §12 R08 | `12-r08.gif`, `reports-view.gif` | Reports view = saved reports CRUD end-to-end (list → New → build → Save → Run → export CSV/JSON → Edit/regroup → delete); `reports-view` is the tour subset. |
 | §12 R11 / §14 | `settings-view.gif` | Settings panel exposes a control for every §14 setting, including the date-format picker. |
 | §19 R03 | `19-r03.gif` | Software Update: current version row + Check now → queries GitHub Releases → "Update available" verdict + release link. |
