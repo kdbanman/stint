@@ -49,6 +49,7 @@ place of `<branch>`.
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
 | `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — CLI transcript, screenshots, recordings, judge report). |
 | `features/` | Gherkin specs run against both surfaces (parity). |
+| `reviews/` | Point-in-time review artifacts, not spec. `architecture-review.md` (issue #20): an adversarially-produced map and critique of the four systems that carry the requirements — code, verification apparatus, SDLC/process, and the `context/` docs themselves — with good/questionable/bad decision verdicts and requirements-preserving fixes. |
 | `LICENSE` | MIT license. |
 
 Read order for newcomers: `context/concept.html` → `context/prd.html` →
