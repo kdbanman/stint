@@ -873,6 +873,10 @@ function confirmInline(btn, { kind, question, confirmLabel, onConfirm }) {
   wrap.querySelector(`[data-act="confirm-${kind}"]`).addEventListener('click', async (ev) => {
     ev.stopPropagation();
     await onConfirm();
+    // If the confirm chrome is still mounted after the destructive op (most callbacks repaint
+    // their whole region, which discards it), restore the original control — so a PERSISTENT
+    // button (e.g. the Reports builder's Delete) survives the gate for its next use.
+    if (wrap.isConnected) wrap.replaceWith(btn);
   });
   wrap.querySelector(`[data-act="cancel-${kind}"]`).addEventListener('click', (ev) => {
     ev.stopPropagation();
@@ -2155,12 +2159,19 @@ function openProjectRename(row, p) {
   form.querySelector('input').focus();
 }
 
-function inlineRenameForm(current, onSave) {
+// The ONE shared inline name field (issue #52): a text input committed on Enter (the form
+// submit) with an explicit Cancel — the renderer's only way to gather a name. Electron's
+// renderer does not implement window.prompt — it returns null, so a prompt-based flow
+// silently no-ops in the packaged app (the same constraint the confirmInline note above
+// records for window.confirm). Clients/projects seeded the pattern; favorites (pin/rename)
+// and the Reports kebab (via window.inlineRenameForm — this is a classic script, so the
+// declaration is a global) reuse it rather than growing bespoke near-copies.
+function inlineRenameForm(current, onSave, { onCancel, commitLabel = 'Save' } = {}) {
   const form = document.createElement('form');
   form.className = 'rename-form';
   form.innerHTML =
     `<input type="text" class="rename-input" autocomplete="off" />` +
-    `<button type="submit" class="small primary">Save</button>` +
+    `<button type="submit" class="small primary">${escapeHtml(commitLabel)}</button>` +
     `<button type="button" class="small ghost rename-cancel">Cancel</button>`;
   form.querySelector('.rename-input').value = current;
   form.addEventListener('submit', async (ev) => {
@@ -2169,7 +2180,8 @@ function inlineRenameForm(current, onSave) {
   });
   form.querySelector('.rename-cancel').addEventListener('click', (ev) => {
     ev.stopPropagation();
-    void renderClients();
+    if (onCancel) onCancel();
+    else void renderClients();
   });
   return form;
 }
@@ -2276,7 +2288,7 @@ async function renderFavorites() {
   const pinBtn = $('fav-pin');
   if (pinBtn && !pinBtn.dataset.wired) {
     pinBtn.dataset.wired = '1';
-    pinBtn.addEventListener('click', () => void pinAsFavorite());
+    pinBtn.addEventListener('click', () => openPinForm(pinBtn));
   }
 }
 
@@ -2327,13 +2339,29 @@ function openFavMenu(card, f) {
   menu.innerHTML =
     `<button type="button" class="small" data-act="fav-rename">Rename</button>` +
     `<button type="button" class="small danger" data-act="fav-unpin">Unpin</button>`;
-  menu.querySelector('[data-act="fav-rename"]').addEventListener('click', async (ev) => {
+  menu.querySelector('[data-act="fav-rename"]').addEventListener('click', (ev) => {
     ev.stopPropagation();
-    const next = window.prompt('Rename favorite', f.name);
-    if (next && next.trim() && next.trim() !== f.name) {
-      await window.stint.renameFavorite({ ref: f.id, name: next.trim() });
-    }
-    await renderFavorites();
+    // §05 R09 / issue #52: the new name is gathered through the SAME inline in-place field
+    // the Clients view uses — never window.prompt, which Electron's renderer does not
+    // implement (a prompt-based rename silently no-ops in the packaged app). The chip's
+    // name swaps into the field; Enter commits over the same renameFavorite IPC; Cancel
+    // repaints the rail untouched.
+    menu.remove();
+    const form = inlineRenameForm(
+      f.name,
+      async (name) => {
+        if (name && name !== f.name) {
+          await window.stint.renameFavorite({ ref: f.id, name });
+        }
+        await renderFavorites();
+      },
+      { onCancel: () => void renderFavorites() },
+    );
+    form.classList.add('fav-rename');
+    card.querySelector('.fav-name').replaceWith(form);
+    const input = form.querySelector('input');
+    input.focus();
+    input.select();
   });
   menu.querySelector('[data-act="fav-unpin"]').addEventListener('click', async (ev) => {
     ev.stopPropagation();
@@ -2343,21 +2371,45 @@ function openFavMenu(card, f) {
   card.appendChild(menu);
 }
 
-async function pinAsFavorite() {
+// §05 R09 / issue #52: the Pin control swaps into an INLINE name field (seeded from the
+// running entry's description when one is running), committed on Enter — never
+// window.prompt, which Electron's renderer does not implement (it returns null, so a
+// prompt-based pin silently no-ops in the packaged app). Cancel restores the Pin control
+// untouched; the commit routes into pinAsFavorite with the gathered name.
+function openPinForm(btn) {
+  const running = state?.status?.entry ?? null;
+  const form = inlineRenameForm(
+    running ? (running.description ?? 'Favorite') : '',
+    async (name) => {
+      if (!name) {
+        form.querySelector('input').focus();
+        return;
+      }
+      form.replaceWith(btn);
+      await pinAsFavorite(name);
+    },
+    { onCancel: () => form.replaceWith(btn), commitLabel: 'Pin' },
+  );
+  form.classList.add('fav-pin-form');
+  const input = form.querySelector('input');
+  input.placeholder = 'Favorite name';
+  input.setAttribute('aria-label', 'Favorite name');
+  btn.replaceWith(form);
+  input.focus();
+  input.select();
+}
+
+async function pinAsFavorite(name) {
   // From the running timer when one is running: capture its template (fromEntryId='open').
   // Otherwise capture the Start form's attributes (description/client/project/tags/billable),
   // exactly the payload `tt fav add` accepts — so the rail reaches nothing tt cannot.
   const running = state?.status?.entry ?? null;
   let payload;
   if (running) {
-    const name = window.prompt('Pin the running timer as a favorite — name?', running.description ?? 'Favorite');
-    if (!name || !name.trim()) return;
-    payload = { name: name.trim(), fromEntryId: 'open' };
+    payload = { name, fromEntryId: 'open' };
   } else {
-    const name = window.prompt('Pin a favorite — name?', '');
-    if (!name || !name.trim()) return;
     payload = {
-      name: name.trim(),
+      name,
       description: $('start-desc') ? $('start-desc').value || null : null,
       client: $('start-client') ? $('start-client').value || undefined : undefined,
       project: $('start-project') ? $('start-project').value || undefined : undefined,
