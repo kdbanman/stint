@@ -1995,6 +1995,12 @@ async function main() {
   // (history kept). Click the Clients nav, assert the clients/projects render with the
   // rename + archive affordances, and that accent discipline holds on the new chrome
   // (§07, §12). The mutators are wired to the same IPC tt's client/project subcommands use.
+  // The create affordances are DRIVEN, not merely present (issue #48: a duplicate
+  // id="add-client" dead-ended the "+ Add client" button while every presence-only check
+  // passed): the scene clicks "+ Add client" and asserts the inline "New client" field
+  // opens, types a name, and asserts the new client LANDS in the active list off the
+  // addClient → re-render round trip — then does the same for "+ Add project" (under a
+  // client row) and "+ Add tag" (the tag strip), asserting each payload over the IPC.
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
     // The view renders its clients/projects from the async listClients/listProjects mock;
@@ -2017,7 +2023,7 @@ async function main() {
       const projRename = !!acme?.querySelector('.project [data-act="rename-project"]');
       const projArchive = !!acme?.querySelector('.project [data-act="archive-project"]');
       const addProject = !!acme?.querySelector('[data-act="add-project"]');
-      const addClient = !!document.querySelector('#add-client');
+      const addClient = !!document.querySelector('#add-client-btn');
       // Accent discipline (§15): no element inside the Clients chrome paints the accent as
       // a fill/text colour except a sanctioned .primary confirm (none open by default).
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
@@ -2047,6 +2053,58 @@ async function main() {
         offenders,
       };
     });
+    // Drive the create flows end to end (issue #48). (1) "+ Add client": the click opens
+    // the inline "New client" field (the fact the duplicate-id bug broke — the button was
+    // a getElementById no-op), typing a name and committing sends { name } over addClient
+    // and the re-render lands the new client in the active list.
+    await page.click('#add-client-btn');
+    await page.waitForSelector('#clients-list .client-add input[placeholder="New client"]');
+    await page.fill('#clients-list .client-add .client-add-input', 'Initech');
+    await page.click('#clients-list .client-add button[type="submit"]');
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('#clients .client-name')].some(
+        (n) => n.textContent.trim() === 'Initech',
+      ),
+    );
+    // (2) "+ Add project" on Acme's row: inline "New project" field → commit → the project
+    // lands nested under Acme, the payload carrying Acme's id (the renderer resolves no names).
+    await page.click('#clients .client[data-id="1"] [data-act="add-project"]');
+    await page.waitForSelector(
+      '#clients .client[data-id="1"] .project-add input[placeholder="New project"]',
+    );
+    await page.fill('#clients .client[data-id="1"] .project-add .project-add-input', 'Mobile');
+    await page.click('#clients .client[data-id="1"] .project-add button[type="submit"]');
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('#clients .client[data-id="1"] .project-name')].some(
+        (n) => n.textContent.trim() === 'Mobile',
+      ),
+    );
+    // (3) "+ Add tag" on the tag strip: inline "New tag" field → commit → the tag lands in
+    // the active strip (addTag wraps core's ensureTag; parity with `tt tag add`).
+    await page.click('#add-tag');
+    await page.waitForSelector('#tags-list .tag-add input[placeholder="New tag"]');
+    await page.fill('#tags-list .tag-add .tag-new-input', 'billing');
+    await page.click('#tags-list .tag-add button[type="submit"]');
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('#tags-list .tag-row-name')].some(
+        (n) => n.textContent.trim() === 'billing',
+      ),
+    );
+    const created = await page.evaluate(() => ({
+      addedClient: window.__ADDED_CLIENT__ ?? null,
+      addedProject: window.__ADDED_PROJECT__ ?? null,
+      addedTag: window.__ADDED_TAG__ ?? null,
+      clientNames: [...document.querySelectorAll('#clients .client-name')].map((n) =>
+        n.textContent.trim(),
+      ),
+      acmeProjects: [
+        ...document.querySelectorAll('#clients .client[data-id="1"] .project-name'),
+      ].map((n) => n.textContent.trim()),
+      tagNames: [...document.querySelectorAll('#tags-list .tag-row-name')].map((n) =>
+        n.textContent.trim(),
+      ),
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'main-clients-created.png'), fullPage: true });
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -2058,14 +2116,26 @@ async function main() {
       probe.projRename &&
       probe.projArchive &&
       probe.addProject &&
-      probe.addClient;
+      probe.addClient &&
+      // …and the DRIVEN create facts (issue #48): each inline field opened (the waits above
+      // would have thrown otherwise), each payload went over the IPC, and each created item
+      // landed in its active list.
+      created.addedClient?.name === 'Initech' &&
+      created.clientNames.includes('Initech') &&
+      created.addedProject?.name === 'Mobile' &&
+      created.addedProject?.clientId === 1 &&
+      created.acmeProjects.includes('Mobile') &&
+      created.addedTag?.name === 'billing' &&
+      created.tagNames.includes('billing');
     // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
     // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
     // list is kept in the justification as captured evidence only.
     record(
       'CLIENTS_VIEW',
       ok,
-      `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}`,
+      `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
+        `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
+        `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}`,
       'main-clients.png',
     );
   });

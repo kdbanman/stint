@@ -492,7 +492,7 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/class="nav"/);
     expect(html).toMatch(/data-view="clients"/);
     expect(html).toMatch(/id="clients"/);
-    expect(html).toMatch(/id="add-client"/);
+    expect(html).toMatch(/id="add-client-btn"/);
     // …nav switching routes to the Clients view and renders it on demand…
     expect(app).toMatch(/route\(/);
     expect(app).toMatch(/renderClients/);
@@ -508,6 +508,26 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.archiveClient\(/);
     expect(app).toMatch(/window\.stint\.renameProject\(/);
     expect(app).toMatch(/window\.stint\.archiveProject\(/);
+  });
+
+  it('every element id in index.html is unique — a duplicate dead-ends getElementById wiring (issue #48)', () => {
+    // The literal issue-48 root cause: the Clients-view "+ Add client" button and the
+    // Add-entry form's Client <select> both carried id="add-client", so $('add-client')
+    // (getElementById → FIRST match in document order) bound the click handler to the
+    // select — the button was a no-op AND opening the dropdown injected a phantom
+    // .client-add row. Guard the invariant wholesale: no id may appear twice in the page.
+    const html = read('index.html');
+    const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
+    const dupes = [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+    expect(dupes, `duplicate element ids in index.html: ${dupes.join(', ')}`).toEqual([]);
+    // …and the issue-48 pair specifically: the button and the select keep DISTINCT ids,
+    // each resolving to its own wiring in app.js — the button to the Clients-view inline
+    // add-client click handler, the select to the form's client→project cascade.
+    expect(html).toMatch(/<button id="add-client-btn"/);
+    expect(html).toMatch(/<select id="add-client"/);
+    const app = read('app.js');
+    expect(app).toMatch(/\$\('add-client-btn'\)\.addEventListener\('click'/);
+    expect(app).toMatch(/\$\('add-client'\)\.addEventListener\('change'/);
   });
 
   it('the Clients view ships a tag-management strip wired to the tag IPC (§12 R10)', () => {
