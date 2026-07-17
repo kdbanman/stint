@@ -240,7 +240,7 @@
       <tbody>
         <tr>
           <td class="term" data-l="Term">Stored truth</td>
-          <td data-l="Definition">The exact <code>start</code> and <code>end</code> timestamps, UTC, to the second. <strong>Never mutated</strong> by rounding or sleep subtraction. The cardinal rule of a billing tool: store the truth, never silently change it. The hardening and recovery mechanisms (§05) exist to protect this truth, never to alter it.</td>
+          <td data-l="Definition">The exact <code>start</code> and <code>end</code> timestamps, UTC, to the second. <strong>Never mutated</strong> by rounding or sleep subtraction — nor by opening/saving the editor without an edit: a display convenience (like the interval picker's 5-minute snap, §12 R15) applies only to a value the user actively changes, never to one that is merely shown. The cardinal rule of a billing tool: store the truth, never silently change it. The hardening and recovery mechanisms (§05) exist to protect this truth, never to alter it.</td>
           <td class="avoid" data-l="Avoid"><s>actual time</s>, <s>real time</s></td>
         </tr>
         <tr>
