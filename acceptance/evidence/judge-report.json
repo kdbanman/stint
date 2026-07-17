@@ -60,7 +60,7 @@
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=2 (Entries 0 + Timer 2; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=1 (Entries 0 + Timer 1; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
@@ -72,8 +72,14 @@
     {
       "item": "START_FORM",
       "pass": true,
-      "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"noSwitch\":true}; running surface keeps the start-with-details form (no Switch)={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"noSwitch\":true}",
+      "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"noSwitch\":true,\"billUncheckedOnOpen\":true}; billable default (§05 R07): unchecked→client checks (true)→cleared unchecks (false), untouched submit sent {\"description\":\"auth refactor\",\"client\":\"Acme\"}; running surface hides the start panel (only edit-or-stop)={\"panelHidden\":true,\"startFormVisible\":false,\"startToggleVisible\":false,\"stopVisible\":true,\"liveEditVisible\":true,\"noSwitch\":true}",
       "screenshot": "main-start-form.png"
+    },
+    {
+      "item": "RUNNING_SINGLE_ACTION",
+      "pass": true,
+      "justification": "running Timer view offers only edit-or-stop: {\"visibleDescFields\":1,\"descFieldId\":\"le-desc\",\"panelHidden\":true,\"startFormVisible\":false,\"startToggleVisible\":false,\"oneTapVisible\":false,\"stopVisible\":true,\"liveEditVisible\":true,\"noSwitch\":true}",
+      "screenshot": "timer-running-single-action.png"
     },
     {
       "item": "UNIFIED_FORM_ADD",

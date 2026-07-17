@@ -106,15 +106,11 @@
   .r-row2{display:flex;align-items:center;gap:18px;margin-top:15px;flex-wrap:wrap}
   .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
   .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
-  .cols{display:grid;grid-template-columns:1fr 292px;gap:20px;align-items:start}
   .pad{padding:20px 22px}
   .ph{font-size:14px;font-weight:640;margin:0 0 16px}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  .f{margin-bottom:14px}
-  .startfoot{display:flex;align-items:center;gap:14px;margin-top:4px}
-  .formrow{display:flex;align-items:center;gap:14px;margin:15px 0}
-  .formrow .right{margin-left:auto}
-  .favrail{background:var(--sidebar)}
+  /* the favorites rail is the only card beside the runner while a timer runs — the start
+     panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51) */
+  .favrail{background:var(--sidebar);max-width:460px}
   .fav{display:flex;align-items:center;gap:11px;border:1px solid var(--line);background:var(--paper);border-radius:var(--r1);padding:10px 11px;margin-bottom:9px;box-shadow:var(--sh-card)}
   .fav .star{color:var(--muted)}.fav .star .ic{width:15px;height:15px}
   .fav .fi{flex:1;min-width:0}
@@ -236,44 +232,32 @@
         </div>
       </div>
 
-      <div class="cols">
-        <div class="card pad">
-          <div class="f"><label class="lab">Description</label><textarea class="field" placeholder="What are you working on?"></textarea></div>
-          <div class="two">
-            <div class="f"><label class="lab">Client</label><input class="field" placeholder="— none (internal) —"></div>
-            <div class="f"><label class="lab">Project</label><input class="field" placeholder="— none —"></div>
-          </div>
-          <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">research <b>×</b></span><input placeholder="add a tag…"></div></div>
-          <div class="formrow">
-            <span class="toggle"><span class="sw"><i></i></span> Billable</span>
-            <button class="btn ghost sm right"><svg class="ic"><use href="#i-star"/></svg> Save as favorite</button>
-          </div>
-          <div class="startfoot">
-            <button class="btn"><svg class="ic"><use href="#i-play"/></svg> Start timer</button>
-          </div>
+      <!-- While a timer runs the view offers ONLY edit-or-stop of the running entry (§12
+           R05, issue #51): the start panel — the one-tap Start and the start-with-details
+           form — is drawn only in the IDLE state, so no second Description field and no
+           start affordance appears beside the runner card. The favorites rail stays: a
+           one-click Resume is §05 R09's own verb (core inherits the atomic stop-then-start). -->
+      <div class="card favrail pad">
+        <h3 class="ph">Favorites</h3>
+        <div class="fav">
+          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+          <div class="fi"><div class="fn">Standup</div><div class="fm">Globex · Q3 Strategy · non-billable</div></div>
+          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
         </div>
-
-        <div class="card favrail pad">
-          <h3 class="ph">Favorites</h3>
-          <div class="fav">
-            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-            <div class="fi"><div class="fn">Standup</div><div class="fm">Globex · Q3 Strategy · non-billable</div></div>
-            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
-          </div>
-          <div class="fav">
-            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-            <div class="fi"><div class="fn">Deep work · Alpha</div><div class="fm">Globex · Project Alpha · billable</div></div>
-            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
-          </div>
-          <div class="fav">
-            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-            <div class="fi"><div class="fn">Admin / email</div><div class="fm">No client · billable · #admin</div></div>
-            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
-          </div>
+        <div class="fav">
+          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+          <div class="fi"><div class="fn">Deep work · Alpha</div><div class="fm">Globex · Project Alpha · billable</div></div>
+          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
         </div>
+        <div class="fav">
+          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+          <div class="fi"><div class="fn">Admin / email</div><div class="fm">No client · billable · #admin</div></div>
+          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+        </div>
+        <div class="favfoot">Resume starts a fresh timer from the favorite — the running one stops first, atomically.</div>
       </div>
     </div>
   </div>
