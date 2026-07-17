@@ -73,12 +73,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Regression backstop: confirm electron-builder's native helper (app-builder-bin) is
-      # present AND runnable before packaging, so a broken toolchain fails here with a clear
-      # message instead of a cryptic ENOENT deep in `pack`. The packaging fix itself is
-      # `npmRebuild: false` in electron-builder.yml (it stopped electron-builder deleting the
-      # helper during its workspace dep-install); this guards against future regressions, and
-      # a reinstall self-heals a genuinely missing/corrupt install.
+      # Confirm electron-builder's native helper (app-builder-bin) is present AND runnable
+      # before packaging, so a broken toolchain fails with a clear message instead of a
+      # cryptic ENOENT deep in `pack`; a reinstall self-heals (process.html R04). The
+      # standing fix is `npmRebuild: false` in electron-builder.yml.
       - name: Verify packaging toolchain (app-builder-bin)
         run: |
           node scripts/check-packaging.mjs || {
