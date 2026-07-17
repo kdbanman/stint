@@ -90,7 +90,7 @@ features/      Gherkin acceptance criteria, run against BOTH surfaces (parity).
 acceptance/
   criteria/    What must hold — coverage matrix, schemas, JUDGE rubric, MANUAL runbook, parity matrix.
 CLAUDE.md      Repo guide and working instructions.
-.claude/       Requirements-change machinery — skills and workflows.
+.claude/       Requirements-change machinery — the standing agent skills.
 README.md      This front door.
 ```
 
