@@ -164,4 +164,16 @@ describe('buildEntryList (§12 R9)', () => {
     expect(list.matchedIds).toEqual([1, 2]);
     expect(list.groups.map((g) => g.key)).toEqual(['ci', 'deep']);
   });
+
+  it('a missing/unknown grouping fails loudly with a clear error, not an opaque TypeError (issue #55)', () => {
+    // `by` is required, but a plain-JS caller (the GUI renderer) can drop it — the switch
+    // used to fall through to undefined and groupInto threw "keysOf … is not iterable".
+    type By = Parameters<typeof buildEntryList>[1]['by'];
+    expect(() => buildEntryList(entries, { by: undefined as unknown as By })).toThrow(
+      /unknown entry grouping 'undefined'/,
+    );
+    expect(() => buildEntryList(entries, { by: 'bogus' as By })).toThrow(
+      /unknown entry grouping 'bogus'/,
+    );
+  });
 });

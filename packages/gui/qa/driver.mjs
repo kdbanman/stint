@@ -62,7 +62,9 @@ export function createHandlers(store, deps = {}) {
     const entries = store.listEntries(filter);
     const overlaps = core.describeOverlaps(entries, now);
     const byId = new Map(entries.map((e) => [e.id, e]));
-    const { groups } = core.buildEntryList(entries, { by: q.by });
+    // Issue #55 (verbatim with main.ts): `by` is required but the renderer is plain JS —
+    // default defensively to the calendar's day grouping so a dropped key cannot reject.
+    const { groups } = core.buildEntryList(entries, { by: q.by ?? 'day' });
     return {
       groups: groups.map((g) => ({
         key: g.key,

@@ -365,8 +365,12 @@ function listEntries(q: ListEntriesQuery): EntryListView {
   const overlaps = describeOverlaps(entries, now);
   const byId = new Map(entries.map((e) => [e.id, e]));
   // store.listEntries already applied the free-text search (via the filter, like the
-  // CLI), so buildEntryList only needs to group the surviving set here.
-  const { groups } = buildEntryList(entries, { by: q.by as EntryGroupBy });
+  // CLI), so buildEntryList only needs to group the surviving set here. Issue #55: `by`
+  // is required on ListEntriesQuery, but the renderer is plain JS (TypeScript cannot
+  // catch a dropped key there) — default defensively to the Entries calendar's 'day'
+  // grouping so a payload missing `by` can never reject the whole query (core's keysOf
+  // now fails loudly on an unknown grouping instead of throwing an opaque TypeError).
+  const { groups } = buildEntryList(entries, { by: (q.by as EntryGroupBy | undefined) ?? 'day' });
   return {
     groups: groups.map((g) => ({
       key: g.key,
