@@ -15,14 +15,14 @@ walkthroughs, QA — not just one kind of recording.
 
 - A Playwright page running the app (see the driver below).
 - `ffmpeg` on PATH (`apt-get install -y ffmpeg`) for the WEBM→GIF conversion.
-- The helper module: `cine.mjs` in this skill directory.
+- The helper module: `packages/gui/qa/cine.mjs` (committed apparatus, beside the driver).
 
 ## Wiring it into a page
 
 Install the overlay **before** `page.goto(...)`, then build the helpers:
 
 ```js
-import { installOverlay, makeCine } from '<skill-dir>/cine.mjs';
+import { installOverlay, makeCine } from './packages/gui/qa/cine.mjs';
 
 await installOverlay(page);          // adds the cursor/ripple/toast overlay (addInitScript)
 await page.goto(url);
@@ -98,10 +98,12 @@ shows the change.
 
 ## The driver (context)
 
-The overlay is engine-agnostic, but it was built alongside a driver that runs the **real
-renderer** (`packages/gui/renderer`) in the pre-installed Chromium, bridged to a
-**real `@stint/core` SQLite store** via the same `window.stint` IPC map `main.ts`
-registers. That driver watches a `commands/` dir for `NNN.mjs` files (each
-`export default async (ctx) => {}` with `ctx.record`, `ctx.page`, `ctx.store`, `ctx.cine`)
-and writes results to `responses/`. This skill supplies the `cine`/`record` half; keep the
-driver in your scratchpad, not the repo.
+The overlay is engine-agnostic, but its home is the committed QA discovery driver
+(`packages/gui/qa/driver.mjs` — see `context/process.html`, QA discovery): the **real
+renderer** (`packages/gui/renderer`) in headless Chromium over a **real `@stint/core`
+SQLite store**, bridged by a guarded port of `main.ts`'s IPC map. Run it with
+`node packages/gui/qa/driver.mjs` (after `npm run build`; `STINT_QA_DIR` overrides the
+work dir, default `<tmpdir>/stint-qa`). It watches `<qa-dir>/commands/` for `NNN.mjs`
+recipes (each `export default async (ctx) => {}` with `ctx.record`, `ctx.page`,
+`ctx.store`, `ctx.cine`) and writes results to `<qa-dir>/responses/`. The driver is
+apparatus; the **recipes are scratch** — consumed by the run, never committed.
