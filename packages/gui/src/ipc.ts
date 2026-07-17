@@ -135,7 +135,11 @@ export interface ListEntriesQuery {
   preset?: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
   fromDate?: string;
   toDate?: string;
-  by: 'day' | 'client' | 'project' | 'tag';
+  /**
+   * Optional — main defaults to 'day' (issue #50). The Entries calendar always lays by
+   * day and its toolbar sends no `by` (grouped breakdowns live in Reports, G11).
+   */
+  by?: 'day' | 'client' | 'project' | 'tag';
   clientId?: number;
   projectId?: number;
   tag?: string;
