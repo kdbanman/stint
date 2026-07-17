@@ -1,37 +1,37 @@
 ---
 name: change-requirements
 description: >-
-  Drive a controlled requirements change for Stint. Use whenever the user wants
-  to change, add, modify, or remove product requirements — new features, dropped
-  features, schema/data-model changes, CLI/GUI behavior, packaging, anything that
-  alters context/prd.html / context/concept.html / context/glossary.html / context/acceptance.html. The user
-  LISTS the changes they want; this skill grills the design, then authors the
-  full transition artifact set (renamed *-old.html docs, new docs, a
-  requirements-transition.md work-list, mockups, and the transition workflow) and
-  STOPS. It authors but does not run the workflow.
+  Use when the user wants to add, change, or remove Stint product
+  requirements — anything that alters the context/ spec docs (prd, concept,
+  glossary, acceptance). Designs the change; does not execute it.
 ---
 
 # Change requirements (Stint)
 
 Turn a user's list of desired requirement changes into a complete, reviewable
 **requirements transition**: grilled design decisions, rewritten requirement
-docs, a work-list mapping doc, mockups covering every new/changed GUI
-requirement, and a transition workflow ready for the user to launch.
+docs, a work-list mapping doc, and mockups covering every new/changed GUI
+requirement — ready for the user to launch the `requirements-transition`
+skill against.
 
 **Scope of this skill: author, don't run.** You conduct the interview and author
 every artifact below, then hand the run to the user. You do **not** execute the
-transition workflow, write code, or modify `packages/`. The workflow you author
-is what later does that work.
+transition, write code, or modify `packages/`. The `requirements-transition`
+skill is what later does that work, consuming the work-list you author here.
 
 Read first for house style and the target shape:
 - `CLAUDE.md` — repo doc map and conventions.
+- `context/process.html` §04 — the authoring rules every doc you write here
+  must follow (concise over grammatical, common language, no editorializing,
+  stateless, one home per fact).
 - An existing `requirements-transition.md` if one is present (study its shape:
   §0 consumption legend, §1 global decisions, §C core labeling, §2
   section-by-section new/modified/deleted tables, §19/§20 new sections, §W
   screen-recording scope, §R two reviews, §Z swap/cleanup). Your job is to
   reliably produce a doc of this shape plus the new docs and mockups.
-- `.claude/workflows/requirements-transition.js` — the existing transition
-  workflow; mirror its `meta`/phases/schema style when re-authoring it.
+- `.claude/skills/requirements-transition/SKILL.md` — the standing execution
+  skill. The work-list you author is its input; keep the columns and section
+  structure exactly what its stages consume.
 
 ---
 
@@ -105,7 +105,8 @@ workflow's swap stage. Only rename docs that actually change.
 ### 2b. Author the new docs
 
 Author the new `context/prd.html` / `context/concept.html` / `context/glossary.html` / `context/acceptance.html`
-in the legacy house style, reflecting every signed-off decision:
+in the house style (per the `context/process.html` §04 authoring rules),
+reflecting every signed-off decision:
 
 - `context/prd.html` — full requirements including new sections and the `core` badges
   (Step 3). Renumber within each section as needed; the transition doc's
@@ -118,10 +119,10 @@ in the legacy house style, reflecting every signed-off decision:
 
 ### 2c. Author `requirements-transition.md` (the work-list)
 
-This is the single source of truth the workflow consumes. Mirror the reference
-shape exactly:
+This is the single source of truth the `requirements-transition` skill
+consumes. Mirror the reference shape exactly:
 
-- **§0 How the workflow consumes this file** — the column legend: ID, Change
+- **§0 How the transition consumes this file** — the column legend: ID, Change
   (`NEW`/`MODIFIED`/`DELETED`), Core (`●`), Surfaces (`core`/`cli`/`gui`),
   Files, Mockup, AC (`BDD`/`PROP`/`GOLD`/`JUDGE`/`MANUAL`), Rec (`▶`).
 - **§1 Global decisions** — the grill-outcome table (G1, G2, …) from Step 1.
@@ -132,10 +133,11 @@ shape exactly:
   **Files**, target **Mockup(s)**, **AC method(s)**, and **Rec** flag.
 - **New sections** (e.g. §19 packaging, §20 durability) for net-new requirement
   clusters.
-- **§W Screen-recording QA evidence** — scope of the recording stage (Step 4).
-- **§R Review stages** — the two reviews (Step 4).
-- **§Z Swap / cleanup** — the completion swap list (Step 4 + the cleanup
-  checklist below).
+- **§W Screen-recording QA evidence** — scope of the transition skill's
+  recording stage.
+- **§R Review stages** — the two reviews the transition skill runs.
+- **§Z Swap / cleanup** — the completion swap list the transition skill's
+  gated final stage deletes and updates.
 
 Every requirement gets: a stable ID, exactly one Change tag, a Core flag where
 it applies, its surfaces, its files, its mockup(s), and its AC method(s).
@@ -185,92 +187,50 @@ Apply it like this:
    integrity-or-loss).
 
 Core GUI requirements and all changed/new GUI requirements get a screen
-recording in QA evidence (Step 4 §W).
+recording in QA evidence (work-list §W, captured by the transition skill's
+recording stage).
 
 ---
 
-## Step 4 — Author the transition workflow
+## Step 4 — Reconcile with the transition skill
 
-Author `.claude/workflows/requirements-transition.js` (mirror the `meta` +
-phases + JSON-schema style of the existing `requirements-transition.js` if one
-is present). **Author it; do not run
-it.** The workflow consumes `requirements-transition.md` and carries out all
-pending work. It must encode these stages in order:
+Execution is **not** authored per change. The standing
+`requirements-transition` skill
+(`.claude/skills/requirements-transition/SKILL.md`) carries the stages — plan
+→ file-disjoint waves with checkpoint commits → AC verification → the two
+reviews with a bounded improvement loop → screen-recording QA LAST → one PR →
+the gated old→new swap — plus the subagent model-level rubric. Your job here
+is to make sure your work-list feeds it:
 
-1. **Plan** — parse the work-list into a per-requirement plan; one agent per
-   requirement returns its exact file set + implementation/AC/evidence plan.
-2. **Implement in file-disjoint waves** — schedule requirements into waves so no
-   two agents in a wave touch the same file; verify each wave green before the
-   next.
-3. **AC verification** — regenerate all evidence (`npm run build`, `npm test`,
-   `npm run judge`, `npm run evidence`, `npm run verify:no-network`); each
-   requirement must have a passing executable AC of its mapped method(s).
-4. **Two separate reviews**, each looping back into an improvement pass:
-   - **AC-evidence-sufficiency review** — an adversarial completeness critic per
-     requirement; defaults to *insufficient* unless the requirement is
-     implemented **and** covered by a passing AC **and** reflected in regenerated
-     evidence (no stubs/skips).
-   - **Code-quality & architecture review** — in the Matt Pocock
-     *improve-codebase-architecture* lineage: hunt shallow modules, leaky seams,
-     poor locality, cognitive bounce; apply the deletion test; rate findings
-     `Strong` / `Worth exploring` / `Speculative` with a top recommendation.
-     Must not regress AC.
-5. **Improvement loop** — apply review feedback; re-verify until both reviews are
-   clean and AC stays green.
-6. **Screen-recording QA stage — runs LAST**, after AC and both reviews. This is
-   **QA evidence, not executable AC.** Scope:
-   - all **core-flow GUI requirements** (GUI requirements marked `core`);
-   - all **changed/new GUI requirements** (every `Rec ▶` row);
-   - all **code-change-adjacent requirements** demonstrable in the GUI.
-   Recordings land under `acceptance/evidence/recordings/`, indexed by
-   requirement id. **Deliver them as committed, inline-embedded GIFs** — this is
-   the only format that renders inline in a PR description without a manual
-   web upload (GitHub's CSP blocks inline `<video>` from repo/raw URLs; native
-   video controls would require drag-dropping the file into the web editor).
-   Recording production conventions (the workflow's Recordings stage carries the
-   exact ffmpeg/Playwright recipe):
-   - **GIF, ASCII-only filenames** slugged from the requirement id
-     (`§12 R15` → `12-r15.gif`) — non-ASCII/spaced names render unreliably.
-   - **Slowed to ~0.5× with a ~1.5 s hold on the final frame** so fast actions
-     are followable and each loop has a clear settle/restart beat.
-   - **Make the interaction visible** (inject a synthetic cursor + click pulse,
-     highlight the target element) so clicks are not invisible.
-   - **Commit** the GIFs (do NOT git-ignore them) and **embed each inline** in
-     the PR body as an image — `![<req id> — <caption>](<raw-url-at-commit-sha>)`
-     — pinned to the commit SHA, **each with a one-line description of what the
-     GIF shows**.
-7. **Evidence aggregation → one GitHub PR** — collect AC evidence, both review
-   reports, and the recordings into a single PR.
-8. **Auto-swap, gated on all-green** — only when every requirement has passing AC
-   evidence **and** both reviews are clean, perform the old→new swap inside the
-   same PR (see cleanup list below). The **human gate is the PR merge.**
-
-### Swap / cleanup list (the workflow's final stage, gated on all-green)
-
-- Delete the `*-old.html` files (`context/prd-old.html`, `context/concept-old.html`,
-  `context/glossary-old.html`, `context/acceptance-old.html` — whichever were created).
-- Delete any GUI files folded into another view (e.g. a retired standalone page
-  + its script), per the work-list's DELETED rows.
-- Delete superseded prior-art workflows referenced in the work-list.
-- Delete **`requirements-transition.md`** itself (the mapping doc is consumed).
-- Ensure `README.md`, `CLAUDE.md`, `acceptance/criteria/COVERAGE.md`, and
-  `acceptance/criteria/parity-matrix.json` reference only the new docs and entities.
+1. **Re-read the transition skill** and confirm every stage can consume what
+   you authored: the §0 legend matches the columns its Plan/Implement stages
+   read; §W's scope (core `●` GUI rows ∪ Rec `▶` rows) is derivable from your
+   tables; §R names the two reviews; §Z lists everything the swap must delete
+   (the `*-old.html` docs, retired files per DELETED rows, and
+   `requirements-transition.md` itself).
+2. **If the change genuinely needs a stage or convention the skill lacks**
+   (a new evidence kind, a new artifact class), extend the skill itself as a
+   durable improvement to the standing procedure — never fork a per-change
+   variant. Per-change orchestration is scaffolding, and the process forbids
+   it (`context/process.html`).
 
 ---
 
 ## Step 5 — Stop and hand off
 
-You have authored everything; **do not run the workflow.** Report to the user:
+You have authored everything; **do not run the transition.** Report to the
+user:
 
 1. What was authored: renamed old docs, new docs, `requirements-transition.md`,
-   new/updated mockups, and `.claude/workflows/requirements-transition.js`.
+   and new/updated mockups (plus any durable extension made to the
+   `requirements-transition` skill).
 2. The **mockup-coverage check** result (every NEW/MODIFIED GUI requirement maps
    to ≥1 mockup).
 3. The core-requirement labeling summary (relabeled + net-new core reqs).
-4. **How to launch it themselves**, e.g.: "When you're ready, use a workflow to
-   run `requirements-transition` — it will plan, implement in disjoint waves,
-   verify AC, run the two reviews, capture screen recordings, open one PR, and
-   swap old→new on green. The merge is your gate."
+4. **How to launch it themselves**, e.g.: "When you're ready, invoke the
+   `requirements-transition` skill — it will plan, implement in disjoint
+   waves, verify AC, run the two reviews, capture screen recordings, open one
+   PR, and swap old→new on green. The merge is your gate."
 
 Then stop.
 
@@ -292,7 +252,7 @@ Then stop.
       integrity/loss gaps, exclusions recorded.
 - [ ] **Mockup-coverage rule satisfied** — every NEW/MODIFIED GUI requirement
       maps to ≥1 mockup; coverage check run and reported.
-- [ ] `requirements-transition.js` workflow authored (file-disjoint waves, AC
-      verification, two reviews, improvement loop, screen-recording stage LAST,
-      evidence→one PR, gated auto-swap) — **authored, not run.**
-- [ ] Handed off to the user with launch instructions; workflow NOT run.
+- [ ] Work-list reconciled against the `requirements-transition` skill's
+      stages (§0 legend, §W scope, §R reviews, §Z swap list); any needed
+      extension made to the skill itself, never a per-change fork.
+- [ ] Handed off to the user with launch instructions; transition NOT run.
