@@ -122,13 +122,20 @@ function render() {
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
 
-  // §17 R11: the report total reflects the active selection LIVE. When the toolbar is
-  // active (a range / filter / search is in play) the total is the snapshot-derived
-  // billable-only report sum for that selection (deriveView), so it narrows alongside the
-  // list; idle, it is the plain whole-window billable total. Both come from the in-memory
-  // snapshot — no IPC round-trip — so the figure tracks the selection on every keystroke.
+  // §17 R11 / §12 R16 (issue #55): the report total reflects the active selection LIVE.
+  // When the toolbar is active and the queried set is in hand (entryGroups), the total is
+  // that result's billable-only sum — the SELECTED RANGE's billable total, exactly what the
+  // calendar shows; while a query is still in flight it is the snapshot-derived estimate
+  // for the selection (deriveView — instant, but unbounded by the range). Idle, it is the
+  // week-bounded billable total (weekTotal, the "This week" default). The estimate + idle
+  // figures come from the in-memory snapshot — no IPC round-trip — so the figure tracks
+  // the selection on every keystroke, then settles on the authoritative range sum.
   $('week-total').textContent = fmtHours(
-    entryCtrlActive ? deriveView(state, liveSelection()).reportTotalSeconds : weekTotal(),
+    entryCtrlActive
+      ? entryGroups
+        ? entryGroupsTotal()
+        : deriveView(state, liveSelection()).reportTotalSeconds
+      : weekTotal(),
   );
 
   renderEntries();
@@ -1287,9 +1294,22 @@ async function openEntryForm(row, e) {
   });
 }
 
+// Today as a LOCAL 'YYYY-MM-DD' day string — the same local-day vocabulary core's
+// localDay gives the snapshot's day keys, so the two compare directly.
+function localTodayDay() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function weekTotal() {
+  // §12 R16 / §17 R11 (issue #55): the "This week" chip is the CURRENT WEEK's billable
+  // sum — bounded to the week containing today by the weekStart setting (calWeekBounds,
+  // the same rule the calendar's default view pads to), never the whole in-memory window.
   // The renderer's at-a-glance figure; the report builder owns the authoritative one.
+  const [ws, we] = calWeekBounds(localTodayDay());
   return state.days
+    .filter((d) => d.day >= ws && d.day <= we)
     .flatMap((d) => d.entries)
     .filter((e) => e.billable)
     .reduce((s, e) => s + e.billableSeconds, 0);
@@ -1455,6 +1475,17 @@ function updateLiveTotal() {
   $('week-total').textContent = fmtHours(derived.reportTotalSeconds);
 }
 
+// §12 R16 / §17 R11 (issue #55): the billable-only sum of the LAST AUTHORITATIVE
+// listEntries result — the selected range's report total (what `tt report` sums for the
+// same selection). Only meaningful while entryGroups holds a queried set; render() falls
+// back to the live snapshot estimate (or the idle week total) otherwise.
+function entryGroupsTotal() {
+  return entryGroups
+    .flatMap((g) => g.entries)
+    .filter((e) => e.billable)
+    .reduce((s, e) => s + e.billableSeconds, 0);
+}
+
 // Run the current toolbar query through window.stint.listEntries (the read-only entries
 // calendar read, parity with `tt list --range/--client/--project/--tag/--search`), store the
 // flat, day-laid result, and repaint. Pure read — no write, no refreshAll. The search box
@@ -1464,7 +1495,10 @@ async function applyEntryQuery() {
   // §17 R11: reflect the selection in the report total LIVE off the snapshot first, so the
   // total updates on the same keystroke/selection — it never waits on the async list query.
   updateLiveTotal();
-  const q = { billable: entryQuery.billable };
+  // Issue #55: `by` is REQUIRED on ListEntriesQuery — without it core's grouping throws and
+  // the whole query rejects. The Entries calendar always lays entries into day columns, so
+  // the toolbar query always asks for the 'day' grouping.
+  const q = { by: 'day', billable: entryQuery.billable };
   if (entryQuery.preset === 'custom') {
     if (!entryQuery.fromDate || !entryQuery.toDate) return; // wait for a complete date pair
     // §09 R01 (G3): a custom range is a pair of PLAIN DATES — the two fields' raw
@@ -1480,7 +1514,18 @@ async function applyEntryQuery() {
   if (entryQuery.tag) q.tag = entryQuery.tag;
   if (searchQuery) q.search = searchQuery;
   selected.clear();
-  const view = await window.stint.listEntries(q);
+  // Issue #55: a rejected query must never SILENTLY leave the previous (or unfiltered)
+  // set on screen while the toolbar highlights a different selection. On failure, log it
+  // and paint the explicit no-match empty state instead of stale rows.
+  let view;
+  try {
+    view = await window.stint.listEntries(q);
+  } catch (err) {
+    console.error('listEntries failed for the Entries toolbar query', q, err);
+    entryGroups = [];
+    render();
+    return;
+  }
   entryGroups = view.groups;
   render();
 }

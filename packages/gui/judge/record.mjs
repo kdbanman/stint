@@ -1398,6 +1398,116 @@ const RECIPES = {
     },
   },
 
+  // §12 R09 (issue #55) — EVERY Entries-toolbar control narrows the calendar LIVE, with the
+  // range chip (#week-total) tracking each selection. Recorded over the multi-week, multi-
+  // client, mixed-billable listState fixture (7 entries: this week 5.00h billable + a non-
+  // billable lunch, last week 2.00h, last month 1.00h — all-time 8.00h) so "filtered" is
+  // visibly different from "shows everything" (the exact blindness that let the dead toolbar
+  // ship). The recording drives, in turn: the idle default (the chip reads the WEEK-BOUNDED
+  // 5.00h, not the all-time 8.00h — issue #55 Part B), the search box (range + search compose:
+  // last week's 'refactor planning' stays excluded), each range preset, the billable toggle,
+  // the client + project filters, and the tag filter — each visibly moving the event set AND
+  // the chip. Every query rides the strict listEntries mock (rejects a missing `by` exactly
+  // like core), so the flow on camera is also the no-query-throws proof. Mirrors the hardened
+  // ENTRIES_CALENDAR / LIVE_FILTER judge scenes; same fixture, same selectors.
+  '§12 R09': {
+    page: 'index.html',
+    state: listState,
+    contextOpts: { viewport: { width: 900, height: 700 } },
+    drive: async (page) => {
+      const settle = (n) =>
+        page.waitForFunction((c) => document.querySelectorAll('.dcol .ev').length === c, n);
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 7);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Entries toolbar — every control filters the calendar live (§12 R09)'));
+      await wait(page, 1100);
+      // Idle default: 7 events over three weeks; the chip is the WEEK's 5.00h, not all-time 8.00h.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Idle: 7 entries across 3 weeks — "This week" chip reads the week-bounded 5.00h'));
+      await wait(page, 1200);
+
+      // SEARCH — narrows to the two IN-WEEK refactor matches (3.50h); the out-of-week match stays out.
+      await page.fill('#search', 'refactor');
+      await settle(2);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Search "refactor" → 2 in-week matches, chip 3.50h (range + search compose)'));
+      await wait(page, 1400);
+      await page.fill('#search', '');
+      await settle(7);
+
+      // RANGE PRESETS — each chip re-queries; the event set + chip move with the window.
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Range presets — This month: 6 entries, 7.00h'));
+      await page.click('#el-preset-seg .preset[data-preset="month"]');
+      await settle(6);
+      await wait(page, 1100);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Last week: 1 entry, 2.00h'));
+      await page.click('#el-preset-seg .preset[data-preset="last-week"]');
+      await settle(1);
+      await wait(page, 1100);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Today: 3 entries, 3.00h'));
+      await page.click('#el-preset-seg .preset[data-preset="today"]');
+      await settle(3);
+      await wait(page, 1100);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('This week: 5 entries, 5.00h'));
+      await page.click('#el-preset-seg .preset[data-preset="week"]');
+      await settle(5);
+      await wait(page, 1100);
+
+      // BILLABLE TOGGLE — billable drops the lunch (4); non-billable keeps only it (1, 0.00h).
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Billable: 4 entries — the non-billable lunch drops out'));
+      await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
+      await settle(4);
+      await wait(page, 1100);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Non-billable: only the lunch, chip 0.00h'));
+      await page.click('#el-billable-seg .seg-btn[data-billable="non-billable"]');
+      await settle(1);
+      await wait(page, 1100);
+      await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
+      await settle(5);
+
+      // CLIENT + PROJECT — Acme keeps 3 (2.50h); its API project narrows to 1 (2.00h).
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Client Acme: 3 entries, 2.50h'));
+      await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
+      await page.selectOption('#el-client', '1');
+      await settle(3);
+      await wait(page, 1100);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Project API: 1 entry, 2.00h'));
+      await page.waitForSelector('#el-project option[value="11"]', { state: 'attached' });
+      await page.selectOption('#el-project', '11');
+      await settle(1);
+      await wait(page, 1100);
+      await page.selectOption('#el-client', '');
+      await settle(5);
+
+      // TAG — 'ci' keeps the week's two ci-tagged entries (2.50h).
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Tag "ci": 2 entries, 2.50h'));
+      await page.fill('#el-tag', 'ci');
+      await settle(2);
+      await wait(page, 1300);
+
+      // The wire verdict, stamped on camera: every query carried by:'day', zero rejections.
+      const wire = await page.evaluate(() => ({
+        errors: window.__LIST_ERRORS__ || 0,
+        reqs: (window.__LIST_REQS__ || []).length,
+        allBy: (window.__LIST_REQS__ || []).every((r) => r && r.by === 'day'),
+      }));
+      await page.evaluate((w) =>
+        window.__recCaption && window.__recCaption(
+          `listEntries: ${w.reqs} queries, ${w.errors} throws, all carry by:'day' = ${w.allBy} (issue #55)`),
+        wire);
+      await wait(page, 1600);
+    },
+  },
+
   // §12 R06 / §06 R01 (shared shot) — the readonly calendar's per-event HOVER OPS + the unified
   // editor as the ONE edit surface, with §06 R01's two-step Delete confirm gate. Over
   // unifiedFormState (the SAME seeded snapshot the UNIFIED_FORM judge item drives — the closed
