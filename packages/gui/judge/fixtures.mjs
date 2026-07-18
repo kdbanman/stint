@@ -1445,8 +1445,12 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __PROJECTS__: ${JSON.stringify(PROJECTS)},
       listClients: function () { return Promise.resolve(this.__CLIENTS__); },
       listProjects: function (p) { return Promise.resolve((this.__PROJECTS__[(p && p.clientId)] || [])); },
-      addClient: (p) => { window.__ADDED_CLIENT__ = p; return Promise.resolve({ id: 99, name: (p && p.name) || '', archived: false }); },
-      addProject: (p) => { window.__ADDED_PROJECT__ = p; return Promise.resolve({ id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }); },
+      // The add mutators are STATEFUL like production core: they record their payload
+      // (so a scene can assert what the renderer sent) AND append the created row to the
+      // canned lists, so a create → re-render actually lands the new item in the active
+      // list — the end-to-end fact the CLIENTS_VIEW scene drives (issue #48).
+      addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); return Promise.resolve(c); },
+      addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); return Promise.resolve(pr); },
       renameClient: (p) => { window.__RENAMED_CLIENT__ = p; return Promise.resolve(); },
       archiveClient: (p) => { window.__ARCHIVED_CLIENT__ = p; return Promise.resolve(); },
       renameProject: (p) => { window.__RENAMED_PROJECT__ = p; return Promise.resolve(); },
@@ -1458,7 +1462,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // sub-fact (every channel has a window.stint method) reads this surface.
       __TAGS__: [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }],
       listTags: function () { return Promise.resolve(this.__TAGS__); },
-      addTag: (p) => { window.__ADDED_TAG__ = p; return Promise.resolve({ id: 97, name: (p && p.name) || '', archived: false }); },
+      addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); return Promise.resolve(t); },
       renameTag: (p) => { window.__RENAMED_TAG__ = p; return Promise.resolve(); },
       archiveTag: (p) => { window.__ARCHIVED_TAG__ = p; return Promise.resolve(); },
       // §09 R7: the free-text search the search box drives (parity with tt list --search).

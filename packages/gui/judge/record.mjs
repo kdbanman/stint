@@ -38,6 +38,7 @@ import { fileURLToPath } from 'node:url';
 import {
   emptyState,
   runningState,
+  clientsState,
   multilineDescState,
   addFormState,
   listState,
@@ -1522,6 +1523,89 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Subtract slept — reversible: the raw duration is struck once more'));
       await wait(page, 1300);
+    },
+  },
+
+  // §07 R01 — reference data from the Clients view, CREATE driven end to end (issue #48):
+  // "+ Add client" opens the inline "New client" field, a typed name commits over the
+  // addClient IPC (parity with `tt client add`) and the new client LANDS in the active
+  // list; then a client row's "+ Add project" and the tag strip's "+ Add tag" do the same
+  // over addProject / addTag. This recording exists because presence-only checks passed
+  // while the button was DEAD — a duplicate id="add-client" bound its click handler to the
+  // Add-entry form's Client <select> — so the evidence here is the click WORKING, on
+  // camera, over the same stateful fixture mocks the CLIENTS_VIEW JUDGE scene machine-
+  // scores (the add mutators append to the canned lists, so each re-render shows the
+  // created item like production core would).
+  '§07 R01': {
+    page: 'index.html',
+    state: clientsState,
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="clients"]');
+      await page.waitForSelector('#clients:not([hidden]) .client .project', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Clients view — create client / project / tag in place (§07 R1)'));
+      await wait(page, 1100);
+
+      // (1) + Add client — the inline "New client" field opens (the click issue #48 dead-ended).
+      await page.click('#add-client-btn');
+      await page.waitForSelector('#clients-list .client-add input[placeholder="New client"]');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('+ Add client → the inline New-client field opens'));
+      await wait(page, 900);
+      await page.fill('#clients-list .client-add .client-add-input', 'Initech');
+      await wait(page, 500);
+      await page.click('#clients-list .client-add button[type="submit"]');
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('#clients .client-name')].some(
+          (n) => n.textContent.trim() === 'Initech',
+        ));
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Committed over addClient — Initech lands in the active list'));
+      await wait(page, 1300);
+
+      // (2) + Add project on Acme's row — the inline field opens in line with Acme's
+      // projects; the commit carries Acme's id (the renderer resolves no names).
+      await page.click('#clients .client[data-id="1"] [data-act="add-project"]');
+      await page.waitForSelector(
+        '#clients .client[data-id="1"] .project-add input[placeholder="New project"]',
+      );
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption("+ Add project under Acme → the inline New-project field"));
+      await wait(page, 900);
+      await page.fill('#clients .client[data-id="1"] .project-add .project-add-input', 'Mobile');
+      await wait(page, 500);
+      await page.click('#clients .client[data-id="1"] .project-add button[type="submit"]');
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('#clients .client[data-id="1"] .project-name')].some(
+          (n) => n.textContent.trim() === 'Mobile',
+        ));
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Committed over addProject — Mobile nests under Acme'));
+      await wait(page, 1300);
+
+      // (3) + Add tag on the tag strip — same inline pattern over addTag (`tt tag add`).
+      await page.click('#add-tag');
+      await page.waitForSelector('#tags-list .tag-add input[placeholder="New tag"]');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('+ Add tag → the inline New-tag field opens'));
+      await wait(page, 900);
+      await page.fill('#tags-list .tag-add .tag-new-input', 'billing');
+      await wait(page, 500);
+      await page.click('#tags-list .tag-add button[type="submit"]');
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('#tags-list .tag-row-name')].some(
+          (n) => n.textContent.trim() === 'billing',
+        ));
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Committed over addTag — billing lands in the active tag strip'));
+      await wait(page, 1400);
     },
   },
 

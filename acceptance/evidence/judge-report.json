@@ -144,7 +144,7 @@
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
-      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\",\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\"]}",
+      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\",\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\"]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}",
       "screenshot": "main-clients.png"
     },
     {

@@ -747,7 +747,7 @@ button.ghost { color: var(--muted); }
 button.ghost:hover { color: var(--ink); }
 button.small { font-size: 12px; padding: 6px 11px; }
 /* The .small.primary cascade made explicit — keeps the .small sizing while .primary's accent
-   fill still applies (Clients view #add-client / #add-tag). No visual change, just one rule
+   fill still applies (Clients view #add-client-btn / #add-tag). No visual change, just one rule
    instead of tracking button / button.primary / button.small together. */
 button.small.primary { font-size: 12px; padding: 6px 11px; }
 /* An icon inside a .btn sizes down per the system. */
