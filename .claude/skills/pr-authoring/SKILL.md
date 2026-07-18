@@ -31,4 +31,5 @@ When the change commits visual evidence (GIFs, screenshots), embed the pieces th
 - After creating or updating the body, **verify the embeds**: read the stored body back
   through the API and confirm it matches what you sent — posting tooling has injected
   backticks into image URLs before, breaking the markdown — and confirm each embed URL
-  still returns 200.
+  still returns 200. If the read-back shows a mangled markdown image, resend that embed
+  as an HTML `<img src="...">` tag, which has survived where the markdown form didn't.
