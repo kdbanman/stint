@@ -915,10 +915,11 @@ async function main() {
     // GUI core-entry surface relocated from the Entries toolbar), so the running Entries view
     // shows its accent only as the running-state strip — not a primary-action FILL. Route to
     // the Timer view and count the primary-action accent there (the running card's Stop is the
-    // visible accent-filled primary). The positive/inert/stray-accent checks stay on the
-    // content-rich Entries view above; this only re-homes the "≥1 primary carries accent" fact.
+    // visible accent-filled primary — the start panel itself is hidden while running, §12 R05 /
+    // issue #51). The positive/inert/stray-accent checks stay on the content-rich Entries view
+    // above; this only re-homes the "≥1 primary carries accent" fact.
     await page.click('.nav-item[data-view="timer"]');
-    await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-panel');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
     const timerPrimaryAccentCount = await page.evaluate(() => {
       const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
       const toRgb = (hex) => {
@@ -997,14 +998,19 @@ async function main() {
 
   // START_FORM — §12 R5: the start surface as a whole. The Start offers the inline attribute
   // form (description / client / project / tags / billable) so a timer can start carrying its
-  // attributes immediately (the primary Start stays one-tap behind a disclosure). The form
-  // STAYS AVAILABLE WHILE A TIMER RUNS (issue #34 — Switch is removed; it no longer flips to a
-  // separate Switch affordance): submitting the form while running starts a new entry, atomically
-  // stopping the open one — a strictly richer "switch" with no dedicated verb. Two snapshots in
-  // one item: the idle form (startFormState) opened + its five controls present + primary reads
-  // 'Start' + no #switch; and the running snapshot (runningState) where the start-with-details
-  // form is STILL present (its five controls reachable) and there is STILL no #switch element.
-  // Captures main-start-form.png (idle form) and main-start-form-running.png (running form).
+  // attributes immediately (the primary Start stays one-tap behind a disclosure). The surface
+  // is IDLE-ONLY (issue #51): while a timer runs the whole start panel (#toggle + #start-toggle
+  // + #start-form) is hidden, so the running Timer view offers only edit-or-stop — no Switch
+  // affordance either (issue #34; core's start remains the atomic stop-then-start for tt).
+  // The form's Billable box defaults per the §05 R07 client-keyed rule: it opens unchecked
+  // (no client), auto-checks when a client is typed, un-checks when it is cleared, and an
+  // UNTOUCHED box is omitted from the submitted payload so core derives the default — the
+  // same rule the one-tap #toggle start (a parameterless write) reaches in core. Two
+  // snapshots in one item: the idle form (startFormState) opened + its five controls present
+  // + the billable-default dance + an untouched submit carrying NO billable key + primary
+  // reads 'Start' + no #switch; and the running snapshot (runningState) where the start panel
+  // is HIDDEN (no visible #start-form / #start-toggle) and there is still no #switch element.
+  // Captures main-start-form.png (idle form) and main-start-form-running.png (running view).
   await withPage(browser, startFormState(), 'index.html', async (page) => {
     // §12 R05: route to the Timer view (the start surface's home; the default route is
     // Entries), then open the disclosure and confirm every optional attribute control.
@@ -1028,31 +1034,50 @@ async function main() {
         },
         toggleLabel,
         noSwitch: !document.querySelector('#switch'),
+        // §05 R07: the box opens UNCHECKED — no client is set yet, so the client-keyed
+        // default is non-billable (a static `checked` would override the rule).
+        billUncheckedOnOpen: !document.querySelector('#start-bill').checked,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-start-form.png') });
 
-    // The running surface: the start-with-details form STAYS available while a timer runs and
-    // there is STILL no #switch element. §12 R05: the form lives in the Timer view, so route
-    // there and open the disclosure before reading the controls.
+    // §05 R07 — the billable default TRACKS the Client field until the user touches the box:
+    // typing a client checks it (client ⇒ billable), clearing the field un-checks it.
+    await page.fill('#start-desc', 'auth refactor');
+    await page.fill('#start-client', 'Acme');
+    const billWithClient = await page.evaluate(() => document.querySelector('#start-bill').checked);
+    await page.fill('#start-client', '');
+    const billCleared = await page.evaluate(() => document.querySelector('#start-bill').checked);
+    await page.fill('#start-client', 'Acme');
+    // Submit WITHOUT touching the checkbox: the payload must omit the billable key entirely
+    // (tri-state — core's store.start derives billable ?? clientId !== null, §05 R07).
+    await page.click('#start-go');
+    const started = await page.evaluate(() => window.__STARTED__);
+    const billDefaultOk =
+      idle.billUncheckedOnOpen &&
+      billWithClient === true &&
+      billCleared === false &&
+      !!started &&
+      started.client === 'Acme' &&
+      !('billable' in started);
+
+    // The running surface (issue #51): the start panel is HIDDEN while a timer runs — no
+    // visible #start-form / #start-toggle / #toggle, only Stop + the live-edit strip — and
+    // there is still no #switch element anywhere.
     const running = await withPage(browser, runningState(), 'index.html', async (rp) => {
       await rp.click('.nav-item[data-view="timer"]');
-      await rp.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
-      await rp.click('#start-toggle');
-      await rp.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+      await rp.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
       const probe = await rp.evaluate(() => {
-        const form = document.querySelector('#start-form');
-        const has = (id) => !!document.querySelector(`#${id}`);
+        const visible = (sel) => {
+          const el = document.querySelector(sel);
+          return !!el && el.getClientRects().length > 0;
+        };
         return {
-          formVisible: !!form && !form.hidden,
-          fields: {
-            desc: has('start-desc'),
-            client: has('start-client'),
-            project: has('start-project'),
-            tags: has('start-tags'),
-            bill: has('start-bill'),
-          },
-          // Switch is removed — no #switch element on the running start surface either.
+          panelHidden: !!document.querySelector('#start-panel')?.hidden,
+          startFormVisible: visible('#start-form'),
+          startToggleVisible: visible('#start-toggle'),
+          stopVisible: visible('#timer-stop'),
+          liveEditVisible: visible('#live-edit'),
           noSwitch: !document.querySelector('#switch'),
         };
       });
@@ -1063,14 +1088,73 @@ async function main() {
     const f = idle.fields;
     const formOk = idle.formVisible && f.desc && f.client && f.project && f.tags && f.bill;
     const idleLabelOk = idle.toggleLabel === 'Start' && idle.noSwitch;
-    const rf = running.fields;
     const runningOk =
-      running.formVisible && rf.desc && rf.client && rf.project && rf.tags && rf.bill && running.noSwitch;
+      running.panelHidden &&
+      !running.startFormVisible &&
+      !running.startToggleVisible &&
+      running.stopVisible &&
+      running.liveEditVisible &&
+      running.noSwitch;
     record(
       'START_FORM',
-      formOk && idleLabelOk && runningOk,
-      `idle start form fields=${JSON.stringify(idle)}; running surface keeps the start-with-details form (no Switch)=${JSON.stringify(running)}`,
+      formOk && idleLabelOk && billDefaultOk && runningOk,
+      `idle start form fields=${JSON.stringify(idle)}; billable default (§05 R07): unchecked→client checks (${billWithClient})→cleared unchecks (${billCleared}), untouched submit sent ${JSON.stringify(started)}; running surface hides the start panel (only edit-or-stop)=${JSON.stringify(running)}`,
       'main-start-form.png',
+    );
+  });
+
+  // RUNNING_SINGLE_ACTION — §12 R05 (issue #51): while a timer runs, the Timer view offers
+  // ONLY edit-or-stop of the running entry. The whole start panel is hidden — no visible
+  // #start-form, #start-toggle, or one-tap #toggle — so exactly ONE Description field paints
+  // (the live-edit strip's #le-desc; the Details form's #start-desc is gone with its panel),
+  // and the only primary action is Stop beside the live-edit strip. No "start another"
+  // affordance exists until the running entry is stopped (core's start stays the atomic
+  // stop-then-start for tt and programmatic callers, §05 R01 — only the GUI surfacing of a
+  // start control while running is removed).
+  await withPage(browser, runningState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
+    const probe = await page.evaluate(() => {
+      const visible = (el) => !!el && el.getClientRects().length > 0;
+      const vis = (sel) => visible(document.querySelector(sel));
+      // Count every visible description input in the Timer view — the live-edit strip's
+      // #le-desc must be the ONE AND ONLY (a second field is exactly the issue #51 defect).
+      const descFields = [
+        ...document.querySelectorAll('[data-view="timer"] input[type="text"], [data-view="timer"] textarea'),
+      ].filter((el) => {
+        const labelled =
+          (el.closest('label')?.textContent || '').includes('Description') ||
+          (el.getAttribute('placeholder') || '').includes('Description');
+        return labelled && visible(el);
+      });
+      return {
+        visibleDescFields: descFields.length,
+        descFieldId: descFields[0]?.id ?? null,
+        panelHidden: !!document.querySelector('#start-panel')?.hidden,
+        startFormVisible: vis('#start-form'),
+        startToggleVisible: vis('#start-toggle'),
+        oneTapVisible: vis('#toggle'),
+        stopVisible: vis('#timer-stop'),
+        liveEditVisible: vis('#live-edit'),
+        noSwitch: !document.querySelector('#switch') && !document.querySelector('#timer-switch'),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-running-single-action.png') });
+    const ok =
+      probe.visibleDescFields === 1 &&
+      probe.descFieldId === 'le-desc' &&
+      probe.panelHidden &&
+      !probe.startFormVisible &&
+      !probe.startToggleVisible &&
+      !probe.oneTapVisible &&
+      probe.stopVisible &&
+      probe.liveEditVisible &&
+      probe.noSwitch;
+    record(
+      'RUNNING_SINGLE_ACTION',
+      ok,
+      `running Timer view offers only edit-or-stop: ${JSON.stringify(probe)}`,
+      'timer-running-single-action.png',
     );
   });
 

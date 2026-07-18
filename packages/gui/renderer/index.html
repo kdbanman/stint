@@ -110,6 +110,12 @@
                 <button type="button" id="le-project" class="ghost small">Client / project</button>
               </div>
             </section>
+            <!-- §12 R05 (issue #51): the start panel is the IDLE-ONLY core-entry surface —
+                 renderTimerCard hides it while a timer runs, so the running Timer view offers
+                 only edit-or-stop of the open entry. The Billable box carries no static
+                 `checked`: it defaults off the §05 R07 client-keyed rule (app.js syncs it to
+                 the Client field until the user touches it, and an untouched box is omitted
+                 from the payload so core derives the default). -->
             <section class="start-panel" id="start-panel">
               <div class="sp-actions">
                 <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Start</button>
@@ -122,7 +128,7 @@
                   <input id="start-project" type="text" placeholder="Project" autocomplete="off" />
                 </div>
                 <input id="start-tags" type="text" placeholder="Tags" autocomplete="off" />
-                <label class="start-bill"><input id="start-bill" type="checkbox" checked /> Billable</label>
+                <label class="start-bill"><input id="start-bill" type="checkbox" /> Billable</label>
                 <button id="start-go" type="submit" class="primary">Start</button>
               </form>
             </section>
