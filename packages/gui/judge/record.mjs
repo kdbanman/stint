@@ -2935,6 +2935,49 @@ const RECIPES = {
     },
   },
 
+  // §12 R04 / issue #50 — CROSS-VIEW FRESHNESS: the Active-Timer card mirrors `tt status`
+  // even after an Entries-toolbar control has been touched (the regression path: pre-fix,
+  // a used filter latched the renderer's entries-query flag and starved every later load()
+  // of its repaint, so Start clicks mutated the DB while the card stayed frozen on idle).
+  // The recording drives the exact reported path over the idle list fixture: touch the
+  // Today range preset on the Entries toolbar (the calendar narrows), route to the Timer
+  // view (the card reads idle / 00:00:00 / Start), click Start — the toggle mock mutates
+  // the snapshot like main's toggleTimer over core (toggleStarts) — and the card flips to
+  // running ON CAMERA without any reload: state 'running', the primary reads Stop, and the
+  // fresh count-up visibly ticks up from 00:00:00 as the pinned clock steps. The JUDGE
+  // CROSS_VIEW_FRESHNESS scene gates the same facts; this recording is its moving evidence.
+  'cross-view-freshness': {
+    page: 'index.html',
+    state: listState,
+    initOpts: { toggleStarts: true },
+    drive: async (page) => {
+      // 1) Entries (the default view): touch a toolbar control — the Today range preset.
+      await page.waitForSelector('.view[data-view="entries"]:not([hidden]) #el-preset-seg');
+      await wait(page, 600);
+      await page.click('#el-preset-seg .preset[data-preset="today"]');
+      await page.waitForFunction(() => !!window.__LIST_REQ__);
+      await wait(page, 700);
+      // 2) Route to the Timer view — the card paints its idle face (00:00:00 / Start).
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('.view[data-view="timer"]:not([hidden]) #timer-card.idle');
+      await wait(page, 800);
+      // 3) Click Start: the card must flip to running in place — no reload, no rerouting.
+      await page.click('#toggle');
+      await page.waitForSelector('#timer-card.running');
+      await page.waitForFunction(
+        () => document.querySelector('#timer-state')?.textContent?.trim() === 'running',
+      );
+      // 4) Step the pinned clock so the fresh entry's 00:00:0x count-up visibly ticks — the
+      // card is the live timer, not a stale paint.
+      await wait(page, 500);
+      for (let i = 1; i <= 3; i++) {
+        await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
+        await wait(page, 350);
+      }
+      await wait(page, 1000);
+    },
+  },
+
   // §12 R01 — the tray popover while running: Stop + Open Stint ONLY, no Switch button (issue
   // #34 — Switch is removed; the popover does not host a quick-start/favorites list either, G4).
   // The recording drives the REAL popover renderer (popover.html) over the canonical runningState

@@ -478,6 +478,98 @@ async function main() {
     );
   });
 
+  // CROSS_VIEW_FRESHNESS — §12 R04 (issue #50 regression): the Active-Timer card mirrors
+  // `tt status` EVEN AFTER an Entries-toolbar control has been touched. The renderer latches a
+  // module flag once a range/filter/search control is used; pre-fix, load() early-returned into
+  // the entries-only query and never repainted the shared surfaces, so on the Timer view a
+  // Start click mutated the DB while the card stayed frozen on its idle face (the app's primary
+  // action looked dead). Drive the exact reported path over the idle list fixture: (a) touch an
+  // Entries-toolbar control (the Today range preset — window.__LIST_REQ__ records the query,
+  // proving the toolbar latched), (b) route to the Timer view (the card paints idle), (c) click
+  // Start — the toggle mock mutates the snapshot to a running open row (toggleStarts), exactly
+  // like main's toggleTimer over core — and assert WITHOUT any reload (a window marker set
+  // before the click must survive) that the card flips to running: state text 'running', the
+  // card carries .running, the idle-only start panel hides (§12 R05 / issue #51 — the Start
+  // affordance disappears with it) while the accented #timer-stop primary becomes visible,
+  // and the count-up ADVANCES (+3s across a pinned-clock step — live, not a stale paint).
+  // Fails if the card stays idle/frozen after the toolbar was touched — the exact #50
+  // symptom. Captures timer-cross-view.png.
+  await withPage(
+    browser,
+    listState(),
+    'index.html',
+    async (page) => {
+      // (a) Entries view (the default route): touch a toolbar control — the Today range preset.
+      await page.click('#el-preset-seg .preset[data-preset="today"]');
+      await page.waitForFunction(() => !!window.__LIST_REQ__);
+      const latched = await page.evaluate(() => window.__LIST_REQ__ ?? null);
+      // (b) Route to the Timer view; the card paints the idle face.
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-card');
+      const idle = await page.evaluate(() => ({
+        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        toggle: document.querySelector('#toggle')?.textContent?.trim() ?? null,
+        clock: document.querySelector('#timer-clock')?.textContent?.trim() ?? null,
+      }));
+      // The no-reload marker: a page reload would wipe it, so its survival proves the flip
+      // below came from a live repaint of the same document — never a reload/reroute.
+      await page.evaluate(() => { window.__NO_RELOAD__ = true; });
+      // (c) Click Start. The handler's toggle → load() → render chain is all microtasks; poll
+      // from the harness side (real time — the page clock stays pinned) until the card flips.
+      await page.click('#toggle');
+      let after = null;
+      for (let i = 0; i < 40; i++) {
+        after = await page.evaluate(() => {
+          const visible = (el) => !!el && el.getClientRects().length > 0;
+          return {
+            state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+            // §12 R05 (issue #51, merged since this fact was drafted): while running the whole
+            // start panel — and the one-tap #toggle inside it — is hidden; the running card's
+            // visible primary is #timer-stop. Assert that post-click surface, not the label of
+            // a control the user can no longer see.
+            panelHidden: !!document.querySelector('#start-panel')?.hidden,
+            startVisible: visible(document.querySelector('#toggle')),
+            stopVisible: visible(document.querySelector('#timer-stop')),
+            running: !!document.querySelector('#timer-card')?.classList.contains('running'),
+            clock: document.querySelector('#timer-clock')?.textContent?.trim() ?? null,
+            noReload: window.__NO_RELOAD__ === true,
+          };
+        });
+        if (after.state === 'running') break;
+        await page.waitForTimeout(50);
+      }
+      await page.screenshot({ path: join(EVIDENCE, 'timer-cross-view.png') });
+      // (d) The count-up ADVANCES from the pinned start across a +3s clock step — the card is
+      // the live timer surface, not a one-off stale paint.
+      await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
+      const clock2 = (await page.textContent('#timer-clock')).trim();
+      const ok =
+        !!latched &&
+        latched.preset === 'today' &&
+        idle.state === 'idle' &&
+        idle.toggle === 'Start' &&
+        idle.clock === '00:00:00' &&
+        !!after &&
+        after.state === 'running' &&
+        after.panelHidden &&
+        !after.startVisible &&
+        after.stopVisible &&
+        after.running &&
+        after.noReload &&
+        after.clock === '00:00:00' &&
+        clock2 === '00:00:03';
+      record(
+        'CROSS_VIEW_FRESHNESS',
+        ok,
+        `Entries toolbar latched (listEntries query ${JSON.stringify(latched)}); Timer card before Start ` +
+          `${JSON.stringify(idle)}; after Start (no reload) ${JSON.stringify(after)}; count-up then ` +
+          `advanced ${after ? after.clock : 'n/a'} → ${clock2} across a +3s pinned-clock step`,
+        'timer-cross-view.png',
+      );
+    },
+    { toggleStarts: true },
+  );
+
   // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
   // Timer view renders the live clock reading the derived count-up (advances +3s across the
   // pinned-clock step, not reset) with the live-edit-running strip present (no End input).

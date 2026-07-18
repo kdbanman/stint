@@ -1346,7 +1346,7 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false } = {}) {
   return `
     window.__STATE__ = ${stateJson};
     // §05 R01 (RECORD only) — when set, the start mock performs core's atomic stop-then-start
@@ -1356,6 +1356,13 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
     // count-up (starting while a timer runs IS the atomic stop-then-start, §05 R01 — there is no
     // separate switch verb). Off by default → JUDGE's start mock is unchanged.
     window.__START_STOPS_OPEN__ = ${startStopsOpen ? 'true' : 'false'};
+    // §12 R04 / issue #50 (CROSS_VIEW_FRESHNESS) — when set, the toggle mock mutates the
+    // injected snapshot the way main's toggleTimer over core does: idle → a fresh open row at
+    // the pinned now (status flips to running); running → the open row closes at now (status
+    // flips to idle). The subsequent load()/getState repaint must then SHOW the flip, so a
+    // scene can assert the Timer card mirrors tt status after a real toggle click. Off by
+    // default → every other scene keeps the state-preserving, ack-only toggle.
+    window.__TOGGLE_STARTS__ = ${toggleStarts ? 'true' : 'false'};
     window.__JUDGE_NOW__ = '${JUDGE_NOW}';
     // §09 R6: in the REPORT_SUMMARY scene the report mock routes EVERY report request to the
     // single flag-carrying REPORT_SUMMARY report, so the summary always paints the nested
@@ -1465,7 +1472,47 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         }));
         return Promise.resolve({ groups, rangeFromUtc: '2026-06-22T00:00:00.000Z', rangeToUtc: '2026-06-29T00:00:00.000Z' });
       },
-      toggle: () => Promise.resolve(window.__ACK__),
+      toggle: () => {
+        // issue #50 (CROSS_VIEW_FRESHNESS): the opt-in state-mutating toggle — see
+        // window.__TOGGLE_STARTS__ above. Mirrors main.ts toggleTimer over core: stop the
+        // open row when running, else start a fresh open row at the pinned now.
+        if (window.__TOGGLE_STARTS__ && window.__STATE__) {
+          const st = window.__STATE__;
+          const now = window.__JUDGE_NOW__;
+          if (st.status && st.status.running) {
+            for (const d of (st.days || [])) {
+              for (const e of d.entries) {
+                if (e.endUtc == null) {
+                  e.endUtc = now;
+                  const sec = Math.max(0, Math.round((Date.parse(now) - Date.parse(e.startUtc)) / 1000) - (e.excludedSeconds || 0));
+                  e.billableSeconds = sec;
+                  e.rawSeconds = sec;
+                }
+              }
+            }
+            st.status = { running: false, entry: null };
+          } else {
+            const day = now.slice(0, 10);
+            const fresh = {
+              id: 300,
+              description: null,
+              clientLabel: null,
+              startUtc: now,
+              endUtc: null,
+              billableSeconds: 0,
+              billable: true,
+              overlapped: false, overlapMinutes: 0, overlapRelation: null,
+              sleptThrough: false, excludedSeconds: 0, rawSeconds: 0,
+              tags: [],
+            };
+            let dayBlock = (st.days || []).find((d) => d.day === day);
+            if (!dayBlock) { dayBlock = { day, entries: [] }; (st.days ||= []).unshift(dayBlock); }
+            dayBlock.entries.unshift(fresh);
+            st.status = { running: true, entry: { id: fresh.id, description: null, clientLabel: null, startUtc: now, billableSeconds: 0, billable: true, sleptThrough: false, excludedSeconds: 0, tags: [] } };
+          }
+        }
+        return Promise.resolve(window.__ACK__);
+      },
       // Records the attributed-start payload so the harness can assert the Start form
       // sends description/client/project/tags/billable (not a parameterless start).
       start: (p) => {

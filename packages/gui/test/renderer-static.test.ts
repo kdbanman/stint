@@ -1149,4 +1149,26 @@ describe('renderer static contract', () => {
     // presence of an end field.
     expect(app).toMatch(/endInput:\s*running \? null : form\.querySelector\('\.edit-end'\)/);
   });
+
+  it('load() refreshes shared state and repaints regardless of the entries-query branch (§12 R04, issue #50)', () => {
+    const app = read('app.js');
+    // Isolate the load() body (its closing brace is the first one back at column 0).
+    const load = app.match(/async function load\(\) \{[\s\S]*?\n\}/)?.[0];
+    expect(load, 'app.js must define load()').toBeTruthy();
+    // The shared UiState refresh is unconditional — every (re)load fetches a fresh snapshot
+    // before any branching, so the Timer card / compact strip / summary always paint current
+    // running/idle truth (the card mirrors `tt status`, §12 R04).
+    expect(load!).toMatch(/state =[\s\S]*?window\.stint\.getState\(\)/);
+    // The entries-query branch must NEVER early-return before the repaint — the exact #50
+    // freeze: once a toolbar control latched entryCtrlActive, load() returned into the
+    // entries-only query and render() was starved, so Start/Stop clicks mutated the DB while
+    // the Active-Timer card stayed painted with stale idle data. No return statement exists
+    // anywhere in the body.
+    expect(load!).not.toMatch(/^\s*return\b/m);
+    // The toolbar re-query cannot take the shared repaint down with it: a failure degrades to
+    // the last-painted calendar groups while the fresh state still reaches render().
+    expect(load!).toMatch(/try \{\s*\n\s*await refreshEntryGroups\(\);/);
+    // And the active view repaints unconditionally — render() is the body's final statement.
+    expect(load!.trimEnd()).toMatch(/render\(\);\s*\n\}$/);
+  });
 });
