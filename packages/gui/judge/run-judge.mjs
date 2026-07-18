@@ -1730,6 +1730,13 @@ async function main() {
       from: document.querySelector('.edit-form .edit-start')?.value ?? '',
       to: document.querySelector('.edit-form .edit-end')?.value ?? '',
     }));
+    // Capture the exact-times rendering ON CAMERA: expand the Start/Stop disclosure so the raw
+    // fields (2026-06-24T09:07:33 / …T11:03) are visible, then screenshot the entry-84 editor —
+    // the committed evidence that a stored 09:07:33 opens as 09:07:33, never snapped to 09:05.
+    await page.click(`${editForm} .ef-times-toggle`);
+    await page.evaluate(() =>
+      document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+    await page.screenshot({ path: join(EVIDENCE, 'main-edit-exact-times.png') });
     await page.click(`${editForm} button[type="submit"]`);
     await page.waitForFunction(() => !!window.__EDITED__);
     const noDragSave = await page.evaluate(() => window.__EDITED__);
