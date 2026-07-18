@@ -51,11 +51,23 @@ async function load() {
   // re-run the range/filter/search query on every (re)load so a tt write keeps the
   // filtered calendar fresh. Otherwise entryGroups stays null and render() paints the
   // default state.days.
+  //
+  // Issue #50 (§12 R04): the entries-only query must NEVER gate the shared repaint. load()
+  // used to early-return into applyEntryQuery here, so once a toolbar control latched
+  // entryCtrlActive, any failure (or stall) inside the entries query starved render() —
+  // the Timer view's Active-Timer card and Start/Stop button froze on stale idle data while
+  // writes kept landing in the DB. Now the fresh `state` always reaches the unconditional
+  // render() below: the card/strip/summary mirror `tt status` on every (re)load, and a
+  // failed entries query only leaves the calendar on its last-painted groups.
   if (entryCtrlActive) {
-    await applyEntryQuery();
-    return;
+    try {
+      await refreshEntryGroups();
+    } catch {
+      // keep the last-painted groups; the shared surfaces still repaint below
+    }
+  } else {
+    entryGroups = null;
   }
-  entryGroups = null;
   render();
 }
 
@@ -1521,6 +1533,15 @@ async function applyEntryQuery() {
   // §17 R11: reflect the selection in the report total LIVE off the snapshot first, so the
   // total updates on the same keystroke/selection — it never waits on the async list query.
   updateLiveTotal();
+  await refreshEntryGroups();
+  render();
+}
+
+// The query half of applyEntryQuery, split out so load() can refresh the toolbar-narrowed
+// calendar data WITHOUT routing the shared repaint through the entries branch (issue #50) —
+// load() renders unconditionally after this; applyEntryQuery renders itself above. Updates
+// entryGroups only; an incomplete custom date pair leaves the last groups untouched.
+async function refreshEntryGroups() {
   // Issue #55: `by` is REQUIRED on ListEntriesQuery — without it core's grouping throws and
   // the whole query rejects. The Entries calendar always lays entries into day columns, so
   // the toolbar query always asks for the 'day' grouping.
@@ -1553,7 +1574,6 @@ async function applyEntryQuery() {
     return;
   }
   entryGroups = view.groups;
-  render();
 }
 
 // Mark the bar active (so search composes into listEntries and load() preserves the query
