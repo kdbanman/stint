@@ -1079,8 +1079,14 @@ async function openEntryForm(row, e) {
     `<button type="button" class="small ghost ef-delete" data-act="delete">Delete</button>` +
     `</div>`;
   form.querySelector('.edit-desc').value = e.description ?? '';
-  form.querySelector('.edit-start').value = localInputValue(new Date(e.startUtc));
-  if (!running) form.querySelector('.edit-end').value = localInputValue(new Date(e.endUtc));
+  // §12 R15 (issue #49): seed the raw Start/Stop fields with the entry's EXACT stored instants —
+  // localInputValue keeps seconds when they are non-zero, so a 09:07:33 start reads 09:07:33, never
+  // a 5-min-snapped 09:05. Keep the seeded strings: the submit handler treats a byte-identical
+  // field as UNTOUCHED and sends no time patch, so open-then-Save round-trips start/stop unchanged.
+  const seededStart = localInputValue(new Date(e.startUtc));
+  form.querySelector('.edit-start').value = seededStart;
+  const seededEnd = running ? '' : localInputValue(new Date(e.endUtc));
+  if (!running) form.querySelector('.edit-end').value = seededEnd;
   form.querySelector('.edit-bill-box').checked = !!e.billable;
 
   const select = form.querySelector('.edit-client');
@@ -1203,14 +1209,17 @@ async function openEntryForm(row, e) {
 
     // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
     // the form has no End input, so the patch never carries endUtc and editing cannot close it.
+    // §12 R15 (issue #49): a Start/Stop field whose text is byte-identical to what the form
+    // seeded is UNTOUCHED — it contributes nothing to the patch, so Save after merely opening
+    // the editor (no drag, no typing) preserves the stored start/stop exactly, to the second.
     const patch = {};
     const nextDesc = desc || null;
     if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
-    if (startLocal) {
+    if (startLocal && startLocal !== seededStart) {
       const nextStart = new Date(startLocal).toISOString();
       if (nextStart !== new Date(e.startUtc).toISOString()) patch.startUtc = nextStart;
     }
-    if (!running && endLocal) {
+    if (!running && endLocal && endLocal !== seededEnd) {
       const nextEnd = new Date(endLocal).toISOString();
       if (nextEnd !== new Date(e.endUtc).toISOString()) patch.endUtc = nextEnd;
     }
@@ -1867,7 +1876,11 @@ async function openAddForm() {
   renderAddTagChips();
   $('add-bill').checked = true;
   // Default the span to a sensible recent hour the user can adjust by dragging or typing.
+  // Seconds are zeroed: this is a fresh DEFAULT (there is no stored truth to preserve), and the
+  // picker no longer rewrites seeded fields on mount (§12 R15 / issue #49), so the default should
+  // read as a clean whole-minute suggestion.
   const now = new Date();
+  now.setSeconds(0, 0);
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   $('add-from').value = localInputValue(hourAgo);
   $('add-to').value = localInputValue(now);

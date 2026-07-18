@@ -223,8 +223,12 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.listClients\(\)/);
     // …and editing the RUNNING entry never sends endUtc — the End field is omitted for
     // the open row and the endUtc patch is gated behind `!running`, so the open entry
-    // stays open (the §05 R6 guarantee, mirrored in the renderer affordance).
-    expect(app).toMatch(/if\s*\(!running\s*&&\s*endLocal\)/);
+    // stays open (the §05 R6 guarantee, mirrored in the renderer affordance). The time
+    // patches are ALSO gated behind the seeded-text guard (§12 R15 / issue #49): a field
+    // whose text is byte-identical to what the form seeded is untouched stored truth and
+    // contributes nothing, so open-then-Save round-trips start/stop to the second.
+    expect(app).toMatch(/if\s*\(!running\s*&&\s*endLocal\s*&&\s*endLocal !== seededEnd\)/);
+    expect(app).toMatch(/if\s*\(startLocal\s*&&\s*startLocal !== seededStart\)/);
     expect(app).toMatch(/const endField = running\s*\?\s*''/);
   });
 

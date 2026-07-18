@@ -46,6 +46,9 @@ window.STP = (function () {
   const TRACK_H = 24 * 30; // 720px = 30px/hour, so 1 minute = 0.5px (deterministic).
 
   // Round a minute-of-day to the nearest 5-minute grid step, clamped to [0, 1440].
+  // §12 R15 (issue #49): snapTo5 applies ONLY to a handle the user is actively dragging (and to
+  // drag clamps) — NEVER to a seeded/stored value. Opening the picker over an entry must paint
+  // (and leave in the bound fields) the entry's exact stored times, to the second.
   function snapTo5(minutes) {
     const snapped = Math.round(minutes / SNAP_MIN) * SNAP_MIN;
     return Math.max(0, Math.min(DAY_MIN, snapped));
@@ -68,12 +71,21 @@ window.STP = (function () {
   // picker, the raw Start/Stop fields, and the split instant all agree byte-for-byte.
   const localInputValue = (date) => window.SU.localInputValue(date);
   function hhmm(minutes) {
-    const m = Math.round(minutes);
+    // Floor, not round: an exact seed carries fractional minutes (seconds ride the fraction,
+    // issue #49), and 09:07:33 must label as 09:07 — the minute the bound field shows — not 09:08.
+    // Dragged values are whole grid minutes, for which floor and round agree.
+    const m = Math.floor(minutes);
     return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
   }
   // Minute-of-day for a Date in local time.
   function localMinuteOfDay(date) {
     return date.getHours() * 60 + date.getMinutes();
+  }
+  // §12 R15 (issue #49): the EXACT minute-of-day, seconds riding the fraction (09:07:33 →
+  // 547.55). Seeds and reseeds use THIS — never snapTo5 — so the painted block and any value
+  // written back (dateAtMinute inverts the fraction to seconds) preserve the stored instant.
+  function exactMinuteOfDay(date) {
+    return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
   }
   // The local Y-M-D the column is drawn against; the calendar selection sets this.
   function sameLocalDay(a, b) {
@@ -87,10 +99,12 @@ window.STP = (function () {
     return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
   }
   // Build a local Date on `day` at `minute` of that day (minute may exceed the column for
-  // labels; the geometry clamps before this is called).
+  // labels; the geometry clamps before this is called). `minute` may be FRACTIONAL (an exact
+  // seed carries seconds in the fraction, issue #49) — round to whole seconds so 547.55 min
+  // inverts to exactly 09:07:33, never a float-drifted 09:07:32.999.
   function dateAtMinute(day, minute) {
     const d = startOfLocalDay(day);
-    d.setMinutes(minute);
+    d.setMinutes(0, Math.round(minute * 60), 0);
     return d;
   }
 
@@ -194,9 +208,11 @@ window.STP = (function () {
     host.innerHTML = '';
 
     // Seed from the bound start input (the running entry's start); drags stay on its day.
+    // EXACT, never snapped (issue #49): the painted block shows the stored start as-is; the
+    // 5-min snap applies only once the user actually drags the grip.
     const startDate = parseInput(startInput) || new Date();
     const columnDay = startOfLocalDay(startDate);
-    let startMin = snapTo5(localMinuteOfDay(startDate));
+    let startMin = exactMinuteOfDay(startDate);
 
     const box = document.createElement('div');
     box.className = 'stp stp-inline stp-start-only';
@@ -278,6 +294,12 @@ window.STP = (function () {
    * drag the BODY moves start+stop together, drag the BOTTOM grip resizes the stop, both 5-min
    * snap. Other entries paint gray; the overlapping span paints yellow (warn-only, never blocks).
    *
+   * §12 R15 (issue #49) — EXACT stored times: the picker seeds from the bound inputs WITHOUT
+   * snapping (seconds preserved) and never writes back on mount, so opening an editor shows the
+   * entry's stored start/stop to the second and Save with no drag round-trips them unchanged.
+   * Snapping applies ONLY to a handle the user actively drags: a body drag snaps the start and
+   * preserves the exact duration; a bottom-grip drag snaps the stop the user is dragging.
+   *
    * Every drag AND every calendar day-pick writes the picked LOCAL instants BACK into the bound
    * start+stop text inputs LIVE (writeBack fires input+change) AND calls onChange — so the form's
    * start/stop state tracks the picker live (G7) and "Save entry" (which reads those inputs) is
@@ -299,9 +321,13 @@ window.STP = (function () {
     host.innerHTML = '';
 
     // Seed the span from the bound inputs, else last-stop→now (the same default open() uses).
+    // Remember which inputs were BLANK: mounting may seed those, but a POPULATED field is stored
+    // truth — the mount never rewrites it (issue #49); only a user drag / day-pick writes back.
     const now = new Date();
     let startDate = parseInput(startInput);
     let endDate = parseInput(endInput);
+    const startWasBlank = !startDate;
+    const endWasBlank = !endDate;
     if (!startDate) {
       let lastStop = null;
       for (const e of others) {
@@ -313,9 +339,11 @@ window.STP = (function () {
     }
     if (!endDate) endDate = new Date(Math.max(startDate.getTime() + 30 * MS_PER_MIN, now.getTime()));
 
+    // EXACT seed, never snapped (issue #49): the column paints the bound fields' instants to the
+    // second (seconds ride the minute fraction). snapTo5 fires only inside the drag handlers.
     let columnDay = startOfLocalDay(startDate);
-    let startMin = snapTo5(localMinuteOfDay(startDate));
-    let endMin = snapTo5(localMinuteOfDay(endDate));
+    let startMin = exactMinuteOfDay(startDate);
+    let endMin = exactMinuteOfDay(endDate);
     // §12 R17 — a stop on a LATER local day than the start is an OVERNIGHT span. The single-day
     // drag column can't draw it, so it stays on the START's day (endMin painted to the column foot)
     // and the bound stop TEXT field — the collapsed Start/Stop expander — stays authoritative for the
@@ -374,7 +402,9 @@ window.STP = (function () {
     }
 
     // The sole write path: push the picked instants into the bound inputs LIVE and notify the
-    // form. Called on mount, on every drag, and on a calendar day change.
+    // form. Called on every drag and on a calendar day change — NEVER on mount (issue #49):
+    // mounting must not rewrite the entry's exact stored times (a day-pick preserves the exact
+    // time-of-day, seconds included; only the dragged handle itself lands on the 5-min grid).
     function commit() {
       writeBack(startInput, dateAtMinute(columnDay, startMin));
       // §12 R17: while an OVERNIGHT stop stands in the bound field, the column's same-day endMin is
@@ -531,9 +561,13 @@ window.STP = (function () {
 
     renderCalendar();
     renderTrack();
-    // Seed the bound inputs from the (snapped) picker span immediately, so the form's start/stop
-    // state reflects the picker before any drag — Save reads exactly what the column shows.
-    commit();
+    // §12 R15 (issue #49): mounting is NOT an edit. A field that arrived POPULATED holds the
+    // entry's exact stored instant (to the second) and stays byte-untouched — so Save with no
+    // drag round-trips start/stop unchanged. Only a field that arrived BLANK is seeded, from the
+    // same derived default span the column paints. The form is still notified either way.
+    if (startWasBlank) writeBack(startInput, dateAtMinute(columnDay, startMin));
+    if (endInput && endWasBlank && !overnightActive) writeBack(endInput, dateAtMinute(columnDay, endMin));
+    onChange({ startMin, endMin });
 
     // §12 R17 — reflect an EXTERNAL edit of the bound Start/Stop fields (the collapsed expander's raw
     // text inputs) back into the picker: re-anchor the single-day column + span on the typed start,
@@ -544,8 +578,10 @@ window.STP = (function () {
     function reseedFromInputs() {
       const s = parseInput(startInput);
       if (!s) return; // need a valid start to anchor the single-day column
+      // EXACT, never snapped (issue #49): the typed text is authoritative and the column paints
+      // it as-is — snapping a typed 09:12:44 to the grid would misrepresent the field.
       columnDay = startOfLocalDay(s);
-      startMin = snapTo5(localMinuteOfDay(s));
+      startMin = exactMinuteOfDay(s);
       const e = parseInput(endInput);
       if (!e) {
         overnightActive = false;
@@ -555,7 +591,7 @@ window.STP = (function () {
         endMin = DAY_MIN;
       } else {
         overnightActive = false;
-        endMin = snapTo5(localMinuteOfDay(e));
+        endMin = exactMinuteOfDay(e);
         if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
       }
       calMonth = new Date(columnDay.getFullYear(), columnDay.getMonth(), 1);

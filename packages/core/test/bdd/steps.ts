@@ -44,7 +44,13 @@ export interface StepDef {
 }
 
 const DAY = '2026-06-24';
-const iso = (hhmm: string): string => `${DAY}T${hhmm.padStart(5, '0')}:00Z`;
+// Accepts HH:MM or HH:MM:SS — sub-minute instants let a scenario prove stored truth round-trips
+// to the SECOND (§12 R15 / glossary "Stored truth"), e.g. a 09:07:33 start that no editor pass
+// may quietly snap to a 5-minute grid.
+const iso = (t: string): string => {
+  const [h, m, s] = t.split(':');
+  return `${DAY}T${h!.padStart(2, '0')}:${m}:${s ?? '00'}Z`;
+};
 
 // §05 R10 — a description carrying an interior newline. The line break lives HERE, in the step
 // definition, not in the Gherkin cell, so the .feature stays single-line while the stored/reported
@@ -94,7 +100,9 @@ export const steps: StepDef[] = [
     run: (w, _c, client, project) => w.ensureClientProject(client, project),
   },
   {
-    pattern: /^a closed entry "([^"]*)" from (\d{1,2}:\d{2}) to (\d{1,2}:\d{2})$/,
+    // The times may carry seconds (HH:MM:SS) so a scenario can seed a non-5-min-aligned span
+    // and prove edits preserve stored truth to the second (§12 R15 / issue #49).
+    pattern: /^a closed entry "([^"]*)" from (\d{1,2}:\d{2}(?::\d{2})?) to (\d{1,2}:\d{2}(?::\d{2})?)$/,
     run: (w, ctx, desc, from, to) => {
       const r = w.backfill({ desc, from: iso(from), to: iso(to) });
       ctx.lastClosedId = r.id;
@@ -602,6 +610,18 @@ export const steps: StepDef[] = [
       expect(entries).toHaveLength(1);
       expect(entries[0]!.startUtc).toBe(iso(from));
       expect(entries[0]!.endUtc).toBe(iso(to));
+    },
+  },
+  {
+    // §12 R15 / glossary "Stored truth" (issue #49) — the entry's stored start/stop, asserted to
+    // the SECOND (the times may carry HH:MM:SS). Regresses if any surface's edit path quietly
+    // rewrites an untouched span — e.g. a 5-min snap applied by merely opening + saving an editor.
+    pattern:
+      /^the entry "([^"]*)" runs exactly from (\d{1,2}:\d{2}(?::\d{2})?) to (\d{1,2}:\d{2}(?::\d{2})?)$/,
+    run: (w, _c, desc, from, to) => {
+      const e = byDesc(w, desc);
+      expect(e.startUtc).toBe(iso(from));
+      expect(e.endUtc).toBe(iso(to));
     },
   },
   {
