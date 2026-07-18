@@ -71,6 +71,19 @@ Feature: Overlap, split and merge
     Then exactly one entry is open
     And the open entry is "final draft"
 
+  Scenario: Editing an entry without touching the times preserves them to the second
+    # PRD §06 R1 / §12 R15, glossary "Stored truth" — stored start/stop are exact, to the second,
+    # and an edit that does not touch the times must not disturb them: not by rounding, not by a
+    # picker's 5-minute snap, not by opening/saving an editor (issue #49 — the GUI editor snapped
+    # a 09:07:33 entry to 09:05 and Save persisted it). The times here are deliberately NOT
+    # 5-minute-aligned, so any snap or truncation anywhere in the edit path fails the round-trip.
+    # In the GUI this edit runs through the unified entry form (§12 R06), whose untouched
+    # Start/Stop fields must contribute nothing to the patch; here we prove the surface-neutral
+    # arithmetic on core and tt (the editor's own no-drag Save is JUDGE evidence, UNIFIED_FORM).
+    Given a closed entry "odd times" from 09:07:33 to 11:03:07
+    When I edit the entry "odd times" description to "still odd"
+    Then the entry "still odd" runs exactly from 09:07:33 to 11:03:07
+
   Scenario: Deleting an entry removes it and its time from the list
     # PRD §06 R1 — an entry can be deleted outright; it is gone from the entries calendar
     # (§12 R16) and the surviving entries are exactly the rest (the deleted entry's time no

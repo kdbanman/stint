@@ -488,7 +488,7 @@ async function main() {
   // transparency fade (mask-image gradient) dissolving the block toward the future; the
   // snapshot's other same-day entries paint gray. Dragging the grip UP by a known pixel delta
   // (-30px on the 720px/24h track = -60min) advances the raw #le-start text field LIVE by the
-  // snapped 5-min amount (21:35 → 20:35); the debounced commit then sends an `edit` patch over
+  // snapped 5-min amount (the exact 21:35:53 → 20:35); the debounced commit then sends an `edit` patch over
   // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
   // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
   // instants land on a deterministic local day/track geometry.
@@ -545,7 +545,8 @@ async function main() {
     await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
 
     // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, 5-min
-    // snapped): the raw #le-start text must advance LIVE from 21:35 to 20:35 (UTC page).
+    // snapped): the raw #le-start text must advance LIVE from the exact 21:35:53 to the
+    // snapped 20:35 (UTC page) — the drag is the user's edit, so the dragged handle snaps.
     const grip = page.locator('#le-start-disc .stp-grip');
     await grip.scrollIntoViewIfNeeded();
     const g = await grip.boundingBox();
@@ -589,7 +590,9 @@ async function main() {
       disc.noEndEcho &&
       disc.fade &&
       disc.others >= 1 &&
-      disc.startBefore === '2026-06-24T21:35' &&
+      // §12 R15 (issue #49): the strip renders the stored start EXACTLY, to the second — the
+      // fixture's open row started 5047s (01:24:07) before the 23:00:00Z pinned clock = 21:35:53.
+      disc.startBefore === '2026-06-24T21:35:53' &&
       dragged.startLive === '2026-06-24T20:35' &&
       dragged.stillNoEndChrome &&
       dragged.noBackdrop &&
@@ -1705,6 +1708,75 @@ async function main() {
     const sleptRestored = await page.evaluate(
       () => !document.querySelector('.edit-form .ef-dur s.struck'),
     );
+
+    // §12 R15 (issue #49) — EXACT stored times round-trip. Entry 84 (09:07:33 → 11:03:00Z) is
+    // deliberately NOT 5-minute-aligned: (1) opening its editor renders the stored start/stop
+    // EXACTLY, to the second — never snapped to the picker grid; (2) Save entry with NO drag
+    // sends a patch carrying no startUtc/endUtc at all, so the store's times round-trip
+    // unchanged; (3) only an actively dragged stop grip snaps — after a bottom-grip drag the
+    // stop lands on the :05 grid while the untouched start keeps its seconds. The assertions are
+    // shape-relative (seconds suffix + minute-mod-5), so they hold under any whole-minute host
+    // timezone offset.
+    await page.click('.edit-form .edit-cancel');
+    await page.waitForSelector('.edit-form', { state: 'detached' });
+    await page.evaluate(() => {
+      window.__EDITED__ = null; // beat (c) recorded entry 80's patch — clear it for this probe
+    });
+    await page.hover('.entry[data-id="84"]');
+    await page.click('.entry[data-id="84"] [data-act="edit"]');
+    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
+    const exactSeed = await page.evaluate(() => ({
+      from: document.querySelector('.edit-form .edit-start')?.value ?? '',
+      to: document.querySelector('.edit-form .edit-end')?.value ?? '',
+    }));
+    // Capture the exact-times rendering ON CAMERA: expand the Start/Stop disclosure so the raw
+    // fields (2026-06-24T09:07:33 / …T11:03) are visible, then screenshot the entry-84 editor —
+    // the committed evidence that a stored 09:07:33 opens as 09:07:33, never snapped to 09:05.
+    await page.click(`${editForm} .ef-times-toggle`);
+    await page.evaluate(() =>
+      document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+    await page.screenshot({ path: join(EVIDENCE, 'main-edit-exact-times.png') });
+    await page.click(`${editForm} button[type="submit"]`);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const noDragSave = await page.evaluate(() => window.__EDITED__);
+    // Reopen and drag the bottom stop grip: the DRAGGED handle — and only it — snaps to :05.
+    await page.hover('.entry[data-id="84"]');
+    await page.click('.entry[data-id="84"] [data-act="edit"]');
+    await page.waitForSelector(`${editForm} .edit-picker .stp-resize`, { state: 'attached' });
+    await page.locator(`${editForm} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
+    const grip84 = await page.evaluate(() => {
+      const r = document.querySelector('.edit-form .edit-picker .stp-resize').getBoundingClientRect();
+      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    });
+    await page.mouse.move(Math.round(grip84.cx), Math.round(grip84.cy));
+    await page.mouse.down();
+    await page.mouse.move(Math.round(grip84.cx), Math.round(grip84.cy + 30), { steps: 8 });
+    await page.mouse.up();
+    const snapDrag = await page.evaluate(() => ({
+      from: document.querySelector('.edit-form .edit-start')?.value ?? '',
+      to: document.querySelector('.edit-form .edit-end')?.value ?? '',
+    }));
+    await page.click(`${editForm} .edit-cancel`);
+    await page.waitForSelector(editForm, { state: 'detached' });
+    const minuteMod5 = (v) => Number(v.slice(14, 16)) % 5;
+    const exactShown =
+      /:33$/.test(exactSeed.from) && // the start renders its stored seconds (…09:07:33)
+      exactSeed.to.length === 16 && // the stop (…11:03:00) needs no seconds suffix…
+      minuteMod5(exactSeed.to) !== 0; // …but sits OFF the 5-min grid — shown unsnapped
+    const noDragRoundTrip =
+      !!noDragSave &&
+      noDragSave.id === 84 &&
+      !!noDragSave.patch &&
+      !('startUtc' in noDragSave.patch) &&
+      !('endUtc' in noDragSave.patch);
+    const dragSnaps =
+      snapDrag.from === exactSeed.from && // the untouched start keeps its exact seconds
+      snapDrag.to.length === 16 && // the dragged stop is a whole minute…
+      minuteMod5(snapDrag.to) === 0 && // …on the :05 grid
+      snapDrag.to !== exactSeed.to;
+    const exactTimesOk = exactShown && noDragRoundTrip && dragSnaps;
+
     const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
     const sleptOk =
       /Subtract/i.test(sleptBefore.subtractLabel) &&
@@ -1746,7 +1818,7 @@ async function main() {
       removed.calls[0].id === 80;
     // §12 R06/G5 — add + edit mount in the SAME view-level host, in flow (no modal).
     const hostShared = addHostIsFormHost && sameHost;
-    const ok = hostShared && clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk;
+    const ok = hostShared && clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk && exactTimesOk;
     record(
       'UNIFIED_FORM',
       ok,
@@ -1754,13 +1826,17 @@ async function main() {
         `flow), seeded, INLINE picker (in-flow, no backdrop/apply, ` +
         `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
         `gray others + inert yellow overlap), footer Split + two-step Delete, save patch, ` +
-        `§12 R10 flags (overlap detail + reversible subtract): ` +
+        `§12 R10 flags (overlap detail + reversible subtract), ` +
+        `§12 R15 exact times (stored start/stop shown to the second, no-drag Save patches no ` +
+        `time, only the dragged stop grip snaps to :05): ` +
         `hostShared=${hostShared} clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
         `picker=${JSON.stringify(picker)} seed=${JSON.stringify(seedTimes)}→body=${JSON.stringify(bodyDrag)}` +
         `(bodyOk=${bodyOk})→resize=${JSON.stringify(resizeDrag)}(resizeOk=${resizeOk}) ` +
         `edited=${JSON.stringify(edited)} armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
         `overlapDetail=${JSON.stringify(overlapDetail)} sleptBefore=${JSON.stringify(sleptBefore)} ` +
-        `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored}`,
+        `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored} ` +
+        `exactTimes: seed=${JSON.stringify(exactSeed)} noDragSave=${JSON.stringify(noDragSave)} ` +
+        `snapDrag=${JSON.stringify(snapDrag)} (shown=${exactShown} roundTrip=${noDragRoundTrip} snap=${dragSnaps})`,
       'main-edit.png',
     );
   });

@@ -358,6 +358,12 @@ export function multilineDescState() {
  * the same UTC-pinned day, so when the UNIFIED_FORM scene opens entry 80's editor the INLINE interval
  * picker paints entry 83 both as a gray other block AND, where it overlaps the edited "me" span
  * (15:00–15:30), a yellow inert warn band (warn-only, never blocks Save).
+ *
+ * §12 R15 (issue #49) — plus a CLOSED entry (84, 09:07:33–11:03:00Z) whose times are deliberately
+ * NOT 5-minute-aligned (and carry seconds), so the UNIFIED_FORM scene can assert the exact-times
+ * contract: opening its editor renders the stored start/stop to the second, Save with no drag
+ * sends a patch with NO startUtc/endUtc (the store round-trips unchanged), and only an actively
+ * dragged stop grip lands on the :05 grid.
  */
 export function unifiedFormState() {
   return {
@@ -396,11 +402,13 @@ export function unifiedFormState() {
             tags: [],
           },
           {
+            // Moved to the evening (raw 4h unchanged) so the exact-times entry 84 below owns the
+            // 09:07–11:03 slot overlap-free — its hover/edit ops stay reachable without stacking.
             id: 82,
             description: 'deep work',
             clientLabel: 'Acme / API',
-            startUtc: '2026-06-24T09:30:00Z',
-            endUtc: '2026-06-24T13:30:00Z',
+            startUtc: '2026-06-24T16:30:00Z',
+            endUtc: '2026-06-24T20:30:00Z',
             billableSeconds: 14400,
             billable: true,
             overlapped: false,
@@ -410,6 +418,25 @@ export function unifiedFormState() {
             excludedSeconds: 0,
             rawSeconds: 14400,
             sleptSeconds: 3600,
+            tags: [],
+          },
+          {
+            // §12 R15 (issue #49) — the EXACT-TIMES entry: 09:07:33 → 11:03:00, sub-5-min stored
+            // truth (6927s). The editor must show these to the second and a no-drag Save must not
+            // rewrite them; only a dragged handle snaps.
+            id: 84,
+            description: 'standup notes',
+            clientLabel: 'Acme / API',
+            startUtc: '2026-06-24T09:07:33Z',
+            endUtc: '2026-06-24T11:03:00Z',
+            billableSeconds: 6927,
+            billable: true,
+            overlapped: false,
+            overlapMinutes: 0,
+            overlapRelation: null,
+            sleptThrough: false,
+            excludedSeconds: 0,
+            rawSeconds: 6927,
             tags: [],
           },
           {

@@ -1565,6 +1565,13 @@ const RECIPES = {
   //       with the entry id and the event LEAVES the calendar on the repaint. No scoped override is
   //       needed — the shared initScript remove mock splices the row and reloads (as the judge's
   //       CONFIRM_DELETE / UNIFIED_FORM items rely on), so the deletion lands on camera.
+  //   (4) §12 R15 (issue #49) — EXACT stored times: opens the NOT-5-min-aligned entry 84
+  //       (09:07:33 → 11:03:00Z) and shows the editor rendering the stored start/stop to the
+  //       second (no snap-on-open), then clicks Save entry with NO drag and asserts (via
+  //       waitForFunction — the recording FAILS if it times out) that the committed patch carries
+  //       no startUtc/endUtc: the store's times round-trip unchanged.
+  //   (5) reopens entry 84 and drags the bottom stop grip — asserting the DRAGGED stop (and only
+  //       it) snaps onto the :05 grid while the untouched start keeps its 09:07:33.
   // No IPC surgery: the whole scene runs over the unmodified renderer + the same window.stint.*
   // channels tt uses; the shared unifiedFormState keeps the recording 1:1 with the JUDGE scene.
   '§12 R06': {
@@ -1618,6 +1625,67 @@ const RECIPES = {
         window.__recCaption('Confirm — remove fires with the entry id; the event leaves the calendar'));
       await page.click('.edit-form [data-act="confirm-delete"]');
       await page.waitForSelector(row, { state: 'detached' }).catch(() => {});
+      await wait(page, 1600);
+
+      // (4) §12 R15 (issue #49) — EXACT stored times: open the NOT-5-min-aligned entry 84
+      // (09:07:33 → 11:03:00Z, UTC page). The editor renders the stored times to the second —
+      // never snapped to the picker grid — and Save entry with NO drag round-trips them
+      // unchanged (the committed patch carries no startUtc/endUtc). The waitForFunction below
+      // IS the assertion: the recording fails if the patch ever carries a time key.
+      const exactRow = '.entry[data-id="84"]';
+      await page.evaluate(() => {
+        window.__EDITED__ = null; // beat (3) never edited, but keep the assertion self-contained
+      });
+      await page.hover(exactRow);
+      await page.click(`${exactRow} [data-act="edit"]`);
+      await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="84"]', { state: 'attached' });
+      await page.waitForSelector('.edit-form.entry-form .edit-client option[value="1"]', { state: 'attached' });
+      // Expand the Start/Stop expander so the exact seconds are ON CAMERA (09:07:33 / 11:03).
+      await page.click('.edit-form .ef-times-toggle');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Exact stored times — a 09:07:33 entry opens as 09:07:33, never snapped to 09:05'));
+      await page.evaluate(() =>
+        document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+      await wait(page, 1700);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Save entry with no drag — the patch carries NO start/stop: stored truth is untouched'));
+      await page.click('.edit-form button[type="submit"]');
+      await page.waitForFunction(
+        () =>
+          window.__EDITED__ &&
+          window.__EDITED__.id === 84 &&
+          !('startUtc' in window.__EDITED__.patch) &&
+          !('endUtc' in window.__EDITED__.patch),
+      );
+      await wait(page, 1400);
+
+      // (5) Reopen and drag the bottom stop grip: snapping applies ONLY to the actively dragged
+      // handle — the stop lands on the :05 grid while the untouched start keeps its 09:07:33.
+      await page.hover(exactRow);
+      await page.click(`${exactRow} [data-act="edit"]`);
+      await page.waitForSelector('.edit-form .edit-picker .stp-resize', { state: 'attached' });
+      await page.click('.edit-form .ef-times-toggle');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Drag the stop grip — only the dragged handle snaps to the 5-min grid'));
+      const resizeLoc = page.locator('.edit-form .edit-picker .stp-resize');
+      await resizeLoc.scrollIntoViewIfNeeded();
+      const rBox = await resizeLoc.boundingBox();
+      const rx = Math.round(rBox.x + rBox.width / 2);
+      const ry = Math.round(rBox.y + rBox.height / 2);
+      await page.mouse.move(rx, ry);
+      await page.mouse.down();
+      await page.mouse.move(rx, ry + 30, { steps: 10 });
+      await page.mouse.up();
+      // Assert the drag outcome: the stop snapped onto :05 (whole minute) and the start still
+      // carries its exact stored seconds — the recording fails on a timeout here.
+      await page.waitForFunction(() => {
+        const from = document.querySelector('.edit-form .edit-start')?.value ?? '';
+        const to = document.querySelector('.edit-form .edit-end')?.value ?? '';
+        return /:33$/.test(from) && to.length === 16 && Number(to.slice(14, 16)) % 5 === 0;
+      });
       await wait(page, 1600);
     },
   },
