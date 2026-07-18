@@ -2204,8 +2204,10 @@ function openProjectAdd(list, c) {
 }
 
 // Add a client from the Clients view header: an inline name field committed over the
-// addClient IPC tt's `client add` uses.
-$('add-client').addEventListener('click', () => {
+// addClient IPC tt's `client add` uses. The button is #add-client-btn — distinct from the
+// Add-entry form's #add-client <select> (issue #48: a shared id bound this handler to the
+// select, dead-ending the button and injecting a phantom .client-add row on dropdown open).
+$('add-client-btn').addEventListener('click', () => {
   const host = $('clients-list');
   if (!host || host.querySelector('.client-add')) return;
   const form = document.createElement('form');
