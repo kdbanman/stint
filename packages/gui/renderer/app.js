@@ -338,16 +338,31 @@ function calOverlapBand(e) {
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
 // the Timer view (R14). When a timer runs it paints the live count-up (derived now − start,
 // never stored), the running state, the entry's description + client/project label and its
-// billable/slept attributes, and reveals the primary Stop action (no Switch — issue #34;
-// starting while running is the Start form's job, the atomic stop-then-start). When idle it
-// shows an idle face (00:00:00, "nothing running") and hides the actions. The per-second
-// advance is driven by tick() updating #timer-clock; this only repaints when the data
-// changes. Called from route('timer') so the Timer view's card is fresh on every visit.
+// billable/slept attributes, and reveals the primary Stop action (no Switch — issue #34).
+// When idle it shows an idle face (00:00:00, "nothing running") and hides the actions. The
+// per-second advance is driven by tick() updating #timer-clock; this only repaints when the
+// data changes. Called from route('timer') so the Timer view's card is fresh on every visit.
 function renderTimerCard(running) {
   const card = $('timer-card');
   if (!card) return;
   card.classList.toggle('running', !!running);
   card.classList.toggle('idle', !running);
+  // §12 R05 (issue #51): while a timer runs the Timer view offers ONLY edit-or-stop of the
+  // running entry — the whole start panel (the one-tap #toggle primary, the #start-toggle
+  // disclosure and its #start-form) is hidden until the entry is stopped, so no start
+  // affordance exists while running. Collapse the disclosure with it so stopping never
+  // resumes a stale open form (and its aria-expanded resets alongside).
+  const startPanel = $('start-panel');
+  if (startPanel) {
+    startPanel.hidden = !!running;
+    if (running) {
+      const startForm = $('start-form');
+      if (startForm && !startForm.hidden) {
+        startForm.hidden = true;
+        $('start-toggle').setAttribute('aria-expanded', 'false');
+      }
+    }
+  }
   $('timer-state').textContent = running ? 'running' : 'idle';
   if (running) {
     $('timer-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
@@ -1388,8 +1403,10 @@ $('toggle').addEventListener('click', async () => {
 
 // §12 R4: the Active-Timer card's primary Stop reuses the same `toggle` write the Timer-view
 // #toggle primary uses (stopping the open entry). No new channel — the card is a presentation
-// surface over the existing writes. Starting while running (the atomic stop-then-start) is the
-// job of the start-with-details form, not a dedicated Switch button (issue #34).
+// surface over the existing writes. While running, Stop is the view's ONLY primary action
+// (§12 R05 / issue #51 — the start panel is hidden until the entry is stopped; there is no
+// Switch button either, issue #34). Core's `start` remains the atomic stop-then-start for
+// tt and programmatic callers (§05 R01).
 $('timer-stop').addEventListener('click', async () => {
   const ack = await window.stint.toggle();
   await load();
@@ -1658,10 +1675,11 @@ void populateEntryClients();
 // out of the window shell. No new IPC, so no new parity row.
 $('report-btn').addEventListener('click', () => route('reports'));
 
-// §12 R05 (core): the GUI core-entry surface — the Start form (no separate Switch; issue #34,
-// the form stays available while running so Start performs the atomic stop-then-start). It lives in the
-// Timer view (relocated from the Entries toolbar); the ids are unchanged, so these $()
-// lookups resolve the moved nodes. The primary Start stays one-tap; this disclosure
+// §12 R05 (core): the GUI core-entry surface — the Start form (no separate Switch; issue #34).
+// It lives in the Timer view (relocated from the Entries toolbar); the ids are unchanged, so
+// these $() lookups resolve the moved nodes. The surface is IDLE-ONLY (issue #51): while a
+// timer runs renderTimerCard hides the whole start panel, so the view offers only edit-or-stop
+// of the running entry until it is stopped. The primary Start stays one-tap; this disclosure
 // (#start-toggle) reveals optional description/client/project/tags/billable fields and
 // sends them all over the same `start` IPC the tt CLI uses (core startWithAttributes).
 const startForm = $('start-form');
@@ -1672,6 +1690,20 @@ $('start-toggle').addEventListener('click', () => {
   if (open) $('start-desc').focus();
 });
 
+// §05 R07 (issue #51): the form's Billable checkbox DEFAULTS off the one client-keyed rule —
+// billable when a client is set, not otherwise — tracking the Client field live until the
+// user explicitly touches the checkbox (an explicit choice then wins, "always overridable").
+// Submit forwards billable ONLY when the user set it, so an untouched box falls through to
+// core's §05 R07 default — the very same default the one-tap #toggle start gets (it sends no
+// billable at all), so BOTH start controls resolve billable through the one core rule.
+let startBillTouched = false;
+$('start-bill').addEventListener('change', () => {
+  startBillTouched = true;
+});
+$('start-client').addEventListener('input', () => {
+  if (!startBillTouched) $('start-bill').checked = $('start-client').value.trim() !== '';
+});
+
 startForm.addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const trimmed = (id) => $(id).value.trim();
@@ -1679,13 +1711,17 @@ startForm.addEventListener('submit', async (ev) => {
     .split(',')
     .map((t) => t.trim())
     .filter(Boolean);
-  const payload = { billable: $('start-bill').checked };
+  // Tri-state billable (§05 R07): only an explicitly-touched checkbox rides the payload;
+  // otherwise the key is omitted and core derives billable from the resolved client.
+  const payload = {};
+  if (startBillTouched) payload.billable = $('start-bill').checked;
   if (trimmed('start-desc')) payload.description = trimmed('start-desc');
   if (trimmed('start-client')) payload.client = trimmed('start-client');
   if (trimmed('start-project')) payload.project = trimmed('start-project');
   if (tags.length) payload.tags = tags;
   const ack = await window.stint.start(payload);
   startForm.reset();
+  startBillTouched = false;
   startForm.hidden = true;
   $('start-toggle').setAttribute('aria-expanded', 'false');
   await load();
