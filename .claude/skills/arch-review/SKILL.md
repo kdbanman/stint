@@ -55,18 +55,24 @@ vocabulary — including suspicions the evidence refuted; honesty about
 refutations is what makes the confirmations credible), then
 requirements-preserving fixes ordered by leverage. The researcher fact-checks
 every number, a sample of citations, and **every absence claim** ("no X exists
-anywhere"); the operator applies mechanical corrections. Report to the user as
-a legible, minimal, engineering-styled HTML artifact in the conversation — not
-as a repo file.
+anywhere"); the operator applies mechanical corrections. Every questionable/bad
+entry also carries its **stakes**, thought through hard in both directions: the
+strongest case the finding is real and the strongest honest case it is fine,
+the consequence trajectory if left (and its trigger), and the cost and risk of
+changing it. Report to the user as a legible, minimal, engineering-styled HTML
+artifact in the conversation — not as a repo file. The artifact is the owner's
+reference material during the grilling.
 
 ## Phase 2 — grill the owner
 
-Verdicts are the skeptic's, not the owner's. Run a `grill-me` session over
-every questionable/bad entry (cluster entries that would be one issue): one
-question at a time, recommended answer first, until shared understanding of
-which findings are **actual problems** and which are **accepted decisions**.
-Capture the owner's rationale for each accepted decision — that rationale is
-itself a finding (an unrecorded decision) if no doc records it.
+Verdicts are the skeptic's, not the owner's; the grilling is the bar. It can
+shape anything about a proposed issue — including whether it is one at all.
+Run a `grill-me` session over every questionable/bad entry (cluster entries
+that would be one issue): one question at a time, recommended answer first,
+until shared understanding of which findings are **actual problems** and which
+are **accepted decisions**. Capture the owner's rationale for each accepted
+decision — that rationale is itself a finding (an unrecorded decision) if no
+doc records it.
 
 ## Phase 3 — file the problems
 
