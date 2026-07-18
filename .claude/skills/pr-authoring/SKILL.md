@@ -1,0 +1,38 @@
+---
+name: pr-authoring
+description: Author or update a pull request description. Use whenever opening a PR or revising its body.
+---
+
+# PR authoring
+
+The description is for the reviewer; the diff is the record. Say what changed and why it's
+right — don't re-narrate the diff or the session that produced it. PRs vary widely here
+(bugfix, spec change, apparatus, docs), so this is craft guidance, not a template.
+
+## Language
+
+- Lead with the change and its reason, in plain sentences a reader outside the session can
+  follow. No codenames or shorthand invented mid-session.
+- Report verification honestly: what ran and passed, what didn't run and why. Never dress
+  up a partial check as a full one.
+- Call out deliberate deviations — from the issue, a triage decision, or a reviewer
+  suggestion — and the reason, rather than leaving them to be discovered.
+- Keep it proportional: a small diff earns a short description.
+
+## Evidence (when the branch carries it)
+
+When the change commits visual evidence (GIFs, screenshots), embed the pieces that
+*demonstrate the change* in the description itself — not in a comment.
+
+- Embed by raw URL pinned to the **commit SHA**, not the branch:
+  `https://raw.githubusercontent.com/<owner>/<repo>/<sha>/<path>` — it survives branch
+  pruning and shows exactly the reviewed state. Re-pin when a push re-records evidence.
+- GitHub won't inline-render images much over ~10 MB — link those instead of embedding.
+- Re-recording under an unchanged filename? Bust the image cache with `?v=N`.
+- After creating or updating the body, **view it rendered and confirm the images show** —
+  posting tooling has mangled bare URLs before (backtick-wrapping that breaks the image
+  markdown), and an unrendered embed is worse than a link.
+
+## Pairs with
+
+- `qa-gif-authoring` — for recording the evidence you embed.
