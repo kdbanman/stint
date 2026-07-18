@@ -1617,33 +1617,27 @@ const RECIPES = {
   // (b) LISTS — the rail now shows every favorite (name + captured description/tags); (c)
   // RENAMEs in place — kebab (⋯) → Rename, the prompt resolves to a new name, the chip's name
   // repaints (renameFavorite, parity with `tt fav rename`); (d) UNPINS — kebab → Unpin removes
-  // the chip from the rail (unpinFavorite, parity with `tt fav rm`). The two window.prompt
-  // calls (pin name, rename name) are answered by a scoped page.on('dialog') handler that
-  // returns the next queued answer, so the scripted scene drives the prompts deterministically
-  // without a human. Resume (R10) is recorded separately in 'favorites-rail'.
+  // the chip from the rail (unpinFavorite, parity with `tt fav rm`). Both names are gathered
+  // through the INLINE name field (typed, committed on Enter) — Electron's renderer does not
+  // implement window.prompt, so the pin/rename affordances are inline controls (issue #52)
+  // and the scene drives them like a user. Resume (R10) is recorded separately in
+  // 'favorites-rail'.
   '§05 R09': {
     page: 'index.html',
     state: timerViewFavoritesState,
     drive: async (page) => {
-      // Answer the renderer's window.prompt() calls in order: first the pin name, then the
-      // rename name. Any later/unexpected prompt is dismissed (accept with no value).
-      const answers = ['Invoice prep', 'Client invoicing'];
-      page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'prompt') {
-          const next = answers.shift();
-          if (next !== undefined) return void (await dialog.accept(next));
-          return void (await dialog.dismiss());
-        }
-        await dialog.accept();
-      });
-
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
       await wait(page, 500);
 
-      // (a) PIN from the running timer — the rail grows by one chip named from the prompt.
+      // (a) PIN from the running timer — the Pin control swaps into the INLINE name field;
+      // type the name and commit on Enter. The rail grows by one chip under that name.
       const before = await page.$$eval('.fav-card', (els) => els.length);
       await page.click('#fav-pin');
+      await page.waitForSelector('.fav-pin-form .rename-input');
+      await page.fill('.fav-pin-form .rename-input', 'Invoice prep');
+      await wait(page, 400);
+      await page.press('.fav-pin-form .rename-input', 'Enter');
       await page.waitForFunction(
         (n) => document.querySelectorAll('.fav-card').length === n + 1,
         before,
@@ -1651,11 +1645,16 @@ const RECIPES = {
       // Dwell on (b) the LIST — every favorite is a row in the rail, the new one included.
       await wait(page, 900);
 
-      // (c) RENAME in place — open the newly pinned chip's kebab → Rename; the name repaints.
+      // (c) RENAME in place — open the newly pinned chip's kebab → Rename; the chip's name
+      // swaps into the inline field, Enter commits, and the name repaints.
       const pinned = page.locator('.fav-card', { hasText: 'Invoice prep' });
       await pinned.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
       await pinned.locator('[data-act="fav-rename"]').click();
+      await page.waitForSelector('.fav-card .rename-form .rename-input');
+      await page.fill('.fav-card .rename-form .rename-input', 'Client invoicing');
+      await wait(page, 400);
+      await page.press('.fav-card .rename-form .rename-input', 'Enter');
       await page.waitForFunction(
         () => [...document.querySelectorAll('.fav-card .fav-name')].some((n) => n.textContent.trim() === 'Client invoicing'),
       );
@@ -1706,26 +1705,15 @@ const RECIPES = {
   // post-write load() repaint SHOWS the change on camera. The overrides are scoped to THIS
   // page only — no shared fixture or JUDGE scene is touched, and the renderer's unchanged
   // commit paths stay the single source of truth. The pinned JUDGE_NOW clock is stepped where
-  // a count-up must visibly tick. The two window.prompt calls the rail raises (pin name,
-  // rename name) are answered by a scoped page.on('dialog') queue so the scene is deterministic.
+  // a count-up must visibly tick. The two names the rail gathers (pin name, rename name) are
+  // typed into the INLINE name fields and committed on Enter — Electron's renderer does not
+  // implement window.prompt, so the affordances are inline controls (issue #52).
   '§12 R14': {
     page: 'index.html',
     state: timerViewFavoritesState,
     initOpts: { startStopsOpen: true },
     contextOpts: { viewport: { width: 820, height: 980 } },
     drive: async (page) => {
-      // Answer the rail's window.prompt() calls in order: pin name, then rename name. Any
-      // later/unexpected prompt is dismissed; window.confirm (if any) is accepted.
-      const answers = ['Invoice prep', 'Client invoicing'];
-      page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'prompt') {
-          const next = answers.shift();
-          if (next !== undefined) return void (await dialog.accept(next));
-          return void (await dialog.dismiss());
-        }
-        await dialog.accept();
-      });
-
       // The pinned fake clock starts paused at JUDGE_NOW. Because this one continuous scene flushes
       // a debounce AND ticks several count-ups, the clock can only move FORWARD (pauseAt cannot go
       // backwards). `nowMs` tracks the current pinned instant; tickClock(n) advances it n seconds,
@@ -1870,10 +1858,16 @@ const RECIPES = {
       await wait(page, 600);
 
       // ---- (4) FAVORITES RAIL — pin, resume, rename, unpin -----------------------------------
-      // The rail paints one card per seeded favorite. PIN the running timer → a new chip appears.
+      // The rail paints one card per seeded favorite. PIN the running timer → the Pin control
+      // swaps into the INLINE name field (issue #52 — no window.prompt in Electron's renderer);
+      // type the name, commit on Enter, and a new chip appears.
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail .fav-card');
       const before = await page.$$eval('.fav-card', (els) => els.length);
       await page.click('#fav-pin');
+      await page.waitForSelector('.fav-pin-form .rename-input');
+      await page.fill('.fav-pin-form .rename-input', 'Invoice prep');
+      await wait(page, 400);
+      await page.press('.fav-pin-form .rename-input', 'Enter');
       await page.waitForFunction(
         (n) => document.querySelectorAll('.fav-card').length === n + 1,
         before,
@@ -1927,12 +1921,16 @@ const RECIPES = {
       await tickClock(3);
       await wait(page, 600);
 
-      // RENAME via the kebab — open the pinned 'Invoice prep' chip's kebab → Rename; the name
-      // repaints to the prompt answer.
+      // RENAME via the kebab — open the pinned 'Invoice prep' chip's kebab → Rename; the
+      // chip's name swaps into the INLINE field, Enter commits, and the name repaints.
       const pinned = page.locator('.fav-card', { hasText: 'Invoice prep' });
       await pinned.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
       await pinned.locator('[data-act="fav-rename"]').click();
+      await page.waitForSelector('.fav-card .rename-form .rename-input');
+      await page.fill('.fav-card .rename-form .rename-input', 'Client invoicing');
+      await wait(page, 400);
+      await page.press('.fav-card .rename-form .rename-input', 'Enter');
       await page.waitForFunction(
         () => [...document.querySelectorAll('.fav-card .fav-name')].some((n) => n.textContent.trim() === 'Client invoicing'),
       );
@@ -1982,11 +1980,12 @@ const RECIPES = {
   // written-shaped result — no save dialog over file://, so the status line is the confirmation
   // the requirement calls out); clicks Edit on the new card, changes Group by to Project, and
   // re-runs to show the regroup (the card's spec summary now reads 'grouped by project'); then
-  // DELETES the definition via the card kebab (⋮ → 'delete' → the in-window confirm), the card
-  // leaving the list. The two window.prompt calls the kebab raises ('delete') and the
-  // window.confirm the delete path raises are answered by a scoped page.on('dialog') handler so
-  // the scripted scene drives them deterministically without a human. The accent stays confined
-  // to '+ New report' the whole time. All CRUD/Run/Export run over the same window.stint.*
+  // RENAMES the definition via the card kebab (⋮ → the inline Rename / Delete menu → the
+  // inline name field committed on Enter, renameReport) and DELETES it (⋮ → Delete → the
+  // generic §12 R13 in-window confirm gate), the card leaving the list. Both affordances are
+  // INLINE controls — Electron's renderer implements neither window.prompt nor window.confirm
+  // (issue #52) — so the scene drives them like a user, no dialog handler. The accent stays
+  // confined to '+ New report' the whole time. All CRUD/Run/Export run over the same window.stint.*
   // channels tt uses (saveReport / runReport / exportEntries / editReport / removeReport) — the
   // parity twins of `tt report save|run|edit|rm`. savedReportsState seeds the list; runReport
   // returns the flag-carrying REPORT_SUMMARY so the run-output paints flags in context.
@@ -1995,13 +1994,6 @@ const RECIPES = {
     state: savedReportsState,
     contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
-      // Answer the kebab's window.prompt ('rename'/'delete') with 'delete', and accept the
-      // subsequent window.confirm so the delete actually fires. Any other dialog is accepted.
-      page.on('dialog', async (dialog) => {
-        if (dialog.type() === 'prompt') return void (await dialog.accept('delete'));
-        await dialog.accept();
-      });
-
       // Enter the in-shell Reports view from the sidebar (the sidebar stays present throughout).
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('[data-view="reports"]:not([hidden])');
@@ -2088,11 +2080,35 @@ const RECIPES = {
       );
       await wait(page, 1100);
 
-      // DELETE the definition via the card kebab (⋮ → prompt 'delete' → in-window confirm);
-      // removeReport (parity with `tt report rm`) fires and the card leaves the list.
+      // RENAME the definition via the card kebab — the kebab swaps IN PLACE into the inline
+      // Rename / Delete menu (issue #52: Electron's renderer implements neither window.prompt
+      // nor window.confirm, so both affordances are inline controls). Rename swaps the card's
+      // name into the inline field; Enter commits renameReport (parity with `tt report
+      // rename`) and the card repaints under the new name.
       await newCard.locator('[data-act="menu"]').click();
+      await page.waitForSelector('.def .def-menu');
+      await wait(page, 400);
+      await page.click('.def-menu [data-act="def-rename"]');
+      await page.waitForSelector('#rep-defs .rename-form .rename-input');
+      await page.fill('#rep-defs .rename-form .rename-input', 'Weekly billables — Acme (final)');
+      await wait(page, 400);
+      await page.press('#rep-defs .rename-form .rename-input', 'Enter');
+      await page.waitForSelector('.def[data-name="Weekly billables — Acme (final)"]');
+      await wait(page, 900);
+
+      // DELETE the renamed definition via the kebab — Delete ARMS the generic in-window
+      // confirm gate (§12 R13); only the explicit confirm fires removeReport (parity with
+      // `tt report rm`) and the card leaves the list.
+      const renamedCard = page.locator('.def[data-name="Weekly billables — Acme (final)"]');
+      await renamedCard.locator('[data-act="menu"]').click();
+      await page.waitForSelector('.def .def-menu');
+      await wait(page, 400);
+      await page.click('.def-menu [data-act="def-delete"]');
+      await page.waitForSelector('[data-act="confirm-report-delete"]');
+      await wait(page, 500);
+      await page.click('[data-act="confirm-report-delete"]');
       await page.waitForFunction(
-        () => !document.querySelector('.def[data-name="Weekly billables — Acme"]'),
+        () => !document.querySelector('.def[data-name="Weekly billables — Acme (final)"]'),
       );
       await wait(page, 1200);
     },

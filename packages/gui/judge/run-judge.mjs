@@ -614,8 +614,12 @@ async function main() {
   // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
   // (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
   // favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
-  // callable for each of the five favorite channels. Drive the real renderer twice (seeded +
-  // empty) and machine-score the deterministic sub-facts.
+  // callable for each of the five favorite channels. The scene also DRIVES a pin and a rename
+  // TO COMPLETION through the INLINE name affordances (typed + committed on Enter) and asserts
+  // the rail repaints — Electron's renderer does not implement window.prompt, so a prompt-based
+  // flow would silently no-op in the packaged app (issue #52); this machine-scores the inline
+  // replacement end to end. Drive the real renderer twice (seeded + empty) and machine-score
+  // the deterministic sub-facts.
   await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
@@ -639,6 +643,35 @@ async function main() {
     await page.click('.fav-card [data-act="fav-resume"]');
     await page.waitForFunction(() => Array.isArray(window.__RESUMED__) && window.__RESUMED__.length >= 1);
     const resumed = await page.evaluate(() => window.__RESUMED__);
+
+    // PIN through the INLINE name affordance (issue #52: Electron's renderer does not
+    // implement window.prompt, so the Pin control swaps into an inline field committed on
+    // Enter). pinFavorite must fire with the typed name + the open-row template ref, and the
+    // rail must repaint with the new chip.
+    await page.click('#fav-pin');
+    await page.waitForSelector('.fav-pin-form .rename-input');
+    await page.fill('.fav-pin-form .rename-input', 'Invoice prep');
+    await page.press('.fav-pin-form .rename-input', 'Enter');
+    await page.waitForFunction(() => document.querySelectorAll('#fav-rail .fav-card').length === 4);
+    const pinned = await page.evaluate(() => ({
+      payload: window.__PINNED__ ?? null,
+      names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+    }));
+
+    // RENAME through the SAME inline affordance: kebab → Rename swaps the chip's name into
+    // the inline field; Enter commits renameFavorite and the chip's NAME CHANGES in the rail.
+    await page.click('.fav-card:has-text("Invoice prep") [data-act="fav-menu"]');
+    await page.click('.fav-card:has-text("Invoice prep") [data-act="fav-rename"]');
+    await page.waitForSelector('.fav-card .rename-form .rename-input');
+    await page.fill('.fav-card .rename-form .rename-input', 'Client invoicing');
+    await page.press('.fav-card .rename-form .rename-input', 'Enter');
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('.fav-card .fav-name')].some((n) => n.textContent.trim() === 'Client invoicing'),
+    );
+    const renamed = await page.evaluate(() => ({
+      payload: window.__RENAMED_FAV__ ?? null,
+      names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+    }));
 
     // The empty-favorites variant: the rail paints its instructive empty state.
     const empty = await withPage(
@@ -670,6 +703,18 @@ async function main() {
       resumed.length === 1 &&
       resumed[0] &&
       resumed[0].name === 'Standup' &&
+      // The inline PIN really landed: pinFavorite fired with the typed name + the open-row
+      // template, and the rail repainted with the new chip (issue #52 regression guard).
+      !!pinned.payload &&
+      pinned.payload.name === 'Invoice prep' &&
+      pinned.payload.fromEntryId === 'open' &&
+      pinned.names.includes('Invoice prep') &&
+      // The inline RENAME really landed: renameFavorite fired with the new name and the
+      // chip's name CHANGED in the rail (the old name is gone).
+      !!renamed.payload &&
+      renamed.payload.name === 'Client invoicing' &&
+      renamed.names.includes('Client invoicing') &&
+      !renamed.names.includes('Invoice prep') &&
       empty.shown &&
       /pin/i.test(empty.text) &&
       /tt fav/i.test(empty.text);
@@ -677,6 +722,7 @@ async function main() {
       'FAVORITES_RAIL',
       ok,
       `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
+        `inline pin ${JSON.stringify(pinned)}; inline rename ${JSON.stringify(renamed)}; ` +
         `empty ${JSON.stringify(empty)}`,
       'timer-favorites.png',
     );
@@ -2236,7 +2282,12 @@ async function main() {
   //       inputs are type="date" (zero datetime-local anywhere in the builder), the Custom…
   //       chip reveals them, and saving a filled custom def fires a saveReport whose captured
   //       rangeSpec is exactly { kind:'absolute', fromDate, toDate } (raw YYYY-MM-DD strings,
-  //       no time component, no 'T'), with the new card's spec summary printing the date pair.
+  //       no time component, no 'T'), with the new card's spec summary printing the date pair;
+  //   (g) issue #52: the card kebab RENAMES and DELETES a saved def TO COMPLETION through the
+  //       INLINE affordances (an in-place Rename / Delete menu, the shared inline name field
+  //       committed on Enter, and the generic §12 R13 confirm gate) — Electron's renderer
+  //       implements neither window.prompt nor window.confirm, so these must be inline — with
+  //       renameReport / removeReport firing and the list updating each time.
   // Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
   // output) for rubric review.
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
@@ -2359,6 +2410,41 @@ async function main() {
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'json');
     const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
 
+    // (g) issue #52: RENAME a saved report TO COMPLETION through the INLINE kebab affordance —
+    // Electron's renderer implements neither window.prompt nor window.confirm, so the kebab
+    // swaps IN PLACE into an inline Rename / Delete menu and the rename goes through the
+    // inline name field committed on Enter. renameReport must fire and the LIST must update
+    // to the new name.
+    await page.click('.def[data-name="June window"] .def-kebab');
+    await page.waitForSelector('.def .def-menu');
+    await page.click('.def-menu [data-act="def-rename"]');
+    await page.waitForSelector('#rep-defs .rename-form .rename-input');
+    await page.fill('#rep-defs .rename-form .rename-input', 'June window v2');
+    await page.press('#rep-defs .rename-form .rename-input', 'Enter');
+    await page.waitForFunction(() => !!document.querySelector('.def[data-name="June window v2"]'));
+    const renamed = await page.evaluate(() => ({
+      payload: window.__RENAMED_REPORT__ ?? null,
+      names: [...document.querySelectorAll('#rep-defs .def .dname')].map((n) => n.textContent.trim()),
+    }));
+
+    // …then DELETE it through the same inline menu: Delete only ARMS the generic §12 R13
+    // confirm gate (nothing removed yet); the explicit confirm fires removeReport and the
+    // LIST updates (the card leaves).
+    await page.click('.def[data-name="June window v2"] .def-kebab');
+    await page.waitForSelector('.def .def-menu');
+    await page.click('.def-menu [data-act="def-delete"]');
+    await page.waitForSelector('[data-act="confirm-report-delete"]');
+    const armed = await page.evaluate(() => ({
+      stillListed: !!document.querySelector('.def[data-name="June window v2"]'),
+      removedYet: window.__REMOVED_REPORT__ ?? null,
+    }));
+    await page.click('[data-act="confirm-report-delete"]');
+    await page.waitForFunction(() => !document.querySelector('.def[data-name="June window v2"]'));
+    const deleted = await page.evaluate(() => ({
+      payload: window.__REMOVED_REPORT__ ?? null,
+      count: document.querySelectorAll('#rep-defs .def').length,
+    }));
+
     const listOk =
       list.cards.length === 2 &&
       list.cards.every((c) => c.name.length > 0 && c.spec.length > 0 && c.hasRun && c.hasEdit) &&
@@ -2402,11 +2488,26 @@ async function main() {
       afterJson.format === 'json' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
       afterJson.savedReportRef === 'Weekly billables — Globex';
-    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk;
+    // (g) issue #52: the inline rename/delete really landed — renameReport fired with the
+    // old + new names and the list repainted under the new name; Delete armed the confirm
+    // gate WITHOUT removing anything, then the explicit confirm fired removeReport and the
+    // card left the list (back to the two seeded defs).
+    const kebabOk =
+      !!renamed.payload &&
+      renamed.payload.name === 'June window' &&
+      renamed.payload.newName === 'June window v2' &&
+      renamed.names.includes('June window v2') &&
+      !renamed.names.includes('June window') &&
+      armed.stillListed &&
+      armed.removedYet === null && // arming alone deletes nothing (§12 R13)
+      !!deleted.payload &&
+      deleted.payload.name === 'June window v2' &&
+      deleted.count === 2;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)}`,
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,
       'reports-list.png',
     );
   });

@@ -1390,6 +1390,15 @@ button.danger:hover { background: var(--danger-weak); }
 /* the icon-only kebab */
 .def .def-kebab { width: 30px; height: 30px; padding: 0; justify-content: center; border: 0; background: none; color: var(--faint); }
 .def .def-kebab:hover { color: var(--ink); }
+/* issue #52: the kebab swaps IN PLACE into an inline Rename / Delete menu (Electron's
+   renderer implements neither window.prompt nor window.confirm, so there is no native
+   chooser). Monochrome — Delete carries the standard .danger treatment, never the accent. */
+.def .def-menu {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: none;
+}
 .defs-empty { font-size: 13px; color: var(--muted); padding: 14px 2px; }
 
 /* §09 R08: the inline builder — create / edit a definition. A warm-paper card (not the
@@ -2085,6 +2094,14 @@ body.popover { background: var(--canvas); margin: 0; }
   box-shadow: var(--sh-pop);
 }
 .fav-empty { color: var(--faint); font-size: 13px; }
+/* issue #52: the inline name fields on the favorites surface (the Pin control swaps into
+   .fav-pin-form; a chip's Rename swaps its name into .fav-rename). They reuse the shared
+   .rename-form chrome; only the input is narrowed so the row's controls stay on one line. */
+.fav-pin-form .rename-input,
+.fav-card .rename-form .rename-input {
+  width: 150px;
+  min-width: 0;
+}
 
 /* ============================================================================
    §12 R16 — the readonly entries CALENDAR (ported from context/mockups/main.html

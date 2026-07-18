@@ -4,7 +4,7 @@
  * regression in the empty-state copy or accent discipline on every commit.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const read = (rel: string) =>
@@ -582,8 +582,21 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/window\.stint\.runReport\(\{\s*ref/);
     expect(js).toMatch(/window\.stint\.renameReport\(/);
     expect(js).toMatch(/window\.stint\.removeReport\(/);
-    // …and the destructive delete is confirmed in-window (§12 R13).
-    expect(js).toMatch(/window\.confirm\(/);
+    // …the kebab swaps into an INLINE Rename / Delete menu, the rename goes through the
+    // shared inline name field (app.js's inlineRenameForm — Electron's renderer does not
+    // implement window.prompt, issue #52)…
+    expect(js).toMatch(/data-act="def-rename"/);
+    expect(js).toMatch(/data-act="def-delete"/);
+    expect(js).toMatch(/window\.inlineRenameForm\(/);
+    // …and the destructive delete is confirmed in-window through app.js's generic confirm
+    // gate (§12 R13) — never window.confirm, which the renderer cannot raise (issue #52):
+    // removeReport is reachable ONLY from inside deleteDef, which only confirm callbacks run.
+    expect(js).toMatch(/window\.confirmInline\(/);
+    expect(js).toMatch(/kind:\s*'report-delete'/);
+    const removeSites = [...js.matchAll(/window\.stint\.removeReport\(/g)];
+    expect(removeSites.length).toBe(1);
+    const deleteDefBody = js.slice(js.indexOf('async function deleteDef(name)'));
+    expect(deleteDefBody).toMatch(/^\s*async function deleteDef\(name\)\s*\{\s*\n\s*await window\.stint\.removeReport\(\{\s*name\s*\}\)/);
   });
 
   it('the only accent affordance in the Reports view is the single + New report primary action (§15 / G10)', () => {
@@ -957,6 +970,28 @@ describe('renderer static contract', () => {
     for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
+    }
+  });
+
+  it('the renderer never calls window.prompt or window.confirm — Electron implements neither (issue #52)', () => {
+    // Electron's renderer does not implement window.prompt — it returns null and logs
+    // "prompt() is and will not be supported." — and window.confirm is unavailable/blocking
+    // here (the constraint app.js's confirmInline note records), so either call silently
+    // no-ops in the packaged app. Every name/confirm affordance must be an INLINE control
+    // (inlineRenameForm, confirmInline, the add-client/tag fields). This promotes that note
+    // into an enforced guard: walk EVERY file under renderer/ so no call site — present or
+    // future — can reintroduce the pattern.
+    const dir = fileURLToPath(new URL('../renderer/', import.meta.url));
+    const files = readdirSync(dir).filter((f) => /\.(js|html)$/.test(f));
+    expect(files.length).toBeGreaterThan(0);
+    for (const f of files) {
+      const src = read(f);
+      expect(src, `${f} must not call window.prompt`).not.toMatch(/window\s*\.\s*prompt\s*\(/);
+      expect(src, `${f} must not call window.confirm`).not.toMatch(/window\s*\.\s*confirm\s*\(/);
+      // The bare globals reach the same unsupported built-ins (confirmInline etc. don't match:
+      // the pattern requires the exact name immediately followed by an open paren).
+      expect(src, `${f} must not call the bare prompt()`).not.toMatch(/(?<![.\w$])prompt\(/);
+      expect(src, `${f} must not call the bare confirm()`).not.toMatch(/(?<![.\w$])confirm\(/);
     }
   });
 

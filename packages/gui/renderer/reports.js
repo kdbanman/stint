@@ -307,38 +307,94 @@
     await renderDefs();
   }
 
-  // Delete the definition being edited (window.stint.removeReport, parity with `tt report
-  // rm`). Confirmed in-window (§12 R13). Clears the run-output if it was showing this def.
-  async function deleteBuilder() {
+  // Delete the definition being edited. A destructive action, so the builder's Delete arms
+  // app.js's generic in-window confirm gate (§12 R13, window.confirmInline — Electron's
+  // renderer does not implement window.confirm, issue #52) and ONLY the explicit confirm
+  // runs deleteDef; Cancel restores the button untouched.
+  function armDeleteBuilder() {
     if (draft.editing === null) return;
     const name = draft.editing;
-    if (!window.confirm(`Delete the saved report “${name}”? This cannot be undone.`)) return;
-    await window.stint.removeReport({ name });
-    if (runningRef === name) hideRun();
-    closeBuilder();
-    await renderDefs();
+    window.confirmInline($('rep-delete'), {
+      kind: 'report-delete',
+      question: `Delete “${name}”?`,
+      confirmLabel: 'Delete',
+      onConfirm: () => deleteDef(name),
+    });
   }
 
   // Rename a definition from a card's kebab (window.stint.renameReport, parity with `tt
-  // report rename`). A blank/unchanged name is a no-op.
-  async function renameDef(name) {
-    const next = window.prompt(`Rename “${name}” to:`, name);
-    if (next === null) return;
-    const trimmed = next.trim();
-    if (!trimmed || trimmed === name) return;
+  // report rename`). The name arrives from the inline field; a blank/unchanged name is a
+  // no-op (the repaint restores the card).
+  async function renameDef(name, next) {
+    const trimmed = (next || '').trim();
+    if (!trimmed || trimmed === name) {
+      await renderDefs();
+      return;
+    }
     await window.stint.renameReport({ name, newName: trimmed });
     if (draft.editing === name) draft.editing = trimmed;
     if (runningRef === name) runningRef = trimmed;
     await renderDefs();
   }
 
-  // Delete a definition from a card's kebab (parity with `tt report rm`), confirmed in-window.
+  // Swap the card's name into the shared inline name field (app.js's inlineRenameForm — the
+  // renderer's ONE way to gather a name, since Electron's renderer does not implement
+  // window.prompt, issue #52). Enter commits renameDef; Cancel repaints the list untouched.
+  function openDefRename(card, name) {
+    const form = window.inlineRenameForm(name, (next) => renameDef(name, next), {
+      onCancel: () => void renderDefs(),
+    });
+    card.querySelector('.dname').replaceWith(form);
+    const input = form.querySelector('input');
+    input.focus();
+    input.select();
+  }
+
+  // Delete a saved definition by name (window.stint.removeReport, parity with `tt report
+  // rm`). Reachable ONLY from inside a confirmInline gate's onConfirm (§12 R13) — the kebab
+  // menu's Delete and the builder's Delete both arm the gate first, so a stray click never
+  // deletes. Clears the run-output if it was showing this def; closes the builder if it was
+  // editing it.
   async function deleteDef(name) {
-    if (!window.confirm(`Delete the saved report “${name}”? This cannot be undone.`)) return;
     await window.stint.removeReport({ name });
     if (runningRef === name) hideRun();
     if (draft.editing === name) closeBuilder();
     await renderDefs();
+  }
+
+  // The card kebab swaps IN PLACE into an inline Rename / Delete menu (no native menus in
+  // the page, and no window.prompt chooser — Electron's renderer implements neither prompt
+  // nor confirm, issue #52). Rename routes to the inline name field; Delete arms the generic
+  // §12 R13 confirm gate before deleteDef; Cancel restores the kebab untouched.
+  function openDefMenu(card, name) {
+    const btn = card.querySelector('.def-kebab');
+    if (!btn) return; // the menu is already open (the kebab is swapped out)
+    const menu = document.createElement('span');
+    menu.className = 'def-menu';
+    menu.innerHTML =
+      `<button type="button" class="small" data-act="def-rename">Rename</button>` +
+      `<button type="button" class="small danger" data-act="def-delete">Delete</button>` +
+      `<button type="button" class="small ghost" data-act="def-menu-cancel">Cancel</button>`;
+    btn.replaceWith(menu);
+    menu.querySelector('[data-act="def-rename"]').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      menu.replaceWith(btn);
+      openDefRename(card, name);
+    });
+    const delBtn = menu.querySelector('[data-act="def-delete"]');
+    delBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      window.confirmInline(delBtn, {
+        kind: 'report-delete',
+        question: `Delete “${name}”?`,
+        confirmLabel: 'Delete',
+        onConfirm: () => deleteDef(name),
+      });
+    });
+    menu.querySelector('[data-act="def-menu-cancel"]').addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      menu.replaceWith(btn);
+    });
   }
 
   // ----------------------------------------------------------------- run-output (§09 R09)
@@ -485,14 +541,7 @@
       const act = btn.dataset.act;
       if (act === 'run') void runDef(name);
       else if (act === 'edit') void openBuilder(name);
-      else if (act === 'menu') {
-        // A minimal kebab: choose Rename or Delete (the in-window destructive confirm follows).
-        const choice = window.prompt(`“${name}” — type "rename" or "delete":`, 'rename');
-        if (choice === null) return;
-        const c = choice.trim().toLowerCase();
-        if (c === 'rename') void renameDef(name);
-        else if (c === 'delete') void deleteDef(name);
-      }
+      else if (act === 'menu') openDefMenu(card, name);
     });
 
     // Wire one segmented control: a click on an option writes the named draft field from the
@@ -560,7 +609,7 @@
       void saveBuilder();
     });
     $('rep-cancel').addEventListener('click', () => closeBuilder());
-    $('rep-delete').addEventListener('click', () => void deleteBuilder());
+    $('rep-delete').addEventListener('click', () => armDeleteBuilder());
 
     // §09 R06 / R09: the run-output Export CSV / JSON buttons (export FROM the saved report).
     $('rep-export-csv').addEventListener('click', () => void exportRun('csv'));
