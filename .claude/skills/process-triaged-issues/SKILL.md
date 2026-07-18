@@ -1,10 +1,8 @@
 ---
 name: process-triaged-issues
 description: >-
-  Use when triaged issues (labeled "Triaged") should be driven to done —
-  one batched requirements interview covering every issue that needs a
-  spec change, then per-issue delegation to subagents that land the fix,
-  the guards, and the spec deltas. Runs until every issue has an open PR.
+  Use when the user asks to process, work, or close out the triaged issue
+  backlog (issues labeled "Triaged") — drives each one to an open PR.
 ---
 
 # Process triaged issues (Stint)
