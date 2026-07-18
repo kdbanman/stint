@@ -6,8 +6,7 @@ description: Author or update a pull request description. Use whenever opening a
 # PR authoring
 
 The description is for the reviewer; the diff is the record. Say what changed and why it's
-right — don't re-narrate the diff or the session that produced it. PRs vary widely here
-(bugfix, spec change, apparatus, docs), so this is craft guidance, not a template.
+right — don't re-narrate the diff or the session that produced it.
 
 ## Language
 
@@ -32,10 +31,4 @@ When the change commits visual evidence (GIFs, screenshots), embed the pieces th
 - After creating or updating the body, **verify the embeds**: read the stored body back
   through the API and confirm it matches what you sent — posting tooling has injected
   backticks into image URLs before, breaking the markdown — and confirm each embed URL
-  still returns 200. (A literal render check isn't available to a session: GitHub draws
-  bodies client-side. Intact markdown + a live URL is the reliable proxy; when the render
-  itself is in doubt, ask a human viewer.)
-
-## Pairs with
-
-- `qa-gif-authoring` — for recording the evidence you embed.
+  still returns 200.
