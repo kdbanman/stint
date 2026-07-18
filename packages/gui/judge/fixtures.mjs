@@ -578,23 +578,41 @@ const PROJECTS = {
     { id: 11, clientId: 1, name: 'API', archived: false },
     { id: 12, clientId: 1, name: 'Web', archived: false },
   ],
-  2: [{ id: 21, clientId: 2, name: 'Onboarding', archived: false }],
+  2: [
+    { id: 21, clientId: 2, name: 'Onboarding', archived: false },
+    // Issue #55: the Entries-toolbar scenes filter by project over the LIST_ENTRIES rows,
+    // whose Globex entries live under Ops — present here so #el-project can offer it.
+    { id: 22, clientId: 2, name: 'Ops', archived: false },
+  ],
 };
 
 export function clientsState() {
   return emptyState();
 }
 
-// §12 R9 — the Entries-view dataset. A multi-entry, multi-client, multi-project, tagged
-// set spanning two days, so the ENTRY_LIST_SEARCH scene can drive the search box + the
-// Group-by control and observe the visible rows narrow / regroup. Shaped as the flat row
-// list the listEntries mock groups (mirroring core's buildEntryList) — clientLabel/tags
-// resolved, the same fields the search matches. Billable seconds are deterministic.
+// §12 R9 — the Entries-view dataset. A MULTI-WEEK, multi-client, multi-project, tagged,
+// mixed-billable set (issue #55: a single-context fixture cannot tell "filtered" from
+// "shows everything", which is exactly how the dead-toolbar regression slipped), so the
+// ENTRIES_CALENDAR / LIVE_FILTER scenes can drive EVERY toolbar control and watch the
+// visible set + #week-total move to the expected subset. Shaped as the flat row list the
+// listEntries mock filters + groups (mirroring core) — clientId/projectId carried so the
+// client/project filters narrow like production. Relative to the pinned JUDGE clock
+// (Wed 2026-06-24, weekStart monday):
+//   THIS WEEK (Jun 22–28) — ids 1–4 billable (5.00h) + id 7 NON-billable (the billable
+//     toggle moves counts); ids 1,2,7 fall on "today" (Jun 24, billable 3.00h);
+//   LAST WEEK — id 5 'refactor planning' (2.00h; also a "refactor" match, so a default-
+//     week search proves range + search COMPOSE by excluding it);
+//   LAST MONTH — id 6 'may retro' (1.00h).
+// All-time billable is 8.00h — visibly DIFFERENT from the 5.00h week, so a week-total
+// chip that regresses to the all-time sum fails the scenes.
 const LIST_ENTRIES = [
-  { id: 1, description: 'auth refactor', clientLabel: 'Acme / API', client: 'Acme', project: 'API', startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
-  { id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', startUtc: '2026-06-24T11:00:00Z', endUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['ci'] },
-  { id: 3, description: 'standup', clientLabel: 'Acme / Web', client: 'Acme', project: 'Web', startUtc: '2026-06-23T09:00:00Z', endUtc: '2026-06-23T09:30:00Z', billableSeconds: 1800, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: ['meeting', 'deep'] },
-  { id: 4, description: 'refactor tests', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T14:30:00Z', billableSeconds: 5400, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 5400, tags: ['ci'] },
+  { id: 1, description: 'auth refactor', clientLabel: 'Acme / API', client: 'Acme', project: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
+  { id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-24T11:00:00Z', endUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['ci'] },
+  { id: 3, description: 'standup', clientLabel: 'Acme / Web', client: 'Acme', project: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-23T09:00:00Z', endUtc: '2026-06-23T09:30:00Z', billableSeconds: 1800, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: ['meeting', 'deep'] },
+  { id: 4, description: 'refactor tests', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T14:30:00Z', billableSeconds: 5400, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 5400, tags: ['ci'] },
+  { id: 5, description: 'refactor planning', clientLabel: 'Acme / API', client: 'Acme', project: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-17T09:00:00Z', endUtc: '2026-06-17T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
+  { id: 6, description: 'may retro', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-05-20T10:00:00Z', endUtc: '2026-05-20T11:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['meeting'] },
+  { id: 7, description: 'team lunch', clientLabel: 'Acme / Web', client: 'Acme', project: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-24T12:00:00Z', endUtc: '2026-06-24T13:00:00Z', billableSeconds: 3600, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
 ];
 
 /**
@@ -621,13 +639,13 @@ export function listState() {
 }
 
 /**
- * §17 R11 — the LIVE_FILTER fixture. The same multi-entry / multi-client / tagged set as
+ * §17 R11 — the LIVE_FILTER fixture. The same multi-week / multi-client / tagged set as
  * the Entries-view list (listState), reused so a search keystroke / client selection
- * narrows BOTH the visible rows AND the live report total (#week-total) the renderer
- * derives from the in-memory snapshot (window.SU.deriveView) — no IPC round-trip. The four
- * rows are all billable (7200 + 3600 + 1800 + 5400 = 18000s = 5.00h), and a "refactor"
- * search keeps the two refactor rows (7200 + 5400 = 12600s = 3.50h), so the total visibly
- * moves 5.00h → 3.50h on the same keystroke that narrows the list.
+ * narrows BOTH the visible rows AND the report total (#week-total). Idle, the chip is the
+ * WEEK-BOUNDED billable sum (issue #55): this week's ids 1–4 = 18000s = 5.00h, NOT the
+ * all-time 8.00h. A "refactor" search keeps the two IN-WEEK refactor rows (7200 + 5400 =
+ * 12600s = 3.50h — last week's 'refactor planning' stays excluded, range + search
+ * compose), so the total visibly moves 5.00h → 3.50h with the narrowing list.
  */
 export function liveState() {
   return listState();
@@ -1338,29 +1356,62 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       getState: () => { window.__GETSTATE_CALLS__++; return Promise.resolve(window.__STATE__); },
       onChange: () => () => {},
       // §12 R9: the Entries-view control bar's read-only query. The mock applies the SAME
-      // matchesQuery (case-insensitive substring over description / client / project / tag)
-      // and grouping (day DESC, others ASC; tags fan out) core's buildEntryList does, over
-      // the canned LIST_ENTRIES set, so the headless renderer narrows / regroups exactly as
-      // production. Returns the grouped shape the renderer paints: { key, billableSeconds,
-      // entries } per group, plus the (echoed) resolved range.
+      // narrowing core does — range (preset OR plain-date pair), billable, client/project
+      // ids, tag, matchesQuery search — and the same grouping (day DESC, others ASC; tags
+      // fan out), over the canned LIST_ENTRIES set, so the headless renderer narrows /
+      // regroups exactly as production. Issue #55: it is also STRICT exactly where core
+      // is — 'by' is REQUIRED (ListEntriesQuery), so a query without it REJECTS like
+      // production instead of papering over the dropped key (which is how the dead-toolbar
+      // regression slipped past JUDGE). Every request is logged (window.__LIST_REQS__) and
+      // every rejection counted (window.__LIST_ERRORS__) so scenes can assert "no
+      // listEntries call threw" and "every query carried the grouping". Returns the
+      // grouped shape the renderer paints: { key, billableSeconds, entries } per group,
+      // plus the (echoed) resolved range.
       __LIST_ENTRIES__: ${JSON.stringify(LIST_ENTRIES)},
       listEntries: function (q) {
         window.__LIST_REQ__ = q;
+        (window.__LIST_REQS__ = window.__LIST_REQS__ || []).push(q);
+        if (!q || q.by === undefined) {
+          window.__LIST_ERRORS__ = (window.__LIST_ERRORS__ || 0) + 1;
+          return Promise.reject(new TypeError(
+            "listEntries: required grouping 'by' is missing — core's buildEntryList rejects this query (issue #55)",
+          ));
+        }
         let rows = this.__LIST_ENTRIES__.slice();
+        // A named preset resolves to its local-day window, pinned to the JUDGE clock
+        // (Wed 2026-06-24, weekStart monday) — the mock stand-in for core's resolveRange,
+        // so the toolbar's range chips genuinely narrow the multi-week fixture.
+        if (q.preset) {
+          const windows = {
+            'today': ['2026-06-24', '2026-06-24'],
+            'week': ['2026-06-22', '2026-06-28'],
+            'last-week': ['2026-06-15', '2026-06-21'],
+            'month': ['2026-06-01', '2026-06-30'],
+            'last-month': ['2026-05-01', '2026-05-31'],
+          };
+          const w = windows[q.preset];
+          if (w) rows = rows.filter((e) => {
+            const day = e.startUtc.slice(0, 10);
+            return day >= w[0] && day <= w[1];
+          });
+        }
         // §09 R01 (G3): a custom range arrives as a PAIR OF PLAIN DATES (fromDate/toDate,
         // the raw YYYY-MM-DD strings of the two toolbar date fields — never a derived
         // instant). The mock narrows to the entries whose day falls inside the INCLUSIVE
         // day pair, standing in for main's resolveDateRange half-open local window, so the
-        // ENTRY_LIST_SEARCH scene can assert the fields apply LIVE and narrow the rows.
-        if (q && q.fromDate && q.toDate) {
+        // ENTRIES_CALENDAR scene can assert the fields apply LIVE and narrow the rows.
+        if (q.fromDate && q.toDate) {
           rows = rows.filter((e) => {
             const day = e.startUtc.slice(0, 10);
             return day >= q.fromDate && day <= q.toDate;
           });
         }
-        if (q && q.billable === 'billable') rows = rows.filter((e) => e.billable);
-        if (q && q.billable === 'non-billable') rows = rows.filter((e) => !e.billable);
-        if (q && q.search) {
+        if (q.billable === 'billable') rows = rows.filter((e) => e.billable);
+        if (q.billable === 'non-billable') rows = rows.filter((e) => !e.billable);
+        if (q.clientId !== undefined && q.clientId !== null) rows = rows.filter((e) => e.clientId === q.clientId);
+        if (q.projectId !== undefined && q.projectId !== null) rows = rows.filter((e) => e.projectId === q.projectId);
+        if (q.tag) rows = rows.filter((e) => (e.tags || []).includes(q.tag));
+        if (q.search) {
           const needle = String(q.search).trim().toLowerCase();
           rows = rows.filter((e) => {
             const hay = [e.description, e.client, e.project, ...(e.tags || [])];
@@ -1368,10 +1419,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
           });
         }
         const keysOf = (e) => {
-          const by = (q && q.by) || 'day';
-          if (by === 'day') return [e.startUtc.slice(0, 10)];
-          if (by === 'client') return [e.client || '(no client)'];
-          if (by === 'project') return [e.project || '(no project)'];
+          if (q.by === 'day') return [e.startUtc.slice(0, 10)];
+          if (q.by === 'client') return [e.client || '(no client)'];
+          if (q.by === 'project') return [e.project || '(no project)'];
           return (e.tags && e.tags.length) ? e.tags : ['(untagged)'];
         };
         const map = new Map();
@@ -1380,7 +1430,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
           map.get(k).push(e);
         }
         let keys = [...map.keys()].sort((a, b) => a.localeCompare(b));
-        if (!q || (q.by || 'day') === 'day') keys.reverse();
+        if (q.by === 'day') keys.reverse();
         const groups = keys.map((key) => ({
           key,
           billableSeconds: map.get(key).reduce((s, e) => s + e.billableSeconds, 0),

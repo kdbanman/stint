@@ -2514,26 +2514,48 @@ async function main() {
 
   // ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
   // readonly entries calendar. There is NO grouping control here — grouped breakdowns moved to
-  // Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT. The surviving toolbar
-  // controls (range presets, the plain-date custom pair, client/project/tag filters, the search
-  // box) apply LIVE to the calendar: each drives a real window.stint.listEntries query and the
-  // visible calendar events (.dcol .ev) narrow to the matching set, with #week-total tracking the
-  // selection live. §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields —
-  // #el-range-from/#el-range-to are input[type="date"] (no time component), there is NO
-  // #el-range-apply button, and setting both dates drives a listEntries call carrying the raw
-  // { fromDate, toDate } strings (no derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE.
-  // R16 supplies the calendar-structure half of this scene (the day columns + events); R09 owns
-  // the toolbar-drives-calendar facts below. Deterministic sub-facts are machine-scored under the
-  // pinned JUDGE clock; the calendar looks are captured (entries-search.png / entries-calendar.png).
+  // Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT — but every toolbar QUERY
+  // still carries the REQUIRED grouping key by:'day' (ListEntriesQuery.by; the calendar's day
+  // layout — issue #55: a query without it throws in core and the calendar silently shows
+  // everything). Hardened per the issue-#55 triage: over the MULTI-WEEK, multi-client,
+  // mixed-billable fixture, EACH toolbar control (range preset, billable toggle, client,
+  // project, tag, search) is driven in turn and the VISIBLE EVENT COUNT + #week-total are
+  // asserted to move to the expected subset — counts, not just pixels — with NO listEntries
+  // call rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
+  // §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields — #el-range-from/#el-range-to
+  // are input[type="date"] (no time component), there is NO #el-range-apply button, and setting
+  // both dates drives a listEntries call carrying the raw { fromDate, toDate } strings (no
+  // derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE. Deterministic sub-facts are
+  // machine-scored under the pinned JUDGE clock (Wed 2026-06-24, weekStart monday); the calendar
+  // looks are captured (entries-search.png / entries-calendar.png).
   await withPage(browser, listState(), 'index.html', async (page) => {
-    // The default load paints the readonly entries calendar (R16) — no toolbar control touched yet.
+    const probe = () =>
+      page.evaluate(() => ({
+        req: { ...(window.__LIST_REQ__ || {}) },
+        evCount: document.querySelectorAll('.dcol .ev').length,
+        evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
+        weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
+      }));
+    const waitCountAndTotal = (n, total) =>
+      page.waitForFunction(
+        ({ n, total }) =>
+          document.querySelectorAll('.dcol .ev').length === n &&
+          document.querySelector('#week-total')?.textContent.trim() === total,
+        { n, total },
+      );
+
+    // The default load paints the readonly entries calendar (R16) — no toolbar control touched
+    // yet. All SEVEN fixture entries lay into their day columns, and the idle chip is the
+    // WEEK-BOUNDED billable sum (issue #55 Part B): this week's 5.00h — NOT the all-time 8.00h.
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
     const before = await page.evaluate(() => ({
       // §12 R09 / G11: the group-by control left the Entries view entirely (no grouping here).
       hasByControl: !!document.querySelector('#el-by-seg'),
       // The surviving toolbar controls are present and discoverable.
       hasPresets: !!document.querySelector('#el-preset-seg'),
+      hasBillable: !!document.querySelector('#el-billable-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
+      hasProjectFilter: !!document.querySelector('#el-project'),
       hasTagFilter: !!document.querySelector('#el-tag'),
       hasSearch: !!document.querySelector('#search'),
       // §09 R01 (G3): the two custom-range fields are PLAIN DATE inputs and the toolbar
@@ -2541,35 +2563,92 @@ async function main() {
       fromType: document.querySelector('#el-range-from')?.type ?? '',
       toType: document.querySelector('#el-range-to')?.type ?? '',
       hasApply: !!document.querySelector('#el-range-apply'),
-      // The default calendar lays every entry (4) into its day columns.
       evCount: document.querySelectorAll('.dcol .ev').length,
       weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
-    // Type a query that matches exactly the two "refactor" events (auth refactor / refactor
-    // tests). The search drives a real listEntries call; the visible calendar events narrow to 2
-    // and #week-total tracks the narrowing live (off the in-memory snapshot, no reload).
+    // SEARCH — matches three "refactor" descriptions in the fixture, but only the TWO inside
+    // the default week window survive (range + search COMPOSE): last week's 'refactor planning'
+    // stays excluded. The events narrow to 2 and #week-total drops to their 3.50h.
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
-    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
+    await waitCountAndTotal(2, '3.50h');
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
-    const onSearch = await page.evaluate(() => ({
-      reqSearch: window.__LIST_REQ__?.search ?? null,
-      // The toolbar query carries NO group-by (grouping left this view, G11).
-      reqHasBy: window.__LIST_REQ__?.by !== undefined,
-      evCount: document.querySelectorAll('.dcol .ev').length,
-      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
-    }));
+    const onSearch = await probe();
 
-    // Clear the search — every event returns to the calendar and the total returns to the full set.
+    // Clear the search — every event returns and the chip returns to the week-bounded default.
     await page.fill('#search', '');
-    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 4);
+    await waitCountAndTotal(7, '5.00h');
+
+    // RANGE PRESETS — each chip re-queries and the visible subset + chip move with it:
+    // month (June: 6 events, 7.00h billable) → last-week (1 event, 2.00h) → last-month
+    // (1 event, 1.00h) → today (3 events, 3.00h) → week (5 events, 5.00h).
+    await page.click('#el-preset-seg .preset[data-preset="month"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'month');
+    await waitCountAndTotal(6, '7.00h');
+    const onMonth = await probe();
+    await page.click('#el-preset-seg .preset[data-preset="last-week"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-week');
+    await waitCountAndTotal(1, '2.00h');
+    const onLastWeek = await probe();
+    await page.click('#el-preset-seg .preset[data-preset="last-month"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-month');
+    await waitCountAndTotal(1, '1.00h');
+    const onLastMonth = await probe();
+    await page.click('#el-preset-seg .preset[data-preset="today"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'today');
+    await waitCountAndTotal(3, '3.00h');
+    const onToday = await probe();
+    await page.click('#el-preset-seg .preset[data-preset="week"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'week');
+    await waitCountAndTotal(5, '5.00h');
+
+    // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events, 5.00h);
+    // non-billable keeps ONLY it (1 event, a 0.00h billable sum); all restores the 5.
+    await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'billable');
+    await waitCountAndTotal(4, '5.00h');
+    const onBillable = await probe();
+    await page.click('#el-billable-seg .seg-btn[data-billable="non-billable"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'non-billable');
+    await waitCountAndTotal(1, '0.00h');
+    const onNonBillable = await probe();
+    await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
+    await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'all');
+    await waitCountAndTotal(5, '5.00h');
+
+    // CLIENT FILTER — Acme (id 1) keeps this week's three Acme entries (2.50h billable)…
+    await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
+    await page.selectOption('#el-client', '1');
+    await page.waitForFunction(() => window.__LIST_REQ__?.clientId === 1);
+    await waitCountAndTotal(3, '2.50h');
+    const onClient = await probe();
+    // …PROJECT FILTER — its API project (id 11) narrows to the single 'auth refactor' (2.00h).
+    await page.waitForSelector('#el-project option[value="11"]', { state: 'attached' });
+    await page.selectOption('#el-project', '11');
+    await page.waitForFunction(() => window.__LIST_REQ__?.projectId === 11);
+    await waitCountAndTotal(1, '2.00h');
+    const onProject = await probe();
+    // Reset the client (project resets with it) — the week's 5 return.
+    await page.selectOption('#el-client', '');
+    await page.waitForFunction(
+      () => window.__LIST_REQ__?.clientId === undefined && window.__LIST_REQ__?.projectId === undefined,
+    );
+    await waitCountAndTotal(5, '5.00h');
+
+    // TAG FILTER — 'ci' keeps the week's two ci-tagged entries (2.50h billable), then clears.
+    await page.fill('#el-tag', 'ci');
+    await page.waitForFunction(() => window.__LIST_REQ__?.tag === 'ci');
+    await waitCountAndTotal(2, '2.50h');
+    const onTag = await probe();
+    await page.fill('#el-tag', '');
+    await page.waitForFunction(() => window.__LIST_REQ__?.tag === undefined);
+    await waitCountAndTotal(5, '5.00h');
 
     // §09 R01 (G3): pick Custom… and fill the two plain date fields with the fixture's
     // earlier day (2026-06-23). Setting BOTH dates drives a real listEntries call carrying
     // the raw { fromDate, toDate } strings LIVE — no Apply click exists — and the visible
-    // calendar narrows to the two in-range events (standup / refactor tests).
+    // calendar narrows to the two in-range events (standup / refactor tests, 2.00h).
     await page.click('#el-preset-seg .preset[data-preset="custom"]');
     await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
     await page.fill('#el-range-from', '2026-06-23');
@@ -2577,27 +2656,55 @@ async function main() {
     await page.waitForFunction(
       () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
     );
-    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 2);
+    await waitCountAndTotal(2, '2.00h');
     await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
-    const onCustom = await page.evaluate(() => ({
-      req: { ...(window.__LIST_REQ__ || {}) },
-      evCount: document.querySelectorAll('.dcol .ev').length,
-      evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
+    const onCustom = await probe();
+
+    // Issue #55: NO listEntries call rejected across the whole drive, and EVERY query carried
+    // the required by:'day' grouping (the strict mock mirrors core's required-field contract).
+    const wire = await page.evaluate(() => ({
+      errors: window.__LIST_ERRORS__ || 0,
+      reqCount: (window.__LIST_REQS__ || []).length,
+      allCarryBy: (window.__LIST_REQS__ || []).every((r) => r && r.by === 'day'),
     }));
 
     // §12 R09 / G11: the group-by control is gone; the surviving toolbar controls are all present.
     const controlsOk =
       !before.hasByControl &&
-      before.hasPresets && before.hasClientFilter && before.hasTagFilter && before.hasSearch;
-    const defaultOk = before.evCount === 4; // all four events laid into the calendar
+      before.hasPresets && before.hasBillable && before.hasClientFilter &&
+      before.hasProjectFilter && before.hasTagFilter && before.hasSearch;
+    // Issue #55 Part B: the idle chip is the WEEK's billable sum, not the all-time 8.00h.
+    const defaultOk = before.evCount === 7 && before.weekTotal === '5.00h';
     const searchOk =
-      onSearch.reqSearch === 'refactor' &&
-      !onSearch.reqHasBy && // the toolbar query never carries a group-by
-      onSearch.evCount === 2 && // narrowed to the two "refactor" events…
+      onSearch.req.search === 'refactor' &&
+      onSearch.req.by === 'day' && // the query carries the REQUIRED grouping (issue #55)
+      onSearch.evCount === 2 && // narrowed to the two IN-WEEK "refactor" events…
       onSearch.evText.some((t) => /auth refactor/.test(t)) &&
       onSearch.evText.some((t) => /refactor tests/.test(t)) &&
-      !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded
-      onSearch.weekTotal !== before.weekTotal; // #week-total tracked the narrowing live
+      !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded…
+      !onSearch.evText.some((t) => /refactor planning/.test(t)) && // …range + search compose
+      onSearch.weekTotal === '3.50h'; // #week-total moved to the matching subset's sum
+    const presetsOk =
+      onMonth.evCount === 6 && onMonth.weekTotal === '7.00h' &&
+      onLastWeek.evCount === 1 && onLastWeek.weekTotal === '2.00h' &&
+      onLastWeek.evText.some((t) => /refactor planning/.test(t)) &&
+      onLastMonth.evCount === 1 && onLastMonth.weekTotal === '1.00h' &&
+      onLastMonth.evText.some((t) => /may retro/.test(t)) &&
+      onToday.evCount === 3 && onToday.weekTotal === '3.00h';
+    const billableOk =
+      onBillable.evCount === 4 && onBillable.weekTotal === '5.00h' &&
+      !onBillable.evText.some((t) => /team lunch/.test(t)) &&
+      onNonBillable.evCount === 1 && onNonBillable.weekTotal === '0.00h' &&
+      onNonBillable.evText.some((t) => /team lunch/.test(t));
+    const clientProjectOk =
+      onClient.evCount === 3 && onClient.weekTotal === '2.50h' &&
+      !onClient.evText.some((t) => /deploy pipeline|refactor tests/.test(t)) && // Globex excluded
+      onProject.evCount === 1 && onProject.weekTotal === '2.00h' &&
+      onProject.evText.some((t) => /auth refactor/.test(t));
+    const tagOk =
+      onTag.evCount === 2 && onTag.weekTotal === '2.50h' &&
+      onTag.evText.some((t) => /deploy pipeline/.test(t)) &&
+      onTag.evText.some((t) => /refactor tests/.test(t));
     // §09 R01 (G3): plain date fields, no Apply, and the live plain-date query narrowed the
     // calendar to the 2026-06-23 pair — the payload carries the raw strings (fromDate/toDate,
     // no 'T', no derived fromUtc/toUtc instant).
@@ -2606,15 +2713,25 @@ async function main() {
       onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
       onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
       !String(onCustom.req.fromDate).includes('T') &&
-      onCustom.evCount === 2 &&
+      onCustom.evCount === 2 && onCustom.weekTotal === '2.00h' &&
       onCustom.evText.some((t) => /standup/.test(t)) &&
       onCustom.evText.some((t) => /refactor tests/.test(t)) &&
       !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
-    const ok = controlsOk && defaultOk && searchOk && customRangeOk;
+    // Issue #55: the whole drive produced zero rejected queries, every one grouped by day.
+    const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy;
+    const ok =
+      controlsOk && defaultOk && searchOk && presetsOk && billableOk && clientProjectOk &&
+      tagOk && customRangeOk && wireOk;
     record(
       'ENTRIES_CALENDAR',
       ok,
-      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} -> custom dates=${JSON.stringify(onCustom)}`,
+      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} ` +
+        `-> presets month=${onMonth.evCount}/${onMonth.weekTotal} lastWeek=${onLastWeek.evCount}/${onLastWeek.weekTotal} ` +
+        `lastMonth=${onLastMonth.evCount}/${onLastMonth.weekTotal} today=${onToday.evCount}/${onToday.weekTotal} ` +
+        `-> billable=${onBillable.evCount}/${onBillable.weekTotal} nonBillable=${onNonBillable.evCount}/${onNonBillable.weekTotal} ` +
+        `-> client=${onClient.evCount}/${onClient.weekTotal} project=${onProject.evCount}/${onProject.weekTotal} ` +
+        `-> tag=${onTag.evCount}/${onTag.weekTotal} -> custom dates=${JSON.stringify(onCustom)} ` +
+        `-> wire=${JSON.stringify(wire)}`,
       'entries-calendar.png',
     );
   });
@@ -2788,12 +2905,15 @@ async function main() {
   }
 
   // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
-  // visible list AND the report total, recomputed from the in-memory snapshot with no IPC
-  // reload (no getState). Load the multi-entry fixture (all four rows billable, 5.00h total),
-  // type a "refactor" search, and assert in one keystroke: the visible rows narrow to the two
-  // refactor entries AND #week-total drops from 5.00h to the filtered 3.50h — the total moved
-  // off the snapshot-derived report sum (window.SU.deriveView), not a round-trip. Then clear
-  // the search and confirm the list and the total both return to the full set.
+  // visible list AND the report total, with no getState reload during the keystroke. Hardened
+  // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
+  // week / last month, all-time billable 8.00h): the idle chip must be the WEEK-BOUNDED billable
+  // sum (5.00h — the §12 R16 "This week" chip, NOT the all-time total, issue #55 Part B); a
+  // "refactor" search then narrows the visible rows to the two IN-WEEK refactor entries (last
+  // week's 'refactor planning' stays excluded — the query composes range + search) AND
+  // #week-total settles on the selection's 3.50h — the selected range's billable sum. Clearing
+  // the search returns both. The strict listEntries mock rejects any query missing the required
+  // `by` (exactly like core), so the whole flow also proves no toolbar query throws.
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
     const before = await page.evaluate(() => ({
@@ -2802,12 +2922,11 @@ async function main() {
       // The getState count right before the keystroke — the live update must not reload it.
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
     }));
-    // Type the search — the list narrows AND the total recomputes off the snapshot, live.
+    // Type the search — the list narrows AND the total moves with the same selection.
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
     await page.waitForFunction(
-      (t) => document.querySelector('#week-total')?.textContent.trim() !== t,
-      before.weekTotal,
+      () => document.querySelector('#week-total')?.textContent.trim() === '3.50h',
     );
     await page.screenshot({ path: join(EVIDENCE, 'main-filtered.png'), fullPage: true });
     const onSearch = await page.evaluate(() => ({
@@ -2815,13 +2934,14 @@ async function main() {
       weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
       // The absolute getState count after the keystroke — unchanged from `before` proves the
-      // list + total updated off the snapshot, with no reload during the keystroke.
+      // list + total updated off the query path, with no snapshot reload during the keystroke.
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
+      listErrors: window.__LIST_ERRORS__ || 0, // no listEntries call rejected (issue #55)
     }));
     const noReloadOnSearch = onSearch.getStateCalls === before.getStateCalls;
-    // Clear the search — both the list and the total return to the full set.
+    // Clear the search — both the list and the total return to the full week-bounded default.
     await page.fill('#search', '');
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 4);
+    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 7);
     await page.waitForFunction(
       (t) => document.querySelector('#week-total')?.textContent.trim() === t,
       before.weekTotal,
@@ -2832,15 +2952,18 @@ async function main() {
     }));
 
     const listLiveOk =
-      before.rowCount === 4 &&
+      before.rowCount === 7 &&
       onSearch.rowCount === 2 &&
       onSearch.descs.some((d) => /auth refactor/.test(d)) &&
       onSearch.descs.some((d) => /refactor tests/.test(d)) &&
-      !onSearch.descs.some((d) => /deploy pipeline/.test(d));
+      !onSearch.descs.some((d) => /deploy pipeline/.test(d)) &&
+      // Range + search compose: the out-of-week refactor match stays excluded (issue #55).
+      !onSearch.descs.some((d) => /refactor planning/.test(d));
     const totalLiveOk =
-      before.weekTotal === '5.00h' &&
-      onSearch.weekTotal === '3.50h' && // the report total moved on the same keystroke…
-      onClear.rowCount === 4 &&
+      before.weekTotal === '5.00h' && // WEEK-BOUNDED by default — never the all-time 8.00h
+      onSearch.weekTotal === '3.50h' && // the total moved to the selection's billable sum…
+      onSearch.listErrors === 0 && // …with no listEntries rejection along the way
+      onClear.rowCount === 7 &&
       onClear.weekTotal === '5.00h'; // …and returns with the full set when cleared
     const ok = listLiveOk && totalLiveOk && noReloadOnSearch;
     record(
@@ -2848,7 +2971,8 @@ async function main() {
       ok,
       `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
         `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
-        `(both reflect the selection live; getState unchanged during the keystroke: ${noReloadOnSearch})`,
+        `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
+        `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors})`,
       'main-filtered.png',
     );
   });
