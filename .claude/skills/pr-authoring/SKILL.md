@@ -29,9 +29,12 @@ When the change commits visual evidence (GIFs, screenshots), embed the pieces th
   pruning and shows exactly the reviewed state. Re-pin when a push re-records evidence.
 - GitHub won't inline-render images much over ~10 MB — link those instead of embedding.
 - Re-recording under an unchanged filename? Bust the image cache with `?v=N`.
-- After creating or updating the body, **view it rendered and confirm the images show** —
-  posting tooling has mangled bare URLs before (backtick-wrapping that breaks the image
-  markdown), and an unrendered embed is worse than a link.
+- After creating or updating the body, **verify the embeds**: read the stored body back
+  through the API and confirm it matches what you sent — posting tooling has injected
+  backticks into image URLs before, breaking the markdown — and confirm each embed URL
+  still returns 200. (A literal render check isn't available to a session: GitHub draws
+  bodies client-side. Intact markdown + a live URL is the reliable proxy; when the render
+  itself is in doubt, ask a human viewer.)
 
 ## Pairs with
 
