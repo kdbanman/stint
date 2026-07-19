@@ -811,6 +811,17 @@ export function buildProgram(deps: Deps): Command {
       }),
     );
   client
+    // §07 / §12 R13 — un-archive a client (reverse of `archive`). Resolves by id or name
+    // (findClientByName spans archived records), returns it to the pickers.
+    .command('restore')
+    .argument('<ref>')
+    .action((ref: string) =>
+      withStore((s) => {
+        s.restoreClient(resolveEntityRef(ref, (n) => s.findClientByName(n)));
+        io.out('restored');
+      }),
+    );
+  client
     .command('ls')
     .option('--archived', 'include archived')
     .option('--json', 'machine-readable output')
@@ -859,6 +870,17 @@ export function buildProgram(deps: Deps): Command {
       }),
     );
   project
+    // §07 / §12 R13 — un-archive a project. Core refuses if the owning client is still
+    // archived (StoreError → non-zero exit, naming the client), steering to restore it first.
+    .command('restore')
+    .argument('<ref>')
+    .action((ref: string) =>
+      withStore((s) => {
+        s.restoreProject(resolveEntityRef(ref, (n) => s.findProjectByName(n)));
+        io.out('restored');
+      }),
+    );
+  project
     .command('ls')
     .option('--client <name>', 'filter by client')
     .option('--archived', 'include archived')
@@ -904,6 +926,16 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) => {
         s.archiveTag(resolveEntityRef(ref, (n) => s.findTagByName(n)));
         io.out('archived');
+      }),
+    );
+  tag
+    // §07 / §12 R13 — un-archive a tag (reverse of `archive`), returning it to the pickers.
+    .command('restore')
+    .argument('<ref>')
+    .action((ref: string) =>
+      withStore((s) => {
+        s.restoreTag(resolveEntityRef(ref, (n) => s.findTagByName(n)));
+        io.out('restored');
       }),
     );
   tag

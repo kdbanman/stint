@@ -318,17 +318,23 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     },
     addClient: (payload) => store.addClient(payload.name),
     addProject: (payload) => store.addProject(payload.name, payload.clientId),
-    listClients: () => store.listClients(),
-    // §07: the Clients view's rename/archive over the same reference-data capabilities tt's
-    // `client`/`project` subcommands expose. Each is a thin delegate to core and refreshes all
-    // windows so an open Clients view (or the entries view, whose labels are resolved not copied)
-    // repaints the new truth.
+    // §12 R13: includeArchived lets the Clients view's "show archived" affordance reveal the
+    // hidden records its Restore buttons act on (parity with `tt client ls --archived`).
+    listClients: (payload) => store.listClients(payload?.includeArchived),
+    // §07 / §12 R13: the Clients view's rename/archive/restore over the same reference-data
+    // capabilities tt's `client`/`project` subcommands expose. Each is a thin delegate to core and
+    // refreshes all windows so an open Clients view (or the entries view, whose labels are resolved
+    // not copied) repaints the new truth. Restore is the reverse of archive (archived=0).
     renameClient: (payload) => {
       store.renameClient(payload.id, payload.name);
       refreshAll();
     },
     archiveClient: (payload) => {
       store.archiveClient(payload.id);
+      refreshAll();
+    },
+    restoreClient: (payload) => {
+      store.restoreClient(payload.id);
       refreshAll();
     },
     renameProject: (payload) => {
@@ -339,10 +345,16 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       store.archiveProject(payload.id);
       refreshAll();
     },
-    listProjects: (payload) => store.listProjects(payload?.clientId),
+    restoreProject: (payload) => {
+      // Core refuses restoring a project whose owning client is still archived (StoreError → the
+      // renderer surfaces it, R21); the happy path returns the project to the pickers.
+      store.restoreProject(payload.id);
+      refreshAll();
+    },
+    listProjects: (payload) => store.listProjects(payload?.clientId, payload?.includeArchived),
     // §12 R10: the Clients view's tag-management strip. Each delegates straight to core at parity
-    // with `tt tag add/rename/archive/ls`. The mutators refresh all windows; listTags is a read.
-    listTags: () => store.listTags(),
+    // with `tt tag add/rename/archive/restore/ls`. The mutators refresh all windows; listTags is a read.
+    listTags: (payload) => store.listTags(payload?.includeArchived),
     addTag: (payload) => {
       const t = store.addTag(payload.name);
       refreshAll();
@@ -354,6 +366,10 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     },
     archiveTag: (payload) => {
       store.archiveTag(payload.id);
+      refreshAll();
+    },
+    restoreTag: (payload) => {
+      store.restoreTag(payload.id);
       refreshAll();
     },
     setSetting: (payload) => {

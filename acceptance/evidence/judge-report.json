@@ -178,6 +178,18 @@
       "screenshot": "main-clients.png"
     },
     {
+      "item": "CONFIRM_ARCHIVE",
+      "pass": true,
+      "justification": "archiving a referenced client arms a confirm and does not archive (calls after arm=0); only the explicit confirm archives, exactly once: [{\"id\":1}]",
+      "screenshot": "main-confirm-archive.png"
+    },
+    {
+      "item": "RESTORE_ARCHIVED",
+      "pass": true,
+      "justification": "archived records hidden by default ({\"archivedClientShown\":false,\"archivedTagShown\":false}), revealed with a Restore button on \"show archived\" ({\"archivedClientRestore\":true,\"archivedTagRestore\":true,\"pill\":true}), and Restore returns the client to the active list: {\"restoredPayload\":{\"id\":3},\"nowActive\":true}",
+      "screenshot": "main-clients-archived.png"
+    },
+    {
       "item": "TAG_CHIPS",
       "pass": true,
       "justification": "tags render as chips on events + running summary; NO per-row tags control; edited via the unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: {\"openRowChips\":[\"deep\",\"urgent\"],\"closedRowChips\":[\"meeting\"],\"summaryChips\":[\"deep\",\"urgent\"],\"noPerRowTags\":true,\"totalRowChips\":3} seeded=[\"meeting\"] working=[\"billing\"] edited={\"id\":71,\"patch\":{\"addTags\":[\"billing\"],\"removeTags\":[\"meeting\"]}} (tagsPatchOk=true)",
@@ -246,7 +258,7 @@
     {
       "item": "PARITY_REACH",
       "pass": true,
-      "justification": "window.stint exposes 42/42 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
+      "justification": "window.stint exposes 45/45 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
     },
     {

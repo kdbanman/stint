@@ -163,7 +163,10 @@
 
       <div class="vhead">
         <h2 class="vtitle">Clients</h2>
-        <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg> Add client</button>
+        <span style="display:inline-flex;align-items:center;gap:8px">
+          <button class="btn sm ghost" aria-pressed="true">Hide archived</button>
+          <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg> Add client</button>
+        </span>
       </div>
 
       <div>
@@ -231,6 +234,9 @@
           </div>
           <div class="tg-row"><span class="tag">admin</span><span class="count">5 entries</span>
             <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
+          </div>
+          <div class="tg-row arch"><span class="tag">legacy</span><span class="pill">archived</span>
+            <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-restore"/></svg> Restore</button></span>
           </div>
         </div>
       </div>

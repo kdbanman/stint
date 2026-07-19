@@ -229,8 +229,13 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Archive</td>
-          <td data-l="Definition">Soft-retire <strong>reference data</strong> (client, project, tag) once it's been referenced, preserving history. Distinct from <strong>delete</strong>, which removes an <em>entry</em> outright (CLI needs confirmation or <code>--force</code>).</td>
+          <td data-l="Definition">Soft-retire <strong>reference data</strong> (client, project, tag) once it's been referenced, preserving history — hidden from every picker/filter but kept on past entries. <strong>Reversible</strong> by <strong>restore</strong>. Distinct from <strong>delete</strong>, which removes an <em>entry</em> outright (CLI needs confirmation or <code>--force</code>). Archiving a <em>referenced</em> client/project takes the GUI's two-step confirm (§12 R13).</td>
           <td class="avoid" data-l="Avoid"><s>delete</s> a client/project, <s>hide</s>, <s>deactivate</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Restore (reference data)</td>
+          <td data-l="Definition">Un-archive a client, project, or tag — the reverse of <strong>archive</strong>, returning it to every picker/filter. Because name uniqueness spans archived records (§07), a restore can never create a name collision. Restoring a project whose owning client is still archived is refused (an active project under a hidden client would be unselectable), naming the client to restore first. <strong>Distinct from the database <a href="#s5">Restore</a></strong> (§15/§20 — replacing the live database from a backup): both meanings exist in the product; this one acts on a reference-data row, that one on the SQLite file.</td>
+          <td class="avoid" data-l="Avoid"><s>unarchive</s>, <s>reactivate</s>, <s>undelete</s>; not the database <s>restore</s> (that's the backup file)</td>
         </tr>
       </tbody>
     </table>
@@ -370,9 +375,9 @@
           <td class="avoid" data-l="Avoid"><s>snapshot</s>, <s>dump</s>, <s>archive</s> (that's reference data), <s>export</s> (that's CSV/JSON data-out)</td>
         </tr>
         <tr>
-          <td class="term" data-l="Term">Restore</td>
-          <td data-l="Definition">Replace the live database with the latest good <strong>backup</strong>. Invoked on demand — which first sets the current file aside as a <strong>replaced file</strong> — or automatically by <strong>corruption recovery</strong>, which moves the corrupt file aside as a <strong>quarantined file</strong> and restores the newest good backup, informing the user. Data is never silently lost.</td>
-          <td class="avoid" data-l="Avoid"><s>rollback</s>, <s>revert</s>, <s>recover</s> (use "restore" for the act)</td>
+          <td class="term" data-l="Term">Restore (database)</td>
+          <td data-l="Definition">Replace the live database with the latest good <strong>backup</strong>. Invoked on demand — which first sets the current file aside as a <strong>replaced file</strong> — or automatically by <strong>corruption recovery</strong>, which moves the corrupt file aside as a <strong>quarantined file</strong> and restores the newest good backup, informing the user. Data is never silently lost. <strong>Distinct from <a href="#s2">Restore (reference data)</a></strong> (§07/§12 — un-archiving a client/project/tag): this one replaces the whole SQLite file, that one un-hides a single reference-data row.</td>
+          <td class="avoid" data-l="Avoid"><s>rollback</s>, <s>revert</s>, <s>recover</s> (use "restore" for the act); not the reference-data <s>restore</s> (that's un-archiving)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Integrity check</td>

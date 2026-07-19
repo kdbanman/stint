@@ -2769,6 +2769,104 @@ async function main() {
     );
   });
 
+  // CONFIRM_ARCHIVE — §12 R13: archiving a REFERENCED client/project hides a record that carries
+  // history, so it is destructive and takes the same two-step gate as Delete. Drive the real
+  // renderer: click the referenced Acme client's Archive, assert (a) the inline .confirm-archive
+  // gate appears (a confirm-archive + cancel-archive control) and Acme is STILL listed, (b) the
+  // instrumented archiveClient was NOT called by that first click (__ARCHIVE_CLIENT_CALLS__ empty
+  // — a stray click archives nothing), and (c) the explicit confirm archives exactly once, with
+  // Acme's id, after which Acme detaches. (An UNREFERENCED client archives directly — that path
+  // is the Globex archive the CLIENTS_VIEW scene drives.)
+  await withPage(browser, clientsState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="clients"]');
+    await page.waitForSelector('#clients:not([hidden]) .client[data-id="1"]', { state: 'attached' });
+    await page.click('#clients .client[data-id="1"] [data-act="archive-client"]');
+    const armed = await page.evaluate(() => {
+      const row = document.querySelector('#clients .client[data-id="1"]');
+      return {
+        confirmShown: !!row?.querySelector('.confirm-archive'),
+        confirmBtn: !!row?.querySelector('[data-act="confirm-archive"]'),
+        cancelBtn: !!row?.querySelector('[data-act="cancel-archive"]'),
+        stillListed: !!row,
+        archiveCallsAfterArm: (window.__ARCHIVE_CLIENT_CALLS__ || []).length,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'main-confirm-archive.png'), fullPage: true });
+    await page.click('#clients .client[data-id="1"] [data-act="confirm-archive"]');
+    await page.waitForSelector('#clients .client[data-id="1"]', { state: 'detached' });
+    const confirmed = await page.evaluate(() => ({
+      archiveCalls: (window.__ARCHIVE_CLIENT_CALLS__ || []).slice(),
+    }));
+    const ok =
+      armed.confirmShown &&
+      armed.confirmBtn &&
+      armed.cancelBtn &&
+      armed.stillListed &&
+      armed.archiveCallsAfterArm === 0 && // the stray first click archived nothing
+      confirmed.archiveCalls.length === 1 && // the confirm archived exactly once
+      confirmed.archiveCalls[0] &&
+      confirmed.archiveCalls[0].id === 1;
+    record(
+      'CONFIRM_ARCHIVE',
+      ok,
+      `archiving a referenced client arms a confirm and does not archive (calls after arm=${armed.archiveCallsAfterArm}); ` +
+        `only the explicit confirm archives, exactly once: ${JSON.stringify(confirmed.archiveCalls)}`,
+      'main-confirm-archive.png',
+    );
+  });
+
+  // RESTORE_ARCHIVED — §12 R13: archive is a REVERSIBLE hide. Archived records are out of the
+  // active list by default; a "Show archived" toggle reveals them (with an "archived" pill) each
+  // carrying a Restore button, and Restore returns the record to the active list. Drive the real
+  // renderer: assert the archived client/tag are hidden by default, reveal them, and Restore the
+  // archived client — asserting the restoreClient payload and that it lands back active.
+  await withPage(browser, clientsState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="clients"]');
+    await page.waitForSelector('#clients:not([hidden]) .client[data-id="1"]', { state: 'attached' });
+    const before = await page.evaluate(() => ({
+      archivedClientShown: !!document.querySelector('#clients .client.archived[data-id="3"]'),
+      archivedTagShown: !!document.querySelector('#tags-list .tag-row.archived[data-id="3"]'),
+    }));
+    await page.click('#show-archived');
+    await page.waitForSelector('#clients .client.archived[data-id="3"]', { state: 'attached' });
+    const revealed = await page.evaluate(() => ({
+      archivedClientRestore: !!document.querySelector(
+        '#clients .client.archived[data-id="3"] [data-act="restore-client"]',
+      ),
+      archivedTagRestore: !!document.querySelector(
+        '#tags-list .tag-row.archived[data-id="3"] [data-act="restore-tag"]',
+      ),
+      pill: !!document.querySelector('#clients .client.archived[data-id="3"] .pill'),
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'main-clients-archived.png'), fullPage: true });
+    // Restore the archived client → it moves back into the active list (no longer .archived).
+    await page.click('#clients .client.archived[data-id="3"] [data-act="restore-client"]');
+    await page.waitForFunction(
+      () => !!document.querySelector('#clients .client[data-id="3"]:not(.archived)'),
+    );
+    const restored = await page.evaluate(() => ({
+      restoredPayload: window.__RESTORED_CLIENT__ || null,
+      nowActive: !!document.querySelector('#clients .client[data-id="3"]:not(.archived)'),
+    }));
+    const ok =
+      !before.archivedClientShown &&
+      !before.archivedTagShown &&
+      revealed.archivedClientRestore &&
+      revealed.archivedTagRestore &&
+      revealed.pill &&
+      restored.restoredPayload &&
+      restored.restoredPayload.id === 3 &&
+      restored.nowActive;
+    record(
+      'RESTORE_ARCHIVED',
+      ok,
+      `archived records hidden by default (${JSON.stringify(before)}), revealed with a Restore ` +
+        `button on "show archived" (${JSON.stringify(revealed)}), and Restore returns the client ` +
+        `to the active list: ${JSON.stringify(restored)}`,
+      'main-clients-archived.png',
+    );
+  });
+
   // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
   // running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
   // (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
