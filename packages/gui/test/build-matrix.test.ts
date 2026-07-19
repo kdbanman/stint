@@ -267,15 +267,18 @@ describe('GOLD — pack never auto-publishes in CI (§19 R05)', () => {
  * broken packaging toolchain (e.g. the `app-builder-bin` native helper missing, the
  * `spawn … app-builder ENOENT` that turned every release pack red) used to reach `main`
  * before anyone saw it: build/test CI was green because nothing on the PR path ever
- * exercised packaging. The hardening closes that gap with two PR-time checks — a cheap
- * `verify:packaging` toolchain guard in the `verify` job and a `pack-smoke` job that
- * actually drives electron-builder to a packed Linux app — so a packaging regression
- * fails the PR, not the next release.
+ * exercised packaging. The hardening closes that gap with PR-time checks — a cheap
+ * `verify:packaging` toolchain guard in the `verify` job and two `pack-smoke` jobs that
+ * actually drive electron-builder to a packed app: `pack-smoke` on Linux (the AppImage/.deb
+ * host) and `pack-smoke-mac` on macos-latest (the .dmg host — so a mac-only electron-builder
+ * breakage fails the PR, not the next release, closing the "nothing runs on macOS before
+ * merge" half of the gap). Both drive a `--dir` unpacked build; the full distributable
+ * (.dmg/.AppImage/.deb) still runs only post-merge in release.yml.
  *
- * This guard is the executable mirror of that wiring: it FAILS the moment the smoke is
- * removed or defanged (the script deleted, the guard step dropped, or the smoke job
- * stripped of its actual pack), the same self-protecting role the R01/R02/R05 guards
- * above play for the rest of the §19 config. Static inspection only — no build/network.
+ * This guard is the executable mirror of that wiring: it FAILS the moment either smoke is
+ * removed or defanged (a script deleted, the guard step dropped, or a smoke job stripped of
+ * its actual pack), the same self-protecting role the R01/R02/R05 guards above play for the
+ * rest of the §19 config. Static inspection only — no build/network.
  */
 describe('GOLD — packaging is smoke-tested on PRs, not just at release (§19 R01)', () => {
   it('the GUI declares a linux-only `pack:smoke` script (no mac/windows in the smoke)', () => {
@@ -285,6 +288,19 @@ describe('GOLD — packaging is smoke-tested on PRs, not just at release (§19 R
     // The smoke is Linux-only (the ubuntu PR runner); mac/windows targets must not creep in.
     expect(smoke).not.toMatch(/--mac\b/);
     expect(smoke).not.toMatch(/--win\b|--windows\b/);
+  });
+
+  it('the GUI declares a mac-only `pack:smoke:mac` script (a --dir unpacked mac pack)', () => {
+    const smokeMac = guiPkg.scripts?.['pack:smoke:mac'] ?? '';
+    expect(smokeMac).toMatch(/electron-builder\b/);
+    expect(smokeMac).toMatch(/--mac\b/);
+    // An unpacked `dir` build — fast, and (unlike a distributable) it never auto-publishes,
+    // so no `--publish never` is strictly needed, but keep the flag for parity with `pack:smoke`.
+    expect(smokeMac).toMatch(/(?:^|\s)(?:--dir|dir)(?:\s|$)/);
+    expect(smokeMac).toMatch(/--publish\s+never\b/);
+    // The mac smoke is macOS-only (the macos-latest PR runner); linux/windows must not creep in.
+    expect(smokeMac).not.toMatch(/--linux\b/);
+    expect(smokeMac).not.toMatch(/--win\b|--windows\b/);
   });
 
   it('the CI verify job runs the cheap packaging-toolchain guard before merge', () => {
@@ -306,5 +322,27 @@ describe('GOLD — packaging is smoke-tested on PRs, not just at release (§19 R
     expect(smokeBody).toMatch(/pack:smoke/);
     // And it asserts an artifact was produced, so an empty/failed pack can't pass silently.
     expect(smokeBody).toMatch(/dist-pack/);
+  });
+
+  it('CI declares a pack-smoke-mac job that actually packs the macOS .app on macos-latest', () => {
+    // The mac sibling of the Linux pack-smoke — the ONLY place a real mac pack is exercised
+    // before merge (release.yml's mac pack is post-merge only). Deleting the job drops this
+    // `^  pack-smoke-mac:` line and this assertion fails, so removing the guard is a caught
+    // regression (process.html §02 R05 — protect the guard).
+    expect(ciActive).toMatch(/^\s{2}pack-smoke-mac\s*:/m);
+    // Isolate the pack-smoke-mac job body (from its key to the next top-level job key)
+    // so the assertions key off that job, not the whole file.
+    const smokeMacBody = (() => {
+      const m = ciActive.match(/^\s{2}pack-smoke-mac\s*:\n([\s\S]*?)(?=\n\s{2}\S)/m);
+      return m ? (m[1] ?? '') : '';
+    })();
+    expect(smokeMacBody).not.toBe('');
+    // It runs on macOS and drives the real mac packaging script (not just a config check).
+    expect(smokeMacBody).toMatch(/runs-on\s*:\s*macos-latest/);
+    expect(smokeMacBody).toMatch(/pack:smoke:mac/);
+    // And it asserts the packed `.app` bundle was produced under dist-pack, so an empty/failed
+    // mac pack can't pass silently.
+    expect(smokeMacBody).toMatch(/dist-pack/);
+    expect(smokeMacBody).toMatch(/\.app\b/);
   });
 });
