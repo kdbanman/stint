@@ -1137,6 +1137,52 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §09 R01/R08 — save a report with an ABSOLUTE custom range (fixed from/to bounds). Used by
+    // the same-day (from == to) VALID scenario: the report rule is ≤, so this is accepted, saved,
+    // and runnable. Surface-neutral (CoreWorld store.saveReport{absolute} / CliWorld `tt report
+    // save --range FROM TO`).
+    pattern:
+      /^I save a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+    run: (w, _c, name, fromUtc, toUtc, by, filter) => {
+      w.saveReportRange({
+        name,
+        fromUtc,
+        toUtc,
+        by: groupBy(by),
+        billableFilter: filter as 'billable' | 'all' | 'non-billable',
+      });
+    },
+  },
+  {
+    // §09 R01/R08 — core REFUSES an inverted absolute range (from > to), which only ever resolves
+    // to an empty window, so it is rejected rather than stored (mirroring add()'s from<to guard and
+    // §14's working-hours start<end). This is the refusal the GUI builder surfaces inline (§12 R21);
+    // this proves the CONTRACT holds on BOTH surfaces (store.saveReport throws / `tt report save`
+    // exits non-zero), and — paired with a list assertion — that a refused save persists nothing.
+    pattern:
+      /^saving a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time is rejected$/,
+    run: (w, _c, name, fromUtc, toUtc, by, filter) => {
+      expect(
+        w.attemptSaveReportRange({
+          name,
+          fromUtc,
+          toUtc,
+          by: groupBy(by),
+          billableFilter: filter as 'billable' | 'all' | 'non-billable',
+        }).rejected,
+      ).toBe(true);
+    },
+  },
+  {
+    // §09 R08 — the from ≤ to guard holds on EDIT too: amending a saved report into an inverted
+    // absolute window is refused, leaving the original definition untouched. Both surfaces.
+    pattern:
+      /^amending the saved report "([^"]*)" range to the custom range (\S+) to (\S+) is rejected$/,
+    run: (w, _c, name, fromUtc, toUtc) => {
+      expect(w.attemptEditReportRange(name, { fromUtc, toUtc }).rejected).toBe(true);
+    },
+  },
+  {
     pattern: /^the saved report list includes "([^"]*)"$/,
     run: (w, _c, name) => expect(w.listReportNames()).toContain(name),
   },
