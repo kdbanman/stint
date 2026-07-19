@@ -48,6 +48,23 @@ export type SavedReportInput = Omit<SavedReport, 'id' | 'createdUtc'>;
 export type SavedReportPatch = Partial<Omit<SavedReport, 'id' | 'name' | 'createdUtc'>>;
 
 /**
+ * §09 R01/R08 — a saved report's absolute range must be ordered from ≤ to: a definition
+ * whose From is AFTER its To can only ever resolve to an empty window, so it is rejected
+ * rather than stored (the same guarantee §14 gives working hours). Returns the rejection
+ * message when the spec is an inverted absolute window, else null; a preset never inverts.
+ *
+ * Note the ≤ (not the entries' strict <): a report over a same-day from == to window is a
+ * legitimate, non-empty request, whereas an entry needs a strictly positive duration. This
+ * ≤-for-reports vs <-for-entries asymmetry is the ratified rule (§05 R5, §09 R01).
+ */
+export function rangeSpecOrderError(spec: RangeSpec): string | null {
+  if (spec.kind === 'absolute' && Date.parse(spec.fromUtc) > Date.parse(spec.toUtc)) {
+    return 'report range end must not be before its start';
+  }
+  return null;
+}
+
+/**
  * Resolve a saved report's RangeSpec to absolute UTC bounds. A preset delegates to the
  * SAME core resolveRange the ad-hoc report path uses (so the saved range and the ad-hoc
  * range can never diverge); an absolute spec passes its exact bounds through.

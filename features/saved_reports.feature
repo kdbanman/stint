@@ -89,6 +89,36 @@ Feature: Saved reports
     Then the saved report list includes "Weekly"
     And the saved report list does not include "weekly"
 
+  Scenario: A saved report with an inverted custom range is rejected and stores nothing
+    # PRD §09 R01/R08 — a custom range whose From is AFTER its To can only ever resolve to an
+    # EMPTY window, so core REFUSES it rather than storing a definition that always runs empty
+    # (the guarantee §14 gives working hours, and add()'s from<to gives entries). The refused
+    # save persists nothing; this is the rejection the GUI builder surfaces inline (§12 R21).
+    # Proven on BOTH surfaces (store.saveReport throws / `tt report save --range` exits non-zero).
+    When saving a report "Backwards" for the custom range 2026-07-15T00:00:00Z to 2026-07-01T00:00:00Z grouped by client over billable time is rejected
+    Then the saved report list does not include "Backwards"
+
+  Scenario: Amending a saved report to an inverted custom range is rejected
+    # PRD §09 R08 — the from ≤ to guard holds on EDIT too (mirroring saveReport): a valid saved
+    # definition cannot be amended into an inverted window; the amendment is refused and the
+    # original definition is left untouched. Proven on both surfaces (store.editReport throws /
+    # `tt report edit --range` exits non-zero).
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    When I save a report "Weekly" for this week grouped by client over billable time
+    Then the saved report list includes "Weekly"
+    When amending the saved report "Weekly" range to the custom range 2026-07-15T00:00:00Z to 2026-07-01T00:00:00Z is rejected
+    Then the saved report list includes "Weekly"
+
+  Scenario: A saved report with a same-day (from == to) custom range is accepted
+    # PRD §09 R01 — the report range rule is from ≤ to (NOT the entries' strict <): a same-day
+    # window where From EQUALS To is a legitimate request, so it SAVES and RUNS (here over an
+    # empty window, totalling 0h) rather than being rejected. This is the ≤-for-reports vs
+    # <-for-entries asymmetry made concrete. Both surfaces (store.saveReport / `tt report save`).
+    When I save a report "SameDay" for the custom range 2026-06-24T00:00:00Z to 2026-06-24T00:00:00Z grouped by client over billable time
+    Then the saved report list includes "SameDay"
+    When I run the saved report "SameDay"
+    Then the saved report run totals 0 billable hours
+
   Scenario: Renaming then deleting a saved report removes it from the list
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     When I save a report "Draft" for this week grouped by client over billable time

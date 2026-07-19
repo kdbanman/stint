@@ -337,6 +337,40 @@ export interface World {
     by: 'client' | 'project' | 'day' | 'tag';
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean };
+  /**
+   * §09 R01/R08 — save a report with an ABSOLUTE custom range (fixed from/to bounds passed
+   * straight through, no re-resolution). Surface-neutral: CoreWorld store.saveReport with a
+   * `{kind:'absolute'}` spec, CliWorld `tt report save <name> --range FROM TO`. A same-day
+   * from == to window is valid (the report rule is ≤, unlike the entry rule's strict <).
+   */
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void;
+  /**
+   * §09 R01/R08 — attempt to save a report with an absolute custom range and report whether
+   * core REFUSED it (an inverted from > to window resolves to nothing, so it is rejected
+   * rather than stored — the same guarantee §14 gives working hours). Surface-neutral:
+   * CoreWorld catches store.saveReport's throw, CliWorld reads `tt report save`'s non-zero
+   * exit. This is the refusal the GUI builder surfaces inline (§12 R21).
+   */
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean };
+  /**
+   * §09 R01/R08 — attempt to amend a saved report's range to an absolute custom window and
+   * report whether core REFUSED it (an inverted from > to amendment is rejected, mirroring
+   * saveReport). CoreWorld catches store.editReport's throw, CliWorld reads `tt report edit`'s
+   * non-zero exit.
+   */
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean };
   /** §09 R08 — the names of the saved report definitions (CoreWorld store.listReports / CliWorld `tt report ls --json`). */
   listReportNames(): string[];
   /** §09 R08 — amend a saved report's range preset (CoreWorld store.editReport / CliWorld `tt report edit <name> --<preset>`). */
@@ -932,6 +966,49 @@ export class CoreWorld implements World {
     // (UNIQUE COLLATE NOCASE) IS the rejection, and the transaction rolls back so nothing persists.
     try {
       this.saveReport(o);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void {
+    // §09 R01/R08: an ABSOLUTE spec freezes the exact from/to bounds (no re-resolution).
+    this.store.saveReport({
+      name: o.name,
+      rangeSpec: { kind: 'absolute', fromUtc: o.fromUtc, toUtc: o.toUtc },
+      by: o.by,
+      billableFilter: o.billableFilter,
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+  }
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §09 R01/R08 — the SAME saveReport the happy path uses; core's from ≤ to guard throws on
+    // an inverted window and the transaction rolls back, so nothing persists.
+    try {
+      this.saveReportRange(o);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
+    try {
+      this.store.editReport(name, {
+        rangeSpec: { kind: 'absolute', fromUtc: o.fromUtc, toUtc: o.toUtc },
+      });
       return { rejected: false };
     } catch {
       return { rejected: true };
@@ -1593,6 +1670,39 @@ export class CliWorld implements World {
     if (o.billableFilter === 'all') args.push('--all');
     else if (o.billableFilter === 'non-billable') args.push('--non-billable');
     const r = this.tt(args);
+    return { rejected: r.code !== 0 };
+  }
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void {
+    // §09 R01/R08: `tt report save --range FROM TO` freezes an ABSOLUTE window, parity with the
+    // GUI builder's Custom range. The from/to parse to UTC through the same parseTime `tt add` uses.
+    const args = ['report', 'save', o.name, '--range', o.fromUtc, o.toUtc, '--by', o.by];
+    if (o.billableFilter === 'all') args.push('--all');
+    else if (o.billableFilter === 'non-billable') args.push('--non-billable');
+    this.tt(args);
+  }
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §09 R01/R08 — an inverted `tt report save --range FROM TO` exits non-zero with the core
+    // diagnostic and stores nothing; that non-zero exit is the surface's rejection signal.
+    const args = ['report', 'save', o.name, '--range', o.fromUtc, o.toUtc, '--by', o.by];
+    if (o.billableFilter === 'all') args.push('--all');
+    else if (o.billableFilter === 'non-billable') args.push('--non-billable');
+    const r = this.tt(args);
+    return { rejected: r.code !== 0 };
+  }
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
+    const r = this.tt(['report', 'edit', name, '--range', o.fromUtc, o.toUtc]);
     return { rejected: r.code !== 0 };
   }
   listReportNames(): string[] {
