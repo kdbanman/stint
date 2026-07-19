@@ -523,6 +523,30 @@ export const steps: StepDef[] = [
     pattern: /^I archive tag "([^"]*)"$/,
     run: (w, _c, name) => w.archiveTag(name),
   },
+  // §12 R13 — restore (un-archive) reference data, the reverse of archive. Surface-neutral over
+  // the World restore capability (CoreWorld store.restore*, CliWorld `tt … restore`), so the
+  // Clients view's Restore button is proven to reach nothing tt cannot (§17 R8).
+  {
+    pattern: /^I restore client "([^"]*)"$/,
+    run: (w, _c, name) => w.restoreClient(name),
+  },
+  {
+    pattern: /^I restore project "([^"]*)"$/,
+    run: (w, _c, name) => w.restoreProject(name),
+  },
+  {
+    pattern: /^I restore tag "([^"]*)"$/,
+    run: (w, _c, name) => w.restoreTag(name),
+  },
+  // §12 R13 edge — attempt to restore a project whose owning client is still archived; both
+  // surfaces REFUSE (an active project under a hidden client is unselectable). Stash the result
+  // for the shared "the reference-data change is rejected" assertion.
+  {
+    pattern: /^I try to restore project "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.refDataResult = w.attemptRestoreProject(name);
+    },
+  },
   // §07 R03 (#64) — attempt an add/rename whose name may already be taken; the surface either
   // creates it or REJECTS the duplicate. Both surfaces reject identically (§17 R8), so a
   // by-client report can never silently conflate two clients under one line.
