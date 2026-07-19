@@ -149,6 +149,14 @@ export interface MergeOptions {
   projectId?: number | null;
   /** Override the winning billable flag (default: first entry's). */
   billable?: boolean;
+  /**
+   * Acknowledge a non-contiguous selection (PRD §06 R3). A merge folds its selection into
+   * one span from earliest start to latest end; when consecutive entries are not contiguous
+   * (an earlier entry's end is strictly before the next's start) the gap becomes billable
+   * time. merge() refuses a gapped selection unless this is set, so fabricating a gap as
+   * billable time is always an explicit choice.
+   */
+  allowGap?: boolean;
 }
 
 /** A non-fatal note surfaced alongside a successful write (e.g. overlap warnings). */

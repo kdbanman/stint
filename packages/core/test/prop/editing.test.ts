@@ -6,7 +6,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
-import { Store } from '@stint/core';
+import { Store, StoreError } from '@stint/core';
 
 const NOW = '2026-05-10T18:00:00Z';
 const mem = () => Store.openMemory(() => new Date(NOW));
@@ -257,4 +257,55 @@ describe('merge conflict resolution (§06, §16)', () => {
     expect(merged.clientId).toBe(bId); // override wins over first-entry default
     store.close();
   });
+});
+
+// §06 R3 — the contiguity gate. Two closed entries with a randomly-sized gap between them.
+// A merge folds the selection into ONE span from earliest start to latest end, so any positive
+// gap becomes billable time the freelancer never worked (the filed bug: two 1-hour entries days
+// apart → one 78-hour billable entry, silently). The property that kills that class: a
+// SUCCESSFUL merge's span never exceeds the sum of its inputs' spans plus the acknowledged gap —
+// and a gapped selection is refused outright unless the gap is acknowledged.
+describe('merge contiguity gate (§06 R3)', () => {
+  const base = Date.parse('2026-05-01T00:00:00Z');
+  const isoAt = (s: number) => new Date(base + s * 1000).toISOString().replace('.000Z', 'Z');
+
+  test.prop([
+    fc.integer({ min: 60, max: 36_000 }), // first entry duration (s)
+    fc.integer({ min: 0, max: 259_200 }), // gap after the first entry (s) — 0 = contiguous
+    fc.integer({ min: 60, max: 36_000 }), // second entry duration (s)
+  ])(
+    'a successful merge spans exactly inputs + acknowledged gap, and a gap is refused unless acknowledged',
+    (d1, gap, d2) => {
+      const store = mem();
+      try {
+        const { value: e1 } = store.add({
+          description: 'a',
+          fromUtc: isoAt(0),
+          toUtc: isoAt(d1),
+        });
+        const { value: e2 } = store.add({
+          description: 'b',
+          fromUtc: isoAt(d1 + gap),
+          toUtc: isoAt(d1 + gap + d2),
+        });
+        const inputsSeconds = e1.rawSeconds + e2.rawSeconds; // d1 + d2
+
+        if (gap > 0) {
+          // Unacknowledged: refused, and the fold never ran — both originals survive untouched.
+          expect(() => store.merge([e1.id, e2.id])).toThrow(StoreError);
+          expect(store.getEntry(e1.id)).not.toBeNull();
+          expect(store.getEntry(e2.id)).not.toBeNull();
+        }
+
+        // Acknowledged (a no-op for a contiguous selection): the fold proceeds and its span is
+        // earliest start → latest end = inputs + gap — never the runaway billable of the bug.
+        const { value: merged } = store.merge([e1.id, e2.id], { allowGap: true });
+        expect(merged.rawSeconds).toBe(inputsSeconds + gap);
+        expect(merged.rawSeconds).toBeLessThanOrEqual(inputsSeconds + gap);
+        expect(merged.billableSeconds).toBeLessThanOrEqual(inputsSeconds + gap);
+      } finally {
+        store.close();
+      }
+    },
+  );
 });
