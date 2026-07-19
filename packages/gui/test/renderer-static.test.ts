@@ -600,6 +600,36 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/\$\('add-client'\)\.addEventListener\('change'/);
   });
 
+  it('renderClients / renderTags are re-entrant so a direct repaint + the changed broadcast cannot double the list (issue #66)', () => {
+    const app = read('app.js');
+    // Root cause: a rename / archive / add each calls renderClients directly AND the write's
+    // `changed` broadcast schedules a SECOND renderClients via onChange; the two async runs
+    // interleaved — both cleared #clients-list, then both awaited per-client listProjects, then
+    // both appended — so every client, project and tag rendered twice. The fix makes each run
+    // claim a monotonic generation token, build into a detached fragment, and bail after an await
+    // once a newer run has superseded it — so exactly one run ever paints. Pin that shape here so
+    // a regression to the racy clear-then-await-then-append is caught cheaply per commit.
+    const clientsBody = app.slice(
+      app.indexOf('async function renderClients()'),
+      app.indexOf('async function renderTags()'),
+    );
+    // renderClients no longer clears the host up front then awaits mid-append — it builds into a
+    // detached fragment and only the still-current run swaps it in (one synchronous replace)…
+    expect(app).toMatch(/let clientsRenderGen = 0/);
+    expect(clientsBody).toMatch(/const gen = \+\+clientsRenderGen/);
+    expect(clientsBody).toMatch(/document\.createDocumentFragment\(\)/);
+    // …with a generation guard after each await that drops a superseded run before it touches DOM.
+    expect(clientsBody).toMatch(/if \(gen !== clientsRenderGen\) return/);
+    // The Tags strip carries the same guard — the same broadcast double-fires renderTags too.
+    const tagsBody = app.slice(
+      app.indexOf('async function renderTags()'),
+      app.indexOf('function tagRow('),
+    );
+    expect(app).toMatch(/let tagsRenderGen = 0/);
+    expect(tagsBody).toMatch(/const gen = \+\+tagsRenderGen/);
+    expect(tagsBody).toMatch(/if \(gen !== tagsRenderGen\) return/);
+  });
+
   it('the Clients view ships a tag-management strip wired to the tag IPC (§12 R10)', () => {
     const html = read('index.html');
     const app = read('app.js');
