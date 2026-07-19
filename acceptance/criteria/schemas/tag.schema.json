@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/tag.json",
+  "title": "tt tag ls --json",
+  "description": "A tag — a flat, reusable, cross-cutting label (PRD §07; born on the fly when first applied, §03). `tt tag ls --json` emits an array of these (active only by default, `--archived` includes archived rows).",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "name", "archived"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "name": { "type": "string", "minLength": 1 },
+      "archived": { "type": "boolean" }
+    }
+  }
+}

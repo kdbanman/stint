@@ -801,6 +801,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listClients(!!opts.archived),
+          // §07 — the client scripting shape, validated against acceptance/criteria/schemas/client.schema.json.
           toJson: (cs) => cs.map((c) => ({ id: c.id, name: c.name, archived: c.archived })),
           empty: 'no clients',
           headers: ['ID', 'NAME', 'ARCHIVED'],
@@ -850,6 +851,7 @@ export function buildProgram(deps: Deps): Command {
         const clientId = opts.client ? s.findClientByName(opts.client)?.id : undefined;
         emitList(io, opts.json, {
           items: s.listProjects(clientId, !!opts.archived),
+          // §07 — the project scripting shape, validated against acceptance/criteria/schemas/project.schema.json.
           toJson: (ps) =>
             ps.map((p) => ({ id: p.id, client_id: p.clientId, name: p.name, archived: p.archived })),
           empty: 'no projects',
@@ -895,6 +897,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listTags(!!opts.archived),
+          // §07 — the tag scripting shape, validated against acceptance/criteria/schemas/tag.schema.json.
           toJson: (ts) => ts.map((t) => ({ id: t.id, name: t.name, archived: t.archived })),
           empty: 'no tags',
           headers: ['ID', 'NAME', 'ARCHIVED'],
@@ -1095,6 +1098,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listSleepFlagged(),
+          // §10a — the sleep-flagged-entry scripting shape, validated against acceptance/criteria/schemas/sleep.schema.json.
           toJson: (es) =>
             es.map((e) => ({
               id: e.id,
@@ -1142,6 +1146,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) => {
         const st = s.settings();
         if (opts.json) {
+          // §14 — the raw camelCase settings object, validated against acceptance/criteria/schemas/settings.schema.json.
           io.out(JSON.stringify(st));
           return;
         }

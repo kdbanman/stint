@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/project.json",
+  "title": "tt project ls --json",
+  "description": "A project — an optional refinement belonging to exactly one client (PRD §07). `tt project ls --json` emits an array of these (active only by default, `--archived` includes archived rows); `client_id` names the owning client.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "client_id", "name", "archived"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "client_id": { "type": "integer" },
+      "name": { "type": "string", "minLength": 1 },
+      "archived": { "type": "boolean" }
+    }
+  }
+}
