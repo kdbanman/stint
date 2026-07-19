@@ -12,6 +12,13 @@ See `README.md` for the implementation front door and `acceptance/criteria/COVER
 for the full PRD-to-test map. Key commands: `npm run build`, `npm test`,
 `npm run judge`, `npm run evidence`, `npm run verify:no-network`.
 
+## Name the idea
+
+Wherever an idea is delivered — an issue, a PR, a doc, a conversation — give it
+a handle first: the concept compressed to one plain sentence a reader can hold
+and repeat ("docs lie about the apparatus"). Detail hangs off the handle, never
+replaces it.
+
 ## Sharing rendered HTML
 
 These docs are styled HTML, which renders as raw source when opened directly on
