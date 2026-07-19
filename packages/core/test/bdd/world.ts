@@ -324,6 +324,19 @@ export interface World {
     rounding?: boolean;
     roundingIncrementMin?: number;
   }): void;
+  /**
+   * §09 R08 / §13 — attempt to save a report and report whether core REFUSED it (a duplicate
+   * name, UNIQUE COLLATE NOCASE). Surface-neutral: CoreWorld catches store.saveReport's throw,
+   * CliWorld reads `tt report save`'s non-zero exit. The refusal is what the GUI builder's
+   * duplicate-name feedback (§12 R21) surfaces; this proves the CONTRACT it surfaces holds on
+   * both surfaces, and that a refused save persists nothing.
+   */
+  attemptSaveReport(o: {
+    name: string;
+    preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean };
   /** §09 R08 — the names of the saved report definitions (CoreWorld store.listReports / CliWorld `tt report ls --json`). */
   listReportNames(): string[];
   /** §09 R08 — amend a saved report's range preset (CoreWorld store.editReport / CliWorld `tt report edit <name> --<preset>`). */
@@ -908,6 +921,21 @@ export class CoreWorld implements World {
       rounding: o.rounding ?? false,
       roundingIncrementMin: o.roundingIncrementMin ?? 15,
     });
+  }
+  attemptSaveReport(o: {
+    name: string;
+    preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §13 — the SAME saveReport the happy path uses; core's assertNameFree throw on a duplicate
+    // (UNIQUE COLLATE NOCASE) IS the rejection, and the transaction rolls back so nothing persists.
+    try {
+      this.saveReport(o);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
   }
   listReportNames(): string[] {
     return this.store.listReports().map((d) => d.name);
@@ -1545,6 +1573,27 @@ export class CliWorld implements World {
     else if (o.billableFilter === 'non-billable') args.push('--non-billable');
     if (o.rounding) args.push('--round', String(o.roundingIncrementMin ?? 15));
     this.tt(args);
+  }
+  attemptSaveReport(o: {
+    name: string;
+    preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §13 — a duplicate `tt report save` exits non-zero with a diagnostic and stores nothing;
+    // that non-zero exit is the surface's rejection signal (the twin of attemptSetConfig).
+    const PRESET_FLAG: Record<typeof o.preset, string> = {
+      today: '--today',
+      week: '--week',
+      'last-week': '--last-week',
+      month: '--month',
+      'last-month': '--last-month',
+    };
+    const args = ['report', 'save', o.name, PRESET_FLAG[o.preset], '--by', o.by];
+    if (o.billableFilter === 'all') args.push('--all');
+    else if (o.billableFilter === 'non-billable') args.push('--non-billable');
+    const r = this.tt(args);
+    return { rejected: r.code !== 0 };
   }
   listReportNames(): string[] {
     const r = this.tt(['report', 'ls', '--json']);

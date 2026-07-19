@@ -22,6 +22,9 @@
       <div class="pop-act">
         <button class="btn primary" id="toggle" aria-label="Start timer" aria-pressed="false">Start</button>
       </div>
+      <!-- §12 R21: a refused Stop/Start from the popover is surfaced here, announced, never a
+           silent no-op — the tray twin of the main window's banner-routed toggle rejection. -->
+      <div id="pop-warning" class="form-error" role="status" aria-live="polite" hidden></div>
       <div class="pop-foot">
         <button class="pop-open" id="open" aria-label="Open the main Stint window">Open Stint</button>
       </div>
