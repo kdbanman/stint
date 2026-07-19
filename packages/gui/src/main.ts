@@ -23,7 +23,7 @@ import {
   nativeTheme,
   dialog,
 } from 'electron';
-import { watch, writeFileSync, type FSWatcher } from 'node:fs';
+import { watch, type FSWatcher } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -33,47 +33,14 @@ import {
   formatDuration,
   initCheckinState,
   evaluateCheckin,
-  resolveRange,
-  buildEntryList,
-  describeOverlaps,
-  joinClientProject,
   LAST_SEEN_KEY,
   type EntryView,
-  type EntryGroupBy,
   type WriteResult,
 } from '@stint/core';
-import {
-  CHANNELS,
-  type WriteAck,
-  type ListEntriesQuery,
-  type EntryListView,
-  type SavedReportInputView,
-  type FavoriteInputView,
-  type UpdateProgress,
-} from './ipc.js';
-import {
-  pinFavorite as pinFavoriteHelper,
-  listFavorites as listFavoritesHelper,
-  favoriteToView,
-} from './favorites.js';
-import { listBackups as listBackupsHelper } from './backupview.js';
-import { buildUiState } from './uistate.js';
+import { CHANNELS, type WriteAck, type UpdateProgress } from './ipc.js';
+import { createIpcHandlers } from './ipc-handlers.js';
 import { nextTimerAction } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
-import { startWithAttributes, type StartPayload } from './start.js';
-import {
-  buildReportView,
-  buildSavedReportView,
-  resolveDateRange,
-  resolveExportDefinition,
-  exportPayload,
-  exportFileName,
-  savedReportToView,
-  savedReportInputFromView,
-  savedReportPatchFromView,
-  type ReportViewRequest,
-  type ExportRequest,
-} from './reportview.js';
 import {
   currentVersion,
   checkForUpdates,
@@ -333,394 +300,52 @@ function createPopover(): void {
   popover.on('blur', () => popover?.hide());
 }
 
-// ------------------------------------------------------------ entries query (§12 R9)
-
-/**
- * §12 R9 — the Entries view's grouped/filtered/searched list. A read-only query: it
- * resolves the range (a preset via core's resolveRange, or the custom PLAIN-DATE pair —
- * §09 R01 — via reportview.ts's resolveDateRange, the inclusive-end-day half-open local
- * window [from 00:00, day-after-to 00:00)), narrows through store.listEntries
- * (range/client/project/tag/billable/search — exactly `tt list`), groups via core's
- * buildEntryList, and projects each entry to the renderer-safe row shape with its
- * overlap flag. No write, so it never refreshes windows.
- */
-function listEntries(q: ListEntriesQuery): EntryListView {
-  const now = new Date();
-  const range = q.preset
-    ? resolveRange(q.preset, store.settings().weekStart, now)
-    : resolveDateRange(q.fromDate!, q.toDate!);
-  const filter: Parameters<Store['listEntries']>[0] = {
-    fromUtc: range.fromUtc,
-    toUtc: range.toUtc,
-    billable: q.billable ?? 'all',
-  };
-  if (q.clientId !== undefined) filter.clientId = q.clientId;
-  if (q.projectId !== undefined) filter.projectId = q.projectId;
-  if (q.tag !== undefined && q.tag !== '') filter.tag = q.tag;
-  if (q.search !== undefined && q.search !== '') filter.search = q.search;
-  const entries = store.listEntries(filter);
-  // §12 R9: per-entry overlap detail (worst-neighbour minutes + previous/next relation)
-  // off the one core rule, so the Entries-view rows paint the same detailed banner the
-  // day-grouped getState path does. `describeOverlaps` keys are exactly the overlapped ids.
-  const overlaps = describeOverlaps(entries, now);
-  const byId = new Map(entries.map((e) => [e.id, e]));
-  // store.listEntries already applied the free-text search (via the filter, like the
-  // CLI), so buildEntryList only needs to group the surviving set here. Issues #55/#50:
-  // `by` is optional on ListEntriesQuery (and the renderer is plain JS — TypeScript
-  // could not catch a dropped key there anyway) — default to the Entries calendar's 'day'
-  // grouping so a payload missing `by` can never reject the whole query (core's keysOf
-  // now fails loudly on an unknown grouping instead of throwing an opaque TypeError).
-  const { groups } = buildEntryList(entries, { by: (q.by as EntryGroupBy | undefined) ?? 'day' });
-  return {
-    groups: groups.map((g) => ({
-      key: g.key,
-      billableSeconds: g.entries.reduce((s, e) => s + e.billableSeconds, 0),
-      entries: g.entries.map((e) => {
-        const full = byId.get(e.id)!;
-        const overlap = overlaps.get(full.id);
-        return {
-          id: full.id,
-          description: full.description,
-          clientLabel: joinClientProject(full.clientName, full.projectName),
-          startUtc: full.startUtc,
-          endUtc: full.endUtc,
-          billableSeconds: full.billableSeconds,
-          billable: full.billable,
-          overlapped: overlap !== undefined,
-          overlapMinutes: overlap ? Math.round(overlap.overlapSeconds / 60) : 0,
-          overlapRelation: overlap ? overlap.relation : null,
-          sleptThrough: full.sleptThrough,
-          excludedSeconds: full.excludedSeconds,
-          rawSeconds: full.rawSeconds,
-          tags: full.tags,
-        };
-      }),
-    })),
-    rangeFromUtc: range.fromUtc,
-    rangeToUtc: range.toUtc,
-  };
-}
-
 // ------------------------------------------------------------------------- IPC
 
+/**
+ * Bind the renderer↔main IPC handler map to ipcMain. The map itself — every channel's handler,
+ * its typed payload and result — lives in ipc-handlers.ts (createIpcHandlers), pure and
+ * Electron-free so it is typed against ipc.ts's IpcContract and bind-tested against CHANNELS
+ * (issue #87). Here we supply the three OS-bound bits it cannot own — the window refresh, the
+ * native Save dialog, and the live global-hotkey rebind — and wire each channel. The map is
+ * total over Channel, so the bind needs no non-null assertion; the payload crosses the process
+ * boundary as `unknown`, so it is widened once here, at the wire.
+ */
 function registerIpc(): void {
-  const handlers: Record<string, (payload: unknown) => unknown> = {
-    getState: () => buildUiState(store),
-    // §09 R7: free-text search over the day-grouped history list. The query rides inside
-    // the payload and narrows the listed entries through core (parity with `tt list
-    // --search`); the returned UiState is painted exactly as getState's is.
-    search: (p) => buildUiState(store, { search: (p as { query?: string })?.query }),
-    // §12 R9: the Entries view's control bar. Read-only (no refreshAll): resolve the range
-    // (a preset through core's resolveRange — the same rule the report picker drives — or
-    // the custom plain-date pair through resolveDateRange, §09 R01: the toolbar's two date
-    // fields resolve to the inclusive-end-day half-open local window here, never in the
-    // renderer), list the entries through the SAME store.listEntries the
-    // CLI uses (range/client/project/tag/billable/search all narrow there), then group via
-    // core's buildEntryList. Returns the grouped rows + the resolved window; the renderer
-    // paints it and re-derives no grouping/matching (parity with `tt list … --by`).
-    listEntries: (p): EntryListView => listEntries(p as ListEntriesQuery),
-    // A write IPC channel returns a WriteAck carrying the core write's warnings (PRD §06
-    // R4: overlap is allowed but flagged) so the renderer can surface an inline banner at
-    // the moment of the edit. getState/report/list-style channels stay value-returning.
-    toggle: () => toggleTimer(),
-    start: (p): WriteAck => {
-      // The renderer's Start form supplies optional attributes (description, client,
-      // project, tags, billable); resolve and forward them all (PRD §05 R1, §12 R1). A
-      // start can land on an instant that overlaps an existing entry — warned, not blocked.
-      const res = startWithAttributes(store, (p as StartPayload) ?? {});
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    stop: (): WriteAck => {
-      const res = store.stop({});
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    resume: (): WriteAck => {
-      const res = store.resume();
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    add: (p): WriteAck => {
-      // §12 R7 / §05 R5: backfill a completed entry from explicit from/to times. Mirror
-      // `tt add` exactly so the surfaces stay equal: the two local datetime strings convert
-      // to UTC, client/project names resolve through core's single rule, tags/billable ride
-      // along. A backfill can land on a span that overlaps an existing entry — warned, not
-      // blocked (§06 R4) — so we return the uniform WriteAck carrying the overlap warning,
-      // exactly like start/edit, and the renderer raises the same inline banner. Core
-      // validation errors (`--to must be after --from`) propagate as the IPC rejection.
-      const payload = p as {
-        description?: string | null;
-        fromLocal: string;
-        toLocal: string;
-        client?: string;
-        project?: string;
-        tags?: string[];
-        billable?: boolean;
-      };
-      const { clientId, projectId } = store.resolveClientProjectByName({
-        client: payload.client,
-        project: payload.project,
-      });
-      const res = store.add({
-        description: payload.description ?? null,
-        fromUtc: toUtc(new Date(payload.fromLocal)),
-        toUtc: toUtc(new Date(payload.toLocal)),
-        clientId,
-        projectId,
-        tags: payload.tags ?? [],
-        ...(payload.billable !== undefined ? { billable: payload.billable } : {}),
-      });
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    edit: (p): WriteAck => {
-      // Editing a start/end can move an entry onto an instant that overlaps another
-      // (PRD §06 R4); core warns-not-blocks, and we return that warning so the renderer
-      // raises the inline overlap banner at the moment of the edit.
-      const { id, patch } = p as { id: number; patch: Parameters<Store['edit']>[1] };
-      const res = store.edit(id, patch);
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    split: (p): WriteAck => {
-      // split returns the two new entries (not a WriteResult); cutting a span in place
-      // cannot create a NEW overlap, so there is nothing to warn about — but the channel
-      // still returns the uniform WriteAck so the renderer's write path stays one shape.
-      const { id, atUtc } = p as { id: number; atUtc: string };
-      store.split(id, atUtc);
-      refreshAll();
-      return { warnings: [] };
-    },
-    merge: (p): WriteAck => {
-      // Fold a contiguous selection into one entry (PRD §06 R3). Core concatenates
-      // descriptions and unions tags unconditionally; client/project and billable can
-      // disagree. The renderer cannot resolve names, so when the conflict prompt picks a
-      // winner it sends that entry's id as `winnerId` — we look it up here and pass its
-      // clientId/projectId as MergeOptions overrides, plus the chosen billable flag. With
-      // no winnerId/billable (the selection already agreed) core keeps the first entry's
-      // attributes, exactly as `tt merge` does.
-      const { ids, winnerId, billable } = p as {
-        ids: number[];
-        winnerId?: number;
-        billable?: boolean;
-      };
-      const opts: Parameters<Store['merge']>[1] = {};
-      if (winnerId !== undefined) {
-        const winner = store.getEntry(winnerId);
-        if (winner) {
-          opts.clientId = winner.clientId;
-          opts.projectId = winner.projectId;
-        }
-      }
-      if (billable !== undefined) opts.billable = billable;
-      const res = store.merge(ids, opts);
-      refreshAll();
-      // A merge folds adjacent spans into one; the folded span can still overlap a
-      // third entry outside the selection (PRD §06 R4), so return any overlap warning.
-      return { warnings: res.warnings ?? [] };
-    },
-    remove: (p) => {
-      store.remove((p as { id: number }).id);
-      refreshAll();
-    },
-    subtractSleep: (p) => {
-      store.subtractSleep((p as { id: number }).id);
-      refreshAll();
-    },
-    report: (p) => {
-      // §09 R1: the GUI report view's date-range picker. The five presets (today / week /
-      // last-week / month / last-month) are resolved through core's resolveRange — the
-      // renderer never re-derives date math — by the pure buildReportView helper (mirroring
-      // uistate.ts): a preset, when supplied, takes precedence and fills in {fromUtc, toUtc};
-      // the Custom path passes the user's explicit fromUtc/toUtc straight through. The
-      // returned shape is the core Report the report view paints verbatim.
-      return buildReportView(store, p as ReportViewRequest, new Date());
-    },
-    // §09 R08–R09: saved report definitions. Each delegates straight to @stint/core — the
-    // single source of truth — at parity with `tt report save|ls|show|rename|rm|run`. The
-    // mutators refresh all windows so an open Reports view repaints; the reads do not. The
-    // renderer never re-derives a range or a total: runReport returns the SAME core Report
-    // payload the ad-hoc `report` handler builds, resolved through core's resolveSavedRange.
-    saveReport: (p) => {
-      const def = store.saveReport(savedReportInputFromView(p as SavedReportInputView));
-      refreshAll();
-      return savedReportToView(def);
-    },
-    listReports: () => store.listReports().map(savedReportToView),
-    showReport: (p) => {
-      const def = store.getReport((p as { name: string }).name);
-      return def ? savedReportToView(def) : null;
-    },
-    renameReport: (p) => {
-      const { name, newName } = p as { name: string; newName: string };
-      const def = store.renameReport(name, newName);
-      refreshAll();
-      return savedReportToView(def);
-    },
-    editReport: (p) => {
-      const { name, patch } = p as { name: string; patch: Partial<SavedReportInputView> };
-      const def = store.editReport(name, savedReportPatchFromView(patch));
-      refreshAll();
-      return savedReportToView(def);
-    },
-    removeReport: (p) => {
-      store.removeReport((p as { name: string }).name);
-      refreshAll();
-    },
-    // §09 R09: run a saved report against current data. buildSavedReportView is a thin
-    // pass-through to store.runReport (resolving the stored RangeSpec through core), so the
-    // renderer paints the SAME core Report the ad-hoc `report` channel returns. Accepts a
-    // name or id ref so the Reports view can run a definition by whichever handle it holds.
-    runReport: (p) => buildSavedReportView(store, (p as { ref: string | number }).ref, new Date()),
-    // §05 R09: pinned timer favorites. Each delegates to @stint/core — the single source of
-    // truth — at parity with `tt fav add|ls|rename|rm`. The mutators refresh all windows so an
-    // open Timer view repaints its favorites rail; listFavorites is a read, no refresh. The
-    // pin/rename/unpin LOGIC (duplicate-name rejection, template capture, tag application) all
-    // lives in core; the helpers only resolve names + project to the renderer-safe view.
-    pinFavorite: (p) => {
-      const view = pinFavoriteHelper(store, p as FavoriteInputView);
-      refreshAll();
-      return view;
-    },
-    listFavorites: () => listFavoritesHelper(store),
-    renameFavorite: (p) => {
-      const { ref, name } = p as { ref: string | number; name: string };
-      const fav = store.renameFavorite(ref, name);
-      refreshAll();
-      return favoriteToView(fav);
-    },
-    unpinFavorite: (p) => {
-      store.unpinFavorite((p as { ref: string | number }).ref);
-      refreshAll();
-    },
-    // §05 R10: resume from a favorite — start a FRESH timer from the favorite's template. All
-    // logic is in core (store.startFromFavorite delegates to start: atomic stop-then-start, the
-    // ≤1-open invariant, the overlap warning); the favorite is never mutated. refreshAll repaints
-    // the Active-Timer card + favorites rail. Parity with `tt fav start` / `tt start --fav`.
-    startFavorite: (p): WriteAck => {
-      const res = store.startFromFavorite((p as { name: string }).name);
-      refreshAll();
-      return { warnings: res.warnings ?? [] };
-    },
-    exportEntries: (p) => {
-      // §09 R6 / R09: the report view's Export CSV / Export JSON. The renderer cannot reach
-      // Node/fs, so the export round-trips through main. When the request names a SAVED report
-      // (savedReportRef), export its definition's range via core's exportSavedReport (raw
-      // entries for the resolved window — byte-identical to `tt report run --csv|--json`);
-      // otherwise resolve the ad-hoc preset/custom range and export it (exactly `tt export`).
-      // Either way the bytes come from core's toCsv/toJsonEntries and write through the OS
-      // save dialog. No network.
-      const req = p as ExportRequest;
-      const now = new Date();
-      // One pure decision in core/reportview: saved-report ref → its own resolved range, else
-      // the ad-hoc preset/custom range — both yielding the RAW entries for the window.
-      const { range, entries } = resolveExportDefinition(req, store, now);
-      const payload = exportPayload(entries, req.format, now);
+  const handlers = createIpcHandlers({
+    store,
+    refreshAll,
+    toggleTimer,
+    showSaveDialog: (format, defaultPath) => {
       const options: Electron.SaveDialogSyncOptions = {
-        title: req.format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
-        defaultPath: exportFileName(range.fromUtc, req.format),
+        title: format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
+        defaultPath,
         filters: [
-          req.format === 'json'
+          format === 'json'
             ? { name: 'JSON', extensions: ['json'] }
             : { name: 'CSV', extensions: ['csv'] },
         ],
       };
-      const result =
-        mainWindow && !mainWindow.isDestroyed()
-          ? dialog.showSaveDialogSync(mainWindow, options)
-          : dialog.showSaveDialogSync(options);
-      if (!result) return { canceled: true };
-      writeFileSync(result, payload);
-      return { written: entries.length, path: result };
+      return mainWindow && !mainWindow.isDestroyed()
+        ? dialog.showSaveDialogSync(mainWindow, options)
+        : dialog.showSaveDialogSync(options);
     },
-    addClient: (p) => store.addClient((p as { name: string }).name),
-    addProject: (p) => {
-      const { name, clientId } = p as { name: string; clientId: number };
-      return store.addProject(name, clientId);
-    },
-    listClients: () => store.listClients(),
-    // §07: the Clients view's rename/archive over the same reference-data capabilities
-    // tt's `client`/`project` subcommands expose. Each is a thin delegate to core — the
-    // single source of truth — and refreshes all windows so an open Clients view (or the
-    // entries view, whose labels are resolved not copied) repaints the new truth.
-    renameClient: (p) => {
-      const { id, name } = p as { id: number; name: string };
-      store.renameClient(id, name);
-      refreshAll();
-    },
-    archiveClient: (p) => {
-      store.archiveClient((p as { id: number }).id);
-      refreshAll();
-    },
-    renameProject: (p) => {
-      const { id, name } = p as { id: number; name: string };
-      store.renameProject(id, name);
-      refreshAll();
-    },
-    archiveProject: (p) => {
-      store.archiveProject((p as { id: number }).id);
-      refreshAll();
-    },
-    listProjects: (p) => {
-      const { clientId } = (p as { clientId?: number }) ?? {};
-      return store.listProjects(clientId);
-    },
-    // §12 R10: the Clients view's tag-management strip. Each delegates straight to core —
-    // the single source of truth — at parity with `tt tag add/rename/archive/ls`. The
-    // mutators refresh all windows so an open view (and the entries view, whose tag chips
-    // are resolved not copied) repaints the new truth; listTags is a read, no refresh.
-    listTags: () => store.listTags(),
-    addTag: (p) => {
-      const t = store.addTag((p as { name: string }).name);
-      refreshAll();
-      return t;
-    },
-    renameTag: (p) => {
-      const { id, name } = p as { id: number; name: string };
-      store.renameTag(id, name);
-      refreshAll();
-    },
-    archiveTag: (p) => {
-      store.archiveTag((p as { id: number }).id);
-      refreshAll();
-    },
-    // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. Each
-    // delegates straight to @stint/core (store.listBackups / store.restoreFromBackup over the
-    // file-level backup module) at parity with `tt backup ls|restore`. listBackups is a read, no
-    // refresh; restoreBackup quarantines the current file, re-points the store at the chosen
-    // backup, and refreshes all windows so every open view repaints the restored truth.
-    listBackups: () => listBackupsHelper(store),
-    restoreBackup: (p) => {
-      const r = store.restoreFromBackup((p as { name: string }).name);
-      refreshAll();
-      return { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo };
-    },
-    setSetting: (p) => {
-      // §12 R11: the Settings view (and the report view's rounding controls) persist any §14
-      // setting over this one channel — parity with `tt config set` (no new channel). A
-      // global-hotkey edit must take effect live, so re-register the OS shortcut here: drop
-      // the old accelerator and bind the new one, all without a relaunch.
-      const { key, value } = p as { key: keyof ReturnType<Store['settings']>; value: never };
-      const prevHotkey = store.settings().globalHotkey;
-      store.setSetting(key as never, value);
-      if (key === 'globalHotkey') {
-        const next = store.settings().globalHotkey;
-        if (next !== prevHotkey) {
-          globalShortcut.unregister(prevHotkey);
-          try {
-            globalShortcut.register(next, () => toggleTimer());
-          } catch {
-            // A malformed/occupied accelerator must not crash the app; the setting is still
-            // saved (and provable on both surfaces), it just may not bind until corrected.
-          }
-        }
+    rebindGlobalHotkey: (previous, next) => {
+      globalShortcut.unregister(previous);
+      try {
+        globalShortcut.register(next, () => toggleTimer());
+      } catch {
+        // A malformed/occupied accelerator must not crash the app; the setting is still saved
+        // (and provable on both surfaces), it just may not bind until corrected.
       }
-      refreshAll();
     },
-  };
+  });
   for (const ch of CHANNELS) {
-    ipcMain.handle(ch, (_e, payload) => handlers[ch]!(payload));
+    // ipcMain.handle is untyped and the payload genuinely crosses a process boundary as
+    // `unknown`; the per-channel types live at the handler definitions (createIpcHandlers) and
+    // the CHANNELS-completeness check, so widening the handler once here cannot hide drift.
+    const handle = handlers[ch] as (payload: unknown) => unknown;
+    ipcMain.handle(ch, (_e, payload) => handle(payload));
   }
 }
 
