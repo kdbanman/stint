@@ -1,6 +1,6 @@
 ---
 name: sync-assessment
-description: Assess requirements↔implementation synchronization — whether the spec docs (context/, acceptance/criteria/) still describe the tree and its shipped behavior — and file drift findings as issues. Use when the user asks for a sync assessment, a doc-drift check, or whether the docs still tell the truth about the tree.
+description: Assess requirements↔implementation sync and file drift findings as issues. Use when asked for a sync assessment, a doc-drift check, or whether the docs still tell the truth about the tree.
 ---
 
 # Requirements ↔ implementation sync assessment
