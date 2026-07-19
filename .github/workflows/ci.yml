@@ -56,6 +56,14 @@ jobs:
           }
       - name: Regenerate acceptance evidence
         run: npm run evidence
+      # R08 — the regenerated CLI transcript must be byte-identical to what is committed.
+      # cli-transcript.md is clock-pinned (TT_NOW / the NOW const in generate-evidence.mjs)
+      # and pure Node — no rendering — so it is byte-reproducible in CI; any divergence between
+      # the code and the committed transcript fails the PR. Scoped to the transcript on purpose:
+      # judge-report.json is drift-gated in the judge job (it needs Chromium), and the
+      # screenshots are not byte-reproducible across the Chromium/font stack (uploaded, not gated).
+      - name: Evidence drift gate — CLI transcript (R08)
+        run: git diff --exit-code -- acceptance/evidence/cli-transcript.md
       # SLOC + documentation census. Fails the PR if a file escapes categorization or the
       # sums stop reconciling; the report ships as a build artifact, never committed
       # (process.html R10).
@@ -190,6 +198,15 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run JUDGE harness (xvfb)
         run: xvfb-run -a npm run judge
+      # R08 — the regenerated judge report must be byte-identical to what is committed. Its
+      # facts are pinned to the fixture clock (JUDGE_NOW) and its values are integer layout +
+      # machine-checked booleans + text — byte-reproducible across the Chromium/font stack
+      # (verified: it regenerates identically even where the screenshots the same run emits do
+      # not), so any divergence between the code and the committed report fails the PR. Scoped to
+      # the report so a screenshot byte-shift (not byte-reproducible) does not red the build; the
+      # screenshots are uploaded below for the visual comparison (R11), never byte-gated.
+      - name: Evidence drift gate — judge report (R08)
+        run: git diff --exit-code -- acceptance/evidence/judge-report.json
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
