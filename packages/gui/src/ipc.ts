@@ -3,6 +3,14 @@
  * is an equal surface to tt; every channel maps to a capability that also exists as
  * a tt command (PRD §17 R8 — parity).
  */
+// Type-only imports (erased at compile — the renderer/preload bundle stays core-free,
+// PRD §15). They name the shapes that genuinely cross the seam — an edit patch, a
+// settings key/value, a report request — so the per-channel IpcContract below can be
+// exact instead of the old per-handler `as` casts (issue #87).
+import type { StartPayload } from './start.js';
+import type { ReportViewRequest, ExportRequest } from './reportview.js';
+import type { Client, Project, Tag, Report, EditPatch, Settings } from '@stint/core';
+
 export const CHANNELS = [
   'getState',
   // §09 R7: free-text search over the day-grouped history list. Returns a UiState
@@ -337,3 +345,144 @@ export interface UpdateProgress {
   artifactPath: string | null;
   message: string | null;
 }
+
+// ------------------------------------------------------------- typed IPC seam
+//
+// The one seam Electron forces (renderer ↔ main) is the only place a payload used to
+// cross as `unknown` and get hand-cast per handler (issue #87). IpcContract is the single
+// per-channel payload/result map: main.ts's shipping handler map is typed `IpcHandlers`
+// (derived from it), so a reshaped payload or a CHANNELS entry without a handler stops
+// compiling — the compile-time equivalent of the runtime guard the QA-driver port already
+// carries (test/qa-driver.test.ts), now on the original too. Runtime validation at the
+// seam is deliberately out: both ends are in-repo and typed against this one map.
+
+/** The renderer identifies an entry by id — remove / subtractSleep. */
+export interface EntryIdPayload {
+  id: number;
+}
+
+/**
+ * §12 R7 / §05 R5 — what the renderer's backfill form sends over `add`: two local datetime
+ * strings plus the optional attributes, mirroring `tt add` (main resolves names + converts
+ * to UTC through core's one rule).
+ */
+export interface AddEntryPayload {
+  description?: string | null;
+  fromLocal: string;
+  toLocal: string;
+  client?: string;
+  project?: string;
+  tags?: string[];
+  billable?: boolean;
+}
+
+/** What the edit form sends over `edit`: the entry id and a core EditPatch. */
+export interface EditEntryPayload {
+  id: number;
+  patch: EditPatch;
+}
+
+/** §06 — cut an entry at an instant (`split`). */
+export interface SplitPayload {
+  id: number;
+  atUtc: string;
+}
+
+/**
+ * §06 R3 — fold a contiguous selection into one entry (`merge`). `winnerId` names the entry
+ * whose client/project win when the selection disagrees; `billable` the chosen flag.
+ */
+export interface MergePayload {
+  ids: number[];
+  winnerId?: number;
+  billable?: boolean;
+}
+
+/**
+ * §12 R11 / §14 — the Settings view persists any one §14 setting over `setSetting` (parity
+ * with `tt config set`). The distributed form ties each key to its own value type, so a
+ * wrong-typed value for a key stops compiling.
+ */
+export type SetSettingPayload = {
+  [K in keyof Settings]: { key: K; value: Settings[K] };
+}[keyof Settings];
+
+/** §09 R6 — the ack `exportEntries` returns: canceled at the save dialog, or bytes written. */
+export type ExportResult = { canceled: true } | { written: number; path: string };
+
+/** §20 R05 — what `restoreBackup` reports back (mirrors core's RecoveryResult, renderer-safe). */
+export interface RestoreResult {
+  recoveredFrom: string;
+  quarantinedTo: string;
+}
+
+/**
+ * The per-channel payload/result contract — one entry per CHANNELS name. `payload` is what
+ * the renderer sends (`void` for the parameterless reads/toggles); `result` is what main
+ * returns. Write channels return WriteAck (PRD §06 R4 overlap warnings); reads return the
+ * renderer-safe views defined above (or the core shapes that already cross the seam).
+ */
+export interface IpcContract {
+  getState: { payload: void; result: UiState };
+  search: { payload: { query?: string } | undefined; result: UiState };
+  listEntries: { payload: ListEntriesQuery; result: EntryListView };
+  toggle: { payload: void; result: WriteAck };
+  start: { payload: StartPayload | undefined; result: WriteAck };
+  stop: { payload: void; result: WriteAck };
+  resume: { payload: void; result: WriteAck };
+  add: { payload: AddEntryPayload; result: WriteAck };
+  edit: { payload: EditEntryPayload; result: WriteAck };
+  split: { payload: SplitPayload; result: WriteAck };
+  merge: { payload: MergePayload; result: WriteAck };
+  remove: { payload: EntryIdPayload; result: void };
+  subtractSleep: { payload: EntryIdPayload; result: void };
+  report: { payload: ReportViewRequest; result: Report };
+  saveReport: { payload: SavedReportInputView; result: SavedReportView };
+  listReports: { payload: void; result: SavedReportView[] };
+  showReport: { payload: { name: string }; result: SavedReportView | null };
+  renameReport: { payload: { name: string; newName: string }; result: SavedReportView };
+  editReport: {
+    payload: { name: string; patch: Partial<SavedReportInputView> };
+    result: SavedReportView;
+  };
+  removeReport: { payload: { name: string }; result: void };
+  runReport: { payload: { ref: string | number }; result: Report };
+  pinFavorite: { payload: FavoriteInputView; result: FavoriteView };
+  listFavorites: { payload: void; result: FavoriteView[] };
+  renameFavorite: { payload: { ref: string | number; name: string }; result: FavoriteView };
+  unpinFavorite: { payload: { ref: string | number }; result: void };
+  startFavorite: { payload: { name: string }; result: WriteAck };
+  exportEntries: { payload: ExportRequest; result: ExportResult };
+  addClient: { payload: { name: string }; result: Client };
+  addProject: { payload: { name: string; clientId: number }; result: Project };
+  listClients: { payload: void; result: Client[] };
+  renameClient: { payload: { id: number; name: string }; result: void };
+  archiveClient: { payload: { id: number }; result: void };
+  renameProject: { payload: { id: number; name: string }; result: void };
+  archiveProject: { payload: { id: number }; result: void };
+  listProjects: { payload: { clientId?: number } | undefined; result: Project[] };
+  listTags: { payload: void; result: Tag[] };
+  addTag: { payload: { name: string }; result: Tag };
+  renameTag: { payload: { id: number; name: string }; result: void };
+  archiveTag: { payload: { id: number }; result: void };
+  setSetting: { payload: SetSettingPayload; result: void };
+  listBackups: { payload: void; result: BackupInfoView[] };
+  restoreBackup: { payload: { name: string }; result: RestoreResult };
+}
+
+// Compile-time exhaustiveness, both directions: a CHANNELS name missing from IpcContract
+// (the mapped IpcHandlers below cannot resolve IpcContract[C]) OR a stray IpcContract key
+// that is not a channel (_NoStrayContractKeys) fails to compile.
+type Assert<T extends true> = T;
+type _ContractCoversChannels = Assert<Channel extends keyof IpcContract ? true : false>;
+type _NoStrayContractKeys = Assert<keyof IpcContract extends Channel ? true : false>;
+
+/**
+ * The shipping handler map's type: one handler per channel, its typed payload in, its typed
+ * result out. main.ts's `createIpcHandlers` returns this, so the whole map is checked against
+ * IpcContract at compile time. Because it is a total map over Channel, the runtime bind needs
+ * no non-null assertion (issue #87).
+ */
+export type IpcHandlers = {
+  [C in Channel]: (payload: IpcContract[C]['payload']) => IpcContract[C]['result'];
+};
