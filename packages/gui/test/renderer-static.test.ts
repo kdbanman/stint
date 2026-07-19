@@ -401,6 +401,66 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/applyAck\(ack\)/);
   });
 
+  it('a refused core write is surfaced where it was attempted, never silently swallowed (§12 R21)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    // Every inline message region is ANNOUNCED (role=status + aria-live) so assistive tech
+    // hears the refusal — the add-form region (seed pattern), the report builder, the popover.
+    expect(html).toMatch(/id="add-warning"[^>]*role="status"[^>]*aria-live/);
+    expect(html).toMatch(/id="rep-warning"[^>]*role="status"[^>]*aria-live/);
+    // The shared primitives: a normalizer + inline show/clear + the banner-routed block.
+    expect(app).toMatch(/function showFormError\(/);
+    expect(app).toMatch(/function clearFormError\(/);
+    expect(app).toMatch(/function showWriteError\(/);
+    // The edit form carries an ANNOUNCED region, and its Save is wrapped in a try/catch that
+    // routes BOTH a locally-thrown parse error and a core StoreError into it (form stays open —
+    // no closeEntryForm/load in the catch), with the message cleared on the next input.
+    expect(app).toMatch(/class="ef-warning form-error" role="status" aria-live="polite"/);
+    const editSubmit = app.slice(
+      app.indexOf("form.addEventListener('submit'", app.indexOf('.ef-warning')),
+      app.indexOf("form.addEventListener('input'"),
+    );
+    expect(editSubmit).toMatch(/try \{[\s\S]*const ack = await window\.stint\.edit\(\{ id: e\.id, patch \}\)[\s\S]*\} catch \(err\) \{\s*\n\s*showFormError\(warn, err\);/);
+    expect(app).toMatch(/form\.addEventListener\('input', \(\) => clearFormError\(form\.querySelector\('\.ef-warning'\)\)\)/);
+    // The split confirm catches its refusal (in-span rule) into its own region, form stays open.
+    const splitClick = app.slice(app.indexOf('data-act="confirm-split"'), app.indexOf('.split-cancel'));
+    expect(splitClick).toMatch(/try \{[\s\S]*await window\.stint\.split\(\{ id: e\.id, atUtc \}\)[\s\S]*\} catch \(err\) \{\s*\n\s*showFormError\(warn, err\);/);
+    // The shared inline rename form catches a rejected rename (UNIQUE collision) into its region.
+    const renameForm = app.slice(app.indexOf('function inlineRenameForm('), app.indexOf('function openProjectAdd('));
+    expect(renameForm).toMatch(/class="rename-warning form-error"/);
+    expect(renameForm).toMatch(/try \{\s*\n\s*await onSave\([\s\S]*\} catch \(err\) \{\s*\n\s*showFormError\(warn, err\);/);
+    // BOTH toggle write paths (Timer view #toggle + the Active-Timer card #timer-stop) route a
+    // rejection to showWriteError — a Stop the core refuses is never a silent no-op.
+    const toggleCatches = app.match(/\} catch \(err\) \{\s*\n\s*showWriteError\(err\);/g) || [];
+    expect(toggleCatches.length).toBeGreaterThanOrEqual(2);
+    // The popover's toggle is likewise guarded (the tray twin of the banner-routed rejection).
+    const pop = read('popover.js');
+    const popHtml = read('popover.html');
+    expect(popHtml).toMatch(/id="pop-warning"[^>]*role="status"[^>]*aria-live/);
+    expect(pop).toMatch(/await window\.stint\.toggle\(\);[\s\S]*\} catch \(err\) \{/);
+  });
+
+  it('the report builder refuses an incomplete range and a duplicate name with persistent inline feedback (§12 R21 / §09 R01)', () => {
+    const js = read('reports.js');
+    // The incomplete-range branch carries a FEEDBACK statement (focus the missing field + a
+    // persistent message), NOT the bare return that read as a dead click.
+    const incomplete = js.slice(
+      js.indexOf("rangeSpec.kind === 'absolute'"),
+      js.indexOf('try {', js.indexOf("rangeSpec.kind === 'absolute'")),
+    );
+    expect(incomplete).toMatch(/\$\(missing\)\.focus\(\)/);
+    expect(incomplete).toMatch(/setWarn\(/);
+    // …and the feedback precedes the return (not a bare early-return that read as a dead click).
+    expect(incomplete).toMatch(/setWarn\([\s\S]*return;/);
+    // The duplicate-name catch surfaces a PERSISTENT message — the old same-tick self-erase
+    // (setCustomValidity(msg) → reportValidity() → setCustomValidity('')) is gone entirely.
+    expect(js).toMatch(/catch \(err\) \{[\s\S]*setWarn\(/);
+    expect(js).not.toMatch(/setCustomValidity/);
+    expect(js).not.toMatch(/reportValidity/);
+    // The message persists until the next input on the builder (no bare return without feedback).
+    expect(js).toMatch(/\$\('rep-builder'\)\.addEventListener\('input', \(\) => clearWarn\(\)\)/);
+  });
+
   it('an overlapped row shows the detailed overlap banner and a slept-trimmed row strikes the raw duration (§12 R9)', () => {
     const app = read('app.js');
     // The affected row paints a detailed banner spelling out the overlapping amount + which

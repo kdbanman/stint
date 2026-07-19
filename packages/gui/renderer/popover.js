@@ -63,8 +63,19 @@ function tick() {
 }
 
 $('toggle').addEventListener('click', async () => {
-  await window.stint.toggle();
-  await load();
+  // §12 R21: a refused Stop/Start (core rejects the write) must not vanish. Surface it in the
+  // popover's own message region; a successful toggle reloads (clearing any stale message).
+  const warn = $('pop-warning');
+  try {
+    await window.stint.toggle();
+    if (warn) { warn.textContent = ''; warn.hidden = true; }
+    await load();
+  } catch (err) {
+    if (warn) {
+      warn.textContent = String((err && err.message) || err).replace(/^Error:\s*/, '');
+      warn.hidden = false;
+    }
+  }
 });
 $('open').addEventListener('click', () => window.stint.openMain && window.stint.openMain());
 

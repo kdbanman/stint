@@ -199,12 +199,20 @@ terminal pointed at the same database.
    - [ ] Only **Save entry** carries the accent; Split, Cancel and Delete are quiet.
    - [ ] `tt list --json` shows **every changed field persisted**; the GUI and the DB agree
          (Save went through the same `edit` path `tt` uses, sending only the changed fields).
+   - [ ] **Rejection feedback (§12 R21, the edit-mode twin of the backfill Stop-before-Start
+         step):** re-open the form, expand Start/Stop and set **Stop *before* Start**, then click
+         **Save entry**. The save is **rejected with an inline message in the form** (the core
+         reason, e.g. "entry end must be after its start", announced to assistive tech) — the
+         **form stays open and unchanged**, nothing persists (`tt list --json` is unchanged), and
+         it never silently no-ops or closes as if saved. The message clears on the next edit.
 4. Re-open the form and, in the footer, click **Split**; in the plain-text instant field
    (`YYYY-MM-DDTHH:mm`, seeded to the span's midpoint — a simple text input, **no native
    date-time picker**, G4/G1), type an instant **inside** the span and confirm.
    - [ ] `tt list` shows **two contiguous** entries that exactly tile the original span (the
          boundary is the picked instant; no time is lost or gained), cross-checking `tt split`.
-   - [ ] Picking an instant **outside** the span is rejected (core would reject it too).
+   - [ ] Picking an instant **outside** the span is **rejected with a visible message in the
+         split picker** (the reason shows, the picker **stays open**) — a **visible refusal**,
+         never a silent no-op (§12 R21; core would reject it too).
 5. Open the form on the **open (running)** entry and nudge its **Start**, then Save.
    - [ ] The open entry stays open — `tt status` still reports it running (the running variant
          has **no End**, so the patch never carries `endUtc`).

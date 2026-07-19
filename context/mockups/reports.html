@@ -105,6 +105,10 @@
   .ctrl .cr{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
   .efoot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px}
   .efoot .left{margin-right:auto}
+  /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
+     surfaced in the builder at the point of action; the builder stays open, nothing persists. */
+  .msg{font-size:12px;border-radius:8px;padding:7px 11px;border:1px solid;margin-top:16px}
+  .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
   .runhd{display:flex;align-items:baseline;justify-content:space-between;margin:26px 0 10px}
   .runhd .rt{font-size:14px;font-weight:640}
   .runhd .rc{font-size:12px;color:var(--muted)}
@@ -197,6 +201,9 @@
             <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
               <select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
           </div>
+          <!-- §12 R21: a refused Save is surfaced in the builder — a duplicate name (core rejects,
+               §13) or an incomplete custom range (focus the missing field). Announced, persistent. -->
+          <div class="msg err">A saved report named that already exists — pick a different name.</div>
           <div class="efoot">
             <button class="btn danger sm left">Delete</button>
             <button class="btn sm">Cancel</button>
