@@ -2,10 +2,8 @@
 name: triage-arch-findings
 description: >-
   Use when issues filed by an architecture review (labeled "Agentic Arch
-  Review Discovery") need triaging — deciding each confirmed problem's fix
-  direction with the owner, naming what will prove it fixed, and routing it
-  to the triaged backlog or a dedicated session. Decides and routes; does
-  not fix.
+  Review Discovery") need triage into the Triaged backlog. Decides and
+  routes; does not fix.
 ---
 
 # Triage architecture findings (Stint)
