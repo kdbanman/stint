@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2266,28 +2266,86 @@ async function main() {
     );
   });
 
-  // MERGE_NOCONFLICT — selecting two contiguous entries that AGREE on client and
-  // billable and clicking Merge fires the merge DIRECTLY, with no conflict prompt
-  // (nothing to resolve); the payload carries just the ids (§06 R3).
+  // MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
+  // clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
+  // no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
+  // "no unnecessary question" counterpart, NOT proof that the agree path never gates: a
+  // NON-contiguous agreeing selection still gates (MERGE_GAP). The payload carries just the ids
+  // (no winnerId, no allowGap), §06 R3.
   await withPage(browser, mergeAgreeState(), 'index.html', async (page) => {
     await page.check('.entry[data-id="50"] .sel');
     await page.check('.entry[data-id="51"] .sel');
     await page.click('#merge-go');
     const probe = await page.evaluate(() => ({
-      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      conflictPromptShown: !!document.querySelector('.editor.conflict-prompt'),
+      gapConfirmShown: !!document.querySelector('.confirm-gap'),
       merged: window.__MERGED__,
     }));
     const ok =
-      !probe.promptShown &&
+      !probe.conflictPromptShown &&
+      !probe.gapConfirmShown &&
       !!probe.merged &&
       Array.isArray(probe.merged.ids) &&
       probe.merged.ids.length === 2 &&
-      probe.merged.winnerId === undefined;
+      probe.merged.winnerId === undefined &&
+      probe.merged.allowGap === undefined;
     record(
       'MERGE_NOCONFLICT',
       ok,
-      `agreeing selection merges with no prompt: ${JSON.stringify(probe)}`,
+      `contiguous agreeing selection merges with no conflict prompt and no gap confirm: ${JSON.stringify(probe)}`,
       'main-merge-conflict.png',
+    );
+  });
+
+  // MERGE_GAP — selecting two entries that AGREE on client/billable but are NOT contiguous (a
+  // positive gap sits between them) and clicking Merge must NOT fold silently: the Merge button
+  // first swaps into a confirm stating the resulting span/duration (§06 R3, §12 R13 precedent).
+  // Only the explicit "Merge anyway" tap commits, and the payload then carries allowGap so core
+  // accepts the fold. This is the regression guard for the filed bug — a gapped merge that
+  // fabricated the whole gap as billable time with one click, no confirmation.
+  await withPage(browser, mergeGapState(), 'index.html', async (page) => {
+    await page.check('.entry[data-id="60"] .sel');
+    await page.check('.entry[data-id="61"] .sel');
+    await page.click('#merge-go');
+    // The gap gate arms in place of a silent fold: a .confirm-gap affordance, no merge yet.
+    await page.waitForSelector('.confirm-gap', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-merge-gap.png'), fullPage: true });
+    const armed = await page.evaluate(() => {
+      const gate = document.querySelector('.confirm-gap');
+      return {
+        confirmShown: !!gate,
+        // The confirm names the non-contiguity, the resulting span duration (09:00→15:00 =
+        // 06:00:00) and the fabricated gap (10:00→14:00 = 04:00:00). Durations are
+        // timezone-independent; the wall-clock endpoints are localized, so we assert the spans.
+        namesGap: /not contiguous/i.test(gate?.textContent ?? ''),
+        statesSpan: /06:00:00/.test(gate?.textContent ?? ''),
+        statesGapDuration: /04:00:00/.test(gate?.textContent ?? ''),
+        hasConfirmBtn: !!gate?.querySelector('[data-act="confirm-gap"]'),
+        hasCancelBtn: !!gate?.querySelector('[data-act="cancel-gap"]'),
+        // Nothing committed yet — a stray first click fabricates no billable time.
+        merged: window.__MERGED__,
+      };
+    });
+    // The explicit confirm commits the fold WITH the gap acknowledged.
+    await page.click('[data-act="confirm-gap"]');
+    const after = await page.evaluate(() => ({ merged: window.__MERGED__ }));
+    const ok =
+      armed.confirmShown &&
+      armed.namesGap &&
+      armed.statesSpan &&
+      armed.statesGapDuration &&
+      armed.hasConfirmBtn &&
+      armed.hasCancelBtn &&
+      !armed.merged &&
+      !!after.merged &&
+      Array.isArray(after.merged.ids) &&
+      after.merged.ids.length === 2 &&
+      after.merged.allowGap === true;
+    record(
+      'MERGE_GAP',
+      ok,
+      `gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed=${JSON.stringify(armed)} after=${JSON.stringify(after)}`,
+      'main-merge-gap.png',
     );
   });
 
@@ -2525,6 +2583,63 @@ async function main() {
       ),
     }));
     await page.screenshot({ path: join(EVIDENCE, 'main-clients-created.png'), fullPage: true });
+    // Issue #66: a rename / archive used to DOUBLE the whole list — the write handler called
+    // renderClients directly AND the write's changed-broadcast scheduled a second run, and the two
+    // interleaved (both cleared #clients-list, then both awaited per-client listProjects, then both
+    // appended), so every client, project and tag landed twice (6 cards for 3 clients). Drive a tag
+    // archive, a client archive, and — LAST, so no solo render rebuilds the list clean behind it —
+    // a client RENAME, whose two racing renders leave the doubled DOM in place. Then flush the
+    // microtask queue (a macrotask boundary drains both renders) and assert cardinality: each
+    // record renders EXACTLY ONCE (no duplicate data-id) and the counts/names match the mutated
+    // active list. The fixture's onChange now fires after each mutator, so this scene reproduces
+    // the broadcast race — without the re-entrancy guard the rename doubles and these assertions
+    // FAIL (verified by reverting the guard: clientCount 4, dupClientIds [1,99]).
+    // (1) Archive the "urgent" tag (id 2): it drops out of the active strip.
+    await page.click('#tags-list .tag-row[data-id="2"] [data-act="archive-tag"]');
+    await page.waitForSelector('#tags-list .tag-row[data-id="2"]', { state: 'detached' });
+    // (2) Archive Globex (id 2): it drops out of the active list (history kept).
+    await page.click('#clients .client[data-id="2"] [data-act="archive-client"]');
+    await page.waitForSelector('#clients .client[data-id="2"]', { state: 'detached' });
+    // (3) Rename Acme (id 1) → "Acme Corp", LAST: open the inline field, commit over renameClient.
+    // This write's direct renderClients races the changed-broadcast renderClients — the exact
+    // double-render pair — with nothing after it to repaint the list clean. The .first() locators
+    // keep the drive robust even if a regression has already doubled the DOM, so the scene reaches
+    // the cardinality assertion and FAILS there cleanly rather than hanging on a strict-mode match.
+    const acmeRow = page.locator('#clients .client[data-id="1"]').first();
+    await acmeRow.locator('[data-act="rename-client"]').click();
+    await acmeRow.locator('.rename-form .rename-input').fill('Acme Corp');
+    await acmeRow.locator('.rename-form button[type="submit"]').click();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('#clients .client[data-id="1"] .client-name')].some(
+        (n) => n.textContent.trim() === 'Acme Corp',
+      ),
+    );
+    const norace = await page.evaluate(async () => {
+      // Drain the microtask queue so BOTH racing renders complete before we count. The JUDGE page
+      // clock is PAUSED (page.clock.pauseAt), so setTimeout never fires here — but the renders'
+      // awaits are all microtasks (the mock IPC returns Promise.resolve), so yielding the queue
+      // enough times settles them. The doubled DOM (if the guard is missing) is fully materialised
+      // before the count; with the guard the superseded run has bailed, leaving one clean paint.
+      for (let i = 0; i < 100; i++) await Promise.resolve();
+      const dupes = (els) => {
+        const ids = [...els].map((e) => e.dataset.id);
+        return [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+      };
+      const clientEls = document.querySelectorAll('#clients .client[data-id]');
+      const projectEls = document.querySelectorAll('#clients .project[data-id]');
+      const tagEls = document.querySelectorAll('#tags-list .tag-row[data-id]');
+      return {
+        clientCount: clientEls.length,
+        projectCount: projectEls.length,
+        tagCount: tagEls.length,
+        clientNames: [...clientEls].map((e) => e.querySelector('.client-name')?.textContent?.trim()),
+        tagNames: [...tagEls].map((e) => e.querySelector('.tag-row-name')?.textContent?.trim()),
+        dupClientIds: dupes(clientEls),
+        dupProjectIds: dupes(projectEls),
+        dupTagIds: dupes(tagEls),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'main-clients-mutated.png'), fullPage: true });
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -2546,7 +2661,22 @@ async function main() {
       created.addedProject?.clientId === 1 &&
       created.acmeProjects.includes('Mobile') &&
       created.addedTag?.name === 'billing' &&
-      created.tagNames.includes('billing');
+      created.tagNames.includes('billing') &&
+      // …and the NO-DOUBLE-RENDER facts (issue #66): after the rename/archive writes, every
+      // record renders exactly once (no duplicate data-id) and the counts/names track the
+      // mutated active list — Acme→Acme Corp, Globex archived (Acme Corp + Initech remain, with
+      // Acme's 3 projects), the "urgent" tag archived (deep + billing remain).
+      norace.dupClientIds.length === 0 &&
+      norace.dupProjectIds.length === 0 &&
+      norace.dupTagIds.length === 0 &&
+      norace.clientCount === 2 &&
+      norace.projectCount === 3 &&
+      norace.tagCount === 2 &&
+      norace.clientNames.includes('Acme Corp') &&
+      !norace.clientNames.includes('Globex') &&
+      norace.tagNames.includes('deep') &&
+      norace.tagNames.includes('billing') &&
+      !norace.tagNames.includes('urgent');
     // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
     // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
     // list is kept in the justification as captured evidence only.
@@ -2555,7 +2685,8 @@ async function main() {
       ok,
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
-        `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}`,
+        `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
+        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}`,
       'main-clients.png',
     );
   });
@@ -2814,13 +2945,30 @@ async function main() {
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-run.png'), fullPage: true });
 
-    // (d): Export CSV then JSON — each drives a real exportEntries call carrying the saved ref.
+    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run) carry
+    // scope 'filtered' + the saved ref — the rows the report shows (byte-identical to
+    // `tt report run <name> --csv|--json`).
     await page.click('#rep-export-csv');
-    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'filtered');
     const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
     await page.click('#rep-export-json');
-    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'filtered');
     const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    // …and Export All Data (set apart at the bottom) carries scope 'all' + the saved ref — every
+    // raw entry in the range (byte-identical to `tt export`), its status the honest "(all data)".
+    await page.click('#rep-export-all-csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'all');
+    const afterAllCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    await page.click('#rep-export-all-json');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'all');
+    const afterAllJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    const exportLabels = await page.evaluate(() => ({
+      filteredCsv: document.querySelector('#rep-export-csv')?.textContent.trim(),
+      filteredJson: document.querySelector('#rep-export-json')?.textContent.trim(),
+      allCsv: document.querySelector('#rep-export-all-csv')?.textContent.trim(),
+      allJson: document.querySelector('#rep-export-all-json')?.textContent.trim(),
+      allStatus: document.querySelector('#rep-export-all-status')?.textContent.trim(),
+    }));
 
     // (g) issue #52: RENAME a saved report TO COMPLETION through the INLINE kebab affordance —
     // Electron's renderer implements neither window.prompt nor window.confirm, so the kebab
@@ -2895,11 +3043,21 @@ async function main() {
       run.flagOutside === 0 && // flags IN CONTEXT (none in a separate list)
       run.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
       run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
+    // (d) issue #72: BOTH export scopes fire correctly — the filtered Export CSV/JSON carry
+    // scope 'filtered' + the saved ref, and Export All Data carries scope 'all' + the saved ref
+    // and is labelled "Export All Data", its status carrying the honest "(all data)" wording.
     const exportOk =
-      afterCsv.format === 'csv' &&
-      afterJson.format === 'json' &&
+      afterCsv.format === 'csv' && afterCsv.scope === 'filtered' &&
+      afterJson.format === 'json' && afterJson.scope === 'filtered' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
-      afterJson.savedReportRef === 'Weekly billables — Globex';
+      afterJson.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllCsv.format === 'csv' && afterAllCsv.scope === 'all' &&
+      afterAllJson.format === 'json' && afterAllJson.scope === 'all' &&
+      afterAllCsv.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllJson.savedReportRef === 'Weekly billables — Globex' &&
+      /Export All Data/.test(exportLabels.allCsv || '') &&
+      /Export All Data/.test(exportLabels.allJson || '') &&
+      /all data/.test(exportLabels.allStatus || '');
     // (g) issue #52: the inline rename/delete really landed — renameReport fired with the
     // old + new names and the list repainted under the new name; Delete armed the confirm
     // gate WITHOUT removing anything, then the explicit confirm fired removeReport and the
@@ -2930,8 +3088,7 @@ async function main() {
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,
-      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
     );
   });
 

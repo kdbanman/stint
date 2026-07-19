@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import {
   Store,
+  StoreError,
   APP_VERSION,
   parseTime,
   formatDuration,
@@ -388,6 +389,10 @@ export function buildProgram(deps: Deps): Command {
     .argument('<ids...>', 'entry ids')
     .option('--client <name>', 'resolve client conflicts to this client')
     .option('--project <name>', 'resolve project conflicts to this project')
+    .option(
+      '--allow-gap',
+      'merge a non-contiguous selection, folding the gap into billable time',
+    )
     .action((ids: string[], opts) => {
       withStore((store) => {
         const mergeOpts: Parameters<Store['merge']>[1] = {};
@@ -399,7 +404,19 @@ export function buildProgram(deps: Deps): Command {
           mergeOpts.clientId = resolved.clientId;
           if (opts.project) mergeOpts.projectId = resolved.projectId;
         }
-        const res = store.merge(ids.map(Number), mergeOpts);
+        // §06 R3: a gapped selection is refused by core unless acknowledged. Non-interactive
+        // (no TTY prompt, matching --client/--project): on refusal, exit non-zero and point at
+        // the flag that acknowledges the gap.
+        if (opts.allowGap) mergeOpts.allowGap = true;
+        let res;
+        try {
+          res = store.merge(ids.map(Number), mergeOpts);
+        } catch (err) {
+          if (err instanceof StoreError && !opts.allowGap && /not contiguous/.test(err.message)) {
+            throw new CliError(`${err.message} Pass --allow-gap.`);
+          }
+          throw err;
+        }
         printWarnings(io, res.warnings);
         io.out(`merged into entry ${res.value.id} · ${formatDuration(res.value.rawSeconds)}`);
       });
@@ -716,21 +733,21 @@ export function buildProgram(deps: Deps): Command {
       withStore((store) => {
         const def = store.getReport(name);
         if (!def) throw new CliError(`no saved report named "${name}"`);
+        // §09 R06/R09 — `--csv`/`--json` EXPORT THE FILTERED SET: the rows the report shows
+        // (its resolved range narrowed by the def's client/project/tag/search + billable
+        // filter), rendered through the SAME core exporters, byte-identical to the GUI report's
+        // Export CSV/JSON. This is the report's own export; the RAW, whole-range escape hatch
+        // is `tt export` (the "Export All Data" scope). The default (no flag) still renders the
+        // grouped human totals — the on-screen figure — with the saved grouping and rounding.
         if (opts.csv) {
-          // §09 R09 — CSV/JSON export from a saved report: the RAW entries for the resolved
-          // range (billable='all', no narrowing — byte-identical to `tt export` for that
-          // window), rendered through the SAME core export path the GUI export uses.
           io.out((store.exportSavedReport(name, 'csv', now()) as string).replace(/\n$/, ''));
           return;
         }
-        // --json (and the default human view) render the grouped Report runReport builds —
-        // the standard Report shape `tt report` already emits (report.schema.json).
-        const built = store.runReport(name, now());
         if (opts.json) {
-          io.out(JSON.stringify(reportJson(built)));
+          io.out(JSON.stringify(store.exportSavedReport(name, 'json', now()), null, 2));
           return;
         }
-        io.out(renderReport(built, def.rounding));
+        io.out(renderReport(store.runReport(name, now()), def.rounding));
       }),
     );
 

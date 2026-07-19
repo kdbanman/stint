@@ -812,37 +812,46 @@ describe('GOLD: tt report save / show / ls / run (§09 R08–R09)', () => {
     expect(json.map((d: { name: string }) => d.name).sort()).toEqual(['Monthly', 'Weekly']);
   });
 
-  it('run --json validates against report.schema.json and its range matches resolveRange(week)', () => {
+  it('run --json exports the FILTERED entries the report shows (export-entry schema), dropping off-filter rows', () => {
+    // §09 R06/R09 — `report run --json` now exports the FILTERED SET the report shows, not a
+    // grouped Report: the billable-only "Weekly" drops the non-billable "admin" that sits in the
+    // same week, so the file holds exactly the rows behind the on-screen totals.
     seed();
+    tt(['add', 'admin', '--from', '2026-06-24T14:00:00Z', '--to', '2026-06-24T14:30:00Z', '--no-bill']);
     tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
-    // The seeded entry is on 2026-06-24 (Wednesday); the default now keeps it in this week.
     const r = tt(['report', 'run', 'Weekly', '--json']);
     expect(r.code).toBe(0);
-    const json = JSON.parse(r.out);
-    const validate = validator('report.schema.json');
-    expect(validate(json) || validate.errors).toBe(true);
-    // An ad-hoc `report --week --json` over the same clock resolves the same window.
-    const adhoc = JSON.parse(tt(['report', '--week', '--by', 'client', '--json']).out);
-    expect(json.range).toEqual(adhoc.range);
-    expect(json.grand_total_seconds).toBe(adhoc.grand_total_seconds);
-    expect(json.grand_total_seconds).toBe(5400);
+    const rows = JSON.parse(r.out);
+    const validate = validator('export-entry.schema.json');
+    expect(validate(rows) || validate.errors).toBe(true);
+    // The billable "auth refactor" only — the non-billable "admin" is filtered out.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ description: 'auth refactor', billable: true });
   });
 
-  it('run --csv emits export bytes byte-identical to `tt export` for the resolved range', () => {
+  it('run --csv exports the FILTERED rows (byte-identical to the ad-hoc `report --csv`), NOT raw `tt export`', () => {
+    // §09 R06/R09 — the filtered export scope: `report run --csv` == the ad-hoc filtered export
+    // `report --week --by client --csv` over the same window/filters, and DROPS the off-filter
+    // non-billable row — unlike the raw `tt export` scope, which keeps every entry in the range.
     seed();
+    tt(['add', 'admin', '--from', '2026-06-24T14:00:00Z', '--to', '2026-06-24T14:30:00Z', '--no-bill']);
     tt(['report', 'save', 'Weekly', '--week', '--by', 'client']);
-    // The saved report resolves the same this-week window the run-json test proved; its CSV
-    // export must be byte-identical to `tt export` over that window (raw entries, billable=all).
     const run = tt(['report', 'run', 'Weekly', '--csv']);
     expect(run.code).toBe(0);
-    const adhocRange = JSON.parse(tt(['report', 'run', 'Weekly', '--json']).out).range;
-    const direct = tt(['export', '--range', adhocRange.from_utc, adhocRange.to_utc, '--csv']);
-    expect(run.out).toBe(direct.out);
-    // …and the export carries the one seeded entry under the exact column contract.
+    // Byte-identical to the ad-hoc filtered CSV over the same resolved window + billable filter.
+    const adhoc = tt(['report', '--week', '--by', 'client', '--csv']);
+    expect(run.out).toBe(adhoc.out);
     expect(run.out.split('\n')[0]).toBe(
       'client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped',
     );
     expect(run.out).toMatch(/Client A,API,deep,auth refactor/);
+    expect(run.out).not.toMatch(/admin/);
+    // The raw `tt export` scope over the SAME window keeps the non-billable "admin" — the two
+    // export scopes are genuinely different bytes (the bug #72 fix: filtered vs all-data).
+    const range = JSON.parse(tt(['report', '--week', '--by', 'client', '--json']).out).range;
+    const raw = tt(['export', '--range', range.from_utc, range.to_utc, '--csv']);
+    expect(raw.out).toMatch(/admin/);
+    expect(run.out).not.toBe(raw.out);
   });
 
   it('run (human) prints the renderReport totals with the saved grouping', () => {
@@ -882,16 +891,20 @@ describe('GOLD: tt report save / show / ls / run (§09 R08–R09)', () => {
     expect(json.range_to_utc).toBe('2026-06-08T00:00:00Z');
   });
 
-  it('edit changes the range and re-run re-resolves the totals', () => {
+  it('edit changes the range and re-run re-resolves the exported rows', () => {
     // A this-week entry (1h) and a last-week entry (2h); the saved report's range edit flips
-    // which one its run totals reflect — the relative spec re-resolves on each run.
+    // which one its filtered export carries — the relative spec re-resolves on each run.
     tt(['client', 'add', 'Acme']);
     tt(['add', 'review', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:00:00Z', '--client', 'Acme']);
     tt(['add', 'ops sync', '--from', '2026-06-17T09:00:00Z', '--to', '2026-06-17T11:00:00Z', '--client', 'Acme']);
     tt(['report', 'save', 'Flexible', '--week', '--by', 'client']);
-    expect(JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out).grand_total_seconds).toBe(3600);
+    // §09 R06/R09 — the filtered export is the report's rows: this week holds "review" alone…
+    const thisWeek = JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out);
+    expect(thisWeek.map((e: { description: string }) => e.description)).toEqual(['review']);
     tt(['report', 'edit', 'Flexible', '--last-week']);
-    expect(JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out).grand_total_seconds).toBe(7200);
+    // …and after the range edit re-resolves, last week holds "ops sync" alone.
+    const lastWeek = JSON.parse(tt(['report', 'run', 'Flexible', '--json']).out);
+    expect(lastWeek.map((e: { description: string }) => e.description)).toEqual(['ops sync']);
   });
 
   it('rename then rm removes it from ls', () => {

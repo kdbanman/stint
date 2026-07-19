@@ -38,18 +38,28 @@ Feature: Saved reports
     And I run the saved report "Flexible"
     Then the saved report run totals 2 billable hours
 
-  Scenario: Exporting from a saved report yields the raw entries for the resolved range
-    # The saved "last-week" spec re-resolves on export; only the last-week entry falls in the
-    # window, so the export carries it alone (raw, billable='all', no narrowing) — byte-
-    # identical to `tt export` over that window. Run TWICE so CSV export-from-saved is proven
-    # reachable + identical on @stint/core (store.exportSavedReport) and tt (`report run --csv`).
+  Scenario: A saved report's two export scopes differ — the filtered export drops an off-filter row the raw keeps
+    # PRD §09 R06/R09 — a saved report exports at TWO honest scopes. The FILTERED scope (the rows
+    # the report SHOWS) is byte-identical to `tt report run <name> --csv|--json` / the GUI report's
+    # Export; ALL DATA (every raw entry in the resolved range) is byte-identical to `tt export` /
+    # the GUI "Export All Data". An off-filter entry INSIDE the range tells them apart: "audit" is
+    # non-billable, so it sits in last week yet fails the report's billable filter — the filtered
+    # export drops it while the raw range export keeps it. "review" (this week) proves the range
+    # itself excludes out-of-window entries. Run TWICE so both scopes are proven on @stint/core
+    # (store.exportSavedReport / listEntries) and tt (`report run --csv` / `export --range`), §17 R8.
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     And a closed entry "ops sync" for "Globex" last week lasting 2 hours
+    And a closed non-billable entry "audit" for "Globex" last week lasting 1 hour
     When I save a report "Archive" for last week grouped by client over billable time
     And I export the saved report "Archive"
     Then the saved report export has 1 row
     And the saved report export has a row "ops sync" for "Globex" of 7200 seconds
+    And the saved report export does not have a row "audit"
     And the saved report export does not have a row "review"
+    When I export the range 2026-06-15T00:00:00Z to 2026-06-22T00:00:00Z as csv
+    Then the export has 2 rows
+    And the export has a row "ops sync" for "Globex" of 7200 seconds
+    And the export has a row "audit" for "Globex" of 3600 seconds
 
   Scenario: Editing a saved report's group-by regroups the same total
     # The grand total is invariant on the grouping (it only changes how the totals are

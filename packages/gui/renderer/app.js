@@ -877,6 +877,21 @@ function toggleSelect(id, on) {
   renderMergeBar();
 }
 
+// §06 R3: a selection is *contiguous* only when each entry's end equals the next's start
+// exactly; any positive gap between consecutive selected entries would be folded into the
+// merged span as fabricated billable time. An open (null-end) entry covers everything after
+// it, so it can never leave a positive gap. Returns the total gapped seconds (0 = contiguous).
+function mergeGapSeconds(sorted) {
+  let gap = 0;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const prevEnd = sorted[i].endUtc;
+    if (prevEnd == null) continue;
+    const g = Date.parse(sorted[i + 1].startUtc) - Date.parse(prevEnd);
+    if (g > 0) gap += g;
+  }
+  return Math.round(gap / 1000);
+}
+
 // §06 R3: fold the selected entries into one. Core concatenates descriptions and unions
 // tags unconditionally; the only thing that can DISAGREE is client/project and billable.
 // If the selection already agrees on both, merge fires directly. If it disagrees, we
@@ -884,16 +899,45 @@ function toggleSelect(id, on) {
 // which billable value the merged row carries — exactly the §06 R3 / §12 R6 rule. The
 // renderer never resolves names: it sends the chosen entry's id as `winnerId`, and the
 // main process looks that entry up and passes its clientId/projectId as MergeOptions.
-async function mergeSelected() {
+//
+// A NON-CONTIGUOUS selection is gated first (§06 R3, §12 R13): folding a gap fabricates it
+// as billable time, so — before any commit — the Merge button swaps into a confirm stating
+// the resulting span/duration (the confirmInline delete-confirm precedent). Only the explicit
+// "Merge anyway" tap re-enters with the gap acknowledged, threading allowGap through both the
+// direct and conflict paths so core accepts the fold; Cancel leaves the originals untouched.
+async function mergeSelected(acknowledgedGap = false) {
   const entries = selectedEntries();
   if (entries.length < 2) return;
+  const sorted = entries.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  const gapSeconds = mergeGapSeconds(sorted);
+  if (gapSeconds > 0 && !acknowledgedGap) {
+    // Resulting span: earliest start → latest end (or "now" if any selected entry is open).
+    const first = sorted[0];
+    let latest = first.startUtc;
+    let open = false;
+    for (const e of sorted) {
+      if (e.endUtc == null) open = true;
+      else if (Date.parse(e.endUtc) > Date.parse(latest)) latest = e.endUtc;
+    }
+    const spanSeconds = open ? elapsed(first.startUtc) : Math.round((Date.parse(latest) - Date.parse(first.startUtc)) / 1000);
+    const endLabel = open ? 'now' : localTime(latest);
+    confirmInline($('merge-go'), {
+      kind: 'gap',
+      question: `Not contiguous — merge spans ${localTime(first.startUtc)}–${endLabel} (${fmtDur(spanSeconds)}), folding a ${fmtDur(gapSeconds)} gap into billable time?`,
+      confirmLabel: 'Merge anyway',
+      onConfirm: () => mergeSelected(true),
+    });
+    return;
+  }
   const clients = new Set(entries.map((e) => e.clientLabel ?? ''));
   const billables = new Set(entries.map((e) => !!e.billable));
   const conflict = clients.size > 1 || billables.size > 1;
   if (!conflict) {
     // §06 R4: the folded span can overlap a third entry outside the selection; capture
     // the WriteAck and raise the banner after the reload (which clears it).
-    const ack = await window.stint.merge({ ids: entries.map((e) => e.id) });
+    const payload = { ids: entries.map((e) => e.id) };
+    if (gapSeconds > 0) payload.allowGap = true;
+    const ack = await window.stint.merge(payload);
     await load();
     applyAck(ack);
     return;
@@ -902,10 +946,14 @@ async function mergeSelected() {
   // hosted here in app.js (§12 modal
   // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
   // overlap ack the fold raised against a third entry (§06 R4).
-  openMergeConflict(entries, async (ack) => {
-    await load();
-    if (ack) applyAck(ack);
-  });
+  openMergeConflict(
+    entries,
+    async (ack) => {
+      await load();
+      if (ack) applyAck(ack);
+    },
+    gapSeconds > 0,
+  );
 }
 
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
@@ -924,7 +972,9 @@ function closeMergeConflict() {
 // merges. It sends { ids, winnerId, billable } — the winning entry's id, never a resolved
 // name — over the same window.stint.merge IPC (no new channel, no parity row); the main
 // process maps winnerId to core's MergeOptions. `onDone(ack)` reloads after the commit.
-function openMergeConflict(entries, onDone = () => {}) {
+// `allowGap` is threaded from mergeSelected's gap gate (§06 R3): a gapped selection has
+// already been confirmed before this prompt opens, so it rides into the merge payload.
+function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   closeMergeConflict();
   const { icon } = window.SU;
   const backdrop = document.createElement('div');
@@ -1008,6 +1058,7 @@ function openMergeConflict(entries, onDone = () => {}) {
     const payload = { ids: entries.map((e) => e.id), winnerId };
     const billChoice = dialog.querySelector('.mc-bill:checked');
     if (billChoice) payload.billable = billChoice.value === '1';
+    if (allowGap) payload.allowGap = true;
     const ack = await window.stint.merge(payload);
     closeMergeConflict();
     onDone(ack);
@@ -2300,10 +2351,22 @@ for (const item of document.querySelectorAll('.nav-item')) {
 // place, and an Add project control sits under each client. Archived items are excluded
 // by listClients/listProjects' default (includeArchived=false) — archive hides from the
 // active list but keeps history (the durable entry labels are resolved, not copied).
+// Re-entrancy guard (issue #66): a rename / archive / add each calls renderClients directly
+// AND the write's `changed` broadcast schedules a SECOND renderClients via onChange. The two
+// async runs used to interleave — both cleared #clients-list, then both awaited per-client
+// listProjects, then both appended — so every client and project landed twice (6 cards for 3
+// clients). Each run now claims a monotonic generation token, builds its rows into a DETACHED
+// fragment across the awaits, and only the run still current after the last await swaps them in
+// (one synchronous replace). A superseded run drops its fragment and never touches the DOM, so
+// exactly one run paints. The Tags strip (renderTags) carries the same guard — the same
+// broadcast double-fires it too.
+let clientsRenderGen = 0;
+
 async function renderClients() {
   const host = $('clients-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++clientsRenderGen;
+  const frag = document.createDocumentFragment();
   const clients = await window.stint.listClients();
   if (clients.length === 0) {
     const empty = document.createElement('div');
@@ -2311,13 +2374,17 @@ async function renderClients() {
     empty.innerHTML =
       `<div class="big">No clients yet</div>` +
       `<div>Add a client, or run <code>tt client add</code>.</div>`;
-    host.appendChild(empty);
+    frag.appendChild(empty);
   } else {
     for (const c of clients) {
       const projects = await window.stint.listProjects({ clientId: c.id });
-      host.appendChild(clientRow(c, projects));
+      if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+      frag.appendChild(clientRow(c, projects));
     }
   }
+  if (gen !== clientsRenderGen) return; // superseded after the last await — never paint stale rows
+  host.innerHTML = '';
+  host.appendChild(frag);
   // §12 R10: the tag-management strip lives in the same view, rendered from the active tags.
   await renderTags();
 }
@@ -2326,11 +2393,15 @@ async function renderClients() {
 // is listed with rename + archive in place; archived tags drop out of the active list
 // (listTags' default excludes them — archive hides from pickers but keeps history). The
 // renderer resolves no names — it sends the tag's id over the rename/archive IPC tt uses.
+let tagsRenderGen = 0;
+
 async function renderTags() {
   const host = $('tags-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++tagsRenderGen;
   const tags = await window.stint.listTags();
+  if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
+  host.innerHTML = '';
   if (tags.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'tags-empty';
