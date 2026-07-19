@@ -170,6 +170,64 @@ describe('GOLD: settings defaults (§14)', () => {
   });
 });
 
+describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
+  // Two sibling rules that live only in code elsewhere — pin both so a regression cannot silently
+  // drop either. Entries use a STRICT < (a backfill needs a positive duration); saved reports use
+  // ≤ (a same-day from == to window is a legitimate, non-empty request). The asymmetry is the
+  // ratified rule (§05 R5 vs §09 R01), guarded here at the core boundary both surfaces inherit.
+  const REPORT_BASE = {
+    by: 'client' as const,
+    billableFilter: 'billable' as const,
+    rounding: false,
+    roundingIncrementMin: 15,
+  };
+
+  it('add() rejects a backfill whose --to is not strictly after --from (entries: strict <)', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    // Inverted: to before from.
+    expect(() =>
+      store.add({ description: 'x', fromUtc: '2026-06-24T10:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
+    ).toThrow(/--to must be after --from/);
+    // Zero-length: to == from is ALSO rejected for entries (the rule is strict <, not ≤).
+    expect(() =>
+      store.add({ description: 'x', fromUtc: '2026-06-24T09:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
+    ).toThrow(/--to must be after --from/);
+  });
+
+  it('saveReport rejects an inverted absolute range but ACCEPTS same-day from == to (reports: ≤)', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    // Inverted from > to → rejected, nothing stored.
+    expect(() =>
+      store.saveReport({
+        name: 'Backwards',
+        rangeSpec: { kind: 'absolute', fromUtc: '2026-07-15T00:00:00Z', toUtc: '2026-07-01T00:00:00Z' },
+        ...REPORT_BASE,
+      }),
+    ).toThrow(/must not be before/);
+    expect(store.listReports().map((d) => d.name)).not.toContain('Backwards');
+    // Same-day from == to → accepted (≤), unlike the entry rule's strict <.
+    const def = store.saveReport({
+      name: 'SameDay',
+      rangeSpec: { kind: 'absolute', fromUtc: '2026-06-24T00:00:00Z', toUtc: '2026-06-24T00:00:00Z' },
+      ...REPORT_BASE,
+    });
+    expect(def.name).toBe('SameDay');
+    expect(store.listReports().map((d) => d.name)).toContain('SameDay');
+  });
+
+  it('editReport rejects amending a stored report into an inverted absolute range, leaving it untouched', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    store.saveReport({ name: 'Weekly', rangeSpec: { kind: 'preset', preset: 'week' }, ...REPORT_BASE });
+    expect(() =>
+      store.editReport('Weekly', {
+        rangeSpec: { kind: 'absolute', fromUtc: '2026-07-15T00:00:00Z', toUtc: '2026-07-01T00:00:00Z' },
+      }),
+    ).toThrow(/must not be before/);
+    // The original preset definition is intact — the refused amendment persisted nothing.
+    expect(store.getReport('Weekly')?.rangeSpec).toEqual({ kind: 'preset', preset: 'week' });
+  });
+});
+
 describe('GOLD: schema shape (§13)', () => {
   // Artefact-is-criterion: the v3 schema IS the contract. A fresh in-memory DB must carry
   // the new favorite / favorite_tag / report tables with the exact §13 column sets and the

@@ -38,6 +38,10 @@ export interface Ctx {
   resumeFavResult?: { rejected: boolean };
   /** §07 R03 (#64) — the result of the most recent `When I try to add/rename` reference data. */
   refDataResult?: { rejected: boolean };
+  /** §05 R06 / §16 (#61) — the result of the most recent future-start edit attempt on the open row. */
+  editResult?: { rejected: boolean };
+  /** §05 R01 / §16 (#61) — the result of the most recent backdated-start attempt over the open row. */
+  startResult?: { rejected: boolean };
   /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
   integrityOpen?: { refused: boolean; wrote: boolean };
   /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
@@ -57,6 +61,11 @@ const iso = (t: string): string => {
   const [h, m, s] = t.split(':');
   return `${DAY}T${h!.padStart(2, '0')}:${m}:${s ?? '00'}Z`;
 };
+
+// §05 R06 / §16 (#61) — an instant unambiguously AFTER the fixed clock (FIXED_NOW is late on DAY,
+// 2026-06-24T23:59Z), used to prove a future start on the running entry is refused on both
+// surfaces. The next calendar day at midday is safely ahead of now under any runner timezone.
+const FUTURE_ISO = '2026-06-25T12:00:00Z';
 
 // §05 R10 — a description carrying an interior newline. The line break lives HERE, in the step
 // definition, not in the Gherkin cell, so the .feature stays single-line while the stored/reported
@@ -431,6 +440,32 @@ export const steps: StepDef[] = [
   {
     pattern: /^I edit the open entry start to (\d{1,2}:\d{2})$/,
     run: (w, _c, at) => w.edit(open(w)!.id, { startUtc: iso(at) }),
+  },
+  // §05 R06 / §03 / §16 (#61) — attempt to move the running entry's start to a FUTURE instant
+  // (the day AFTER the fixed clock, unambiguously ahead of now). Core refuses it on BOTH surfaces
+  // and stores nothing; stash the result so the assertion below proves the guard held identically.
+  {
+    pattern: /^I attempt to edit the open entry start to a future time$/,
+    run: (w, ctx) => {
+      ctx.editResult = w.attemptEditStart(open(w)!.id, FUTURE_ISO);
+    },
+  },
+  {
+    pattern: /^the future-start edit is rejected$/,
+    run: (_w, ctx) => expect(ctx.editResult?.rejected).toBe(true),
+  },
+  // §05 R01 / §03 / §16 (#61) — attempt to Start a new entry backdated BEFORE the running row's
+  // start: start()'s atomic close would then write an end < start, so the whole transaction is
+  // refused and rolls back on BOTH surfaces, the open row left intact. Stash the result.
+  {
+    pattern: /^I attempt to start an entry "([^"]*)" backdated to (\d{1,2}:\d{2})$/,
+    run: (w, ctx, desc, at) => {
+      ctx.startResult = w.attemptStart({ desc, atIso: iso(at) });
+    },
+  },
+  {
+    pattern: /^the backdated start is rejected$/,
+    run: (_w, ctx) => expect(ctx.startResult?.rejected).toBe(true),
   },
   // §06 R1 — delete an entry outright, surface-neutral over the World `remove` capability
   // (CoreWorld store.remove, CliWorld `tt rm --force`). Proves the delete arithmetic — the
@@ -1158,6 +1193,52 @@ export const steps: StepDef[] = [
           billableFilter: filter as 'billable' | 'all' | 'non-billable',
         }).rejected,
       ).toBe(true);
+    },
+  },
+  {
+    // §09 R01/R08 — save a report with an ABSOLUTE custom range (fixed from/to bounds). Used by
+    // the same-day (from == to) VALID scenario: the report rule is ≤, so this is accepted, saved,
+    // and runnable. Surface-neutral (CoreWorld store.saveReport{absolute} / CliWorld `tt report
+    // save --range FROM TO`).
+    pattern:
+      /^I save a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+    run: (w, _c, name, fromUtc, toUtc, by, filter) => {
+      w.saveReportRange({
+        name,
+        fromUtc,
+        toUtc,
+        by: groupBy(by),
+        billableFilter: filter as 'billable' | 'all' | 'non-billable',
+      });
+    },
+  },
+  {
+    // §09 R01/R08 — core REFUSES an inverted absolute range (from > to), which only ever resolves
+    // to an empty window, so it is rejected rather than stored (mirroring add()'s from<to guard and
+    // §14's working-hours start<end). This is the refusal the GUI builder surfaces inline (§12 R21);
+    // this proves the CONTRACT holds on BOTH surfaces (store.saveReport throws / `tt report save`
+    // exits non-zero), and — paired with a list assertion — that a refused save persists nothing.
+    pattern:
+      /^saving a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time is rejected$/,
+    run: (w, _c, name, fromUtc, toUtc, by, filter) => {
+      expect(
+        w.attemptSaveReportRange({
+          name,
+          fromUtc,
+          toUtc,
+          by: groupBy(by),
+          billableFilter: filter as 'billable' | 'all' | 'non-billable',
+        }).rejected,
+      ).toBe(true);
+    },
+  },
+  {
+    // §09 R08 — the from ≤ to guard holds on EDIT too: amending a saved report into an inverted
+    // absolute window is refused, leaving the original definition untouched. Both surfaces.
+    pattern:
+      /^amending the saved report "([^"]*)" range to the custom range (\S+) to (\S+) is rejected$/,
+    run: (w, _c, name, fromUtc, toUtc) => {
+      expect(w.attemptEditReportRange(name, { fromUtc, toUtc }).rejected).toBe(true);
     },
   },
   {
