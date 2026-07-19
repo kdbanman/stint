@@ -242,6 +242,7 @@
     <h2>Self-updating from GitHub Releases</h2>
     <p>Specified in <a href="prd.html#s19">§19</a>. CI builds a macOS bundle and a Linux artifact — no Windows target — and every merge to <code>main</code> publishes a GitHub Release, so the public repo is the distribution backend. One installer per platform lands both the GUI and <code>tt</code> in one step; both report one shared <code>YYYY.M.D[.N]</code> version.</p>
     <p>The in-app updater makes the app's only outbound request — a user-initiated query to the GitHub Releases API over Electron's <code>net</code>, sending no data (<a href="prd.html#s17">§17 R09</a>) — then guides the install. An update <strong>never touches the Database</strong>, which is why it lives entirely outside the Core and the parity matrix (<a href="prd.html#s16">§16</a>).</p>
+    <p>The updater is <strong>hand-rolled</strong> (<code>gui/src/update.ts</code>) rather than <code>electron-updater</code>. Stint ships with <strong>no code-signing / Developer ID / notarization</strong> (<a href="prd.html#s19">§19 R04</a>), and the drop-in auto-update backends assume a signed bundle — Squirrel.Mac, electron-updater's macOS path, refuses to apply an unsigned update. Foreclosed from silent background replacement, the app owns the three steps itself: a user-initiated check, a plain artifact download to the OS temp dir, and a one-time Gatekeeper clearance surfaced as an explicit step. The consequence is the visible, manual update flow of §19 R03/R04, not a silent auto-update.</p>
   </section>
 
   <section id="s11">
