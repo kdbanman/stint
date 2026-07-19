@@ -2176,17 +2176,21 @@ async function main() {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('#timer-stop', { state: 'visible' });
       await page.click('#timer-stop');
-      await page.waitForFunction(() => {
-        const b = document.querySelector('#overlap-banner');
-        return !!b && !b.hidden && b.classList.contains('error') && b.textContent.trim().length > 0;
-      });
+      // §12 R21 / issue #61: the refusal must be VISIBLE on the Timer view — the very surface the
+      // Stop was clicked on ("Stop appears dead"). #timer-warning is in the active Timer view, so
+      // waiting for state:'visible' asserts a genuinely on-screen region (not an off-view banner).
+      await page.waitForSelector('#timer-warning', { state: 'visible' });
       return page.evaluate(() => {
+        const t = document.querySelector('#timer-warning');
         const b = document.querySelector('#overlap-banner');
+        const rect = t?.getBoundingClientRect();
         return {
-          shown: !!b && !b.hidden && b.textContent.trim().length > 0,
-          isError: !!b && b.classList.contains('error'),
-          announced: b?.getAttribute('role') === 'status' && b?.hasAttribute('aria-live'),
-          message: b?.textContent.trim() ?? '',
+          // The Timer-view region is visible (in the active view), announced, carries the reason.
+          timerShown: !!t && !t.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && t.textContent.trim().length > 0,
+          timerAnnounced: t?.getAttribute('role') === 'status' && t?.hasAttribute('aria-live'),
+          message: t?.textContent.trim() ?? '',
+          // The Entries-view banner mirrors it (block chrome) for that context.
+          bannerMirrors: !!b && !b.hidden && b.classList.contains('error') && b.textContent.trim().length > 0,
         };
       });
     }, { rejectWrites: true });
@@ -2195,7 +2199,7 @@ async function main() {
       editReject.formOpen && editReject.shown && editReject.announced && editReject.notWritten &&
       splitReject.formOpen && splitReject.shown && splitReject.announced && splitReject.notWritten &&
       renameReject.formOpen && renameReject.shown && renameReject.announced && renameReject.notWritten &&
-      toggleReject.shown && toggleReject.isError && toggleReject.announced;
+      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors;
     record(
       'WRITE_REJECTION_FEEDBACK',
       ok,

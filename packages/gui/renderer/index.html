@@ -79,6 +79,11 @@
                 <button class="primary" id="timer-stop" hidden><svg class="ic" aria-hidden="true"><use href="#i-stop" /></svg>Stop</button>
                 <button type="button" id="timer-pin" class="ghost" hidden><svg class="ic" aria-hidden="true"><use href="#i-star" /></svg>Pin</button>
               </div>
+              <!-- §12 R21: a refused Stop/toggle is surfaced HERE, on the Timer view where the
+                   action lives — the "Stop appears dead" surface (issue #61). Announced; cleared
+                   on the next good write. The Entries-view #overlap-banner mirrors it for that
+                   context, and the tray popover carries its own #pop-warning. -->
+              <div id="timer-warning" class="form-error" role="status" aria-live="polite" hidden></div>
             </section>
             <section class="liveedit" id="live-edit" hidden aria-label="Edit the running timer">
               <div class="le-grid">
