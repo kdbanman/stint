@@ -418,6 +418,39 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/e\.sleptThrough && \(e\.excludedSeconds \?\? 0\) > 0/);
   });
 
+  it('a cross-midnight span renders one segment per day column, split on the local end day (§12 R16 / issue #71)', () => {
+    const app = read('app.js');
+    // The segment planner exists and keys each segment by the day column it lands in, so an
+    // entry can fan out across columns without the day-grouping/totals being re-bucketed.
+    expect(app).toMatch(/function calEntrySegments\(e, startDay\)/);
+    // The split is driven by the entry's LOCAL END DAY — never assumed same-day: calLocalDayOf on
+    // the stop instant decides whether the span crosses midnight (the bug was computing an end-min
+    // that assumed the same local day, collapsing a later-day stop to the 18px floor).
+    expect(app).toMatch(/function calLocalDayOf\(iso\)/);
+    expect(app).toMatch(/const endDay = calLocalDayOf\(e\.endUtc\)/);
+    expect(app).toMatch(/if \(endDay <= startDay\)/); // same-day is the guarded trivial case
+    // A cross-midnight span emits a start segment to the boundary, full-height middle days, and an
+    // end segment from the boundary — the three parts the calEvent/styles.css open-edge rules key on.
+    expect(app).toMatch(/part: 'seg-start'/);
+    expect(app).toMatch(/part: 'seg-mid'/);
+    expect(app).toMatch(/part: 'seg-end'/);
+    expect(app).toMatch(/botMin: 1440/); // the start segment runs to the track bottom (24:00)
+    // renderCalendar/calColumn paint one event PER SEGMENT (not per entry), each carrying the
+    // entry so selection/click/hover act on the one span…
+    expect(app).toMatch(/for \(const seg of d\.segments\)/);
+    expect(app).toMatch(/calEvent\(seg\.entry, seg\)/);
+    // …and calEvent positions the block from the SEGMENT's bounds, so no unguarded
+    // (endMin − startMin) same-day height computation survives on the closed path.
+    expect(app).toMatch(/function calEvent\(e, seg\)/);
+    expect(app).not.toMatch(/\(endMin - startMin\) \* CAL_PX_PER_MIN/);
+    // The open-edge CSS drops the edge each segment continues across (so the split reads as one span).
+    const css = read('styles.css');
+    expect(css).toMatch(/\.dt \.ev\.seg-start \{[^}]*border-bottom: 0/);
+    expect(css).toMatch(/\.dt \.ev\.seg-end \{[^}]*border-top: 0/);
+    // Selection lifts EVERY segment of the id, not just the first (a cross-midnight span has two).
+    expect(app).toMatch(/document\.querySelectorAll\(`\.entry\[data-id="\$\{id\}"\]`\)/);
+  });
+
   it('tags show as chips in-context and are edited in the unified form over the edit IPC (§07, §12 R06)', () => {
     const app = read('app.js');
     // Every event's tags render as monochrome chips, off an entry tags accessor…

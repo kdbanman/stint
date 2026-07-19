@@ -391,11 +391,14 @@ export interface SplitPayload {
 /**
  * §06 R3 — fold a contiguous selection into one entry (`merge`). `winnerId` names the entry
  * whose client/project win when the selection disagrees; `billable` the chosen flag.
+ * `allowGap` acknowledges a non-contiguous selection (core refuses the fold otherwise) — the
+ * renderer sets it only after the user confirms the gapped-span gate (§12 R13).
  */
 export interface MergePayload {
   ids: number[];
   winnerId?: number;
   billable?: boolean;
+  allowGap?: boolean;
 }
 
 /**

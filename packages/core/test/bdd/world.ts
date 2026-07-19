@@ -20,6 +20,7 @@ import { basename, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
+  StoreError,
   joinClientProject,
   resolveRange,
   openDb,
@@ -181,7 +182,17 @@ export interface World {
    */
   removeUnconfirmed(id: number): { refused: boolean };
   split(id: number, atIso: string): { ids: [number, number] };
-  merge(ids: number[], opts?: { client?: string }): { id: number; warned: boolean };
+  merge(ids: number[], opts?: { client?: string; allowGap?: boolean }): { id: number; warned: boolean };
+  /**
+   * §06 R3 — a *contiguous* selection folds each entry's end into the next's start exactly;
+   * any positive gap fabricates that gap as billable time, so a gapped merge must be refused
+   * unless acknowledged. Surface-neutral: CoreWorld calls store.merge WITHOUT allowGap and
+   * catches the StoreError; CliWorld shells `tt merge <ids>` WITHOUT `--allow-gap`, which
+   * refuses on stderr with a non-zero exit. Both return { refused: true } and leave the
+   * originals intact — the loss-protection the GUI gap confirm (§12 R13) reaches. The
+   * acknowledged path stays reachable via merge(..., { allowGap: true }).
+   */
+  mergeUnacknowledged(ids: number[]): { refused: boolean };
   /**
    * §12 R10 / §05 R08 — seed a CLOSED entry that slept through: the backfilled span plus a
    * recorded sleep span inside it, so the reversible subtract has something to exclude. Core owns
@@ -220,13 +231,32 @@ export interface World {
   /**
    * §12 R10 — tag management at parity with `tt tag` / the Clients view's tag strip.
    * Surface-neutral: CoreWorld calls store.addTag/renameTag/archiveTag/listTags directly;
-   * CliWorld shells `tt tag add/rename/archive` and reads `tt tag ls --json`. addTag is
-   * create-or-return (wraps core's ensureTag), so it is the explicit manage-it-first path.
+   * CliWorld shells `tt tag add/rename/archive` and reads `tt tag ls --json`. addTag is the
+   * explicit manage-it-first path (`tt tag add`), which REJECTS a case-variant duplicate
+   * (§07 R03); the distinct on-the-fly tagging path instead resolves it to the existing tag.
    */
   addTag(name: string): void;
   renameTag(name: string, to: string): void;
   archiveTag(name: string): void;
   activeTagNames(): string[];
+  /**
+   * §07 R03 (#64) — attempt an "add" of reference data whose name may already be taken and
+   * report whether the surface REJECTED it without creating a duplicate. Surface-neutral:
+   * CoreWorld calls store.addClient/addProject/addTag and catches the StoreError; CliWorld
+   * checks the non-zero exit of `tt client|project|tag add`. A duplicate name is rejected
+   * identically on BOTH surfaces (§17 R8) — the fix for the silent by-client conflation (#64).
+   */
+  attemptAddClient(name: string): { rejected: boolean };
+  attemptAddProject(name: string, client: string): { rejected: boolean };
+  attemptAddTag(name: string): { rejected: boolean };
+  /**
+   * §07 R03 (#64) — attempt a RENAME of reference data onto a name that may collide; report
+   * whether it was rejected. A rename onto a DIFFERENT record's name is rejected case-
+   * insensitively (a case-only self-rename is allowed and rides the happy-path rename verbs).
+   */
+  attemptRenameClient(name: string, to: string): { rejected: boolean };
+  attemptRenameProject(name: string, to: string): { rejected: boolean };
+  attemptRenameTag(name: string, to: string): { rejected: boolean };
   /**
    * §12 R11 / §14 — the shared `config` capability the GUI Settings view edits. Surface-
    * neutral: CoreWorld calls store.setSetting / store.settings(); CliWorld shells
@@ -561,10 +591,25 @@ export class CoreWorld implements World {
     const [a, b] = this.store.split(id, atIso);
     return { ids: [a.id, b.id] };
   }
-  merge(ids: number[], opts?: { client?: string }): { id: number; warned: boolean } {
-    const mergeOpts = opts?.client ? { clientId: this.store.ensureClient(opts.client).id } : {};
+  merge(ids: number[], opts?: { client?: string; allowGap?: boolean }): { id: number; warned: boolean } {
+    const mergeOpts: Parameters<Store['merge']>[1] = opts?.client
+      ? { clientId: this.store.ensureClient(opts.client).id }
+      : {};
+    if (opts?.allowGap) mergeOpts.allowGap = true;
     const r = this.store.merge(ids, mergeOpts);
     return { id: r.value.id, warned: r.warnings.length > 0 };
+  }
+  mergeUnacknowledged(ids: number[]): { refused: boolean } {
+    // §06 R3: core refuses a gapped selection unless allowGap acknowledges it. We call merge
+    // WITHOUT allowGap and treat the StoreError as the refusal — the originals are untouched
+    // (the fold never ran), the same loss-protection the GUI gap confirm reaches.
+    try {
+      this.store.merge(ids);
+      return { refused: false };
+    } catch (err) {
+      if (err instanceof StoreError && /not contiguous/.test(err.message)) return { refused: true };
+      throw err;
+    }
   }
   seedSleptEntry(o: {
     desc: string;
@@ -628,6 +673,61 @@ export class CoreWorld implements World {
   }
   activeTagNames(): string[] {
     return this.store.listTags().map((t) => t.name);
+  }
+  attemptAddClient(name: string): { rejected: boolean } {
+    try {
+      this.store.addClient(name);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptAddProject(name: string, client: string): { rejected: boolean } {
+    try {
+      const c = this.store.ensureClient(client);
+      this.store.addProject(name, c.id);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptAddTag(name: string): { rejected: boolean } {
+    try {
+      this.store.addTag(name);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptRenameClient(name: string, to: string): { rejected: boolean } {
+    try {
+      const c = this.store.findClientByName(name);
+      if (!c) throw new Error(`no client "${name}"`);
+      this.store.renameClient(c.id, to);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptRenameProject(name: string, to: string): { rejected: boolean } {
+    try {
+      const p = this.store.findProjectByName(name);
+      if (!p) throw new Error(`no project "${name}"`);
+      this.store.renameProject(p.id, to);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptRenameTag(name: string, to: string): { rejected: boolean } {
+    try {
+      const t = this.store.findTagByName(name);
+      if (!t) throw new Error(`no tag "${name}"`);
+      this.store.renameTag(t.id, to);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
   }
   setConfig(key: string, value: string): void {
     // §12 R11/§14: drive the SAME descriptor-based parse the CLI's `config set` uses, so the
@@ -1160,12 +1260,21 @@ export class CliWorld implements World {
     const m = /into (\d+) and (\d+)/.exec(r.out)!;
     return { ids: [Number(m[1]), Number(m[2])] };
   }
-  merge(ids: number[], opts?: { client?: string }): { id: number; warned: boolean } {
+  merge(ids: number[], opts?: { client?: string; allowGap?: boolean }): { id: number; warned: boolean } {
     const args = ['merge', ...ids.map(String)];
     if (opts?.client) args.push('--client', opts.client);
+    if (opts?.allowGap) args.push('--allow-gap');
     const r = this.tt(args);
     const id = Number(/merged into entry (\d+)/.exec(r.out)?.[1]);
     return { id, warned: /warning/.test(r.err) };
+  }
+  mergeUnacknowledged(ids: number[]): { refused: boolean } {
+    // §06 R3: `tt merge` WITHOUT --allow-gap is the unacknowledged path — it refuses a gapped
+    // selection on stderr with a non-zero exit and folds nothing (the same gate the GUI gap
+    // confirm reaches). We assert the refusal signal and leave the originals intact.
+    const r = this.tt(['merge', ...ids.map(String)]);
+    const refused = r.code !== 0 && /not contiguous/.test(r.err);
+    return { refused };
   }
   seedSleptEntry(o: {
     desc: string;
@@ -1230,6 +1339,25 @@ export class CliWorld implements World {
   activeTagNames(): string[] {
     const r = this.tt(['tag', 'ls', '--json']);
     return (JSON.parse(r.out || '[]') as { name: string }[]).map((t) => t.name);
+  }
+  attemptAddClient(name: string): { rejected: boolean } {
+    // §07 R03 (#64) — `tt client add` exits non-zero on a duplicate; that IS the rejection.
+    return { rejected: this.tt(['client', 'add', name]).code !== 0 };
+  }
+  attemptAddProject(name: string, client: string): { rejected: boolean } {
+    return { rejected: this.tt(['project', 'add', name, '--client', client]).code !== 0 };
+  }
+  attemptAddTag(name: string): { rejected: boolean } {
+    return { rejected: this.tt(['tag', 'add', name]).code !== 0 };
+  }
+  attemptRenameClient(name: string, to: string): { rejected: boolean } {
+    return { rejected: this.tt(['client', 'rename', name, to]).code !== 0 };
+  }
+  attemptRenameProject(name: string, to: string): { rejected: boolean } {
+    return { rejected: this.tt(['project', 'rename', name, to]).code !== 0 };
+  }
+  attemptRenameTag(name: string, to: string): { rejected: boolean } {
+    return { rejected: this.tt(['tag', 'rename', name, to]).code !== 0 };
   }
   setConfig(key: string, value: string): void {
     // §12 R11/§14: the GUI Settings view's edit, reached from tt via `config set <snake>` —

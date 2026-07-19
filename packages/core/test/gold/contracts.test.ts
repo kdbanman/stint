@@ -990,3 +990,77 @@ describe('GOLD: JSON export shape (§09 R06)', () => {
     store.close();
   });
 });
+
+describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
+  // The bug: client/project/tag names carried no uniqueness guard, so a duplicate client (added
+  // or renamed-onto) slipped through and a by-client report merged the two into one line —
+  // silently conflating billing. The guard now matches the favorites/saved-report contract:
+  // unique case-insensitively, spanning archived records, with per-client project scope; the
+  // on-the-fly tagging path keeps its case-insensitive REUSE (resolution, not an error).
+
+  it('rejects a duplicate CLIENT name (case-insensitive) on add and rename', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    store.addClient('Acme Corp');
+    // add: a case-variant duplicate is refused, so no second row can split Acme's billing.
+    expect(() => store.addClient('acme corp')).toThrow(/already exists/i);
+    const beta = store.addClient('Beta Labs');
+    // rename onto a DIFFERENT client's name is refused…
+    expect(() => store.renameClient(beta.id, 'ACME CORP')).toThrow(/already exists/i);
+    // …but a case-only SELF-rename (same row) is allowed.
+    expect(() => store.renameClient(beta.id, 'beta labs')).not.toThrow();
+    expect(store.listClients().map((c) => c.name).sort()).toEqual(['Acme Corp', 'beta labs']);
+    store.close();
+  });
+
+  it('scopes PROJECT uniqueness per client: dup under same client rejected, same name under another client allowed', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const acme = store.addClient('Acme');
+    const globex = store.addClient('Globex');
+    store.addProject('Platform', acme.id);
+    expect(() => store.addProject('platform', acme.id)).toThrow(/already exists/i);
+    // The SAME name under a DIFFERENT client is fine — projects are unique per client.
+    expect(() => store.addProject('Platform', globex.id)).not.toThrow();
+    // rename onto a sibling under the same client is rejected; case-only self-rename allowed.
+    const billing = store.addProject('Billing', acme.id);
+    expect(() => store.renameProject(billing.id, 'PLATFORM')).toThrow(/already exists/i);
+    expect(() => store.renameProject(billing.id, 'billing')).not.toThrow();
+    store.close();
+  });
+
+  it('rejects a duplicate TAG name (case-insensitive) on explicit add and on rename', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    store.addTag('billing');
+    // The tag table's own UNIQUE is binary-collated; the app-level guard is what catches a case
+    // variant on the explicit manage-first path.
+    expect(() => store.addTag('Billing')).toThrow(/already exists/i);
+    const invoicing = store.addTag('invoicing');
+    expect(() => store.renameTag(invoicing.id, 'BILLING')).toThrow(/already exists/i);
+    expect(() => store.renameTag(invoicing.id, 'Invoicing')).not.toThrow(); // case-only self-rename
+    store.close();
+  });
+
+  it('the ON-THE-FLY tagging path REUSES a case-variant tag (no new row, no error)', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const { value: e } = store.add({
+      description: 'a',
+      billable: false,
+      tags: ['deep'],
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T10:00:00Z',
+    });
+    // Applying a case-variant of an existing tag resolves to the same tag — §07 R03 resolution.
+    expect(() => store.edit(e.id, { addTags: ['Deep'] })).not.toThrow();
+    expect(store.listTags().map((t) => t.name)).toEqual(['deep']);
+    store.close();
+  });
+
+  it('uniqueness spans ARCHIVED records and the message steers to Restore', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const acme = store.addClient('Acme Corp');
+    store.archiveClient(acme.id);
+    // An archived record still holds its name: a fresh add of a case variant is rejected, and
+    // the message points at the archived record (Restore it instead of minting a duplicate).
+    expect(() => store.addClient('acme corp')).toThrow(/archived client .* already exists .* Restore/i);
+    store.close();
+  });
+});

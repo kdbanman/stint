@@ -139,6 +139,12 @@
   /* running entry: fades into the future, no bottom edge */
   .ev.run{border:0;border-radius:7px 7px 0 0;background:linear-gradient(180deg,var(--accent-weak) 0%,var(--accent-weak) 35%,rgba(248,233,229,0) 100%)}
   .ev.run .bd{display:flex;align-items:center;gap:6px}
+  /* §12 R16 (issue #71): a cross-midnight span renders one segment per day column, sharing the
+     entry — each drops the edge it continues across so the split reads as one span: seg-start no
+     bottom edge (continues into the next column at 00:00), seg-end no top edge (continued from it). */
+  .ev.seg-start{border-bottom:0;border-bottom-left-radius:0;border-bottom-right-radius:0}
+  .ev.seg-end{border-top:0;border-top-left-radius:0;border-top-right-radius:0}
+  .ev.seg-mid{border-top:0;border-bottom:0;border-radius:0}
   /* slept-through segment */
   .zz{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;color:var(--muted);border-top:1px dashed var(--line-strong);background:repeating-linear-gradient(45deg,rgba(214,209,201,.25) 0,rgba(214,209,201,.25) 6px,rgba(214,209,201,.5) 6px,rgba(214,209,201,.5) 12px)}
   .zz .ic{width:12px;height:12px}
@@ -190,7 +196,7 @@
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">This week</div><div class="v tnum">18h 00m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">25h 45m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 
@@ -222,7 +228,7 @@
         <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
         <select class="field"><option>All tags</option></select>
         <span class="srch"><svg class="ic"><use href="#i-search"/></svg><input placeholder="Search entries"></span>
-        <span class="tot tnum">18.00h</span>
+        <span class="tot tnum">25.75h</span>
       </div>
 
       <div class="calwrap">
@@ -264,13 +270,23 @@
                 <a class="ev run" href="edit-entry.html" style="top:286px;height:132px"><span class="bd"><span class="dot run"></span>Drafting proposals</span><span class="bc">Globex Corp</span><span class="bt">13:30 –</span></a>
               </div>
             </div>
+            <!-- §12 R16 (issue #71): a CROSS-MIDNIGHT span (Fri 22:30 → Sat 06:15, 7h45m) renders as
+                 TWO segments sharing the one entry — a start-day segment reaching Fri's track foot
+                 (no bottom edge, continues into Sat at 00:00) and an end-day segment from Sat's
+                 track head (no top edge). It is grouped and TOTALLED on its START day: Fri's header
+                 carries the 7.75h; Sat shows the segment but its header does NOT count it. -->
             <div class="dcol">
-              <div class="dh"><span class="dw">Fri</span><b class="dd">26</b></div>
-              <div class="dt"></div>
+              <div class="dh"><span class="dw">Fri</span><b class="dd">26</b><span class="ds tnum">7.75h</span></div>
+              <div class="dt">
+                <a class="ev seg seg-start" href="edit-entry.html" style="top:396px;height:88px"><span class="bd">Overnight render</span><span class="bc">Globex Corp</span><span class="bt">22:30 – 06:15</span></a>
+              </div>
             </div>
             <div class="dcol">
+              <!-- start-day attribution: Sat shows the end segment but its header carries NO total for it -->
               <div class="dh"><span class="dw">Sat</span><b class="dd">27</b></div>
-              <div class="dt"></div>
+              <div class="dt">
+                <a class="ev seg seg-end" href="edit-entry.html" style="top:0;height:132px"><span class="bd">Overnight render</span><span class="bc">Globex Corp</span><span class="bt">22:30 – 06:15</span></a>
+              </div>
             </div>
             <div class="dcol">
               <div class="dh"><span class="dw">Sun</span><b class="dd">28</b></div>
@@ -294,7 +310,7 @@
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">This week</div><div class="v tnum">18h 00m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">25h 45m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 
@@ -343,13 +359,20 @@
                 <div class="ev run" style="top:286px;height:132px"><span class="bd"><span class="dot run"></span>Drafting proposals</span><span class="bc">Globex Corp</span><span class="bt">13:30 –</span></div>
               </div>
             </div>
+            <!-- §12 R16 (issue #71): the same CROSS-MIDNIGHT span (Fri 22:30 → Sat 06:15) — two
+                 segments sharing the one entry, totalled on Fri (start-day attribution); Sat shows
+                 the segment but its header does not count it. Its corner checkbox joins multi-select. -->
             <div class="dcol">
-              <div class="dh"><span class="dw">Fri</span><b class="dd">26</b></div>
-              <div class="dt"></div>
+              <div class="dh"><span class="dw">Fri</span><b class="dd">26</b><span class="ds tnum">7.75h</span></div>
+              <div class="dt">
+                <div class="ev seg seg-start wck" style="top:396px;height:88px"><span class="ck"></span><span class="bd">Overnight render</span><span class="bc">Globex Corp</span><span class="bt">22:30 – 06:15</span></div>
+              </div>
             </div>
             <div class="dcol">
               <div class="dh"><span class="dw">Sat</span><b class="dd">27</b></div>
-              <div class="dt"></div>
+              <div class="dt">
+                <div class="ev seg seg-end wck" style="top:0;height:132px"><span class="ck"></span><span class="bd">Overnight render</span><span class="bc">Globex Corp</span><span class="bt">22:30 – 06:15</span></div>
+              </div>
             </div>
             <div class="dcol">
               <div class="dh"><span class="dw">Sun</span><b class="dd">28</b></div>
@@ -373,7 +396,7 @@
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">This week</div><div class="v tnum">18h 00m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
+  <div class="stat"><div class="k">This week</div><div class="v tnum">25h 45m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 

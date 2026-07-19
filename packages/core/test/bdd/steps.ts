@@ -16,6 +16,8 @@ export interface Ctx {
   lastWarned?: boolean;
   /** §06 R1 — the result of the most recent `When I attempt to delete … without confirming`. */
   removeResult?: { refused: boolean };
+  /** §06 R3 — the result of the most recent `When I attempt to merge … without acknowledging the gap`. */
+  mergeResult?: { refused: boolean };
   /** §09 R7 — the rows returned by the most recent `When I search for "X"`. */
   searchResults?: EntryRec[];
   /** §09 R6 — the rows returned by the most recent `When I export the range …`. */
@@ -34,6 +36,8 @@ export interface Ctx {
   favorites?: FavoriteRec[];
   /** §05 R10 — the result of the most recent `When I attempt to resume from favorite "X"`. */
   resumeFavResult?: { rejected: boolean };
+  /** §07 R03 (#64) — the result of the most recent `When I try to add/rename` reference data. */
+  refDataResult?: { rejected: boolean };
   /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
   integrityOpen?: { refused: boolean; wrote: boolean };
   /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
@@ -375,6 +379,24 @@ export const steps: StepDef[] = [
       ctx.mergedId = w.merge(thoseTwo(ctx), { client }).id;
     },
   },
+  // §06 R3 — the contiguity gate: attempt to merge a GAPPED selection WITHOUT acknowledging
+  // the gap, over the World `mergeUnacknowledged` capability (CoreWorld catches the StoreError,
+  // CliWorld `tt merge` without --allow-gap refuses). Stash the result so the assertion below
+  // proves the fold never ran and the originals survive on both surfaces.
+  {
+    pattern: /^I attempt to merge those two entries without acknowledging the gap$/,
+    run: (w, ctx) => {
+      ctx.mergeResult = w.mergeUnacknowledged(thoseTwo(ctx));
+    },
+  },
+  // §06 R3 — the acknowledged path stays reachable: a gapped merge folds the gap into the span
+  // once the gap is acknowledged (CoreWorld allowGap, CliWorld --allow-gap).
+  {
+    pattern: /^I merge those two entries acknowledging the gap$/,
+    run: (w, ctx) => {
+      ctx.mergedId = w.merge(thoseTwo(ctx), { allowGap: true }).id;
+    },
+  },
 
   // ---- edit / billable override / reference data -------------------------
   {
@@ -449,6 +471,49 @@ export const steps: StepDef[] = [
     pattern: /^I archive tag "([^"]*)"$/,
     run: (w, _c, name) => w.archiveTag(name),
   },
+  // §07 R03 (#64) — attempt an add/rename whose name may already be taken; the surface either
+  // creates it or REJECTS the duplicate. Both surfaces reject identically (§17 R8), so a
+  // by-client report can never silently conflate two clients under one line.
+  {
+    pattern: /^I try to add a client "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.refDataResult = w.attemptAddClient(name);
+    },
+  },
+  {
+    pattern: /^I try to add a project "([^"]*)" for client "([^"]*)"$/,
+    run: (w, ctx, name, client) => {
+      ctx.refDataResult = w.attemptAddProject(name, client);
+    },
+  },
+  {
+    pattern: /^I try to add a tag "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.refDataResult = w.attemptAddTag(name);
+    },
+  },
+  {
+    pattern: /^I try to rename client "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameClient(name, to);
+    },
+  },
+  {
+    pattern: /^I try to rename project "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameProject(name, to);
+    },
+  },
+  {
+    pattern: /^I try to rename tag "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameTag(name, to);
+    },
+  },
+  {
+    pattern: /^the reference-data change is rejected$/,
+    run: (_w, ctx) => expect(ctx.refDataResult?.rejected).toBe(true),
+  },
 
   // ---- assertions --------------------------------------------------------
   {
@@ -507,6 +572,12 @@ export const steps: StepDef[] = [
   {
     pattern: /^the delete is refused$/,
     run: (_w, ctx) => expect(ctx.removeResult?.refused).toBe(true),
+  },
+  // §06 R3 — the contiguity gate held: the unacknowledged gapped merge was refused, so the
+  // fold never fabricated the gap as billable time (the originals survive, asserted below).
+  {
+    pattern: /^the merge is refused$/,
+    run: (_w, ctx) => expect(ctx.mergeResult?.refused).toBe(true),
   },
   {
     pattern: /^there is still an entry "([^"]*)"$/,
