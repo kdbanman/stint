@@ -7,7 +7,7 @@ description: >-
 
 # Process triaged issues (Stint)
 
-Consume the output of `triage-qa-findings`: take every open issue labeled
+Consume the triaged discovery backlog: take every open issue labeled
 `Triaged`, hold **one** batched grill interview covering all the issues that
 need requirement changes, then fan the work out — one subagent per issue (or
 small merged cluster) — and drive until every issue has an open, ready-for-
@@ -16,8 +16,13 @@ one human gate (`context/process.html` §07).
 
 ## Where this fits
 
-- Upstream: `qa-sweep` discovers → `bug-report-authoring` files →
-  `triage-qa-findings` categorizes, records owner decisions, and labels.
+- Upstream, two streams into one contract (`context/process.html` §06):
+  - `qa-sweep` discovers → `bug-report-authoring` files →
+    `triage-qa-findings` categorizes, records owner decisions, and labels.
+  - `arch-review` critiques and files → `triage-arch-findings` decides fix
+    direction, names proof of fix, and labels.
+  Both end at the same `Triaged` comment-and-label contract; this skill does
+  not care which stream an issue came from, only that the contract holds.
 - This skill: interview once, delegate, deliver PRs.
 - For issue-scale requirement changes it substitutes for the
   `change-requirements` → `requirements-transition` pair: the batched interview
@@ -46,10 +51,12 @@ change-requirements-style grill **once across the whole batch**:
 - Every question carries a recommended answer and a one-line rationale.
 - Consult the codebase, don't ask what code can answer (schema, CLI command
   table, renderer, mockups).
-- Cover per issue: the exact PRD §/R text delta, parity (a new capability is
-  reachable from both `tt` and the GUI unless the user explicitly waives it),
-  data-loss/integrity consequences, which mockup depicts the change, and where
-  the ACs land.
+- Cover per issue: the exact §/R text delta — in `context/prd.html` for
+  product-shaped issues, in `context/process.html` for process-shaped ones
+  (arch findings often land there; the product questions below don't apply to
+  them) — parity (a new capability is reachable from both `tt` and the GUI
+  unless the user explicitly waives it), data-loss/integrity consequences,
+  which mockup depicts the change, and where the ACs land.
 - Triage-time decisions are givens; the interview goes one level deeper — the
   threshold behind a decided confirm, the canonical glossary term, comparator
   edge cases, CLI flag shapes.
@@ -65,6 +72,21 @@ files, so separate PRs would conflict or duplicate work (e.g. a feedback
 requirement whose call sites span several issues). Keep a merged unit
 reviewable — when in doubt, split. A unit's PR names every issue it closes.
 
+Then sequence and batch deliberately — the backlog varies more in shape than
+a product-bugfix list (triaged arch issues especially), so don't just launch
+everything at once:
+
+- **Gate-strengthening first.** A unit that adds or tightens a deterministic
+  gate (a schema, a binding test, a drift comparison) lands before units
+  whose work that gate would check, so later units run against the stronger
+  gate.
+- **Shared-file units run sequentially,** not in parallel worktrees: units
+  touching the same load-bearing files (`COVERAGE.md`, `context/process.html`,
+  the judge) will conflict — order them, rebase later units on the earlier
+  branch (Step 5), or fold them into one unit.
+- **Batch kindred smallness.** A checklist issue of phrase-scale fixes is one
+  unit, not N.
+
 Issues labeled `has requirement or AC already` / `no requirement needed` need
 no interview; they become units directly.
 
@@ -77,6 +99,12 @@ Launch one subagent per unit, in parallel:
   per-PR checks) catch implementation slips, and PR review is the human gate.
   The judgment-heavy stages — interview, synthesis, partitioning, final PR
   review — stay in this session.
+- **Self-reference flagged units get no benefit of the doubt.** A unit whose
+  fix modifies a deterministic gate (the judge, CI wiring, check scripts,
+  test harnesses) cannot be vouched for by the gate it modifies — the triage
+  comment carries the flag. Delegate the mechanical work if useful, but
+  review that unit's gate-diff in this session line by line before calling it
+  done; for small gate changes, just do the unit in-session.
 - **Isolation: own worktree + branch.** Units run concurrently and must not
   share a working tree.
 - **Prompt contents:** the issue number(s) and full text, the triage comment
@@ -117,6 +145,10 @@ Merging is not this skill's job.
       written synthesis signed off before any delegation.
 - [ ] Units partitioned; any multi-issue unit justified by a shared
       requirement or files, and its PR names every issue.
+- [ ] Units sequenced: gate-strengthening work first, shared-file units
+      ordered rather than raced, kindred small fixes batched.
+- [ ] Every self-reference-flagged unit's gate-diff reviewed in-session (or
+      the unit done in-session); none delegated fire-and-forget.
 - [ ] Every unit delegated to an Opus high-effort subagent in its own
       worktree, prompted with issue + triage comment + decisions — not with
       skill instructions.
