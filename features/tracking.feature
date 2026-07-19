@@ -123,3 +123,34 @@ Feature: Tracking and backfill
     Then exactly one entry is open
     And the open entry starts at 08:30
     And the open entry has no end
+
+  # PRD §05 R06 / §03 / §16 (issue #61) — the running entry's start is editable, but NOT to a
+  # FUTURE instant. A future start freezes the derived count-up at 00:00:00 AND would brick Stop
+  # (stop()'s 'stop ≥ start' rule can never hold at now), so core REJECTS it rather than store it
+  # (§14). Runs TWICE (CoreWorld store.edit throws / CliWorld `tt edit --from <future>` exits
+  # non-zero), proving the guard is identical on both surfaces. Crucially there is no wedge: after
+  # the refusal the open row is byte-for-byte unchanged, so Stop still closes it into a valid span.
+  Scenario: A future start on the running entry is rejected and never wedges Stop
+    Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
+    When I attempt to edit the open entry start to a future time
+    Then the future-start edit is rejected
+    And exactly one entry is open
+    And the open entry starts at 09:00
+    And the open entry has no end
+    When I stop at 10:00
+    Then the entry "auth refactor" is closed with end 10:00
+
+  # PRD §05 R01 / §03 (issue #61) — start()'s atomic close obeys Stop's rule: a closed entry's end
+  # must be ≥ its start. Backdating a NEW Start before the running row began would close that row
+  # at an end < start — a corrupted span. Core refuses the whole transaction on BOTH surfaces
+  # (CoreWorld store.start throws / CliWorld `tt start --at <before>` exits non-zero) and rolls
+  # back, leaving the original open row intact — never persisting a backwards span (the fix shares
+  # stop()'s guard in closeOpenEntry).
+  Scenario: Starting a new entry backdated before the running one is refused, never corrupting it
+    Given I start an entry "auth refactor" for "Client A" / "API" at 10:00
+    When I attempt to start an entry "code review" backdated to 09:00
+    Then the backdated start is rejected
+    And exactly one entry is open
+    And the open entry is "auth refactor"
+    And the open entry starts at 10:00
+    And the open entry has no end
