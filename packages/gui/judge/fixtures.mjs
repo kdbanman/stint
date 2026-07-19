@@ -1388,7 +1388,20 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // updates the list + the report total LIVE off the in-memory snapshot, with NO getState
       // round-trip during the keystroke (the live derivation never reloads).
       getState: () => { window.__GETSTATE_CALLS__++; return Promise.resolve(window.__STATE__); },
-      onChange: () => () => {},
+      // §07/§12 / issue #66: onChange is the main-process changed-broadcast the renderer
+      // subscribes to; production emits it after EVERY write, so a Clients-view mutation
+      // triggers a SECOND renderClients on top of the handler's own direct call. The mock now
+      // CAPTURES the renderer's callback (and returns the unsubscribe) so the reference-data
+      // mutators below can fire it after each write — reproducing the concurrent direct-call +
+      // broadcast repaint the double-render bug rode (a no-op stub made that race structurally
+      // impossible, so any cardinality assertion would have been vacuous).
+      // MULTIPLE listeners, like the real ipcRenderer.on('changed', …): app.js, reports.js and
+      // settings.js each subscribe, and production fires ALL of them on every broadcast. A single
+      // slot would let the last registrant clobber app.js's clients-repaint callback — so the
+      // broadcast would never re-render the Clients view and the double-render race could not occur.
+      __ONCHANGE__: [],
+      onChange: function (cb) { this.__ONCHANGE__.push(cb); return () => { this.__ONCHANGE__ = this.__ONCHANGE__.filter((f) => f !== cb); }; },
+      __FIRE_CHANGED__: function () { for (const f of this.__ONCHANGE__.slice()) { try { f(); } catch { /* one listener throwing must not stop the rest (ipcRenderer parity) */ } } },
       // §12 R9: the Entries-view control bar's read-only query. The mock applies the SAME
       // narrowing core does — range (preset OR plain-date pair), billable, client/project
       // ids, tag, matchesQuery search — and the same grouping (day DESC, others ASC; tags
@@ -1569,16 +1582,18 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __PROJECTS__: ${JSON.stringify(PROJECTS)},
       listClients: function () { return Promise.resolve(this.__CLIENTS__); },
       listProjects: function (p) { return Promise.resolve((this.__PROJECTS__[(p && p.clientId)] || [])); },
-      // The add mutators are STATEFUL like production core: they record their payload
-      // (so a scene can assert what the renderer sent) AND append the created row to the
-      // canned lists, so a create → re-render actually lands the new item in the active
-      // list — the end-to-end fact the CLIENTS_VIEW scene drives (issue #48).
-      addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); return Promise.resolve(c); },
-      addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); return Promise.resolve(pr); },
-      renameClient: (p) => { window.__RENAMED_CLIENT__ = p; return Promise.resolve(); },
-      archiveClient: (p) => { window.__ARCHIVED_CLIENT__ = p; return Promise.resolve(); },
-      renameProject: (p) => { window.__RENAMED_PROJECT__ = p; return Promise.resolve(); },
-      archiveProject: (p) => { window.__ARCHIVED_PROJECT__ = p; return Promise.resolve(); },
+      // The mutators are STATEFUL like production core: they record their payload (so a scene
+      // can assert what the renderer sent), apply the change to the canned lists (create appends,
+      // rename updates the name, archive drops from the active list), and fire the changed
+      // broadcast (issue #66) — so a write → re-render actually lands / renames / removes the
+      // item in the active list (the end-to-end fact the CLIENTS_VIEW scene drives, issue #48)
+      // AND drives the broadcast repaint on top of the handler's own direct renderClients call.
+      addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); this.__FIRE_CHANGED__(); return Promise.resolve(c); },
+      addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); this.__FIRE_CHANGED__(); return Promise.resolve(pr); },
+      renameClient: function (p) { window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      archiveClient: function (p) { window.__ARCHIVED_CLIENT__ = p; this.__CLIENTS__ = this.__CLIENTS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameProject: function (p) { window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      archiveProject: function (p) { window.__ARCHIVED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { this.__PROJECTS__[k] = this.__PROJECTS__[k].filter((x) => x.id !== (p && p.id)); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R10: the tag-management channels the Clients view's tag strip drives (parity
       // with tt tag ls/add/rename/archive). listTags returns the canned active tags; the
       // mutators record their payload so a scene could assert what the strip sends. Present
@@ -1586,9 +1601,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // sub-fact (every channel has a window.stint method) reads this surface.
       __TAGS__: [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }],
       listTags: function () { return Promise.resolve(this.__TAGS__); },
-      addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); return Promise.resolve(t); },
-      renameTag: (p) => { window.__RENAMED_TAG__ = p; return Promise.resolve(); },
-      archiveTag: (p) => { window.__ARCHIVED_TAG__ = p; return Promise.resolve(); },
+      addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
+      renameTag: function (p) { window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §09 R7: the free-text search the search box drives (parity with tt list --search).
       // Returns the same UiState the renderer paints from, narrowed to matching rows — the
       // mock applies the SAME case-insensitive substring match over description/client/project/

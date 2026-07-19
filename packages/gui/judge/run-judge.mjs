@@ -2403,6 +2403,63 @@ async function main() {
       ),
     }));
     await page.screenshot({ path: join(EVIDENCE, 'main-clients-created.png'), fullPage: true });
+    // Issue #66: a rename / archive used to DOUBLE the whole list — the write handler called
+    // renderClients directly AND the write's changed-broadcast scheduled a second run, and the two
+    // interleaved (both cleared #clients-list, then both awaited per-client listProjects, then both
+    // appended), so every client, project and tag landed twice (6 cards for 3 clients). Drive a tag
+    // archive, a client archive, and — LAST, so no solo render rebuilds the list clean behind it —
+    // a client RENAME, whose two racing renders leave the doubled DOM in place. Then flush the
+    // microtask queue (a macrotask boundary drains both renders) and assert cardinality: each
+    // record renders EXACTLY ONCE (no duplicate data-id) and the counts/names match the mutated
+    // active list. The fixture's onChange now fires after each mutator, so this scene reproduces
+    // the broadcast race — without the re-entrancy guard the rename doubles and these assertions
+    // FAIL (verified by reverting the guard: clientCount 4, dupClientIds [1,99]).
+    // (1) Archive the "urgent" tag (id 2): it drops out of the active strip.
+    await page.click('#tags-list .tag-row[data-id="2"] [data-act="archive-tag"]');
+    await page.waitForSelector('#tags-list .tag-row[data-id="2"]', { state: 'detached' });
+    // (2) Archive Globex (id 2): it drops out of the active list (history kept).
+    await page.click('#clients .client[data-id="2"] [data-act="archive-client"]');
+    await page.waitForSelector('#clients .client[data-id="2"]', { state: 'detached' });
+    // (3) Rename Acme (id 1) → "Acme Corp", LAST: open the inline field, commit over renameClient.
+    // This write's direct renderClients races the changed-broadcast renderClients — the exact
+    // double-render pair — with nothing after it to repaint the list clean. The .first() locators
+    // keep the drive robust even if a regression has already doubled the DOM, so the scene reaches
+    // the cardinality assertion and FAILS there cleanly rather than hanging on a strict-mode match.
+    const acmeRow = page.locator('#clients .client[data-id="1"]').first();
+    await acmeRow.locator('[data-act="rename-client"]').click();
+    await acmeRow.locator('.rename-form .rename-input').fill('Acme Corp');
+    await acmeRow.locator('.rename-form button[type="submit"]').click();
+    await page.waitForFunction(() =>
+      [...document.querySelectorAll('#clients .client[data-id="1"] .client-name')].some(
+        (n) => n.textContent.trim() === 'Acme Corp',
+      ),
+    );
+    const norace = await page.evaluate(async () => {
+      // Drain the microtask queue so BOTH racing renders complete before we count. The JUDGE page
+      // clock is PAUSED (page.clock.pauseAt), so setTimeout never fires here — but the renders'
+      // awaits are all microtasks (the mock IPC returns Promise.resolve), so yielding the queue
+      // enough times settles them. The doubled DOM (if the guard is missing) is fully materialised
+      // before the count; with the guard the superseded run has bailed, leaving one clean paint.
+      for (let i = 0; i < 100; i++) await Promise.resolve();
+      const dupes = (els) => {
+        const ids = [...els].map((e) => e.dataset.id);
+        return [...new Set(ids.filter((id, i) => ids.indexOf(id) !== i))];
+      };
+      const clientEls = document.querySelectorAll('#clients .client[data-id]');
+      const projectEls = document.querySelectorAll('#clients .project[data-id]');
+      const tagEls = document.querySelectorAll('#tags-list .tag-row[data-id]');
+      return {
+        clientCount: clientEls.length,
+        projectCount: projectEls.length,
+        tagCount: tagEls.length,
+        clientNames: [...clientEls].map((e) => e.querySelector('.client-name')?.textContent?.trim()),
+        tagNames: [...tagEls].map((e) => e.querySelector('.tag-row-name')?.textContent?.trim()),
+        dupClientIds: dupes(clientEls),
+        dupProjectIds: dupes(projectEls),
+        dupTagIds: dupes(tagEls),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'main-clients-mutated.png'), fullPage: true });
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -2424,7 +2481,22 @@ async function main() {
       created.addedProject?.clientId === 1 &&
       created.acmeProjects.includes('Mobile') &&
       created.addedTag?.name === 'billing' &&
-      created.tagNames.includes('billing');
+      created.tagNames.includes('billing') &&
+      // …and the NO-DOUBLE-RENDER facts (issue #66): after the rename/archive writes, every
+      // record renders exactly once (no duplicate data-id) and the counts/names track the
+      // mutated active list — Acme→Acme Corp, Globex archived (Acme Corp + Initech remain, with
+      // Acme's 3 projects), the "urgent" tag archived (deep + billing remain).
+      norace.dupClientIds.length === 0 &&
+      norace.dupProjectIds.length === 0 &&
+      norace.dupTagIds.length === 0 &&
+      norace.clientCount === 2 &&
+      norace.projectCount === 3 &&
+      norace.tagCount === 2 &&
+      norace.clientNames.includes('Acme Corp') &&
+      !norace.clientNames.includes('Globex') &&
+      norace.tagNames.includes('deep') &&
+      norace.tagNames.includes('billing') &&
+      !norace.tagNames.includes('urgent');
     // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
     // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
     // list is kept in the justification as captured evidence only.
@@ -2433,7 +2505,8 @@ async function main() {
       ok,
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
-        `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}`,
+        `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
+        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}`,
       'main-clients.png',
     );
   });
