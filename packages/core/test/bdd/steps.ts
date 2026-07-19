@@ -176,6 +176,23 @@ export const steps: StepDef[] = [
       ctx.entryIds.push(r.id);
     },
   },
+  // §09 R06 — a client-attributed but explicitly NON-BILLABLE entry in last week: the off-filter
+  // row INSIDE a billable-only report's resolved range that tells the two export scopes apart
+  // (the filtered export drops it; the raw "Export All Data" / `tt export` keeps it).
+  {
+    pattern: /^a closed non-billable entry "([^"]*)" for "([^"]*)" last week lasting (\d+) hours?$/,
+    run: (w, ctx, desc, client, hours) => {
+      const r = w.backfillAt({
+        desc,
+        client,
+        billable: false,
+        fromIso: LAST_WEEK_ANCHOR,
+        toIso: plusHours(LAST_WEEK_ANCHOR, Number(hours)),
+      });
+      ctx.lastClosedId = r.id;
+      ctx.entryIds.push(r.id);
+    },
+  },
   // §09 R2 — place a closed, client/project-attributed, tagged entry on a chosen day of
   // this week, for the group-by scenarios. The tags (comma-separated) and the project let
   // one set of entries be regrouped by client / project / day / tag; the day selector

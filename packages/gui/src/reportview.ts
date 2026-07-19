@@ -7,12 +7,14 @@
  *   1. resolveExportRange — turn a preset name (resolved through core's resolveRange) OR an
  *      explicit custom from/to into the absolute UTC bounds `tt export` uses. The renderer
  *      never re-derives date math; the preset rule lives once in core.
- *   2. exportPayload — render the range's raw entries to the CSV / JSON byte string `tt
- *      export --csv/--json` produces, so the GUI export writes bytes that match the CLI.
+ *   2. exportPayload — render a set of entries to the CSV / JSON byte string core's
+ *      toCsv/toJsonEntries produce, so the GUI export writes bytes that match the CLI.
  *
- * Export mirrors `tt export` exactly (raw entries for a range, billable='all', no
- * client/project/tag narrowing) so the MANUAL byte-for-byte parity check holds — the
- * report view's filters shape the on-screen summary, not the exported file.
+ * §09 R06/R09 — export has TWO honest scopes (resolveExportDefinition owns the split):
+ * the FILTERED rows a saved report shows (byte-identical to `tt report run <name>
+ * --csv|--json`) and ALL DATA — the raw entries for the resolved range (byte-identical to
+ * `tt export`). The report's filters shape the filtered file; the all-data file is the raw
+ * escape hatch. Both render through the SAME core exporters, so the MANUAL byte-diff holds.
  */
 import { resolveRange, toCsv, toJsonEntries, toUtc } from '@stint/core';
 import type {
@@ -82,10 +84,19 @@ export function utcWindowToDatePair(
 export interface ExportRequest {
   format: 'csv' | 'json';
   /**
-   * §09 R09 — export from a SAVED report: the saved definition's name (or id). When present,
-   * main resolves the def's range and exports its raw entries (preset/custom resolved in
-   * core), so the bytes match `tt report run <name> --csv|--json`. It takes precedence over
-   * preset/from/to (those describe an ad-hoc range; a saved ref carries its own range).
+   * §09 R06/R09 — which set of entries to export:
+   *   - 'filtered' — the FILTERED rows the report SHOWS (its range narrowed by the def's
+   *     client/project/tag/search + billable filter), byte-identical to `tt report run
+   *     <name> --csv|--json`. Requires `savedReportRef` (a filtered export belongs to a report).
+   *   - 'all' — ALL DATA: the RAW entries for the resolved range (billable='all', no
+   *     narrowing), byte-identical to `tt export`. This is the durability / data-out escape
+   *     hatch; the report's filters do NOT shape the file.
+   */
+  scope: 'filtered' | 'all';
+  /**
+   * §09 R09 — the saved definition's name (or id). For scope 'filtered' it names the report
+   * whose rows are exported; for scope 'all' its resolved range bounds the raw export. It takes
+   * precedence over preset/from/to (those describe an ad-hoc range; a saved ref carries its own).
    */
   savedReportRef?: string | number;
   /** A named preset resolved through core; takes precedence over from/to when present. */
@@ -158,32 +169,38 @@ export function buildSavedReportView(
 }
 
 /**
- * §09 R6 / R09 — resolve an export request to its absolute range AND the raw entries it
- * covers, handling BOTH cases in one place so main.ts no longer fragments the decision:
+ * §09 R06/R09 — resolve an export request to its absolute range AND the entries it covers,
+ * honouring the request's SCOPE so the two honest export meanings live in one place:
  *
- *   - a SAVED report (savedReportRef): its range is resolved through the one core path
- *     (store.runReport → resolveReportDef → resolveRange), and we take the resolved window
- *     straight off the returned Report rather than re-deriving it;
- *   - an AD-HOC range: the preset/custom from/to is resolved through resolveExportRange.
+ *   - scope 'filtered' (a saved report's own Export): the FILTERED rows the report shows —
+ *     store.reportFilteredEntries resolves the def and applies its client/project/tag/search +
+ *     billable filter, so the file holds exactly what the run-output paints. Byte-identical to
+ *     `tt report run <name> --csv|--json`. The range (used only to name the file) is the def's
+ *     resolved window.
+ *   - scope 'all' (the "Export All Data" escape hatch): the RAW set for the resolved window
+ *     (billable='all', NO narrowing), exactly `tt export`. The window comes from the saved def
+ *     (if a ref is given) or the ad-hoc preset/custom range — so an all-data export and
+ *     `tt export --range <from> <to>` produce byte-identical files.
  *
- * Either way the entries are the RAW set for the resolved window (billable='all', NO
- * client/project/tag/search narrowing), exactly `tt export` / `tt report run --csv|--json`,
- * so a saved-report export and an ad-hoc export with identical resolved bounds produce
- * byte-identical files. Pure (Electron-free): main.ts just renders + writes the result.
+ * Pure (Electron-free): main.ts just renders + writes the result.
  */
 export function resolveExportDefinition(
   req: ExportRequest,
-  store: Pick<Store, 'runReport' | 'listEntries' | 'settings'>,
+  store: Pick<Store, 'runReport' | 'reportFilteredEntries' | 'resolveReportRange' | 'listEntries' | 'settings'>,
   now: Date,
 ): { range: { fromUtc: string; toUtc: string }; entries: EntryView[] } {
+  if (req.scope === 'filtered') {
+    if (req.savedReportRef === undefined) {
+      throw new Error('a filtered export requires a saved report reference');
+    }
+    // The rows the report SHOWS — the one core filtered-entries path both surfaces share.
+    const range = store.resolveReportRange(req.savedReportRef, now);
+    return { range, entries: store.reportFilteredEntries(req.savedReportRef, now) };
+  }
+  // scope 'all': the RAW entries for the resolved window (billable='all', no narrowing).
   const range =
     req.savedReportRef !== undefined
-      ? (() => {
-          // The saved definition carries its own range; resolve it through the one core path
-          // and read the resolved window off the Report (no re-extraction of date math).
-          const run = store.runReport(req.savedReportRef, now);
-          return { fromUtc: run.rangeFromUtc, toUtc: run.rangeToUtc };
-        })()
+      ? store.resolveReportRange(req.savedReportRef, now)
       : resolveExportRange(req, store.settings().weekStart, now);
   const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
   return { range, entries };

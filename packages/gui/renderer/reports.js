@@ -403,6 +403,7 @@
     runningRef = null;
     $('rep-run').hidden = true;
     $('rep-run-export').hidden = true;
+    $('rep-run-export-all').hidden = true;
   }
 
   // §09 R09: the flags a grouped line carries, shown IN CONTEXT on the affected row (not in
@@ -443,7 +444,9 @@
     $('rep-run-range').textContent = rangeLabel(report.rangeFromUtc, report.rangeToUtc);
     $('rep-run').hidden = false;
     $('rep-run-export').hidden = false;
+    $('rep-run-export-all').hidden = false;
     $('rep-export-status').textContent = '';
+    $('rep-export-all-status').textContent = '';
   }
 
   // Run a saved definition by name. core resolves its stored range-spec and totals it
@@ -454,20 +457,41 @@
     paintRun(name, report);
   }
 
-  // §09 R09 / R06: export CSV / JSON FROM the currently-run saved report. The request carries
-  // the saved-report ref, so main resolves the definition's range and exports its raw entries
-  // (byte-identical to `tt report run <name> --csv|--json`); the renderer holds no export math.
+  // §09 R09 / R06: the report's OWN export — the FILTERED rows it shows. The request carries the
+  // saved-report ref + scope 'filtered', so main narrows by the def's client/project/tag +
+  // billable filter (byte-identical to `tt report run <name> --csv|--json`); the renderer holds
+  // no export math. The status states the honest count of the filtered set.
   async function exportRun(format) {
     if (runningRef === null) return;
     const status = $('rep-export-status');
     status.textContent = '';
     try {
-      const res = await window.stint.exportEntries({ format, savedReportRef: runningRef });
+      const res = await window.stint.exportEntries({ format, scope: 'filtered', savedReportRef: runningRef });
       if (!res || res.canceled) {
         status.textContent = 'Export canceled.';
         return;
       }
       status.textContent = `Exported ${res.written} entr${res.written === 1 ? 'y' : 'ies'} to ${res.path}.`;
+    } catch (err) {
+      status.textContent = `Export failed: ${String((err && err.message) || err).replace(/^Error:\s*/, '')}`;
+    }
+  }
+
+  // §09 R06: Export All Data — the raw escape hatch. Scope 'all' with the run's ref, so main
+  // exports EVERY raw entry in the resolved range (billable + non-billable, unfiltered — byte-
+  // identical to `tt export`), NOT the filtered report. The status says "all data" so the scope
+  // is never mistaken for the report's rows.
+  async function exportAllData(format) {
+    if (runningRef === null) return;
+    const status = $('rep-export-all-status');
+    status.textContent = '';
+    try {
+      const res = await window.stint.exportEntries({ format, scope: 'all', savedReportRef: runningRef });
+      if (!res || res.canceled) {
+        status.textContent = 'Export canceled.';
+        return;
+      }
+      status.textContent = `Exported ${res.written} entr${res.written === 1 ? 'y' : 'ies'} (all data) to ${res.path}.`;
     } catch (err) {
       status.textContent = `Export failed: ${String((err && err.message) || err).replace(/^Error:\s*/, '')}`;
     }
@@ -611,9 +635,12 @@
     $('rep-cancel').addEventListener('click', () => closeBuilder());
     $('rep-delete').addEventListener('click', () => armDeleteBuilder());
 
-    // §09 R06 / R09: the run-output Export CSV / JSON buttons (export FROM the saved report).
+    // §09 R06 / R09: the report's own Export CSV / JSON (the FILTERED rows it shows).
     $('rep-export-csv').addEventListener('click', () => void exportRun('csv'));
     $('rep-export-json').addEventListener('click', () => void exportRun('json'));
+    // §09 R06: Export All Data — the raw escape hatch, set apart at the bottom of the view.
+    $('rep-export-all-csv').addEventListener('click', () => void exportAllData('csv'));
+    $('rep-export-all-json').addEventListener('click', () => void exportAllData('json'));
   }
 
   // Repaint the saved-defs list whenever the Reports view is shown. The view routes via

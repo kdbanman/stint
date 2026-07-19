@@ -117,7 +117,11 @@
   .subr td{color:var(--muted);padding-left:32px}
   .subr td .pill{margin-left:8px}
   .tot td{font-weight:680;border-top:1px solid var(--line-strong);border-bottom:0;background:var(--sunken)}
-  .export{display:flex;gap:10px;justify-content:flex-end;margin-top:14px}
+  .export{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:14px}
+  .export .escope{margin-right:auto;font-size:12px;font-weight:590;color:var(--muted);letter-spacing:.02em}
+  /* §09 R06: the raw "Export All Data" block sits apart at the bottom — a hairline rule and a
+     lighter margin mark it as the data-out escape hatch, not the report's filtered export. */
+  .export-all{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
 </style>
 </head>
 <body>
@@ -190,8 +194,8 @@
             <div class="cr">
               <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
               <select class="field"><option>All projects</option></select>
-              <select class="field"><option>All tags</option></select>
-              <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
+              <select class="field"><option>All tags</option><option selected>deep</option></select>
+              <span class="seg"><button>All</button><button class="on">Billable</button><button>Non-billable</button></span>
             </div>
             <span class="cl">Rounding</span>
             <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
@@ -210,7 +214,7 @@
         </div>
       </div>
 
-      <div class="runhd"><span class="rt">Monthly — all clients by client</span><span class="rc tnum">May 2026 · round 15 min</span></div>
+      <div class="runhd"><span class="rt">Monthly — billable #deep by client</span><span class="rc tnum">May 2026 · billable only · #deep · round 15 min</span></div>
       <div class="summary card">
         <table>
           <thead><tr><th>Client</th><th class="num">Hours</th></tr></thead>
@@ -225,7 +229,12 @@
           </tbody>
         </table>
       </div>
-      <div class="export"><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> JSON</button></div>
+      <!-- §09 R06 — the report's OWN export: the FILTERED rows it shows (billable #deep),
+           byte-identical to `tt report run <name> --csv|--json`. Beside the run-output. -->
+      <div class="export"><span class="escope">This report</span><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export JSON</button></div>
+      <!-- §09 R06 — the raw data-out escape hatch, set apart at the BOTTOM: EVERY entry in the
+           range (billable + non-billable, unfiltered), byte-identical to `tt export`. -->
+      <div class="export export-all"><span class="escope">All data in range</span><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (CSV)</button><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (JSON)</button></div>
     </div>
   </div>
 </div>

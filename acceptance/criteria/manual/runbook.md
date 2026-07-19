@@ -405,37 +405,49 @@ parity, R8, that JUDGE's canned `report` mock cannot exercise).
 > `--range` on a real session. JUDGE screenshots the affordance headless
 > (`REPORTS_VIEW`, `reports-list.png` / `reports-run.png`).
 
-## CHECK REPORT EXPORT (GUI) — Export CSV / JSON writes a file matching `tt export` (§09 R6, §12 R8)
+## CHECK REPORT EXPORT (GUI) — the TWO export scopes each match their `tt` twin (§09 R06/R09, §12 R8)
 
-Confirms the report view's **Export CSV** / **Export JSON** buttons write a real file through
-the OS save dialog whose **bytes match `tt export --csv/--json` for the same range** — the
-cross-surface byte-for-byte parity JUDGE cannot exercise (the native save dialog has no
-Playwright host, the same rationale as the global-hotkey MANUAL case).
+Confirms the Reports view's **two distinct exports** (issue #72) each write a real file through
+the OS save dialog whose **bytes match the matching `tt` command** — the cross-surface byte-for-
+byte parity JUDGE cannot exercise (the native save dialog has no Playwright host, the same
+rationale as the global-hotkey MANUAL case). The two scopes are **the report's own filtered
+export** (the rows it shows) and **Export All Data** (every raw entry in the range).
 
 1. Seed a few entries this week against a known DB, e.g.:
    `tt add "auth refactor" --from "Mon 09:00" --to "Mon 12:00" --client "Acme" --project "API" --tag deep`
-   and `tt add "admin" --from "Tue 09:00" --to "Tue 09:30" --no-billable`.
-2. In the running app, open the **Report** view (the *This week* button in the toolbar) and
-   leave the range on **This week** (the default).
-   - [ ] The on-screen grouped summary shows the seeded entries with their per-line totals
-         and a grand total, and any overlap / unreviewed-sleep entries carry their flag
-         **inline on the affected row** (not in a separate list).
-3. Click **Export CSV**, accept the suggested filename in the native save dialog, and save.
+   and `tt add "admin" --from "Tue 09:00" --to "Tue 09:30" --no-bill`.
+   Then save a **billable-only** report over this week:
+   `tt report save "This week" --week --by client` (the default filter is billable).
+2. In the running app, open the **Reports** view (the *This week* button in the toolbar), and
+   **Run** the "This week" saved report.
+   - [ ] The on-screen grouped summary shows the **billable** entries with their per-line totals
+         and a grand total (the non-billable `admin` is **absent** — it fails the report's filter),
+         and any overlap / unreviewed-sleep entries carry their flag **inline on the affected row**
+         (not in a separate list).
+3. In the run-output, click the report's own **Export CSV**, accept the suggested filename in the
+   native save dialog, and save.
    - [ ] A status line confirms the write (`Exported N entries to <path>.`).
-   - [ ] `diff <path> <(tt export --week --csv)` reports **no differences** (the GUI export
-         is byte-identical to `tt export --week --csv` — raw entries for the range, the exact
-         CSV column contract, both billable and non-billable rows present).
-4. Click **Export JSON**, save to a second file.
+   - [ ] `diff <path> <(tt report run "This week" --csv)` reports **no differences** — the file is
+         the **filtered** rows the report shows (the billable `auth refactor` only; **no `admin`**).
+4. Click the report's **Export JSON**, save to a second file.
+   - [ ] `diff <path.json> <(tt report run "This week" --json)` reports **no differences**.
+5. Scroll to the **bottom** of the view and click **Export All Data (CSV)**, save to a third file.
+   - [ ] The status line reads `Exported N entries (all data) to <path>.` (the honest "all data"
+         wording, so the raw scope is never mistaken for the report's rows).
+   - [ ] `diff <path> <(tt export --week --csv)` reports **no differences** — the file is **every**
+         raw entry in the range, **including the non-billable `admin`** (billable='all', no narrowing).
+6. Click **Export All Data (JSON)**, save to a fourth file.
    - [ ] `diff <path.json> <(tt export --week --json)` reports **no differences**.
-5. Cancel the save dialog on a third Export click.
+7. Cancel the save dialog on a further Export click (either scope).
    - [ ] No file is written and the status line reads `Export canceled.` (the cancel path
          is non-destructive — the renderer never reaches `fs`; main owns the write).
 
 > The export bytes themselves are core's `toCsv` / `toJsonEntries` (GOLD `gold/contracts.test.ts`
-> + the GUI `reportview.test.ts` proves `exportPayload` is byte-identical to them); this runbook
-> confirms the GUI round-trips through main's `exportEntries` handler + the OS save dialog and
-> lands a file equal to `tt export` on a real session. JUDGE screenshots the summary + buttons
-> headless (`REPORT_SUMMARY`, `reports-summary.png`) but cannot drive the native save dialog.
+> + the GUI `reportview.test.ts` proves `exportPayload` and both `resolveExportDefinition` scopes
+> are byte-identical to them); this runbook confirms the GUI round-trips through main's
+> `exportEntries` handler + the OS save dialog and lands, for each scope, a file equal to its `tt`
+> twin on a real session. JUDGE screenshots the summary + both export controls headless
+> (`REPORTS_VIEW`, `reports-run.png`) but cannot drive the native save dialog.
 
 ## CHECK REPORT BUILDER (GUI) — rounding the line + flags, cross-checked against `tt report` (§09 R4, §12 R8)
 
@@ -666,8 +678,10 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    not here (G11).
    - [ ] The readonly entries calendar (§12 R16) narrows and searches live — no terminal (§12 R9).
 5. In the **Reports** view, pick a range, choose a **group-by**, toggle **billable** and
-   **rounding**, read the on-screen grouped totals, then **Export CSV** and **Export JSON**.
-   - [ ] The summary updates and both files are written via the OS save dialog (§12 R8, §09 R6).
+   **rounding**, read the on-screen grouped totals, then use the report's own **Export CSV /
+   JSON** (its filtered rows) and the bottom **Export All Data** (every raw entry in the range).
+   - [ ] The summary updates; both scopes write files via the OS save dialog, each with an
+         honest status line ("Exported N entries" vs "…(all data)") (§12 R8, §09 R06/R09).
 6. In the **Clients** view, **create / rename / archive** a client and a project, and from
    the **Tags** strip **create / rename / archive** a tag.
    - [ ] Each mutation lands; archived records drop from the active pickers but referenced
