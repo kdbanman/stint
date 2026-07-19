@@ -212,7 +212,7 @@
                   </div>
                 </div>
               </div>
-              <div id="add-warning" class="add-warning" hidden></div>
+              <div id="add-warning" class="add-warning" role="status" aria-live="polite" hidden></div>
               <div class="uf-foot">
                 <span class="uf-foot-spacer"></span>
                 <button id="add-go" type="submit" class="primary">Save entry</button>
@@ -367,6 +367,11 @@
                 </div>
               </div>
 
+              <!-- §12 R21: a refused Save is surfaced here, at the point of action — an
+                   incomplete custom range (focus the missing field) or a core rejection
+                   (duplicate name). Announced (role=status/aria-live); the message persists
+                   until the next input on the builder, never a same-tick self-erase. -->
+              <div id="rep-warning" class="form-error" role="status" aria-live="polite" hidden></div>
               <div class="builder-foot">
                 <button type="button" id="rep-cancel" class="report-export-btn">Cancel</button>
                 <button type="button" id="rep-delete" class="report-export-btn" hidden>Delete</button>

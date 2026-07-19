@@ -1075,6 +1075,25 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §13 / §12 R21 — core REFUSES a duplicate report name (UNIQUE COLLATE NOCASE). The GUI
+    // builder surfaces this refusal inline (§12 R21); this scenario proves the CONTRACT it
+    // surfaces holds on BOTH surfaces (CoreWorld store.saveReport throws, CliWorld `tt report
+    // save` exits non-zero), and — paired with a follow-up list assertion — that a refused save
+    // persists nothing. Mirrors the "setting … is rejected" §14 rejection step.
+    pattern:
+      /^saving a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time is rejected$/,
+    run: (w, _c, name, preset, by, filter) => {
+      expect(
+        w.attemptSaveReport({
+          name,
+          preset: presetKeyFull(preset),
+          by: groupBy(by),
+          billableFilter: filter as 'billable' | 'all' | 'non-billable',
+        }).rejected,
+      ).toBe(true);
+    },
+  },
+  {
     pattern: /^the saved report list includes "([^"]*)"$/,
     run: (w, _c, name) => expect(w.listReportNames()).toContain(name),
   },

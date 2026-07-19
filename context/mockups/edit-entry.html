@@ -114,6 +114,11 @@
   .phint{margin-top:10px;display:flex;justify-content:flex-end}
   .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
 
+  /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
+     surfaced here at the point of action; the card stays open and unchanged. --danger block. */
+  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid;margin:0 24px 12px}
+  .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
+
   /* footer */
   .foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
   .foot .grp{display:flex;gap:8px;align-items:center}
@@ -184,6 +189,9 @@
       </div>
     </div>
   </div>
+  <!-- §12 R21: a Save core refuses (here, a Stop moved before the Start) is surfaced inline at the
+       point of action — announced, the card staying open and unchanged, never a silent no-op. -->
+  <div class="msg err">Stop time is before the entry started — adjust the Start or Stop and save again.</div>
   <div class="foot">
     <span class="grp">
       <button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Split</button>

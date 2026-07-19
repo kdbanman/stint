@@ -86,6 +86,7 @@ function showOverlapBanner(warnings) {
   if (!banner) return;
   const overlap = (warnings || []).find((w) => w && w.kind === 'overlap');
   if (!overlap) return; // no overlap → leave the banner as load() left it (cleared)
+  banner.classList.remove('error'); // an overlap is a warn advisory, never the block chrome
   const n = overlap.overlapsWith ? overlap.overlapsWith.length : 0;
   banner.textContent =
     `This entry overlaps ${n} other ${n === 1 ? 'entry' : 'entries'} — ` +
@@ -98,6 +99,41 @@ function clearOverlapBanner() {
   if (!banner) return;
   banner.textContent = '';
   banner.hidden = true;
+  banner.classList.remove('error');
+}
+
+// §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
+// `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
+// (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
+// human string the message region shows, stripping the "Error:" prefix the add-form catch drops.
+function errMessage(err) {
+  return String((err && err.message) || err).replace(/^Error:\s*/, '');
+}
+
+// §12 R21: paint a refused write into an INLINE message region at the point of action (the add
+// form's #add-warning is the seed pattern). The region is announced (role=status/aria-live) and
+// stays until the next input on that form clears it. `showFormError`/`clearFormError` are the
+// shared primitives the edit form, split confirm, inline rename and report builder all use.
+function showFormError(el, err) {
+  if (!el) return;
+  el.textContent = errMessage(err);
+  el.hidden = false;
+}
+function clearFormError(el) {
+  if (!el) return;
+  el.textContent = '';
+  el.hidden = true;
+}
+
+// §12 R21: a Stop/toggle (timer card + Timer view) rejection has no open form to hold it, so it
+// routes to the existing overlap-banner AREA — reworded as a block (the .error modifier flips the
+// chrome from the warn advisory to the --danger notice). load() clears it on the next good write.
+function showWriteError(err) {
+  const banner = $('overlap-banner');
+  if (!banner) return;
+  banner.textContent = errMessage(err);
+  banner.classList.add('error');
+  banner.hidden = false;
 }
 
 // The compact glance summary line shared by render() (data repaint) and tick() (per-second
@@ -1041,23 +1077,36 @@ function openSplitForm(btn, e) {
     `<input type="text" class="split-input" autocomplete="off" spellcheck="false" ` +
     `placeholder="YYYY-MM-DDTHH:mm" aria-label="Split instant" />` +
     `<button class="small primary" type="button" data-act="confirm-split">Split</button>` +
-    `<button class="small ghost split-cancel" type="button">Cancel</button>`;
+    `<button class="small ghost split-cancel" type="button">Cancel</button>` +
+    // §12 R21: a refused split (a point NOT strictly inside the span, or unparseable text) is
+    // surfaced here at the point of action; the picker stays open with the message announced.
+    `<span class="split-warning form-error" role="status" aria-live="polite" hidden></span>`;
   btn.replaceWith(wrap);
   wrap.querySelector('.split-input').value = localInputValue(midpoint);
+  const warn = wrap.querySelector('.split-warning');
 
   wrap.querySelector('[data-act="confirm-split"]').addEventListener('click', async (ev) => {
     ev.stopPropagation();
     const atLocal = wrap.querySelector('.split-input').value;
     if (!atLocal) return;
-    // Convert the picked local instant to a UTC ISO; core rejects anything not strictly
-    // inside [startUtc, endUtc], so no clamping or arithmetic happens here.
-    const atUtc = new Date(atLocal).toISOString();
-    // Splitting a span in place cannot create a NEW overlap, so the ack carries no
-    // warning; routing it through applyAck keeps every write path one uniform shape.
-    const ack = await window.stint.split({ id: e.id, atUtc });
-    await load();
-    applyAck(ack);
+    // §12 R21: catch BOTH a locally-thrown parse error (unparseable instant → RangeError from
+    // toISOString) and core's in-span rejection over the `split` IPC — the split picker stays
+    // open and shows the reason instead of the click reading as a silent no-op.
+    try {
+      // Convert the picked local instant to a UTC ISO; core rejects anything not strictly
+      // inside [startUtc, endUtc], so no clamping or arithmetic happens here.
+      const atUtc = new Date(atLocal).toISOString();
+      // Splitting a span in place cannot create a NEW overlap, so the ack carries no
+      // warning; routing it through applyAck keeps every write path one uniform shape.
+      const ack = await window.stint.split({ id: e.id, atUtc });
+      await load();
+      applyAck(ack);
+    } catch (err) {
+      showFormError(warn, err);
+    }
   });
+  // The message persists until the next input on the split field (add-form pattern).
+  wrap.querySelector('.split-input').addEventListener('input', () => clearFormError(warn));
   wrap.querySelector('.split-cancel').addEventListener('click', (ev) => {
     ev.stopPropagation();
     wrap.replaceWith(btn);
@@ -1166,6 +1215,11 @@ async function openEntryForm(row, e) {
     `</div></div>` +
     `</div>` +
     `</div>` +
+    // §12 R21: a refused Save is surfaced HERE, inline at the point of action — a core
+    // StoreError (Stop-before-Start, split-in-span, etc.) or a locally-thrown parse error
+    // (unparseable Start/Stop text). Announced (role=status/aria-live); the form stays open
+    // and the message persists until the next input on it (see the .ef-warning input wiring).
+    `<div class="ef-warning form-error" role="status" aria-live="polite" hidden></div>` +
     // §12 R06: the edit-mode footer, laid out by the shared `.uf-foot` grid. Only Save entry
     // carries the accent (§15); Split, Cancel and the two-step Delete are quiet. Split leads, then
     // a flexible spacer pushes Save / Cancel / Delete to the trailing edge.
@@ -1307,38 +1361,51 @@ async function openEntryForm(row, e) {
     const clientSel = select.value === '' ? null : Number(select.value);
     const projectSel = projectSelect.value === '' ? null : Number(projectSelect.value);
 
-    // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
-    // the form has no End input, so the patch never carries endUtc and editing cannot close it.
-    // §12 R15 (issue #49): a Start/Stop field whose text is byte-identical to what the form
-    // seeded is UNTOUCHED — it contributes nothing to the patch, so Save after merely opening
-    // the editor (no drag, no typing) preserves the stored start/stop exactly, to the second.
-    const patch = {};
-    const nextDesc = desc || null;
-    if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
-    if (startLocal && startLocal !== seededStart) {
-      const nextStart = new Date(startLocal).toISOString();
-      if (nextStart !== new Date(e.startUtc).toISOString()) patch.startUtc = nextStart;
-    }
-    if (!running && endLocal && endLocal !== seededEnd) {
-      const nextEnd = new Date(endLocal).toISOString();
-      if (nextEnd !== new Date(e.endUtc).toISOString()) patch.endUtc = nextEnd;
-    }
-    if (billable !== !!e.billable) patch.billable = billable;
-    if (clientSel !== currentClientId) patch.clientId = clientSel;
-    // Project only rides along when the client is unchanged or the project actually differs;
-    // a null clears it. (Changing the client resets the project select, so a stale id never leaks.)
-    if (projectSel !== currentProjectId) patch.projectId = projectSel;
-    const { addTags, removeTags } = tagDiff(originalTags, nextTags);
-    if (addTags.length) patch.addTags = addTags;
-    if (removeTags.length) patch.removeTags = removeTags;
+    // §12 R21: catch BOTH failure modes so a refused Save is surfaced, never silently swallowed —
+    // (a) a locally-thrown parse error (unparseable Start/Stop text makes `new Date(...).toISOString()`
+    // throw a RangeError while the patch is assembled) and (b) a core StoreError forwarded over the
+    // `edit` IPC (Stop-before-Start, §05 R11). On either, the form stays open and the message region
+    // shows the reason; the entry is unchanged. Only the success path reloads + closes.
+    const warn = form.querySelector('.ef-warning');
+    try {
+      // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
+      // the form has no End input, so the patch never carries endUtc and editing cannot close it.
+      // §12 R15 (issue #49): a Start/Stop field whose text is byte-identical to what the form
+      // seeded is UNTOUCHED — it contributes nothing to the patch, so Save after merely opening
+      // the editor (no drag, no typing) preserves the stored start/stop exactly, to the second.
+      const patch = {};
+      const nextDesc = desc || null;
+      if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
+      if (startLocal && startLocal !== seededStart) {
+        const nextStart = new Date(startLocal).toISOString();
+        if (nextStart !== new Date(e.startUtc).toISOString()) patch.startUtc = nextStart;
+      }
+      if (!running && endLocal && endLocal !== seededEnd) {
+        const nextEnd = new Date(endLocal).toISOString();
+        if (nextEnd !== new Date(e.endUtc).toISOString()) patch.endUtc = nextEnd;
+      }
+      if (billable !== !!e.billable) patch.billable = billable;
+      if (clientSel !== currentClientId) patch.clientId = clientSel;
+      // Project only rides along when the client is unchanged or the project actually differs;
+      // a null clears it. (Changing the client resets the project select, so a stale id never leaks.)
+      if (projectSel !== currentProjectId) patch.projectId = projectSel;
+      const { addTags, removeTags } = tagDiff(originalTags, nextTags);
+      if (addTags.length) patch.addTags = addTags;
+      if (removeTags.length) patch.removeTags = removeTags;
 
-    // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck, reload
-    // to repaint the per-row flags, then raise the inline banner (after load(), which clears it).
-    // The write already committed — the banner is advisory.
-    const ack = await window.stint.edit({ id: e.id, patch });
-    await load();
-    applyAck(ack);
+      // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck, reload
+      // to repaint the per-row flags, then raise the inline banner (after load(), which clears it).
+      // The write already committed — the banner is advisory.
+      const ack = await window.stint.edit({ id: e.id, patch });
+      await load();
+      applyAck(ack);
+    } catch (err) {
+      showFormError(warn, err);
+    }
   });
+  // §12 R21: the message persists until the next input on the form — any keystroke / field
+  // change clears it, so a corrected value starts from a clean slate (the add-form pattern).
+  form.addEventListener('input', () => clearFormError(form.querySelector('.ef-warning')));
 
   // §12 R06 (G5): mount the form in the SAME view-level host add mode uses (#entry-form-host), in
   // the view flow — NOT inside the clicked calendar event (a ~124px day column would crush the
@@ -1464,9 +1531,15 @@ $('toggle').addEventListener('click', async () => {
   // §06 R4: the toggle (stop / resume / start) can land on an overlapping span; capture
   // the WriteAck, reload to repaint the durable per-row flags, then raise the transient
   // banner (load() clears it first, so applyAck must run after the reload).
-  const ack = await window.stint.toggle();
-  await load();
-  applyAck(ack);
+  // §12 R21: a Stop/toggle rejection (e.g. core refuses a stop time before the entry started,
+  // #61) has no form to hold it, so it routes to the banner area as a block, never swallowed.
+  try {
+    const ack = await window.stint.toggle();
+    await load();
+    applyAck(ack);
+  } catch (err) {
+    showWriteError(err);
+  }
 });
 
 // §12 R14: the live-edit-running strip wiring. Description + Start-time changes debounce a
@@ -1517,9 +1590,15 @@ $('toggle').addEventListener('click', async () => {
 // Switch button either, issue #34). Core's `start` remains the atomic stop-then-start for
 // tt and programmatic callers (§05 R01).
 $('timer-stop').addEventListener('click', async () => {
-  const ack = await window.stint.toggle();
-  await load();
-  applyAck(ack);
+  // §12 R21: same as the Timer-view toggle — a refused stop routes to the banner area, never
+  // a silent no-op that reads as "the app is broken".
+  try {
+    const ack = await window.stint.toggle();
+    await load();
+    applyAck(ack);
+  } catch (err) {
+    showWriteError(err);
+  }
 });
 
 // §12 R04: the Entries-view compact strip routes to the full Timer view. The whole strip is a
@@ -2374,12 +2453,27 @@ function inlineRenameForm(current, onSave, { onCancel, commitLabel = 'Save' } = 
   form.innerHTML =
     `<input type="text" class="rename-input" autocomplete="off" />` +
     `<button type="submit" class="small primary">${escapeHtml(commitLabel)}</button>` +
-    `<button type="button" class="small ghost rename-cancel">Cancel</button>`;
+    `<button type="button" class="small ghost rename-cancel">Cancel</button>` +
+    // §12 R21: a refused rename (a name colliding with an existing one — §13 UNIQUE COLLATE
+    // NOCASE) is surfaced here, so a client/project/tag rename that core refuses stays open
+    // with the reason announced instead of silently swallowing the UNIQUE-constraint error.
+    // Shared by every inlineRenameForm caller (Clients view, favorites, the Reports kebab).
+    `<span class="rename-warning form-error" role="status" aria-live="polite" hidden></span>`;
   form.querySelector('.rename-input').value = current;
+  const warn = form.querySelector('.rename-warning');
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
-    await onSave(form.querySelector('.rename-input').value.trim());
+    // §12 R21: onSave awaits the rename IPC — a rejection here would otherwise vanish (the form
+    // stays put, the click reads as broken). Catch it and surface it; the success path (onSave
+    // re-renders and drops the form) tears the message down with the form.
+    try {
+      await onSave(form.querySelector('.rename-input').value.trim());
+    } catch (err) {
+      showFormError(warn, err);
+    }
   });
+  // The message persists until the next keystroke on the name field (add-form pattern).
+  form.querySelector('.rename-input').addEventListener('input', () => clearFormError(warn));
   form.querySelector('.rename-cancel').addEventListener('click', (ev) => {
     ev.stopPropagation();
     if (onCancel) onCancel();

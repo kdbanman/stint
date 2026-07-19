@@ -17,6 +17,23 @@
   const { rangeLabel, lineFlags, icon } = window.SU;
   const $ = (id) => document.getElementById(id);
 
+  // §12 R21: the builder's inline message region (#rep-warning) — a refused Save is surfaced
+  // here, at the point of action, and PERSISTS until the next input on the builder (never a
+  // same-tick self-erase). setWarn shows it; clearWarn tears it down on the next edit / a fresh
+  // open. Announced via role=status/aria-live in the markup.
+  function setWarn(msg) {
+    const el = $('rep-warning');
+    if (!el) return;
+    el.textContent = String(msg).replace(/^Error:\s*/, '');
+    el.hidden = false;
+  }
+  function clearWarn() {
+    const el = $('rep-warning');
+    if (!el) return;
+    el.textContent = '';
+    el.hidden = true;
+  }
+
   // The five core presets the range chips drive, plus their display label. 'custom' is the
   // escape hatch to an explicit absolute from/to and carries no resolveRange preset.
   const PRESETS = {
@@ -235,6 +252,7 @@
     await populateClients();
     paintBuilder();
     await populateProjects();
+    clearWarn(); // §12 R21: a fresh open starts with no stale refusal message
     $('rep-builder').hidden = false;
     $('rep-name').focus();
     void renderDefs(); // re-mark the selected card
@@ -242,6 +260,7 @@
 
   function closeBuilder() {
     $('rep-builder').hidden = true;
+    clearWarn();
     resetDraft();
     void renderDefs();
   }
@@ -278,11 +297,20 @@
   async function saveBuilder() {
     const input = draftToInput();
     if (!input.name) {
+      // §12 R21: an empty name is refused with focus + a persistent inline message (not a
+      // silent no-op) — the same feedback shape the incomplete-range refusal uses below.
       $('rep-name').focus();
+      setWarn('Name your report before saving.');
       return;
     }
-    // A custom range needs both plain dates before it can save (§09 R01).
+    // §09 R01 / §12 R21: a custom range needs BOTH plain dates before it can save. An incomplete
+    // range is refused where it was attempted — this is a renderer-local refusal that never
+    // reaches core, so it needs its own feedback: focus the missing field + a persistent inline
+    // message (mirroring the empty-name focus), never the bare return that read as a dead click.
     if (input.rangeSpec.kind === 'absolute' && (!input.rangeSpec.fromDate || !input.rangeSpec.toDate)) {
+      const missing = !input.rangeSpec.fromDate ? 'rep-range-from' : 'rep-range-to';
+      $(missing).focus();
+      setWarn('Pick both a From and a To date for the custom range.');
       return;
     }
     try {
@@ -297,10 +325,12 @@
         await window.stint.editReport({ name, patch });
       }
     } catch (err) {
-      // A duplicate name / invalid range is core's to reject; surface it on the name field.
-      $('rep-name').setCustomValidity(String((err && err.message) || err).replace(/^Error:\s*/, ''));
-      $('rep-name').reportValidity();
-      $('rep-name').setCustomValidity('');
+      // §12 R21: a duplicate name (§13 UNIQUE COLLATE NOCASE) / invalid range is core's to
+      // reject. Surface it in the PERSISTENT inline region — NOT the old constraint-validation
+      // dance that set a message and cleared it in the SAME tick, so it never stayed on screen.
+      // The message stays until the next input on the builder.
+      setWarn(String((err && err.message) || err));
+      $('rep-name').focus();
       return;
     }
     closeBuilder();
@@ -608,6 +638,9 @@
       ev.preventDefault();
       void saveBuilder();
     });
+    // §12 R21: the refusal message persists until the next input on the builder — any field
+    // edit (name, a date, a segment) clears it, so a corrected Save starts from a clean slate.
+    $('rep-builder').addEventListener('input', () => clearWarn());
     $('rep-cancel').addEventListener('click', () => closeBuilder());
     $('rep-delete').addEventListener('click', () => armDeleteBuilder());
 
