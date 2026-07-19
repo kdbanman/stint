@@ -1,0 +1,30 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/sleep.json",
+  "title": "tt sleep ls --json",
+  "description": "A sleep-flagged entry awaiting review (PRD §10a): the entry id, its description, the seconds currently excluded from billable duration, and the sleep→wake spans discovered during it (`source` = event authoritative, gap wall-clock-suspicion). `tt sleep ls --json` emits an array of these.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["id", "description", "excluded_s", "spans"],
+    "additionalProperties": false,
+    "properties": {
+      "id": { "type": "integer" },
+      "description": { "type": ["string", "null"] },
+      "excluded_s": { "type": "integer", "minimum": 0 },
+      "spans": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["sleep_utc", "wake_utc", "source"],
+          "additionalProperties": false,
+          "properties": {
+            "sleep_utc": { "type": "string", "format": "date-time" },
+            "wake_utc": { "type": "string", "format": "date-time" },
+            "source": { "enum": ["event", "gap", "unknown"] }
+          }
+        }
+      }
+    }
+  }
+}
