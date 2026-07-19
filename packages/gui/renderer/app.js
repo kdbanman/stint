@@ -2256,10 +2256,22 @@ for (const item of document.querySelectorAll('.nav-item')) {
 // place, and an Add project control sits under each client. Archived items are excluded
 // by listClients/listProjects' default (includeArchived=false) — archive hides from the
 // active list but keeps history (the durable entry labels are resolved, not copied).
+// Re-entrancy guard (issue #66): a rename / archive / add each calls renderClients directly
+// AND the write's `changed` broadcast schedules a SECOND renderClients via onChange. The two
+// async runs used to interleave — both cleared #clients-list, then both awaited per-client
+// listProjects, then both appended — so every client and project landed twice (6 cards for 3
+// clients). Each run now claims a monotonic generation token, builds its rows into a DETACHED
+// fragment across the awaits, and only the run still current after the last await swaps them in
+// (one synchronous replace). A superseded run drops its fragment and never touches the DOM, so
+// exactly one run paints. The Tags strip (renderTags) carries the same guard — the same
+// broadcast double-fires it too.
+let clientsRenderGen = 0;
+
 async function renderClients() {
   const host = $('clients-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++clientsRenderGen;
+  const frag = document.createDocumentFragment();
   const clients = await window.stint.listClients();
   if (clients.length === 0) {
     const empty = document.createElement('div');
@@ -2267,13 +2279,17 @@ async function renderClients() {
     empty.innerHTML =
       `<div class="big">No clients yet</div>` +
       `<div>Add a client, or run <code>tt client add</code>.</div>`;
-    host.appendChild(empty);
+    frag.appendChild(empty);
   } else {
     for (const c of clients) {
       const projects = await window.stint.listProjects({ clientId: c.id });
-      host.appendChild(clientRow(c, projects));
+      if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+      frag.appendChild(clientRow(c, projects));
     }
   }
+  if (gen !== clientsRenderGen) return; // superseded after the last await — never paint stale rows
+  host.innerHTML = '';
+  host.appendChild(frag);
   // §12 R10: the tag-management strip lives in the same view, rendered from the active tags.
   await renderTags();
 }
@@ -2282,11 +2298,15 @@ async function renderClients() {
 // is listed with rename + archive in place; archived tags drop out of the active list
 // (listTags' default excludes them — archive hides from pickers but keeps history). The
 // renderer resolves no names — it sends the tag's id over the rename/archive IPC tt uses.
+let tagsRenderGen = 0;
+
 async function renderTags() {
   const host = $('tags-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++tagsRenderGen;
   const tags = await window.stint.listTags();
+  if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
+  host.innerHTML = '';
   if (tags.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'tags-empty';
