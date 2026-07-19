@@ -418,6 +418,39 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/e\.sleptThrough && \(e\.excludedSeconds \?\? 0\) > 0/);
   });
 
+  it('a cross-midnight span renders one segment per day column, split on the local end day (§12 R16 / issue #71)', () => {
+    const app = read('app.js');
+    // The segment planner exists and keys each segment by the day column it lands in, so an
+    // entry can fan out across columns without the day-grouping/totals being re-bucketed.
+    expect(app).toMatch(/function calEntrySegments\(e, startDay\)/);
+    // The split is driven by the entry's LOCAL END DAY — never assumed same-day: calLocalDayOf on
+    // the stop instant decides whether the span crosses midnight (the bug was computing an end-min
+    // that assumed the same local day, collapsing a later-day stop to the 18px floor).
+    expect(app).toMatch(/function calLocalDayOf\(iso\)/);
+    expect(app).toMatch(/const endDay = calLocalDayOf\(e\.endUtc\)/);
+    expect(app).toMatch(/if \(endDay <= startDay\)/); // same-day is the guarded trivial case
+    // A cross-midnight span emits a start segment to the boundary, full-height middle days, and an
+    // end segment from the boundary — the three parts the calEvent/styles.css open-edge rules key on.
+    expect(app).toMatch(/part: 'seg-start'/);
+    expect(app).toMatch(/part: 'seg-mid'/);
+    expect(app).toMatch(/part: 'seg-end'/);
+    expect(app).toMatch(/botMin: 1440/); // the start segment runs to the track bottom (24:00)
+    // renderCalendar/calColumn paint one event PER SEGMENT (not per entry), each carrying the
+    // entry so selection/click/hover act on the one span…
+    expect(app).toMatch(/for \(const seg of d\.segments\)/);
+    expect(app).toMatch(/calEvent\(seg\.entry, seg\)/);
+    // …and calEvent positions the block from the SEGMENT's bounds, so no unguarded
+    // (endMin − startMin) same-day height computation survives on the closed path.
+    expect(app).toMatch(/function calEvent\(e, seg\)/);
+    expect(app).not.toMatch(/\(endMin - startMin\) \* CAL_PX_PER_MIN/);
+    // The open-edge CSS drops the edge each segment continues across (so the split reads as one span).
+    const css = read('styles.css');
+    expect(css).toMatch(/\.dt \.ev\.seg-start \{[^}]*border-bottom: 0/);
+    expect(css).toMatch(/\.dt \.ev\.seg-end \{[^}]*border-top: 0/);
+    // Selection lifts EVERY segment of the id, not just the first (a cross-midnight span has two).
+    expect(app).toMatch(/document\.querySelectorAll\(`\.entry\[data-id="\$\{id\}"\]`\)/);
+  });
+
   it('tags show as chips in-context and are edited in the unified form over the edit IPC (§07, §12 R06)', () => {
     const app = read('app.js');
     // Every event's tags render as monochrome chips, off an entry tags accessor…
@@ -598,6 +631,36 @@ describe('renderer static contract', () => {
     const app = read('app.js');
     expect(app).toMatch(/\$\('add-client-btn'\)\.addEventListener\('click'/);
     expect(app).toMatch(/\$\('add-client'\)\.addEventListener\('change'/);
+  });
+
+  it('renderClients / renderTags are re-entrant so a direct repaint + the changed broadcast cannot double the list (issue #66)', () => {
+    const app = read('app.js');
+    // Root cause: a rename / archive / add each calls renderClients directly AND the write's
+    // `changed` broadcast schedules a SECOND renderClients via onChange; the two async runs
+    // interleaved — both cleared #clients-list, then both awaited per-client listProjects, then
+    // both appended — so every client, project and tag rendered twice. The fix makes each run
+    // claim a monotonic generation token, build into a detached fragment, and bail after an await
+    // once a newer run has superseded it — so exactly one run ever paints. Pin that shape here so
+    // a regression to the racy clear-then-await-then-append is caught cheaply per commit.
+    const clientsBody = app.slice(
+      app.indexOf('async function renderClients()'),
+      app.indexOf('async function renderTags()'),
+    );
+    // renderClients no longer clears the host up front then awaits mid-append — it builds into a
+    // detached fragment and only the still-current run swaps it in (one synchronous replace)…
+    expect(app).toMatch(/let clientsRenderGen = 0/);
+    expect(clientsBody).toMatch(/const gen = \+\+clientsRenderGen/);
+    expect(clientsBody).toMatch(/document\.createDocumentFragment\(\)/);
+    // …with a generation guard after each await that drops a superseded run before it touches DOM.
+    expect(clientsBody).toMatch(/if \(gen !== clientsRenderGen\) return/);
+    // The Tags strip carries the same guard — the same broadcast double-fires renderTags too.
+    const tagsBody = app.slice(
+      app.indexOf('async function renderTags()'),
+      app.indexOf('function tagRow('),
+    );
+    expect(app).toMatch(/let tagsRenderGen = 0/);
+    expect(tagsBody).toMatch(/const gen = \+\+tagsRenderGen/);
+    expect(tagsBody).toMatch(/if \(gen !== tagsRenderGen\) return/);
   });
 
   it('the Clients view ships a tag-management strip wired to the tag IPC (§12 R10)', () => {

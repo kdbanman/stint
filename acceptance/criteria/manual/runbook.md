@@ -243,17 +243,32 @@ terminal pointed at the same database.
    - [ ] `tt list` shows the merged entry with the **chosen** client/project/billable,
          the two **descriptions concatenated**, and the **tags unioned** — the GUI and
          the DB agree (the merge went through the same `merge` path `tt` uses).
-6. Now select two **adjacent** entries that **agree** on client and billable and click
+6. Now select two **contiguous** entries (one's end equals the next's start exactly) that
+   **agree** on client and billable and click **Merge**.
+   - [ ] No **conflict** prompt appears **and no gap confirm appears** — the merge fires
+         directly (nothing to resolve, nothing fabricated). This is the no-*unnecessary*-
+         question path, not proof the agree path never gates — step 7 gates a gapped agree.
+7. Now select two **non-contiguous** entries (a positive **gap** between them — e.g. one
+   09:00–10:00 and one 14:00–15:00) that **agree** on client and billable, then click
    **Merge**.
-   - [ ] No conflict prompt appears — the merge fires directly (nothing to resolve).
+   - [ ] The merge does **not** fire on the first click. The **Merge** button swaps into a
+         **confirm stating the resulting span and duration** (09:00 → 15:00, 6h) and the
+         **gap** it would fold into billable time (4h), with a **Cancel**.
+   - [ ] **Cancel** leaves both entries untouched — nothing merged, no time fabricated.
+   - [ ] Click **Merge** again, then the explicit **Merge anyway**: one merged row replaces
+         the two, spanning 09:00 → 15:00. `tt list` shows the 6h span — the gap was folded
+         only because it was acknowledged. (The `tt` parity: `tt merge <a> <b>` exits
+         non-zero naming the gap/span and suggesting `--allow-gap`; `tt merge <a> <b>
+         --allow-gap` folds it.)
 
 > The merge *behaviour* (concatenated descriptions, unioned tags, conflict override) is
 > proven surface-neutrally over core+tt by the BDD merge scenarios in
 > `features/overlap_and_editing.feature` and the GOLD merge-override contract; the GUI
 > multi-select + conflict prompt is screenshotted under JUDGE (`MERGE_CONFLICT`,
-> `main-merge-conflict.png`) and guarded statically (`renderer-static.test.ts`). This
-> runbook confirms the real checkboxes, the live prompt, and the round-trip to `tt` on a
-> real desktop.
+> `main-merge-conflict.png`) and guarded statically (`renderer-static.test.ts`); the
+> contiguity gate is guarded surface-neutrally by the BDD gapped-merge scenarios and by
+> JUDGE (`MERGE_GAP`, `main-merge-gap.png`). This runbook confirms the real checkboxes, the
+> live prompt, the gap confirm, and the round-trip to `tt` on a real desktop.
 
 ## CHECK MERGE VIA CALENDAR CHECKBOXES (GUI) — corner-checkbox selection on the entries calendar (§06 R03, §12 R16)
 

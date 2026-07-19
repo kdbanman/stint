@@ -170,6 +170,15 @@ function localMinOf(iso) {
   const d = new Date(iso);
   return d.getHours() * 60 + d.getMinutes();
 }
+// An instant's LOCAL day as a 'YYYY-MM-DD' token — the same local-day vocabulary core's localDay
+// gives the snapshot's day keys (localTodayDay does this for `now`), so the two compare directly.
+// Used to detect a cross-midnight span (§12 R16 / issue #71): a closed entry whose local end day
+// differs from its local start day.
+function calLocalDayOf(iso) {
+  const d = new Date(iso);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 // 'YYYY-MM-DD' → { dw, dd } via UTC math, so a day column's weekday/date label never depends
 // on the runner timezone (the day key is already the entry's local day, resolved by core).
 function calDayParts(dayStr) {
@@ -204,6 +213,43 @@ function calEnumerateDays(minDay, maxDay) {
   return out;
 }
 
+// §12 R16 (issue #71): the rendering SEGMENTS an entry lays onto the day columns. A same-day
+// entry is one 'full' segment in its start-day column; a CLOSED entry whose local end day differs
+// from its local start day CROSSES MIDNIGHT and renders ONE SEGMENT PER TOUCHED COLUMN, all sharing
+// the entry id: a start-day segment (its start minute → the track BOTTOM, 24:00), a full-height
+// 00:00→24:00 segment for each fully-covered middle day, and an end-day segment (the track TOP,
+// 00:00 → its end minute). The open/running entry never splits — it stays one future-fading
+// start-only block in its start column (calEvent caps the span; no end day exists to cross into).
+// Attribution is NOT touched here: the entry lives in exactly one day bucket keyed by its START
+// day (entrylist.ts localDay(startUtc)); these segments are a pure rendering fan-out that never
+// re-buckets it, so a cross-midnight end/middle column shows the span WITHOUT counting it in that
+// column's billable total — matching `tt report --by day`. `startDay` is the authoritative bucket
+// key the entry was grouped under (never re-derived), so the start segment always lands in its
+// own column even at a local-day boundary. topMin/botMin are local minutes-of-day; a null botMin
+// marks the open block, whose foot calEvent computes (future-fade cap).
+function calEntrySegments(e, startDay) {
+  const startMin = localMinOf(e.startUtc);
+  if (e.endUtc === null) return [{ day: startDay, topMin: startMin, botMin: null, part: 'open' }];
+  const endDay = calLocalDayOf(e.endUtc);
+  const endMin = localMinOf(e.endUtc);
+  // Same local day (the common case): one block start→end, with the legibility floor applied by
+  // calEvent. `endDay <= startDay` also folds any degenerate end-before-start into the same-day
+  // path rather than emitting a backwards fan-out.
+  if (endDay <= startDay) {
+    return [{ day: startDay, topMin: startMin, botMin: Math.max(endMin, startMin + 5), part: 'full' }];
+  }
+  // Cross-midnight: a start segment to the boundary, a full-height slice per whole middle day, and
+  // an end segment from the boundary down to the end minute.
+  const segs = [{ day: startDay, topMin: startMin, botMin: 1440, part: 'seg-start' }];
+  for (let mid = calAddDays(startDay, 1); mid < endDay; mid = calAddDays(mid, 1)) {
+    segs.push({ day: mid, topMin: 0, botMin: 1440, part: 'seg-mid' });
+  }
+  // A span ending exactly at local midnight (endMin 0) gains no visible slice on the end day — the
+  // start segment already reaches the boundary — so no zero-height end segment is emitted.
+  if (endMin > 0) segs.push({ day: endDay, topMin: 0, botMin: endMin, part: 'seg-end' });
+  return segs;
+}
+
 // §12 R16 (G13): resolve the ORDERED set of day columns to paint plus each day's entries + its
 // per-day billable total. Every in-range day is present — including EMPTY days (present-but-empty
 // `.dcol`) — so the calendar reads as a continuous range, not a sparse list. The entries come from
@@ -227,12 +273,29 @@ function calendarModel() {
     minDay = dayKeys.length && dayKeys[0] < ws ? dayKeys[0] : ws;
     maxDay = dayKeys.length && dayKeys[dayKeys.length - 1] > we ? dayKeys[dayKeys.length - 1] : we;
   }
-  return calEnumerateDays(minDay, maxDay).map((day) => {
+  const days = calEnumerateDays(minDay, maxDay);
+  // §12 R16 (issue #71): fan each entry out into a rendering segment per day column it touches
+  // (calEntrySegments). Keyed by day so a cross-midnight end/middle segment lands in the right
+  // column even though that column's own `entries` (its totals below) never gained the entry — the
+  // fan-out is pure rendering, attribution stays start-day. Out-of-range segments (a stop beyond
+  // maxDay) are dropped: their column is not painted.
+  const segsByDay = new Map(days.map((d) => [d, []]));
+  for (const p of present) {
+    for (const e of p.entries) {
+      for (const seg of calEntrySegments(e, p.day)) {
+        const bucket = segsByDay.get(seg.day);
+        if (bucket) bucket.push({ ...seg, entry: e });
+      }
+    }
+  }
+  return days.map((day) => {
     const entries = map.get(day) || [];
     // The day-header total is the billable-only sum (empty day → 0), matching what `tt report`
     // sums for that day — the same billableSeconds core owns; the renderer never re-derives it.
+    // Start-day attribution: a cross-midnight span counts only in its start-day column, so the
+    // end/middle columns can show its segment without inflating their totals.
     const billableSeconds = entries.reduce((s, e) => s + (e.billable ? e.billableSeconds : 0), 0);
-    return { day, entries, billableSeconds };
+    return { day, entries, billableSeconds, segments: segsByDay.get(day) || [] };
   });
 }
 
@@ -329,9 +392,13 @@ function calColumn(d, isEnd) {
   track.className = 'dt';
   track.style.height = CAL_DAY_PX + 'px';
   // §06 R4 / §12 R10: overlap renders as a yellow warn BAND behind the events (detail lives in
-  // the editor). Painted first so the events sit above it.
+  // the editor). Painted first so the events sit above it. Overlap is a same-day concept, so the
+  // band iterates the column's own start-day entries.
   for (const e of d.entries) if (e.overlapped) track.appendChild(calOverlapBand(e));
-  for (const e of d.entries) track.appendChild(calEvent(e));
+  // §12 R16 (issue #71): paint one calendar event per SEGMENT — a same-day entry has exactly one,
+  // a cross-midnight span has a segment in each touched column (all sharing the entry id, so
+  // selection/click/hover act on the one entry). calEvent positions from the segment's bounds.
+  for (const seg of d.segments) track.appendChild(calEvent(seg.entry, seg));
   col.appendChild(track);
   return col;
 }
@@ -570,19 +637,36 @@ function emptyEntries() {
 // corner checkbox (`.ck`) + the ops toolbar (Delete / Split / Edit); a click on the inert body
 // opens the unified editor. The running/open entry gets the future-fade `.run` treatment, a
 // start-only block with no end (§05 R06), and no merge checkbox (only bounded spans merge).
-function calEvent(e) {
+function calEvent(e, seg) {
   const running = e.endUtc === null;
-  const startMin = localMinOf(e.startUtc);
+  // §12 R16 (issue #71): the block's vertical bounds come from the SEGMENT (calEntrySegments) —
+  // 'full' (same-day) / 'seg-start' / 'seg-mid' / 'seg-end' for a cross-midnight span, or 'open'
+  // for the running block. Positioning is per-segment local minutes, so a cross-midnight span is
+  // NEVER the single (endMin − startMin) sliver that collapsed to the 18px floor when the stop
+  // was on a later local day; each segment stays within one day column's 0–1440 track.
+  const part = seg ? seg.part : running ? 'open' : 'full';
+  const topMin = seg ? seg.topMin : localMinOf(e.startUtc);
   // The open block extends a fixed span into the future and fades out (no bottom edge, G8); a
-  // closed block runs start→end (min height so a very short span stays legible/clickable).
-  const endMin = running ? Math.min(startMin + 180, 1440) : Math.max(localMinOf(e.endUtc), startMin + 5);
+  // closed segment runs top→bottom (the min height keeps a very short span legible/clickable).
+  const botMin = running
+    ? Math.min(topMin + 180, 1440)
+    : seg
+      ? seg.botMin
+      : Math.max(localMinOf(e.endUtc), topMin + 5);
   const el = document.createElement('div');
   el.className =
-    'ev entry' + (running ? ' run running' : '') + (selected.has(e.id) ? ' on selected' : '');
+    'ev entry' +
+    (running ? ' run running' : '') +
+    // The cross-midnight parts carry an open edge toward the boundary they continue across
+    // (styles.css): seg-start no bottom edge, seg-end no top edge, seg-mid neither.
+    (part === 'seg-start' || part === 'seg-mid' || part === 'seg-end' ? ` seg ${part}` : '') +
+    (selected.has(e.id) ? ' on selected' : '');
   el.dataset.id = String(e.id);
-  el.style.top = startMin * CAL_PX_PER_MIN + 'px';
-  el.style.height = Math.max((endMin - startMin) * CAL_PX_PER_MIN, 18) + 'px';
+  el.style.top = topMin * CAL_PX_PER_MIN + 'px';
+  el.style.height = Math.max((botMin - topMin) * CAL_PX_PER_MIN, 18) + 'px';
 
+  // Every segment of one entry carries the SAME full start–end label, so both blocks of a
+  // cross-midnight span read as the one entry they share an id with.
   const timeLabel = running
     ? `${localTime(e.startUtc)} –`
     : `${localTime(e.startUtc)}–${localTime(e.endUtc)}`;
@@ -729,12 +813,31 @@ function wire(row, e) {
 function toggleSelect(id, on) {
   if (on) selected.add(id);
   else selected.delete(id);
-  const row = document.querySelector(`.entry[data-id="${id}"]`);
-  if (row) {
+  // §12 R16 (issue #71): a cross-midnight span has more than one segment sharing this id — lift
+  // (and sync the corner checkbox on) EVERY segment, not just the first, so selecting one block
+  // of the span lights both without waiting for a re-render.
+  document.querySelectorAll(`.entry[data-id="${id}"]`).forEach((row) => {
     row.classList.toggle('selected', on);
     row.classList.toggle('on', on); // §12 R16: the calendar event's selected lift
-  }
+    const cb = row.querySelector('.ck');
+    if (cb) cb.checked = on;
+  });
   renderMergeBar();
+}
+
+// §06 R3: a selection is *contiguous* only when each entry's end equals the next's start
+// exactly; any positive gap between consecutive selected entries would be folded into the
+// merged span as fabricated billable time. An open (null-end) entry covers everything after
+// it, so it can never leave a positive gap. Returns the total gapped seconds (0 = contiguous).
+function mergeGapSeconds(sorted) {
+  let gap = 0;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const prevEnd = sorted[i].endUtc;
+    if (prevEnd == null) continue;
+    const g = Date.parse(sorted[i + 1].startUtc) - Date.parse(prevEnd);
+    if (g > 0) gap += g;
+  }
+  return Math.round(gap / 1000);
 }
 
 // §06 R3: fold the selected entries into one. Core concatenates descriptions and unions
@@ -744,16 +847,45 @@ function toggleSelect(id, on) {
 // which billable value the merged row carries — exactly the §06 R3 / §12 R6 rule. The
 // renderer never resolves names: it sends the chosen entry's id as `winnerId`, and the
 // main process looks that entry up and passes its clientId/projectId as MergeOptions.
-async function mergeSelected() {
+//
+// A NON-CONTIGUOUS selection is gated first (§06 R3, §12 R13): folding a gap fabricates it
+// as billable time, so — before any commit — the Merge button swaps into a confirm stating
+// the resulting span/duration (the confirmInline delete-confirm precedent). Only the explicit
+// "Merge anyway" tap re-enters with the gap acknowledged, threading allowGap through both the
+// direct and conflict paths so core accepts the fold; Cancel leaves the originals untouched.
+async function mergeSelected(acknowledgedGap = false) {
   const entries = selectedEntries();
   if (entries.length < 2) return;
+  const sorted = entries.slice().sort((a, b) => Date.parse(a.startUtc) - Date.parse(b.startUtc));
+  const gapSeconds = mergeGapSeconds(sorted);
+  if (gapSeconds > 0 && !acknowledgedGap) {
+    // Resulting span: earliest start → latest end (or "now" if any selected entry is open).
+    const first = sorted[0];
+    let latest = first.startUtc;
+    let open = false;
+    for (const e of sorted) {
+      if (e.endUtc == null) open = true;
+      else if (Date.parse(e.endUtc) > Date.parse(latest)) latest = e.endUtc;
+    }
+    const spanSeconds = open ? elapsed(first.startUtc) : Math.round((Date.parse(latest) - Date.parse(first.startUtc)) / 1000);
+    const endLabel = open ? 'now' : localTime(latest);
+    confirmInline($('merge-go'), {
+      kind: 'gap',
+      question: `Not contiguous — merge spans ${localTime(first.startUtc)}–${endLabel} (${fmtDur(spanSeconds)}), folding a ${fmtDur(gapSeconds)} gap into billable time?`,
+      confirmLabel: 'Merge anyway',
+      onConfirm: () => mergeSelected(true),
+    });
+    return;
+  }
   const clients = new Set(entries.map((e) => e.clientLabel ?? ''));
   const billables = new Set(entries.map((e) => !!e.billable));
   const conflict = clients.size > 1 || billables.size > 1;
   if (!conflict) {
     // §06 R4: the folded span can overlap a third entry outside the selection; capture
     // the WriteAck and raise the banner after the reload (which clears it).
-    const ack = await window.stint.merge({ ids: entries.map((e) => e.id) });
+    const payload = { ids: entries.map((e) => e.id) };
+    if (gapSeconds > 0) payload.allowGap = true;
+    const ack = await window.stint.merge(payload);
     await load();
     applyAck(ack);
     return;
@@ -762,10 +894,14 @@ async function mergeSelected() {
   // hosted here in app.js (§12 modal
   // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
   // overlap ack the fold raised against a third entry (§06 R4).
-  openMergeConflict(entries, async (ack) => {
-    await load();
-    if (ack) applyAck(ack);
-  });
+  openMergeConflict(
+    entries,
+    async (ack) => {
+      await load();
+      if (ack) applyAck(ack);
+    },
+    gapSeconds > 0,
+  );
 }
 
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
@@ -784,7 +920,9 @@ function closeMergeConflict() {
 // merges. It sends { ids, winnerId, billable } — the winning entry's id, never a resolved
 // name — over the same window.stint.merge IPC (no new channel, no parity row); the main
 // process maps winnerId to core's MergeOptions. `onDone(ack)` reloads after the commit.
-function openMergeConflict(entries, onDone = () => {}) {
+// `allowGap` is threaded from mergeSelected's gap gate (§06 R3): a gapped selection has
+// already been confirmed before this prompt opens, so it rides into the merge payload.
+function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   closeMergeConflict();
   const { icon } = window.SU;
   const backdrop = document.createElement('div');
@@ -868,6 +1006,7 @@ function openMergeConflict(entries, onDone = () => {}) {
     const payload = { ids: entries.map((e) => e.id), winnerId };
     const billChoice = dialog.querySelector('.mc-bill:checked');
     if (billChoice) payload.billable = billChoice.value === '1';
+    if (allowGap) payload.allowGap = true;
     const ack = await window.stint.merge(payload);
     closeMergeConflict();
     onDone(ack);
@@ -2117,10 +2256,22 @@ for (const item of document.querySelectorAll('.nav-item')) {
 // place, and an Add project control sits under each client. Archived items are excluded
 // by listClients/listProjects' default (includeArchived=false) — archive hides from the
 // active list but keeps history (the durable entry labels are resolved, not copied).
+// Re-entrancy guard (issue #66): a rename / archive / add each calls renderClients directly
+// AND the write's `changed` broadcast schedules a SECOND renderClients via onChange. The two
+// async runs used to interleave — both cleared #clients-list, then both awaited per-client
+// listProjects, then both appended — so every client and project landed twice (6 cards for 3
+// clients). Each run now claims a monotonic generation token, builds its rows into a DETACHED
+// fragment across the awaits, and only the run still current after the last await swaps them in
+// (one synchronous replace). A superseded run drops its fragment and never touches the DOM, so
+// exactly one run paints. The Tags strip (renderTags) carries the same guard — the same
+// broadcast double-fires it too.
+let clientsRenderGen = 0;
+
 async function renderClients() {
   const host = $('clients-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++clientsRenderGen;
+  const frag = document.createDocumentFragment();
   const clients = await window.stint.listClients();
   if (clients.length === 0) {
     const empty = document.createElement('div');
@@ -2128,13 +2279,17 @@ async function renderClients() {
     empty.innerHTML =
       `<div class="big">No clients yet</div>` +
       `<div>Add a client, or run <code>tt client add</code>.</div>`;
-    host.appendChild(empty);
+    frag.appendChild(empty);
   } else {
     for (const c of clients) {
       const projects = await window.stint.listProjects({ clientId: c.id });
-      host.appendChild(clientRow(c, projects));
+      if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+      frag.appendChild(clientRow(c, projects));
     }
   }
+  if (gen !== clientsRenderGen) return; // superseded after the last await — never paint stale rows
+  host.innerHTML = '';
+  host.appendChild(frag);
   // §12 R10: the tag-management strip lives in the same view, rendered from the active tags.
   await renderTags();
 }
@@ -2143,11 +2298,15 @@ async function renderClients() {
 // is listed with rename + archive in place; archived tags drop out of the active list
 // (listTags' default excludes them — archive hides from pickers but keeps history). The
 // renderer resolves no names — it sends the tag's id over the rename/archive IPC tt uses.
+let tagsRenderGen = 0;
+
 async function renderTags() {
   const host = $('tags-list');
   if (!host) return;
-  host.innerHTML = '';
+  const gen = ++tagsRenderGen;
   const tags = await window.stint.listTags();
+  if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
+  host.innerHTML = '';
   if (tags.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'tags-empty';

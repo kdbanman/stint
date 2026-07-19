@@ -20,6 +20,7 @@ import {
   toUtc,
   secondsBetween,
   elapsedSeconds,
+  formatDuration,
   type Clock,
 } from './time.js';
 import {
@@ -507,9 +508,11 @@ export class Store {
   }
 
   /**
-   * Merge a contiguous selection into one entry spanning earliest start → latest
-   * end (PRD §06 R3). Descriptions concatenated, tags unioned. The first entry's
-   * client/project/billable win unless overridden.
+   * Merge a selection into one entry spanning earliest start → latest end (PRD §06 R3).
+   * Descriptions concatenated, tags unioned. The first entry's client/project/billable win
+   * unless overridden. A selection is *contiguous* only when each entry's end equals the
+   * next's start exactly; any positive gap makes the fold fabricate that gap as billable
+   * time, so a gapped selection is refused unless `opts.allowGap` acknowledges it.
    */
   merge(ids: number[], opts: MergeOptions = {}): WriteResult<EntryView> {
     if (ids.length < 2) throw new StoreError('merge needs at least two entries');
@@ -518,6 +521,35 @@ export class Store {
       const sorted = [...rows].sort((a, b) => Date.parse(a.start_utc) - Date.parse(b.start_utc));
       const first = sorted[0]!;
       const startUtc = first.start_utc;
+      // §06 R3: refuse a non-contiguous selection unless the gap is acknowledged. A positive
+      // gap (an earlier entry's end strictly before the next's start) would be folded into the
+      // merged span as billable time; an open (null-end) entry covers everything after it, so
+      // it can never leave a positive gap. Overlaps (negative gaps) are allowed — §06 R4 warns.
+      if (!opts.allowGap) {
+        let gapSeconds = 0;
+        for (let i = 0; i < sorted.length - 1; i++) {
+          const prevEnd = sorted[i]!.end_utc;
+          if (prevEnd === null) continue;
+          const g = Date.parse(sorted[i + 1]!.start_utc) - Date.parse(prevEnd);
+          if (g > 0) gapSeconds += Math.round(g / 1000);
+        }
+        if (gapSeconds > 0) {
+          // Resulting span: earliest start → latest end (or now, if any entry is open).
+          let latest = startUtc;
+          let open = false;
+          for (const r of sorted) {
+            if (r.end_utc === null) open = true;
+            else if (Date.parse(r.end_utc) > Date.parse(latest)) latest = r.end_utc;
+          }
+          const spanEnd = open ? toUtc(this.now()) : latest;
+          const spanSeconds = Math.round((Date.parse(spanEnd) - Date.parse(startUtc)) / 1000);
+          throw new StoreError(
+            `merge would fabricate a ${formatDuration(gapSeconds)} gap as billable time: ` +
+              `the selection is not contiguous, so the merged entry would span ${startUtc} → ${spanEnd} ` +
+              `(${formatDuration(spanSeconds)}). Acknowledge the gap to merge it anyway.`,
+          );
+        }
+      }
       // Latest end; if any is still open, the merged entry is open.
       let endUtc: string | null = sorted[0]!.end_utc;
       for (const r of sorted) {
