@@ -452,6 +452,17 @@ describe('renderer static contract', () => {
     // rejection to showWriteError — a Stop the core refuses is never a silent no-op.
     const toggleCatches = app.match(/\} catch \(err\) \{\s*\n\s*showWriteError\(err\);/g) || [];
     expect(toggleCatches.length).toBeGreaterThanOrEqual(2);
+    // §12 R21 / issue #61: the live-edit commit (the running entry's Start field) likewise routes a
+    // refused edit — a FUTURE start core now rejects — to showWriteError, so a mistyped future
+    // start surfaces on the Timer view instead of a silently-swallowed rejected promise (the "Stop
+    // appears dead" wedge). The open row is untouched, so the count-up keeps running.
+    const commitBody = app.slice(
+      app.indexOf('async function commitLiveEdit('),
+      app.indexOf('function scheduleLiveEdit('),
+    );
+    expect(commitBody).toMatch(
+      /try \{[\s\S]*await window\.stint\.edit\(\{ id, patch \}\)[\s\S]*\} catch \(err\) \{\s*\n\s*showWriteError\(err\);/,
+    );
     // §12 R21 / issue #61: the Stop/toggle rejection is VISIBLE on the Timer view where the action
     // lives — an announced #timer-warning region beside the card controls. showWriteError paints
     // BOTH it and the Entries-view banner mirror, and clearOverlapBanner (called by load() on the

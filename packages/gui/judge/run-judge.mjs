@@ -704,6 +704,84 @@ async function main() {
     await page.close();
   }
 
+  // FUTURE_START_GUARD — §05 R06 / §03 / §16 (issue #61): a MISTYPED FUTURE start on the running
+  // entry must be REFUSED and surfaced WHERE it was typed, never the silent wedge the bug caused
+  // ("Stop appears dead"). Driving the REAL renderer over the future-start guard mock (edit rejects
+  // a start > now exactly as core's edit() does) plus the state-mutating toggle: typing a next-day
+  // instant into #le-start and letting the debounced live-edit commit fire raises the announced
+  // #timer-warning region with the reason and records NOTHING (window.__EDITED__ stays null) — the
+  // live-edit strip stays present and Stop is still there (the count-up never froze). Correcting the
+  // start to a valid PAST instant then commits cleanly (the warning clears, __EDITED__ carries the
+  // corrected startUtc with NO endUtc — the open row stays open), and clicking Stop flips the status
+  // to idle: the timer never wedged. Pinned to timezoneId 'UTC' so the typed instants map determin-
+  // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
+  {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(runningState()), { futureStartGuard: true, toggleStarts: true }));
+    await page.goto(fileUrl('index.html'));
+
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
+    // Type a FUTURE instant (the next calendar day, unambiguously after the pinned now) into the
+    // running Start field and let the debounced live-edit commit (scheduleLiveEdit, 500ms) fire.
+    await page.fill('#le-start', '2026-06-25T10:00');
+    await page.clock.fastForward(600);
+    await page.waitForSelector('#timer-warning', { state: 'visible' });
+    const refused = await page.evaluate(() => {
+      const t = document.querySelector('#timer-warning');
+      const rect = t?.getBoundingClientRect();
+      const strip = document.querySelector('#live-edit');
+      const stop = document.querySelector('#timer-stop');
+      return {
+        // The Timer-view region is genuinely on-screen (in the active view), announced, and carries
+        // the reason — the surface the mistyped start was typed on (#61's "Stop appears dead" spot).
+        shown: !!t && !t.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && t.textContent.trim().length > 0,
+        announced: t?.getAttribute('role') === 'status' && t?.hasAttribute('aria-live'),
+        message: t?.textContent.trim() ?? '',
+        notWritten: window.__EDITED__ == null, // the refused future start recorded nothing
+        stillRunning: !!strip && !strip.hidden, // the live-edit strip persists — the count-up never froze
+        stopStillThere: !!stop && !stop.hidden, // Stop is still present (no wedge)
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-future-start-reject.png'), fullPage: true });
+
+    // NO WEDGE (correcting): retype a valid PAST instant — the commit succeeds, load() clears the
+    // warning, and window.__EDITED__ now carries the corrected startUtc with NO endUtc (row open).
+    await page.fill('#le-start', '2026-06-24T22:00');
+    await page.clock.fastForward(600);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const corrected = await page.evaluate(() => {
+      const t = document.querySelector('#timer-warning');
+      const p = window.__EDITED__ && window.__EDITED__.patch;
+      return {
+        warningCleared: !t || t.hidden || t.textContent.trim().length === 0,
+        editedStart: p ? p.startUtc : null,
+        noEnd: p ? !('endUtc' in p) : false,
+      };
+    });
+
+    // NO WEDGE (stoppable): click Stop — the toggle resolves and the status flips to idle.
+    await page.click('#timer-stop');
+    await page.waitForFunction(() => window.__STATE__ && window.__STATE__.status && window.__STATE__.status.running === false);
+    const stopped = await page.evaluate(() => ({
+      idle: !!(window.__STATE__ && window.__STATE__.status) && window.__STATE__.status.running === false,
+    }));
+
+    const ok =
+      refused.shown && refused.announced && refused.notWritten && refused.stillRunning && refused.stopStillThere &&
+      corrected.warningCleared && corrected.editedStart === '2026-06-24T22:00:00.000Z' && corrected.noEnd &&
+      stopped.idle;
+    record(
+      'FUTURE_START_GUARD',
+      ok,
+      `future-reject=${JSON.stringify(refused)} corrected=${JSON.stringify(corrected)} stopped=${JSON.stringify(stopped)}`,
+      'timer-future-start-reject.png',
+    );
+    await page.close();
+  }
+
   // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
   // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
   // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
@@ -2989,6 +3067,31 @@ async function main() {
       cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
     }));
 
+    // (i2) §12 R21 / §09 R01 — REFUSAL: an INVERTED custom range (From strictly after To) is
+    // refused by CORE — such a range only ever resolves to an empty window, so it is rejected
+    // rather than stored (the guarantee §14 gives working hours, for report ranges). BOTH dates
+    // are present, so this is a genuine core refusal (not the renderer-local incomplete-range
+    // check of (h)): saveReport rejects, #rep-warning carries the reason and PERSISTS past the
+    // tick, the builder stays open, and no card appears. A fresh (non-duplicate) name isolates
+    // the RANGE rejection from the duplicate-name one. (A same-day from == to would be ACCEPTED —
+    // the report rule is ≤, unlike the entry rule's strict <; that boundary is pinned in BDD/GOLD.)
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#rep-name', 'Backwards range');
+    await page.fill('#rep-range-from', '2026-06-30');
+    await page.fill('#rep-range-to', '2026-06-01');
+    await page.click('#rep-save');
+    await page.waitForSelector('#rep-warning:not([hidden])', { state: 'attached' });
+    await page.waitForTimeout(50); // a self-erasing message would be gone by now; a persistent one stays
+    const refuseInverted = await page.evaluate(() => ({
+      savedYet: window.__SAVED_REPORT__ ?? null, // core rejected before any save landed
+      builderOpen: !document.querySelector('#rep-builder')?.hidden,
+      warnPersists: !document.querySelector('#rep-warning')?.hidden &&
+        (document.querySelector('#rep-warning')?.textContent.trim().length ?? 0) > 0,
+      message: document.querySelector('#rep-warning')?.textContent.trim() ?? '',
+      cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
+    }));
+
     // (f) §09 R01: clicking Custom… reveals the two plain date fields; filling the pair and
     // saving fires a real saveReport whose captured rangeSpec is EXACTLY the plain-date
     // absolute arm { kind:'absolute', fromDate, toDate } — raw YYYY-MM-DD strings, no 'T'.
@@ -3181,12 +3284,19 @@ async function main() {
       refuseIncomplete.warnShown &&
       refuseDup.builderOpen &&
       refuseDup.warnPersists &&
-      refuseDup.cardCount === 2;
+      refuseDup.cardCount === 2 &&
+      // (i2) §09 R01 — the inverted-range core refusal: nothing saved, builder open, message
+      // persists and names the range problem, no card added.
+      refuseInverted.savedYet === null &&
+      refuseInverted.builderOpen &&
+      refuseInverted.warnPersists &&
+      /before/i.test(refuseInverted.message) &&
+      refuseInverted.cardCount === 2;
     const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
     );
   });
 

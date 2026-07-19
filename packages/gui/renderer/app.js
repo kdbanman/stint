@@ -534,20 +534,27 @@ function renderLiveEdit(running) {
   const desc = $('le-desc');
   if (desc && document.activeElement !== desc) desc.value = running.description ?? '';
   const start = $('le-start');
-  if (start && document.activeElement !== start) start.value = localInputValue(new Date(running.startUtc));
+  // §12 R14/R15 (issue #68): seed the raw Start field with the entry's EXACT stored instant as a
+  // localInputValue string, and STASH THAT SAME STRING — the diff byte-compares the field against
+  // it (an untouched field is byte-identical ⇒ no startUtc), so a DST-ambiguous wall-clock is never
+  // reparsed to the wrong instant. seedStart is the FIELD STRING; startUtc holds the stored ISO for
+  // the reparse double-guard.
+  const seedStart = localInputValue(new Date(running.startUtc));
+  if (start && document.activeElement !== start) start.value = seedStart;
   const bill = $('le-bill');
   if (bill) bill.checked = !!running.billable;
   // Stash the open entry's id + the last-seeded values so the change handlers send a minimal
   // patch (only the changed field) and target the right row.
   strip.dataset.entryId = String(running.id);
   strip.dataset.seedDesc = running.description ?? '';
-  strip.dataset.seedStart = new Date(running.startUtc).toISOString();
+  strip.dataset.seedStart = seedStart;
+  strip.dataset.startUtc = new Date(running.startUtc).toISOString();
   strip.dataset.seedBill = String(!!running.billable);
 }
 
 // Build the live-edit patch — ONLY changed fields, and NEVER an endUtc (the open row stays
-// open, §05 R6 / §12 R14). The same rule src/timerview.ts.liveEditPatch enforces and the GOLD
-// timerview.test.ts proves; mirrored here for the page (which cannot import the TS module).
+// open, §05 R6 / §12 R14). The seed-vs-field diff mirrors src/timerview.ts.liveEditStripPatch
+// (the GOLD-pinned unit); this is the page's copy (which cannot import the TS module).
 function liveEditPatch(strip) {
   const patch = {};
   const desc = $('le-desc');
@@ -557,13 +564,17 @@ function liveEditPatch(strip) {
     if (next !== seed) patch.description = next;
   }
   const start = $('le-start');
-  if (start && start.value) {
-    // §12 R14 (G1): #le-start is a RAW text field (localInputValue format) — a half-typed
-    // value can be unparseable, so an invalid instant contributes nothing to the patch.
+  // §12 R14/R15 (issue #68): BYTE-compare the field against its seeded string FIRST — an untouched
+  // field is byte-identical to the seed and is skipped WITHOUT reparsing, so a DST fall-back-
+  // ambiguous wall-clock never resolves to the wrong instant and emits a spurious startUtc on a
+  // desc-only edit. Only a genuinely edited value is parsed (§12 R14/G1: #le-start is a RAW text
+  // field, so a half-typed value can be unparseable — the NaN guard drops it), and the double-guard
+  // drops a change resolving to the SAME stored instant.
+  if (start && start.value && start.value !== strip.dataset.seedStart) {
     const parsed = new Date(start.value);
     if (!isNaN(parsed.getTime())) {
       const nextIso = parsed.toISOString();
-      if (nextIso !== strip.dataset.seedStart) patch.startUtc = nextIso;
+      if (nextIso !== strip.dataset.startUtc) patch.startUtc = nextIso;
     }
   }
   const bill = $('le-bill');
@@ -580,9 +591,18 @@ async function commitLiveEdit() {
   if (!Number.isFinite(id)) return;
   const patch = liveEditPatch(strip);
   if (Object.keys(patch).length === 0) return; // a no-op edit sends nothing
-  const ack = await window.stint.edit({ id, patch });
-  await load();
-  applyAck(ack);
+  // §12 R21 / issue #61: a live start edit the core REFUSES (a future start on the running row —
+  // start > now freezes the count-up and bricks Stop) must be surfaced where it was attempted,
+  // never a silently swallowed rejected promise (the "Stop appears dead" wedge). Route it to the
+  // Timer-view region via showWriteError; the open row is untouched so the count-up keeps running
+  // and the user can retype a valid start — the timer never wedges.
+  try {
+    const ack = await window.stint.edit({ id, patch });
+    await load();
+    applyAck(ack);
+  } catch (err) {
+    showWriteError(err);
+  }
 }
 function scheduleLiveEdit() {
   if (liveEditTimer) clearTimeout(liveEditTimer);

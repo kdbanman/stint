@@ -1402,7 +1402,7 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false } = {}) {
   return `
     window.__STATE__ = ${stateJson};
     // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
@@ -1411,6 +1411,12 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
     // renderer SURFACES it (an announced message region, the form staying open) instead of
     // swallowing it. Off by default → every other scene's writes resolve as before.
     window.__REJECT_WRITES__ = ${rejectWrites ? 'true' : 'false'};
+    // §05 R06 / §03 / issue #61 (FUTURE_START_GUARD) — when set, the edit mock refuses a live
+    // start edit that lands AFTER now exactly as core's edit() refuses a future start on the open
+    // row, so the scene can drive the REAL live-edit commit of a mistyped future start and assert
+    // the Timer view SURFACES the refusal (#timer-warning) instead of a swallowed rejection — while
+    // a start at-or-before now still commits. Off by default → every other scene's edits are unchanged.
+    window.__FUTURE_START_GUARD__ = ${futureStartGuard ? 'true' : 'false'};
     // §05 R01 (RECORD only) — when set, the start mock performs core's atomic stop-then-start
     // ON the injected snapshot: it closes any currently-open row at the pinned now and inserts a
     // single fresh open row from the submitted attributes, so the subsequent load()/getState
@@ -1749,6 +1755,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // (§05 R11), so the WRITE_REJECTION_FEEDBACK scene can assert the editor surfaces it inline.
       edit: (p) => {
         if (window.__REJECT_WRITES__) return Promise.reject(new Error('entry end must be after its start'));
+        // §05 R06 / issue #61: under the future-start guard, a live start edit landing AFTER now is
+        // refused exactly as core's edit() refuses it (a future start on the running row bricks Stop),
+        // so the FUTURE_START_GUARD scene can assert the Timer view surfaces it, never a swallowed
+        // rejection. A start at-or-before now still records + resolves, so the corrected retype commits.
+        if (window.__FUTURE_START_GUARD__ && p && p.patch && p.patch.startUtc &&
+            Date.parse(p.patch.startUtc) > Date.parse(window.__JUDGE_NOW__)) {
+          return Promise.reject(new Error('start time is in the future'));
+        }
         window.__EDITED__ = p; return Promise.resolve(window.__ACK__);
       },
       // Records the split payload so the SPLIT_AFFORDANCE scene can drive the inline
@@ -1872,6 +1886,15 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         return Promise.resolve(def ? { ...def } : null);
       },
       saveReport: function (p) {
+        // §12 R21 / §09 R01: core refuses an inverted absolute range (From after To) — it only
+        // ever resolves to an empty window, so it is rejected rather than stored. The mock mirrors
+        // that guard on the plain-date pair (lexical YYYY-MM-DD compare, the same order the UTC
+        // window carries; same-day from == to is VALID, ≤ not <) so the REPORTS_VIEW inverted-range
+        // refusal fact drives a real rejection. Rejects BEFORE recording, so nothing persists.
+        const rs = p && p.rangeSpec;
+        if (rs && rs.kind === 'absolute' && rs.fromDate && rs.toDate && rs.fromDate > rs.toDate) {
+          return Promise.reject(new Error('report range end must not be before its start'));
+        }
         // §12 R21 / §13: core refuses a duplicate report name (UNIQUE COLLATE NOCASE). The mock
         // mirrors that guard (case-insensitive) so the REPORTS_VIEW duplicate-name refusal fact
         // drives a real rejection — it rejects BEFORE recording, so a refused save leaves no trace.

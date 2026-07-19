@@ -145,6 +145,17 @@ export interface World {
     atIso: string;
   }): { id: number };
   stop(atIso: string): void;
+  /**
+   * §05 R01 / §03 (issue #61) — attempt to Start a new entry at an explicit instant that may fall
+   * BEFORE the currently-open entry's start, and report whether the surface REFUSED it. start()'s
+   * atomic close obeys Stop's rule: closing the open row at an instant before it began would
+   * persist an end < start, so the whole transaction is refused and rolls back. Surface-neutral:
+   * CoreWorld calls store.start and catches the StoreError; CliWorld checks the non-zero exit of
+   * `tt start --at`. Rejected identically on BOTH surfaces (§17 R8), the open row left intact.
+   */
+  attemptStart(o: { desc: string | null; client?: string; project?: string; atIso: string }): {
+    rejected: boolean;
+  };
   resume(): { id: number };
   backfill(o: { desc: string; from: string; to: string; client?: string; project?: string }): {
     id: number;
@@ -169,6 +180,15 @@ export interface World {
     id: number;
   };
   edit(id: number, patch: { desc?: string; startUtc?: string; billable?: boolean }): void;
+  /**
+   * §05 R06 / §03 / §16 (issue #61) — attempt to edit the running entry's start to a (possibly
+   * FUTURE) instant and report whether the surface REJECTED it without storing anything. A future
+   * start on the open row freezes the count-up and would brick Stop, so core refuses it (rejected
+   * rather than stored, §14). Surface-neutral: CoreWorld calls store.edit and catches the
+   * StoreError; CliWorld checks the non-zero exit of `tt edit --from`. Rejected identically on
+   * BOTH surfaces (§17 R8) — the same guard the GUI live-edit region surfaces (§12 R21).
+   */
+  attemptEditStart(id: number, startIso: string): { rejected: boolean };
   /**
    * §06 R1 — delete an entry outright. Surface-neutral: CoreWorld calls store.remove(id);
    * CliWorld shells `tt rm <id> --force` (the confirmation gate is a surface concern, proven
@@ -349,6 +369,40 @@ export interface World {
     by: 'client' | 'project' | 'day' | 'tag';
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean };
+  /**
+   * §09 R01/R08 — save a report with an ABSOLUTE custom range (fixed from/to bounds passed
+   * straight through, no re-resolution). Surface-neutral: CoreWorld store.saveReport with a
+   * `{kind:'absolute'}` spec, CliWorld `tt report save <name> --range FROM TO`. A same-day
+   * from == to window is valid (the report rule is ≤, unlike the entry rule's strict <).
+   */
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void;
+  /**
+   * §09 R01/R08 — attempt to save a report with an absolute custom range and report whether
+   * core REFUSED it (an inverted from > to window resolves to nothing, so it is rejected
+   * rather than stored — the same guarantee §14 gives working hours). Surface-neutral:
+   * CoreWorld catches store.saveReport's throw, CliWorld reads `tt report save`'s non-zero
+   * exit. This is the refusal the GUI builder surfaces inline (§12 R21).
+   */
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean };
+  /**
+   * §09 R01/R08 — attempt to amend a saved report's range to an absolute custom window and
+   * report whether core REFUSED it (an inverted from > to amendment is rejected, mirroring
+   * saveReport). CoreWorld catches store.editReport's throw, CliWorld reads `tt report edit`'s
+   * non-zero exit.
+   */
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean };
   /** §09 R08 — the names of the saved report definitions (CoreWorld store.listReports / CliWorld `tt report ls --json`). */
   listReportNames(): string[];
   /** §09 R08 — amend a saved report's range preset (CoreWorld store.editReport / CliWorld `tt report edit <name> --<preset>`). */
@@ -560,6 +614,17 @@ export class CoreWorld implements World {
     });
     return { id: r.value.id };
   }
+  attemptStart(o: { desc: string | null; client?: string; project?: string; atIso: string }): {
+    rejected: boolean;
+  } {
+    try {
+      const { clientId, projectId } = this.ids(o);
+      this.store.start({ description: o.desc, clientId, projectId, atUtc: o.atIso });
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
   stop(atIso: string): void {
     this.store.stop({ atUtc: atIso });
   }
@@ -607,6 +672,14 @@ export class CoreWorld implements World {
       ...(patch.startUtc !== undefined ? { startUtc: patch.startUtc } : {}),
       ...(patch.billable !== undefined ? { billable: patch.billable } : {}),
     });
+  }
+  attemptEditStart(id: number, startIso: string): { rejected: boolean } {
+    try {
+      this.store.edit(id, { startUtc: startIso });
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
   }
   remove(id: number): void {
     this.store.remove(id);
@@ -972,6 +1045,49 @@ export class CoreWorld implements World {
       return { rejected: true };
     }
   }
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void {
+    // §09 R01/R08: an ABSOLUTE spec freezes the exact from/to bounds (no re-resolution).
+    this.store.saveReport({
+      name: o.name,
+      rangeSpec: { kind: 'absolute', fromUtc: o.fromUtc, toUtc: o.toUtc },
+      by: o.by,
+      billableFilter: o.billableFilter,
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+  }
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §09 R01/R08 — the SAME saveReport the happy path uses; core's from ≤ to guard throws on
+    // an inverted window and the transaction rolls back, so nothing persists.
+    try {
+      this.saveReportRange(o);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
+    try {
+      this.store.editReport(name, {
+        rangeSpec: { kind: 'absolute', fromUtc: o.fromUtc, toUtc: o.toUtc },
+      });
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
   listReportNames(): string[] {
     return this.store.listReports().map((d) => d.name);
   }
@@ -1269,6 +1385,19 @@ export class CliWorld implements World {
     this.tt(args);
     return { id: this.openId()! };
   }
+  attemptStart(o: { desc: string | null; client?: string; project?: string; atIso: string }): {
+    rejected: boolean;
+  } {
+    // §05 R01 / §16 (#61): `tt start --at <before-open-start>` exits non-zero with the StoreError
+    // on stderr and stores nothing — the surface's rejection signal (the twin of CoreWorld's catch).
+    const args = ['start'];
+    if (o.desc) args.push(o.desc);
+    if (o.client) args.push('--client', o.client);
+    if (o.project) args.push('--project', o.project);
+    args.push('--at', o.atIso);
+    const r = this.tt(args);
+    return { rejected: r.code !== 0 };
+  }
   stop(atIso: string): void {
     this.tt(['stop', '--at', atIso]);
   }
@@ -1313,6 +1442,13 @@ export class CliWorld implements World {
     if (patch.billable === true) args.push('--bill');
     if (patch.billable === false) args.push('--no-bill');
     this.tt(args);
+  }
+  attemptEditStart(id: number, startIso: string): { rejected: boolean } {
+    // §05 R06 / §16 (#61): `tt edit --from <future>` on the running row exits non-zero with the
+    // StoreError on stderr and stores nothing — that non-zero exit is the surface's rejection
+    // signal (the twin of CoreWorld catching the throw).
+    const r = this.tt(['edit', String(id), '--from', startIso]);
+    return { rejected: r.code !== 0 };
   }
   remove(id: number): void {
     // §06 R1: `tt rm` refuses without confirmation (proven at GOLD); pass --force to delete,
@@ -1641,6 +1777,39 @@ export class CliWorld implements World {
     if (o.billableFilter === 'all') args.push('--all');
     else if (o.billableFilter === 'non-billable') args.push('--non-billable');
     const r = this.tt(args);
+    return { rejected: r.code !== 0 };
+  }
+  saveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): void {
+    // §09 R01/R08: `tt report save --range FROM TO` freezes an ABSOLUTE window, parity with the
+    // GUI builder's Custom range. The from/to parse to UTC through the same parseTime `tt add` uses.
+    const args = ['report', 'save', o.name, '--range', o.fromUtc, o.toUtc, '--by', o.by];
+    if (o.billableFilter === 'all') args.push('--all');
+    else if (o.billableFilter === 'non-billable') args.push('--non-billable');
+    this.tt(args);
+  }
+  attemptSaveReportRange(o: {
+    name: string;
+    fromUtc: string;
+    toUtc: string;
+    by: 'client' | 'project' | 'day' | 'tag';
+    billableFilter: 'billable' | 'all' | 'non-billable';
+  }): { rejected: boolean } {
+    // §09 R01/R08 — an inverted `tt report save --range FROM TO` exits non-zero with the core
+    // diagnostic and stores nothing; that non-zero exit is the surface's rejection signal.
+    const args = ['report', 'save', o.name, '--range', o.fromUtc, o.toUtc, '--by', o.by];
+    if (o.billableFilter === 'all') args.push('--all');
+    else if (o.billableFilter === 'non-billable') args.push('--non-billable');
+    const r = this.tt(args);
+    return { rejected: r.code !== 0 };
+  }
+  attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
+    const r = this.tt(['report', 'edit', name, '--range', o.fromUtc, o.toUtc]);
     return { rejected: r.code !== 0 };
   }
   listReportNames(): string[] {
