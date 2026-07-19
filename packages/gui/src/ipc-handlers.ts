@@ -222,6 +222,9 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
         }
       }
       if (payload.billable !== undefined) opts.billable = payload.billable;
+      // §06 R3: a non-contiguous selection is refused by core unless acknowledged. The renderer
+      // sets allowGap only after the user confirms the gapped-span gate (§12 R13).
+      if (payload.allowGap) opts.allowGap = true;
       const res = store.merge(payload.ids, opts);
       refreshAll();
       // A merge folds adjacent spans into one; the folded span can still overlap a third entry

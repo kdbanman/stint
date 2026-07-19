@@ -556,6 +556,51 @@ export function mergeAgreeState() {
 }
 
 /**
+ * Two CLOSED entries that AGREE on client and billable but are NOT contiguous — a positive
+ * gap sits between them (10:00 → 14:00). Folding them fabricates that 4-hour gap as billable
+ * time, so the MERGE_GAP scene can assert clicking Merge raises the gap confirm stating the
+ * resulting span/duration BEFORE any merge commits (§06 R3, §12 R13) — never a silent fold.
+ */
+export function mergeGapState() {
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-24',
+        entries: [
+          {
+            id: 60,
+            description: 'morning block',
+            clientLabel: 'Client A / API',
+            startUtc: '2026-06-24T09:00:00Z',
+            endUtc: '2026-06-24T10:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+          {
+            id: 61,
+            description: 'afternoon block',
+            clientLabel: 'Client A / API',
+            startUtc: '2026-06-24T14:00:00Z',
+            endUtc: '2026-06-24T15:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+        ],
+      },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * A single closed entry the OVERLAP_BANNER scene edits to create an overlap. The state
  * itself carries no overlap flag yet — the banner is the AT-WRITE-TIME signal, raised by
  * the WriteAck the mock returns when the edit fires (see initScript's `overlapAck`),
