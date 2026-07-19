@@ -595,11 +595,20 @@ guard prove the gate in headless CI; this confirms it on a real desktop/DB.
    - [ ] The entry disappears from the GUI **and** from `tt list` — removed exactly once,
          only after the explicit confirm.
 
-> The referenced **client/project archive** confirmation (R13's second clause — archiving a
-> client/project that still labels entries) reuses the same in-window confirm gate, but is
-> **deferred until the Clients management view (§12 R10) lands** — there is no GUI archive
-> control to confirm yet, so only entry Delete is reachable for this check today. When the
-> Clients view ships, extend this procedure to cover archive-when-referenced.
+5. In the **Clients** view, archive a client that is **still referenced** by a past entry
+   (attribute one first if needed — `tt add "spec" --from "2h ago" --to "1h ago" --client "Acme"`),
+   by clicking that client's **Archive**.
+   - [ ] The client is **not** archived on the first click — the button swaps into the same
+         in-window confirm ("Archive …? It has time entries.") with **Archive** / **Cancel**.
+   - [ ] `tt client ls` still lists the client (the stray first click hid nothing).
+   - [ ] Only the explicit confirm archives it — it then drops from the active list.
+6. Archive an **unreferenced** client (no past entries) the same way.
+   - [ ] It archives **directly**, with no confirm step (R13's scope: referenced only).
+
+> A tag archive is direct (R13's scope names client/project only). The restore side — the
+> Show-archived toggle and per-record Restore — is covered by CHECK CLIENTS & PROJECTS
+> MANAGEMENT below; JUDGE `CONFIRM_ARCHIVE` (`main-confirm-archive.png`) proves the referenced
+> archive gate and `RESTORE_ARCHIVED` (`main-clients-archived.png`) the restore, both headless.
 
 ## CHECK KEYBOARD & FOCUS (GUI) — the window is fully operable from the keyboard (§12 R14)
 
@@ -690,10 +699,11 @@ together — the dimension headless CI cannot drive (real OS, real DB, real dial
    JSON** (its filtered rows) and the bottom **Export All Data** (every raw entry in the range).
    - [ ] The summary updates; both scopes write files via the OS save dialog, each with an
          honest status line ("Exported N entries" vs "…(all data)") (§12 R8, §09 R06/R09).
-6. In the **Clients** view, **create / rename / archive** a client and a project, and from
-   the **Tags** strip **create / rename / archive** a tag.
+6. In the **Clients** view, **create / rename / archive / restore** a client and a project, and from
+   the **Tags** strip **create / rename / archive / restore** a tag (use **Show archived** to reach
+   the Restore controls).
    - [ ] Each mutation lands; archived records drop from the active pickers but referenced
-         entries keep their labels — all by hand (§12 R10).
+         entries keep their labels, and Restore returns a record to the pickers — all by hand (§12 R11).
 7. In the **Settings** view, change **every §14 setting** (rounding + increment, week start,
    first check-in, check-in interval, global hotkey, date format).
    - [ ] Each setting persists immediately and the relevant control reflects it (§12 R11).
@@ -722,10 +732,10 @@ the by-hand confirmation on a real window.
 3. Click **Delete** again, then the explicit **confirm**.
    - [ ] The entry is removed — and only now. Cross-check with a read-only `tt list` (on a
          second machine / after the walk) that exactly that entry is gone.
-4. (When the Clients view's archive control ships) archive a client/project that is **still
-   referenced** by a past entry.
+4. In the **Clients** view, archive a client/project that is **still referenced** by a past entry.
    - [ ] Archiving asks for confirmation first; confirming hides it from the active pickers
-         while the referenced entry keeps its label (the same confirm gate, reused).
+         while the referenced entry keeps its label (the same confirm gate, reused). An
+         **unreferenced** record archives directly, with no confirm (R13's scope).
 5. In the **Entries** view, watch the **This week** total (`#week-total`) and the list while
    you **type in the search box**.
    - [ ] On each keystroke the visible rows narrow to the matches **and** the total updates
@@ -737,15 +747,16 @@ the by-hand confirmation on a real window.
    - [ ] The list and the total both return to the full week — the live view and the plain
          load agree.
 
-## CHECK CLIENTS & PROJECTS MANAGEMENT (GUI) — create / rename / archive in-window at parity (§12 R10, §07)
+## CHECK CLIENTS & PROJECTS MANAGEMENT (GUI) — create / rename / archive / restore in-window at parity (§12 R11, §07)
 
-§12 R10's Clients view manages reference data **entirely in the window** — create, rename, and
-archive clients and their projects — at parity with `tt client` / `tt project`. Archiving is a
+§12 R11's Clients view manages reference data **entirely in the window** — create, rename, archive,
+and **restore** clients and their projects — at parity with `tt client` / `tt project`. Archiving is a
 **reversible hide**: an archived client/project drops from the active pickers/lists but referenced
-past entries keep their label (history is preserved). The mutator behaviour is proven
-surface-neutrally over core + tt by `features/reference_data.feature`; the view is screenshotted
-headless under JUDGE (`main-clients.png`). This runbook confirms the real in-place editors and the
-round-trip to `tt` on a real desktop/DB. Run with `tt` in a second terminal on the same database.
+past entries keep their label (history is preserved), and a **restore** returns it to every picker.
+The mutator behaviour is proven surface-neutrally over core + tt by `features/reference_data.feature`;
+the view is screenshotted headless under JUDGE (`main-clients.png`, `main-clients-archived.png`). This
+runbook confirms the real in-place editors and the round-trip to `tt` on a real desktop/DB. Run with
+`tt` in a second terminal on the same database.
 
 1. In the running app, click the **Clients** nav item. With no clients it reads an instructive
    empty state. Click **Add client** and name a new client (e.g. "Globex").
@@ -768,22 +779,33 @@ round-trip to `tt` on a real desktop/DB. Run with `tt` in a second terminal on t
    - [ ] The **referenced past entry keeps its label** — `tt list --all` still shows it attributed
          to the (now archived) client/project; archiving hid the record without rewriting history
          (`tt client ls --all` / the include-archived path still lists it).
+   - [ ] Archiving the **referenced** client asked for a confirm first (the two-step gate, §12 R13);
+         an unreferenced one archived directly.
+6. Click **Show archived**.
+   - [ ] The archived client appears as a quiet card with an "archived" pill and a **Restore**
+         button; the archived project appears (under its active client) with its own Restore.
+7. Click the archived client's **Restore**.
+   - [ ] It returns to the active list and to the active pickers, and `tt client ls` shows it again
+         (the GUI Restore and `tt client restore` are the same write). Restoring a project whose
+         client is still archived is refused — restore the client first.
 
-> Create/rename/archive parity is proven over core + tt by `features/reference_data.feature` and
-> the parity matrix rows (`addClient`/`renameClient`/`archiveClient` ↔ `tt client …`,
-> `addProject`/`renameProject`/`archiveProject`/`listProjects` ↔ `tt project …`); JUDGE screenshots
-> the view headless (`CLIENTS_VIEW`, `main-clients.png`). This runbook confirms the live in-place
-> editors and that archiving hides-but-keeps on a real DB the headless host cannot drive.
+> Create/rename/archive/restore parity is proven over core + tt by `features/reference_data.feature`
+> and the parity matrix rows (`addClient`/`renameClient`/`archiveClient`/`restoreClient` ↔ `tt client …`,
+> `addProject`/`renameProject`/`archiveProject`/`restoreProject`/`listProjects` ↔ `tt project …`); JUDGE
+> screenshots the view headless (`CLIENTS_VIEW`/`RESTORE_ARCHIVED`, `main-clients.png`/`main-clients-archived.png`).
+> This runbook confirms the live in-place editors and that archiving hides-but-keeps (reversibly) on a
+> real DB the headless host cannot drive.
 
-## CHECK TAGS MANAGEMENT (GUI) — the tag strip create / rename / archive at parity (§12 R10)
+## CHECK TAGS MANAGEMENT (GUI) — the tag strip create / rename / archive / restore at parity (§12 R11)
 
 The Clients view's **Tags strip** manages the cross-cutting tag vocabulary in-window — list,
-create, rename, archive — at parity with `tt tag`. Tags are otherwise born on the fly when applied
-to an entry; the strip is the explicit **manage-them-first** path. Archiving a tag hides it from the
-active list/pickers while entries already carrying it keep it (history preserved). Parity is proven
-over core + tt by `features/reference_data.feature`; the strip ships inside the Clients view, so it
-is screenshotted headless under JUDGE alongside it (`CLIENTS_VIEW` / `main-clients.png`). This
-runbook confirms the live editors and the round-trip to `tt`.
+create, rename, archive, restore — at parity with `tt tag`. Tags are otherwise born on the fly when
+applied to an entry; the strip is the explicit **manage-them-first** path. Archiving a tag hides it
+from the active list/pickers while entries already carrying it keep it (history preserved); a
+**restore** (revealed by **Show archived**) returns it. Parity is proven over core + tt by
+`features/reference_data.feature`; the strip ships inside the Clients view, so it is screenshotted
+headless under JUDGE alongside it (`CLIENTS_VIEW` / `main-clients.png`). This runbook confirms the
+live editors and the round-trip to `tt`.
 
 1. In the **Clients** view, find the **Tags** strip below the clients list. With no tags it reads
    an instructive empty state. Click **Add tag** and name one (e.g. "deep").
@@ -797,9 +819,12 @@ runbook confirms the live editors and the round-trip to `tt`.
          `tt tag ls` (which excludes archived by default).
    - [ ] The **entry already carrying the tag keeps it** — `tt list --all` still shows the entry
          tagged; archiving hid the tag from pickers without stripping history.
+4. Click **Show archived**, then the archived tag's **Restore**.
+   - [ ] The tag returns to the active strip and the active tag pickers, and `tt tag ls` shows it
+         again (the GUI Restore and `tt tag restore` are the same write).
 
-> Tag create/rename/archive parity is proven over core + tt by `features/reference_data.feature`
-> and the parity rows (`listTags`/`addTag`/`renameTag`/`archiveTag` ↔ `tt tag …`); JUDGE screenshots
+> Tag create/rename/archive/restore parity is proven over core + tt by `features/reference_data.feature`
+> and the parity rows (`listTags`/`addTag`/`renameTag`/`archiveTag`/`restoreTag` ↔ `tt tag …`); JUDGE screenshots
 > the strip headless inside the Clients view (`CLIENTS_VIEW`, `main-clients.png`) and pins its
 > controls via the renderer-static guard. This runbook confirms the live in-place editors and the
 > hide-but-keep on a real DB.

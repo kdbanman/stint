@@ -278,7 +278,11 @@
           <section id="clients" class="view clients" data-view="clients" hidden>
             <div class="clients-head vhead">
               <h2 class="clients-title vtitle">Clients</h2>
-              <button id="add-client-btn" type="button" class="small primary"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add client</button>
+              <span class="clients-head-actions">
+                <!-- §12 R13: reveal archived records (with Restore) — parity with `tt … ls --archived`. -->
+                <button id="show-archived" type="button" class="small ghost" aria-pressed="false">Show archived</button>
+                <button id="add-client-btn" type="button" class="small primary"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add client</button>
+              </span>
             </div>
             <div id="clients-list" class="clients-list"></div>
 

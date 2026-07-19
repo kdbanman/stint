@@ -11,6 +11,13 @@ export interface Client {
   id: number;
   name: string;
   archived: boolean;
+  /**
+   * §12 R13 — whether any entry references this client (i.e. archiving it would hide a
+   * record that carries history). Populated by `listClients`; the GUI Clients view gates the
+   * archive of a *referenced* client behind the two-step confirm, and archives an unreferenced
+   * one directly. Absent (undefined) on freshly-constructed rows that carry no history yet.
+   */
+  referenced?: boolean;
 }
 
 /** A project — an optional refinement that belongs to exactly one client. */
@@ -19,6 +26,8 @@ export interface Project {
   clientId: number;
   name: string;
   archived: boolean;
+  /** §12 R13 — whether any entry references this project (see `Client.referenced`). */
+  referenced?: boolean;
 }
 
 /** A flat, reusable, cross-cutting label. Created on the fly when first applied. */

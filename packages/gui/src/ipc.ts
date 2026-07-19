@@ -73,16 +73,23 @@ export const CHANNELS = [
   // per-client project sub-list; the rename/archive mutators mirror tt rename/archive.
   'renameClient',
   'archiveClient',
+  // §12 R13: un-archive a client / project — the reverse of archive, the Clients view's Restore
+  // button, at parity with tt's `client restore` / `project restore`. listClients/listProjects
+  // take an optional includeArchived so the view's "show archived" affordance can reveal the
+  // hidden records the Restore buttons act on (parity with `client ls --archived` etc.).
+  'restoreClient',
   'renameProject',
   'archiveProject',
+  'restoreProject',
   'listProjects',
-  // §12 R10: the Clients view's tag-management strip — list/create/rename/archive tags at
+  // §12 R10: the Clients view's tag-management strip — list/create/rename/archive/restore tags at
   // parity with tt's `tag` subcommands. Tags are otherwise born on the fly when applied;
   // these are the explicit manage-them-first capabilities the view exposes.
   'listTags',
   'addTag',
   'renameTag',
   'archiveTag',
+  'restoreTag',
   'setSetting',
   // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. CRUD
   // over the SAME @stint/core Store the tt `backup ls|restore` verbs drive, so backups/recovery
@@ -459,16 +466,19 @@ export interface IpcContract {
   exportEntries: { payload: ExportRequest; result: ExportResult };
   addClient: { payload: { name: string }; result: Client };
   addProject: { payload: { name: string; clientId: number }; result: Project };
-  listClients: { payload: void; result: Client[] };
+  listClients: { payload: { includeArchived?: boolean } | undefined; result: Client[] };
   renameClient: { payload: { id: number; name: string }; result: void };
   archiveClient: { payload: { id: number }; result: void };
+  restoreClient: { payload: { id: number }; result: void };
   renameProject: { payload: { id: number; name: string }; result: void };
   archiveProject: { payload: { id: number }; result: void };
-  listProjects: { payload: { clientId?: number } | undefined; result: Project[] };
-  listTags: { payload: void; result: Tag[] };
+  restoreProject: { payload: { id: number }; result: void };
+  listProjects: { payload: { clientId?: number; includeArchived?: boolean } | undefined; result: Project[] };
+  listTags: { payload: { includeArchived?: boolean } | undefined; result: Tag[] };
   addTag: { payload: { name: string }; result: Tag };
   renameTag: { payload: { id: number; name: string }; result: void };
   archiveTag: { payload: { id: number }; result: void };
+  restoreTag: { payload: { id: number }; result: void };
   setSetting: { payload: SetSettingPayload; result: void };
   listBackups: { payload: void; result: BackupInfoView[] };
   restoreBackup: { payload: { name: string }; result: RestoreResult };
