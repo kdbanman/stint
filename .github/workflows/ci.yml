@@ -117,6 +117,65 @@ jobs:
           fi
           echo "packed Linux app present: $root"
 
+  # §19 R01 — packaging smoke on macOS, the sibling of the Linux pack-smoke above (process.html
+  # R02: the release matrix only runs post-merge — so a mac-only electron-builder breakage would
+  # otherwise first surface as a red release, the founding incident's class). macos-latest runners
+  # are free on this PUBLIC repo (only queue time). Drives electron-builder for macOS to an
+  # unpacked `.app` (`--dir`: fast, but the SAME native helper + electron download + `files:` glob
+  # + `.app` bundle assembly as the real pack). The full `.dmg` build + publish stay in release.yml.
+  pack-smoke-mac:
+    name: pack-smoke · macOS (§19 R01)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify packaging toolchain (app-builder-bin)
+        run: |
+          node scripts/check-packaging.mjs || {
+            echo "::warning::app-builder helper missing after npm ci — repairing (clean cache + reinstall)"
+            npm cache clean --force
+            rm -rf node_modules
+            npm ci
+            node scripts/check-packaging.mjs
+          }
+      - name: Stamp version (§19 R06)
+        run: |
+          today="$(date -u +%Y.%-m.%-d)"
+          n="$(( $(git tag -l "${today}*" | wc -l) + 1 ))"
+          STINT_BUILD_N="$n" npm run version:stamp
+      - name: Build (core + cli + gui main)
+        run: npm run build
+      # CSC_IDENTITY_AUTO_DISCOVERY=false keeps the unsigned mac build (electron-builder.yml
+      # identity: null) from hunting for signing certs — no notarization/signing secrets on a
+      # smoke, same as release.yml's pack job.
+      - name: Pack GUI (macOS, unpacked dir — smoke)
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: npm --workspace @stint/gui run pack:smoke:mac
+      - name: Assert a packed macOS .app bundle was produced
+        run: |
+          # electron-builder --mac dir writes the unpacked bundle under
+          # packages/gui/dist-pack/mac<-arch>/Stint.app — mac-arm64/ on the Apple-Silicon
+          # macos-latest runner, mac/ on an x64 image. Tolerate either arch-suffixed dir.
+          app="$(find packages/gui/dist-pack -maxdepth 2 -name 'Stint.app' -type d | head -n1)"
+          if [ -z "$app" ]; then
+            echo "no Stint.app under packages/gui/dist-pack/ — electron-builder --mac dir produced no .app bundle"
+            ls -R packages/gui/dist-pack 2>/dev/null || true
+            exit 1
+          fi
+          # The .app must carry the executable payload: Contents/Resources/app.asar (asar-packed,
+          # the default) or Contents/Resources/app/package.json (non-asar). Either proves pack ran through.
+          if [ ! -e "$app/Contents/Resources/app.asar" ] && [ ! -e "$app/Contents/Resources/app/package.json" ]; then
+            echo ".app produced but the app payload (Contents/Resources/app.asar or app/) is missing"
+            ls -R "$app/Contents/Resources" 2>/dev/null || true
+            exit 1
+          fi
+          echo "packed macOS app present: $app"
+
   judge:
     name: JUDGE · GUI presentation (Chromium, headless)
     runs-on: ubuntu-latest
