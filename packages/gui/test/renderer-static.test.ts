@@ -290,6 +290,25 @@ describe('renderer static contract', () => {
     expect(removeSites.length).toBe(1);
     const armDeleteBody = app.slice(app.indexOf('function armDelete(btn, e)'));
     expect(armDeleteBody).toMatch(/onConfirm:\s*async \(\)\s*=>\s*\{[\s\S]*?window\.stint\.remove\(\{\s*id:\s*e\.id\s*\}\)/);
+
+    // §12 R13 archive-when-referenced: the Clients view's archive click routes to armArchive*,
+    // NOT straight to the archive IPC — the SAME generic confirm gate delete uses. A REFERENCED
+    // client/project (core-fed `referenced` flag) takes the two-step confirm; an unreferenced one
+    // archives directly (R13's exact scope). The archiveClient/archiveProject call must sit inside
+    // the arm helper's confirm path, so a stray click on a referenced record archives nothing.
+    expect(app).toMatch(/\[data-act="archive-client"\]'\)\.addEventListener\('click',\s*\(ev\)\s*=>\s*\n?\s*armArchiveClient\(/);
+    expect(app).toMatch(/\[data-act="archive-project"\]'\)\.addEventListener\('click',\s*\(ev\)\s*=>\s*\n?\s*armArchiveProject\(/);
+    const armArchiveClientBody = app.slice(
+      app.indexOf('function armArchiveClient(btn, c)'),
+      app.indexOf('function armArchiveProject(btn, p)'),
+    );
+    // Unreferenced → direct archive; referenced → the confirm gate (kind 'archive').
+    expect(armArchiveClientBody).toMatch(/if \(!c\.referenced\) return void doArchive\(\)/);
+    expect(armArchiveClientBody).toMatch(/confirmInline\(btn,\s*\{[\s\S]*?kind:\s*'archive'/);
+    expect(armArchiveClientBody).toMatch(/onConfirm:\s*doArchive/);
+    const armArchiveProjectBody = app.slice(app.indexOf('function armArchiveProject(btn, p)'));
+    expect(armArchiveProjectBody).toMatch(/if \(!p\.referenced\) return void doArchive\(\)/);
+    expect(armArchiveProjectBody).toMatch(/confirmInline\(btn,\s*\{[\s\S]*?kind:\s*'archive'/);
   });
 
   it('destructive actions confirm and search/filter/group reflect live in the list AND the report total (§17 R11)', () => {
@@ -682,6 +701,27 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/window\.stint\.archiveProject\(/);
   });
 
+  it('the Clients view can reveal and restore archived records (§12 R13)', () => {
+    const html = read('index.html');
+    const app = read('app.js');
+    // A "show archived" toggle reveals the hidden records; it drives the list IPC with
+    // includeArchived (parity with `tt … ls --archived`), so the archived rows can be painted.
+    expect(html).toMatch(/id="show-archived"/);
+    expect(app).toMatch(/\$\('show-archived'\)\.addEventListener\('click'/);
+    expect(app).toMatch(/showArchived/);
+    expect(app).toMatch(/listClients\(\{\s*includeArchived:\s*showArchived\s*\}\)/);
+    expect(app).toMatch(/listProjects\(\{\s*clientId:[^}]*includeArchived:\s*showArchived\s*\}\)/);
+    expect(app).toMatch(/listTags\(\{\s*includeArchived:\s*showArchived\s*\}\)/);
+    // …and each archived record carries a Restore button over the restore IPC tt's
+    // `client|project|tag restore` drives — the reverse of archive (archived → active).
+    expect(app).toMatch(/window\.stint\.restoreClient\(/);
+    expect(app).toMatch(/window\.stint\.restoreProject\(/);
+    expect(app).toMatch(/window\.stint\.restoreTag\(/);
+    expect(app).toMatch(/data-act="restore-client"/);
+    expect(app).toMatch(/data-act="restore-project"/);
+    expect(app).toMatch(/data-act="restore-tag"/);
+  });
+
   it('every element id in index.html is unique — a duplicate dead-ends getElementById wiring (issue #48)', () => {
     // The literal issue-48 root cause: the Clients-view "+ Add client" button and the
     // Add-entry form's Client <select> both carried id="add-client", so $('add-client')
@@ -739,9 +779,10 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/id="tags-list"/);
     expect(html).toMatch(/id="add-tag"/);
     // …the view renders the active tags from the same IPC tt uses (renderClients also
-    // renders the tag strip; renderTags reads listTags)…
+    // renders the tag strip; renderTags reads listTags, passing includeArchived so the
+    // "show archived" toggle can reveal the archived tags — §12 R13)…
     expect(app).toMatch(/renderTags/);
-    expect(app).toMatch(/window\.stint\.listTags\(\)/);
+    expect(app).toMatch(/window\.stint\.listTags\(\{\s*includeArchived:\s*showArchived\s*\}\)/);
     // …and offers create/rename/archive in place over the tag mutators only — never the DB
     // directly — at parity with `tt tag add/rename/archive` (archived tags drop out of
     // listTags' default, hiding them from the active list while keeping history).

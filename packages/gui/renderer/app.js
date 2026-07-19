@@ -1125,6 +1125,40 @@ function armDelete(btn, e) {
   });
 }
 
+// §12 R13 — archiving a REFERENCED client/project hides a record that carries history, so it is
+// destructive and takes the SAME two-step gate as Delete (confirmInline): the first click only
+// ARMS the confirm, and window.stint.archiveClient/archiveProject is reachable ONLY from inside
+// the explicit confirm. An UNREFERENCED record (core-fed `referenced` flag false/absent — no entry
+// points at it) archives directly, matching R13's scope exactly (unreferenced records archive
+// without a confirm). Tags follow R13's text, which is silent on them, so tag archive is direct.
+function armArchiveClient(btn, c) {
+  const doArchive = async () => {
+    await window.stint.archiveClient({ id: c.id });
+    await renderClients();
+  };
+  if (!c.referenced) return void doArchive();
+  confirmInline(btn, {
+    kind: 'archive',
+    question: `Archive "${c.name}"? It has time entries.`,
+    confirmLabel: 'Archive',
+    onConfirm: doArchive,
+  });
+}
+
+function armArchiveProject(btn, p) {
+  const doArchive = async () => {
+    await window.stint.archiveProject({ id: p.id });
+    await renderClients();
+  };
+  if (!p.referenced) return void doArchive();
+  confirmInline(btn, {
+    kind: 'archive',
+    question: `Archive "${p.name}"? It has time entries.`,
+    confirmLabel: 'Archive',
+    onConfirm: doArchive,
+  });
+}
+
 // Split (PRD §06 R2 / G4): a closed entry can be cut at an instant inside its span into two
 // adjacent entries. The renderer stays a thin shell — it offers a simple PLAIN-TEXT instant
 // field (G1: no native datetime-local anywhere on an entry start/stop surface), seeded in the
@@ -2362,12 +2396,22 @@ for (const item of document.querySelectorAll('.nav-item')) {
 // broadcast double-fires it too.
 let clientsRenderGen = 0;
 
+// §12 R13 — the "show archived" affordance (index.html #show-archived). Off by default, so the
+// view lists only active records (archive hides). When on, archived clients/projects/tags appear
+// with a Restore button (per the clients.html mockup), reversing the hide. The flag is read by
+// renderClients/renderTags, which pass includeArchived to the list IPC (parity with `tt … ls
+// --archived`) and partition the result into the active rows and the archived, Restore-able rows.
+let showArchived = false;
+
 async function renderClients() {
   const host = $('clients-list');
   if (!host) return;
   const gen = ++clientsRenderGen;
   const frag = document.createDocumentFragment();
-  const clients = await window.stint.listClients();
+  const clients = await window.stint.listClients({ includeArchived: showArchived });
+  if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+  const active = clients.filter((c) => !c.archived);
+  const archived = clients.filter((c) => c.archived);
   if (clients.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'clients-empty';
@@ -2376,11 +2420,16 @@ async function renderClients() {
       `<div>Add a client, or run <code>tt client add</code>.</div>`;
     frag.appendChild(empty);
   } else {
-    for (const c of clients) {
-      const projects = await window.stint.listProjects({ clientId: c.id });
+    for (const c of active) {
+      // With "show archived" on, a client's archived projects are revealed under it (each with a
+      // Restore button); off, only its active projects show. One IPC read per client either way.
+      const projects = await window.stint.listProjects({ clientId: c.id, includeArchived: showArchived });
       if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
       frag.appendChild(clientRow(c, projects));
     }
+    // §12 R13: archived clients render LAST as quiet Restore cards (mockup: the ".arch" card with
+    // an "archived" pill and a Restore button), reversing the hide. Only present when showArchived.
+    for (const c of archived) frag.appendChild(archivedClientRow(c));
   }
   if (gen !== clientsRenderGen) return; // superseded after the last await — never paint stale rows
   host.innerHTML = '';
@@ -2399,7 +2448,7 @@ async function renderTags() {
   const host = $('tags-list');
   if (!host) return;
   const gen = ++tagsRenderGen;
-  const tags = await window.stint.listTags();
+  const tags = await window.stint.listTags({ includeArchived: showArchived });
   if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
   host.innerHTML = '';
   if (tags.length === 0) {
@@ -2411,7 +2460,9 @@ async function renderTags() {
     host.appendChild(empty);
     return;
   }
-  for (const t of tags) host.appendChild(tagRow(t));
+  // Active tags first, then (when showArchived) the archived tags as Restore rows.
+  for (const t of tags.filter((t) => !t.archived)) host.appendChild(tagRow(t));
+  for (const t of tags.filter((t) => t.archived)) host.appendChild(archivedTagRow(t));
 }
 
 function tagRow(t) {
@@ -2427,8 +2478,29 @@ function tagRow(t) {
   row.querySelector('[data-act="rename-tag"]').addEventListener('click', () =>
     openTagRename(row, t),
   );
+  // §12 R13 — R13's confirm scope names client/project only; a tag archive is direct (noted in
+  // the PR). archiveTag hides the tag from the pickers while keeping its history on past entries.
   row.querySelector('[data-act="archive-tag"]').addEventListener('click', async () => {
     await window.stint.archiveTag({ id: t.id });
+    await renderTags();
+  });
+  return row;
+}
+
+// §12 R13 — an archived tag rendered as a quiet Restore row (shown only when "show archived" is
+// on). Restore reverses the hide over the same restoreTag IPC `tt tag restore` drives.
+function archivedTagRow(t) {
+  const row = document.createElement('div');
+  row.className = 'tag-row archived';
+  row.dataset.id = String(t.id);
+  row.innerHTML =
+    `<span class="tag-row-name">${escapeHtml(t.name)}</span>` +
+    `<span class="pill">archived</span>` +
+    `<span class="tag-row-actions">` +
+    `<button class="small ghost" type="button" data-act="restore-tag"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
+    `</span>`;
+  row.querySelector('[data-act="restore-tag"]').addEventListener('click', async () => {
+    await window.stint.restoreTag({ id: t.id });
     await renderTags();
   });
   return row;
@@ -2462,7 +2534,9 @@ function clientRow(c, projects) {
 
   const list = document.createElement('div');
   list.className = 'project-list';
-  for (const p of projects) list.appendChild(projectRow(p));
+  // Active projects first; then (when showArchived) the client's archived projects as Restore rows.
+  for (const p of projects.filter((p) => !p.archived)) list.appendChild(projectRow(p));
+  for (const p of projects.filter((p) => p.archived)) list.appendChild(archivedProjectRow(p));
   // §07: the Add-project affordance sits at the foot of the client's own project list, in line
   // with the projects — so it reads as "create a project here", under this client. The accent
   // rides only the "+" (the rationed create signal).
@@ -2474,15 +2548,15 @@ function clientRow(c, projects) {
   list.appendChild(add);
   wrap.appendChild(list);
 
-  // Rename swaps the client name into an inline editor; Archive hides it from the active
-  // list; Add project opens an inline name field. All route through the same IPC tt uses.
+  // Rename swaps the client name into an inline editor; Archive hides it from the active list —
+  // a REFERENCED client takes the two-step confirm (§12 R13, armArchiveClient); Add project opens
+  // an inline name field. All route through the same IPC tt uses.
   head.querySelector('[data-act="rename-client"]').addEventListener('click', () =>
     openClientRename(head, c),
   );
-  head.querySelector('[data-act="archive-client"]').addEventListener('click', async () => {
-    await window.stint.archiveClient({ id: c.id });
-    await renderClients();
-  });
+  head.querySelector('[data-act="archive-client"]').addEventListener('click', (ev) =>
+    armArchiveClient(ev.currentTarget, c),
+  );
   add.addEventListener('click', () => openProjectAdd(list, c));
   return wrap;
 }
@@ -2500,8 +2574,51 @@ function projectRow(p) {
   row.querySelector('[data-act="rename-project"]').addEventListener('click', () =>
     openProjectRename(row, p),
   );
-  row.querySelector('[data-act="archive-project"]').addEventListener('click', async () => {
-    await window.stint.archiveProject({ id: p.id });
+  // §12 R13 — a REFERENCED project takes the two-step confirm; an unreferenced one archives directly.
+  row.querySelector('[data-act="archive-project"]').addEventListener('click', (ev) =>
+    armArchiveProject(ev.currentTarget, p),
+  );
+  return row;
+}
+
+// §12 R13 — an archived client rendered as a quiet Restore card (mockup: ".arch" card, "archived"
+// pill, Restore button). Restore reverses the hide over the restoreClient IPC `tt client restore`
+// drives; a restored client returns to every picker/filter. Shown only when "show archived" is on.
+function archivedClientRow(c) {
+  const wrap = document.createElement('div');
+  wrap.className = 'client archived';
+  wrap.dataset.id = String(c.id);
+  const head = document.createElement('div');
+  head.className = 'client-head';
+  head.innerHTML =
+    `<span class="client-name">${escapeHtml(c.name)}</span>` +
+    `<span class="pill">archived</span>` +
+    `<span class="client-actions">` +
+    `<button class="small ghost" type="button" data-act="restore-client"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
+    `</span>`;
+  wrap.appendChild(head);
+  head.querySelector('[data-act="restore-client"]').addEventListener('click', async () => {
+    await window.stint.restoreClient({ id: c.id });
+    await renderClients();
+  });
+  return wrap;
+}
+
+// §12 R13 — an archived project rendered as a Restore row, nested under its (active) client. Core
+// refuses restoring a project whose client is still archived, but such a project is never shown
+// here (an archived client renders as a card with no project list), so this path always succeeds.
+function archivedProjectRow(p) {
+  const row = document.createElement('div');
+  row.className = 'project archived';
+  row.dataset.id = String(p.id);
+  row.innerHTML =
+    `<span class="project-name">${escapeHtml(p.name)}</span>` +
+    `<span class="pill">archived</span>` +
+    `<span class="project-actions">` +
+    `<button class="small ghost" type="button" data-act="restore-project"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
+    `</span>`;
+  row.querySelector('[data-act="restore-project"]').addEventListener('click', async () => {
+    await window.stint.restoreProject({ id: p.id });
     await renderClients();
   });
   return row;
@@ -2597,6 +2714,16 @@ function openProjectAdd(list, c) {
     void renderClients();
   });
 }
+
+// §12 R13 — the Clients view's "show archived" toggle. Flips showArchived and repaints, so the
+// archived records (and their Restore buttons) appear or hide. aria-pressed + the label track state.
+$('show-archived').addEventListener('click', () => {
+  showArchived = !showArchived;
+  const btn = $('show-archived');
+  btn.setAttribute('aria-pressed', String(showArchived));
+  btn.textContent = showArchived ? 'Hide archived' : 'Show archived';
+  void renderClients();
+});
 
 // Add a client from the Clients view header: an inline name field committed over the
 // addClient IPC tt's `client add` uses. The button is #add-client-btn — distinct from the

@@ -601,6 +601,46 @@ describe('GOLD: client / project rename + archive (§07)', () => {
   });
 });
 
+describe('GOLD: client / project / tag restore — reversible hide (§07, §12 R13)', () => {
+  it('restores a client back into the active list', () => {
+    tt(['client', 'add', 'Initech']);
+    tt(['client', 'archive', 'Initech']);
+    expect(JSON.parse(tt(['client', 'ls', '--json']).out)).toEqual([]);
+    expect(tt(['client', 'restore', 'Initech']).out).toBe('restored');
+    const active = JSON.parse(tt(['client', 'ls', '--json']).out);
+    expect(active.some((c: { name: string; archived: boolean }) => c.name === 'Initech' && !c.archived)).toBe(true);
+  });
+
+  it('restores a project back into the active list', () => {
+    tt(['client', 'add', 'Client A']);
+    tt(['project', 'add', 'API', '--client', 'Client A']);
+    tt(['project', 'archive', 'API']);
+    expect(JSON.parse(tt(['project', 'ls', '--json']).out)).toEqual([]);
+    expect(tt(['project', 'restore', 'API']).out).toBe('restored');
+    expect(JSON.parse(tt(['project', 'ls', '--json']).out).map((p: { name: string }) => p.name)).toContain('API');
+  });
+
+  it('restores a tag back into the active list', () => {
+    tt(['tag', 'add', 'billing']);
+    tt(['tag', 'archive', 'billing']);
+    expect(JSON.parse(tt(['tag', 'ls', '--json']).out)).toEqual([]);
+    expect(tt(['tag', 'restore', 'billing']).out).toBe('restored');
+    expect(JSON.parse(tt(['tag', 'ls', '--json']).out).map((t: { name: string }) => t.name)).toContain('billing');
+  });
+
+  it('refuses to restore a project whose owning client is still archived (§12 R13 edge)', () => {
+    tt(['client', 'add', 'Client A']);
+    tt(['project', 'add', 'API', '--client', 'Client A']);
+    tt(['project', 'archive', 'API']);
+    tt(['client', 'archive', 'Client A']);
+    const r = tt(['project', 'restore', 'API']);
+    // Non-zero exit, a message naming the archived client, and the project stays archived.
+    expect(r.code).not.toBe(0);
+    expect(r.err).toMatch(/Client A/);
+    expect(JSON.parse(tt(['project', 'ls', '--json']).out)).toEqual([]);
+  });
+});
+
 describe('GOLD: reference-data / sleep / settings --json shapes (§07, §10a, §14)', () => {
   // The emitList families (client/project/tag ls) and the raw settings object (config ls) each
   // carry a published JSON Schema beside serialize.ts's five shapes; here each producer's --json

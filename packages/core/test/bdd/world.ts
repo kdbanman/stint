@@ -232,6 +232,18 @@ export interface World {
   archiveProject(name: string): void;
   activeProjectNames(): string[];
   /**
+   * §12 R13 — restore (un-archive) reference data: the reverse of archive, returning the record
+   * to every picker/filter. Surface-neutral: CoreWorld store.restoreClient/restoreProject/
+   * restoreTag; CliWorld `tt client|project|tag restore`. attemptRestoreProject reports whether
+   * the surface REFUSED the restore — the §12 R13 edge: a project whose owning client is still
+   * archived cannot be restored (an active project under a hidden client is unselectable), and
+   * both surfaces refuse it identically (§17 R8).
+   */
+  restoreClient(name: string): void;
+  restoreProject(name: string): void;
+  restoreTag(name: string): void;
+  attemptRestoreProject(name: string): { rejected: boolean };
+  /**
    * §12 R10 — tag management at parity with `tt tag` / the Clients view's tag strip.
    * Surface-neutral: CoreWorld calls store.addTag/renameTag/archiveTag/listTags directly;
    * CliWorld shells `tt tag add/rename/archive` and reads `tt tag ls --json`. addTag is the
@@ -676,6 +688,29 @@ export class CoreWorld implements World {
   }
   activeProjectNames(): string[] {
     return this.store.listProjects().map((p) => p.name);
+  }
+  restoreClient(name: string): void {
+    const c = this.store.findClientByName(name);
+    if (!c) throw new Error(`no client "${name}"`);
+    this.store.restoreClient(c.id);
+  }
+  restoreProject(name: string): void {
+    const p = this.store.findProjectByName(name);
+    if (!p) throw new Error(`no project "${name}"`);
+    this.store.restoreProject(p.id);
+  }
+  restoreTag(name: string): void {
+    const t = this.store.findTagByName(name);
+    if (!t) throw new Error(`no tag "${name}"`);
+    this.store.restoreTag(t.id);
+  }
+  attemptRestoreProject(name: string): { rejected: boolean } {
+    try {
+      this.restoreProject(name);
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
   }
   addTag(name: string): void {
     this.store.addTag(name);
@@ -1363,6 +1398,19 @@ export class CliWorld implements World {
   activeProjectNames(): string[] {
     const r = this.tt(['project', 'ls', '--json']);
     return (JSON.parse(r.out || '[]') as { name: string }[]).map((p) => p.name);
+  }
+  restoreClient(name: string): void {
+    this.tt(['client', 'restore', name]);
+  }
+  restoreProject(name: string): void {
+    this.tt(['project', 'restore', name]);
+  }
+  restoreTag(name: string): void {
+    this.tt(['tag', 'restore', name]);
+  }
+  attemptRestoreProject(name: string): { rejected: boolean } {
+    // §12 R13 edge — `tt project restore` exits non-zero when the owning client is still archived.
+    return { rejected: this.tt(['project', 'restore', name]).code !== 0 };
   }
   addTag(name: string): void {
     this.tt(['tag', 'add', name]);

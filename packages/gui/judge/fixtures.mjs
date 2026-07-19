@@ -641,9 +641,13 @@ export function overlapWriteState() {
  * mock's listClients/listProjects (it does not read the UiState days), so the snapshot is
  * the empty-state shape; the client/project data lives in the mock methods below.
  */
+// §12 R13 — `referenced` marks a client any entry points at (archiving it hides history, so it
+// takes the two-step confirm). Acme is referenced (its projects carry the LIST_ENTRIES work);
+// Globex is not, so archiving it is direct — which is what the CLIENTS_VIEW scene drives, while
+// the CONFIRM_ARCHIVE scene drives the referenced Acme through the two-step gate.
 const CLIENTS = [
-  { id: 1, name: 'Acme', archived: false },
-  { id: 2, name: 'Globex', archived: false },
+  { id: 1, name: 'Acme', archived: false, referenced: true },
+  { id: 2, name: 'Globex', archived: false, referenced: false },
 ];
 const PROJECTS = {
   1: [
@@ -1641,8 +1645,10 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // the rename/archive affordances send the entity id over the same IPC tt uses.
       __CLIENTS__: ${JSON.stringify(CLIENTS)},
       __PROJECTS__: ${JSON.stringify(PROJECTS)},
-      listClients: function () { return Promise.resolve(this.__CLIENTS__); },
-      listProjects: function (p) { return Promise.resolve((this.__PROJECTS__[(p && p.clientId)] || [])); },
+      // §12 R13: includeArchived merges the archived-record store so the "show archived" toggle
+      // can reveal the hidden clients/projects (parity with tt ... ls --archived).
+      listClients: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__CLIENTS__.concat(this.__ARCHIVED_STORE__.clients) : this.__CLIENTS__); },
+      listProjects: function (p) { const cid = p && p.clientId; const base = this.__PROJECTS__[cid] || []; const arch = (p && p.includeArchived) ? this.__ARCHIVED_STORE__.projects.filter((x) => x.clientId === cid) : []; return Promise.resolve(base.concat(arch)); },
       // The mutators are STATEFUL like production core: they record their payload (so a scene
       // §12 R21: under __REJECT_WRITES__ the rename mutators reject like core refusing a
       // colliding name (§13 UNIQUE COLLATE NOCASE), so the inline rename form surfaces it
@@ -1655,7 +1661,17 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); this.__FIRE_CHANGED__(); return Promise.resolve(c); },
       addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); this.__FIRE_CHANGED__(); return Promise.resolve(pr); },
       renameClient: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a client named that already exists')); window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
-      archiveClient: function (p) { window.__ARCHIVED_CLIENT__ = p; this.__CLIENTS__ = this.__CLIENTS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      // §12 R13: __ARCHIVE_CLIENT_CALLS__ records EACH archiveClient invocation so the
+      // CONFIRM_ARCHIVE scene can assert the stray first click fired ZERO and only the explicit
+      // confirm fired exactly ONE. restoreClient/Project/Tag re-add the record (archived → active).
+      archiveClient: function (p) { window.__ARCHIVED_CLIENT__ = p; (window.__ARCHIVE_CLIENT_CALLS__ ||= []).push(p); this.__CLIENTS__ = this.__CLIENTS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      restoreClient: function (p) { window.__RESTORED_CLIENT__ = p; const c = this.__ARCHIVED_STORE__.clients.find((x) => x.id === (p && p.id)); if (c) { c.archived = false; this.__CLIENTS__.push(c); this.__ARCHIVED_STORE__.clients = this.__ARCHIVED_STORE__.clients.filter((x) => x.id !== c.id); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      restoreProject: function (p) { window.__RESTORED_PROJECT__ = p; const pr = this.__ARCHIVED_STORE__.projects.find((x) => x.id === (p && p.id)); if (pr) { pr.archived = false; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); this.__ARCHIVED_STORE__.projects = this.__ARCHIVED_STORE__.projects.filter((x) => x.id !== pr.id); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      restoreTag: function (p) { window.__RESTORED_TAG__ = p; const t = this.__ARCHIVED_STORE__.tags.find((x) => x.id === (p && p.id)); if (t) { t.archived = false; this.__TAGS__.push(t); this.__ARCHIVED_STORE__.tags = this.__ARCHIVED_STORE__.tags.filter((x) => x.id !== t.id); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      // §12 R13: the archived-record store the "show archived" listing reads from and Restore
+      // moves back. Seeded with one archived client/project/tag so the RESTORE_ARCHIVED scene can
+      // reveal them (listClients/listProjects/listTags with includeArchived) and Restore each.
+      __ARCHIVED_STORE__: { clients: [{ id: 3, name: 'Initech', archived: true, referenced: true }], projects: [{ id: 13, clientId: 1, name: 'Legacy', archived: true, referenced: true }], tags: [{ id: 3, name: 'stale', archived: true }] },
       renameProject: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a project named that already exists')); window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveProject: function (p) { window.__ARCHIVED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { this.__PROJECTS__[k] = this.__PROJECTS__[k].filter((x) => x.id !== (p && p.id)); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R10: the tag-management channels the Clients view's tag strip drives (parity
@@ -1664,7 +1680,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // here so window.stint exposes EVERY IPC channel — the PARITY_REACH deterministic
       // sub-fact (every channel has a window.stint method) reads this surface.
       __TAGS__: [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }],
-      listTags: function () { return Promise.resolve(this.__TAGS__); },
+      listTags: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__TAGS__.concat(this.__ARCHIVED_STORE__.tags) : this.__TAGS__); },
       addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
       renameTag: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a tag named that already exists')); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },

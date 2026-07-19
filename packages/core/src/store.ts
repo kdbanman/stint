@@ -1086,13 +1086,46 @@ export class Store {
     this.db.prepare('UPDATE client SET archived = 1 WHERE id = ?').run(id);
   }
 
+  /**
+   * §07 / §12 R13 — un-archive a client (the reverse of archiveClient), making it selectable
+   * again in every picker/filter. Uniqueness spans archived records (§07 R03), so a name held
+   * by this archived client was never free for a duplicate — restoring can therefore never
+   * create a name collision. Parity: the GUI Clients view's Restore button and `tt client restore`.
+   */
+  restoreClient(id: number): void {
+    this.db.prepare('UPDATE client SET archived = 0 WHERE id = ?').run(id);
+  }
+
   listClients(includeArchived = false): Client[] {
+    // §12 R13 — the set of client ids any entry references (carries history). One query, then a
+    // membership test per row, so the archive-confirm scope is decided without an N+1 walk.
+    const referenced = this.referencedClientIds();
     const sql =
       'SELECT id, name, archived FROM client' +
       (includeArchived ? '' : ' WHERE archived = 0') +
       ' ORDER BY name';
     return (this.db.prepare(sql).all() as { id: number; name: string; archived: number }[]).map(
-      (r) => ({ id: r.id, name: r.name, archived: r.archived === 1 }),
+      (r) => ({ id: r.id, name: r.name, archived: r.archived === 1, referenced: referenced.has(r.id) }),
+    );
+  }
+
+  private referencedClientIds(): Set<number> {
+    return new Set(
+      (
+        this.db.prepare('SELECT DISTINCT client_id AS id FROM entry WHERE client_id IS NOT NULL').all() as {
+          id: number;
+        }[]
+      ).map((r) => r.id),
+    );
+  }
+
+  private referencedProjectIds(): Set<number> {
+    return new Set(
+      (
+        this.db.prepare('SELECT DISTINCT project_id AS id FROM entry WHERE project_id IS NOT NULL').all() as {
+          id: number;
+        }[]
+      ).map((r) => r.id),
     );
   }
 
@@ -1171,7 +1204,32 @@ export class Store {
     this.db.prepare('UPDATE project SET archived = 1 WHERE id = ?').run(id);
   }
 
+  /**
+   * §07 / §12 R13 — un-archive a project. Edge: a project whose OWNING CLIENT is still archived
+   * cannot be restored — an active project under a hidden client would be an inconsistent state
+   * (the client is absent from every picker, so its project could never be selected). Refuse it
+   * with a message naming the archived client, steering the user to restore the client first.
+   * Parity: the GUI Clients view's Restore button and `tt project restore`.
+   */
+  restoreProject(id: number): void {
+    this.tx(() => {
+      const row = this.db
+        .prepare(
+          'SELECT c.name AS clientName, c.archived AS clientArchived FROM project p JOIN client c ON c.id = p.client_id WHERE p.id = ?',
+        )
+        .get(id) as { clientName: string; clientArchived: number } | undefined;
+      if (!row) throw new StoreError(`no project with id ${id}`);
+      if (row.clientArchived === 1) {
+        throw new StoreError(
+          `cannot restore this project while its client "${row.clientName}" is archived — restore the client first`,
+        );
+      }
+      this.db.prepare('UPDATE project SET archived = 0 WHERE id = ?').run(id);
+    });
+  }
+
   listProjects(clientId?: number, includeArchived = false): Project[] {
+    const referenced = this.referencedProjectIds();
     const where: string[] = [];
     const params: unknown[] = [];
     if (clientId !== undefined) {
@@ -1190,7 +1248,13 @@ export class Store {
         name: string;
         archived: number;
       }[]
-    ).map((r) => ({ id: r.id, clientId: r.client_id, name: r.name, archived: r.archived === 1 }));
+    ).map((r) => ({
+      id: r.id,
+      clientId: r.client_id,
+      name: r.name,
+      archived: r.archived === 1,
+      referenced: referenced.has(r.id),
+    }));
   }
 
   findProjectByName(name: string, clientId?: number): Project | null {
@@ -1251,6 +1315,15 @@ export class Store {
 
   archiveTag(id: number): void {
     this.db.prepare('UPDATE tag SET archived = 1 WHERE id = ?').run(id);
+  }
+
+  /**
+   * §07 / §12 R13 — un-archive a tag (the reverse of archiveTag), returning it to the pickers.
+   * Uniqueness spans archived records (§07 R03), so restoring can never collide. Parity: the GUI
+   * Clients view's Restore button on an archived tag and `tt tag restore`.
+   */
+  restoreTag(id: number): void {
+    this.db.prepare('UPDATE tag SET archived = 0 WHERE id = ?').run(id);
   }
 
   findTagByName(name: string): Tag | null {

@@ -29,6 +29,35 @@ Feature: Reference-data management
     Then project "Platform" is not in the active project list
     And the entry "spec" is for "Acme Corp / Platform"
 
+  Scenario: Archiving then restoring a client round-trips it back to the active list
+    # PRD §07 / §12 R13 — archive hides; restore is the reverse, returning the record to every
+    # picker/filter. This is the round-trip that makes "reversible hide" true rather than
+    # aspirational. The Clients view's Restore button, parity with `tt client restore`.
+    Given I add a client "Acme Corp"
+    When I archive client "Acme Corp"
+    Then client "Acme Corp" is not in the active client list
+    When I restore client "Acme Corp"
+    Then client "Acme Corp" is in the active client list
+
+  Scenario: Archiving then restoring a project round-trips it back to the active list
+    # PRD §07 / §12 R13 — the per-project Restore, parity with `tt project restore`.
+    Given a client "Acme Corp" with project "Platform"
+    When I archive project "Platform"
+    Then project "Platform" is not in the active project list
+    When I restore project "Platform"
+    Then project "Platform" is in the active project list
+
+  Scenario: Restoring a project whose client is still archived is refused
+    # PRD §12 R13 edge — an active project under a hidden client would be unselectable, so core
+    # refuses the restore (naming the archived client), steering the user to restore the client
+    # first. Both surfaces refuse identically (§17 R8).
+    Given a client "Acme Corp" with project "Platform"
+    And I archive project "Platform"
+    And I archive client "Acme Corp"
+    When I try to restore project "Platform"
+    Then the reference-data change is rejected
+    And project "Platform" is not in the active project list
+
   Scenario: Creating a tag lists it in the active tag list
     # PRD §12 R10 — the Tags strip's Add-tag, the explicit manage-it-first path (tags are
     # otherwise born on the fly when first applied). Parity with `tt tag add`.
@@ -48,6 +77,14 @@ Feature: Reference-data management
     Given I add a tag "deprecated"
     When I archive tag "deprecated"
     Then tag "deprecated" is not in the active tag list
+
+  Scenario: Archiving then restoring a tag round-trips it back to the active list
+    # PRD §07 / §12 R13 — restore returns the tag to the pickers, parity with `tt tag restore`.
+    Given I add a tag "billing"
+    When I archive tag "billing"
+    Then tag "billing" is not in the active tag list
+    When I restore tag "billing"
+    Then tag "billing" is in the active tag list
 
   Scenario: Create then rename then archive a tag runs the full lifecycle
     # PRD §12 R10 — the whole tag lifecycle the Tags strip exposes, end to end.
