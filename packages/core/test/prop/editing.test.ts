@@ -43,6 +43,90 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
     store.close();
   });
 
+  // §05 R06 / §03 / §16 (issue #61) — the running entry's start is editable, but NOT to a future
+  // instant. A future start freezes the derived count-up at 00:00:00 and would brick Stop; core
+  // refuses it (rejected rather than stored, §14) and leaves the open row exactly as it was.
+  it('refuses moving the running entry start AFTER now, leaving the open row intact (#61)', () => {
+    const store = mem();
+    const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T17:00:00Z' });
+    const future = '2026-05-10T19:00:00Z'; // an hour past the NOW clock (18:00)
+    expect(() => store.edit(open.id, { startUtc: future })).toThrow(StoreError);
+    const after = store.getEntry(open.id)!;
+    expect(after.startUtc).toBe('2026-05-10T17:00:00Z'); // unchanged — nothing stored
+    expect(after.endUtc).toBeNull(); // still running
+    expect(store.status().running).toBe(true);
+    store.close();
+  });
+
+  // §05 R06 (#61) — the guard is bounded at now, not before it: editing the start to exactly now,
+  // or a hair before, is still a legitimate amendment of the running row.
+  it('allows moving the running entry start up to (and including) now (#61)', () => {
+    const store = mem();
+    const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T09:00:00Z' });
+    store.edit(open.id, { startUtc: NOW }); // NOW is the fixed clock — the boundary
+    expect(store.getEntry(open.id)!.startUtc).toBe(NOW);
+    store.edit(open.id, { startUtc: '2026-05-10T17:59:59Z' }); // one second before now
+    expect(store.getEntry(open.id)!.startUtc).toBe('2026-05-10T17:59:59Z');
+    store.close();
+  });
+
+  // §05 R06 (#61) — the refused future-start edit never wedges the timer: after the rejection the
+  // open row is unchanged, so Stop still closes it into a valid span (end ≥ start).
+  it('a refused future-start edit leaves the running entry stoppable — no wedge (#61)', () => {
+    const store = mem();
+    const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T17:00:00Z' });
+    expect(() => store.edit(open.id, { startUtc: '2026-05-10T20:00:00Z' })).toThrow(StoreError);
+    const { value: stopped } = store.stop({ atUtc: NOW });
+    expect(stopped.endUtc).toBe(NOW);
+    expect(Date.parse(stopped.endUtc!)).toBeGreaterThanOrEqual(Date.parse(stopped.startUtc));
+    store.close();
+  });
+
+  // §05 R01 / §03 (#61) — start()'s atomic close obeys Stop's rule. Backdating a new Start BEFORE
+  // the open entry's start would close the open row at an instant before it began — a corrupted
+  // end < start. The whole start() transaction must fail loudly and roll back, never persisting
+  // the corruption (the closeOpenEntry guard shares stop()'s validation).
+  it("start()'s atomic close never persists an end before the start (#61)", () => {
+    const store = mem();
+    const { value: open } = store.start({ description: 'running', atUtc: '2026-05-10T10:00:00Z' });
+    expect(() => store.start({ description: 'oops', atUtc: '2026-05-10T09:00:00Z' })).toThrow(
+      StoreError,
+    );
+    // The transaction rolled back: the original open row is intact and still the only entry.
+    const entries = store.listEntries();
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.id).toBe(open.id);
+    expect(entries[0]!.startUtc).toBe('2026-05-10T10:00:00Z');
+    expect(entries[0]!.endUtc).toBeNull();
+    store.close();
+  });
+
+  // §05 R06 / §03 (#61) — a PROPERTY over forward AND backward shifts of the RUNNING entry's
+  // start, straddling `now`: any shift that lands strictly AFTER now is refused (nothing stored);
+  // any shift at-or-before now is accepted and stored to the second. Generated across both sides
+  // so the boundary is proven exactly at now, not on hand-picked instants — and the open row is
+  // never stopped by the edit either way.
+  test.prop([fc.integer({ min: -7200, max: 7200 })])(
+    'a running-start shift is stored iff it lands at-or-before now (#61)',
+    (deltaS) => {
+      const store = mem();
+      try {
+        const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T12:00:00Z' });
+        const target = new Date(Date.parse(NOW) + deltaS * 1000).toISOString().replace('.000Z', 'Z');
+        if (deltaS > 0) {
+          expect(() => store.edit(open.id, { startUtc: target })).toThrow(StoreError);
+          expect(store.getEntry(open.id)!.startUtc).toBe('2026-05-10T12:00:00Z'); // unchanged
+        } else {
+          store.edit(open.id, { startUtc: target }); // at-or-before now — accepted
+          expect(store.getEntry(open.id)!.startUtc).toBe(target);
+        }
+        expect(store.getEntry(open.id)!.endUtc).toBeNull(); // the edit never stops the open row
+      } finally {
+        store.close();
+      }
+    },
+  );
+
   it('editing a time that overlaps another entry warns but is allowed (§06 R4)', () => {
     const store = mem();
     store.add({ description: 'a', fromUtc: '2026-05-10T09:00:00Z', toUtc: '2026-05-10T11:00:00Z' });

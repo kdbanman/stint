@@ -101,6 +101,81 @@ describe('PROP: one open entry under any op sequence (§03, §05 R01, §17 R2)',
   );
 });
 
+// PRD §03 / §05 R01 / §05 R06 (issue #61) — the SPAN-VALIDITY law, beside the at-most-one-open
+// law above: every persisted CLOSED entry has end ≥ its start, under ANY op sequence that
+// includes shifting the running entry's start forward (even past now) and backdating a new Start
+// before the open row began. The bug this guards: a future start on the open row both froze the
+// count-up AND let start()'s atomic close write an end < start, persisting a corrupted span. The
+// two guards under test — edit() refuses a future open start; closeOpenEntry obeys Stop's rule —
+// mean no closed row can ever end before it started, whichever ops happen to succeed.
+describe('PROP: every persisted closed entry has end ≥ its start (§03, §05 R01/R06)', () => {
+  type EOp =
+    | { kind: 'start' }
+    | { kind: 'stop' }
+    | { kind: 'startBackdatedS'; backS: number } // start a new entry backdated backS seconds
+    | { kind: 'editStartDeltaS'; deltaS: number } // shift the open start deltaS from now (±)
+    | { kind: 'gap'; ms: number };
+
+  const eOpArb: fc.Arbitrary<EOp> = fc.oneof(
+    fc.constant<EOp>({ kind: 'start' }),
+    fc.constant<EOp>({ kind: 'stop' }),
+    fc.integer({ min: 1, max: 7200 }).map((backS): EOp => ({ kind: 'startBackdatedS', backS })),
+    fc.integer({ min: -7200, max: 7200 }).map((deltaS): EOp => ({ kind: 'editStartDeltaS', deltaS })),
+    fc.integer({ min: 1000, max: 3_600_000 }).map((ms): EOp => ({ kind: 'gap', ms })),
+  );
+
+  test.prop([fc.array(eOpArb, { maxLength: 40 })])(
+    'no closed entry ever ends before it started, whatever succeeds',
+    (ops) => {
+      const { clock, advance } = mutableClock(BASE);
+      const store = Store.openMemory(clock);
+      try {
+        for (const op of ops) {
+          try {
+            switch (op.kind) {
+              case 'start':
+                store.start({});
+                break;
+              case 'stop':
+                store.stop({});
+                break;
+              case 'startBackdatedS':
+                // A new Start backdated BEFORE the open row's start reaches closeOpenEntry with
+                // at < open.start — the atomic-close guard must refuse it (never a corrupt close).
+                store.start({ atUtc: new Date(clock().getTime() - op.backS * 1000).toISOString() });
+                break;
+              case 'editStartDeltaS': {
+                const open = store.openEntry();
+                if (open) {
+                  // deltaS > 0 lands the running start in the FUTURE — edit() must refuse it.
+                  const target = new Date(clock().getTime() + op.deltaS * 1000).toISOString();
+                  store.edit(open.id, { startUtc: target });
+                }
+                break;
+              }
+              case 'gap':
+                advance(op.ms);
+                break;
+            }
+          } catch (err) {
+            // Domain refusals (future start, corrupt atomic close, nothing running) are expected;
+            // the law must hold regardless of which ops the guards let through.
+            if (!(err as Error).name.includes('StoreError')) throw err;
+          }
+          // The law: NO closed entry ever ends before it started.
+          for (const e of store.listEntries()) {
+            if (e.endUtc !== null) {
+              expect(Date.parse(e.endUtc)).toBeGreaterThanOrEqual(Date.parse(e.startUtc));
+            }
+          }
+        }
+      } finally {
+        store.close();
+      }
+    },
+  );
+});
+
 // §20 R02 — the at-most-one-open invariant given DB-level teeth. The property above proves the
 // invariant holds along the TRANSACTIONAL core path (start/stop under BEGIN IMMEDIATE). This one
 // proves the storage-layer backstop INDEPENDENTLY of the human-readable triggers: with the
