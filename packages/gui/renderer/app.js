@@ -100,6 +100,13 @@ function clearOverlapBanner() {
   banner.textContent = '';
   banner.hidden = true;
   banner.classList.remove('error');
+  // §12 R21: the Timer-view Stop/toggle rejection region is cleared on the same beat — a good
+  // write reloads through load() → clearOverlapBanner(), so the block dismisses from both views.
+  const timerWarn = $('timer-warning');
+  if (timerWarn) {
+    timerWarn.textContent = '';
+    timerWarn.hidden = true;
+  }
 }
 
 // §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
@@ -125,15 +132,24 @@ function clearFormError(el) {
   el.hidden = true;
 }
 
-// §12 R21: a Stop/toggle (timer card + Timer view) rejection has no open form to hold it, so it
-// routes to the existing overlap-banner AREA — reworded as a block (the .error modifier flips the
-// chrome from the warn advisory to the --danger notice). load() clears it on the next good write.
+// §12 R21: a Stop/toggle (timer card + Timer view) rejection has no open form to hold it, so it is
+// surfaced WHERE THE ACTION LIVES. The Stop/toggle controls are on the Timer view, so it paints the
+// Timer-view region (#timer-warning, beside the card's controls — the "Stop appears dead" surface,
+// issue #61) AND the Entries-view overlap-banner area (reworded as a block via .error) so the block
+// is visible in whichever view is active. load() clears both on the next good write.
 function showWriteError(err) {
+  const message = errMessage(err);
+  const timerWarn = $('timer-warning');
+  if (timerWarn) {
+    timerWarn.textContent = message;
+    timerWarn.hidden = false;
+  }
   const banner = $('overlap-banner');
-  if (!banner) return;
-  banner.textContent = errMessage(err);
-  banner.classList.add('error');
-  banner.hidden = false;
+  if (banner) {
+    banner.textContent = message;
+    banner.classList.add('error');
+    banner.hidden = false;
+  }
 }
 
 // The compact glance summary line shared by render() (data repaint) and tick() (per-second

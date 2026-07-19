@@ -433,6 +433,15 @@ describe('renderer static contract', () => {
     // rejection to showWriteError — a Stop the core refuses is never a silent no-op.
     const toggleCatches = app.match(/\} catch \(err\) \{\s*\n\s*showWriteError\(err\);/g) || [];
     expect(toggleCatches.length).toBeGreaterThanOrEqual(2);
+    // §12 R21 / issue #61: the Stop/toggle rejection is VISIBLE on the Timer view where the action
+    // lives — an announced #timer-warning region beside the card controls. showWriteError paints
+    // BOTH it and the Entries-view banner mirror, and clearOverlapBanner (called by load() on the
+    // next good write) tears both down.
+    expect(html).toMatch(/id="timer-warning"[^>]*role="status"[^>]*aria-live/);
+    const showWriteBody = app.slice(app.indexOf('function showWriteError('), app.indexOf('function ', app.indexOf('function showWriteError(') + 1));
+    expect(showWriteBody).toMatch(/timer-warning/);
+    expect(showWriteBody).toMatch(/overlap-banner/);
+    expect(app).toMatch(/function clearOverlapBanner\(\)[\s\S]*timer-warning/);
     // The popover's toggle is likewise guarded (the tray twin of the banner-routed rejection).
     const pop = read('popover.js');
     const popHtml = read('popover.html');

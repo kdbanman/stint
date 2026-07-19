@@ -59,6 +59,10 @@
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
   .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Stop is
+     surfaced on the Timer view, beside the card controls (the "Stop appears dead" surface, #61). */
+  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid;margin-top:12px}
+  .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
   .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
@@ -203,6 +207,9 @@
             <button class="iconbtn" title="Save as favorite"><svg class="ic"><use href="#i-star"/></svg></button>
           </div>
         </div>
+        <!-- §12 R21: a Stop the core refuses (e.g. a stop time before the entry started, #61) is
+             surfaced HERE on the Timer view, announced — never a dead-looking Stop button. -->
+        <div class="msg err">Stop time is before the entry started — the timer is still running.</div>
         <div class="r-edit">
           <div><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
           <div><label class="lab">Client</label><input class="field" value="Globex Corp"></div>
