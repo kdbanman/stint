@@ -1002,14 +1002,23 @@ export class Store {
   // ---------------------------------------------------------- reference data
 
   addClient(name: string): Client {
-    const id = Number(
-      (this.db.prepare('INSERT INTO client(name) VALUES(?)').run(name).lastInsertRowid),
-    );
-    return { id, name, archived: false };
+    // §07 R03: client names are unique case-insensitively, spanning archived records — the same
+    // guard favorites/saved reports use, so a duplicate can never silently split one client's
+    // billing across two rows. Atomic so the check and the insert can't straddle another write.
+    return this.tx(() => {
+      this.assertNameFree('client', name, 'client');
+      const id = Number(this.db.prepare('INSERT INTO client(name) VALUES(?)').run(name).lastInsertRowid);
+      return { id, name, archived: false };
+    });
   }
 
   renameClient(id: number, name: string): void {
-    this.db.prepare('UPDATE client SET name = ? WHERE id = ?').run(name, id);
+    // §07 R03: reject a rename onto a DIFFERENT client's name (case-insensitively, archived
+    // included); a case-only self-rename (`acme` → `Acme`) resolves to this same row and passes.
+    this.tx(() => {
+      this.assertRenameFree('client', name, id, 'client');
+      this.db.prepare('UPDATE client SET name = ? WHERE id = ?').run(name, id);
+    });
   }
 
   archiveClient(id: number): void {
@@ -1073,6 +1082,9 @@ export class Store {
     // Atomic: the client-exists check and the insert must not straddle another write.
     return this.tx(() => {
       this.requireClient(clientId);
+      // §07 R03: project names are unique PER CLIENT (case-insensitively, archived included) —
+      // the same name under a different client is free. Guard scoped to the owning client.
+      this.assertNameFree('project', name, 'project', clientId);
       const id = Number(
         this.db.prepare('INSERT INTO project(client_id, name) VALUES(?, ?)').run(clientId, name)
           .lastInsertRowid,
@@ -1082,7 +1094,16 @@ export class Store {
   }
 
   renameProject(id: number, name: string): void {
-    this.db.prepare('UPDATE project SET name = ? WHERE id = ?').run(name, id);
+    // §07 R03: reject a rename onto a sibling project's name under the SAME client (case-
+    // insensitively, archived included); a case-only self-rename resolves to this row and passes.
+    this.tx(() => {
+      const row = this.db.prepare('SELECT client_id FROM project WHERE id = ?').get(id) as
+        | { client_id: number }
+        | undefined;
+      if (!row) throw new StoreError(`no project with id ${id}`);
+      this.assertRenameFree('project', name, id, 'project', row.client_id);
+      this.db.prepare('UPDATE project SET name = ? WHERE id = ?').run(name, id);
+    });
   }
 
   archiveProject(id: number): void {
@@ -1135,23 +1156,36 @@ export class Store {
   }
 
   /**
-   * Create a tag (or return the existing one of that name) and hand back the row (§07,
-   * §12 R10). Tags are otherwise born on the fly when first applied to an entry; this is
-   * the explicit, manage-it-first path the Clients view and `tt tag add` drive. Wraps the
-   * same `ensureTag` the entry-tagging path uses, so a name never yields two tag rows.
+   * Create a tag and hand back the row (§07, §12 R10) — the explicit, manage-it-first path the
+   * Clients view and `tt tag add` drive. This is the "add" verb, so it REJECTS a name already
+   * taken (case-insensitively, archived included) per §07 R03, exactly as `addClient` /
+   * `addProject` / favorites do. The distinct on-the-fly path (tagging an entry via `applyTags`
+   * → `ensureTag`) instead RESOLVES a case-variant name to the existing tag — that is
+   * §07 R03's case-insensitive resolution, and it stays a silent reuse, never an error.
    */
   addTag(name: string): Tag {
-    const id = this.ensureTag(name.trim());
-    const r = this.db.prepare('SELECT id, name, archived FROM tag WHERE id = ?').get(id) as {
-      id: number;
-      name: string;
-      archived: number;
-    };
-    return { id: r.id, name: r.name, archived: r.archived === 1 };
+    const trimmed = name.trim();
+    return this.tx(() => {
+      this.assertNameFree('tag', trimmed, 'tag');
+      const id = Number(this.db.prepare('INSERT INTO tag(name) VALUES(?)').run(trimmed).lastInsertRowid);
+      const r = this.db.prepare('SELECT id, name, archived FROM tag WHERE id = ?').get(id) as {
+        id: number;
+        name: string;
+        archived: number;
+      };
+      return { id: r.id, name: r.name, archived: r.archived === 1 };
+    });
   }
 
   renameTag(id: number, name: string): void {
-    this.db.prepare('UPDATE tag SET name = ? WHERE id = ?').run(name, id);
+    // §07 R03: reject a rename onto a DIFFERENT tag's name (case-insensitively, archived
+    // included). The tag table's own UNIQUE is binary-collated, so it would let a case-variant
+    // rename create a second tag — this app-level guard closes that; a case-only self-rename
+    // resolves to this same row and passes.
+    this.tx(() => {
+      this.assertRenameFree('tag', name.trim(), id, 'tag');
+      this.db.prepare('UPDATE tag SET name = ? WHERE id = ?').run(name.trim(), id);
+    });
   }
 
   archiveTag(id: number): void {
@@ -1347,17 +1381,28 @@ export class Store {
   // ---------------------------------------------------------------- internals
 
   /**
-   * The one case-insensitive name lookup the named-entity tables (favorite, report) share —
-   * `SELECT * FROM <table> WHERE name = ? COLLATE NOCASE`. Centralising it means the unique
-   * cross-surface name handle resolves the SAME way for every such entity, instead of the
-   * SELECT being copy-pasted per entity (the favorites and saved-reports groups had it twice).
-   * `table` is an internal literal (never user input), so interpolating it carries no injection
-   * risk; the name is bound. Each caller keeps its own typed row cast and its own error strings.
+   * The one case-insensitive name lookup every named table (favorite, report, and the
+   * reference-data client / project / tag) shares — `SELECT * FROM <table> WHERE name = ?
+   * COLLATE NOCASE`. Centralising it means the unique cross-surface name handle resolves the
+   * SAME way for every such entity, instead of the SELECT being copy-pasted per entity. The
+   * lookup deliberately does NOT filter on `archived`, so uniqueness spans archived records
+   * (§07 R03): a new or renamed name may not collide with an archived one. `clientId` scopes
+   * the project lookup — project names are unique PER CLIENT, so the same name under a
+   * different client is free. `table` is an internal literal (never user input), so
+   * interpolating it carries no injection risk; the name is bound. Callers keep their own casts.
    */
-  private findByNameCI<R>(table: 'favorite' | 'report', name: string): R | undefined {
-    return this.db.prepare(`SELECT * FROM ${table} WHERE name = ? COLLATE NOCASE`).get(name) as
-      | R
-      | undefined;
+  private findByNameCI<R>(
+    table: 'favorite' | 'report' | 'client' | 'project' | 'tag',
+    name: string,
+    clientId?: number,
+  ): R | undefined {
+    let sql = `SELECT * FROM ${table} WHERE name = ? COLLATE NOCASE`;
+    const params: unknown[] = [name];
+    if (clientId !== undefined) {
+      sql += ' AND client_id = ?';
+      params.push(clientId);
+    }
+    return this.db.prepare(sql).get(...(params as never[])) as R | undefined;
   }
 
   /** Resolve a numeric-id row from a named-entity table (favorite, report) by primary key. */
@@ -1374,30 +1419,51 @@ export class Store {
   }
 
   /**
-   * Guard the case-insensitive name uniqueness every named entity (favorite, report) shares on
-   * CREATE: throw a StoreError if `name` is already taken. `label` is the noun for the message
-   * ("favorite" / "saved report"). One guard so the two groups can't drift on how a duplicate
-   * is detected or worded — a duplicate is always an error, never a silent overwrite.
+   * Turn a name clash into the StoreError message every guard shares. When the clashing row is
+   * ARCHIVED (§07 R03 uniqueness spans archived records), the message points at the archived
+   * record and steers the user to Restore it rather than mint a duplicate. Favorite / report
+   * rows carry no `archived` column, so the clause is client/project/tag-only in practice.
    */
-  private assertNameFree(table: 'favorite' | 'report', name: string, label: string): void {
-    if (this.findByNameCI(table, name)) {
-      throw new StoreError(`a ${label} named "${name}" already exists`);
-    }
+  private duplicateNameError(label: string, name: string, clash: { archived?: number }): string {
+    return clash.archived === 1
+      ? `an archived ${label} named "${name}" already exists — Restore it instead of creating a duplicate`
+      : `a ${label} named "${name}" already exists`;
+  }
+
+  /**
+   * Guard the case-insensitive name uniqueness every named entity shares on CREATE (favorite,
+   * report, and the reference-data client / project / tag): throw a StoreError if `name` is
+   * already taken. `label` is the noun for the message ("favorite" / "saved report" / "client"
+   * …); `clientId` scopes the project check to its owning client (§07 R03 per-client project
+   * names). One guard so no group can drift on how a duplicate is detected or worded — a
+   * duplicate is always an error, never a silent overwrite.
+   */
+  private assertNameFree(
+    table: 'favorite' | 'report' | 'client' | 'project' | 'tag',
+    name: string,
+    label: string,
+    clientId?: number,
+  ): void {
+    const clash = this.findByNameCI<{ archived?: number }>(table, name, clientId);
+    if (clash) throw new StoreError(this.duplicateNameError(label, name, clash));
   }
 
   /**
    * The RENAME twin of assertNameFree: throw if `newName` is held by a DIFFERENT row than
-   * `currentId` (renaming an entity to its own current name is a no-op, not a clash).
+   * `currentId` (renaming an entity to its own current name — including a case-only self-rename
+   * like `deep` → `Deep`, which resolves to the same row — is a no-op, not a clash). `clientId`
+   * scopes the project check to its owning client.
    */
   private assertRenameFree(
-    table: 'favorite' | 'report',
+    table: 'favorite' | 'report' | 'client' | 'project' | 'tag',
     newName: string,
     currentId: number,
     label: string,
+    clientId?: number,
   ): void {
-    const clash = this.findByNameCI<{ id: number }>(table, newName);
+    const clash = this.findByNameCI<{ id: number; archived?: number }>(table, newName, clientId);
     if (clash && clash.id !== currentId) {
-      throw new StoreError(`a ${label} named "${newName}" already exists`);
+      throw new StoreError(this.duplicateNameError(label, newName, clash));
     }
   }
 
