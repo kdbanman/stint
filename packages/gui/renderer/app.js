@@ -591,9 +591,18 @@ async function commitLiveEdit() {
   if (!Number.isFinite(id)) return;
   const patch = liveEditPatch(strip);
   if (Object.keys(patch).length === 0) return; // a no-op edit sends nothing
-  const ack = await window.stint.edit({ id, patch });
-  await load();
-  applyAck(ack);
+  // §12 R21 / issue #61: a live start edit the core REFUSES (a future start on the running row —
+  // start > now freezes the count-up and bricks Stop) must be surfaced where it was attempted,
+  // never a silently swallowed rejected promise (the "Stop appears dead" wedge). Route it to the
+  // Timer-view region via showWriteError; the open row is untouched so the count-up keeps running
+  // and the user can retype a valid start — the timer never wedges.
+  try {
+    const ack = await window.stint.edit({ id, patch });
+    await load();
+    applyAck(ack);
+  } catch (err) {
+    showWriteError(err);
+  }
 }
 function scheduleLiveEdit() {
   if (liveEditTimer) clearTimeout(liveEditTimer);

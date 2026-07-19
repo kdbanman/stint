@@ -476,6 +476,15 @@ export class Store {
       if (after.end_utc !== null && Date.parse(after.end_utc) <= Date.parse(after.start_utc)) {
         throw new StoreError('entry end must be after its start');
       }
+      // §05 R06 / §03 / §16 (issue #61) — the running entry's start is editable, but it may not
+      // be moved AFTER now. An open entry accrues elapsed from its start to the present, so a
+      // future start freezes the count-up at 00:00:00 AND bricks Stop (stop()'s 'stop ≥ start'
+      // rule can never hold when closing at now). Rejected rather than stored (§14), matching
+      // stop()'s guard wording. Closed spans are bounded by the end > start rule above; only the
+      // OPEN row is bounded against now (a backfilled/closed row legitimately lives in the past).
+      if (after.end_utc === null && Date.parse(after.start_utc) > Date.parse(toUtc(this.now()))) {
+        throw new StoreError('start time is in the future');
+      }
       for (const t of patch.addTags ?? []) this.applyTags(id, [t]);
       for (const t of patch.removeTags ?? []) this.removeTag(id, t);
       return this.withOverlapWarning(id);
@@ -1553,10 +1562,19 @@ export class Store {
   }
 
   private closeOpenEntry(at: string): void {
-    const open = this.db.prepare('SELECT id FROM entry WHERE end_utc IS NULL').get() as
-      | { id: number }
+    const open = this.db.prepare('SELECT id, start_utc FROM entry WHERE end_utc IS NULL').get() as
+      | { id: number; start_utc: string }
       | undefined;
-    if (open) this.db.prepare('UPDATE entry SET end_utc = ? WHERE id = ?').run(at, open.id);
+    if (!open) return;
+    // §05 R01 / §03 (issue #61) — start()'s atomic close obeys Stop's rule: a closed entry's end
+    // must be ≥ its start. If closing at `at` would put the end BEFORE the start (a stuck open
+    // row whose start sits ahead of `at`), fail loudly rather than write a corrupted span — the
+    // whole start() transaction rolls back and the bad open row is surfaced (§12 R21) so the user
+    // fixes it first. Clamping is NOT acceptable: it would silently rewrite the user's start.
+    if (Date.parse(at) < Date.parse(open.start_utc)) {
+      throw new StoreError('stop time is before the entry started');
+    }
+    this.db.prepare('UPDATE entry SET end_utc = ? WHERE id = ?').run(at, open.id);
   }
 
   private resolveClientProject(opts: {
