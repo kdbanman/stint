@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2144,28 +2144,86 @@ async function main() {
     );
   });
 
-  // MERGE_NOCONFLICT — selecting two contiguous entries that AGREE on client and
-  // billable and clicking Merge fires the merge DIRECTLY, with no conflict prompt
-  // (nothing to resolve); the payload carries just the ids (§06 R3).
+  // MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
+  // clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
+  // no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
+  // "no unnecessary question" counterpart, NOT proof that the agree path never gates: a
+  // NON-contiguous agreeing selection still gates (MERGE_GAP). The payload carries just the ids
+  // (no winnerId, no allowGap), §06 R3.
   await withPage(browser, mergeAgreeState(), 'index.html', async (page) => {
     await page.check('.entry[data-id="50"] .sel');
     await page.check('.entry[data-id="51"] .sel');
     await page.click('#merge-go');
     const probe = await page.evaluate(() => ({
-      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      conflictPromptShown: !!document.querySelector('.editor.conflict-prompt'),
+      gapConfirmShown: !!document.querySelector('.confirm-gap'),
       merged: window.__MERGED__,
     }));
     const ok =
-      !probe.promptShown &&
+      !probe.conflictPromptShown &&
+      !probe.gapConfirmShown &&
       !!probe.merged &&
       Array.isArray(probe.merged.ids) &&
       probe.merged.ids.length === 2 &&
-      probe.merged.winnerId === undefined;
+      probe.merged.winnerId === undefined &&
+      probe.merged.allowGap === undefined;
     record(
       'MERGE_NOCONFLICT',
       ok,
-      `agreeing selection merges with no prompt: ${JSON.stringify(probe)}`,
+      `contiguous agreeing selection merges with no conflict prompt and no gap confirm: ${JSON.stringify(probe)}`,
       'main-merge-conflict.png',
+    );
+  });
+
+  // MERGE_GAP — selecting two entries that AGREE on client/billable but are NOT contiguous (a
+  // positive gap sits between them) and clicking Merge must NOT fold silently: the Merge button
+  // first swaps into a confirm stating the resulting span/duration (§06 R3, §12 R13 precedent).
+  // Only the explicit "Merge anyway" tap commits, and the payload then carries allowGap so core
+  // accepts the fold. This is the regression guard for the filed bug — a gapped merge that
+  // fabricated the whole gap as billable time with one click, no confirmation.
+  await withPage(browser, mergeGapState(), 'index.html', async (page) => {
+    await page.check('.entry[data-id="60"] .sel');
+    await page.check('.entry[data-id="61"] .sel');
+    await page.click('#merge-go');
+    // The gap gate arms in place of a silent fold: a .confirm-gap affordance, no merge yet.
+    await page.waitForSelector('.confirm-gap', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-merge-gap.png'), fullPage: true });
+    const armed = await page.evaluate(() => {
+      const gate = document.querySelector('.confirm-gap');
+      return {
+        confirmShown: !!gate,
+        // The confirm names the non-contiguity, the resulting span duration (09:00→15:00 =
+        // 06:00:00) and the fabricated gap (10:00→14:00 = 04:00:00). Durations are
+        // timezone-independent; the wall-clock endpoints are localized, so we assert the spans.
+        namesGap: /not contiguous/i.test(gate?.textContent ?? ''),
+        statesSpan: /06:00:00/.test(gate?.textContent ?? ''),
+        statesGapDuration: /04:00:00/.test(gate?.textContent ?? ''),
+        hasConfirmBtn: !!gate?.querySelector('[data-act="confirm-gap"]'),
+        hasCancelBtn: !!gate?.querySelector('[data-act="cancel-gap"]'),
+        // Nothing committed yet — a stray first click fabricates no billable time.
+        merged: window.__MERGED__,
+      };
+    });
+    // The explicit confirm commits the fold WITH the gap acknowledged.
+    await page.click('[data-act="confirm-gap"]');
+    const after = await page.evaluate(() => ({ merged: window.__MERGED__ }));
+    const ok =
+      armed.confirmShown &&
+      armed.namesGap &&
+      armed.statesSpan &&
+      armed.statesGapDuration &&
+      armed.hasConfirmBtn &&
+      armed.hasCancelBtn &&
+      !armed.merged &&
+      !!after.merged &&
+      Array.isArray(after.merged.ids) &&
+      after.merged.ids.length === 2 &&
+      after.merged.allowGap === true;
+    record(
+      'MERGE_GAP',
+      ok,
+      `gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed=${JSON.stringify(armed)} after=${JSON.stringify(after)}`,
+      'main-merge-gap.png',
     );
   });
 
