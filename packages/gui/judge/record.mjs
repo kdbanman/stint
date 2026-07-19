@@ -1999,12 +1999,26 @@ const RECIPES = {
       // keystroke (scheduleLiveEdit); the fake clock is PAUSED at JUDGE_NOW, so a real wait never
       // fires that timer — advance the pinned clock past the debounce window to flush the commit.
       // The post-commit load() repaints the card to the new text, and it stays .running (no stop).
+      await page.evaluate(() => {
+        window.__EDITED__ = null; // isolate this commit so the desc-only assertion is self-contained
+      });
       await page.fill('#live-edit #le-desc', 'auth refactor v2');
       // Advance the pinned clock past the 500ms debounce window to flush the single commit.
       await tickClock(1, 0);
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'auth refactor v2',
       );
+      // §12 R14/R15 (issue #68) — the DESC-ONLY negative probe: a description edit ALONE commits a
+      // patch carrying ONLY `description`. The untouched Start field is BYTE-compared to its seed
+      // (never reparsed to a spurious instant — even a DST fall-back-ambiguous wall-clock stays
+      // untouched), so NO startUtc; NO endUtc (the open row never closes); NO billable (untouched).
+      // This IS the assertion — the recording fails if the strip's converged diff ever leaks a time
+      // key on a desc-only edit (the gap this scene's positive-only drag path used to leave open).
+      await page.waitForFunction(() => {
+        const p = window.__EDITED__ && window.__EDITED__.patch;
+        return !!p && p.description === 'auth refactor v2' &&
+          !('startUtc' in p) && !('endUtc' in p) && !('billable' in p);
+      });
       await page.waitForSelector('#timer-card.running');
       await wait(page, 600);
 

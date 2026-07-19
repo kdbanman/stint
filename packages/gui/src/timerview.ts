@@ -16,6 +16,12 @@
  *      ONLY the changed fields and, crucially, NEVER an endUtc: editing the open entry must not
  *      close it (PRD §05 R6), so a startUtc / attribute change keeps the row open and the timer
  *      running. The endUtc field is structurally absent from the returned patch.
+ *   2b. liveEditStripPatch — the strip's SEED-VS-FIELD diff (issue #68), the step that decides
+ *      which of the strip's three inline fields (description / start / billable) the user actually
+ *      touched before liveEditPatch assembles the patch. The start-time gate is a BYTE-comparison
+ *      of the current field string vs its seeded string — never a reparse-and-compare — so an
+ *      untouched field yields no key; this lives HERE (not only in the untestable renderer mirror)
+ *      so GOLD pins it, and it removes a DST-ambiguous reparse misfire (see the function comment).
  *   3. favoriteRows — project FavoriteView[] into the rail's row models (name + a one-line
  *      client/project/billable meta + the resume handle = the favorite's name), so the rail and
  *      `tt fav ls` show the same template set.
@@ -122,6 +128,65 @@ export function liveEditPatch(input: LiveEditInput): EditPatch {
   if (input.removeTags && input.removeTags.length) patch.removeTags = input.removeTags;
   // Intentionally NO endUtc — see the doc comment. The open row stays open.
   return patch;
+}
+
+/**
+ * The live-edit-running strip's three inline fields as the renderer reads them straight off the
+ * DOM: for each field, the string/flag renderLiveEdit SEEDED and the field's CURRENT value. The
+ * renderer hands over the raw strings so the seed-vs-field diff — which decides what the user
+ * actually changed — lives here where GOLD pins it, not only in the untestable renderer mirror
+ * (issue #68). Tags + client/project are NOT here: the strip routes those to the unified editor.
+ */
+export interface LiveEditStripInput {
+  /** #le-desc: the seeded description string (running.description ?? '') and the field's current value. */
+  seedDescription: string;
+  description: string;
+  /** #le-start: the seeded start string (localInputValue of the running start) and the field's current text. */
+  seedStart: string;
+  start: string;
+  /** The running entry's stored start instant (ISO-8601 UTC) — the reparse double-guard's reference. */
+  startUtc: string;
+  /** #le-bill: the seeded and current billable checkbox state. */
+  seedBillable: boolean;
+  billable: boolean;
+}
+
+/**
+ * Diff the live-edit-running strip's three inline fields against their seeds, then build the
+ * minimal edit patch through liveEditPatch — the strip's converged diff (issue #68). The
+ * governing rule (glossary 'Stored truth', §12 R14/R15): a field the user did NOT touch
+ * contributes NO key, so a desc-only edit sends `description` and nothing else.
+ *
+ * The start-time gate is a BYTE-comparison of the current field string vs the seeded string —
+ * NOT a reparse-and-compare — mirroring the §12 R15 editor rule (app.js seeded-string check). An
+ * untouched start is byte-identical to its seed and is never even parsed. That is load-bearing on
+ * a DST fall-back-ambiguous wall-clock (e.g. the second 1:30 AM in America/Chicago): reparsing the
+ * untouched seed string resolves to the OTHER of the two instants and would emit a spurious startUtc
+ * shifted an hour on an otherwise desc-only edit; byte-comparison skips it entirely. Only when the
+ * field text genuinely differs is it parsed — an unparseable half-typed instant contributes nothing
+ * (the NaN guard), and a change resolving to the SAME stored instant is dropped by the double-guard.
+ * As with liveEditPatch, the patch NEVER carries endUtc: editing the open row keeps it open (§05 R6).
+ */
+export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
+  const changed: LiveEditInput = {};
+  // Description: normalise both sides (a blank field is a cleared label = null) and compare, so an
+  // untouched field — where the seed already equals the running description — yields no key.
+  const nextDesc = input.description.trim() === '' ? null : input.description;
+  const seedDesc = input.seedDescription === '' ? null : input.seedDescription;
+  if (nextDesc !== seedDesc) changed.description = nextDesc;
+  // Start: BYTE-comparison first (the #68 fix). An untouched field is byte-identical to its seed
+  // and is skipped WITHOUT parsing, so a DST-ambiguous wall-clock never reparses to the wrong
+  // instant. Only a genuinely edited, parseable value resolving to a DIFFERENT stored instant rides.
+  if (input.start && input.start !== input.seedStart) {
+    const parsed = new Date(input.start);
+    if (!isNaN(parsed.getTime())) {
+      const nextIso = parsed.toISOString();
+      if (nextIso !== new Date(input.startUtc).toISOString()) changed.startUtc = nextIso;
+    }
+  }
+  // Billable: a direct boolean seed-vs-current.
+  if (input.billable !== input.seedBillable) changed.billable = input.billable;
+  return liveEditPatch(changed);
 }
 
 /** One favorites-rail row: the name, a one-line meta, and the resume handle (= the name). */

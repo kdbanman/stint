@@ -1870,6 +1870,15 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         return Promise.resolve(def ? { ...def } : null);
       },
       saveReport: function (p) {
+        // §12 R21 / §09 R01: core refuses an inverted absolute range (From after To) — it only
+        // ever resolves to an empty window, so it is rejected rather than stored. The mock mirrors
+        // that guard on the plain-date pair (lexical YYYY-MM-DD compare, the same order the UTC
+        // window carries; same-day from == to is VALID, ≤ not <) so the REPORTS_VIEW inverted-range
+        // refusal fact drives a real rejection. Rejects BEFORE recording, so nothing persists.
+        const rs = p && p.rangeSpec;
+        if (rs && rs.kind === 'absolute' && rs.fromDate && rs.toDate && rs.fromDate > rs.toDate) {
+          return Promise.reject(new Error('report range end must not be before its start'));
+        }
         // §12 R21 / §13: core refuses a duplicate report name (UNIQUE COLLATE NOCASE). The mock
         // mirrors that guard (case-insensitive) so the REPORTS_VIEW duplicate-name refusal fact
         // drives a real rejection — it rejects BEFORE recording, so a refused save leaves no trace.

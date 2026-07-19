@@ -39,6 +39,7 @@ import { matchesQuery } from './entrylist.js';
 import {
   resolveSavedRange,
   resolveReportDef,
+  rangeSpecOrderError,
   type SavedReport,
   type SavedReportInput,
   type SavedReportPatch,
@@ -679,6 +680,12 @@ export class Store {
    */
   saveReport(input: SavedReportInput): SavedReport {
     return this.tx(() => {
+      // §09 R01/R08 — an absolute range whose From is after its To only ever resolves to an
+      // empty window, so it is rejected rather than stored (mirroring add()'s from<to guard
+      // and §14's working-hours start<end). Same-day from == to is valid (≤, not the entry
+      // rule's strict <). A relative preset never inverts, so it is exempt.
+      const orderError = rangeSpecOrderError(input.rangeSpec);
+      if (orderError) throw new StoreError(orderError);
       this.assertNameFree('report', input.name, 'saved report');
       const createdUtc = toUtc(this.now());
       const spec = input.rangeSpec;
@@ -737,6 +744,12 @@ export class Store {
   editReport(name: string, patch: SavedReportPatch): SavedReport {
     return this.tx(() => {
       const row = this.requireReport(name);
+      // §09 R01/R08 — the same from ≤ to guard as saveReport: an amendment that would leave
+      // the definition with an inverted absolute window is rejected rather than stored.
+      if (patch.rangeSpec !== undefined) {
+        const orderError = rangeSpecOrderError(patch.rangeSpec);
+        if (orderError) throw new StoreError(orderError);
+      }
       const sets: string[] = [];
       const params: unknown[] = [];
       if (patch.rangeSpec !== undefined) {
