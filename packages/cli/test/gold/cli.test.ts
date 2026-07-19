@@ -13,6 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
+import { Store } from '@stint/core';
 import { descriptionCell } from '../../src/format.js';
 // ajv-formats ships a CJS default export; cast to its callable shape for NodeNext.
 const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
@@ -566,14 +567,20 @@ describe('GOLD: client / project rename + archive (§07)', () => {
     tt(['client', 'add', 'Acme']);
     expect(tt(['client', 'rename', 'Acme', 'Acme Corp']).code).toBe(0);
     const list = JSON.parse(tt(['client', 'ls', '--json']).out);
+    const validate = validator('client.schema.json');
+    expect(validate(list) || validate.errors).toBe(true);
     expect(list.map((c: { name: string }) => c.name)).toContain('Acme Corp');
   });
 
   it('archives a client (hidden by default, shown with --archived)', () => {
     tt(['client', 'add', 'Old']);
     tt(['client', 'archive', 'Old']);
-    expect(JSON.parse(tt(['client', 'ls', '--json']).out)).toEqual([]);
+    const validate = validator('client.schema.json');
+    const active = JSON.parse(tt(['client', 'ls', '--json']).out);
+    expect(validate(active) || validate.errors).toBe(true);
+    expect(active).toEqual([]);
     const archived = JSON.parse(tt(['client', 'ls', '--archived', '--json']).out);
+    expect(validate(archived) || validate.errors).toBe(true);
     expect(archived.some((c: { name: string; archived: boolean }) => c.name === 'Old' && c.archived)).toBe(true);
   });
 
@@ -582,8 +589,75 @@ describe('GOLD: client / project rename + archive (§07)', () => {
     tt(['project', 'add', 'API', '--client', 'Client A']);
     expect(tt(['project', 'rename', 'API', 'Public API']).code).toBe(0);
     tt(['project', 'archive', 'Public API']);
-    expect(JSON.parse(tt(['project', 'ls', '--json']).out)).toEqual([]);
-    expect(JSON.parse(tt(['project', 'ls', '--archived', '--json']).out).length).toBe(1);
+    const validate = validator('project.schema.json');
+    const active = JSON.parse(tt(['project', 'ls', '--json']).out);
+    expect(validate(active) || validate.errors).toBe(true);
+    expect(active).toEqual([]);
+    const archived = JSON.parse(tt(['project', 'ls', '--archived', '--json']).out);
+    expect(validate(archived) || validate.errors).toBe(true);
+    expect(archived.length).toBe(1);
+    // The project carries its owning client's id (a project belongs to exactly one client).
+    expect(typeof archived[0].client_id).toBe('number');
+  });
+});
+
+describe('GOLD: reference-data / sleep / settings --json shapes (§07, §10a, §14)', () => {
+  // The emitList families (client/project/tag ls) and the raw settings object (config ls) each
+  // carry a published JSON Schema beside serialize.ts's five shapes; here each producer's --json
+  // is validated against its schema, so drift fails the general contract, not just one frozen
+  // example. Client/project validation lives beside the rename/archive snapshots above; this
+  // block covers the families with no prior gold test (tag, sleep, settings) plus the empty lists.
+
+  it('tag ls --json validates against tag.schema.json (populated, archived, empty)', () => {
+    const validate = validator('tag.schema.json');
+    // Fresh DB → valid empty list.
+    const empty = tt(['tag', 'ls', '--json']);
+    expect(empty.out).toBe('[]');
+    expect(validate(JSON.parse(empty.out)) || validate.errors).toBe(true);
+    tt(['tag', 'add', 'deep']);
+    tt(['tag', 'add', 'ci']);
+    tt(['tag', 'archive', 'ci']);
+    const active = JSON.parse(tt(['tag', 'ls', '--json']).out);
+    expect(validate(active) || validate.errors).toBe(true);
+    expect(active.map((t: { name: string }) => t.name)).toEqual(['deep']);
+    const all = JSON.parse(tt(['tag', 'ls', '--archived', '--json']).out);
+    expect(validate(all) || validate.errors).toBe(true);
+    expect(all.some((t: { name: string; archived: boolean }) => t.name === 'ci' && t.archived)).toBe(true);
+  });
+
+  it('sleep ls --json validates against sleep.schema.json (a recorded span) and empty', () => {
+    const validate = validator('sleep.schema.json');
+    // Fresh DB → valid empty list.
+    const empty = tt(['sleep', 'ls', '--json']);
+    expect(empty.out).toBe('[]');
+    expect(validate(JSON.parse(empty.out)) || validate.errors).toBe(true);
+    // The CLI has no verb to record a sleep span (spans come from the GUI powerMonitor / launch
+    // gap reconcile), so — exactly as the BDD CliWorld does — a transient Store on the same db
+    // seeds one, then `tt sleep ls --json` reads it back.
+    seed(); // one closed entry, id 1
+    const store = Store.open({ path: db });
+    store.recordSleepSpan(1, '2026-06-24T09:30:00Z', '2026-06-24T10:00:00Z', 'gap');
+    store.close();
+    const rows = JSON.parse(tt(['sleep', 'ls', '--json']).out);
+    expect(validate(rows) || validate.errors).toBe(true);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 1,
+      description: 'auth refactor',
+      spans: [{ sleep_utc: '2026-06-24T09:30:00Z', wake_utc: '2026-06-24T10:00:00Z', source: 'gap' }],
+    });
+  });
+
+  it('config ls --json validates against settings.schema.json (defaults and after a set)', () => {
+    const validate = validator('settings.schema.json');
+    const defaults = JSON.parse(tt(['config', 'ls', '--json']).out);
+    expect(validate(defaults) || validate.errors).toBe(true);
+    // A non-default value inside the strict stored domain still validates.
+    tt(['config', 'set', 'picker_window_mode', 'around_now']);
+    tt(['config', 'set', 'rounding_increment_min', '30']);
+    const updated = JSON.parse(tt(['config', 'ls', '--json']).out);
+    expect(validate(updated) || validate.errors).toBe(true);
+    expect(updated).toMatchObject({ pickerWindowMode: 'around_now', roundingIncrementMin: 30 });
   });
 });
 
