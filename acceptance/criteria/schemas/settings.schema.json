@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/settings.json",
+  "title": "tt config ls --json",
+  "description": "The settings object (PRD §14), emitted raw by `tt config ls --json` — the camelCase `@stint/core` Settings snapshot `store.settings()` returns, every key defaulted. Unlike the other snake_case scripting shapes this dumps the core type verbatim, so the keys are camelCase. Values are as strict as `config set` writes them; a corrupt stored value reads back as the documented default (§14).",
+  "type": "object",
+  "required": [
+    "rounding",
+    "roundingIncrementMin",
+    "weekStart",
+    "firstCheckinMin",
+    "checkinIntervalMin",
+    "globalHotkey",
+    "dateFormat",
+    "workingHoursStart",
+    "workingHoursEnd",
+    "pickerWindowMode",
+    "pickerAroundHours",
+    "backupRetention"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "rounding": { "type": "boolean" },
+    "roundingIncrementMin": { "enum": [6, 10, 15, 30] },
+    "weekStart": { "enum": ["monday", "sunday"] },
+    "firstCheckinMin": { "type": "integer", "minimum": 1 },
+    "checkinIntervalMin": { "type": "integer", "minimum": 1 },
+    "globalHotkey": { "type": "string", "minLength": 1 },
+    "dateFormat": { "enum": ["system", "iso"] },
+    "workingHoursStart": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+    "workingHoursEnd": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
+    "pickerWindowMode": { "enum": ["working_hours", "around_now"] },
+    "pickerAroundHours": { "type": "integer", "minimum": 1, "maximum": 24 },
+    "backupRetention": { "type": "integer", "minimum": 0 }
+  }
+}
