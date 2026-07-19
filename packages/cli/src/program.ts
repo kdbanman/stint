@@ -9,6 +9,7 @@ import { Command } from 'commander';
 import { writeFileSync } from 'node:fs';
 import {
   Store,
+  StoreError,
   APP_VERSION,
   parseTime,
   formatDuration,
@@ -388,6 +389,10 @@ export function buildProgram(deps: Deps): Command {
     .argument('<ids...>', 'entry ids')
     .option('--client <name>', 'resolve client conflicts to this client')
     .option('--project <name>', 'resolve project conflicts to this project')
+    .option(
+      '--allow-gap',
+      'merge a non-contiguous selection, folding the gap into billable time',
+    )
     .action((ids: string[], opts) => {
       withStore((store) => {
         const mergeOpts: Parameters<Store['merge']>[1] = {};
@@ -399,7 +404,19 @@ export function buildProgram(deps: Deps): Command {
           mergeOpts.clientId = resolved.clientId;
           if (opts.project) mergeOpts.projectId = resolved.projectId;
         }
-        const res = store.merge(ids.map(Number), mergeOpts);
+        // §06 R3: a gapped selection is refused by core unless acknowledged. Non-interactive
+        // (no TTY prompt, matching --client/--project): on refusal, exit non-zero and point at
+        // the flag that acknowledges the gap.
+        if (opts.allowGap) mergeOpts.allowGap = true;
+        let res;
+        try {
+          res = store.merge(ids.map(Number), mergeOpts);
+        } catch (err) {
+          if (err instanceof StoreError && !opts.allowGap && /not contiguous/.test(err.message)) {
+            throw new CliError(`${err.message} Pass --allow-gap.`);
+          }
+          throw err;
+        }
         printWarnings(io, res.warnings);
         io.out(`merged into entry ${res.value.id} · ${formatDuration(res.value.rawSeconds)}`);
       });

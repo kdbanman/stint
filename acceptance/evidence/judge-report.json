@@ -132,8 +132,14 @@
     {
       "item": "MERGE_NOCONFLICT",
       "pass": true,
-      "justification": "agreeing selection merges with no prompt: {\"promptShown\":false,\"merged\":{\"ids\":[50,51]}}",
+      "justification": "contiguous agreeing selection merges with no conflict prompt and no gap confirm: {\"conflictPromptShown\":false,\"gapConfirmShown\":false,\"merged\":{\"ids\":[50,51]}}",
       "screenshot": "main-merge-conflict.png"
+    },
+    {
+      "item": "MERGE_GAP",
+      "pass": true,
+      "justification": "gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed={\"confirmShown\":true,\"namesGap\":true,\"statesSpan\":true,\"statesGapDuration\":true,\"hasConfirmBtn\":true,\"hasCancelBtn\":true} after={\"merged\":{\"ids\":[60,61],\"allowGap\":true}}",
+      "screenshot": "main-merge-gap.png"
     },
     {
       "item": "DELETE_CONFIRM",
