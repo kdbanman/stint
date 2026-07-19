@@ -704,6 +704,84 @@ async function main() {
     await page.close();
   }
 
+  // FUTURE_START_GUARD — §05 R06 / §03 / §16 (issue #61): a MISTYPED FUTURE start on the running
+  // entry must be REFUSED and surfaced WHERE it was typed, never the silent wedge the bug caused
+  // ("Stop appears dead"). Driving the REAL renderer over the future-start guard mock (edit rejects
+  // a start > now exactly as core's edit() does) plus the state-mutating toggle: typing a next-day
+  // instant into #le-start and letting the debounced live-edit commit fire raises the announced
+  // #timer-warning region with the reason and records NOTHING (window.__EDITED__ stays null) — the
+  // live-edit strip stays present and Stop is still there (the count-up never froze). Correcting the
+  // start to a valid PAST instant then commits cleanly (the warning clears, __EDITED__ carries the
+  // corrected startUtc with NO endUtc — the open row stays open), and clicking Stop flips the status
+  // to idle: the timer never wedged. Pinned to timezoneId 'UTC' so the typed instants map determin-
+  // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
+  {
+    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(runningState()), { futureStartGuard: true, toggleStarts: true }));
+    await page.goto(fileUrl('index.html'));
+
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
+    // Type a FUTURE instant (the next calendar day, unambiguously after the pinned now) into the
+    // running Start field and let the debounced live-edit commit (scheduleLiveEdit, 500ms) fire.
+    await page.fill('#le-start', '2026-06-25T10:00');
+    await page.clock.fastForward(600);
+    await page.waitForSelector('#timer-warning', { state: 'visible' });
+    const refused = await page.evaluate(() => {
+      const t = document.querySelector('#timer-warning');
+      const rect = t?.getBoundingClientRect();
+      const strip = document.querySelector('#live-edit');
+      const stop = document.querySelector('#timer-stop');
+      return {
+        // The Timer-view region is genuinely on-screen (in the active view), announced, and carries
+        // the reason — the surface the mistyped start was typed on (#61's "Stop appears dead" spot).
+        shown: !!t && !t.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && t.textContent.trim().length > 0,
+        announced: t?.getAttribute('role') === 'status' && t?.hasAttribute('aria-live'),
+        message: t?.textContent.trim() ?? '',
+        notWritten: window.__EDITED__ == null, // the refused future start recorded nothing
+        stillRunning: !!strip && !strip.hidden, // the live-edit strip persists — the count-up never froze
+        stopStillThere: !!stop && !stop.hidden, // Stop is still present (no wedge)
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-future-start-reject.png'), fullPage: true });
+
+    // NO WEDGE (correcting): retype a valid PAST instant — the commit succeeds, load() clears the
+    // warning, and window.__EDITED__ now carries the corrected startUtc with NO endUtc (row open).
+    await page.fill('#le-start', '2026-06-24T22:00');
+    await page.clock.fastForward(600);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const corrected = await page.evaluate(() => {
+      const t = document.querySelector('#timer-warning');
+      const p = window.__EDITED__ && window.__EDITED__.patch;
+      return {
+        warningCleared: !t || t.hidden || t.textContent.trim().length === 0,
+        editedStart: p ? p.startUtc : null,
+        noEnd: p ? !('endUtc' in p) : false,
+      };
+    });
+
+    // NO WEDGE (stoppable): click Stop — the toggle resolves and the status flips to idle.
+    await page.click('#timer-stop');
+    await page.waitForFunction(() => window.__STATE__ && window.__STATE__.status && window.__STATE__.status.running === false);
+    const stopped = await page.evaluate(() => ({
+      idle: !!(window.__STATE__ && window.__STATE__.status) && window.__STATE__.status.running === false,
+    }));
+
+    const ok =
+      refused.shown && refused.announced && refused.notWritten && refused.stillRunning && refused.stopStillThere &&
+      corrected.warningCleared && corrected.editedStart === '2026-06-24T22:00:00.000Z' && corrected.noEnd &&
+      stopped.idle;
+    record(
+      'FUTURE_START_GUARD',
+      ok,
+      `future-reject=${JSON.stringify(refused)} corrected=${JSON.stringify(corrected)} stopped=${JSON.stringify(stopped)}`,
+      'timer-future-start-reject.png',
+    );
+    await page.close();
+  }
+
   // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
   // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
   // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance

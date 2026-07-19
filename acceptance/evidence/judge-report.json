@@ -52,6 +52,12 @@
       "screenshot": "timer-view-full.png"
     },
     {
+      "item": "FUTURE_START_GUARD",
+      "pass": true,
+      "justification": "future-reject={\"shown\":true,\"announced\":true,\"message\":\"start time is in the future\",\"notWritten\":true,\"stillRunning\":true,\"stopStillThere\":true} corrected={\"warningCleared\":true,\"editedStart\":\"2026-06-24T22:00:00.000Z\",\"noEnd\":true} stopped={\"idle\":true}",
+      "screenshot": "timer-future-start-reject.png"
+    },
+    {
       "item": "FAVORITES_RAIL",
       "pass": true,
       "justification": "rail {\"rows\":3,\"names\":[\"Standup\",\"Deep work\",\"Admin / email\"],\"hasResume\":true,\"hasKebab\":true,\"hasPin\":true,\"emptyHidden\":true,\"callableChannels\":[\"listFavorites\",\"pinFavorite\",\"renameFavorite\",\"unpinFavorite\",\"startFavorite\"]}; resume fired [{\"name\":\"Standup\"}]; inline pin {\"payload\":{\"name\":\"Invoice prep\",\"fromEntryId\":\"open\"},\"names\":[\"Standup\",\"Deep work\",\"Admin / email\",\"Invoice prep\"]}; inline rename {\"payload\":{\"ref\":93,\"name\":\"Client invoicing\"},\"names\":[\"Standup\",\"Deep work\",\"Admin / email\",\"Client invoicing\"]}; empty {\"shown\":true,\"text\":\"No favorites yet. Pin the running timer, or run tt fav add.\"}",
