@@ -89,10 +89,10 @@ the requirement states the intent; the pin is the criterion below).
 
 | PRD | Clause | Method | Status |
 |-----|--------|--------|--------|
-| §04 | Renderer reaches data only through the core (no direct DB / filesystem / network) | **GOLD** (static renderer guard) | **gap** — the renderer wiring is tested; the isolation posture itself is not yet asserted (#35) |
+| §04 | Renderer reaches data only through the core (no direct DB / filesystem / network) | **GOLD** (static renderer guard) | covered — wiring in `gui/test/renderer-static.test.ts`; the isolation posture itself (context isolation on, no node integration, preload bridge, renderer speaks only `ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35) |
 | §05 | Favorite names unique (case-insensitive); unknown-favorite ops fail safely | **GOLD** · BDD | covered — `core/test/gold/contracts.test.ts` (favorite duplicate-name / unknown-ref rejection), `features/favorites.feature` |
 | §07 | Reference-data names unique (case-insensitive); lists exclude archived by default | **GOLD** · BDD | covered — duplicate-name rejection in `core/test/gold/contracts.test.ts`; archive-default in `features/overlap_and_editing.feature` |
-| §14 | Settings validate against allowed values; retention 0 = keep all (negative ⇒ 0) | **GOLD** · PROP | validation covered (`core/test/gold/contracts.test.ts`, `settings.ts` descriptors); **retention-0 semantics gap** (#35) |
-| §20 R08 | Additive, idempotent migrations; no down-migration; existing rows preserved | **GOLD** | version-stamp covered (`SCHEMA_VERSION === 3`, fresh-DB `user_version`); **idempotence / old-DB-preservation gap** (#35) |
+| §14 | Settings validate against allowed values; retention 0 = keep all (negative ⇒ 0) | **GOLD** · PROP | covered — validation (`core/test/gold/contracts.test.ts`, `settings.ts` descriptors); retention-0-keeps-all and negative-⇒-0 semantics in `core/test/gold/backup-retention.test.ts` (#35) |
+| §20 R08 | Additive, idempotent migrations; no down-migration; existing rows preserved | **GOLD** | covered — fresh-DB version stamp (`SCHEMA_VERSION === 3`, `user_version`) plus older-DB row-preservation and idempotent re-open in `core/test/gold/migration.test.ts` (#35) |
 
-The three gaps above are real requirements that currently lack a verifying test; they are tracked in issue #35 rather than left implied here.
+The three rows above were the last open gaps; issue #35 closed them by adding the verifying tests now cited in each row.
