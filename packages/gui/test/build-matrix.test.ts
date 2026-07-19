@@ -346,3 +346,93 @@ describe('GOLD — packaging is smoke-tested on PRs, not just at release (§19 R
     expect(smokeMacBody).toMatch(/\.app\b/);
   });
 });
+
+/**
+ * GOLD — §05 automatic-inventory rows stay wired in CI (process.html §05, R08; R05 "protect
+ * the guard").
+ *
+ * process.html §05 lists the checks that run automatically on every PR / merge to main. That
+ * doc is the spec; a row naming a check with no real ci.yml step is a phantom — a false green
+ * in the process spec itself (process.html §02 R01/R08). Before this guard, only three of the
+ * automatic rows were pinned to real CI steps, so a second phantom could appear undetected.
+ *
+ * This freezes the map by static inspection of the checked-in ci.yml (no build/network): every
+ * automatic §05 row points at a concrete step, and — the R08 core of issue #80 — the two
+ * evidence-drift gates live in the jobs that regenerate their evidence, each scoped to the one
+ * byte-reproducible file it covers (the CLI transcript, the judge report), NOT the whole
+ * evidence tree (whose screenshots are not byte-reproducible across the Chromium/font stack, so
+ * gating them would be a standing false red — process.html R08/R11). Deleting a drift diff, or
+ * letting a listed check lose its CI step, fails this test instead of waiting for a review.
+ */
+describe('GOLD — §05 automatic-inventory rows are wired in ci.yml (process.html §05, R08)', () => {
+  // The body of a top-level CI job: from its 2-space `name:` key to the next 2-space key
+  // (another job, or the between-jobs comment block) or EOF. Steps live at deeper indent, so
+  // only a real job boundary ends the slice.
+  const jobBody = (name: string): string => {
+    const lines = ciActive.split('\n');
+    const start = lines.findIndex((l) => new RegExp(`^\\s{2}${name}\\s*:`).test(l));
+    if (start === -1) return '';
+    const body: string[] = [];
+    for (let i = start + 1; i < lines.length; i++) {
+      if (/^\s{2}\S/.test(lines[i] ?? '')) break; // next top-level (2-space) key ends this job
+      body.push(lines[i] ?? '');
+    }
+    return body.join('\n');
+  };
+  const verifyJob = jobBody('verify');
+  const judgeJob = jobBody('judge');
+
+  it('the verify job runs build, lint, typecheck, and the test suite', () => {
+    expect(verifyJob).toMatch(/npm run build\b/);
+    expect(verifyJob).toMatch(/npm run lint\b/);
+    expect(verifyJob).toMatch(/npm run typecheck\b/);
+    expect(verifyJob).toMatch(/npm test\b/);
+  });
+
+  it('the verify job runs the no-network, no-publish, and packaging guards', () => {
+    expect(verifyJob).toMatch(/verify:no-network\b/);
+    expect(verifyJob).toMatch(/verify:no-publish\b/);
+    expect(verifyJob).toMatch(/verify:packaging\b/);
+  });
+
+  it('the verify job runs the source census (R10)', () => {
+    expect(verifyJob).toMatch(/sloc-report\.mjs\b/);
+  });
+
+  it('CI declares the pack-smoke, pack-smoke-mac, and judge jobs', () => {
+    expect(ciActive).toMatch(/^\s{2}pack-smoke\s*:/m);
+    expect(ciActive).toMatch(/^\s{2}pack-smoke-mac\s*:/m);
+    expect(ciActive).toMatch(/^\s{2}judge\s*:/m);
+  });
+
+  it('the verify job regenerates the CLI transcript AND drift-gates it (R08)', () => {
+    expect(verifyJob).toMatch(/npm run evidence\b/);
+    // The clock-pinned, byte-reproducible transcript is diff-gated: any drift from the committed
+    // file fails the PR. Scoped to cli-transcript.md, not the whole evidence tree.
+    expect(verifyJob).toMatch(
+      /git diff --exit-code[^\n]*acceptance\/evidence\/cli-transcript\.md/,
+    );
+  });
+
+  it('the judge job regenerates the judge report AND drift-gates it (R08)', () => {
+    expect(judgeJob).toMatch(/npm run judge\b/);
+    // The fixture-clock-pinned judge report is diff-gated, scoped to judge-report.json so the
+    // non-reproducible screenshots the same run emits do not red the build.
+    expect(judgeJob).toMatch(
+      /git diff --exit-code[^\n]*acceptance\/evidence\/judge-report\.json/,
+    );
+  });
+
+  it('every evidence drift gate is scoped to a byte-reproducible file (never the whole tree)', () => {
+    // A bare `git diff --exit-code`, or one scoped to acceptance/evidence/ as a whole, would red
+    // on the non-reproducible screenshots (process.html R08). Every drift diff must name a
+    // specific byte-reproducible file — the CLI transcript or the judge report.
+    const diffs = ciActive.match(/git diff --exit-code[^\n]*/g) ?? [];
+    expect(diffs.length).toBeGreaterThanOrEqual(2);
+    for (const d of diffs) {
+      expect(d).toMatch(
+        /acceptance\/evidence\/(cli-transcript\.md|judge-report\.json)\b/,
+      );
+    }
+  });
+});
