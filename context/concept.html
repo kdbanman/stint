@@ -96,7 +96,7 @@
   <section>
     <div class="eyebrow"><span class="n">01</span> The idea</div>
     <h2>One person, honest hours, two front doors</h2>
-    <p class="lede">Stint is a desktop time tracker in the spirit of old Toggl: start a timer, do the work, stop it. It runs entirely on your own computer, stores everything in a single local SQLite file, and never touches the network.</p>
+    <p class="lede">Stint is a desktop time tracker in the spirit of old Toggl: start a timer, do the work, stop it. It runs entirely on your own computer, stores everything in a single local SQLite file, and touches the network only when you ask it to check for an update.</p>
     <p>It exists to answer one question accurately — <strong>how much time did I spend, and for whom</strong> — so you can bill from it with a clear conscience. It deliberately stops there. Stint deals only in <strong>time</strong>; rates, currency, tax, and the invoice itself live in whatever tool you already use. Its job is to hand that tool a number it can stand behind.</p>
     <p>Two things make it more than a stopwatch: it treats the command line as a first-class way in, not an afterthought, and it works quietly to keep your hours <em>honest</em> — catching the timer you left running overnight, flagging time the machine slept through, and never silently rounding a number up or down behind your back.</p>
   </section>
@@ -176,7 +176,7 @@
     <h2>The edges, on purpose</h2>
     <div>
       <div class="not"><div class="k">no money</div><p class="v">No rates, currency, tax, or invoice generation. The unit is time; billing happens downstream.</p></div>
-      <div class="not"><div class="k">no cloud</div><p class="v">Fully offline. No accounts, no sync, no network, no telemetry. One file on your own computer.</p></div>
+      <div class="not"><div class="k">no cloud</div><p class="v">Fully offline. No accounts, no sync, no telemetry — the only network touch is a user-triggered update check that sends no data. One file on your own computer.</p></div>
       <div class="not"><div class="k">no team</div><p class="v">Single user, single machine. No sharing, no roles, no dashboards.</p></div>
       <div class="not"><div class="k">no idle policing</div><p class="v">Sleep and wake, yes. Watching your keyboard for inactivity, no — that's the OS's job.</p></div>
       <div class="not"><div class="k">no mobile</div><p class="v">A desktop instrument for desktop work.</p></div>

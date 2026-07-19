@@ -3,12 +3,15 @@ Feature: Backups & recovery (data-loss protection)
   # writes a timestamped backup beside the database IF the data changed since the last one, keeping
   # the last N (default 5). On open the database is integrity-checked BEFORE any write; if it is
   # corrupt the corrupt file is quarantined (`.corrupted-*`) and the latest good backup restored —
-  # never silently losing data. This locks that CONTRACT and runs TWICE — once over @stint/core
-  # (a file-backed Store: store.listBackups / restoreFromBackup, and Store.open's launch backup +
-  # integrity gate) and once over tt (`tt backup ls`, and every `tt` open re-running the gate) —
-  # so backup-on-launch and corruption recovery are proven at full parity (§17 R8/R12). The launch
-  # backup captures the state AT launch (before that command's own writes), so a relaunch is what
-  # snapshots the data just written, exactly as the GUI's launch backup does. The clock is fixed.
+  # never silently losing data. An explicit restore from a NAMED backup is destructive by contract:
+  # it sets the pre-restore file aside to a `.replaced-*` sibling before reinstating the snapshot.
+  # This locks that CONTRACT and runs TWICE — once over @stint/core (a file-backed Store:
+  # store.listBackups / restoreFromBackup, and Store.open's launch backup + integrity gate) and once
+  # over tt (`tt backup ls` / `tt backup restore <name> --force`, and every `tt` open re-running the
+  # gate) — so backup-on-launch, corruption recovery, and named restore are proven at full parity
+  # (§17 R8/R12). The launch backup captures the state AT launch (before that command's own writes),
+  # so a relaunch is what snapshots the data just written, exactly as the GUI's launch backup does.
+  # The clock is fixed.
 
   Background:
     Given an empty database
@@ -34,3 +37,16 @@ Feature: Backups & recovery (data-loss protection)
     And the entry "auth refactor" is for "Acme / API"
     And the corrupt database file is quarantined beside the database
     And there is at least one backup
+
+  Scenario: An explicit restore from a named backup reinstates that snapshot and sets the current file aside
+    # The explicit Restore… path (the by-name choice, distinct from automatic corruption recovery):
+    # a relaunch snapshots the one entry into a backup, then a restore resolves that backup by name
+    # and reinstates it. The destructive-restore contract sets the pre-restore file aside to a
+    # `.replaced-*` sibling, and the reopened DB carries exactly the chosen backup's snapshot.
+    Given a closed entry "auth refactor" for "Acme" / "API" from 09:00 to 10:30
+    And I relaunch the store
+    When I restore from the latest backup by name
+    Then the database has exactly 1 entry
+    And the entry "auth refactor" is for "Acme / API"
+    And the restored database matches the named backup
+    And the previous database file is set aside beside the database
