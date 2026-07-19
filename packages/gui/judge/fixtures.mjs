@@ -556,6 +556,51 @@ export function mergeAgreeState() {
 }
 
 /**
+ * Two CLOSED entries that AGREE on client and billable but are NOT contiguous — a positive
+ * gap sits between them (10:00 → 14:00). Folding them fabricates that 4-hour gap as billable
+ * time, so the MERGE_GAP scene can assert clicking Merge raises the gap confirm stating the
+ * resulting span/duration BEFORE any merge commits (§06 R3, §12 R13) — never a silent fold.
+ */
+export function mergeGapState() {
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-24',
+        entries: [
+          {
+            id: 60,
+            description: 'morning block',
+            clientLabel: 'Client A / API',
+            startUtc: '2026-06-24T09:00:00Z',
+            endUtc: '2026-06-24T10:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+          {
+            id: 61,
+            description: 'afternoon block',
+            clientLabel: 'Client A / API',
+            startUtc: '2026-06-24T14:00:00Z',
+            endUtc: '2026-06-24T15:00:00Z',
+            billableSeconds: 3600,
+            billable: true,
+            overlapped: false,
+            sleptThrough: false,
+            excludedSeconds: 0,
+          },
+        ],
+      },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * A single closed entry the OVERLAP_BANNER scene edits to create an overlap. The state
  * itself carries no overlap flag yet — the banner is the AT-WRITE-TIME signal, raised by
  * the WriteAck the mock returns when the edit fires (see initScript's `overlapAck`),
@@ -723,6 +768,13 @@ export function entriesCalendarState() {
           ev({ id: 3, description: 'early standup', clientLabel: 'Acme / API', startUtc: '2026-06-22T06:00:00Z', endUtc: '2026-06-22T06:45:00Z', billableSeconds: 2700, billable: true }),
           ev({ id: 1, description: 'client call', clientLabel: 'Acme / API', startUtc: '2026-06-22T09:00:00Z', endUtc: '2026-06-22T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'next' }),
           ev({ id: 2, description: 'market research', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T10:30:00Z', endUtc: '2026-06-22T12:00:00Z', billableSeconds: 5400, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'previous' }),
+          // §12 R16 (issue #71): a CROSS-MIDNIGHT span — 22:30 on the 22nd → 06:15 on the 23rd
+          // (7h45m). It is grouped under and totalled on its START day (the 22nd) but renders as
+          // TWO segments sharing data-id 8: a start-day segment (22:30 → the 22nd's track bottom)
+          // and an end-day segment (the 23rd's track top → 06:15) — never the single 18px sliver
+          // the same-day end-min math used to collapse it to. The end column (the 23rd) shows the
+          // segment WITHOUT the 7.75h counting toward its header total (start-day attribution).
+          ev({ id: 8, description: 'overnight render', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T22:30:00Z', endUtc: '2026-06-23T06:15:00Z', billableSeconds: 27900, billable: true }),
         ],
       },
       {

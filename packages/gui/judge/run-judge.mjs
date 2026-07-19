@@ -13,7 +13,7 @@ import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2144,28 +2144,86 @@ async function main() {
     );
   });
 
-  // MERGE_NOCONFLICT — selecting two contiguous entries that AGREE on client and
-  // billable and clicking Merge fires the merge DIRECTLY, with no conflict prompt
-  // (nothing to resolve); the payload carries just the ids (§06 R3).
+  // MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
+  // clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
+  // no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
+  // "no unnecessary question" counterpart, NOT proof that the agree path never gates: a
+  // NON-contiguous agreeing selection still gates (MERGE_GAP). The payload carries just the ids
+  // (no winnerId, no allowGap), §06 R3.
   await withPage(browser, mergeAgreeState(), 'index.html', async (page) => {
     await page.check('.entry[data-id="50"] .sel');
     await page.check('.entry[data-id="51"] .sel');
     await page.click('#merge-go');
     const probe = await page.evaluate(() => ({
-      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      conflictPromptShown: !!document.querySelector('.editor.conflict-prompt'),
+      gapConfirmShown: !!document.querySelector('.confirm-gap'),
       merged: window.__MERGED__,
     }));
     const ok =
-      !probe.promptShown &&
+      !probe.conflictPromptShown &&
+      !probe.gapConfirmShown &&
       !!probe.merged &&
       Array.isArray(probe.merged.ids) &&
       probe.merged.ids.length === 2 &&
-      probe.merged.winnerId === undefined;
+      probe.merged.winnerId === undefined &&
+      probe.merged.allowGap === undefined;
     record(
       'MERGE_NOCONFLICT',
       ok,
-      `agreeing selection merges with no prompt: ${JSON.stringify(probe)}`,
+      `contiguous agreeing selection merges with no conflict prompt and no gap confirm: ${JSON.stringify(probe)}`,
       'main-merge-conflict.png',
+    );
+  });
+
+  // MERGE_GAP — selecting two entries that AGREE on client/billable but are NOT contiguous (a
+  // positive gap sits between them) and clicking Merge must NOT fold silently: the Merge button
+  // first swaps into a confirm stating the resulting span/duration (§06 R3, §12 R13 precedent).
+  // Only the explicit "Merge anyway" tap commits, and the payload then carries allowGap so core
+  // accepts the fold. This is the regression guard for the filed bug — a gapped merge that
+  // fabricated the whole gap as billable time with one click, no confirmation.
+  await withPage(browser, mergeGapState(), 'index.html', async (page) => {
+    await page.check('.entry[data-id="60"] .sel');
+    await page.check('.entry[data-id="61"] .sel');
+    await page.click('#merge-go');
+    // The gap gate arms in place of a silent fold: a .confirm-gap affordance, no merge yet.
+    await page.waitForSelector('.confirm-gap', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'main-merge-gap.png'), fullPage: true });
+    const armed = await page.evaluate(() => {
+      const gate = document.querySelector('.confirm-gap');
+      return {
+        confirmShown: !!gate,
+        // The confirm names the non-contiguity, the resulting span duration (09:00→15:00 =
+        // 06:00:00) and the fabricated gap (10:00→14:00 = 04:00:00). Durations are
+        // timezone-independent; the wall-clock endpoints are localized, so we assert the spans.
+        namesGap: /not contiguous/i.test(gate?.textContent ?? ''),
+        statesSpan: /06:00:00/.test(gate?.textContent ?? ''),
+        statesGapDuration: /04:00:00/.test(gate?.textContent ?? ''),
+        hasConfirmBtn: !!gate?.querySelector('[data-act="confirm-gap"]'),
+        hasCancelBtn: !!gate?.querySelector('[data-act="cancel-gap"]'),
+        // Nothing committed yet — a stray first click fabricates no billable time.
+        merged: window.__MERGED__,
+      };
+    });
+    // The explicit confirm commits the fold WITH the gap acknowledged.
+    await page.click('[data-act="confirm-gap"]');
+    const after = await page.evaluate(() => ({ merged: window.__MERGED__ }));
+    const ok =
+      armed.confirmShown &&
+      armed.namesGap &&
+      armed.statesSpan &&
+      armed.statesGapDuration &&
+      armed.hasConfirmBtn &&
+      armed.hasCancelBtn &&
+      !armed.merged &&
+      !!after.merged &&
+      Array.isArray(after.merged.ids) &&
+      after.merged.ids.length === 2 &&
+      after.merged.allowGap === true;
+    record(
+      'MERGE_GAP',
+      ok,
+      `gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed=${JSON.stringify(armed)} after=${JSON.stringify(after)}`,
+      'main-merge-gap.png',
     );
   });
 
@@ -3075,6 +3133,10 @@ async function main() {
   //   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
   //     toolbar range chip (#week-total) shows the week total (9.25h);
   //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
+  //   • §12 R16 (issue #71): a CROSS-MIDNIGHT span (id 8, 22:30→06:15 next day) renders as TWO
+  //     `.ev` segments sharing its data-id — a start-day segment (22:30 → the track bottom, a true
+  //     height, never the 18px sliver) and an end-day segment (the track top → 06:15) — while its
+  //     billable time counts ONLY on its start day (the 22nd's header reads 12.00h, the week 17.00h);
   //   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
   //   • clicking an `.ev` body opens the unified editor in the view-level host (`#entry-form-host
   //     .edit-form.entry-form`), and the event carries the `.editing` selection state;
@@ -3105,6 +3167,17 @@ async function main() {
         const track = document.querySelector('.dt');
         const evs = [...document.querySelectorAll('.dcol .ev')];
         const evTop = (el) => parseFloat(el.style.top) || 0;
+        const evNum = (el, prop) => Math.round(parseFloat(el.style[prop]) || 0);
+        // §12 R16 (issue #71): the cross-midnight entry (data-id 8, 22:30→06:15 next day) renders
+        // as TWO segments sharing its id — a start-day segment and an end-day segment. Capture each
+        // segment's class + top/height so the rubric can assert the split geometry (start segment
+        // reaches the track bottom at a TRUE height; end segment runs from the track top) rather
+        // than the single 18px sliver the same-day end-min math used to collapse it to.
+        const xmid = [...document.querySelectorAll('.dcol .ev[data-id="8"]')].map((el) => ({
+          cls: el.className,
+          top: evNum(el, 'top'),
+          height: evNum(el, 'height'),
+        }));
         // A day header's billable total, keyed by its day-of-month label.
         const dayTotals = {};
         for (const dh of document.querySelectorAll('.dcol .dh')) {
@@ -3141,6 +3214,10 @@ async function main() {
           sleptMoon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
           runPresent: !!runEv,
           runFade: /gradient/.test(runBg),
+          xmid,
+          // The full 24h track bottom in px (CAL_DAY_PX = 44 * 24) — the start segment must reach
+          // it, proving it runs to local midnight, not to a clipped 18px block.
+          trackBottomPx: 44 * 24,
           // The running/open block shows only a START time — no end (no full HH:MM–HH:MM range).
           runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
         };
@@ -3202,11 +3279,31 @@ async function main() {
       structure.trackHeight >= 1000 &&
       structure.hasBeforeWork &&
       structure.hasAfterWork;
+    // §12 R16 (issue #71): the 22nd's header carries the cross-midnight span in full (start-day
+    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h — and the week
+    // chip sums to 17.00h. The 23rd's header is NOT asserted here, but its total must stay off the
+    // overnight span (it shows the end segment without counting it) — pinned by crossMidnightOk +
+    // the segment/attribution rule below.
     const totalsOk =
-      structure.dayTotals['22'] === '4.25h' &&
+      structure.dayTotals['22'] === '12.00h' &&
       structure.dayTotals['24'] === '1.00h' &&
-      structure.weekTotal === '9.25h';
+      structure.weekTotal === '17.00h';
     const emptyOk = structure.emptyCols >= 1;
+    // §12 R16 (issue #71): the cross-midnight entry renders as exactly TWO segments sharing id 8.
+    // The start segment sits at 22:30 (1350 min → ~990px) and runs to the track bottom (a true
+    // ~66px height, never the 18px sliver); the end segment starts at the track top (0) and runs
+    // to 06:15 (375 min → ~275px). The two blocks share the one data-id, so the span is one entry.
+    const startSeg = structure.xmid.find((s) => /\bseg-start\b/.test(s.cls));
+    const endSeg = structure.xmid.find((s) => /\bseg-end\b/.test(s.cls));
+    const crossMidnightOk =
+      structure.xmid.length === 2 &&
+      !!startSeg &&
+      !!endSeg &&
+      Math.abs(startSeg.top - 990) <= 2 && // 22:30
+      startSeg.height > 40 && // a TRUE height, not the 18px floor
+      Math.abs(startSeg.top + startSeg.height - structure.trackBottomPx) <= 2 && // reaches midnight
+      endSeg.top === 0 && // starts at the day's top edge (00:00)
+      Math.abs(endSeg.height - 275) <= 2; // down to 06:15
     // §12 R10: the overlapped event paints a `.ov` warn band whose `.otag` reads "overlap Nm", and
     // the slept event paints a `.zz` hatch carrying the `#i-moon` marker over its excluded portion.
     const flagsOk =
@@ -3218,12 +3315,13 @@ async function main() {
     const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
     const ok =
       columnsOk && neverClipOk && totalsOk && emptyOk && flagsOk && runOk && hoverOk &&
-      editorOpen && mergeHiddenBefore && mergeShown;
+      crossMidnightOk && editorOpen && mergeHiddenBefore && mergeShown;
     record(
       'CALENDAR_LAYOUT',
       ok,
       `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
-        `editorOpen=${editorOpen}; merge hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown}`,
+        `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
+        `merge hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown}`,
       'main-calendar.png',
     );
     await page.close();
