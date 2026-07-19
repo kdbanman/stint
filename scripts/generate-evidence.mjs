@@ -382,11 +382,15 @@ section(
     '# A live timer is open across a SIMULATED in-app update (the app bundle is swapped,',
     '# the data directory is left alone). The relaunch reads BOTH surfaces.',
     `pre-update : open entry id=${before.entry.id} start=${beStartUtc} elapsed=${beElapsed}s`,
-    `             db sha256=${beforeHash.slice(0, 16)}… size=${beforeStat.size}`,
+    // The raw sha256/size are NOT printed: the db's exact bytes vary with the runner's
+    // bundled SQLite (Node patch version), and this transcript is byte-gated in CI
+    // (process.html R08) — only environment-independent text belongs here. The identity
+    // CHECK still runs on the full hashes; the OK/FAIL line below is the proof.
+    `             db bytes hashed (sha256) + sized for the identity check below`,
     `app swap   : Stint.app v2026.6.24 → v2026.7.1 (data dir untouched; no Store write)`,
     `post-update: open entry id=${after.entry.id} start=${afStartUtc} elapsed=${afElapsed}s (tt)`,
     `             gui surface (core Store) sees open entry id=${guiStatus.entry?.id} start=${guiStatus.entry?.startUtc}`,
-    `             db sha256=${afterHash.slice(0, 16)}… size=${afterStat.size}`,
+    `             db re-hashed after the swap and compared to the pre-update capture`,
     '',
     'live tt.sqlite byte-identical across the swap ..................... ' + (dbByteIdentical ? 'OK' : 'FAIL'),
     'same entry still open, id + start unchanged (both surfaces) ....... ' + (sameOpenEntry ? 'OK' : 'FAIL'),

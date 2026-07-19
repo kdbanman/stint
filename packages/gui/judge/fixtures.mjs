@@ -768,6 +768,13 @@ export function entriesCalendarState() {
           ev({ id: 3, description: 'early standup', clientLabel: 'Acme / API', startUtc: '2026-06-22T06:00:00Z', endUtc: '2026-06-22T06:45:00Z', billableSeconds: 2700, billable: true }),
           ev({ id: 1, description: 'client call', clientLabel: 'Acme / API', startUtc: '2026-06-22T09:00:00Z', endUtc: '2026-06-22T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'next' }),
           ev({ id: 2, description: 'market research', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T10:30:00Z', endUtc: '2026-06-22T12:00:00Z', billableSeconds: 5400, billable: true, overlapped: true, overlapMinutes: 30, overlapRelation: 'previous' }),
+          // §12 R16 (issue #71): a CROSS-MIDNIGHT span — 22:30 on the 22nd → 06:15 on the 23rd
+          // (7h45m). It is grouped under and totalled on its START day (the 22nd) but renders as
+          // TWO segments sharing data-id 8: a start-day segment (22:30 → the 22nd's track bottom)
+          // and an end-day segment (the 23rd's track top → 06:15) — never the single 18px sliver
+          // the same-day end-min math used to collapse it to. The end column (the 23rd) shows the
+          // segment WITHOUT the 7.75h counting toward its header total (start-day attribution).
+          ev({ id: 8, description: 'overnight render', clientLabel: 'Globex / Ops', startUtc: '2026-06-22T22:30:00Z', endUtc: '2026-06-23T06:15:00Z', billableSeconds: 27900, billable: true }),
         ],
       },
       {

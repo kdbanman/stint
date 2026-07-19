@@ -277,11 +277,11 @@ The §19 R04 download + guided install replaces the *application* only; it never
 # A live timer is open across a SIMULATED in-app update (the app bundle is swapped,
 # the data directory is left alone). The relaunch reads BOTH surfaces.
 pre-update : open entry id=1 start=2026-06-24T09:00:00Z elapsed=28800s
-             db sha256=d8f4c602a4fc34ed… size=98304
+             db bytes hashed (sha256) + sized for the identity check below
 app swap   : Stint.app v2026.6.24 → v2026.7.1 (data dir untouched; no Store write)
 post-update: open entry id=1 start=2026-06-24T09:00:00Z elapsed=31500s (tt)
              gui surface (core Store) sees open entry id=1 start=2026-06-24T09:00:00Z
-             db sha256=d8f4c602a4fc34ed… size=98304
+             db re-hashed after the swap and compared to the pre-update capture
 
 live tt.sqlite byte-identical across the swap ..................... OK
 same entry still open, id + start unchanged (both surfaces) ....... OK
