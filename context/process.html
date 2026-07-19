@@ -205,10 +205,11 @@
         <tr><td data-l="check">Evidence regen + drift comparison (R08)</td><td data-l="runs as" class="m">npm run evidence</td></tr>
         <tr><td data-l="check">Source census reconcile (R10)</td><td data-l="runs as" class="m">sloc-report.mjs</td></tr>
         <tr><td data-l="check">Packaging smoke — a real Linux pack (§19 R01)</td><td data-l="runs as" class="m">pack-smoke job</td></tr>
+        <tr><td data-l="check">Packaging smoke — a real macOS <code>.app</code> pack (§19 R01)</td><td data-l="runs as" class="m">pack-smoke-mac job</td></tr>
         <tr><td data-l="check">GUI presentation judge, headless Chromium (§12/§18)</td><td data-l="runs as" class="m">judge job</td></tr>
       </tbody>
     </table>
-    <p>Post-merge (<code>release.yml</code>): stamp the date version (§19 R06) → pack macOS + Linux → publish the GitHub Release (§19 R05). Operator-run per GUI change, not CI-gating: the §W recording GIFs (<code>npm run record</code>) — QA evidence, regenerated so every committed GIF shows the current UI.</p>
+    <p>Post-merge (<code>release.yml</code>): stamp the date version (§19 R06) → pack macOS + Linux → publish the GitHub Release (§19 R05). The two PR-path <code>pack-smoke</code> jobs exercise an unpacked <code>--dir</code> pack on each OS; the full distributable build (<code>.dmg</code>, AppImage/<code>.deb</code>) is first exercised here, post-merge — an acknowledged residue. If a mac- or <code>.dmg</code>-only packaging breakage ever reddens a release, the escalation is full (non-<code>--dir</code>) builds for both platforms on the PR path. Operator-run per GUI change, not CI-gating: the §W recording GIFs (<code>npm run record</code>) — QA evidence, regenerated so every committed GIF shows the current UI.</p>
     <h3>Manual — the live residue <span class="tag">runbook.md</span></h3>
     <p>Most runbook procedures also run headlessly through their JUDGE/GOLD mirrors; a human on a real machine covers only what CI cannot:</p>
     <table>
@@ -260,7 +261,7 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
     <ul class="d">
       <li><strong>Every change rides a PR.</strong> Issue-anchored branch → ready (not draft) PR → owner merge. No direct pushes to <code>main</code>. The merge is the one human gate (§03).</li>
       <li><strong>Merge on green only.</strong> The §05 per-PR checks pass before merge; a red check blocks.</li>
-      <li><strong>Every merge to main is a release.</strong> <code>release.yml</code> publishes a GitHub Release versioned <code>YYYY.M.D[.N]</code> with the macOS + Linux artifacts. Two reasons: a release path that runs on every merge cannot rot unseen (R02), and shipping is fast by default.</li>
+      <li><strong>Every merge to main is a release.</strong> <code>release.yml</code> publishes a GitHub Release versioned <code>YYYY.M.D[.N]</code> with the macOS + Linux artifacts. Two reasons: a release path that runs on every merge cannot rot unseen (R02), and shipping is fast by default. A failed release surfaces through GitHub's own workflow-failure email to the repository owner — owner-configured, out-of-repo; an acknowledged residue, not an in-repo gated guarantee (there is deliberately no alerting step in <code>release.yml</code>).</li>
       <li><strong>Changing this doc.</strong> Process requirements change by grilled PR: interrogate intent before authoring, author directly, merge gates. None of the transition machinery applies — no <code>*-old.html</code> coexistence, no work-list, no swap; there is no generated evidence to migrate.</li>
     </ul>
     <p>Recorded conventions (reasoned, not binding — §08):</p>
