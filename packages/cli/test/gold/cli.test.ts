@@ -661,6 +661,42 @@ describe('GOLD: reference-data / sleep / settings --json shapes (§07, §10a, §
   });
 });
 
+describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
+  // The CLI mirror of the favorite-add rejection: a duplicate `tt … add` / `… rename` exits
+  // non-zero with a diagnostic on stderr and creates nothing — so the GUI Clients view, which
+  // reaches the same core, cannot silently mint a second client that a by-client report would
+  // merge into one line (the original defect).
+  it('tt client add rejects a duplicate name (case-insensitive), exit non-zero, no second row', () => {
+    expect(tt(['client', 'add', 'Acme Corp']).code).toBe(0);
+    const dup = tt(['client', 'add', 'acme corp']);
+    expect(dup.code).not.toBe(0);
+    expect(dup.err).toMatch(/already exists/);
+    expect(JSON.parse(tt(['client', 'ls', '--json']).out).map((c: { name: string }) => c.name)).toEqual([
+      'Acme Corp',
+    ]);
+  });
+
+  it('tt client rename onto an existing name is rejected; a case-only self-rename is allowed', () => {
+    tt(['client', 'add', 'Acme Corp']);
+    tt(['client', 'add', 'Beta Labs']);
+    expect(tt(['client', 'rename', 'Beta Labs', 'acme corp']).code).not.toBe(0);
+    expect(tt(['client', 'rename', 'Beta Labs', 'beta labs']).code).toBe(0);
+  });
+
+  it('tt project add rejects a duplicate under the same client but allows it under another', () => {
+    tt(['client', 'add', 'Acme']);
+    tt(['client', 'add', 'Globex']);
+    expect(tt(['project', 'add', 'Platform', '--client', 'Acme']).code).toBe(0);
+    expect(tt(['project', 'add', 'platform', '--client', 'Acme']).code).not.toBe(0);
+    expect(tt(['project', 'add', 'Platform', '--client', 'Globex']).code).toBe(0);
+  });
+
+  it('tt tag add rejects a case-variant duplicate, exit non-zero', () => {
+    expect(tt(['tag', 'add', 'billing']).code).toBe(0);
+    expect(tt(['tag', 'add', 'Billing']).code).not.toBe(0);
+  });
+});
+
 describe('GOLD: §11 CLI table core badges (§11, §C)', () => {
   // The artefact is the criterion: the §C relabel renamed the four core-entry /
   // data-out subcommands "core" in the §11 table. This contract parses prd.html and
