@@ -167,7 +167,7 @@
       <thead><tr><th>Skill</th><th>Role</th></tr></thead>
       <tbody>
         <tr><td data-l="skill" class="m">change-requirements</td><td data-l="role"><strong>Author.</strong> Grills the design one question-cluster at a time, then authors the transition artifact set — renamed <code>*-old.html</code> docs, new docs, the <code>requirements-transition.md</code> work-list, mockups for every new/changed GUI requirement — and stops. It never executes.</td></tr>
-        <tr><td data-l="skill" class="m">requirements-transition</td><td data-l="role"><strong>Execute.</strong> Consumes the work-list: plans file-disjoint waves, implements them with subagents under checkpoint commits, regenerates all AC evidence, runs the two reviews with a bounded improvement loop, captures screen-recording QA last, aggregates one PR, and performs the gated old→new swap. The human gate is the merge.</td></tr>
+        <tr><td data-l="skill" class="m">requirements-transition</td><td data-l="role"><strong>Execute.</strong> Consumes the work-list, driving the change to one aggregated PR by following the staged, gated procedure the skill defines — the stages live in the skill, not restated here (§04's one-home rule). The merge is the human gate.</td></tr>
       </tbody>
     </table>
     <p>The pair is asymmetric: authoring wants a conversation (recommendations, sign-off, a synthesis the user approves), execution wants a checklist with gates. A change that needs a stage the execution skill lacks extends the skill itself — never a per-change fork. This pair carries <em>application</em> requirement changes — they are not the whole skill set (the discovery and triage skills live with the practice they serve, §06) — and changing this doc is lighter still (§07).</p>
@@ -186,6 +186,10 @@
       <li><strong>Stateless.</strong> Present tense, as if it had always been this way — no change narrative, no responses to dead decisions (R12). History lives in git. One exception: a principle may cite the incident that motivated it.</li>
       <li><strong>One home per fact.</strong> State a fact in the doc that owns it; everywhere else, point. Duplicated rationale drifts — CI config and code comments keep the mechanics and point here for the why.</li>
       <li><strong>Mark the tier.</strong> A convention-tier statement appears under a "Recorded conventions" label in its owning section and is registered in §08's members row. Unlabeled prose in a requirements doc reads as requirement — the tiers stay decidable without asking the author.</li>
+    </ul>
+    <p>Recorded conventions (reasoned, not binding — §08):</p>
+    <ul class="d">
+      <li><strong>The prose specs are styled HTML.</strong> The <code>context/</code> docs (concept, prd, glossary, acceptance, process, architecture) are authored as single, self-contained <code>.html</code> files, not Markdown. A spec is a designed artifact — a type ramp, tables, colour tokens, a masthead — read as a rendered page and carrying the mockups' visual language, which Markdown cannot hold; one file styles itself with no build step and no external asset, and renders the same wherever a browser opens it. This is why a skill is Markdown (§03) while a spec is not: the artifacts differ, so their format does. The cost is that the docs render as raw source on GitHub / mobile, so sharing a <em>rendered</em> page wraps the raw URL with htmlpreview — that workaround, and its known-broken outer-<code>https</code> variant, live in <code>CLAUDE.md</code>.</li>
     </ul>
   </section>
 
@@ -280,7 +284,7 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
       <thead><tr><th>Tier</th><th>Members</th></tr></thead>
       <tbody>
         <tr><td data-l="tier" class="m">requirement</td><td data-l="members">The principles (§02); the agentic process + skills (§03); authoring rules (§04); the automatic/manual boundary + inventory (§05); the QA-driver parity guard (§06); PR-gated main, merge-on-green, release-per-merge, the process-change rule (§07).</td></tr>
-        <tr><td data-l="tier" class="m">recorded convention</td><td data-l="members">Merge commits; tooling branch names; commit-message shape; one issue per change (§07). The discovery conventions (§06): one labeled issue per finding, the triage comment-and-label contract, the <code>qa-evidence</code> branch, per-issue evidence directories with prune-after-close, scratch sweep recipes.</td></tr>
+        <tr><td data-l="tier" class="m">recorded convention</td><td data-l="members">The styled-HTML spec-doc format (§04). Merge commits; tooling branch names; commit-message shape; one issue per change (§07). The discovery conventions (§06): one labeled issue per finding, the triage comment-and-label contract, the <code>qa-evidence</code> branch, per-issue evidence directories with prune-after-close, scratch sweep recipes.</td></tr>
         <tr><td data-l="tier" class="m">unspecified</td><td data-l="members">Code style beyond the linter; PR body shape; issue formatting; anything not named in this doc. Absence is information: an unnamed practice is at most convention.</td></tr>
       </tbody>
     </table>

@@ -26,10 +26,11 @@
  * No-network (PRD §17 R9): the ONLY outbound traffic in the whole app is THIS module's
  * user-initiated check AND the user-initiated artifact byte download — both confined to this
  * one file. They use Electron's built-in `net` (`import { net } from 'electron'`, an allowed
- * prod dep), never node:https / node:net / global fetch, so the no-network backstop
- * (scripts/check-no-network.mjs) stays green WITHOUT relaxing any rule or editing the scanner
- * (the import names 'electron', not 'net'/'node:https', and `net.request` is not a forbidden
- * token). The decision / selection / plan logic takes injectable inputs so it is fully
+ * prod dep), never node:https / node:net / global fetch. The no-network backstop
+ * (scripts/check-no-network.mjs) pins this file as the SOLE shipped site allowed to reach
+ * electron's `net`: any other file importing it or calling `net.request` fails the scan, since
+ * the allowed `electron` dependency would otherwise hide a new outbound site from the module /
+ * token scan. The decision / selection / plan logic takes injectable inputs so it is fully
  * unit-testable offline and without Electron.
  */
 import { app, net, shell } from 'electron';

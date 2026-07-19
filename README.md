@@ -26,7 +26,9 @@ npm run tt -- status     # or: node packages/cli/dist/bin.js status
 Your data is one SQLite file: `$TT_DB` if set, otherwise the per-OS app-data
 directory (`~/.local/share/stint/timetracker.sqlite` on Linux,
 `~/Library/Application Support` on macOS, `%APPDATA%` on Windows). Both surfaces
-use the same path. Backup is copying the file. No network, ever.
+use the same path. Backup is copying the file. The app makes no network
+connection except the optional, user-initiated update check (§17 R9), which
+sends no data.
 
 ### The `tt` command line
 

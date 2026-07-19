@@ -36,6 +36,8 @@ export interface Ctx {
   resumeFavResult?: { rejected: boolean };
   /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
   integrityOpen?: { refused: boolean; wrote: boolean };
+  /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
+  restoreChosenCount?: number;
 }
 
 export interface StepDef {
@@ -1301,6 +1303,29 @@ export const steps: StepDef[] = [
     // §20 R05 — the corrupt file was set aside, not destroyed: a `.corrupted-*` sibling remains.
     pattern: /^the corrupt database file is quarantined beside the database$/,
     run: (w) => expect(w.hasQuarantinedFile()).toBe(true),
+  },
+  {
+    // §20 R05 / §17 R12 — the explicit named-restore path (distinct from automatic recovery): the
+    // newest backup is resolved to its name and restored, its entry count captured for the match.
+    pattern: /^I restore from the latest backup by name$/,
+    run: (w, c) => {
+      c.restoreChosenCount = w.restoreLatestBackup().chosenEntryCount;
+    },
+  },
+  {
+    // §20 R05 — the reopened database carries exactly the chosen backup's snapshot (its live entry
+    // count equals the backup's, read independently before the restore).
+    pattern: /^the restored database matches the named backup$/,
+    run: (w, c) => {
+      expect(c.restoreChosenCount, 'expected a prior `When I restore … by name`').toBeDefined();
+      expect(w.list()).toHaveLength(c.restoreChosenCount!);
+    },
+  },
+  {
+    // §20 R05 — the destructive restore set the pre-restore file aside, not destroyed: a
+    // `.replaced-*` sibling remains beside the database.
+    pattern: /^the previous database file is set aside beside the database$/,
+    run: (w) => expect(w.hasReplacedFile()).toBe(true),
   },
 
   // ---- §20 R03 integrity check on open (detect corruption, refuse to write) ----
