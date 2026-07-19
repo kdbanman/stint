@@ -34,6 +34,8 @@ export interface Ctx {
   favorites?: FavoriteRec[];
   /** §05 R10 — the result of the most recent `When I attempt to resume from favorite "X"`. */
   resumeFavResult?: { rejected: boolean };
+  /** §07 R03 (#64) — the result of the most recent `When I try to add/rename` reference data. */
+  refDataResult?: { rejected: boolean };
   /** §20 R03 — the result of the most recent `When I open the database` over a corrupt file. */
   integrityOpen?: { refused: boolean; wrote: boolean };
   /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
@@ -448,6 +450,49 @@ export const steps: StepDef[] = [
   {
     pattern: /^I archive tag "([^"]*)"$/,
     run: (w, _c, name) => w.archiveTag(name),
+  },
+  // §07 R03 (#64) — attempt an add/rename whose name may already be taken; the surface either
+  // creates it or REJECTS the duplicate. Both surfaces reject identically (§17 R8), so a
+  // by-client report can never silently conflate two clients under one line.
+  {
+    pattern: /^I try to add a client "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.refDataResult = w.attemptAddClient(name);
+    },
+  },
+  {
+    pattern: /^I try to add a project "([^"]*)" for client "([^"]*)"$/,
+    run: (w, ctx, name, client) => {
+      ctx.refDataResult = w.attemptAddProject(name, client);
+    },
+  },
+  {
+    pattern: /^I try to add a tag "([^"]*)"$/,
+    run: (w, ctx, name) => {
+      ctx.refDataResult = w.attemptAddTag(name);
+    },
+  },
+  {
+    pattern: /^I try to rename client "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameClient(name, to);
+    },
+  },
+  {
+    pattern: /^I try to rename project "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameProject(name, to);
+    },
+  },
+  {
+    pattern: /^I try to rename tag "([^"]*)" to "([^"]*)"$/,
+    run: (w, ctx, name, to) => {
+      ctx.refDataResult = w.attemptRenameTag(name, to);
+    },
+  },
+  {
+    pattern: /^the reference-data change is rejected$/,
+    run: (_w, ctx) => expect(ctx.refDataResult?.rejected).toBe(true),
   },
 
   // ---- assertions --------------------------------------------------------
