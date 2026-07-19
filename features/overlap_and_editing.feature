@@ -61,6 +61,30 @@ Feature: Overlap, split and merge
     Then the merged entry runs from 09:00 to 11:00
     And the merged entry is for "Client B"
 
+  Scenario: Merging a non-contiguous selection without acknowledgement is refused (the originals survive)
+    # PRD §06 R3 — a selection is contiguous only when each entry's end equals the next's start
+    # exactly; a positive gap (here 10:00 → 11:00) would be folded into the merged span as
+    # fabricated billable time. Surface-neutral over the World `mergeUnacknowledged` capability:
+    # core refuses without allowGap, `tt merge` (no --allow-gap) refuses on stderr with a non-zero
+    # exit, and the GUI raises the gap confirm (§12 R13) before committing — so the gate behaves
+    # identically on every surface and the two originals are still there, untouched.
+    Given a closed entry "morning" from 09:00 to 10:00
+    And a closed entry "midday" from 11:00 to 12:00
+    When I attempt to merge those two entries without acknowledging the gap
+    Then the merge is refused
+    And there is still an entry "morning"
+    And there is still an entry "midday"
+    And there are exactly 2 entries
+
+  Scenario: Merging a non-contiguous selection with acknowledgement folds the gap into the span
+    # PRD §06 R3 — the acknowledged path stays reachable: once the gap is acknowledged (core
+    # allowGap, `tt merge --allow-gap`, the GUI confirm) the fold proceeds, spanning earliest
+    # start → latest end. A legitimate gap merge is always possible; it is never silent.
+    Given a closed entry "morning" from 09:00 to 10:00
+    And a closed entry "midday" from 11:00 to 12:00
+    When I merge those two entries acknowledging the gap
+    Then the merged entry runs from 09:00 to 12:00
+
   Scenario: Editing amends a field without disturbing the open state
     # PRD §05 R6, §06 R1 — any field is editable; the entry stays as it was otherwise. In the
     # GUI this edit runs through the unified entry form (§12 R06) opened in edit mode from the

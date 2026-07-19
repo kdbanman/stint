@@ -16,6 +16,7 @@ import {
   resolveDateRange,
   utcWindowToDatePair,
   resolveExportRange,
+  resolveExportDefinition,
   exportPayload,
   exportFileName,
   savedReportToView,
@@ -267,6 +268,70 @@ describe('exportPayload — bytes identical to tt export', () => {
     const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
     expect(entries).toEqual([]);
     expect(exportPayload(entries, 'csv', NOW)).toBe(toCsv([], NOW));
+    store.close();
+  });
+});
+
+describe('resolveExportDefinition — the two export scopes (§09 R06/R09)', () => {
+  function withWeeklyReport(): Store {
+    const store = mem();
+    seed(store);
+    // A billable-only Weekly report: on screen (and in its filtered export) it shows the
+    // billable "auth refactor" and drops the non-billable "admin".
+    store.saveReport({
+      name: 'Weekly',
+      rangeSpec: { kind: 'preset', preset: 'week' },
+      by: 'client',
+      billableFilter: 'billable',
+      rounding: false,
+      roundingIncrementMin: 15,
+    });
+    return store;
+  }
+
+  it("scope 'filtered' exports the rows the report shows (byte-identical to `tt report run --csv`)", () => {
+    const store = withWeeklyReport();
+    const { range, entries } = resolveExportDefinition(
+      { format: 'csv', scope: 'filtered', savedReportRef: 'Weekly' },
+      store,
+      NOW,
+    );
+    // The billable "auth refactor" only — the non-billable "admin" is filtered out.
+    expect(entries.map((e) => e.description)).toEqual(['auth refactor']);
+    // Byte-identical to the core exporter the CLI `report run <name> --csv` drives.
+    expect(exportPayload(entries, 'csv', NOW)).toBe(store.exportSavedReport('Weekly', 'csv', NOW));
+    // The range names the resolved this-week window.
+    expect(range).toEqual(store.resolveReportRange('Weekly', NOW));
+    store.close();
+  });
+
+  it("scope 'all' exports every raw entry in the report's range (byte-identical to `tt export`)", () => {
+    const store = withWeeklyReport();
+    const { range, entries } = resolveExportDefinition(
+      { format: 'csv', scope: 'all', savedReportRef: 'Weekly' },
+      store,
+      NOW,
+    );
+    // Keeps BOTH rows — the non-billable "admin" too (the raw escape hatch, unfiltered).
+    expect(entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor']);
+    const raw = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
+    expect(exportPayload(entries, 'csv', NOW)).toBe(toCsv(raw, NOW));
+    store.close();
+  });
+
+  it("scope 'all' with an ad-hoc preset (no saved ref) exports the raw range — the `tt export` path", () => {
+    const store = mem();
+    seed(store);
+    const { entries } = resolveExportDefinition({ format: 'csv', scope: 'all', preset: 'week' }, store, NOW);
+    expect(entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor']);
+    store.close();
+  });
+
+  it("scope 'filtered' without a saved ref is rejected (a filtered export belongs to a report)", () => {
+    const store = mem();
+    expect(() =>
+      resolveExportDefinition({ format: 'csv', scope: 'filtered' }, store, NOW),
+    ).toThrow(/filtered export requires/);
     store.close();
   });
 });

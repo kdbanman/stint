@@ -222,6 +222,9 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
         }
       }
       if (payload.billable !== undefined) opts.billable = payload.billable;
+      // §06 R3: a non-contiguous selection is refused by core unless acknowledged. The renderer
+      // sets allowGap only after the user confirms the gapped-span gate (§12 R13).
+      if (payload.allowGap) opts.allowGap = true;
       const res = store.merge(payload.ids, opts);
       refreshAll();
       // A merge folds adjacent spans into one; the folded span can still overlap a third entry
@@ -299,11 +302,12 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       return { warnings: res.warnings ?? [] };
     },
     exportEntries: (payload) => {
-      // §09 R6 / R09: the report view's Export CSV / Export JSON. The renderer cannot reach Node/fs,
-      // so the export round-trips through main. When the request names a SAVED report, export its
-      // definition's range via core's exportSavedReport; otherwise resolve the ad-hoc preset/custom
-      // range and export it (exactly `tt export`). Either way the bytes come from core's
-      // toCsv/toJsonEntries and write through the OS save dialog. No network.
+      // §09 R06/R09: the Reports view's exports. The renderer cannot reach Node/fs, so the export
+      // round-trips through main. The request's SCOPE picks the set: 'filtered' writes the rows the
+      // report shows (byte-identical to `tt report run <name> --csv|--json`), 'all' writes the raw
+      // entries for the resolved range (byte-identical to `tt export`). resolveExportDefinition owns
+      // the split; either way the bytes come from core's toCsv/toJsonEntries and write through the
+      // OS save dialog. No network.
       const now = new Date();
       const { range, entries } = resolveExportDefinition(payload, store, now);
       const bytes = exportPayload(entries, payload.format, now);

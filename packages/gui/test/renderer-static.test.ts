@@ -702,6 +702,36 @@ describe('renderer static contract', () => {
     expect(app).toMatch(/\$\('add-client'\)\.addEventListener\('change'/);
   });
 
+  it('renderClients / renderTags are re-entrant so a direct repaint + the changed broadcast cannot double the list (issue #66)', () => {
+    const app = read('app.js');
+    // Root cause: a rename / archive / add each calls renderClients directly AND the write's
+    // `changed` broadcast schedules a SECOND renderClients via onChange; the two async runs
+    // interleaved — both cleared #clients-list, then both awaited per-client listProjects, then
+    // both appended — so every client, project and tag rendered twice. The fix makes each run
+    // claim a monotonic generation token, build into a detached fragment, and bail after an await
+    // once a newer run has superseded it — so exactly one run ever paints. Pin that shape here so
+    // a regression to the racy clear-then-await-then-append is caught cheaply per commit.
+    const clientsBody = app.slice(
+      app.indexOf('async function renderClients()'),
+      app.indexOf('async function renderTags()'),
+    );
+    // renderClients no longer clears the host up front then awaits mid-append — it builds into a
+    // detached fragment and only the still-current run swaps it in (one synchronous replace)…
+    expect(app).toMatch(/let clientsRenderGen = 0/);
+    expect(clientsBody).toMatch(/const gen = \+\+clientsRenderGen/);
+    expect(clientsBody).toMatch(/document\.createDocumentFragment\(\)/);
+    // …with a generation guard after each await that drops a superseded run before it touches DOM.
+    expect(clientsBody).toMatch(/if \(gen !== clientsRenderGen\) return/);
+    // The Tags strip carries the same guard — the same broadcast double-fires renderTags too.
+    const tagsBody = app.slice(
+      app.indexOf('async function renderTags()'),
+      app.indexOf('function tagRow('),
+    );
+    expect(app).toMatch(/let tagsRenderGen = 0/);
+    expect(tagsBody).toMatch(/const gen = \+\+tagsRenderGen/);
+    expect(tagsBody).toMatch(/if \(gen !== tagsRenderGen\) return/);
+  });
+
   it('the Clients view ships a tag-management strip wired to the tag IPC (§12 R10)', () => {
     const html = read('index.html');
     const app = read('app.js');
@@ -871,11 +901,12 @@ describe('renderer static contract', () => {
     expect(app).not.toMatch(/new Date\(\$\('el-range/);
   });
 
-  it('the Reports run-output paints grouped totals with flags in context + Export CSV/JSON from the saved report (§09 R09 / R06)', () => {
+  it('the Reports run-output paints grouped totals with flags in context + the two export scopes (§09 R06/R09)', () => {
     const html = read('index.html');
     const js = read('reports.js');
     // The run-output panel reuses the report-summary/table chrome, plus a resolved-range
-    // header and the two Export buttons (the §09 R06 export surface over the saved range).
+    // header and BOTH export scopes: the report's own FILTERED export (Export CSV/JSON beside
+    // Run) and the raw "Export All Data" escape hatch set apart at the bottom (§09 R06).
     expect(html).toMatch(/id="rep-run"/);
     expect(html).toMatch(/id="rep-run-rows"/);
     expect(html).toMatch(/id="rep-run-range"/);
@@ -883,6 +914,12 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/id="rep-export-json"/);
     expect(html).toMatch(/Export CSV/);
     expect(html).toMatch(/Export JSON/);
+    // …and the second, raw scope — Export All Data (byte-identical to `tt export`).
+    expect(html).toMatch(/id="rep-run-export-all"/);
+    expect(html).toMatch(/id="rep-export-all-csv"/);
+    expect(html).toMatch(/id="rep-export-all-json"/);
+    expect(html).toMatch(/Export All Data \(CSV\)/);
+    expect(html).toMatch(/Export All Data \(JSON\)/);
     // reports.js paints the core Report runReport returned (lines + grand total), with flags
     // IN CONTEXT on the affected rows via the pure window.SU.lineFlags over the Report's
     // overlapped / unreviewed-sleep id sets — no separate flag list, no renderer flag math…
@@ -894,11 +931,17 @@ describe('renderer static contract', () => {
     expect(js).toMatch(/rounding\s*\?\s*line\.roundedSeconds\s*:\s*line\.totalSeconds/);
     expect(js).toMatch(/report\.options\.rounding/);
     expect(js).not.toMatch(/roundSeconds/);
-    // …the run-output Export buttons export FROM the saved report, carrying its ref so main
-    // exports the definition's range (byte-identical to `tt report run <name> --csv|--json`).
-    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*savedReportRef/);
+    // …the report's own Export buttons carry scope 'filtered' + the saved-report ref, so main
+    // exports the rows the report shows (byte-identical to `tt report run <name> --csv|--json`)…
+    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*scope:\s*'filtered',\s*savedReportRef/);
     expect(js).toMatch(/\$\('rep-export-csv'\)\.addEventListener/);
     expect(js).toMatch(/\$\('rep-export-json'\)\.addEventListener/);
+    // …and Export All Data carries scope 'all' (the raw entries for the range — `tt export`),
+    // with an honest "(all data)" status so the scope is never mistaken for the report's rows.
+    expect(js).toMatch(/window\.stint\.exportEntries\(\{\s*format,\s*scope:\s*'all',\s*savedReportRef/);
+    expect(js).toMatch(/\$\('rep-export-all-csv'\)\.addEventListener/);
+    expect(js).toMatch(/\$\('rep-export-all-json'\)\.addEventListener/);
+    expect(js).toMatch(/\(all data\)/);
   });
 
   it('the consolidated modal editor (editor.js / window.SE) is retired; the richer-fields path opens the unified editor (§12 R06 / §Z)', () => {

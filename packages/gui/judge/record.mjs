@@ -2255,7 +2255,8 @@ const RECIPES = {
       await page.waitForSelector('#rep-run-rows .report-flag');
       await wait(page, 1300);
 
-      // EXPORT CSV then JSON → exportEntries carrying the saved ref; the confirmation line paints.
+      // EXPORT (the report's OWN, FILTERED scope): Export CSV then JSON → exportEntries with
+      // scope 'filtered' + the saved ref; the confirmation line paints (the rows the report shows).
       await page.waitForSelector('#rep-run-export:not([hidden])');
       await page.click('#rep-export-csv');
       await page.waitForFunction(
@@ -2267,6 +2268,21 @@ const RECIPES = {
         () => /\.json/.test(document.querySelector('#rep-export-status')?.textContent || ''),
       );
       await wait(page, 1100);
+
+      // EXPORT ALL DATA (the RAW scope): the escape hatch set apart at the bottom → exportEntries
+      // with scope 'all'; its status carries the honest "(all data)" wording so the two scopes
+      // read as genuinely different (issue #72 — a filtered report never silently ships raw rows).
+      await page.waitForSelector('#rep-run-export-all:not([hidden])');
+      await page.click('#rep-export-all-csv');
+      await page.waitForFunction(
+        () => /all data/.test(document.querySelector('#rep-export-all-status')?.textContent || ''),
+      );
+      await wait(page, 900);
+      await page.click('#rep-export-all-json');
+      await page.waitForFunction(
+        () => /\.json/.test(document.querySelector('#rep-export-all-status')?.textContent || ''),
+      );
+      await wait(page, 1000);
 
       // EDIT the card → the builder re-opens on the saved def; change Group by to Project.
       await newCard.locator('[data-act="edit"]').click();
