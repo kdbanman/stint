@@ -56,3 +56,63 @@ Feature: Reference-data management
     Then tag "drafts" is in the active tag list
     When I archive tag "drafts"
     Then tag "drafts" is not in the active tag list
+
+  # PRD §07 R03 (#64) — reference-data names are unique and resolved case-insensitively;
+  # adding or renaming onto an existing name is rejected. Without this, renaming one client
+  # onto another's name was accepted, and a by-client report then merged the two into one
+  # line — silently conflating billing. Every scenario runs over BOTH surfaces (§17 R8).
+
+  Scenario: Adding a client whose name already exists is rejected (case-insensitively)
+    Given I add a client "Acme Corp"
+    When I try to add a client "acme corp"
+    Then the reference-data change is rejected
+    And client "acme corp" is not in the active client list
+
+  Scenario: Adding a project whose name already exists under the same client is rejected
+    # §07 R03 — project names are unique PER CLIENT, case-insensitively.
+    Given I add a client "Acme Corp"
+    And I add a project "Platform" for client "Acme Corp"
+    When I try to add a project "platform" for client "Acme Corp"
+    Then the reference-data change is rejected
+
+  Scenario: The same project name under a different client is allowed
+    # §07 R03 — per-client scope: "Platform" may exist under two different clients.
+    Given I add a client "Acme Corp"
+    And I add a project "Platform" for client "Acme Corp"
+    And I add a client "Globex"
+    When I add a project "Platform" for client "Globex"
+    Then project "Platform" is in the active project list
+
+  Scenario: Adding a tag whose name already exists is rejected (case-insensitively)
+    # §07 R03 — the explicit manage-first `tt tag add` rejects a case-variant duplicate; the
+    # on-the-fly tagging path instead reuses the existing tag (pinned in core GOLD).
+    Given I add a tag "billing"
+    When I try to add a tag "Billing"
+    Then the reference-data change is rejected
+
+  Scenario: Renaming a client onto another client's name is rejected (case-insensitively)
+    Given I add a client "Acme Corp"
+    And I add a client "Beta Labs"
+    When I try to rename client "Beta Labs" to "acme corp"
+    Then the reference-data change is rejected
+    And client "Beta Labs" is in the active client list
+
+  Scenario: Renaming a project onto a sibling project's name is rejected
+    Given I add a client "Acme Corp"
+    And I add a project "Platform" for client "Acme Corp"
+    And I add a project "Billing" for client "Acme Corp"
+    When I try to rename project "Billing" to "platform"
+    Then the reference-data change is rejected
+
+  Scenario: Renaming a tag onto another tag's name is rejected (case-insensitively)
+    Given I add a tag "billing"
+    And I add a tag "invoicing"
+    When I try to rename tag "invoicing" to "Billing"
+    Then the reference-data change is rejected
+    And tag "invoicing" is in the active tag list
+
+  Scenario: A case-only self-rename is allowed
+    # §07 R03 — renaming a record onto its OWN name in a new case is not a clash.
+    Given I add a tag "deep"
+    When I rename tag "deep" to "Deep"
+    Then tag "Deep" is in the active tag list
