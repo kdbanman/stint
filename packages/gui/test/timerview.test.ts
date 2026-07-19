@@ -15,8 +15,10 @@ import { describe, it, expect } from 'vitest';
 import {
   deriveRunningModel,
   liveEditPatch,
+  liveEditStripPatch,
   favoriteRows,
   type LiveEditInput,
+  type LiveEditStripInput,
 } from '../src/timerview.js';
 import type { UiState, FavoriteView } from '../src/ipc.js';
 
@@ -171,6 +173,83 @@ describe('liveEditPatch — edit the running timer live, NEVER closing it (§12 
     const patch = liveEditPatch({ clientId: null, projectId: null });
     expect(patch).toEqual({ clientId: null, projectId: null });
     expect('endUtc' in patch).toBe(false);
+  });
+});
+
+describe('liveEditStripPatch — the strip seed-vs-field diff, byte-compared (§12 R14/R15, issue #68)', () => {
+  // Second-granular seeds: the field seeds carry seconds, so the untouched-field rule holds to the
+  // second, not the whole minute. startUtc is the stored instant; seedStart is the localInputValue
+  // string renderLiveEdit put in #le-start; start is the field's current text.
+  const SEED_START = '2026-06-24T09:07:33'; // localInputValue string (seconds kept)
+  const STORED_ISO = '2026-06-24T09:07:33.000Z'; // the exact stored instant (UTC test env)
+  const stripInput = (over: Partial<LiveEditStripInput> = {}): LiveEditStripInput => ({
+    seedDescription: 'auth refactor',
+    description: 'auth refactor',
+    seedStart: SEED_START,
+    start: SEED_START,
+    startUtc: STORED_ISO,
+    seedBillable: true,
+    billable: true,
+    ...over,
+  });
+
+  it('nothing touched ⇒ an empty patch (no key, to the second)', () => {
+    expect(liveEditStripPatch(stripInput())).toEqual({});
+  });
+
+  it('a desc-only edit carries description and NO startUtc / endUtc key (the #68 regression guard)', () => {
+    const patch = liveEditStripPatch(stripInput({ description: 'auth refactor v2' }));
+    expect(patch).toEqual({ description: 'auth refactor v2' });
+    expect('startUtc' in patch).toBe(false); // the untouched start contributes nothing…
+    expect('endUtc' in patch).toBe(false); // …and the open row is never closed
+  });
+
+  it('an untouched DST-ambiguous start is BYTE-skipped, never reparsed to the wrong instant', () => {
+    // The stored instant is the SECOND 1:30 AM on a fall-back day (CST, UTC-6 = 07:30Z); the seed
+    // wall-clock string 01:30 reparses (in any single-offset engine) to a DIFFERENT instant. A
+    // reparse-and-compare diff would emit a spurious startUtc here; byte-comparison of the untouched
+    // field against its seed skips it. Desc-only edit ⇒ only description rides.
+    const patch = liveEditStripPatch(
+      stripInput({
+        seedStart: '2024-11-03T01:30:00',
+        start: '2024-11-03T01:30:00', // untouched
+        startUtc: '2024-11-03T07:30:00.000Z', // the real stored instant, an hour off the reparse
+        description: 'note',
+        seedDescription: 'auth refactor',
+      }),
+    );
+    expect(patch).toEqual({ description: 'note' });
+    expect('startUtc' in patch).toBe(false);
+  });
+
+  it('a genuinely edited start rides along (byte-different, parseable, a new instant)', () => {
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T08:30:00' }));
+    expect(patch.startUtc).toBe('2026-06-24T08:30:00.000Z');
+    expect('endUtc' in patch).toBe(false); // still never closes the open row
+  });
+
+  it('a half-typed unparseable start contributes nothing (the NaN guard)', () => {
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T08:' }));
+    expect('startUtc' in patch).toBe(false);
+  });
+
+  it('a byte-different start that resolves to the SAME stored instant is dropped (double-guard)', () => {
+    // An equivalent representation of the seed (a trailing .000 on the seconds) differs byte-wise
+    // from the seed, so it passes the byte gate and is parsed — but it lands on the SAME stored
+    // instant, so the double-guard drops it and no startUtc key is emitted.
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T09:07:33.000' }));
+    expect('startUtc' in patch).toBe(false);
+  });
+
+  it('the billable toggle rides the same patch, still no endUtc', () => {
+    const patch = liveEditStripPatch(stripInput({ billable: false }));
+    expect(patch).toEqual({ billable: false });
+    expect('endUtc' in patch).toBe(false);
+  });
+
+  it('clearing the description to blank sends description: null', () => {
+    const patch = liveEditStripPatch(stripInput({ description: '   ' }));
+    expect(patch).toEqual({ description: null });
   });
 });
 
