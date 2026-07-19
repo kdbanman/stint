@@ -4,8 +4,11 @@
  *
  * The live-traffic guarantee is confirmed manually under a network monitor, but a
  * cheap static check runs in CI: scan all shipped source for any networking import
- * or outbound-request API, and assert production dependencies stay within a minimal
- * allowlist. A regression is caught fast even though the live confirmation is manual.
+ * or outbound-request API, assert production dependencies stay within a minimal
+ * allowlist, and pin the app's one sanctioned outbound path — Electron's built-in
+ * `net`, reachable from a single allowed file — so a second `net.request` site cannot
+ * ride the allowed `electron` dependency unseen. A regression is caught fast even
+ * though the live confirmation is manual.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -49,9 +52,35 @@ const FORBIDDEN_TOKENS = ['XMLHttpRequest', 'WebSocket', 'EventSource', 'navigat
 // through Electron's built-in `net` (`import { net } from 'electron'`), an already-allowed
 // prod dep, NOT node:https / node:net / global fetch. That import names 'electron' (not 'net'
 // / 'node:https'), so it does not match the FORBIDDEN_MODULES specifiers above, and `net.request`
-// is not a FORBIDDEN_TOKEN — so this scanner stays green WITHOUT relaxing any forbidden token.
-// The live-traffic guarantee (only this one user-initiated request, ever) is the MANUAL CHECK.
+// is not a FORBIDDEN_TOKEN. `electron` being allowed is exactly why the module/token scan cannot
+// see a NEW outbound site — the ELECTRON_NET pin below is what catches one.
 const ALLOWED_PROD_DEPS = new Set(['@stint/core', 'commander', 'electron']);
+
+// The one shipped file allowed to reach Electron's built-in `net` — the user-initiated update
+// check (§17 R09 / §19 R03), the app's sole outbound request. Pinned by FILE, not line: any OTHER
+// shipped file that imports electron's `net` or calls `net.request` fails the scan, so a second
+// outbound site cannot ride the allowed `electron` dependency past the module/token scan above.
+// update.ts itself stays unrestricted — a one-file allowlist, robust to line edits inside it.
+const ELECTRON_NET_ALLOWED = new Set([join(ROOT, 'packages', 'gui', 'src', 'update.ts')]);
+
+/**
+ * Whether a file's text reaches Electron's built-in `net`: a named `net` import from 'electron'
+ * (`import { app, net } from 'electron'`, in any binding order, allowing `net as x` and `type`
+ * imports), or a `net.request(` call wherever `net` was bound. Both are the outbound-request
+ * surface the allowed `electron` dependency hides from FORBIDDEN_MODULES / FORBIDDEN_TOKENS.
+ */
+export function usesElectronNet(text) {
+  for (const m of text.matchAll(/import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*['"]electron['"]/g)) {
+    const bound = m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0].trim());
+    if (bound.includes('net')) return true;
+  }
+  return /\bnet\.request\b/.test(text);
+}
+
+/** Shipped files that reach Electron's `net` — must equal ELECTRON_NET_ALLOWED (§17 R09). */
+export function electronNetSites() {
+  return shippedSourceFiles().filter((f) => usesElectronNet(readFileSync(f, 'utf8')));
+}
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {
@@ -113,6 +142,14 @@ export function scanNoNetwork() {
       // Bare global fetch( call (not a comment mention).
       if (/(?<![\w.])fetch\s*\(/.test(text.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, ''))) {
         violations.push(`${file}: calls global fetch()`);
+      }
+      // Electron `net` file-level pin (§17 R09): `electron` is an allowed prod dep, so a new
+      // `net.request` site is invisible to the module/token scan above — only update.ts may reach
+      // it. Any OTHER file importing electron's `net` or calling `net.request` fails here.
+      if (usesElectronNet(text) && !ELECTRON_NET_ALLOWED.has(file)) {
+        violations.push(
+          `${file}: reaches Electron's built-in net outside the single allowed update-check site (packages/gui/src/update.ts)`,
+        );
       }
     }
   }

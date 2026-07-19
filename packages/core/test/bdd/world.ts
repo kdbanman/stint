@@ -402,6 +402,23 @@ export interface World {
    */
   hasQuarantinedFile(): boolean;
   /**
+   * §20 R05 / §17 R12 — the explicit named-restore path (the GUI Restore… button /
+   * `tt backup restore <name> --force`), distinct from automatic corruption recovery: resolve the
+   * newest backup to its NAME and restore the database by that name. The destructive-restore
+   * contract sets the pre-restore file aside to a `.replaced-*` sibling (never destroyed). Surface-
+   * neutral: CoreWorld store.restoreFromBackup(name) on the open store; CliWorld `tt backup restore
+   * <name> --force` (process-per-command). Returns the chosen backup's entry count, read
+   * independently of the live DB, so a scenario can prove the reopened database carries exactly that
+   * snapshot. Requires a FILE-backed world (the backup scenarios run only against the file worlds).
+   */
+  restoreLatestBackup(): { chosenEntryCount: number };
+  /**
+   * §20 R05 — whether a `.replaced-*` sibling now sits beside the database: proof the destructive
+   * named restore set the pre-restore file aside rather than destroying it (distinct from the
+   * `.corrupted-*` sibling automatic recovery leaves — `hasQuarantinedFile`).
+   */
+  hasReplacedFile(): boolean;
+  /**
    * §20 R03 — write garbage bytes to a FRESH on-disk database path that has NO backup beside it,
    * so the only possible outcome on open is detection + refusal (recovery is impossible without a
    * good copy). Isolated from the backup scenarios' database so this proves the bare detect-and-
@@ -926,6 +943,27 @@ export class CoreWorld implements World {
   }
   hasQuarantinedFile(): boolean {
     return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.dbPath)}.corrupted-`));
+  }
+  restoreLatestBackup(): { chosenEntryCount: number } {
+    // §20 R05 / §17 R12 — resolve the newest backup's NAME and restore the OPEN store by it (the
+    // explicit Restore… path, not automatic recovery). Read the chosen backup's entry count first,
+    // independently of the live DB (a fresh handle on the backup file), so the caller can prove the
+    // reopened DB carries that snapshot. store.restoreFromBackup quarantines the current file to a
+    // `.replaced-*` sibling, copies the chosen backup into place, and reopens.
+    const chosen = this.store.listBackups()[0];
+    if (!chosen) throw new Error('no backup to restore from');
+    const db = openDb(chosen.path);
+    let chosenEntryCount: number;
+    try {
+      chosenEntryCount = (db.prepare('SELECT COUNT(*) AS n FROM entry').get() as { n: number }).n;
+    } finally {
+      db.close();
+    }
+    this.store.restoreFromBackup(chosen.name);
+    return { chosenEntryCount };
+  }
+  hasReplacedFile(): boolean {
+    return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.dbPath)}.replaced-`));
   }
   corruptDatabaseFile(): void {
     // §20 R03 — a brand-new temp dir holding only a garbage "database" file: no `.bak-*` sibling
@@ -1546,6 +1584,31 @@ export class CliWorld implements World {
   }
   hasQuarantinedFile(): boolean {
     return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.db)}.corrupted-`));
+  }
+  restoreLatestBackup(): { chosenEntryCount: number } {
+    // §20 R05 / §17 R12 — the explicit `tt backup restore <name> --force` path. Resolve the newest
+    // backup's NAME from `tt backup ls --json`, read its entry count independently (a fresh handle
+    // straight on the backup file, no launch backup), then restore by that name. tt is process-per-
+    // command, so the restore process re-opens, quarantines the current file to a `.replaced-*`
+    // sibling, copies the chosen backup in, and the next read sees the restored file.
+    const backups = JSON.parse(this.tt(['backup', 'ls', '--json']).out || '[]') as {
+      name: string;
+      path: string;
+    }[];
+    const chosen = backups[0];
+    if (!chosen) throw new Error('no backup to restore from');
+    const db = openDb(chosen.path);
+    let chosenEntryCount: number;
+    try {
+      chosenEntryCount = (db.prepare('SELECT COUNT(*) AS n FROM entry').get() as { n: number }).n;
+    } finally {
+      db.close();
+    }
+    this.tt(['backup', 'restore', chosen.name, '--force']);
+    return { chosenEntryCount };
+  }
+  hasReplacedFile(): boolean {
+    return readdirSync(this.dir).some((f) => f.startsWith(`${basename(this.db)}.replaced-`));
   }
   // §20 R03 — the garbage bytes written to the (backup-less) db, kept so openCorruptDatabase can
   // prove the failed open did not mutate the file.
