@@ -112,11 +112,13 @@ Feature: Report grouping (group by client / project / day / tag)
     And a closed entry "call" for "Acme" / "API" tagged "meeting" this week on day 1 lasting 3 hours
     Then a report covering this week flags 2 overlapping entries
 
-  # PRD §09 R6 — the report view's Export CSV / Export JSON buttons write the RAW entries for
-  # the shown range via core's toCsv/toJsonEntries (byte-identical to `tt export --csv/--json`,
-  # the renderer cannot touch fs so the GUI rounds the bytes through main). This locks the
-  # export SHAPE surface-neutrally — it runs TWICE, over @stint/core (the core exporters) and
-  # over tt (`tt export --range … --csv|--json`) — so the GUI export reaches nothing tt cannot.
+  # PRD §09 R06 — the ALL-DATA export scope: every RAW entry for a range via core's
+  # toCsv/toJsonEntries (byte-identical to `tt export --csv/--json` and the GUI report's
+  # "Export All Data" button — the renderer cannot touch fs, so the GUI rounds the bytes through
+  # main). This locks the raw export SHAPE surface-neutrally — it runs TWICE, over @stint/core
+  # (the core exporters) and over tt (`tt export --range … --csv|--json`). The other scope — a
+  # saved report's FILTERED export (`tt report run <name> --csv|--json`) — is proven in
+  # features/saved_reports.feature, where an off-filter row inside the range tells them apart.
   Scenario: CSV and JSON export the raw entries for the range with the same shape
     Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours

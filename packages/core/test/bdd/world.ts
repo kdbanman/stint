@@ -161,6 +161,9 @@ export interface World {
     client?: string;
     project?: string;
     tags?: string[];
+    /** §08 R3 — force the billable flag (e.g. a non-billable entry under a client, so a
+     *  report's billable filter has an off-filter row INSIDE its range to discriminate). */
+    billable?: boolean;
   }): {
     id: number;
   };
@@ -322,17 +325,18 @@ export interface World {
   removeReport(name: string): void;
   /**
    * §09 R09 — run a saved report against current data and return its grand total seconds.
-   * CoreWorld store.runReport(name).grandTotalSeconds, CliWorld `tt report run <name> --json`.
-   * The total must equal an equivalent ad-hoc report over the same resolved range (asserted).
+   * CoreWorld store.runReport(name).grandTotalSeconds; CliWorld sums the billable seconds of
+   * the FILTERED entries `tt report run <name> --json` now exports (both yield the one grand
+   * total). The total must equal an equivalent ad-hoc report over the same resolved range.
    */
   runReportTotalSeconds(name: string): number;
   /**
-   * §09 R09 — export FROM a saved report: the RAW entries for the definition's resolved
-   * range (billable='all', no narrowing), parsed back to the surface-neutral row shape.
-   * CoreWorld store.exportSavedReport(name, 'csv') → toCsv; CliWorld `tt report run <name>
-   * --csv`. Both must equal each other AND an `export` over the same resolved window —
-   * proving export-from-saved adds no tt-unreachable bytes (§17 R8). (CSV is the cross-
-   * surface export form: `tt report run --json` returns the GROUPED Report, not raw entries.)
+   * §09 R06/R09 — export FROM a saved report: the FILTERED entries the report SHOWS (its range
+   * narrowed by the def's client/project/tag/search + billable filter), parsed back to the
+   * surface-neutral row shape. CoreWorld store.exportSavedReport(name,'csv') → reportFiltered
+   * Entries → toCsv; CliWorld `tt report run <name> --csv`. Both must equal each other — the
+   * filtered export is byte-identical across surfaces. The RAW, whole-range escape hatch is a
+   * separate scope (`tt export` / "Export All Data"), exercised via exportRows over the window.
    */
   exportSavedReportRows(name: string): ExportRowRec[];
   /**
@@ -547,6 +551,7 @@ export class CoreWorld implements World {
     client?: string;
     project?: string;
     tags?: string[];
+    billable?: boolean;
   }): { id: number } {
     const { clientId, projectId } = this.ids(o);
     const r = this.store.add({
@@ -556,6 +561,7 @@ export class CoreWorld implements World {
       clientId,
       projectId,
       ...(o.tags && o.tags.length ? { tags: o.tags } : {}),
+      ...(o.billable !== undefined ? { billable: o.billable } : {}),
     });
     return { id: r.value.id };
   }
@@ -896,8 +902,8 @@ export class CoreWorld implements World {
     return this.store.runReport(name, this.clock()).grandTotalSeconds;
   }
   exportSavedReportRows(name: string): ExportRowRec[] {
-    // §09 R09: the RAW entries for the saved definition's resolved range — store.export
-    // SavedReport renders the SAME core toCsv `tt report run --csv` does.
+    // §09 R06/R09: the FILTERED rows the saved report shows — store.exportSavedReport renders
+    // the SAME core toCsv `tt report run --csv` does (via reportFilteredEntries).
     return parseCsvExport(this.store.exportSavedReport(name, 'csv', this.clock()));
   }
   pinFavoriteFromEntry(name: string, source: number | 'open'): void {
@@ -1199,11 +1205,14 @@ export class CliWorld implements World {
     client?: string;
     project?: string;
     tags?: string[];
+    billable?: boolean;
   }): { id: number } {
     const args = ['add', o.desc, '--from', o.fromIso, '--to', o.toIso];
     if (o.client) args.push('--client', o.client);
     if (o.project) args.push('--project', o.project);
     for (const t of o.tags ?? []) args.push('--tag', t);
+    if (o.billable === true) args.push('--bill');
+    if (o.billable === false) args.push('--no-bill');
     const r = this.tt(args);
     const id = Number(/added entry (\d+)/.exec(r.out)?.[1]);
     return { id };
@@ -1526,12 +1535,19 @@ export class CliWorld implements World {
     this.tt(['report', 'rm', name]);
   }
   runReportTotalSeconds(name: string): number {
-    const r = this.tt(['report', 'run', name, '--json']);
-    return (JSON.parse(r.out) as { grand_total_seconds: number }).grand_total_seconds;
+    // §09 R06/R09 — `tt report run <name> --json` now exports the FILTERED ENTRIES the report
+    // shows (not a grouped Report). The run total is their billable-seconds sum (raw − excluded),
+    // which equals the grouped grand total CoreWorld reads off store.runReport — so the "run total
+    // equals ad-hoc" parity holds, computed from the same filtered set the export writes.
+    const rows = JSON.parse(this.tt(['report', 'run', name, '--json']).out) as {
+      raw_duration_s: number;
+      excluded_s: number;
+    }[];
+    return rows.reduce((s, e) => s + (e.raw_duration_s - e.excluded_s), 0);
   }
   exportSavedReportRows(name: string): ExportRowRec[] {
-    // §09 R09: `tt report run <name> --csv` emits the export bytes for the saved definition's
-    // resolved range (the SAME core toCsv CoreWorld renders via store.exportSavedReport).
+    // §09 R06/R09: `tt report run <name> --csv` emits the FILTERED rows the report shows (the
+    // SAME core toCsv CoreWorld renders via store.exportSavedReport → reportFilteredEntries).
     return parseCsvExport(this.tt(['report', 'run', name, '--csv']).out);
   }
   pinFavoriteFromEntry(name: string, source: number | 'open'): void {
