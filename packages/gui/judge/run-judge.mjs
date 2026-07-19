@@ -2785,13 +2785,30 @@ async function main() {
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-run.png'), fullPage: true });
 
-    // (d): Export CSV then JSON — each drives a real exportEntries call carrying the saved ref.
+    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run) carry
+    // scope 'filtered' + the saved ref — the rows the report shows (byte-identical to
+    // `tt report run <name> --csv|--json`).
     await page.click('#rep-export-csv');
-    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'filtered');
     const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
     await page.click('#rep-export-json');
-    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'filtered');
     const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    // …and Export All Data (set apart at the bottom) carries scope 'all' + the saved ref — every
+    // raw entry in the range (byte-identical to `tt export`), its status the honest "(all data)".
+    await page.click('#rep-export-all-csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'all');
+    const afterAllCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    await page.click('#rep-export-all-json');
+    await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'all');
+    const afterAllJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
+    const exportLabels = await page.evaluate(() => ({
+      filteredCsv: document.querySelector('#rep-export-csv')?.textContent.trim(),
+      filteredJson: document.querySelector('#rep-export-json')?.textContent.trim(),
+      allCsv: document.querySelector('#rep-export-all-csv')?.textContent.trim(),
+      allJson: document.querySelector('#rep-export-all-json')?.textContent.trim(),
+      allStatus: document.querySelector('#rep-export-all-status')?.textContent.trim(),
+    }));
 
     // (g) issue #52: RENAME a saved report TO COMPLETION through the INLINE kebab affordance —
     // Electron's renderer implements neither window.prompt nor window.confirm, so the kebab
@@ -2866,11 +2883,21 @@ async function main() {
       run.flagOutside === 0 && // flags IN CONTEXT (none in a separate list)
       run.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
       run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
+    // (d) issue #72: BOTH export scopes fire correctly — the filtered Export CSV/JSON carry
+    // scope 'filtered' + the saved ref, and Export All Data carries scope 'all' + the saved ref
+    // and is labelled "Export All Data", its status carrying the honest "(all data)" wording.
     const exportOk =
-      afterCsv.format === 'csv' &&
-      afterJson.format === 'json' &&
+      afterCsv.format === 'csv' && afterCsv.scope === 'filtered' &&
+      afterJson.format === 'json' && afterJson.scope === 'filtered' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
-      afterJson.savedReportRef === 'Weekly billables — Globex';
+      afterJson.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllCsv.format === 'csv' && afterAllCsv.scope === 'all' &&
+      afterAllJson.format === 'json' && afterAllJson.scope === 'all' &&
+      afterAllCsv.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllJson.savedReportRef === 'Weekly billables — Globex' &&
+      /Export All Data/.test(exportLabels.allCsv || '') &&
+      /Export All Data/.test(exportLabels.allJson || '') &&
+      /all data/.test(exportLabels.allStatus || '');
     // (g) issue #52: the inline rename/delete really landed — renameReport fired with the
     // old + new names and the list repainted under the new name; Delete armed the confirm
     // gate WITHOUT removing anything, then the explicit confirm fired removeReport and the
@@ -2890,7 +2917,7 @@ async function main() {
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,
       'reports-list.png',
     );
   });

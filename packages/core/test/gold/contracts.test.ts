@@ -721,11 +721,12 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     store.close();
   });
 
-  it('exportSavedReport equals toCsv/toJsonEntries over the resolved range raw entries', () => {
-    // §09 R09 — export-from-saved is the durability path: the RAW entries for the resolved
-    // window (billable='all', no narrowing), byte-identical to the core exporters `tt export`
-    // and the GUI Export buttons use. The saved report's billable filter must NOT narrow the
-    // export (it shapes the on-screen totals only), so a non-billable entry is still exported.
+  it('exportSavedReport exports the FILTERED rows the report shows, not the raw range', () => {
+    // §09 R06/R09 — export-from-saved is the report's OWN export: the FILTERED rows it shows
+    // (its range narrowed by the def's client/project/tag/search + billable filter), byte-
+    // identical to `tt report run <name> --csv|--json` and the GUI report's Export. The def's
+    // billable-only filter DOES narrow the file, so the non-billable "admin" is dropped. The
+    // RAW, whole-range escape hatch is a separate scope (`tt export` / "Export All Data").
     const now = new Date(FIXED_NOW);
     const store = Store.openMemory(() => now);
     const acme = store.addClient('Acme');
@@ -746,20 +747,22 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       name: 'Weekly',
       rangeSpec: { kind: 'preset', preset: 'week' },
       by: 'client',
-      billableFilter: 'billable', // billable-only on screen…
+      billableFilter: 'billable', // billable-only, on screen AND in the filtered export…
       rounding: false,
       roundingIncrementMin: 15,
     });
-    const range = resolveSavedRange(
-      store.getReport('Weekly')!.rangeSpec,
-      store.settings().weekStart,
-      now,
-    );
+    // The filtered export == the report's rows (billable-only): "review" alone, no "admin".
+    const filtered = store.reportFilteredEntries('Weekly', now);
+    expect(filtered.map((e) => e.description)).toEqual(['review']);
+    expect(store.exportSavedReport('Weekly', 'csv', now)).toBe(toCsv(filtered, now));
+    expect(store.exportSavedReport('Weekly', 'json', now)).toEqual(toJsonEntries(filtered, now));
+    expect(store.exportSavedReport('Weekly', 'json', now)).toHaveLength(1);
+    // …while the ALL-DATA scope over the SAME resolved range still carries BOTH entries (the
+    // non-billable "admin" too) — the raw file `tt export --range …` / "Export All Data" writes.
+    const range = store.resolveReportRange('Weekly', now);
     const raw = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
-    expect(store.exportSavedReport('Weekly', 'csv', now)).toBe(toCsv(raw, now));
-    expect(store.exportSavedReport('Weekly', 'json', now)).toEqual(toJsonEntries(raw, now));
-    // …but the export carries BOTH entries (the non-billable admin too — billable='all').
-    expect(store.exportSavedReport('Weekly', 'json', now)).toHaveLength(2);
+    expect(raw).toHaveLength(2);
+    expect(store.exportSavedReport('Weekly', 'json', now)).not.toEqual(toJsonEntries(raw, now));
     store.close();
   });
 

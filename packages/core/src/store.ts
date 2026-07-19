@@ -804,12 +804,47 @@ export class Store {
   }
 
   /**
-   * Export the RAW entries a saved report covers (PRD §09 R09, §09 R6): resolve the def's
-   * range, list its entries with billable='all' and NO client/project/tag/search narrowing —
-   * byte-identical to `tt export` for the resolved window — and render them through the SAME
-   * core toCsv/toJsonEntries the ad-hoc export uses. The saved report's filters shape its
-   * on-screen totals (runReport), not the exported file: the export is the durability/data-out
-   * path (the full range), so CSV/JSON from a saved report and `tt export --range …` agree.
+   * §09 R06/R09 — the FILTERED entries a saved report SHOWS: the rows behind its grouped
+   * totals. Resolve the def through the SAME core fold `runReport` uses (resolveReportDef →
+   * range + client/project/tag/search narrowing), then list with the def's own billable
+   * filter applied — so this set is exactly the entries `runReport` groups (report()'s
+   * listEntries + filterByBillable), just returned flat. This is the ONE home of "the report's
+   * rows"; both the CLI `tt report run <name> --csv|--json` and the GUI report's Export drive
+   * it, so a filtered export can never diverge between the surfaces. Distinct from `tt export`
+   * / "Export All Data", which is the RAW set for the range (see resolveReportRange).
+   */
+  reportFilteredEntries(ref: string | number, now: Date = this.now()): EntryView[] {
+    const def = this.requireReportDefByRef(ref);
+    const req = resolveReportDef(def, this.settings().weekStart, now);
+    return this.listEntries({
+      fromUtc: req.fromUtc,
+      toUtc: req.toUtc,
+      ...(req.clientId !== undefined ? { clientId: req.clientId } : {}),
+      ...(req.projectId !== undefined ? { projectId: req.projectId } : {}),
+      ...(req.tag !== undefined ? { tag: req.tag } : {}),
+      ...(req.search !== undefined ? { search: req.search } : {}),
+      billable: req.billableFilter,
+    });
+  }
+
+  /**
+   * §09 R06/R09 — the resolved absolute window a saved report covers (its range-spec run
+   * through the SAME core resolveSavedRange the run path uses). The "Export All Data" scope /
+   * `tt export` reads its RAW entries over exactly this window (billable='all', no narrowing),
+   * so a saved report's all-data export and `tt export --range <from> <to>` agree byte-for-byte.
+   */
+  resolveReportRange(ref: string | number, now: Date = this.now()): { fromUtc: string; toUtc: string } {
+    const def = this.requireReportDefByRef(ref);
+    return resolveSavedRange(def.rangeSpec, this.settings().weekStart, now);
+  }
+
+  /**
+   * §09 R06/R09 — export the FILTERED set a saved report shows (the rows behind its totals),
+   * rendered through the SAME core toCsv/toJsonEntries the ad-hoc export uses. This is the
+   * filtered export scope: the def's client/project/tag/search + billable filter DO narrow the
+   * file, so it holds exactly what the report displays — byte-identical between `tt report run
+   * <name> --csv|--json` and the GUI report's Export CSV/JSON. The RAW, whole-range escape
+   * hatch is `tt export` / "Export All Data" (resolveReportRange + listEntries billable='all').
    */
   exportSavedReport(
     ref: string | number,
@@ -826,13 +861,7 @@ export class Store {
     format: 'csv' | 'json',
     now: Date = this.now(),
   ): string | JsonEntry[] {
-    const def = this.requireReportDefByRef(ref);
-    const range = resolveSavedRange(def.rangeSpec, this.settings().weekStart, now);
-    const entries = this.listEntries({
-      fromUtc: range.fromUtc,
-      toUtc: range.toUtc,
-      billable: 'all',
-    });
+    const entries = this.reportFilteredEntries(ref, now);
     return format === 'csv' ? toCsv(entries, now) : toJsonEntries(entries, now);
   }
 
