@@ -2969,6 +2969,31 @@ async function main() {
       cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
     }));
 
+    // (i2) §12 R21 / §09 R01 — REFUSAL: an INVERTED custom range (From strictly after To) is
+    // refused by CORE — such a range only ever resolves to an empty window, so it is rejected
+    // rather than stored (the guarantee §14 gives working hours, for report ranges). BOTH dates
+    // are present, so this is a genuine core refusal (not the renderer-local incomplete-range
+    // check of (h)): saveReport rejects, #rep-warning carries the reason and PERSISTS past the
+    // tick, the builder stays open, and no card appears. A fresh (non-duplicate) name isolates
+    // the RANGE rejection from the duplicate-name one. (A same-day from == to would be ACCEPTED —
+    // the report rule is ≤, unlike the entry rule's strict <; that boundary is pinned in BDD/GOLD.)
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#rep-name', 'Backwards range');
+    await page.fill('#rep-range-from', '2026-06-30');
+    await page.fill('#rep-range-to', '2026-06-01');
+    await page.click('#rep-save');
+    await page.waitForSelector('#rep-warning:not([hidden])', { state: 'attached' });
+    await page.waitForTimeout(50); // a self-erasing message would be gone by now; a persistent one stays
+    const refuseInverted = await page.evaluate(() => ({
+      savedYet: window.__SAVED_REPORT__ ?? null, // core rejected before any save landed
+      builderOpen: !document.querySelector('#rep-builder')?.hidden,
+      warnPersists: !document.querySelector('#rep-warning')?.hidden &&
+        (document.querySelector('#rep-warning')?.textContent.trim().length ?? 0) > 0,
+      message: document.querySelector('#rep-warning')?.textContent.trim() ?? '',
+      cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
+    }));
+
     // (f) §09 R01: clicking Custom… reveals the two plain date fields; filling the pair and
     // saving fires a real saveReport whose captured rangeSpec is EXACTLY the plain-date
     // absolute arm { kind:'absolute', fromDate, toDate } — raw YYYY-MM-DD strings, no 'T'.
@@ -3161,12 +3186,19 @@ async function main() {
       refuseIncomplete.warnShown &&
       refuseDup.builderOpen &&
       refuseDup.warnPersists &&
-      refuseDup.cardCount === 2;
+      refuseDup.cardCount === 2 &&
+      // (i2) §09 R01 — the inverted-range core refusal: nothing saved, builder open, message
+      // persists and names the range problem, no card added.
+      refuseInverted.savedYet === null &&
+      refuseInverted.builderOpen &&
+      refuseInverted.warnPersists &&
+      /before/i.test(refuseInverted.message) &&
+      refuseInverted.cardCount === 2;
     const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
     );
   });
 
