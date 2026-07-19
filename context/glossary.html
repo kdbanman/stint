@@ -219,8 +219,13 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Merge</td>
-          <td data-l="Definition">Combine a contiguous selection of entries into one spanning earliest start to latest end. In the GUI the selection is checked on the <strong>entries calendar</strong> (§06): each event's hover-corner checkbox; any check enters multi-select mode and raises a merge bar (§12 R16). On attribute conflict: GUI prompts; <code>tt</code> uses the first entry unless overridden. Descriptions concatenate, tags union.</td>
+          <td data-l="Definition">Combine a <strong>contiguous</strong> selection of entries into one spanning earliest start to latest end. In the GUI the selection is checked on the <strong>entries calendar</strong> (§06): each event's hover-corner checkbox; any check enters multi-select mode and raises a merge bar (§12 R16). On attribute conflict: GUI prompts; <code>tt</code> uses the first entry unless overridden. Descriptions concatenate, tags union. A <strong>non-contiguous</strong> selection is refused unless the gap is acknowledged (core <code>allowGap</code> / <code>tt merge --allow-gap</code> / a GUI span-duration confirm), because the fold hard-deletes its inputs and turns the gap into billable time (§06 R3, §12 R13).</td>
           <td class="avoid" data-l="Avoid"><s>combine</s>, <s>join</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Contiguous</td>
+          <td data-l="Definition">A property of a selection about to be <strong>merged</strong>: consecutive selected entries are contiguous only when one's end equals the next's start <strong>exactly</strong>. One deterministic rule, no tolerance — <strong>any</strong> positive gap makes the selection non-contiguous and triggers the merge gate (§06 R3). An overlap (a negative gap) is not a contiguity failure; it is warned, not blocked (§06 R4). An open (running) entry has no end, so it cannot leave a gap before whatever follows it.</td>
+          <td class="avoid" data-l="Avoid"><s>adjacent</s>, <s>consecutive</s>, <s>back-to-back</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Archive</td>
@@ -275,7 +280,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Group key</td>
-          <td data-l="Definition">The value a <strong>report run</strong>'s rows are bucketed under when grouping is on: a local-date token <code>YYYY-MM-DD</code> (by day), or a client / project / tag name. An entry lacking a value for the grouped dimension falls under a canonical <strong>empty-dimension bucket</strong> — exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — which sorts first. Grouping by tag <strong>fans out</strong>: a multi-tag entry appears under each of its tags, so per-tag lines may sum to more than the grand total — which stays the de-duplicated sum of distinct entries and is identical under every grouping. Grouping is a <strong>Reports</strong> concept: grouped breakdowns live in <code>tt report --by</code> and the GUI Reports view (§09 R02), while the entries calendar and <code>tt list</code> render entries ungrouped.</td>
+          <td data-l="Definition">The value a <strong>report run</strong>'s rows are bucketed under when grouping is on: a local-date token <code>YYYY-MM-DD</code> (by day), or a client / project / tag name. An entry lacking a value for the grouped dimension falls under a canonical <strong>empty-dimension bucket</strong> — exactly <code>(no client)</code>, <code>(no project)</code>, or <code>(untagged)</code> — which sorts first. Grouping by tag <strong>fans out</strong>: a multi-tag entry appears under each of its tags, so per-tag lines may sum to more than the grand total — which stays the de-duplicated sum of distinct entries and is identical under every grouping. A span that <strong>crosses local midnight</strong> buckets under the local date of its <strong>start</strong> (<code>localDay(startUtc)</code>) — under every by-day grouping, and for the entries calendar's per-day billable total. This is the one attribution rule: the entries calendar may <em>draw</em> a midnight-crossing span as a segment in each day column it touches (§12 R16), but it is still grouped and totalled under its start day alone, so those visual segments never re-bucket it. Grouping is a <strong>Reports</strong> concept: grouped breakdowns live in <code>tt report --by</code> and the GUI Reports view (§09 R02), while the entries calendar and <code>tt list</code> render entries ungrouped.</td>
           <td class="avoid" data-l="Avoid"><s>bucket</s> (reserve that for the empty-dimension label), <s>segment</s>, <s>category</s></td>
         </tr>
       </tbody>
