@@ -2278,6 +2278,15 @@ body.popover { background: var(--canvas); margin: 0; }
   );
 }
 .ev.run .bd { display: flex; align-items: center; }
+/* §12 R16 (issue #71): a cross-midnight span renders one segment per day column, sharing the entry
+   id. Each segment drops the edge it CONTINUES ACROSS so the split reads as one span, not two
+   separate blocks: the start segment runs to the track bottom with no bottom edge (it continues
+   into the next column at 00:00), the end segment starts at the track top with no top edge, and a
+   full-day middle segment drops both. The open edge is the same "continues" language as the
+   running block's future-fade foot. */
+.dt .ev.seg-start { border-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+.dt .ev.seg-end { border-top: 0; border-top-left-radius: 0; border-top-right-radius: 0; }
+.dt .ev.seg-mid { border-top: 0; border-bottom: 0; border-radius: 0; }
 /* Slept-through hatch at the foot of the event (G12). */
 .ev .zz {
   position: absolute;
