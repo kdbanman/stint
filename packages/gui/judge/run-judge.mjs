@@ -2086,6 +2086,128 @@ async function main() {
     );
   });
 
+  // WRITE_REJECTION_FEEDBACK — §12 R21: a refused core write is surfaced WHERE it was attempted,
+  // never silently swallowed. Driving the REAL renderer over a STRICT-rejecting mock (the
+  // strict-listEntries precedent, issue #55 — `rejectWrites` makes edit/split/rename/toggle reject
+  // with a StoreError-shaped message), assert each site catches-and-displays: the form stays OPEN
+  // and an ANNOUNCED (role=status + aria-live) message region carries the reason (the Stop/toggle
+  // rejection routes to the banner area). Folds four facts — edit-mode Save, split confirm, inline
+  // rename, Stop/toggle. Captures main-edit-reject.png as the rubric evidence.
+  {
+    // (a) EDIT-MODE SAVE — open the unified editor, change a field, Save: the `edit` IPC rejects,
+    // and the editor stays open with the reason in the announced .ef-warning region (never closed,
+    // never a silent no-op). window.__EDITED__ stays unset — the refused write recorded nothing.
+    const editReject = await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+      const editRow = '.entry[data-id="80"]';
+      const editForm = '.edit-form.entry-form';
+      await page.hover(editRow);
+      await page.click(`${editRow} [data-act="edit"]`);
+      await page.waitForSelector(editForm, { state: 'attached' });
+      await page.fill(`${editForm} .edit-desc`, 'an edit core will refuse');
+      await page.click(`${editForm} button[type="submit"]`);
+      await page.waitForSelector(`${editForm} .ef-warning:not([hidden])`, { state: 'attached' });
+      await page.screenshot({ path: join(EVIDENCE, 'main-edit-reject.png'), fullPage: true });
+      return page.evaluate(() => {
+        const form = document.querySelector('.edit-form.entry-form');
+        const warn = form?.querySelector('.ef-warning');
+        return {
+          formOpen: !!form,
+          shown: !!warn && !warn.hidden && warn.textContent.trim().length > 0,
+          announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+          message: warn?.textContent.trim() ?? '',
+          notWritten: window.__EDITED__ == null,
+        };
+      });
+    }, { rejectWrites: true });
+
+    // (b) SPLIT CONFIRM — open the inline split picker on a closed row and confirm: the `split`
+    // IPC rejects (in-span rule) and the picker stays open with the reason in .split-warning.
+    const splitReject = await withPage(browser, splittableState(), 'index.html', async (page) => {
+      const row = '.entry[data-id="30"]';
+      await page.hover(row);
+      await page.waitForSelector(`${row} [data-act="split"]`, { state: 'attached' });
+      await page.click(`${row} [data-act="split"]`);
+      await page.waitForSelector(`${row} .split-at .split-input`, { state: 'attached' });
+      await page.click(`${row} [data-act="confirm-split"]`);
+      await page.waitForSelector(`${row} .split-warning:not([hidden])`, { state: 'attached' });
+      return page.evaluate(() => {
+        const wrap = document.querySelector('.entry[data-id="30"] .split-at');
+        const warn = wrap?.querySelector('.split-warning');
+        return {
+          formOpen: !!wrap && !!wrap.querySelector('.split-input'),
+          shown: !!warn && !warn.hidden && warn.textContent.trim().length > 0,
+          announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+          message: warn?.textContent.trim() ?? '',
+          notWritten: window.__SPLIT__ == null,
+        };
+      });
+    }, { rejectWrites: true });
+
+    // (c) INLINE RENAME — rename a client to a fresh name: the `renameClient` IPC rejects (a name
+    // collision, §13) and the inline rename form stays open with the reason in .rename-warning.
+    const renameReject = await withPage(browser, clientsState(), 'index.html', async (page) => {
+      await page.click('.nav-item[data-view="clients"]');
+      await page.waitForSelector('#clients:not([hidden]) .client[data-id] .project', { state: 'attached' });
+      const rowSel = '#clients .client[data-id]';
+      const current = (await page.textContent(`${rowSel} .client-name`)).trim();
+      await page.hover(rowSel);
+      await page.click(`${rowSel} [data-act="rename-client"]`);
+      await page.waitForSelector(`${rowSel} .rename-form .rename-input`, { state: 'attached' });
+      await page.fill(`${rowSel} .rename-form .rename-input`, current + ' Renamed');
+      await page.click(`${rowSel} .rename-form button[type="submit"]`);
+      await page.waitForSelector(`${rowSel} .rename-warning:not([hidden])`, { state: 'attached' });
+      return page.evaluate(() => {
+        const form = document.querySelector('#clients .client[data-id] .rename-form');
+        const warn = form?.querySelector('.rename-warning');
+        return {
+          formOpen: !!form && !!form.querySelector('.rename-input'),
+          shown: !!warn && !warn.hidden && warn.textContent.trim().length > 0,
+          announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+          message: warn?.textContent.trim() ?? '',
+          notWritten: window.__RENAMED_CLIENT__ == null,
+        };
+      });
+    }, { rejectWrites: true });
+
+    // (d) STOP/TOGGLE — Stop the running entry from the Active-Timer card: the `toggle` IPC
+    // rejects (#61) and the rejection routes to the banner AREA, reworded as a block (.error),
+    // announced — never a silent no-op. (The tray-popover twin has its own #pop-warning region.)
+    const toggleReject = await withPage(browser, runningState(), 'index.html', async (page) => {
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('#timer-stop', { state: 'visible' });
+      await page.click('#timer-stop');
+      // §12 R21 / issue #61: the refusal must be VISIBLE on the Timer view — the very surface the
+      // Stop was clicked on ("Stop appears dead"). #timer-warning is in the active Timer view, so
+      // waiting for state:'visible' asserts a genuinely on-screen region (not an off-view banner).
+      await page.waitForSelector('#timer-warning', { state: 'visible' });
+      return page.evaluate(() => {
+        const t = document.querySelector('#timer-warning');
+        const b = document.querySelector('#overlap-banner');
+        const rect = t?.getBoundingClientRect();
+        return {
+          // The Timer-view region is visible (in the active view), announced, carries the reason.
+          timerShown: !!t && !t.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && t.textContent.trim().length > 0,
+          timerAnnounced: t?.getAttribute('role') === 'status' && t?.hasAttribute('aria-live'),
+          message: t?.textContent.trim() ?? '',
+          // The Entries-view banner mirrors it (block chrome) for that context.
+          bannerMirrors: !!b && !b.hidden && b.classList.contains('error') && b.textContent.trim().length > 0,
+        };
+      });
+    }, { rejectWrites: true });
+
+    const ok =
+      editReject.formOpen && editReject.shown && editReject.announced && editReject.notWritten &&
+      splitReject.formOpen && splitReject.shown && splitReject.announced && splitReject.notWritten &&
+      renameReject.formOpen && renameReject.shown && renameReject.announced && renameReject.notWritten &&
+      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors;
+    record(
+      'WRITE_REJECTION_FEEDBACK',
+      ok,
+      `edit-save=${JSON.stringify(editReject)} split=${JSON.stringify(splitReject)} rename=${JSON.stringify(renameReject)} toggle=${JSON.stringify(toggleReject)}`,
+      'main-edit-reject.png',
+    );
+  }
+
   // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
   // action; merging entries that DISAGREE on client/billable raises the conflict prompt
   // offering the distinct client choices and a billable choice BEFORE committing
@@ -2731,6 +2853,44 @@ async function main() {
       presets: [...document.querySelectorAll('#rep-preset-seg .preset')].map((c) => c.dataset.preset),
       bys: [...document.querySelectorAll('#rep-by-seg .seg-btn')].map((b) => b.dataset.by),
     }));
+
+    // (h) §12 R21 / §09 R01 — REFUSAL: an incomplete custom range is refused with FEEDBACK, not a
+    // silent no-op. Name it, pick Custom…, fill ONLY From, Save → ZERO saveReport calls, the
+    // builder STAYS open, the missing field (#rep-range-to) takes focus, and #rep-warning carries
+    // a persistent message (a renderer-local refusal that never reaches core, so #65's catch can't
+    // cover it — it needs its own feedback).
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+    await page.fill('#rep-name', 'Temp report');
+    await page.fill('#rep-range-from', '2026-06-01');
+    await page.click('#rep-save');
+    await page.waitForSelector('#rep-warning:not([hidden])', { state: 'attached' });
+    const refuseIncomplete = await page.evaluate(() => ({
+      savedYet: window.__SAVED_REPORT__ ?? null, // no saveReport call reached core
+      builderOpen: !document.querySelector('#rep-builder')?.hidden,
+      toFocused: document.activeElement?.id === 'rep-range-to',
+      warnShown: !document.querySelector('#rep-warning')?.hidden &&
+        (document.querySelector('#rep-warning')?.textContent.trim().length ?? 0) > 0,
+    }));
+
+    // (i) §12 R21 / §13 — REFUSAL: a duplicate report name is refused by core, and the error
+    // PERSISTS past the tick (the old setCustomValidity dance erased its own message same-tick).
+    // Complete the range, name it an EXISTING def, Save → saveReport rejects → #rep-warning stays
+    // visible with the reason, the builder stays open, and no third card appears.
+    await page.fill('#rep-range-to', '2026-06-07');
+    await page.fill('#rep-name', 'Weekly billables — Globex');
+    await page.click('#rep-save');
+    await page.waitForSelector('#rep-warning:not([hidden])', { state: 'attached' });
+    // Let a tick pass — a self-erasing message would be gone by now; a persistent one stays.
+    await page.waitForTimeout(50);
+    const refuseDup = await page.evaluate(() => ({
+      builderOpen: !document.querySelector('#rep-builder')?.hidden,
+      warnPersists: !document.querySelector('#rep-warning')?.hidden &&
+        (document.querySelector('#rep-warning')?.textContent.trim().length ?? 0) > 0,
+      message: document.querySelector('#rep-warning')?.textContent.trim() ?? '',
+      cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
+    }));
+
     // (f) §09 R01: clicking Custom… reveals the two plain date fields; filling the pair and
     // saving fires a real saveReport whose captured rangeSpec is EXACTLY the plain-date
     // absolute arm { kind:'absolute', fromDate, toDate } — raw YYYY-MM-DD strings, no 'T'.
@@ -2913,12 +3073,22 @@ async function main() {
       !!deleted.payload &&
       deleted.payload.name === 'June window v2' &&
       deleted.count === 2;
-    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk;
+    // §12 R21: the two Save-refusal sub-facts — an incomplete custom range is a fed-back no-op
+    // (zero saveReport, builder open, missing field focused, message shown), and a duplicate name
+    // is refused with a message that PERSISTS past the tick (no self-erase), builder still open.
+    const refusalOk =
+      refuseIncomplete.savedYet === null &&
+      refuseIncomplete.builderOpen &&
+      refuseIncomplete.toFocused &&
+      refuseIncomplete.warnShown &&
+      refuseDup.builderOpen &&
+      refuseDup.warnPersists &&
+      refuseDup.cardCount === 2;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,
-      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
     );
   });
 

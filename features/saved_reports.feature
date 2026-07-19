@@ -76,6 +76,19 @@ Feature: Saved reports
     Then the saved report run totals 3 billable hours
     And the saved report run total is unchanged
 
+  Scenario: A duplicate report name is refused and persists nothing
+    # PRD §13 (UNIQUE COLLATE NOCASE) — a saved report's name is unique, case-insensitively.
+    # A second save under the same name (any case) is REFUSED by core; the original stays the
+    # only "Weekly" in the list. This is the rejection the GUI builder surfaces inline (§12 R21):
+    # proving the CONTRACT holds identically on @stint/core (store.saveReport throws) and tt
+    # (`tt report save` exits non-zero), and that the refused save adds nothing.
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    When I save a report "Weekly" for this week grouped by client over billable time
+    Then the saved report list includes "Weekly"
+    When saving a report "weekly" for last week grouped by project over all time is rejected
+    Then the saved report list includes "Weekly"
+    And the saved report list does not include "weekly"
+
   Scenario: Renaming then deleting a saved report removes it from the list
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     When I save a report "Draft" for this week grouped by client over billable time

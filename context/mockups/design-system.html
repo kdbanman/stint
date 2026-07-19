@@ -85,6 +85,13 @@
   .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
   .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
   .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C44C3833}
+  /* Inline messages (PRD §12 R21). A .msg is a full-width notice at the point of action, one
+     home for both semantics: .warn is the warn-not-block ADVISORY (an overlap that still saved,
+     --warn tokens); .err is a refused-write BLOCK (--danger tokens) — the write did not land,
+     the form stays open. Distinct palettes so an advisory never reads as a hard error. */
+  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid}
+  .msg.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
@@ -290,6 +297,22 @@
     <div class="panel">
       <div style="max-width:280px"><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
       <p class="rule" style="margin-top:14px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
+    </div>
+  </div>
+  <div class="two" style="margin-top:18px">
+    <div class="panel">
+      <div class="demos" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div class="msg warn">This entry overlaps 1 other entry — allowed, but flagged in reports.</div>
+        <div class="msg err">Stop time is before the entry started.</div>
+      </div>
+      <p class="rule" style="margin-top:14px"><b>Inline messages</b> (§12 R21) appear at the point of action. A <b>warn</b> advisory is allowed-but-flagged (the write saved); an <b>error</b> is a refused write (the form stays open, nothing changed). Two palettes so an advisory never reads as a hard block.</p>
+    </div>
+    <div class="panel">
+      <div class="demos" style="flex-direction:column;align-items:stretch;gap:8px">
+        <div class="msg err">A saved report named that already exists.</div>
+        <div class="msg err">Pick both a From and a To date for the custom range.</div>
+      </div>
+      <p class="rule" style="margin-top:14px">The error message carries the core rejection verbatim (or, for a renderer-local refusal like an incomplete range, focuses the missing field). It is announced (<code>role=status</code>) and persists until the next input.</p>
     </div>
   </div>
 </div>

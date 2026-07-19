@@ -1398,9 +1398,15 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false } = {}) {
   return `
     window.__STATE__ = ${stateJson};
+    // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
+    // (the strict-listEntries precedent, issue #55): edit/split/toggle/rename each reject with a
+    // StoreError-shaped message, so the scene can drive a real refused write and assert the
+    // renderer SURFACES it (an announced message region, the form staying open) instead of
+    // swallowing it. Off by default → every other scene's writes resolve as before.
+    window.__REJECT_WRITES__ = ${rejectWrites ? 'true' : 'false'};
     // §05 R01 (RECORD only) — when set, the start mock performs core's atomic stop-then-start
     // ON the injected snapshot: it closes any currently-open row at the pinned now and inserts a
     // single fresh open row from the submitted attributes, so the subsequent load()/getState
@@ -1538,6 +1544,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         return Promise.resolve({ groups, rangeFromUtc: '2026-06-22T00:00:00.000Z', rangeToUtc: '2026-06-29T00:00:00.000Z' });
       },
       toggle: () => {
+        // §12 R21: a strict core can refuse a stop (e.g. stop time before the entry started,
+        // #61). The renderer must route it to the banner area, never a silent no-op.
+        if (window.__REJECT_WRITES__) return Promise.reject(new Error('stop time is before the entry started'));
         // issue #50 (CROSS_VIEW_FRESHNESS): the opt-in state-mutating toggle — see
         // window.__TOGGLE_STARTS__ above. Mirrors main.ts toggleTimer over core: stop the
         // open row when running, else start a fresh open row at the pinned now.
@@ -1635,6 +1644,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       listClients: function () { return Promise.resolve(this.__CLIENTS__); },
       listProjects: function (p) { return Promise.resolve((this.__PROJECTS__[(p && p.clientId)] || [])); },
       // The mutators are STATEFUL like production core: they record their payload (so a scene
+      // §12 R21: under __REJECT_WRITES__ the rename mutators reject like core refusing a
+      // colliding name (§13 UNIQUE COLLATE NOCASE), so the inline rename form surfaces it
+      // instead of no-op'ing — the WRITE_REJECTION_FEEDBACK scene drives this.
       // can assert what the renderer sent), apply the change to the canned lists (create appends,
       // rename updates the name, archive drops from the active list), and fire the changed
       // broadcast (issue #66) — so a write → re-render actually lands / renames / removes the
@@ -1642,9 +1654,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // AND drives the broadcast repaint on top of the handler's own direct renderClients call.
       addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); this.__FIRE_CHANGED__(); return Promise.resolve(c); },
       addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); this.__FIRE_CHANGED__(); return Promise.resolve(pr); },
-      renameClient: function (p) { window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameClient: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a client named that already exists')); window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveClient: function (p) { window.__ARCHIVED_CLIENT__ = p; this.__CLIENTS__ = this.__CLIENTS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
-      renameProject: function (p) { window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameProject: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a project named that already exists')); window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveProject: function (p) { window.__ARCHIVED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { this.__PROJECTS__[k] = this.__PROJECTS__[k].filter((x) => x.id !== (p && p.id)); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R10: the tag-management channels the Clients view's tag strip drives (parity
       // with tt tag ls/add/rename/archive). listTags returns the canned active tags; the
@@ -1654,7 +1666,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __TAGS__: [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }],
       listTags: function () { return Promise.resolve(this.__TAGS__); },
       addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
-      renameTag: function (p) { window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameTag: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a tag named that already exists')); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §09 R7: the free-text search the search box drives (parity with tt list --search).
       // Returns the same UiState the renderer paints from, narrowed to matching rows — the
@@ -1717,10 +1729,19 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // Records the edit payload so the harness can assert inline editing of the
       // running entry sends a patch that never carries endUtc (so it cannot stop it).
       // Returns the WriteAck so the OVERLAP_BANNER scene can drive an overlapping edit.
-      edit: (p) => { window.__EDITED__ = p; return Promise.resolve(window.__ACK__); },
+      // §12 R21: under __REJECT_WRITES__ the edit rejects like core refusing a Stop-before-Start
+      // (§05 R11), so the WRITE_REJECTION_FEEDBACK scene can assert the editor surfaces it inline.
+      edit: (p) => {
+        if (window.__REJECT_WRITES__) return Promise.reject(new Error('entry end must be after its start'));
+        window.__EDITED__ = p; return Promise.resolve(window.__ACK__);
+      },
       // Records the split payload so the SPLIT_AFFORDANCE scene can drive the inline
       // picker without erroring; core owns the in-span rule, so the mock just resolves.
-      split: (p) => { window.__SPLIT__ = p; return Promise.resolve(window.__ACK__); },
+      // §12 R21: under __REJECT_WRITES__ it rejects like core's strictly-in-span rule.
+      split: (p) => {
+        if (window.__REJECT_WRITES__) return Promise.reject(new Error('split point must be strictly inside the entry span'));
+        window.__SPLIT__ = p; return Promise.resolve(window.__ACK__);
+      },
       // Records the merge payload so the MERGE_CONFLICT / MERGE_NOCONFLICT scenes can
       // assert what the conflict prompt (or direct merge) sends — { ids, winnerId,
       // billable }; core owns the actual fold, so the mock just resolves.
@@ -1835,6 +1856,11 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         return Promise.resolve(def ? { ...def } : null);
       },
       saveReport: function (p) {
+        // §12 R21 / §13: core refuses a duplicate report name (UNIQUE COLLATE NOCASE). The mock
+        // mirrors that guard (case-insensitive) so the REPORTS_VIEW duplicate-name refusal fact
+        // drives a real rejection — it rejects BEFORE recording, so a refused save leaves no trace.
+        const dup = this.__SAVED_REPORTS__.some((d) => d.name.toLowerCase() === String((p && p.name) || '').toLowerCase());
+        if (dup) return Promise.reject(new Error('a saved report named that already exists'));
         window.__SAVED_REPORT__ = p;
         const def = { id: 99, createdUtc: '2026-06-24T00:00:00.000Z', ...p };
         this.__SAVED_REPORTS__.push(def);
