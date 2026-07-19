@@ -1696,10 +1696,11 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __REPORTS_BY_ROUNDING__: ${JSON.stringify(REPORT_BY_ROUNDING)},
       __CUSTOM_REPORT__: ${JSON.stringify(CUSTOM_REPORT)},
       __REPORT_SUMMARY__: ${JSON.stringify(REPORT_SUMMARY)},
-      // §09 R6: the report view's Export CSV / Export JSON. The renderer rounds the export
-      // through main (it cannot touch fs); the mock records the requested format + range so
-      // the REPORT_SUMMARY scene can assert each button drives a real exportEntries call,
-      // and returns a written-shaped result (a fixed path + count) without touching disk.
+      // §09 R06/R09: the Reports view's exports — the report's own filtered Export CSV/JSON
+      // (scope 'filtered') and Export All Data (scope 'all'). The renderer rounds the export
+      // through main (it cannot touch fs); the mock records the requested format + scope + range
+      // so the REPORTS_VIEW scene can assert each button drives a real exportEntries call, and
+      // returns a written-shaped result (a fixed path + count) without touching disk.
       exportEntries: function (p) {
         window.__EXPORTED__ = p;
         return Promise.resolve({ written: 3, path: '/tmp/stint-export.' + ((p && p.format) || 'csv') });

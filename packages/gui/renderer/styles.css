@@ -1312,6 +1312,21 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--ink);
 }
 .report-export-status { font-size: 12px; color: var(--muted); }
+/* The scope label that names each export block (This report / All data in range). */
+.report-export-scope {
+  font-size: 12px;
+  font-weight: 590;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin-right: 2px;
+}
+/* §09 R06: the raw "Export All Data" block sits apart at the bottom of the view — a hairline
+   rule above it and a lighter margin mark it as the data-out escape hatch, not the report. */
+.report-export-all {
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--rule);
+}
 
 /* §12 R08 / §09 R08–R09 (G11): the Reports view — SAVED, named report definitions. Its one
    accent affordance is the + New report primary action; the cards, builder, and run-output
