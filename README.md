@@ -40,7 +40,7 @@ tt add "spec review" --from 13:00 --to 14:30 --client "Client A"
 tt list --week
 tt report --week --by client --round 15
 tt export --month --csv -o june.csv
-tt sleep ls                     # entries the machine slept through
+tt sleep ls                     # entries the machine slept through (detected by the GUI app while it runs)
 tt sleep subtract 42            # exclude slept time (reversible)
 tt status --json                # --json on every read command, for scripting
 ```
