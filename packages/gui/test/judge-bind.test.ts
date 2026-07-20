@@ -30,7 +30,7 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 
 const rubricIds = (): string[] => {
   const rubric = readFileSync(join(repoRoot, 'acceptance/criteria/judge-rubric.md'), 'utf8');
-  return [...rubric.matchAll(/^\| `([A-Z_]+)` \|/gm)].map((m) => m[1]);
+  return [...rubric.matchAll(/^\| `([A-Z_]+)` \|/gm)].map((m) => m[1]!);
 };
 
 const sceneIds = (): string[] => {
