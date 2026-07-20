@@ -1003,6 +1003,41 @@ database (find it with `tt config ls` / the default path in PRD §13; below it i
 > `now`/`restore` exit contracts. This runbook confirms the live launch backup, retention pruning,
 > the on-open corruption dialog, and the real cross-surface round-trip a headless host cannot exercise.
 
+## CHECK VERSION-SKEW REFUSAL (§20 R09) — a newer-schema DB is refused before any write
+
+§20 R09 is the two-sided version gate's max fence: a binary opening a database whose
+`user_version` **exceeds** its own `SCHEMA_VERSION` must **refuse the open** — nothing beyond the
+database header is read, and **nothing is ever written** (no launch backup, no journal sibling,
+and above all no quarantine/restore, which would replace newer data with an older backup). The
+**cheap automated mirror** of this check is the core + CLI GOLD cases
+(`core/test/gold/migration.test.ts` "refuses to open a DB from a NEWER schema…" / "Store.open
+refuses the same future-stamped DB…" and `cli/test/gold/cli.test.ts` "tt status on a
+future-stamped DB exits 1…"); this MANUAL check confirms the GUI's native dialog on a real
+install. Run with `tt` available (the database is `timetracker.sqlite` — find it with
+`tt config ls` / the default path in PRD §13).
+
+1. With the app **quit**, make a **copy** of a real database (never stamp the live file) and
+   stamp the copy as if a future Stint wrote it:
+   `cp timetracker.sqlite /tmp/tt-future.sqlite && sqlite3 /tmp/tt-future.sqlite 'PRAGMA user_version = 99'`.
+   Note the copy's size + mtime (`ls -l --time-style=full-iso /tmp/tt-future.sqlite`).
+2. Launch the GUI **pointed at the stamped copy** (`TT_DB=/tmp/tt-future.sqlite` in the app's
+   environment).
+   - [ ] A **native error dialog** appears naming **both versions** (the database's 99 and the
+         binary's supported schema version), the **remedy** ("run the newer binary"), and the
+         **refused file's path** — and the app **exits** (non-zero) instead of proceeding.
+   - [ ] The app did **not write**: the copy's **size and mtime are unchanged** versus step 1,
+         and **no sibling files** appeared next to it (no `-wal`/`-shm`, no `.corrupted-*`
+         quarantine, no `.bak-*` launch backup).
+3. Cross-check the CLI surface on the same copy: `TT_DB=/tmp/tt-future.sqlite tt status`.
+   - [ ] It exits **non-zero** with the same both-versions + remedy message on **stderr**, and
+         again the file and its directory are untouched.
+
+> The refusal must come **before** the integrity scan and the corruption-recovery routing: a
+> stale binary that misread a merely-newer database as corrupt would quarantine it and restore
+> an **older** backup over newer data — the exact loss R09 forecloses. This check fails if the
+> GUI proceeds to a normal window, writes anything beside the stamped copy, or shows a recovery
+> dialog instead of the version-skew error.
+
 ## CHECK SOFTWARE UPDATE — VERSION DISPLAYED (§19 R06)
 
 §19 R06 stamps a single date/build version (`YYYY.M.D`, with a numeric same-day suffix

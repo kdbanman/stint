@@ -467,7 +467,8 @@ function init(): void {
   try {
     store = Store.open({ path: dbPath });
   } catch (err) {
-    // §20 R09 — a database stamped by a NEWER Stint is refused before any read or write;
+    // §20 R09 — a database stamped by a NEWER Stint is refused before any write (nothing
+    // beyond the database header is read);
     // surface the actionable message (both versions + "run the newer binary") and exit
     // non-zero. ONLY this error is caught: every other open failure (DbOpenError,
     // RecoveryError, …) must stay exactly as loud as before.

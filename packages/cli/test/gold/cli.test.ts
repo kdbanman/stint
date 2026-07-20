@@ -7,13 +7,14 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { DatabaseSync } from 'node:sqlite';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
-import { Store } from '@stint/core';
+import { Store, SCHEMA_VERSION } from '@stint/core';
 import { descriptionCell } from '../../src/format.js';
 // ajv-formats ships a CJS default export; cast to its callable shape for NodeNext.
 const addFormats = addFormatsImport as unknown as <T>(ajv: T) => T;
@@ -1316,5 +1317,32 @@ describe('GOLD: tt list description cell (§11, §05 R10)', () => {
     const descriptions = json.map((e: { description: string }) => e.description);
     expect(descriptions).toContain(multiline); // interior newline intact, full fidelity
     expect(descriptions).toContain(long); // full 80 chars, never capped at 60
+  });
+});
+
+describe('GOLD: version-skew refusal (§20 R09)', () => {
+  // §20 R09 on the tt surface: a database stamped by a FUTURE binary is refused at open,
+  // BEFORE any write — including the §20 R04 launch backup Store.open would otherwise take.
+  // The stamp goes through raw node:sqlite, not the code under test, exactly as a stale
+  // binary would meet the file.
+  it('tt status on a future-stamped DB exits 1 with both versions and the remedy on stderr, leaving the directory unchanged', () => {
+    tt(['client', 'add', 'Client A']); // create a real DB through the normal path
+    const futureVersion = SCHEMA_VERSION + 5;
+    const raw = new DatabaseSync(db);
+    raw.exec(`PRAGMA user_version = ${futureVersion}`);
+    raw.close();
+    const listingBefore = readdirSync(dir).sort();
+
+    const r = tt(['status']);
+    expect(r.code).toBe(1);
+    expect(r.out).toBe(''); // no normal status over a refused DB
+    // stderr names the DB's version, the binary's version, the remedy, and the refused file.
+    expect(r.err).toContain(String(futureVersion));
+    expect(r.err).toContain(String(SCHEMA_VERSION));
+    expect(r.err).toContain('newer version of Stint');
+    expect(r.err).toContain('run the newer binary');
+    expect(r.err).toContain(db);
+    // The refused open wrote nothing: no launch backup, no journal/quarantine sibling.
+    expect(readdirSync(dir).sort()).toEqual(listingBefore);
   });
 });

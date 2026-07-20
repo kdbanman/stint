@@ -184,15 +184,37 @@ export class DbOpenError extends Error {
 /**
  * The database's `user_version` exceeds this binary's {@link SCHEMA_VERSION} (PRD §20 R09).
  *
- * Thrown by {@link openDb} after the version read but before any DDL or write — R08's
+ * Thrown by {@link openDb} as the FIRST post-open action — only the database header's version
+ * stamp is read before the refusal — and again by `migrate()` as the backstop. R08's
  * additive-only migration policy is a policy, not a fence, and a stale binary reading or
  * writing under an outdated schema understanding could silently corrupt billing data, so
- * the open is refused entirely. Naming it lets both surfaces catch it precisely.
+ * the open is refused entirely. The message carries the offending file's path (with `TT_DB`
+ * overrides the user must be able to see WHICH file was refused). Naming the error lets both
+ * surfaces catch it precisely.
  */
 export class SchemaTooNewError extends Error {
-  constructor(message: string) {
-    super(message);
+  readonly foundVersion: number;
+  readonly supportedVersion: number;
+  readonly path: string;
+  constructor(foundVersion: number, supportedVersion: number, path: string) {
+    super(
+      `database schema version ${foundVersion} is newer than this binary's supported ` +
+        `version ${supportedVersion}: this database was written by a newer version of Stint; ` +
+        `run the newer binary (database: ${path})`,
+    );
     this.name = 'SchemaTooNewError';
+    this.foundVersion = foundVersion;
+    this.supportedVersion = supportedVersion;
+    this.path = path;
+  }
+}
+
+/** Close a handle on a refusal path, swallowing errors — the handle may already be unusable. */
+function closeQuietly(db: Db): void {
+  try {
+    db.close();
+  } catch {
+    /* a refused or corrupt handle may already be unusable */
   }
 }
 
@@ -276,6 +298,11 @@ export function assertOpenPragmas(db: Db, path: string, busyTimeoutMs: number): 
  * never start fresh on an empty DB), and the restored file is reopened. When a recovery
  * happened, `opts.onRecovered` is invoked with its result so the caller (the GUI) can
  * inform the user that nothing was lost.
+ *
+ * §20 R09 — a database stamped with a `user_version` NEWER than this binary's
+ * {@link SCHEMA_VERSION} is refused with {@link SchemaTooNewError} as the first post-open
+ * action: nothing beyond the database header is read before the refusal, and nothing is
+ * ever written.
  */
 export function openDb(
   path: string,
@@ -289,8 +316,29 @@ export function openDb(
   if (path === ':memory:') {
     const mem = new DatabaseSync(path);
     assertOpenPragmas(mem, path, busyTimeoutMs);
-    migrate(mem);
+    migrate(mem, ':memory:');
     return mem;
+  }
+
+  let db = new DatabaseSync(path);
+
+  // §20 R09 — the version-skew fence is the FIRST post-open action, BEFORE the pragmas
+  // (whose WAL switch can rewrite the journal-mode header), BEFORE the integrity scan
+  // (a full-file read), and BEFORE the corrupt→quarantine routing below: a stale binary
+  // must never route a merely-NEWER database into quarantine/restore — that would replace
+  // newer data with an older backup, the exact hazard R09 forecloses. Only the database
+  // header's version stamp is read before the refusal. If the header itself is unreadable,
+  // the read throws and we fall through to the existing corrupt-handling flow unchanged.
+  let foundVersion: number | null = null;
+  try {
+    foundVersion = (db.prepare('PRAGMA user_version').get() as { user_version: number })
+      .user_version;
+  } catch {
+    /* header unreadable — let the R03 corruption gate below classify it */
+  }
+  if (foundVersion !== null && foundVersion > SCHEMA_VERSION) {
+    closeQuietly(db);
+    throw new SchemaTooNewError(foundVersion, SCHEMA_VERSION, path);
   }
 
   // §20 R03/R05 — integrity gate on a real file: open it, set the durability pragmas, and run
@@ -299,7 +347,6 @@ export function openDb(
   // raise "file is not a database"); BOTH are treated as corruption. On corruption we close the
   // handle, quarantine the corrupt file and restore the latest backup (RecoveryError if none —
   // never an empty start), reopen the restored file, and notify the caller.
-  let db = new DatabaseSync(path);
   let corrupt = false;
   try {
     assertOpenPragmas(db, path, busyTimeoutMs);
@@ -309,37 +356,38 @@ export function openDb(
     // not corruption, so it must propagate (§20 R01: refused before any write). Any other
     // throw from the pragmas/open (e.g. a clobbered header that makes WAL raise "file is not
     // a database") IS corruption and routes to recovery below.
-    if (e instanceof DbOpenError) throw e;
+    if (e instanceof DbOpenError) {
+      closeQuietly(db);
+      throw e;
+    }
     corrupt = true;
   }
   if (corrupt) {
-    try {
-      db.close();
-    } catch {
-      /* a corrupt handle may already be unusable */
-    }
+    closeQuietly(db);
     const recovery = quarantineAndRecover(path); // throws RecoveryError if no backup
     db = new DatabaseSync(path); // reopen the restored file
-    assertOpenPragmas(db, path, busyTimeoutMs);
+    try {
+      assertOpenPragmas(db, path, busyTimeoutMs);
+    } catch (e) {
+      // A refusal on the recovery-reopen must not leak the fresh handle either.
+      closeQuietly(db);
+      throw e;
+    }
     opts.onRecovered?.(recovery);
   }
 
   try {
-    migrate(db);
+    migrate(db, path);
   } catch (e) {
-    // A refused open (§20 R09) must not leak the handle — close it so the file is left
-    // exactly as found before propagating.
-    try {
-      db.close();
-    } catch {
-      /* handle may already be unusable */
-    }
+    // A refused open (§20 R09 backstop, or any migration failure) must not leak the
+    // handle — close it so the file is left exactly as found before propagating.
+    closeQuietly(db);
     throw e;
   }
   return db;
 }
 
-function migrate(db: Db): void {
+function migrate(db: Db, path: string): void {
   // Only touch the schema when it is actually behind: an up-to-date database skips all
   // DDL, so concurrent opens don't each take a write lock just to re-assert the schema.
   // Every statement in SCHEMA_SQL is IF NOT EXISTS, so the v2→v3 bump (which adds the
@@ -347,15 +395,13 @@ function migrate(db: Db): void {
   // index) is purely additive: an existing v2 DB simply re-runs the idempotent DDL and
   // stamps user_version = 3 with no data migration.
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  // §20 R09 — a database stamped AHEAD of this binary is refused outright, before any DDL
-  // or write: there are no down-migrations, so this binary cannot know what a future schema
-  // means and must not read or write under it.
+  // §20 R09 backstop — openDb's header read is the PRIMARY fence (first post-open action);
+  // this check is defense-in-depth guarding the post-recovery reopen and any other migrate
+  // caller. A database stamped AHEAD of this binary is refused before any DDL or write:
+  // there are no down-migrations, so this binary cannot know what a future schema means
+  // and must not read or write under it.
   if (row.user_version > SCHEMA_VERSION) {
-    throw new SchemaTooNewError(
-      `database schema version ${row.user_version} is newer than this binary's supported ` +
-        `version ${SCHEMA_VERSION}: this database was written by a newer version of Stint; ` +
-        `run the newer binary`,
-    );
+    throw new SchemaTooNewError(row.user_version, SCHEMA_VERSION, path);
   }
   if (row.user_version >= SCHEMA_VERSION) return;
   db.exec(SCHEMA_SQL);

@@ -9,16 +9,19 @@
  * preserves every existing row byte-for-byte while adding the new v3 structures and stamping the
  * version forward; (b) re-opening an up-to-date DB mutates neither schema nor data.
  *
- * §20 R09 is the max-version fence on the same gate: a DB stamped AHEAD of this binary's
- * SCHEMA_VERSION is refused outright (SchemaTooNewError naming both versions and the remedy),
- * and the refused open leaves the file byte-identical — no write, ever.
+ * §20 R09 is the max-version fence, hoisted to openDb's FIRST post-open action (nothing beyond
+ * the database header is read; migrate()'s check remains as backstop): a DB stamped AHEAD of this
+ * binary's SCHEMA_VERSION is refused outright (SchemaTooNewError naming both versions, the
+ * remedy, and the refused file's path), and the refused open — through openDb AND through
+ * Store.open — leaves the file byte-identical and the directory listing unchanged: no write,
+ * no journal/quarantine/backup sibling, ever.
  */
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { openDb, SCHEMA_VERSION, SchemaTooNewError } from '@stint/core';
+import { openDb, SCHEMA_VERSION, SchemaTooNewError, Store } from '@stint/core';
 import type { Db } from '@stint/core';
 
 const userVersion = (db: Db) =>
@@ -145,7 +148,7 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       // Build a current DB with real data, then stamp it as if a FUTURE binary wrote it.
       // The stamp goes through raw node:sqlite — not the code under test — so the gate is
       // exercised from the outside, exactly as a stale binary would meet the file.
-      let db = openDb(dbPath);
+      const db = openDb(dbPath);
       db.exec("INSERT INTO client(name) VALUES('Initech')");
       db.close();
       const futureVersion = SCHEMA_VERSION + 5;
@@ -153,6 +156,7 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       raw.exec(`PRAGMA user_version = ${futureVersion}`);
       raw.close();
       const bytesBefore = readFileSync(dbPath);
+      const listingBefore = readdirSync(dir).sort();
 
       // The open is refused with the typed error…
       let thrown: unknown;
@@ -162,15 +166,53 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
         thrown = e;
       }
       expect(thrown).toBeInstanceOf(SchemaTooNewError);
-      // …whose message names the database's version, the binary's version, and the remedy…
+      // …whose message names the database's version, the binary's version, the remedy, and
+      // WHICH file was refused (with TT_DB overrides the user must be able to see the path)…
       const message = (thrown as Error).message;
       expect(message).toContain(String(futureVersion));
       expect(message).toContain(String(SCHEMA_VERSION));
       expect(message).toContain('newer version of Stint');
       expect(message).toContain('run the newer binary');
-      // …and the refused open wrote NOTHING: the file bytes are identical.
+      expect(message).toContain(dbPath);
+      // …and the refused open wrote NOTHING: the file bytes are identical…
       const bytesAfter = readFileSync(dbPath);
       expect(bytesAfter.equals(bytesBefore)).toBe(true);
+      // …and NO sibling file was left behind — no -wal/-shm journal, no .corrupted-*
+      // quarantine, no .bak-* backup. A stale binary must never route a merely-newer DB
+      // into quarantine/restore (that would replace newer data with an older backup).
+      expect(readdirSync(dir).sort()).toEqual(listingBefore);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('Store.open refuses the same future-stamped DB with the same typed error and writes no launch backup (§20 R09)', () => {
+    // The Store-level gate: Store.open wraps openDb and then writes a §20 R04 launch
+    // backup — this pins that NO launch backup (or any other write) precedes the refusal,
+    // so the directory listing is unchanged after the refused open.
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-migrate-newer-store-'));
+    try {
+      const dbPath = join(dir, 'timetracker.sqlite');
+      const db = openDb(dbPath);
+      db.exec("INSERT INTO client(name) VALUES('Initech')");
+      db.close();
+      const futureVersion = SCHEMA_VERSION + 5;
+      const raw = new DatabaseSync(dbPath);
+      raw.exec(`PRAGMA user_version = ${futureVersion}`);
+      raw.close();
+      const listingBefore = readdirSync(dir).sort();
+
+      let thrown: unknown;
+      try {
+        Store.open({ path: dbPath });
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(SchemaTooNewError);
+      expect((thrown as Error).message).toContain(dbPath);
+      // The refused open left the directory listing unchanged: no launch backup, no
+      // journal siblings, no quarantine file.
+      expect(readdirSync(dir).sort()).toEqual(listingBefore);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
