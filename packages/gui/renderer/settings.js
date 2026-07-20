@@ -1,8 +1,8 @@
 // §12 R11 — the in-window Settings view. Editable controls for every §14 setting, modeled
 // on context/mockups/settings.html. Each control persists its value over the SAME setSetting IPC
 // `tt config set` uses (parity-covered — no new channel), then reloads, so an edit is
-// immediately the new truth on BOTH surfaces. Classic script (no ES modules) so it loads
-// over file:// in the packaged app; helpers come from window.SU (util.js, loaded first).
+// immediately the new truth on BOTH surfaces. Classic script; helpers come from window.SU
+// (the bundled su.ts entry, loaded first — see context/architecture.html §08).
 //
 // This file is intentionally additive: it does not edit app.js. It hooks the Settings
 // nav-item to render the panel, mirrors the date-format mode onto the renderer, and
@@ -13,7 +13,7 @@
 
   // The live date-format mode. render() re-applies it off fresh getState (on startup, on
   // every external change, and right after a setSetting), so the chosen format drives
-  // util.js's localTime.
+  // SU.localTime.
   let dateFormatMode = 'system';
 
   // §14 — the editable settings, in the mockup's grouped order. `key` is the camelCase
@@ -310,7 +310,7 @@
         checkBtn.textContent = 'Checking…';
         try {
           lastUpdateResult = await bridge.check();
-        } catch (e) {
+        } catch {
           lastUpdateResult = { status: 'error', message: 'Update check failed.' };
         }
         // A fresh check starts a clean guided-install panel.
@@ -333,7 +333,7 @@
         void renderSoftwareUpdate(fallbackVersion);
         try {
           await bridge.download();
-        } catch (e) {
+        } catch {
           lastUpdateProgress = {
             phase: 'error',
             percent: 0,

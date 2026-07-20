@@ -314,7 +314,6 @@ describe('renderer static contract', () => {
   it('destructive actions confirm and search/filter/group reflect live in the list AND the report total (§17 R11)', () => {
     const html = read('index.html');
     const app = read('app.js');
-    const util = read('util.js');
     // (a) The destructive Delete is gated behind a confirm step — the first click only arms
     // the confirm gate, and window.stint.remove is reachable ONLY from inside it (no destroy
     // on a stray click). The single-remove-site invariant is asserted in the §12 R13 test
@@ -329,10 +328,11 @@ describe('renderer static contract', () => {
     expect(html).toMatch(/id="el-client"/);
     expect(html).toMatch(/id="el-billable-seg"/);
 
-    // (c) The live view is DERIVED FROM THE SNAPSHOT — the pure deriveView (util.js mirror of
-    // src/liveview.ts) recomputes the list + the report totals with no IPC reload. The filter
-    // handlers repaint the report total off the snapshot, never re-fetching getState.
-    expect(util).toMatch(/function deriveView\(state, sel\)/);
+    // (c) The live view is DERIVED FROM THE SNAPSHOT — the pure deriveView (src/liveview.ts,
+    // imported by the bundled SU entry; renderer-bundle.test.ts asserts the shipped bundle IS
+    // that derivation — issue #83 removed the old util.js hand-mirror) recomputes the list +
+    // the report totals with no IPC reload. The filter handlers repaint the report total off
+    // the snapshot, never re-fetching getState.
     expect(app).toMatch(/deriveView/);
     // The report total tracks the selection: while a toolbar query is in flight render()
     // paints the snapshot-derived report sum (deriveView) and updateLiveTotal repaints
@@ -1182,7 +1182,7 @@ describe('renderer static contract', () => {
     // …the rail repaints on route('timer') and over the change broadcast (§12 R14: a tt write
     // on the Timer view reloads the state — repainting the card + live-edit strip — AND repaints
     // the rail, so the in-window timer surface tracks the other surface)…
-    expect(app).toMatch(/view === 'timer'\)\s*void renderFavorites/);
+    expect(app).toMatch(/view === 'timer'\)\s*\{\s*void renderFavorites/);
     expect(app).toMatch(/activeView === 'timer'\)\s*void load\(\)\.then\(\(\) => renderFavorites\(\)\)/);
   });
 
@@ -1222,7 +1222,10 @@ describe('renderer static contract', () => {
   });
 
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
-    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    // The CLASSIC scripts can reach neither Node nor core. The bundled SU entry (su.ts) is
+    // the one sanctioned core importer — its output staying node-free is asserted
+    // behaviorally by renderer-bundle.test.ts, not text-pinned here (issue #83).
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'reports.js', 'settings.js']) {
       const src = read(f);
       expect(src).not.toMatch(/require\(['"]node:/);
       expect(src).not.toMatch(/@stint\/core/);
@@ -1234,7 +1237,7 @@ describe('renderer static contract', () => {
     // page; assert it uses none of the browser request APIs. (The no-network backstop
     // now also walks this directory; this keeps the guard close to the renderer.)
     const forbidden = [/\bfetch\s*\(/, /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /sendBeacon/];
-    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'util.js', 'reports.js', 'settings.js']) {
+    for (const f of ['app.js', 'timepicker.js', 'popover.js', 'su.ts', 'reports.js', 'settings.js']) {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
     }

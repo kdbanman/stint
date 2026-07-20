@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "version:stamp": "node scripts/stamp-version.mjs",
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --build tsconfig.build.json && node scripts/build-renderer.mjs",
     "clean": "tsc --build tsconfig.build.json --clean",
     "tt": "node packages/cli/dist/bin.js",
     "test": "vitest run",
@@ -23,7 +23,7 @@
     "test:prop": "vitest run packages/core/test/prop",
     "test:gold": "vitest run packages/core/test/gold packages/cli/test/gold",
     "test:bdd": "vitest run packages/core/test/bdd",
-    "typecheck": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json && tsc --build packages/gui/tsconfig.renderer.json packages/gui/tsconfig.popover.json",
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
     "metrics": "node scripts/sloc-report.mjs",
@@ -46,8 +46,10 @@
     "@vitest/coverage-v8": "^4.0.18",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
+    "esbuild": "^0.28.1",
     "eslint": "^9.17.0",
     "fast-check": "^3.23.2",
+    "globals": "^17.7.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.18.1",
     "vitest": "^4.0.18"
