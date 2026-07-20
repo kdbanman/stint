@@ -16,7 +16,7 @@ import type { UiState, EntryRowView } from './ipc.js';
 
 /** The control-bar selection the live view derives against. Every field is optional. */
 export interface ViewSelection {
-  /** Free-text query, matched case-insensitively over description / client / tag. */
+  /** Free-text query, matched case-insensitively over description / client name / project name / tag (§09 R7, each field separately). */
   search?: string;
   /** Exact client/project label to keep (the row's `clientLabel`); null keeps the no-client rows. */
   clientLabel?: string | null;
@@ -44,9 +44,14 @@ export interface DerivedView {
 
 const NO_CLIENT = '(no client)';
 
-/** Whether a row matches the free-text query (case-insensitive over description/client/tags). */
+/**
+ * Whether a row matches the free-text query — §09 R7's one match rule: case-insensitive
+ * substring over description, client name, project name, and any tag, each field matched
+ * SEPARATELY (parity with core's `matchesQuery` / `tt list --search`). Never the joined
+ * "Client / Project" display label: a query spanning the join must not match (issue #84).
+ */
 function matchesSearch(e: EntryRowView, needle: string): boolean {
-  const hay = [e.description, e.clientLabel, ...(e.tags ?? [])];
+  const hay = [e.description, e.clientName, e.projectName, ...(e.tags ?? [])];
   return hay.some((h) => h != null && String(h).toLowerCase().includes(needle));
 }
 
