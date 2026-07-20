@@ -133,9 +133,14 @@ Per issue:
 1. **Post one comment** (house style, §04): the category (with the
    requirement/AC refs that justify it), one line on why it slipped the suite,
    and the Step-4 regression-prevention plan pointing at real files.
-2. **Apply labels:** every category that applies **plus** a `Triaged` label.
-   Preserve the issue's existing labels — a label-set update replaces the whole
-   set, so include the originals (e.g. `Agentic QA Discovery`) in the call.
+2. **Apply labels:** every category that applies **plus** the routing label:
+   `Triaged` when the fix is sized for one issue-anchored PR, or
+   `Triaged: dedicated session` when the routing verdict sends it to
+   `change-requirements` or a dedicated session instead — only plain `Triaged`
+   feeds `process-triaged-issues`, and either label records that triage is
+   complete. Preserve the issue's existing labels — a label-set update
+   replaces the whole set, so include the originals (e.g.
+   `Agentic QA Discovery`) in the call.
 
 Be frugal elsewhere: one comment per issue, no thread noise.
 
@@ -157,6 +162,7 @@ issues.
       for each.
 - [ ] Regression guard located per issue at a real file in the right AC method;
       weak-but-existing guards diagnosed, not just re-flagged.
-- [ ] One comment per issue in house style; `Triaged` + category labels applied;
-      original labels preserved.
+- [ ] One comment per issue in house style; the routing label (`Triaged` or
+      `Triaged: dedicated session`) + category labels applied; original labels
+      preserved.
 - [ ] Final report routes each issue downstream; no code touched, no PR opened.
