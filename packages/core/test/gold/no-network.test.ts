@@ -16,10 +16,11 @@ describe('GOLD: no network (§17 R9)', () => {
     // Regression guard: the renderer ships outside src, so the backstop must walk it
     // for a renderer-side fetch()/WebSocket to ever be caught.
     const scanned = shippedSourceFiles() as string[];
-    const rendererFiles = scanned.filter((f) => /packages\/gui\/renderer\/.*\.js$/.test(f));
+    const rendererFiles = scanned.filter((f) => /packages\/gui\/renderer\/.*\.(js|ts)$/.test(f));
     expect(rendererFiles.some((f) => f.endsWith('app.js'))).toBe(true);
     expect(rendererFiles.some((f) => f.endsWith('popover.js'))).toBe(true);
-    expect(rendererFiles.some((f) => f.endsWith('util.js'))).toBe(true);
+    // The bundled SU entry (issue #83 — util.js's replacement) is shipped page code too.
+    expect(rendererFiles.some((f) => f.endsWith('su.ts'))).toBe(true);
   });
 
   it('Electron `net` is reachable from exactly one shipped file — the update check', () => {

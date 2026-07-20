@@ -1,6 +1,7 @@
 // Popover renderer (PRD §12 R1) — the running timer, counting up; one click to
 // stop or start; opens the main window.
-// Classic script: helpers come from window.SU (util.js, loaded first).
+// Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
+// loaded first; the tooling decision is recorded in context/architecture.html §08).
 const { fmtDur, elapsed, icon, injectSprite, localTime } = window.SU;
 
 const $ = (id) => document.getElementById(id);

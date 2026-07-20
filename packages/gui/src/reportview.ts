@@ -16,7 +16,7 @@
  * `tt export`). The report's filters shape the filtered file; the all-data file is the raw
  * escape hatch. Both render through the SAME core exporters, so the MANUAL byte-diff holds.
  */
-import { resolveRange, toCsv, toJsonEntries, toUtc } from '@stint/core';
+import { resolveRange, resolveDateRange, utcWindowToDatePair, toCsv, toJsonEntries } from '@stint/core';
 import type {
   Store,
   EntryView,
@@ -32,53 +32,13 @@ import type { SavedReportView, SavedReportInputView, SavedReportRangeView } from
 export type RangePreset = 'today' | 'week' | 'last-week' | 'month' | 'last-month';
 
 // ----------------------------------------------- plain-date custom ranges (§09 R01 / G3)
-
-/** A local midnight, `plusDays` calendar days after the given `YYYY-MM-DD` plain date. */
-function localMidnight(date: string, plusDays = 0): Date {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
-  if (!m) throw new Error(`invalid plain date (expected YYYY-MM-DD): ${date}`);
-  // Local Date(y, m-1, d) construction: the day-after arithmetic is CALENDAR arithmetic
-  // (never `+ 24h`), so a DST-transition day of 23/25 local hours still resolves to the
-  // true next local midnight.
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + plusDays);
-}
-
-/** The local `YYYY-MM-DD` calendar day an instant falls on. */
-function localDateOf(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
-/**
- * §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). Resolve the
- * two date-field values (`YYYY-MM-DD`) to the half-open local window
- * [from 00:00 local, day-after-to 00:00 local): the to-day is included IN FULL (an entry
- * late that evening still counts) and the next day is excluded — the same inclusive-end-
- * day, half-open convention core's resolveRange presets produce. This is the ONE home of
- * the plain-date → window rule on the GUI side (main.ts's listEntries handler and the
- * saved-report rangeSpec conversions both route through it); the renderer only ever
- * carries the raw date strings.
- */
-export function resolveDateRange(fromDate: string, toDate: string): { fromUtc: string; toUtc: string } {
-  return { fromUtc: toUtc(localMidnight(fromDate)), toUtc: toUtc(localMidnight(toDate, 1)) };
-}
-
-/**
- * §09 R01 — the inverse of resolveDateRange: paint a stored absolute window back into the
- * two plain date fields. The stored to-bound is EXCLUSIVE, so the inclusive to-day is the
- * local day of the instant just before it. Tolerant of LEGACY arbitrary-instant windows
- * (a saved def whose bounds are not local midnights): the pair rounds OUTWARD to the
- * covering day pair, so re-saving such a def normalises it to plain-date bounds.
- */
-export function utcWindowToDatePair(
-  fromUtc: string,
-  toUtcBound: string,
-): { fromDate: string; toDate: string } {
-  return {
-    fromDate: localDateOf(new Date(fromUtc)),
-    toDate: localDateOf(new Date(Date.parse(toUtcBound) - 1)),
-  };
-}
+//
+// The plain-date → half-open-window rule (resolveDateRange) and its inverse
+// (utcWindowToDatePair) live in core, next to the resolveRange presets that share their
+// inclusive-end-day convention (issue #83 — GUI range resolution gets a core home). They
+// are re-exported here because this module is the GUI's report/export façade: main.ts's
+// listEntries handler and the saved-report rangeSpec conversions below route through it.
+export { resolveDateRange, utcWindowToDatePair };
 
 /** What the renderer's Export buttons send over the `exportEntries` IPC channel. */
 export interface ExportRequest {

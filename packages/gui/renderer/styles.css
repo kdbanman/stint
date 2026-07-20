@@ -88,7 +88,7 @@ html, body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* The single line-icon family (util.js ICON_SPRITE / icon()). Every <svg class="ic"><use …/></svg>
+/* The single line-icon family (su.ts ICON_SPRITE / icon()). Every <svg class="ic"><use …/></svg>
    the renderers drop in inherits this one stroke convention: 1.6px stroke in currentColor, no fill,
    so an icon takes the colour of its context — never a second hardcoded fill, never the accent unless
    its context already carries it. Drawn off the design-system base; per-context sizing/colour is

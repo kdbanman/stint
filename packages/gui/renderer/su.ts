@@ -1,0 +1,274 @@
+/**
+ * The renderer's shared display helpers — `window.SU`, consumed by the classic renderer
+ * scripts (app.js, reports.js, settings.js, timepicker.js, popover.js). TypeScript,
+ * bundled by esbuild into the classic script `dist/su.js` (IIFE output loads over
+ * `file://` under the CSP's `script-src 'self'`; see scripts/build-renderer.mjs and the
+ * decision record in context/architecture.html), so it IMPORTS the display rules the old
+ * util.js hand-mirrored (issue #83) instead of restating them:
+ *
+ *   - fmtDur     → core `formatDuration` — SIGNED: a negative duration reads `-HH:MM:SS`,
+ *                  parity with `tt` (the old mirror clamped to 0 and masked the state).
+ *   - fmtHours   → core `formatHours` + the view's `h` suffix (view chrome, not a rule).
+ *   - elapsed    → timerview.ts `countUpSeconds` — the ONE live count-up rule (§12 R2).
+ *   - deriveView → src/liveview.ts — the asserted, unit-tested §12 R9 / §17 R11 derivation.
+ *   - tagDiff    → src/tags.ts — the asserted, unit-tested §07 tag-edit decision.
+ *
+ * Everything below those imports is renderer-only display chrome with no other home.
+ * Display only: elapsed is always derived (now − start), never stored.
+ */
+import { formatDuration, formatHours } from '@stint/core';
+import { countUpSeconds } from '../src/timerview.js';
+import { deriveView } from '../src/liveview.js';
+import { tagDiff } from '../src/tags.js';
+
+/** Format a duration in seconds as HH:MM:SS — core's rule verbatim (signed negatives). */
+const fmtDur = formatDuration;
+
+/** Decimal hours to two places with the view's `h` suffix over core's bare number. */
+function fmtHours(seconds: number): string {
+  return formatHours(seconds) + 'h';
+}
+
+/** The live count-up for an open entry — timerview.ts's rule with `now` taken here. */
+function elapsed(startUtc: string, excludedSeconds = 0): number {
+  return countUpSeconds(startUtc, new Date(), excludedSeconds);
+}
+
+// §12 R11: the chosen date/number format. 'system' renders the runner's locale; 'iso'
+// renders an unambiguous 24h HH:MM off the instant's local wall-clock. Display only — the
+// stored instant is always UTC ISO; this only changes how a time is shown.
+let dateFormat: 'system' | 'iso' = 'system';
+function applyDateFormat(mode: string): void {
+  dateFormat = mode === 'iso' ? 'iso' : 'system';
+}
+function localTime(iso: string): string {
+  const d = new Date(iso);
+  if (dateFormat === 'iso') {
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+// §09 R1: a short local-date label for a single range endpoint, used by the report
+// view's resolved-range header. Display only — the authoritative UTC bounds come from
+// core's resolveRange; this never re-derives a range, it only formats one core returned.
+function localDateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+// The resolved window as "From → To". The report range is half-open [from, to), so the
+// header shows the inclusive last day (to − 1ms) to read naturally (e.g. a Mon–Sun week
+// reads "Jun 22 → Jun 28", not "Jun 22 → Jun 29"). Pure formatting of core's bounds.
+function rangeLabel(fromUtc: string, toUtc: string): string {
+  const lastInclusive = new Date(Date.parse(toUtc) - 1).toISOString();
+  return `${localDateLabel(fromUtc)} → ${localDateLabel(lastInclusive)}`;
+}
+
+// §09 R6: which report flags a grouped line carries. A line is flagged when any of its
+// entries appears in the report's overlapped / unreviewed-sleep id sets — so the flag
+// shows IN CONTEXT on the affected summary row (not in a separate list). Pure set
+// membership over ids the core Report already computed; the renderer derives no flags.
+function lineFlags(
+  line: { entryIds?: number[] },
+  overlappedIds?: number[],
+  unreviewedSleepIds?: number[],
+): string[] {
+  const ids = line.entryIds || [];
+  const over = new Set(overlappedIds || []);
+  const slept = new Set(unreviewedSleepIds || []);
+  const flags: string[] = [];
+  if (ids.some((id) => over.has(id))) flags.push('overlap');
+  if (ids.some((id) => slept.has(id))) flags.push('unreviewed sleep');
+  return flags;
+}
+
+function friendlyHotkey(accel: string): string {
+  return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
+}
+
+// §12 R15/R17 (G1): the ONE local-time seed format the raw Start/Stop text fields, the split
+// instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm[:ss]` in *local*
+// time (no timezone suffix), parsed identically by `new Date(value)`. Seconds are emitted only
+// when NON-ZERO, so a stored instant like 09:07:33 renders (and round-trips) exactly to the
+// second (§12 R15 / issue #49 — opening an entry must show its exact stored times), while the
+// common whole-minute instants keep the familiar short form. Hoisted here so app.js and
+// timepicker.js consume a single definition.
+function localInputValue(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const secs = date.getSeconds();
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}${secs ? `:${pad(secs)}` : ''}`
+  );
+}
+
+/** The settings fields the timeline-viewport derivation reads (a stale/partial snapshot tolerated). */
+interface TimelineSettings {
+  workingHoursStart?: string;
+  workingHoursEnd?: string;
+  pickerWindowMode?: string;
+  pickerAroundHours?: number;
+}
+
+// §14 / G16 — the ONE default-viewport derivation for the timeline surfaces: the inline
+// interval picker (§12 R15) and the readonly entries calendar (§12 R16) both consume THIS
+// helper and must never re-derive the window math themselves. It returns a scroll window
+// { startMin, endMin } in LOCAL minutes-of-day over the full 24h track (0–1440) — a scroll
+// default, never a clipped one (the track itself always spans the whole day):
+//   • editedInterval present ({ startUtc, endUtc|null }) → the window keeps the mode's
+//     span but re-centers on the edited interval (a running entry centers on its start);
+//   • else pickerWindowMode 'working_hours' → [workingHoursStart, workingHoursEnd];
+//   • else 'around_now' → now ± pickerAroundHours/2, clamped to [0, 1440].
+// The entries calendar always defaults to working hours (§12 R16): it passes settings with
+// pickerWindowMode forced to 'working_hours'. Display only — core owns and validates the
+// stored settings; the fallbacks here only shield against a stale/partial snapshot.
+function timelineWindow(
+  settings: TimelineSettings | null | undefined,
+  nowUtcIso: string,
+  editedInterval?: { startUtc?: string; endUtc?: string | null } | null,
+): { startMin: number; endMin: number } {
+  const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const toMin = (hhmm: string | undefined, fallback: number) =>
+    HHMM.test(String(hhmm || ''))
+      ? Number(String(hhmm).slice(0, 2)) * 60 + Number(String(hhmm).slice(3, 5))
+      : fallback;
+  const localMin = (iso: string) => {
+    const d = new Date(iso);
+    return d.getHours() * 60 + d.getMinutes();
+  };
+  const s = settings || {};
+  let start = toMin(s.workingHoursStart, 7 * 60);
+  let end = toMin(s.workingHoursEnd, 18 * 60);
+  if (end <= start) {
+    start = 7 * 60;
+    end = 18 * 60;
+  }
+  if (s.pickerWindowMode === 'around_now') {
+    const hours =
+      Number.isInteger(s.pickerAroundHours) && s.pickerAroundHours! >= 1 && s.pickerAroundHours! <= 24
+        ? s.pickerAroundHours!
+        : 8;
+    const nowMin = localMin(nowUtcIso);
+    start = nowMin - (hours * 60) / 2;
+    end = nowMin + (hours * 60) / 2;
+  }
+  if (editedInterval && editedInterval.startUtc) {
+    const a = localMin(editedInterval.startUtc);
+    const b = editedInterval.endUtc ? localMin(editedInterval.endUtc) : a;
+    const span = end - start;
+    const mid = (a + b) / 2;
+    start = mid - span / 2;
+    end = mid + span / 2;
+  }
+  // Clamp into the 24h track: the window is a viewport over the day column, so its edges
+  // never leave [0, 1440] (an around-now window near midnight simply meets the day edge).
+  const clamp = (m: number) => Math.max(0, Math.min(1440, Math.round(m)));
+  let startMin = clamp(start);
+  let endMin = clamp(end);
+  if (endMin <= startMin) {
+    // Degenerate after clamping (should not happen off validated settings) — fall back to
+    // the documented working-hours default rather than a zero-height viewport.
+    startMin = 7 * 60;
+    endMin = 18 * 60;
+  }
+  return { startMin, endMin };
+}
+
+// The single line-icon family — the SVG <symbol> sprite from the design system,
+// the one sanctioned icon source for both the main window and the popover. Drawn
+// at 1.6px stroke in currentColor (see the shared `.ic` rule), so an icon inherits
+// the colour of its context — never a second hardcoded fill. NEVER emoji/glyphs.
+// Lifted verbatim from context/mockups/design-system.html.
+const ICON_SPRITE =
+  '<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>' +
+  '<symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>' +
+  '<symbol id="i-list" viewBox="0 0 24 24"><path d="M8 7h12M8 12h12M8 17h12M4 7h.01M4 12h.01M4 17h.01"/></symbol>' +
+  '<symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.6 19a5.4 5.4 0 0 1 10.8 0"/><path d="M16 5.6a3.1 3.1 0 0 1 0 5.8"/><path d="M16.6 13.4a5.4 5.4 0 0 1 3.8 5.6"/></symbol>' +
+  '<symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7.5 20v-6M12 20v-10M16.5 20v-4"/></symbol>' +
+  '<symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/></symbol>' +
+  '<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.2-4.2"/></symbol>' +
+  '<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 6l10 6-10 6z"/></symbol>' +
+  '<symbol id="i-stop" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2.2"/></symbol>' +
+  '<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 9h11l-3-3M17 15H6l3 3"/></symbol>' +
+  '<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>' +
+  '<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.5 5 5.5.8-4 3.9.95 5.5L12 16.6 6.05 19.2 7 13.7l-4-3.9 5.5-.8z"/></symbol>' +
+  '<symbol id="i-cal" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="16" rx="2.2"/><path d="M4 9.5h16M9 3v4M15 3v4"/></symbol>' +
+  '<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>' +
+  '<symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.2A8 8 0 1 1 10.8 5a6.4 6.4 0 0 0 9.2 9.2z"/></symbol>' +
+  '<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>' +
+  '<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11L12 15.5 16.5 11M5 20h14"/></symbol>' +
+  '<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>' +
+  '<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>' +
+  '<symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>' +
+  '<symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>' +
+  '<symbol id="i-dots" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>' +
+  '<symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>' +
+  '<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></symbol>' +
+  '<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>' +
+  '<symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>' +
+  '<symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>' +
+  '<symbol id="i-archive" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><path d="M10 12h4"/></symbol>' +
+  '<symbol id="i-split" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M12 4v5M12 15v5"/></symbol>' +
+  '</defs></svg>';
+
+// The set of ids the sprite defines — the canonical icon vocabulary. Renderers
+// pass one of these to icon(); an unknown id is a programming error, not a glyph.
+const ICON_IDS = [
+  'clock', 'list', 'users', 'chart', 'settings', 'search', 'play', 'stop', 'swap',
+  'plus', 'star', 'cal', 'flag', 'moon', 'check', 'download', 'x', 'down', 'right',
+  'left', 'dots', 'edit', 'info', 'arrow', 'grip', 'restore', 'archive', 'split',
+];
+
+// Render one line icon by id as an <svg class="ic"><use href="#i-<id>"/></svg>
+// string the renderers can drop into innerHTML. Always class="ic" so it picks up
+// the shared stroke/size rule; pass `cls` for extra classes (e.g. a size modifier)
+// and `title` for an accessible label (decorative icons stay aria-hidden).
+function icon(id: string, opts?: { cls?: string; title?: string }): string {
+  opts = opts || {};
+  const cls = opts.cls ? 'ic ' + opts.cls : 'ic';
+  const a11y = opts.title
+    ? ' role="img" aria-label="' + String(opts.title).replace(/"/g, '&quot;') + '"'
+    : ' aria-hidden="true"';
+  return '<svg class="' + cls + '"' + a11y + '><use href="#i-' + id + '"/></svg>';
+}
+
+// Inject the icon sprite into the document once (idempotent), so every <use href>
+// in the renderer resolves. Call this on load before painting any icons.
+function injectSprite(doc?: Document): void {
+  doc = doc || document;
+  if (doc.getElementById('stint-icon-sprite')) return;
+  const host = doc.createElement('div');
+  host.id = 'stint-icon-sprite';
+  host.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  host.innerHTML = ICON_SPRITE;
+  (doc.body || doc.documentElement).appendChild(host);
+}
+
+const SU = {
+  fmtDur,
+  fmtHours,
+  elapsed,
+  localTime,
+  localDateLabel,
+  rangeLabel,
+  lineFlags,
+  friendlyHotkey,
+  localInputValue,
+  timelineWindow,
+  applyDateFormat,
+  tagDiff,
+  deriveView,
+  ICON_SPRITE,
+  ICON_IDS,
+  icon,
+  injectSprite,
+};
+
+declare global {
+  interface Window {
+    SU: typeof SU;
+  }
+}
+
+window.SU = SU;
