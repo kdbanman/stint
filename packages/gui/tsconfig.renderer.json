@@ -1,0 +1,25 @@
+{
+  "$comment": "checkJs over the main-window renderer scripts + the typed SU entry (issue #83 — the renderer is no longer exempt from static guards). noEmit: the shipped artifact is the esbuild bundle (scripts/build-renderer.mjs), not tsc output. popover.js is checked by tsconfig.popover.json — it shares top-level names with app.js (the two never load on the same page), so each page gets its own program, mirroring the real script scopes.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "references": [{ "path": "./tsconfig.main.json" }, { "path": "../core" }],
+  "files": [
+    "renderer/globals.d.ts",
+    "renderer/su.ts",
+    "renderer/app.js",
+    "renderer/reports.js",
+    "renderer/settings.js",
+    "renderer/timepicker.js"
+  ]
+}

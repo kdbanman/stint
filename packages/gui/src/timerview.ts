@@ -57,6 +57,17 @@ export interface RunningModel {
 }
 
 /**
+ * The ONE live count-up rule (§12 R2): now − startUtc − excludedSeconds in whole seconds,
+ * floored at 0 (a clock that jumped backwards, or an excluded stretch longer than the raw
+ * span, reads 00:00:00 — never a negative count-up). deriveRunningModel and the renderer's
+ * per-tick `SU.elapsed` both consume THIS helper; neither re-derives the arithmetic.
+ */
+export function countUpSeconds(startUtc: string, now: Date, excludedSeconds = 0): number {
+  const raw = Math.floor((now.getTime() - Date.parse(startUtc)) / 1000) - excludedSeconds;
+  return Math.max(0, raw);
+}
+
+/**
  * Derive the running-state display model from the snapshot alone (no IPC). The count-up is
  * the live now − startUtc − excludedSeconds; `now` is injected so the JUDGE harness can pin
  * it (and the unit test asserts a deterministic value). When nothing runs, the model reads an
@@ -79,11 +90,10 @@ export function deriveRunningModel(state: UiState, now: Date): RunningModel {
   // excludedSeconds is optional on the status entry (a slept stretch trimmed from the open
   // row); default 0 so a snapshot without it still counts up from the raw start.
   const excluded = (e as { excludedSeconds?: number }).excludedSeconds ?? 0;
-  const raw = Math.floor((now.getTime() - Date.parse(e.startUtc)) / 1000) - excluded;
   return {
     running: true,
     entryId: e.id,
-    elapsedSeconds: Math.max(0, raw),
+    elapsedSeconds: countUpSeconds(e.startUtc, now, excluded),
     description: e.description,
     clientProjectLabel: e.clientLabel,
     billable: e.billable,

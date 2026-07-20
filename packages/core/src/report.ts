@@ -8,6 +8,7 @@
  */
 import type { EntryView } from './types.js';
 import type { WeekStart } from './settings.js';
+import { toUtc } from './time.js';
 
 export type GroupBy = 'client' | 'project' | 'day' | 'tag';
 export type BillableFilter = 'billable' | 'all' | 'non-billable';
@@ -344,4 +345,53 @@ export function resolveRange(
       break;
   }
   return { fromUtc: from.toISOString(), toUtc: to.toISOString() };
+}
+
+// ----------------------------------------------- plain-date custom ranges (§09 R01 / G3)
+
+/** A local midnight, `plusDays` calendar days after the given `YYYY-MM-DD` plain date. */
+function localMidnight(date: string, plusDays = 0): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) throw new Error(`invalid plain date (expected YYYY-MM-DD): ${date}`);
+  // Local Date(y, m-1, d) construction: the day-after arithmetic is CALENDAR arithmetic
+  // (never `+ 24h`), so a DST-transition day of 23/25 local hours still resolves to the
+  // true next local midnight.
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + plusDays);
+}
+
+/** The local `YYYY-MM-DD` calendar day an instant falls on. */
+function localDateOf(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). Resolve the
+ * two date-field values (`YYYY-MM-DD`) to the half-open local window
+ * [from 00:00 local, day-after-to 00:00 local): the to-day is included IN FULL (an entry
+ * late that evening still counts) and the next day is excluded — the same inclusive-end-
+ * day, half-open convention the resolveRange presets above produce. This is the ONE home
+ * of the plain-date → window rule (both surfaces route through it: the GUI's listEntries
+ * handler and saved-report rangeSpec conversions via reportview.ts; the renderer only
+ * ever carries the raw date strings).
+ */
+export function resolveDateRange(fromDate: string, toDate: string): { fromUtc: string; toUtc: string } {
+  return { fromUtc: toUtc(localMidnight(fromDate)), toUtc: toUtc(localMidnight(toDate, 1)) };
+}
+
+/**
+ * §09 R01 — the inverse of resolveDateRange: paint a stored absolute window back into the
+ * two plain date fields. The stored to-bound is EXCLUSIVE, so the inclusive to-day is the
+ * local day of the instant just before it. Tolerant of LEGACY arbitrary-instant windows
+ * (a saved def whose bounds are not local midnights): the pair rounds OUTWARD to the
+ * covering day pair, so re-saving such a def normalises it to plain-date bounds.
+ */
+export function utcWindowToDatePair(
+  fromUtc: string,
+  toUtcBound: string,
+): { fromDate: string; toDate: string } {
+  return {
+    fromDate: localDateOf(new Date(fromUtc)),
+    toDate: localDateOf(new Date(Date.parse(toUtcBound) - 1)),
+  };
 }

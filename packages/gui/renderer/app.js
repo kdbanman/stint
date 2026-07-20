@@ -1,9 +1,13 @@
 // Main window renderer (PRD §12). Paints the same truth tt would show — entries
 // grouped by day with flags in context, a one-tap subtract on slept entries, an
 // instructing empty state, and a live count-up on the running entry.
-// Classic script: helpers come from window.SU (util.js, loaded first).
+// Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
+// loaded first; the tooling decision is recorded in context/architecture.html §08).
 const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView } = window.SU;
 
+// Element lookup. Typed `any` (not HTMLElement) under checkJs: the call sites use
+// page-specific form-element properties (.value/.checked/…) the id alone can't prove.
+/** @type {(id: string) => any} */
 const $ = (id) => document.getElementById(id);
 let state = null;
 
@@ -22,6 +26,7 @@ let searchQuery = '';
 // existing empty-state facts hold. A control change or search keystroke re-queries + repaints.
 // §09 R01: fromDate/toDate are the custom range's two PLAIN DATES (raw `YYYY-MM-DD` field
 // strings, no time component) — main resolves them to the inclusive-end-day local window.
+/** @type {{ preset: string | null, billable: 'all' | 'billable' | 'non-billable', clientId: any, projectId: any, tag: string, fromDate: string | null, toDate: string | null }} */
 const entryQuery = { preset: 'week', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
 let entryGroups = null;
 
@@ -865,7 +870,6 @@ function wire(row, e) {
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
       else if (act === 'delete') return armDelete(btn, e); // two-step; first click only arms
       else return;
-      await load();
     });
   });
   // §12 R06 (R16 wiring): a click anywhere on the entry — not on one of its action controls —
@@ -994,6 +998,7 @@ function closeMergeConflict() {
 // process maps winnerId to core's MergeOptions. `onDone(ack)` reloads after the commit.
 // `allowGap` is threaded from mergeSelected's gap gate (§06 R3): a gapped selection has
 // already been confirmed before this prompt opens, so it rides into the merge payload.
+/** @param {any[]} entries @param {(ack?: unknown) => void} [onDone] @param {boolean} [allowGap] */
 function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   closeMergeConflict();
   const { icon } = window.SU;
@@ -1777,6 +1782,7 @@ function hasEntryFilter() {
 // the in-memory snapshot — the authoritative flat rows still come from listEntries (parity
 // with tt), but the totals never wait on that round-trip.
 function liveSelection() {
+  /** @type {import('../src/liveview.js').ViewSelection} */
   const sel = { billable: entryQuery.billable, group: 'day' };
   if (searchQuery) sel.search = searchQuery;
   if (entryQuery.clientId != null && elClient) {
@@ -2391,8 +2397,10 @@ function route(view) {
   else if (view === 'clients') void renderClients();
   // §12 R04: repaint the favorites rail (R14) and the full Active-Timer card (the Timer view
   // hosts it) from the current running state. The card's count-up keeps advancing via tick().
-  else if (view === 'timer')
-    void renderFavorites(), renderTimerCard(state && state.status.running ? state.status.entry : null);
+  else if (view === 'timer') {
+    void renderFavorites();
+    renderTimerCard(state && state.status.running ? state.status.entry : null);
+  }
 }
 
 for (const item of document.querySelectorAll('.nav-item')) {
@@ -2671,6 +2679,11 @@ function openProjectRename(row, p) {
 // records for window.confirm). Clients/projects seeded the pattern; favorites (pin/rename)
 // and the Reports kebab (via window.inlineRenameForm — this is a classic script, so the
 // declaration is a global) reuse it rather than growing bespoke near-copies.
+/**
+ * @param {string} current
+ * @param {(name: string) => void | Promise<void>} onSave
+ * @param {{ onCancel?: () => void, commitLabel?: string }} [opts]
+ */
 function inlineRenameForm(current, onSave, { onCancel, commitLabel = 'Save' } = {}) {
   const form = document.createElement('form');
   form.className = 'rename-form';

@@ -1,8 +1,10 @@
-// Flat ESLint config. Lints the TypeScript sources and the .mjs tooling; the
-// renderer JS (browser globals), generated output, and the agent skills under
-// .claude/ (Markdown procedures, nothing lintable) are excluded.
+// Flat ESLint config. Lints the TypeScript sources, the .mjs tooling, and the renderer
+// (classic scripts + the bundled SU entry — issue #83 turned the renderer's guards on);
+// generated output and the agent skills under .claude/ (Markdown procedures, nothing
+// lintable) are excluded.
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
+import globals from 'globals';
 
 export default tseslint.config(
   {
@@ -10,7 +12,6 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       'coverage/**',
-      'packages/gui/renderer/**',
       'packages/gui/judge/**',
       // The QA discovery driver — like the judge, a Playwright harness whose page-context
       // snippets need browser globals; excluded on the same grounds.
@@ -36,6 +37,27 @@ export default tseslint.config(
     languageOptions: {
       globals: { process: 'readonly', console: 'readonly', URL: 'readonly' },
       parserOptions: { ecmaVersion: 2023, sourceType: 'module' },
+    },
+  },
+  {
+    // The renderer's classic page scripts (issue #83): browser globals, script (not
+    // module) source. Cross-file/page globals they share are declared here rather than
+    // ignored: window.SU is typed by su.ts, and app.js's shared inline affordances are
+    // reached as window.* properties (see renderer/globals.d.ts).
+    files: ['packages/gui/renderer/**/*.js'],
+    languageOptions: {
+      globals: { ...globals.browser },
+      parserOptions: { ecmaVersion: 2023, sourceType: 'script' },
+    },
+    rules: {
+      // tseslint's recommended set already applies its no-unused-vars here; keep the one
+      // configured rule and silence the base duplicate.
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      'no-empty': ['error', { allowEmptyCatch: true }],
     },
   },
 );
