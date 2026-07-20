@@ -37,9 +37,11 @@ decisions already made, and the regression-guard plan pointing at real files.
 
 ## Step 1 — Gather
 
-Collect the open issues labeled `Triaged` (or the set the user names). Read
-each in full — body **plus** the triage comment. Decisions recorded there are
-settled: do not re-ask them.
+Collect the open issues labeled `Triaged` (or the set the user names) — plain
+`Triaged` only: `Triaged: dedicated session` marks an issue triage routed
+*away* from this orchestrator, never its input. Read each in full — body
+**plus** the triage comment. Decisions recorded there are settled: do not
+re-ask them.
 
 ## Step 2 — One batched requirements interview
 
