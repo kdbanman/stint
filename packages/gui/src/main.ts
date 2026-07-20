@@ -28,6 +28,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
+  SchemaTooNewError,
   resolveDbPath,
   toUtc,
   formatDuration,
@@ -463,7 +464,20 @@ function registerUpdateIpc(): void {
 
 function init(): void {
   const dbPath = resolveDbPath(process.env, app.getPath('userData'));
-  store = Store.open({ path: dbPath });
+  try {
+    store = Store.open({ path: dbPath });
+  } catch (err) {
+    // §20 R09 — a database stamped by a NEWER Stint is refused before any read or write;
+    // surface the actionable message (both versions + "run the newer binary") and exit
+    // non-zero. ONLY this error is caught: every other open failure (DbOpenError,
+    // RecoveryError, …) must stay exactly as loud as before.
+    if (err instanceof SchemaTooNewError) {
+      dialog.showErrorBox('Database is newer than this version of Stint', err.message);
+      app.exit(1);
+      return;
+    }
+    throw err;
+  }
 
   // §20 R05 — if the database was corrupt on open, core quarantined it and restored the latest
   // good backup before we ever wrote (nothing lost). Tell the user once, on launch — the

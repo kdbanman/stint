@@ -8,12 +8,17 @@
  * new DB). These guards close §20 R08's two unproven halves: (a) opening a planted OLDER DB
  * preserves every existing row byte-for-byte while adding the new v3 structures and stamping the
  * version forward; (b) re-opening an up-to-date DB mutates neither schema nor data.
+ *
+ * §20 R09 is the max-version fence on the same gate: a DB stamped AHEAD of this binary's
+ * SCHEMA_VERSION is refused outright (SchemaTooNewError naming both versions and the remedy),
+ * and the refused open leaves the file byte-identical — no write, ever.
  */
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDb, SCHEMA_VERSION } from '@stint/core';
+import { DatabaseSync } from 'node:sqlite';
+import { openDb, SCHEMA_VERSION, SchemaTooNewError } from '@stint/core';
 import type { Db } from '@stint/core';
 
 const userVersion = (db: Db) =>
@@ -128,6 +133,44 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       const after = snapshot(db);
       expect(after).toEqual(before);
       db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses to open a DB from a NEWER schema, naming both versions and the remedy, without touching a byte (§20 R09)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-migrate-newer-'));
+    try {
+      const dbPath = join(dir, 'timetracker.sqlite');
+      // Build a current DB with real data, then stamp it as if a FUTURE binary wrote it.
+      // The stamp goes through raw node:sqlite — not the code under test — so the gate is
+      // exercised from the outside, exactly as a stale binary would meet the file.
+      let db = openDb(dbPath);
+      db.exec("INSERT INTO client(name) VALUES('Initech')");
+      db.close();
+      const futureVersion = SCHEMA_VERSION + 5;
+      const raw = new DatabaseSync(dbPath);
+      raw.exec(`PRAGMA user_version = ${futureVersion}`);
+      raw.close();
+      const bytesBefore = readFileSync(dbPath);
+
+      // The open is refused with the typed error…
+      let thrown: unknown;
+      try {
+        openDb(dbPath);
+      } catch (e) {
+        thrown = e;
+      }
+      expect(thrown).toBeInstanceOf(SchemaTooNewError);
+      // …whose message names the database's version, the binary's version, and the remedy…
+      const message = (thrown as Error).message;
+      expect(message).toContain(String(futureVersion));
+      expect(message).toContain(String(SCHEMA_VERSION));
+      expect(message).toContain('newer version of Stint');
+      expect(message).toContain('run the newer binary');
+      // …and the refused open wrote NOTHING: the file bytes are identical.
+      const bytesAfter = readFileSync(dbPath);
+      expect(bytesAfter.equals(bytesBefore)).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
