@@ -30,6 +30,8 @@ function row(p: Partial<EntryRowView> & { id: number; startUtc: string }): Entry
   return {
     description: null,
     clientLabel: null,
+    clientName: null,
+    projectName: null,
     endUtc: null,
     billableSeconds: 3600,
     billable: true,
@@ -52,15 +54,15 @@ function fixture(): UiState {
     {
       day: '2026-06-24',
       entries: [
-        row({ id: 1, description: 'auth refactor', clientLabel: 'Acme / API', startUtc: '2026-06-24T09:00:00Z', billableSeconds: 7200, rawSeconds: 7200, tags: ['deep'] }),
-        row({ id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T11:00:00Z', billableSeconds: 3600, rawSeconds: 3600, tags: ['ci'] }),
+        row({ id: 1, description: 'auth refactor', clientLabel: 'Acme / API', clientName: 'Acme', projectName: 'API', startUtc: '2026-06-24T09:00:00Z', billableSeconds: 7200, rawSeconds: 7200, tags: ['deep'] }),
+        row({ id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', clientName: 'Globex', projectName: 'Ops', startUtc: '2026-06-24T11:00:00Z', billableSeconds: 3600, rawSeconds: 3600, tags: ['ci'] }),
       ],
     },
     {
       day: '2026-06-23',
       entries: [
-        row({ id: 3, description: 'standup', clientLabel: 'Acme / API', startUtc: '2026-06-23T09:00:00Z', billableSeconds: 1800, rawSeconds: 1800, tags: ['meeting'] }),
-        row({ id: 4, description: 'internal sync', clientLabel: 'Globex / Ops', startUtc: '2026-06-23T13:00:00Z', billableSeconds: 3600, rawSeconds: 3600, billable: false, tags: [] }),
+        row({ id: 3, description: 'standup', clientLabel: 'Acme / API', clientName: 'Acme', projectName: 'API', startUtc: '2026-06-23T09:00:00Z', billableSeconds: 1800, rawSeconds: 1800, tags: ['meeting'] }),
+        row({ id: 4, description: 'internal sync', clientLabel: 'Globex / Ops', clientName: 'Globex', projectName: 'Ops', startUtc: '2026-06-23T13:00:00Z', billableSeconds: 3600, rawSeconds: 3600, billable: false, tags: [] }),
       ],
     },
   ];
@@ -100,8 +102,21 @@ describe('deriveView — search narrows the visible rows AND both totals', () =>
   });
 
   it('search is case-insensitive and matches client + tags too', () => {
-    expect(ids(deriveView(fixture(), { search: 'GLOBEX' }))).toEqual([2, 4]); // client label
+    expect(ids(deriveView(fixture(), { search: 'GLOBEX' }))).toEqual([2, 4]); // client name
     expect(ids(deriveView(fixture(), { search: 'ci' }))).toEqual([2]); // tag
+  });
+
+  // §09 R7 (issue #84): the haystack is description / client name / project name / tag,
+  // each matched SEPARATELY — parity with core's matchesQuery and `tt list --search`.
+  it('search matches the project name on its own', () => {
+    expect(ids(deriveView(fixture(), { search: 'api' }))).toEqual([1, 3]); // project name
+  });
+
+  it('a query spanning the "Client / Project" display join matches nothing (§09 R7 parity, issue #84)', () => {
+    // "e / A" appears only inside the joined "Acme / API" label; core's field-separate
+    // rule (and tt list --search) rejects it, so the live view must too.
+    expect(ids(deriveView(fixture(), { search: 'e / a' }))).toEqual([]);
+    expect(ids(deriveView(fixture(), { search: 'Acme / API' }))).toEqual([]);
   });
 });
 

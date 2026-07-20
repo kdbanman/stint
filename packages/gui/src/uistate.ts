@@ -40,6 +40,10 @@ export function buildUiState(
         id: e.id,
         description: e.description,
         clientLabel: joinClientProject(e.clientName, e.projectName),
+        // §09 R7 (issue #84): the names ride separately so the live search matches each
+        // field on its own, never the joined label.
+        clientName: e.clientName,
+        projectName: e.projectName,
         startUtc: e.startUtc,
         endUtc: e.endUtc,
         billableSeconds: e.billableSeconds,
