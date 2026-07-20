@@ -111,6 +111,10 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
           id: full.id,
           description: full.description,
           clientLabel: joinClientProject(full.clientName, full.projectName),
+          // §09 R7 (issue #84): the names ride separately so the live search matches each
+          // field on its own, never the joined label.
+          clientName: full.clientName,
+          projectName: full.projectName,
           startUtc: full.startUtc,
           endUtc: full.endUtc,
           billableSeconds: full.billableSeconds,
