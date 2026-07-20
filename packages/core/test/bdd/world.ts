@@ -1493,9 +1493,10 @@ export class CliWorld implements World {
   }): { id: number } {
     const r = this.tt(['add', o.desc, '--from', o.from, '--to', o.to]);
     const id = Number(/added entry (\d+)/.exec(r.out)?.[1]);
-    // No CLI verb records a sleep span (sleep detection is the running app's job), so seed it by
-    // opening a transient Store on the same db file — the same direct-db access the backup helpers
-    // use — then close it before the next `tt` process runs (tt is process-per-command).
+    // No CLI verb records a sleep span — detection is GUI-resident, the CLI review-only (PRD §10a
+    // item 7, "Detection residency") — so seed it by opening a transient Store on the same db
+    // file — the same direct-db access the backup helpers use — then close it before the next
+    // `tt` process runs (tt is process-per-command).
     const store = Store.open({ path: this.db, clock: () => new Date(FIXED_NOW) });
     try {
       store.recordSleepSpan(id, o.sleepFrom, o.sleepTo, 'gap');

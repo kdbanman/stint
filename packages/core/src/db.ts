@@ -181,6 +181,21 @@ export class DbOpenError extends Error {
   }
 }
 
+/**
+ * The database's `user_version` exceeds this binary's {@link SCHEMA_VERSION} (PRD §20 R09).
+ *
+ * Thrown by {@link openDb} after the version read but before any DDL or write — R08's
+ * additive-only migration policy is a policy, not a fence, and a stale binary reading or
+ * writing under an outdated schema understanding could silently corrupt billing data, so
+ * the open is refused entirely. Naming it lets both surfaces catch it precisely.
+ */
+export class SchemaTooNewError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'SchemaTooNewError';
+  }
+}
+
 /** `PRAGMA synchronous` numeric levels — FULL is the §20 R01 durability target on disk. */
 const SYNCHRONOUS_FULL = 2;
 
@@ -309,7 +324,18 @@ export function openDb(
     opts.onRecovered?.(recovery);
   }
 
-  migrate(db);
+  try {
+    migrate(db);
+  } catch (e) {
+    // A refused open (§20 R09) must not leak the handle — close it so the file is left
+    // exactly as found before propagating.
+    try {
+      db.close();
+    } catch {
+      /* handle may already be unusable */
+    }
+    throw e;
+  }
   return db;
 }
 
@@ -321,6 +347,16 @@ function migrate(db: Db): void {
   // index) is purely additive: an existing v2 DB simply re-runs the idempotent DDL and
   // stamps user_version = 3 with no data migration.
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
+  // §20 R09 — a database stamped AHEAD of this binary is refused outright, before any DDL
+  // or write: there are no down-migrations, so this binary cannot know what a future schema
+  // means and must not read or write under it.
+  if (row.user_version > SCHEMA_VERSION) {
+    throw new SchemaTooNewError(
+      `database schema version ${row.user_version} is newer than this binary's supported ` +
+        `version ${SCHEMA_VERSION}: this database was written by a newer version of Stint; ` +
+        `run the newer binary`,
+    );
+  }
   if (row.user_version >= SCHEMA_VERSION) return;
   db.exec(SCHEMA_SQL);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);

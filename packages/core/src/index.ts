@@ -18,7 +18,7 @@ export * from './checkin.js';
 export * from './version.js';
 export { Store, StoreError } from './store.js';
 export type { ListFilter, ReportRequest } from './store.js';
-export { SCHEMA_VERSION, openDb, assertOpenPragmas, DbOpenError } from './db.js';
+export { SCHEMA_VERSION, openDb, assertOpenPragmas, DbOpenError, SchemaTooNewError } from './db.js';
 export type { Db } from './db.js';
 export {
   backupDb,
