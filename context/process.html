@@ -201,7 +201,7 @@
     <table>
       <thead><tr><th>Check</th><th>Runs as</th></tr></thead>
       <tbody>
-        <tr><td data-l="check">Build, lint, typecheck</td><td data-l="runs as" class="m">verify job</td></tr>
+        <tr><td data-l="check">Build, lint, typecheck — renderer included (ESLint + <code>checkJs</code> over <code>packages/gui/renderer</code>; no ignore-list exemption since issue #83)</td><td data-l="runs as" class="m">verify job</td></tr>
         <tr><td data-l="check">Unit · PROP · GOLD · BDD · integration</td><td data-l="runs as" class="m">npm test</td></tr>
         <tr><td data-l="check">No-network backstop (§17 R09)</td><td data-l="runs as" class="m">npm run verify:no-network</td></tr>
         <tr><td data-l="check">Auto-publish guard (§19 R05)</td><td data-l="runs as" class="m">npm run verify:no-publish</td></tr>

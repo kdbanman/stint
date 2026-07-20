@@ -9,8 +9,8 @@
 // on every run (the SAME core resolveRange the ad-hoc report uses), so a saved report and
 // an ad-hoc report over the same window can never diverge.
 //
-// Classic script (no ES modules) so it loads over file:// in the packaged app; display
-// helpers come from window.SU (util.js, loaded first). Loaded AFTER app.js so it can rely
+// Classic script; display helpers come from window.SU (the bundled su.ts entry, loaded
+// first — see context/architecture.html §08). Loaded AFTER app.js so it can rely
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {

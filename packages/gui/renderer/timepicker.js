@@ -10,7 +10,7 @@
 // the single source of truth and the text fields stay authoritative. No new IPC channel, no parity
 // row — the picker never talks to core, the DB, or the network.
 //
-// Classic script (window.STP, no ES modules) so it loads over file:// alongside util.js /
+// Classic script (window.STP) loaded alongside the bundled SU entry (dist/su.js) and
 // app.js. Pure DOM: no Node imports, no core-package import, no network (the renderer-static
 // guard asserts this). Accent discipline (§15): only the dragged "me" rectangle (.stp-block.me)
 // and the selected calendar day (.stp-d.stp-sel) carry the accent; every other control is
@@ -67,7 +67,7 @@ window.STP = (function () {
     return String(n).padStart(2, '0');
   }
   // The single local-time seed format (`YYYY-MM-DDTHH:mm`, no timezone) the picker writes back
-  // into the bound text inputs — the ONE shared helper on window.SU (util.js loads first), so the
+  // into the bound text inputs — the ONE shared helper on window.SU (loaded first), so the
   // picker, the raw Start/Stop fields, and the split instant all agree byte-for-byte.
   const localInputValue = (date) => window.SU.localInputValue(date);
   function hhmm(minutes) {

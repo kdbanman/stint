@@ -1,0 +1,18 @@
+{
+  "$comment": "checkJs over the popover page's script (issue #83). Split from tsconfig.renderer.json because popover.js and app.js share top-level names (each page is its own global scope); see that config's note.",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": []
+  },
+  "references": [{ "path": "./tsconfig.main.json" }, { "path": "../core" }],
+  "files": ["renderer/globals.d.ts", "renderer/su.ts", "renderer/popover.js"]
+}
