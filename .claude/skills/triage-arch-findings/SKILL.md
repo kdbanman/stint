@@ -79,10 +79,20 @@ Triage records four things per issue, in one comment:
    - **Orchestrator-sized** → label `Triaged` (+ category labels): fits one
      issue-anchored PR, reviewable, and a deterministic gate can catch a
      subtle implementation failure.
-   - **Dedicated session** → *no* `Triaged` label: multi-PR restructures,
-     tooling decisions, process design with no code surface. Name the route
-     in the comment (the `change-requirements` pair for spec-scale change, a
-     dedicated working session otherwise).
+   - **Dedicated session** → label `Triaged: dedicated session` (+ category
+     labels), never plain `Triaged`: multi-PR restructures, tooling
+     decisions, process design with no code surface. Name the route in the
+     comment (the `change-requirements` pair for spec-scale change, a
+     dedicated working session otherwise). The label records that triage is
+     complete — without it a routed issue is indistinguishable from an
+     un-triaged one — while only plain `Triaged` feeds
+     `process-triaged-issues`.
+
+   An issue whose triage is *suspended* rather than completed (the owner
+   withdraws the fix direction pending more thought) gets neither label:
+   it is not yet routed, and its pending state must stay visible. Track
+   the open question somewhere real (a todo issue) and say so in the
+   comment.
 
 ## The self-reference flag
 
@@ -113,8 +123,9 @@ fire-and-forget.
    category with the doc refs that justify it, the owner's fix-direction
    decision, the proof-of-fix plan at real files, the routing verdict, and
    the self-reference flag if it applies. Apply the category labels plus
-   `Triaged` for orchestrator-sized issues; preserve existing labels — a
-   label-set update replaces the whole set, so include the originals
+   `Triaged` for orchestrator-sized issues or `Triaged: dedicated session`
+   for dedicated-session ones; preserve existing labels — a label-set
+   update replaces the whole set, so include the originals
    (`Agentic Arch Review Discovery`).
 5. **Report and route.** Summarize: issue → category → route table, the
    owner decisions made, which issues are now `Triaged` backlog and which go
@@ -130,7 +141,9 @@ fire-and-forget.
       alternatives open; nothing laundered into a confident label.
 - [ ] Proof of fix named at a real file/§ per issue.
 - [ ] Routing verdict per issue; `Triaged` only on orchestrator-sized ones;
-      dedicated-session issues name their route.
+      dedicated-session issues labeled `Triaged: dedicated session` and
+      naming their route; suspended issues left unlabeled with their open
+      question tracked.
 - [ ] Gate-modifying fixes carry the self-reference flag.
 - [ ] One comment per issue, house style; labels applied with originals
       preserved.
