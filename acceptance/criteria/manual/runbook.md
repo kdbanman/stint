@@ -226,7 +226,7 @@ terminal pointed at the same database.
 > The edit/split/delete *behaviour* is proven surface-neutrally over core+tt by the BDD
 > scenarios in `features/reachable_by_hand.feature` + `features/overlap_and_editing.feature`;
 > the unified form (edit mode) is screenshotted headless under JUDGE (`UNIFIED_FORM`,
-> `main-edit.png`) and guarded statically (`renderer-static.test.ts`). This runbook confirms
+> `main-edit.png`). This runbook confirms
 > the real inline form (no modal), the client/project selects, the footer Split, the two-step
 > Delete, and the round-trip to `tt` on a real desktop — the OS residual no headless host covers.
 
@@ -273,7 +273,7 @@ terminal pointed at the same database.
 > proven surface-neutrally over core+tt by the BDD merge scenarios in
 > `features/overlap_and_editing.feature` and the GOLD merge-override contract; the GUI
 > multi-select + conflict prompt is screenshotted under JUDGE (`MERGE_CONFLICT`,
-> `main-merge-conflict.png`) and guarded statically (`renderer-static.test.ts`); the
+> `main-merge-conflict.png`); the
 > contiguity gate is guarded surface-neutrally by the BDD gapped-merge scenarios and by
 > JUDGE (`MERGE_GAP`, `main-merge-gap.png`). This runbook confirms the real checkboxes, the
 > live prompt, the gap confirm, and the round-trip to `tt` on a real desktop.
@@ -577,8 +577,7 @@ equivalent flags.
 `tt rm`'s confirm / `--force` — so **no entry is destroyed on a single stray click without
 a confirm step**. The confirm gate is a renderer-only fact the surface-neutral BDD harness
 cannot express (core/tt have no dialog); the destructive op itself (`tt rm`) is already
-BDD-covered. JUDGE `CONFIRM_DELETE` (`main-confirm-delete.png`) and the renderer-static
-guard prove the gate in headless CI; this confirms it on a real desktop/DB.
+BDD-covered. JUDGE `CONFIRM_DELETE` (`main-confirm-delete.png`) proves the gate in headless CI; this confirms it on a real desktop/DB.
 
 1. Open the main window with at least one entry (or `tt add "design review" --from "2h ago"
    --to "30m ago" --client "Acme"`). Confirm the event shows in its day column, and note the
@@ -615,8 +614,7 @@ guard prove the gate in headless CI; this confirms it on a real desktop/DB.
 §12 R14 requires every control to be **keyboard-reachable and focus-visible**, and the window
 to be **fully operable from the keyboard** while respecting the OS theme. JUDGE
 `KEYBOARD_FOCUS` (`main-focus.png`) Tab-walks the empty + running main windows in headless
-Chromium and asserts every visible control is reached and shows a ring; the renderer-static
-guard pins the `:focus-visible` ring + the toggle's aria hooks per commit. This MANUAL check
+Chromium and asserts every visible control is reached and shows a ring. This MANUAL check
 covers what headless Chromium **cannot**: the **real OS focus ring** (the platform's own
 high-contrast halo, which Chromium does not render headless), real **assistive-technology**
 announcements, and the **popover** (no tray host in CI), on a real desktop session — matching
@@ -665,7 +663,7 @@ R10 is the end-to-end completeness claim: a non-terminal freelancer can do **eve
 `@stint/core` offers from the **window alone**. The CI nets prove each capability is real
 and at parity (BDD `features/reachable_by_hand.feature` over core + tt), that every GUI
 channel has a by-hand-equivalent tt path (GOLD `parity-matrix.json`), and that each view
-renders its controls (renderer-static + JUDGE screenshots). This MANUAL walk is the human
+renders its controls (the JUDGE scenes + screenshots). This MANUAL walk is the human
 confirmation that the *real desktop app*, **with no terminal open**, threads all of them
 together — the dimension headless CI cannot drive (real OS, real DB, real dialogs).
 
@@ -825,8 +823,8 @@ live editors and the round-trip to `tt`.
 
 > Tag create/rename/archive/restore parity is proven over core + tt by `features/reference_data.feature`
 > and the parity rows (`listTags`/`addTag`/`renameTag`/`archiveTag`/`restoreTag` ↔ `tt tag …`); JUDGE screenshots
-> the strip headless inside the Clients view (`CLIENTS_VIEW`, `main-clients.png`) and pins its
-> controls via the renderer-static guard. This runbook confirms the live in-place editors and the
+> the strip headless inside the Clients view (`CLIENTS_VIEW`, `main-clients.png`), driving the create
+> affordances to completion. This runbook confirms the live in-place editors and the
 > hide-but-keep on a real DB.
 
 ## CHECK SETTINGS VIEW (GUI) — every §14 setting persists to the same DB `tt config` reads (§12 R11, §14)
@@ -863,7 +861,7 @@ reads. Run with `tt` in a second terminal on the same database.
 
 > The setSetting parity (the GUI Settings view ↔ `tt config set`, every §14 key) is the
 > `setSetting` parity-matrix row; JUDGE screenshots the panel headless (`SETTINGS_VIEW`,
-> `main-settings.png`) and the renderer-static guard pins the field set. This runbook confirms the
+> `main-settings.png`) and machine-scores a control for every §14 setting. This runbook confirms the
 > live hotkey re-registration, the date-format repaint against the real OS theme, and
 > the cross-surface round-trip on a real desktop/DB the headless host cannot exercise.
 
@@ -1079,8 +1077,8 @@ bridged to the renderer as `window.stint.update`. The check is the app's **singl
 user-initiated outbound request** (Electron's built-in `net` to GitHub — never `node:https` /
 global `fetch`; §17 R9), and it **never writes the database** (§19 R04). The download + guided
 install is §19 R04 — out of scope here; this is the **check** only. The pure ordering + verdict
-logic is proven offline by GOLD (`packages/gui/test/update.test.ts`); the renderer wiring by
-`packages/gui/test/renderer-static.test.ts`. This MANUAL CHECK confirms the live query + the
+logic is proven offline by GOLD (`packages/gui/test/update.test.ts`); the renderer wiring headless by
+JUDGE `SOFTWARE_UPDATE`. This MANUAL CHECK confirms the live query + the
 on-screen verdict + the no-DB-write invariant on a real install.
 
 1. **The current version is shown.** Launch the installed app and open **Settings → Software
@@ -1114,8 +1112,8 @@ on-screen verdict + the no-DB-write invariant on a real install.
 > the database** (mtime changes — violating §19 R04); or if a failed/offline check **crashes** the
 > app instead of showing a graceful error. R03 is a live-network + GUI reality with no headless
 > network AC (the no-network backstop forbids a test reaching GitHub); the pure verdict logic is
-> proven offline by GOLD `packages/gui/test/update.test.ts` and the wiring by
-> `packages/gui/test/renderer-static.test.ts`, so the **live query** itself is confirmed by this
+> proven offline by GOLD `packages/gui/test/update.test.ts` and the wiring headless by
+> JUDGE `SOFTWARE_UPDATE`, so the **live query** itself is confirmed by this
 > MANUAL CHECK on a real install.
 
 ## CHECK INSTALL — single artifact puts the GUI in Applications/launcher and `tt` on PATH (§19 R02)
@@ -1292,8 +1290,8 @@ database (find it with `tt config ls` / the default path in PRD §13; below it i
 > for **both** the *check* step **and the download + guided install** by GOLD
 > `packages/gui/test/update.test.ts` (artifact selection, progress maths, the guided-step plan, and the
 > size-verified `downloadUpdate` over an injected byte source — asserting the artifact lands in the TEMP
-> dir, never beside the database, and the flow makes zero Store calls) and the renderer wiring by
-> `packages/gui/test/renderer-static.test.ts`, so the **install-across-a-live-timer** reality is this
+> dir, never beside the database, and the flow makes zero Store calls) and the renderer wiring headless by
+> JUDGE `SOFTWARE_UPDATE`, so the **install-across-a-live-timer** reality is this
 > MANUAL CHECK on a real install.
 >
 > **Executed evidence.** The headless-drivable core of this check — the **no-DB-touch invariant across a
@@ -1410,8 +1408,8 @@ the database** (§16 / §19 R04). The component mechanisms are each proven in th
 SOFTWARE UPDATE — CHECK FOR UPDATES** (§19 R03), and **CHECK UPDATE-MID-TIMER** (§16 / §19 R04) — and
 their headless backstops are GOLD `packages/gui/test/update.test.ts` (the `YYYY.M.D[.N]` ordering +
 verdicts), `cli/test/gold/cli.test.ts` + `core/test/gold/contracts.test.ts` (the one shared
-`APP_VERSION`), and `packages/gui/test/renderer-static.test.ts` (the Settings → Software Update
-wiring). **This umbrella walks the end-to-end install→update reality as ONE criterion**: a freshly
+`APP_VERSION`), and JUDGE `SOFTWARE_UPDATE` (the driven Settings → Software Update
+group). **This umbrella walks the end-to-end install→update reality as ONE criterion**: a freshly
 installed app, the same version on both surfaces, a real update detected and applied, and the open
 timer + the live DB completely untouched across the swap. It is **MANUAL** because every step is an
 OS-level / live-network reality the headless host cannot drive (real `.pkg`/AppImage install, real
