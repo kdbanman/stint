@@ -121,6 +121,14 @@ export interface EntryRowView {
   id: number;
   description: string | null;
   clientLabel: string | null;
+  /**
+   * §09 R7: the resolved client and project names, carried SEPARATELY from the joined
+   * display `clientLabel` so the live search matches each field on its own (parity with
+   * core's `matchesQuery` / `tt list --search`) — a query spanning the " / " join must
+   * not match (issue #84).
+   */
+  clientName: string | null;
+  projectName: string | null;
   startUtc: string;
   endUtc: string | null;
   billableSeconds: number;

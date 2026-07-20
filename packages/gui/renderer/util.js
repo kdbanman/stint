@@ -240,8 +240,10 @@ window.SU = (function () {
   function deriveView(state, sel) {
     sel = sel || {};
     const needle = (sel.search || '').trim().toLowerCase();
+    // §09 R7 (issue #84): match description / client name / project name / tag each
+    // SEPARATELY (parity with core matchesQuery), never the joined "Client / Project" label.
     const matchesSearch = (e) =>
-      [e.description, e.clientLabel, ...(e.tags || [])].some(
+      [e.description, e.clientName, e.projectName, ...(e.tags || [])].some(
         (h) => h != null && String(h).toLowerCase().includes(needle),
       );
     const matchesBillable = (e) =>
