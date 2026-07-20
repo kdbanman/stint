@@ -97,8 +97,8 @@ no interview; they become units directly.
 Launch one subagent per unit, in parallel:
 
 - **Model level: Opus, high effort.** The §03 gate question justifies it: the
-  deterministic gates (`npm test`, the judge, evidence drift, no-network, the
-  per-PR checks) catch implementation slips, and PR review is the human gate.
+  §05 deterministic gates catch implementation slips, and PR review is the
+  human gate.
   The judgment-heavy stages — interview, synthesis, partitioning, final PR
   review — stay in this session.
 - **Self-reference flagged units get no benefit of the doubt.** A unit whose
@@ -116,23 +116,18 @@ Launch one subagent per unit, in parallel:
   session, and the triage comment already names the guard files. Beware the
   corollary: a detailed-but-partial checklist **prescribes by omission** —
   agents optimize to the enumerated list and the ambient steering loses.
-  When a prompt enumerates gates, anchor the enumeration to the §05 inventory
-  as the source of truth rather than freezing a snapshot of it.
+  Point prompts at the §05 inventory and the relevant skills; don't restate
+  them.
 - **Definition of done per unit:**
   - Spec-affecting units: `context/` docs and mockups updated per the
     decisions, obeying §04 authoring rules (mockup sync is a hard rule).
   - The fix implemented; the regression guards from the triage comment added
     at the named files/layers; `COVERAGE.md` rows corrected where touched.
   - **Every check `context/process.html` §05 names for the surfaces the unit
-    touches** — automatic *and* operator-run. Today that means `npm run
-    build`, `npm test`, `npm run evidence`, plus for GUI-affecting units
-    `npm run judge` **and the §W recordings (`npm run record`, refreshed
-    GIFs committed)**. If this sentence and §05 ever disagree, §05 wins — a
-    unit is not done because it satisfied a stale checklist.
+    touches** — automatic *and* operator-run. §05 is the source of truth;
+    this file never restates it.
   - Issue-anchored branch pushed; a ready (not draft) PR opened that closes
-    the unit's issue(s), authored per the `pr-authoring` skill — visual
-    evidence committed on the branch is embedded in the description,
-    SHA-pinned.
+    the unit's issue(s), authored per the `pr-authoring` skill.
 
 ## Step 5 — Drive to PRs-up
 
@@ -143,10 +138,10 @@ Do not end the run while any unit lacks an open PR:
   (or finished directly) — one attempt is not the task.
 - Review each PR diff against the unit's decisions before calling it done;
   push corrections to the unit's branch where needed.
-- Review against the **un-gated conventions** too — refreshed §W GIFs on
-  GUI-affecting units, evidence embedded per `pr-authoring`: the checks no
-  CI gate enforces are exactly what this review exists to catch, and a green
-  pipeline says nothing about them.
+- Review against the **un-gated conventions** too — §05's operator-run rows
+  and the authoring skills' rules: the checks no CI gate enforces are exactly
+  what this review exists to catch, and a green pipeline says nothing about
+  them.
 - Cross-unit conflicts land sequentially: rebase later units on the earlier
   branch or note the ordering in both PRs.
 - Finish with a table mapping issue → unit → PR, plus anything handed back
@@ -168,8 +163,8 @@ Merging is not this skill's job.
 - [ ] Every unit delegated to an Opus high-effort subagent in its own
       worktree, prompted with issue + triage comment + decisions — not with
       skill instructions.
-- [ ] GUI-affecting units refreshed the §W recordings; every PR with visual
-      evidence on its branch embeds it per `pr-authoring`.
+- [ ] Every unit passed the §05 checks for its touched surfaces — operator-run
+      rows included — and its PR follows `pr-authoring`.
 - [ ] Every unit's PR open and ready (not draft); failures re-driven, not
       dropped.
 - [ ] Final report maps issue → PR; nothing merged by this skill.
