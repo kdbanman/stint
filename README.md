@@ -111,7 +111,8 @@ scripts/       Evidence generator and the no-network backstop.
 The design lives in the styled HTML under [`context/`](context/) — read order:
 [`concept.html`](context/concept.html) → [`prd.html`](context/prd.html) →
 [`glossary.html`](context/glossary.html) →
-[`acceptance.html`](context/acceptance.html), then
+[`acceptance.html`](context/acceptance.html), with
+[`design.html`](context/design.html) for the visual system, then
 [`process.html`](context/process.html) for how it's built and verified.
 
 ### Build & test
