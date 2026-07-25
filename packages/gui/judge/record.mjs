@@ -339,11 +339,67 @@ function convertToGif(webmPath, gifPath) {
   return gifPath;
 }
 
-// Is an `ffmpeg` runnable on PATH? (Capability honesty — if not, we keep the .webm and report
-// the gap rather than silently shipping no GIF.)
-function ffmpegAvailable() {
-  const r = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
-  return r.status === 0;
+// Is a GIF-CAPABLE `ffmpeg` runnable on PATH? (Capability honesty — if not, we keep the .webm and
+// report the gap rather than silently shipping no GIF.) A bare `-version` probe is not enough:
+// Playwright ships its own STRIPPED ffmpeg build (a dozen filters, no gif encoder) which often
+// lands first on PATH, answers `-version` happily, and then fails deep inside the palette pass
+// with an opaque filtergraph error. So we also require the two filters the conversion is built
+// on. Returns null when the pipeline can run, or the reason it cannot.
+function ffmpegGap() {
+  const version = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  if (version.status !== 0) return 'ffmpeg not on PATH';
+  const filters = spawnSync('ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' });
+  const out = filters.stdout || '';
+  if (!/\bpalettegen\b/.test(out) || !/\bpaletteuse\b/.test(out)) {
+    return (
+      'the ffmpeg on PATH lacks the palettegen/paletteuse filters — it is a stripped build ' +
+      "(Playwright's bundled ffmpeg is one); install a full ffmpeg and put it first on PATH"
+    );
+  }
+  return null;
+}
+
+// The picker-day snapshot: a RUNNING open entry (id 99, start 12:00, no stop) alongside
+// pickerState's two closed entries, all on 2026-06-24, so every picker entry point — the add
+// form, a closed row's editor, and the running row's start-only disclosure — draws its
+// single-day column with the same deterministic gray other-entries. Built here (not as a new
+// shared fixture in fixtures.mjs) so no JUDGE scene drifts; settings are reused from pickerState.
+// Shared by the §12 R15 every-surface tour and the V3 "me"-block close-up.
+function pickerDayState() {
+  const base = pickerState();
+  const open = {
+    id: 99,
+    description: 'auth refactor',
+    clientLabel: 'Client A / API',
+    startUtc: '2026-06-24T12:00:00Z',
+    endUtc: null,
+    billableSeconds: 3600,
+    billable: true,
+    overlapped: false,
+    overlapMinutes: 0,
+    overlapRelation: null,
+    sleptThrough: false,
+    excludedSeconds: 0,
+    rawSeconds: 3600,
+    tags: ['deep'],
+  };
+  return {
+    ...base,
+    status: {
+      running: true,
+      entry: {
+        id: 99,
+        description: 'auth refactor',
+        clientLabel: 'Client A / API',
+        startUtc: '2026-06-24T12:00:00Z',
+        billableSeconds: 3600,
+        billable: true,
+        sleptThrough: false,
+        tags: ['deep'],
+      },
+    },
+    days: [{ day: '2026-06-24', entries: [open, ...base.days[0].entries] }],
+  };
 }
 
 /**
@@ -917,33 +973,9 @@ const RECIPES = {
   // the authoritative text fields; the add/edit submit paths are proven on camera by §05 R05 / §12 R07.
   '§12 R15': {
     page: 'index.html',
-    // Running open entry (no stop) + the two pickerState closed entries, all on 2026-06-24, so
-    // every entry point's single-day column shows the gray other-entries. Built inline (not a new
-    // shared fixture) so no JUDGE scene drifts; settings are reused from pickerState().
-    state: () => {
-      const base = pickerState();
-      const open = {
-        id: 99,
-        description: 'auth refactor',
-        clientLabel: 'Client A / API',
-        startUtc: '2026-06-24T12:00:00Z',
-        endUtc: null,
-        billableSeconds: 3600,
-        billable: true,
-        overlapped: false,
-        overlapMinutes: 0,
-        overlapRelation: null,
-        sleptThrough: false,
-        excludedSeconds: 0,
-        rawSeconds: 3600,
-        tags: ['deep'],
-      };
-      return {
-        ...base,
-        status: { running: true, entry: { id: 99, description: 'auth refactor', clientLabel: 'Client A / API', startUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, sleptThrough: false, tags: ['deep'] } },
-        days: [{ day: '2026-06-24', entries: [open, ...base.days[0].entries] }],
-      };
-    },
+    // The shared picker-day snapshot (running open row + the two pickerState closed entries, all
+    // on 2026-06-24), so every entry point's single-day column shows the gray other-entries.
+    state: pickerDayState,
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
       // Helper: the "me" rectangle box within a given picker host, to grab its body centre and
@@ -1067,6 +1099,175 @@ const RECIPES = {
       }
       // Dwell on the typed overnight text values standing as the authoritative span.
       await wait(page, 1600);
+    },
+  },
+
+  // V3 (design.html D11) — the picker "me" BLOCK close-up. The divergence resolved to the MOCK's
+  // idiom: the block a user drags is an accent OUTLINE over a WEAK accent fill with INK labels and
+  // full-strength accent GRIPS — never the retired solid-accent slab. The rule behind it is accent
+  // discipline: a solid accent fill marks a view's one primary ACTION, and a time span is data, not
+  // an action; the weak fill also keeps the block's own labels readable in ink (a white label on
+  // accent-weak would fail the text floor outright).
+  //
+  // The close-up opens the unified editor on the closed 'morning sync' row (09:00–11:00) and works
+  // its inline picker: drag the block BODY down (start and stop move together on the 5-min snap)
+  // and then the bottom accent GRIP (only the stop moves), with the form's Start/Stop text fields
+  // updating LIVE on every step — the captions echo the actual field values, so the live write is
+  // legible rather than asserted off-camera. It then ends on the RUNNING variant, which is cheap
+  // from this fixture: the Timer view's start-only disclosure paints the same idiom with no end
+  // edge at all — the block dissolves into the future behind its mask and offers a start grip
+  // alone (§05 R06: editing an open row can never close it).
+  //
+  // Computed oracles ride along at both ends, resolved against the live tokens (never a hardcoded
+  // hex), so a regression to the solid-accent slab FAILS the recording: the block's fill must be
+  // accent-weak (not accent-solid), its border the full accent, its labels ink; the running block
+  // must carry the `.open` mask class and expose NO resize grip. No write IPC is scoped — the
+  // picker's live write into the authoritative text fields is the whole subject, and the add/edit
+  // commit paths are proven on camera by §05 R05 / §12 R07.
+  'V3': {
+    page: 'index.html',
+    state: pickerDayState,
+    // Wider than the §12 R15 tour (940px, as §12 R07 uses): the editor's two-column layout must
+    // put the whole picker day column — block, labels and grips — inside the frame, since the
+    // block IS the subject here rather than one beat of a tour.
+    contextOpts: { viewport: { width: 940, height: 900 }, timezoneId: 'UTC' },
+    drive: async (page) => {
+      const times = () =>
+        page.evaluate(() => {
+          const v = (sel) => document.querySelector(sel)?.value || '';
+          return { start: v('.edit-form .edit-start').slice(11, 16), end: v('.edit-form .edit-end').slice(11, 16) };
+        });
+      const meBox = (hostSel) =>
+        page.evaluate((sel) => {
+          const r = document.querySelector(`${sel} .stp-block.me`).getBoundingClientRect();
+          return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
+        }, hostSel);
+
+      // ===== The EDIT picker: the block is an outline over a weak fill, with ink labels =====
+      await page.waitForSelector('.entry[data-id="1"]');
+      await page.hover('.entry[data-id="1"]');
+      await page.click('.entry[data-id="1"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form.entry-form .edit-picker .stp-block.me', { state: 'attached' });
+      await page.locator('.edit-form .edit-picker .stp-block.me').scrollIntoViewIfNeeded();
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('The picked span: an accent OUTLINE over a weak fill, ink labels (V3 / D11)'));
+      await wait(page, 1500);
+
+      const blockFacts = await page.evaluate(() => {
+        const resolve = (name) => {
+          const p = document.createElement('span');
+          p.style.color = `var(${name})`;
+          document.body.appendChild(p);
+          const c = getComputedStyle(p).color;
+          p.remove();
+          return c;
+        };
+        const me = document.querySelector('.edit-form .edit-picker .stp-block.me');
+        const cs = getComputedStyle(me);
+        const lab = me.querySelector('.stp-lab-top');
+        const grip = me.querySelector('.stp-resize i');
+        return {
+          fill: cs.backgroundColor,
+          border: cs.borderTopColor,
+          label: lab ? getComputedStyle(lab).color : '',
+          grip: grip ? getComputedStyle(grip).backgroundColor : '',
+          accent: resolve('--accent'),
+          accentSolid: resolve('--accent-solid'),
+          accentWeak: resolve('--accent-weak'),
+          ink: resolve('--ink'),
+        };
+      });
+      if (blockFacts.fill !== blockFacts.accentWeak || blockFacts.fill === blockFacts.accentSolid) {
+        throw new Error(
+          `V3: the "me" block fill is ${blockFacts.fill}, expected the weak accent ${blockFacts.accentWeak}`,
+        );
+      }
+      if (blockFacts.border !== blockFacts.accent) {
+        throw new Error(`V3: the "me" block outline is ${blockFacts.border}, expected accent ${blockFacts.accent}`);
+      }
+      if (blockFacts.label !== blockFacts.ink) {
+        throw new Error(`V3: the "me" block label is ${blockFacts.label}, expected ink ${blockFacts.ink}`);
+      }
+      if (blockFacts.grip !== blockFacts.accent) {
+        throw new Error(`V3: the resize grip is ${blockFacts.grip}, expected accent ${blockFacts.accent}`);
+      }
+
+      // DRAG THE BODY down +20px (≈ +40min on the 30px/hour track, 5-min snap) — start and stop
+      // move TOGETHER and both text fields tick live.
+      const t0 = await times();
+      const b0 = await meBox('.edit-form .edit-picker');
+      const bx = Math.round(b0.cx);
+      const by = Math.round((b0.top + b0.bottom) / 2);
+      await page.mouse.move(bx, by);
+      await page.mouse.down();
+      await page.mouse.move(bx, by + 20, { steps: 20 });
+      await page.mouse.up();
+      await wait(page, 500);
+      const t1 = await times();
+      if (t1.start === t0.start || t1.end === t0.end) {
+        throw new Error(
+          `V3: dragging the block body did not move both fields live (${t0.start}–${t0.end} → ${t1.start}–${t1.end})`,
+        );
+      }
+      await page.evaluate(
+        (msg) => window.__recCaption && window.__recCaption(msg),
+        `Body drag moves the whole span live — ${t0.start}–${t0.end} → ${t1.start}–${t1.end}`,
+      );
+      await wait(page, 1300);
+
+      // DRAG THE BOTTOM GRIP down +15px (≈ +30min) — the accent grip resizes the STOP alone.
+      const b1 = await meBox('.edit-form .edit-picker');
+      await page.mouse.move(Math.round(b1.cx), Math.round(b1.bottom - 1));
+      await page.mouse.down();
+      await page.mouse.move(Math.round(b1.cx), Math.round(b1.bottom - 1 + 15), { steps: 16 });
+      await page.mouse.up();
+      await wait(page, 500);
+      const t2 = await times();
+      if (t2.end === t1.end || t2.start !== t1.start) {
+        throw new Error(
+          `V3: the bottom grip should move the stop alone (${t1.start}–${t1.end} → ${t2.start}–${t2.end})`,
+        );
+      }
+      await page.evaluate(
+        (msg) => window.__recCaption && window.__recCaption(msg),
+        `The accent grip resizes the stop alone — ${t1.end} → ${t2.end}`,
+      );
+      await wait(page, 1500);
+      await page.click('.edit-form.entry-form .edit-cancel');
+      await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
+      await wait(page, 500);
+
+      // ===== The RUNNING variant: the same idiom with no end edge (§05 R06) =====
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
+      await page.click('#le-start-pick');
+      await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+      await page.locator('#le-start-disc .stp-grip').scrollIntoViewIfNeeded();
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Running: the same block with NO end — it fades into the future, start grip only'));
+      const openFacts = await page.evaluate(() => ({
+        masked: !!document.querySelector('#le-start-disc .stp-block.me.open'),
+        resizeGrips: document.querySelectorAll('#le-start-disc .stp-block.me .stp-resize').length,
+      }));
+      if (!openFacts.masked) throw new Error('V3: the running block is not the masked `.open` variant');
+      if (openFacts.resizeGrips !== 0) {
+        throw new Error(`V3: the running block exposes ${openFacts.resizeGrips} resize grip(s); it must expose none`);
+      }
+      await wait(page, 1600);
+
+      // Drag the start grip up -15px (≈ -30min): the start moves, the end stays absent.
+      const g = await page.locator('#le-start-disc .stp-grip').boundingBox();
+      if (g) {
+        const gx = Math.round(g.x + g.width / 2);
+        const gy = Math.round(g.y + g.height / 2);
+        await page.mouse.move(gx, gy);
+        await page.mouse.down();
+        await page.mouse.move(gx, gy - 15, { steps: 16 });
+        await page.mouse.up();
+      }
+      await wait(page, 1500);
     },
   },
 
@@ -1399,6 +1600,115 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('One merged event remains, spanning earliest start to latest end'));
       await wait(page, 1200);
+    },
+  },
+
+  // V5 (design.html D11) — the MERGE SELECTION BAR close-up. The divergence resolved to the
+  // MOCK's idiom: once two entries are checked, a quiet selection bar appears ABOVE the calendar
+  // carrying a lifted "N selected" count pill (the same chip idiom as D12), a spacer, and a
+  // NEUTRAL small Merge button — not the retired accent card below the calendar. The reason is
+  // accent discipline: the Entries view already spends its ONE accent-solid primary on the add
+  // form's Save entry, so Merge, however consequential, stays a neutral button.
+  //
+  // This close-up drives the same fixture and selectors as the §06 R03 merge scene (the pinned
+  // mergeConflictState pair, ids 40/41, whose disagreeing fields open the conflict prompt), but
+  // dwells on the BAR rather than the merge outcome: the pointer travels to each corner checkbox
+  // so the entry into multi-select is visible, the bar's arrival is held on camera with the live
+  // "2 selected" pill, the pointer then travels across the pill and the Merge button, and only
+  // then does Merge open the conflict prompt (the commit itself is §06 R03's evidence, so no
+  // merge override is scoped here — nothing is written).
+  //
+  // Two computed oracles ride along, so a regression cannot re-record the retired look: the bar's
+  // bottom edge must sit ABOVE the calendar strip's top edge (position, the whole point of V5),
+  // and the Merge button must be neutral — no `.primary` class and no accent-solid fill.
+  'V5': {
+    page: 'index.html',
+    state: mergeConflictState,
+    drive: async (page) => {
+      // Travel the pointer to an element's centre in visible steps (page.check is not one of the
+      // decorated high-level actions, and this close-up is about seeing the interaction land).
+      const travel = async (sel) => {
+        const box = await page.locator(sel).first().boundingBox();
+        if (!box) return;
+        await page.mouse.move(
+          Math.round(box.x + box.width / 2),
+          Math.round(box.y + box.height / 2),
+          { steps: 16 },
+        );
+        await wait(page, 320);
+      };
+
+      await page.waitForSelector('.entry[data-id="40"] .sel');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption("Check an event's corner box to enter multi-select (§06 R3 / V5)"));
+      await wait(page, 900);
+
+      await travel('.entry[data-id="40"] .sel');
+      await page.check('.entry[data-id="40"] .sel');
+      await wait(page, 600);
+      await travel('.entry[data-id="41"] .sel');
+      await page.check('.entry[data-id="41"] .sel');
+      await page.waitForFunction(() => {
+        const bar = document.querySelector('#merge-bar');
+        const count = document.querySelector('#merge-count');
+        return bar && !bar.hidden && count && count.textContent.trim() === '2 selected';
+      });
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('The selection bar appears ABOVE the calendar — a "2 selected" chip pill'));
+      await wait(page, 1400);
+
+      // The V5 oracles: the bar is ABOVE the calendar, and Merge is NEUTRAL (the view's single
+      // accent-solid primary is the add form's Save entry, so Merge never takes it).
+      const facts = await page.evaluate(() => {
+        const resolve = (name) => {
+          const p = document.createElement('span');
+          p.style.color = `var(${name})`;
+          document.body.appendChild(p);
+          const c = getComputedStyle(p).color;
+          p.remove();
+          return c;
+        };
+        const bar = document.querySelector('#merge-bar').getBoundingClientRect();
+        const calEl = document.querySelector('.cstrip') || document.querySelector('#entries');
+        const cal = calEl.getBoundingClientRect();
+        const go = document.querySelector('#merge-go');
+        return {
+          barBottom: bar.bottom,
+          calTop: cal.top,
+          mergePrimary: go.classList.contains('primary'),
+          mergeBg: getComputedStyle(go).backgroundColor,
+          accentSolid: resolve('--accent-solid'),
+        };
+      });
+      if (!(facts.barBottom <= facts.calTop + 1)) {
+        throw new Error(
+          `V5: the selection bar is not above the calendar (bar bottom ${facts.barBottom} vs calendar top ${facts.calTop})`,
+        );
+      }
+      if (facts.mergePrimary || facts.mergeBg === facts.accentSolid) {
+        throw new Error(
+          `V5: Merge is not neutral (primary=${facts.mergePrimary}, background ${facts.mergeBg})`,
+        );
+      }
+
+      // Travel across the two things the bar is made of, so both read on camera.
+      await travel('#merge-count');
+      await wait(page, 700);
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Merge stays a NEUTRAL button — the accent belongs to the view’s one primary'));
+      await travel('#merge-go');
+      await wait(page, 900);
+
+      // Merge → the disagreeing-field conflict prompt (the commit itself is §06 R03's evidence).
+      await page.click('#merge-go');
+      await page.waitForSelector('.editor.conflict-prompt');
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Merge opens the disagreeing-field prompt — resolve, then commit'));
+      await wait(page, 1600);
     },
   },
 
@@ -3055,6 +3365,133 @@ const RECIPES = {
     },
   },
 
+  // D12 / V7 (design.html) — SELECTION IS NEVER THE ACCENT FILL. This close-up drives the five
+  // rail items in sequence, hovering each one before clicking it, so the changed idiom is seen
+  // MOVING between items: hover is a quiet neutral wash on a still-flat row, while the ACTIVE row
+  // is a LIFTED PAPER CHIP — it rises onto var(--paper) with the sub-card chip shadow
+  // (var(--sh-chip)), keeps an INK label, and gives the accent to its ICON only. That last split
+  // is the point of the rule: accent-ink on an accent-weak fill is a prohibited pair (4.33:1,
+  // below the text floor), so the retired accent-weak marker behind the whole row could never
+  // carry an accent label. V7 resolved the mock-vs-impl divergence to NEITHER prior marker — the
+  // raised-chip idiom is new to both surfaces, and this is the first recording of it.
+  //
+  // The recording is self-evidencing twice over. A small on-page badge (presentation-only, the
+  // same device §12 R03 uses for the sidebar width) echoes the LIVE computed chip/lift/label/icon
+  // values of whichever item is active, so the idiom reads as VALUES on camera and not merely as
+  // a picture; and the recipe ASSERTS those same four facts per item against the resolved tokens
+  // (paper chip, non-`none` shadow, ink — never accent — label, accent icon). A regression to a
+  // flat accent-weak marker therefore FAILS the recording rather than quietly re-recording the
+  // retired look. The narrow viewport keeps the 168px rail a large fraction of the frame (the
+  // "close-up"); the fixture is the canonical runningState so every view has content to route to.
+  'D12': {
+    page: 'index.html',
+    state: runningState,
+    contextOpts: { viewport: { width: 620, height: 620 } },
+    drive: async (page) => {
+      await page.waitForSelector('.shell .nav .nav-item.active');
+
+      // The live computed-value badge. Scoped to this recording page — no renderer/CSP change.
+      await page.evaluate(() => {
+        const b = document.createElement('div');
+        b.id = '__rec_badge__';
+        b.style.cssText =
+          'position:fixed;top:8px;right:8px;z-index:99999;font:11px/1.5 ui-monospace,monospace;' +
+          'background:rgba(20,20,20,.85);color:#fff;padding:6px 9px;border-radius:6px;' +
+          'pointer-events:none;white-space:pre;';
+        document.body.appendChild(b);
+        window.__recBadge__ = () => {
+          const el = document.querySelector('.shell .nav .nav-item.active');
+          if (!el) {
+            b.textContent = 'active nav item  (none)';
+            return;
+          }
+          const cs = getComputedStyle(el);
+          const ic = el.querySelector('.ic');
+          b.textContent =
+            `active  ${el.dataset.view}\n` +
+            `chip    ${cs.backgroundColor}\n` +
+            `lift    ${cs.boxShadow.replace(/\s+/g, ' ')}\n` +
+            `label   ${cs.color}\n` +
+            `icon    ${ic ? getComputedStyle(ic).color : '—'}`;
+        };
+        window.__recBadge__();
+      });
+
+      // Read the active item's four D12 facts, resolved against the live tokens (a probe element
+      // turns `var(--x)` into the same computed rgb() form getComputedStyle returns, so the
+      // comparison is token-vs-token — never a hardcoded hex in the apparatus).
+      const chipFacts = (view) =>
+        page.evaluate((v) => {
+          const resolve = (name) => {
+            const p = document.createElement('span');
+            p.style.color = `var(${name})`;
+            document.body.appendChild(p);
+            const c = getComputedStyle(p).color;
+            p.remove();
+            return c;
+          };
+          const el = document.querySelector(`.shell .nav .nav-item[data-view="${v}"]`);
+          const cs = getComputedStyle(el);
+          const ic = el.querySelector('.ic');
+          return {
+            active: el.classList.contains('active'),
+            bg: cs.backgroundColor,
+            shadow: cs.boxShadow,
+            label: cs.color,
+            icon: ic ? getComputedStyle(ic).color : '',
+            paper: resolve('--paper'),
+            accent: resolve('--accent'),
+            ink: resolve('--ink'),
+          };
+        }, view);
+
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Nav selection is a lifted paper chip — never an accent fill (D12 / V7)'));
+      await wait(page, 1200);
+
+      // Walk every rail item. Entries is already active on load, so visiting the other four and
+      // returning to Entries shows the chip land on all five.
+      for (const view of ['timer', 'clients', 'reports', 'settings', 'entries']) {
+        // HOVER first: travel the pointer in visible steps and dwell, so the quiet --hover wash on
+        // the still-flat inactive row is on camera immediately before the chip lifts.
+        const box = await page.locator(`.nav-item[data-view="${view}"]`).first().boundingBox();
+        if (box) {
+          await page.mouse.move(
+            Math.round(box.x + box.width / 2),
+            Math.round(box.y + box.height / 2),
+            { steps: 16 },
+          );
+          await wait(page, 420);
+        }
+        await page.click(`.nav-item[data-view="${view}"]`);
+        await page.waitForSelector(`.view[data-view="${view}"]:not([hidden])`);
+        await page.waitForSelector(`.shell .nav .nav-item[data-view="${view}"].active`);
+        await page.evaluate(() => window.__recBadge__());
+
+        const f = await chipFacts(view);
+        if (f.bg !== f.paper) {
+          throw new Error(`D12: active ${view} chip is ${f.bg}, expected the paper fill ${f.paper}`);
+        }
+        if (!f.shadow || f.shadow === 'none') {
+          throw new Error(`D12: active ${view} has no chip lift (box-shadow: ${f.shadow})`);
+        }
+        if (f.label !== f.ink) {
+          throw new Error(`D12: active ${view} label is ${f.label}, expected ink ${f.ink}`);
+        }
+        if (f.icon !== f.accent) {
+          throw new Error(`D12: active ${view} icon is ${f.icon}, expected accent ${f.accent}`);
+        }
+        await wait(page, 560);
+      }
+
+      await page.evaluate(() =>
+        window.__recCaption &&
+        window.__recCaption('Paper chip + lift, ink label, accent icon — the same idiom in every view'));
+      await wait(page, 1600);
+    },
+  },
+
   // §12 R-report.html (G7) — the standalone, SIDEBAR-LESS `report.html` page is REMOVED; its
   // function folds into the in-sidebar Reports view (§12 R08). A deletion has no positive UI of
   // its own, so this recording proves BOTH halves of the requirement on camera:
@@ -3221,8 +3658,9 @@ async function recordRecipe(browser, reqId, recipe) {
 
   // Convert to the committed ASCII-named GIF (two-pass palette, ~0.5x, 1.5s end hold). If ffmpeg
   // is unavailable, keep the .webm and report the gap honestly — never ship a faked GIF.
-  if (!ffmpegAvailable()) {
-    return { webm: webmOut, webmBytes, gif: null, gifBytes: 0, gifGap: 'ffmpeg not on PATH' };
+  const gap = ffmpegGap();
+  if (gap) {
+    return { webm: webmOut, webmBytes, gif: null, gifBytes: 0, gifGap: gap };
   }
   const gifOut = join(RECORDINGS, `${slug}.gif`);
   rmSync(gifOut, { force: true });
