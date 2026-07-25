@@ -5,123 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stint — Timer</title>
 <style>
-  :root{
-    --paper:#FDFDFC;--canvas:#EAE8E3;--sidebar:#F6F5F2;--sunken:#F2F1ED;--hover:#ECEBE5;
-    --ink:#221F1C;--muted:#6B645D;--faint:#A39B92;--line:#E9E6E0;--line-strong:#D6D1C9;
-    --accent:#C44C38;--accent-ink:#9E3829;--accent-weak:#F8E9E5;
-    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
-    --danger:#B23B2B;--danger-weak:#F8E9E4;
-    --r1:8px;--r2:12px;--r3:16px;
-    --ring:0 0 0 3px #C44C3833;
-    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
-    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
-  }
+/* STINT-TOKENS start — generated from context/design.tokens.json; do not edit by hand */
+:root{
+  --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
+  --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
+  --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
+  --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
+  --danger:#ce2c31;--danger-weak:#feebec;
+  --r1:8px;--r2:12px;--r3:16px;
+  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
+  --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
+  --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
+  --sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);
+  --sh-win:0 30px 80px rgba(50,34,14,.22);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+/* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #D6D1C9}
-  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
+  .win{max-width:1040px;margin:34px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
   .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A39B92;padding:4px 14px}
+  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A39B92;padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
-  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
   .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
-  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C44C3822}
+  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
-  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
-  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
-  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
-  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
-  .nav .stat a:hover{background:none;text-decoration:underline}
-  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
   .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
-  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C44C3855}
-  .btn.primary:hover{background:#a83c2c}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff;box-shadow:0 1px 2px #C44C3855}
+  .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:#fff}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
-  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .btn.sm{height:30px;padding:0 12px;font-size:12px}
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Stop is
      surfaced on the Timer view, beside the card controls (the "Stop appears dead" surface, #61). */
-  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid;margin-top:12px}
+  .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin-top:12px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
   .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
-  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   /* toggle */
-  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--accent)}.sw.on i{left:17px}
   /* fields */
-  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
   /* card / tag / pill */
-  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
   .tag b{color:var(--faint);cursor:pointer;font-weight:400}
-  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
+  .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
-  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C44C3833}
-  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
   .view{gap:20px}
   .runner{padding:20px 22px}
   .r-top{display:flex;align-items:flex-start;gap:24px}
-  .clock{font-size:46px;font-weight:680;letter-spacing:-.015em;line-height:.95}
-  .r-state{display:flex;align-items:center;gap:7px;margin-top:11px;font-size:12px;color:var(--run)}
+  .clock{font-size:38px;font-weight:680;letter-spacing:-.015em;line-height:.95;font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted)}
+  .clock.run{color:var(--accent-ink)}
+  .r-state{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--run)}
   .r-desc{flex:1;min-width:0;padding-top:4px}
   .r-desc .d{font-size:16px;font-weight:600}
   .r-desc .m{color:var(--muted);font-size:12.5px;margin-top:4px}
-  .r-act{display:flex;gap:9px;flex:none}
-  .r-edit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:14px;margin-top:18px;padding-top:18px;border-top:1px solid var(--line)}
+  .r-act{display:flex;gap:8px;flex:none}
+  .r-edit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:16px;margin-top:18px;padding-top:18px;border-top:1px solid var(--rule)}
   .timefield{position:relative}
   .timefield .field{padding-right:32px;font-family:var(--num);font-size:12.5px}
   .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted);cursor:pointer}
   .timefield .cal .ic{width:15px;height:15px}
-  .timefield .cal.on{color:var(--ink);background:var(--sunken);box-shadow:inset 0 0 0 1px var(--line);border-radius:6px;padding:3px;right:6px;bottom:6px}
+  .timefield .cal.on{color:var(--ink);background:var(--wash);box-shadow:inset 0 0 0 1px var(--rule);border-radius:6px;padding:4px;right:6px;bottom:6px}
   .r-row2{display:flex;align-items:center;gap:18px;margin-top:15px;flex-wrap:wrap}
-  .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
+  .tagchips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
   .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
   .pad{padding:20px 22px}
   .ph{font-size:14px;font-weight:640;margin:0 0 16px}
   /* the favorites rail is the only card beside the runner while a timer runs — the start
      panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51) */
   .favrail{background:var(--sidebar);max-width:460px}
-  .fav{display:flex;align-items:center;gap:11px;border:1px solid var(--line);background:var(--paper);border-radius:var(--r1);padding:10px 11px;margin-bottom:9px;box-shadow:var(--sh-card)}
+  .fav{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r1);padding:12px 12px;margin-bottom:8px;box-shadow:var(--sh-card)}
   .fav .star{color:var(--muted)}.fav .star .ic{width:15px;height:15px}
   .fav .fi{flex:1;min-width:0}
   .fav .fn{font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fav .fm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
   .fav .kebab{color:var(--faint);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
-  .favfoot{margin-top:14px;padding-top:13px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+  .favfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--muted)}
   /* start disclosure — the calendar affordance expands the day timeline inline, in
      flow below the Start field; the viewport rests on working hours (07:00–18:00)
      and scrolls the full 24 h */
@@ -131,22 +133,22 @@
   .daywrap{position:relative}
   .dayview{height:352px;overflow-y:auto;overscroll-behavior:contain}
   .dayview::-webkit-scrollbar{width:6px}
-  .dayview::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .dayview::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:3px}
   .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
-  .track{position:relative;height:768px;border-left:1px solid var(--line);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--line) 31px,var(--line) 32px)}
+  .track{position:relative;height:768px;border-left:1px solid var(--rule);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--rule) 31px,var(--rule) 32px)}
   .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
   .block{position:absolute;left:6px;right:10px;border-radius:7px}
-  .block.other{background:var(--sunken);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
+  .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);z-index:3}
   /* a running entry has a start and no stop yet: the block dissolves into the future */
   .block.me.open{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* the time label & start grip live at track level so nothing hides them */
   .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
-  .phint{margin-top:10px;display:flex;justify-content:flex-end}
-  .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
+  .phint{margin-top:12px;display:flex;justify-content:flex-end}
+  .snap{font-size:10px;background:var(--wash);border:1px solid var(--rule);border-radius:10px;padding:1px 8px;color:var(--faint)}
 </style>
 </head>
 <body>
@@ -188,14 +190,13 @@
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">This week</div><div class="v tnum">21h 35m billable</div><a href="reports.html">Open in Reports <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 
       <div class="card runner">
         <div class="r-top">
           <div>
-            <div class="clock tnum">01:23:45</div>
+            <div class="clock run tnum">01:23:45</div>
             <div class="r-state"><span class="dot run"></span> since 09:00</div>
           </div>
           <div class="r-desc">
