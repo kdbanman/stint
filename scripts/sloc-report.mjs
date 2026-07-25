@@ -69,7 +69,6 @@ const RULES = [
   [/^context\/mockups\//,                       'Design',         'GUI mockups'],
   [/^context\/design\.tokens\.json$/,            'Design',         'design tokens (values)'],
   [/^context\/.*\.html$/,                        'Requirements',   'PRD / spec docs'],
-  [/^requirements-transition\.md$/,              'Requirements',   'transition work-list (scaffolding)'],
 
   // Packaging
   [/^packaging\//,                              'Packaging',      'installers & launchers'],
