@@ -861,6 +861,14 @@ export function backupsState() {
   return s;
 }
 
+// §20 R04 — the canned backup files the listBackups mock returns by default (newest first;
+// the newest one's createdUtc matches backupsState().lastBackupUtc). The initScript `backups`
+// option overrides this list so the BACKUPS_SECTION scene's empty variant can inject [].
+const BACKUPS = [
+  { name: 'timetracker.sqlite.bak-20260627T101500Z', path: '/db/timetracker.sqlite.bak-20260627T101500Z', createdUtc: '2026-06-27T10:15:00Z', sizeBytes: 40960 },
+  { name: 'timetracker.sqlite.bak-20260626T090000Z', path: '/db/timetracker.sqlite.bak-20260626T090000Z', createdUtc: '2026-06-26T09:00:00Z', sizeBytes: 36864 },
+];
+
 /**
  * §20 R05 — the corruption-recovery fixture. Same Backups snapshot, but carrying a non-null
  * recoveryNotice (the DB was recovered from a backup on this launch): recoveredFrom names the
@@ -1402,7 +1410,7 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false, emptyRefData = false, savedReports = SAVED_REPORTS, backups = BACKUPS } = {}) {
   return `
     window.__STATE__ = ${stateJson};
     // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
@@ -1649,8 +1657,12 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // listProjects return the canned active clients/projects (archived excluded by
       // default); the mutators record their payload so the CLIENTS_VIEW scene can assert
       // the rename/archive affordances send the entity id over the same IPC tt uses.
-      __CLIENTS__: ${JSON.stringify(CLIENTS)},
-      __PROJECTS__: ${JSON.stringify(PROJECTS)},
+      // §12 R05/R10 (STATES.md Clients × empty): the emptyRefData knob (the favorites:[]
+      // precedent) injects a NEVER-POPULATED reference-data store — no clients, no projects,
+      // no tags, nothing archived — so a scene can assert the instructive "No clients yet" /
+      // "No tags yet" empty states. Off by default → every other scene's data is unchanged.
+      __CLIENTS__: ${JSON.stringify(emptyRefData ? [] : CLIENTS)},
+      __PROJECTS__: ${JSON.stringify(emptyRefData ? {} : PROJECTS)},
       // §12 R13: includeArchived merges the archived-record store so the "show archived" toggle
       // can reveal the hidden clients/projects (parity with tt ... ls --archived).
       listClients: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__CLIENTS__.concat(this.__ARCHIVED_STORE__.clients) : this.__CLIENTS__); },
@@ -1677,7 +1689,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // §12 R13: the archived-record store the "show archived" listing reads from and Restore
       // moves back. Seeded with one archived client/project/tag so the RESTORE_ARCHIVED scene can
       // reveal them (listClients/listProjects/listTags with includeArchived) and Restore each.
-      __ARCHIVED_STORE__: { clients: [{ id: 3, name: 'Initech', archived: true, referenced: true }], projects: [{ id: 13, clientId: 1, name: 'Legacy', archived: true, referenced: true }], tags: [{ id: 3, name: 'stale', archived: true }] },
+      __ARCHIVED_STORE__: ${emptyRefData ? `{ clients: [], projects: [], tags: [] }` : `{ clients: [{ id: 3, name: 'Initech', archived: true, referenced: true }], projects: [{ id: 13, clientId: 1, name: 'Legacy', archived: true, referenced: true }], tags: [{ id: 3, name: 'stale', archived: true }] }`},
       renameProject: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a project named that already exists')); window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveProject: function (p) { window.__ARCHIVED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { this.__PROJECTS__[k] = this.__PROJECTS__[k].filter((x) => x.id !== (p && p.id)); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R10: the tag-management channels the Clients view's tag strip drives (parity
@@ -1685,7 +1697,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // mutators record their payload so a scene could assert what the strip sends. Present
       // here so window.stint exposes EVERY IPC channel — the PARITY_REACH deterministic
       // sub-fact (every channel has a window.stint method) reads this surface.
-      __TAGS__: [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }],
+      __TAGS__: ${JSON.stringify(emptyRefData ? [] : [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }])},
       listTags: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__TAGS__.concat(this.__ARCHIVED_STORE__.tags) : this.__TAGS__); },
       addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
       renameTag: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a tag named that already exists')); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
@@ -1793,10 +1805,10 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // backups (the restore list + "Last backup" status); restoreBackup records its payload so a
       // scene could assert the Restore… action's argument. Present here so window.stint exposes
       // EVERY IPC channel — the PARITY_REACH deterministic sub-fact reads this surface.
-      __BACKUPS__: [
-        { name: 'timetracker.sqlite.bak-20260627T101500Z', path: '/db/timetracker.sqlite.bak-20260627T101500Z', createdUtc: '2026-06-27T10:15:00Z', sizeBytes: 40960 },
-        { name: 'timetracker.sqlite.bak-20260626T090000Z', path: '/db/timetracker.sqlite.bak-20260626T090000Z', createdUtc: '2026-06-26T09:00:00Z', sizeBytes: 36864 },
-      ],
+      // §20 R04 (STATES.md Settings × empty): the backups knob (default BACKUPS) lets a scene
+      // inject [] — a never-backed-up launch — so the "No backups yet…" / "No backups to
+      // restore from yet." empty copies can be asserted. Default → every other scene unchanged.
+      __BACKUPS__: ${JSON.stringify(backups)},
       listBackups: function () { return Promise.resolve(this.__BACKUPS__); },
       restoreBackup: (p) => {
         window.__RESTORED_BACKUP__ = p;
@@ -1878,7 +1890,10 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // runReport returns the flag-carrying REPORT_SUMMARY report so the run-output paints the
       // grouped totals with overlap + unreviewed-sleep flags on the affected rows. Present here
       // so window.stint exposes EVERY IPC channel — the PARITY_REACH sub-fact reads this surface.
-      __SAVED_REPORTS__: ${JSON.stringify(SAVED_REPORTS)},
+      // §12 R08 (STATES.md Reports × empty): the savedReports knob (default SAVED_REPORTS)
+      // lets a scene inject [] so the #rep-defs-empty "No saved reports yet." state can be
+      // asserted. Default → every other scene's seeded defs are unchanged.
+      __SAVED_REPORTS__: ${JSON.stringify(savedReports)},
       listReports: function () { return Promise.resolve(this.__SAVED_REPORTS__.map((d) => ({ ...d }))); },
       showReport: function (p) {
         const name = p && p.name;
@@ -1950,6 +1965,9 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       },
       unpinFavorite: function (p) {
         window.__UNPINNED__ = p;
+        // §05 R09: __UNPIN_CALLS__ records EACH invocation so the FAVORITES_RAIL scene can
+        // assert the kebab's Unpin fired EXACTLY once (the CONFIRM_ARCHIVE call-list precedent).
+        (window.__UNPIN_CALLS__ ||= []).push(p);
         this.__FAVORITES__ = this.__FAVORITES__.filter((x) => x.id !== (p && p.ref) && x.name !== (p && p.ref));
         return Promise.resolve();
       },
@@ -1973,6 +1991,15 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         getVersion: () => Promise.resolve(window.__UPDATE__.version),
         check: () => { window.__CHECKED__ = true; return Promise.resolve(window.__UPDATE__.verdict); },
         download: () => {
+          // §19 R04 (STATES.md Settings × error): with the fixture's downloadError flag set the
+          // download REJECTS before any progress frame — the failed-fetch path — so the scene
+          // can assert the panel flips to its error phase ("The update download failed.") and
+          // stays operable. __DOWNLOAD_FAILED__ records the rejection; __DOWNLOADED__ stays
+          // unset. Off by default → the happy-path replay below is unchanged.
+          if (window.__UPDATE__.downloadError) {
+            window.__DOWNLOAD_FAILED__ = true;
+            return Promise.reject(new Error('network unreachable'));
+          }
           window.__DOWNLOADED__ = true;
           for (const frame of (window.__UPDATE__.progress || [])) {
             for (const cb of window.__UPDATE_LISTENERS__) cb(frame);

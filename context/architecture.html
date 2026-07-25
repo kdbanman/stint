@@ -86,7 +86,7 @@
 
   <div class="note">
     <span class="lbl">Scope principle</span>
-    This document records <strong>architecture, not implementation</strong>. A detail belongs here only if it <strong>spans more than one module</strong> or <strong>can't be recovered by reading a single source file</strong> — boundaries, cross-cutting invariants, and decisions that would need a rewrite to change. Function signatures, field-level schema, and line-by-line control flow stay in the code; normative requirements and their status stay in <a href="prd.html">prd.html</a>; vocabulary stays in <a href="glossary.html#s6">glossary.html §06</a>; build/CI/verification stays in <a href="process.html">process.html</a> and <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. When a detail is in doubt, cut it and link.
+    This document records <strong>architecture, not implementation</strong>. A detail belongs here only if it <strong>spans more than one module</strong> or <strong>can't be recovered by reading a single source file</strong> — boundaries, cross-cutting invariants, and decisions that would need a rewrite to change. Function signatures, field-level schema, and line-by-line control flow stay in the code; normative requirements and their status stay in <a href="prd.html">prd.html</a>; vocabulary stays in <a href="glossary.html#s6">glossary.html §06</a>; visual rules and tokens stay in <a href="design.html">design.html</a>; build/CI/verification stays in <a href="process.html">process.html</a> and <a href="https://github.com/kdbanman/stint/issues/19">issue&nbsp;#19</a>. When a detail is in doubt, cut it and link.
   </div>
 
   <nav class="toc">
@@ -161,6 +161,16 @@
         <tr><td class="m" data-l="Module">version</td><td data-l="Owns">The one app-version string both surfaces report, and its <code>YYYY.M.D[.N]</code> shape.</td></tr>
         <tr><td class="m" data-l="Module">label</td><td data-l="Owns">The single client/project label-join rule.</td></tr>
         <tr><td class="m" data-l="Module">index</td><td data-l="Owns">The public API barrel — the only import surface for <code>cli</code> and <code>gui</code>.</td></tr>
+      </tbody>
+    </table>
+    <p>Non-normative: the design-token pipeline sits outside <code>@stint/core</code> but is the same file-to-role shape, keeping every surface's CSS generated from one source (<a href="design.html">design.html</a> D01/D02).</p>
+    <table>
+      <thead><tr><th>File</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td class="m" data-l="File"><code>context/design.tokens.json</code></td><td data-l="Role">The DTCG source of truth — Radix primitive scales plus the semantic aliases surfaces reference.</td></tr>
+        <tr><td class="m" data-l="File"><code>scripts/gen-tokens.mjs</code></td><td data-l="Role">Generator — writes the CSS custom-property block between <code>/* STINT-TOKENS */</code> markers.</td></tr>
+        <tr><td class="m" data-l="File"><code>context/mockups/*.html</code>, <code>packages/gui/renderer/styles.css</code></td><td data-l="Role">Where the generated blocks land; hand-editing inside the markers is a defect.</td></tr>
+        <tr><td class="m" data-l="File">guard test</td><td data-l="Role">Asserts every generated block matches the source and stays wired; the same check line carries the token-parity and contrast-floor assertions (<a href="design.html">design.html</a> §07/§08).</td></tr>
       </tbody>
     </table>
   </section>

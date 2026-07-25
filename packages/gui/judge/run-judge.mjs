@@ -42,8 +42,38 @@ function resolveChromium() {
 
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 
+// The shared in-page probe (window.__probe), injected into every scene page so the
+// colour-space and visibility trivia lives once: cssVar reads a custom property off :root,
+// toRgb normalizes a token hex to the computed-style rgb() form, rgbOf composes the two, and
+// visible is the harness-wide visibility predicate (laid out, not display:none/visibility:
+// hidden, outside any [hidden] ancestor). Scene ASSERTIONS and their sanctioned/whitelist
+// tables stay inline in each scene — only these mechanics are shared.
+const PROBE_HELPERS = `window.__probe = {
+  cssVar: (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(),
+  toRgb: (hex) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return 'rgb(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ')';
+  },
+  rgbOf: (name) => window.__probe.toRgb(window.__probe.cssVar(name)),
+  visible: (el) => {
+    if (!el || el.hidden || el.closest('[hidden]')) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  },
+};`;
+
+// Every scene page — withPage's and the hand-built ones — comes through here so the probe
+// helpers are always installed before the renderer loads.
+async function newScenePage(browser, pageOpts) {
+  const page = await browser.newPage(pageOpts);
+  await page.addInitScript(PROBE_HELPERS);
+  return page;
+}
+
 async function withPage(browser, state, name, fn, initOpts = {}) {
-  const page = await browser.newPage({ viewport: { width: 760, height: 620 }, colorScheme: 'light' });
+  const page = await newScenePage(browser, { viewport: { width: 760, height: 620 }, colorScheme: 'light' });
   // Pin the page clock so derived count-ups and the captured evidence are
   // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -73,17 +103,22 @@ async function sceneEmptyState(browser) {
   });
 }
 
-// NAV_SHELL — §12 R3 (G7): the main window presents a persistent left-hand nav with the five
-// views (Timer / Entries / Clients / Reports / Settings); the current view is highlighted and
-// each item routes to its view. The MODIFIED req hardens two G7 guarantees beyond order +
-// default-active + routing:
+// NAV_SHELL — §12 R3 (G7) + design.html D12: the main window presents a persistent left-hand
+// nav with the five views (Timer / Entries / Clients / Reports / Settings); the current view
+// is highlighted and each item routes to its view. Beyond order + default-active + routing,
+// two hardened G7 guarantees:
 //   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
 //     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
 //     visible each time — no view escapes the shell.
-//   FIXED_WIDTH_ON_RESIZE — the rail's measured width is byte-identical (168) across viewports
-//     480/760/1200px while the `.views` column width changes, proving resize lands on the
-//     content area, not the rail.
-// All four facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
+//   FIXED_WIDTH_ON_RESIZE — the rail's measured width is FIXED across the 480/760/1200px
+//     viewports while the `.views` column width changes, proving resize lands on the content
+//     area, not the rail (168px is the JUDGE-pinned width, not asserted as a magic number).
+//   D12 LIFTED CHIP — selection ≠ accent: the ACTIVE item is a raised paper chip (computed
+//     background === --paper, label === --ink, a non-none chip-lift box-shadow) whose ICON —
+//     and only its icon — takes the accent (--accent); the four inactive items are flat
+//     (box-shadow none, no accent icon). An accent-weak active fill would fail every one
+//     of these.
+// All the facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
 // and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
 async function sceneNavShell(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
@@ -102,6 +137,30 @@ async function sceneNavShell(browser) {
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-nav.png') });
+
+    // design.html D12 — the active item is the LIFTED CHIP, never an accent fill: paper
+    // background, ink label, a real chip-lift shadow, accent confined to the icon. Inactive
+    // items stay flat (no shadow) with non-accent icons.
+    const chip = await page.evaluate(() => {
+      const { rgbOf } = window.__probe;
+      const paper = rgbOf('--paper');
+      const ink = rgbOf('--ink');
+      const accent = rgbOf('--accent');
+      const active = document.querySelector('.nav-item.active');
+      const inactive = [...document.querySelectorAll('.nav-item:not(.active)')];
+      const cs = active ? getComputedStyle(active) : null;
+      return {
+        bgIsPaper: !!cs && cs.backgroundColor === paper,
+        labelIsInk: !!active && getComputedStyle(active.querySelector('.nav-label')).color === ink,
+        iconIsAccent: !!active && getComputedStyle(active.querySelector('.ic')).color === accent,
+        lifted: !!cs && cs.boxShadow !== 'none',
+        inactiveFlat: inactive.length === 4 && inactive.every((b) => getComputedStyle(b).boxShadow === 'none'),
+        inactiveNoAccentIcon: inactive.every((b) => getComputedStyle(b.querySelector('.ic')).color !== accent),
+      };
+    });
+    const chipOk =
+      chip.bgIsPaper && chip.labelIsInk && chip.iconIsAccent && chip.lifted &&
+      chip.inactiveFlat && chip.inactiveNoAccentIcon;
 
     // Route to a different view by clicking its nav item; the active marker and the visible
     // view must both move to Settings (client-side routing works, no IPC).
@@ -139,7 +198,8 @@ async function sceneNavShell(browser) {
       everyView.every((p) => p.railVisible && p.visibleViews.length === 1 && p.visibleViews[0] === p.view);
 
     // FIXED_WIDTH_ON_RESIZE: measure the rail (and the views column, to show it is the one that
-    // moves) at three viewport widths; the rail must be byte-identical 168 across all three.
+    // moves) at three viewport widths; the rail must hold ONE fixed width across all three
+    // (168px is the JUDGE-pinned width; the assertion pins fixedness, not the number).
     const measure = () =>
       page.evaluate(() => {
         const nav = document.querySelector('.shell .nav');
@@ -183,8 +243,9 @@ async function sceneNavShell(browser) {
       after.entriesHidden;
     record(
       'NAV_SHELL',
-      orderOk && defaultOk && routedOk && sidebarEveryView && fixedWidthOnResize,
+      orderOk && defaultOk && routedOk && sidebarEveryView && fixedWidthOnResize && chipOk,
       `nav order ${JSON.stringify(before.labels)}; default active=${before.activeView} (one view shown); ` +
+        `D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=${chipOk} ${JSON.stringify(chip)}; ` +
         `clicking Settings routed: active=${JSON.stringify(after.active)} visible=${JSON.stringify(after.visibleViews)}; ` +
         `sidebar-every-view rail visible on all five=${sidebarEveryView} ` +
         `(${everyView.map((p) => `${p.view}:w${p.railWidth}/${p.railVisible ? 'shown' : 'HIDDEN'}`).join(', ')}); ` +
@@ -195,15 +256,18 @@ async function sceneNavShell(browser) {
   });
 }
 
-// KEYBOARD_FOCUS — §12 R14 / §14: the keyboard-operability + focus pass. Every interactive
-// control in the window must be reachable by Tab in reading order (the active element never
-// gets trapped on <body> or goes null) AND show a visible, accent-disciplined focus ring when
-// it holds keyboard focus. We drive the REAL renderer on both the empty and the running main
-// window: collect the focusable controls (querySelectorAll over button / [tabindex] / a[href],
-// minus the hidden ones), Tab-walk from <body>, and assert (a) the walk advances through every
-// visible control with activeElement never null/stuck on body, and (b) each focused control,
-// under :focus-visible (the keyboard-focus class Playwright's Tab walk triggers), paints a
-// non-default ring (a real outline OR a box-shadow — not the UA `outline: none`). Captures
+// KEYBOARD_FOCUS — §12 R14 / §14 + design.html A04 (focus visible): the keyboard-operability
+// + focus pass. Every interactive control in the window must be reachable by Tab in reading
+// order (the active element never gets trapped on <body> or goes null) AND show a visible
+// focus ring when it holds keyboard focus. We drive the REAL renderer on both the empty and
+// the running main window: collect the focusable controls (querySelectorAll over button /
+// [tabindex] / a[href], minus the hidden ones), Tab-walk from <body>, and assert (a) the walk
+// advances through every visible control with activeElement never null/stuck on body, and
+// (b) each focused control, under :focus-visible (the keyboard-focus state Playwright's Tab
+// walk triggers), paints a ring as a computed-style DELTA: its outline/box-shadow signature
+// while focused DIFFERS from its own unfocused baseline. The delta predicate is the A04
+// hardening — a persistent decoration (the D12 chip-lift shadow on a selected chip, a static
+// border) can never fake a ring, because it is identical focused and unfocused. Captures
 // main-focus.png with the primary toggle focused so the ring is visible evidence.
 async function sceneKeyboardFocus(browser) {
   const focusWalk = async (page) => {
@@ -227,6 +291,19 @@ async function sceneKeyboardFocus(browser) {
       }
       return n;
     });
+    // A04 delta baseline: capture every marked control's UNFOCUSED outline/box-shadow
+    // signature before the walk starts (nothing is focused yet — the walk begins on <body>).
+    // A ring is then a CHANGE against this baseline, so a chip's persistent lift shadow —
+    // identical focused and unfocused — no longer counts as a ring.
+    const baseline = await page.evaluate(() => {
+      const map = {};
+      for (const el of document.querySelectorAll('[data-focus-id]')) {
+        const cs = getComputedStyle(el);
+        map[el.getAttribute('data-focus-id')] =
+          `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}`;
+      }
+      return map;
+    });
     // Tab through, recording each control we land on by its unique marker and whether it shows a
     // visible ring under keyboard focus. We stop once every marked control has been reached (the
     // walk has cycled through the whole tab order) or the budget is exhausted. A single body /
@@ -245,15 +322,18 @@ async function sceneKeyboardFocus(browser) {
         if (!el || el === document.body || el === document.documentElement) {
           return { onBody: true };
         }
-        // Read the focus ring the control shows RIGHT NOW (it has :focus-visible from the Tab
-        // press): a real outline (width > 0 and a style other than none) OR a box-shadow ring.
+        // Read the control's outline/box-shadow signature RIGHT NOW (it has :focus-visible
+        // from the Tab press); the caller compares it against the unfocused baseline — a ring
+        // is a DELTA, never a persistent decoration (A04 hardening).
         const cs = getComputedStyle(el);
-        const outlineW = parseFloat(cs.outlineWidth) || 0;
-        const hasOutline = cs.outlineStyle !== 'none' && outlineW > 0;
-        const hasShadow = cs.boxShadow && cs.boxShadow !== 'none';
         const id = el.getAttribute('data-focus-id');
         const label = el.id || `${el.tagName.toLowerCase()}.${el.className || ''}`;
-        return { onBody: false, id, label, ring: hasOutline || hasShadow };
+        return {
+          onBody: false,
+          id,
+          label,
+          sig: `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}`,
+        };
       });
       if (step.onBody) {
         if (prevOnBody) trappedOnBody = true; // stuck: Tab from body did not advance to a control
@@ -269,7 +349,8 @@ async function sceneKeyboardFocus(browser) {
         continue;
       }
       reached.add(step.id);
-      if (!step.ring) ringMisses.push(step.label);
+      // A04: the focused signature must DIFFER from the control's own unfocused baseline.
+      if (step.sig === baseline[step.id]) ringMisses.push(step.label);
       if (reached.size >= focusables) break;
     }
     return { focusables, reached: reached.size, ringMisses, trappedOnBody };
@@ -392,6 +473,67 @@ async function sceneTrayPopoverSurface(browser) {
   });
 }
 
+// POPOVER_REJECT — §12 R21 / §12 R01 (STATES.md Popover × error): a REFUSED Stop/Start from
+// the tray popover is surfaced in the popover's OWN announced message region (#pop-warning,
+// popover.js), never a silent no-op — the tray twin of the main window's banner-routed toggle
+// rejection (WRITE_REJECTION_FEEDBACK site d, which uses the same rejectWrites toggle mock).
+// Drive the REAL popover renderer over the running snapshot with the strict-rejecting mock:
+// clicking #toggle (Stop) rejects ('stop time is before the entry started'), and the popover
+//   SURFACES it — #pop-warning is visible, non-empty, and announced (role=status + aria-live);
+//   STAYS OPERABLE — #toggle is still present, enabled and still reads 'Stop' (the running
+//     state never wedged; the refusal did not fake a stop), and Open Stint is still there;
+//   a SECOND click rejects again and the warning region persists (repeatable, not one-shot).
+// Captures popover-reject.png as the rubric evidence.
+async function scenePopoverReject(browser) {
+  await withPage(browser, runningState(), 'popover.html', async (page) => {
+    await page.click('#toggle');
+    await page.waitForSelector('#pop-warning', { state: 'visible' });
+    const refused = await page.evaluate(() => {
+      const warn = document.querySelector('#pop-warning');
+      const rect = warn?.getBoundingClientRect();
+      const toggle = document.querySelector('#toggle');
+      const open = document.querySelector('#open');
+      return {
+        shown: !!warn && !warn.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && warn.textContent.trim().length > 0,
+        announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+        message: warn?.textContent.trim() ?? '',
+        // Operability: the toggle survives the refusal — present, enabled, still reading
+        // 'Stop' (the popover never pretended the stop landed), with Open Stint reachable.
+        toggleLive: !!toggle && !toggle.disabled && /Stop/.test(toggle.textContent),
+        stillRunning: !!document.querySelector('#pop.running'),
+        openPresent: !!open && !open.disabled,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'popover-reject.png') });
+
+    // Repeatable, not one-shot: a second Stop attempt rejects again and the announced
+    // region still carries the reason — the popover remains a live surface throughout.
+    await page.click('#toggle');
+    await page.waitForSelector('#pop-warning', { state: 'visible' });
+    const again = await page.evaluate(() => ({
+      shown: !document.querySelector('#pop-warning').hidden &&
+        document.querySelector('#pop-warning').textContent.trim().length > 0,
+      toggleLive: !document.querySelector('#toggle').disabled,
+    }));
+
+    const ok =
+      refused.shown &&
+      refused.announced &&
+      /stop time is before the entry started/.test(refused.message) &&
+      refused.toggleLive &&
+      refused.stillRunning &&
+      refused.openPresent &&
+      again.shown &&
+      again.toggleLive;
+    record(
+      'POPOVER_REJECT',
+      ok,
+      `refused popover toggle surfaced + operable: ${JSON.stringify(refused)}; second attempt ${JSON.stringify(again)}`,
+      'popover-reject.png',
+    );
+  }, { rejectWrites: true });
+}
+
 // IN_WINDOW_TIMER (main window) — §12 R04 + R14: the FULL Active-Timer card lives in the
 // Timer view, and the Entries view keeps only a COMPACT STRIP that mirrors the running
 // count-up/state/desc and links to the Timer view. Drive the real renderer on index.html
@@ -402,19 +544,28 @@ async function sceneTrayPopoverSurface(browser) {
 // exposes a Stop control with NO Switch (Switch is removed — issue #34; the start-with-details
 // form performs the atomic stop-then-start); and (b) on the Entries view the compact
 // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
-// Stop control (and never a #timer-switch). Fails if the full panel stayed on Entries, the
-// card/strip placement regressed, or a #timer-switch reappeared. Captures timer-view.png (the
-// full panel) and main-timer.png (the Entries strip).
+// Stop control (and never a #timer-switch). A third, IDLE page (STATES.md Entries × edge)
+// asserts the strip is STILL PAINTED with nothing running — its idle face: 00:00:00 clock,
+// state 'idle', empty description (app.js renderTimerStrip's idle branch). The strip clock
+// also computes the D06 compact Clock role: 22px, tabular numerals. Fails if the full
+// panel stayed on Entries, the card/strip placement regressed, a #timer-switch reappeared,
+// or the idle strip vanished/kept stale running data. Captures timer-view.png (the full
+// panel), main-timer.png (the Entries strip) and main-timer-idle.png (the idle strip).
 async function sceneInWindowTimer(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     // Entries view (default) first: the compact strip mirrors the running timer and exposes no
     // full-panel Stop control (it lives on the Timer-view card only); no #timer-switch anywhere.
     const strip = await page.evaluate(() => {
       const el = document.querySelector('#timer-strip');
+      // design.html D06 — the strip clock is the compact Clock role: 22px, tabular numerals
+      // (computed style, so a stylesheet regression cannot hide behind the right markup).
+      const clockCs = getComputedStyle(document.querySelector('#strip-clock'));
       return {
         present: !!el,
         running: !!el && el.classList.contains('running'),
         clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
+        clockPx: clockCs.fontSize,
+        clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
         state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
         desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
         // The strip must NOT carry the full Stop panel control (it belongs to the card).
@@ -467,15 +618,40 @@ async function sceneInWindowTimer(browser) {
       strip.present &&
       strip.running &&
       strip.clock === '01:24:07' &&
+      strip.clockPx === '22px' &&
+      strip.clockTnum &&
       strip.state === 'running' &&
       strip.desc === 'auth refactor' &&
       strip.noStop &&
       strip.noSwitch;
+
+    // The IDLE strip page (STATES.md Entries × edge): with nothing running the Entries view
+    // still paints the compact strip in its idle face — 00:00:00, state 'idle', empty desc.
+    const idleStrip = await withPage(browser, emptyState(), 'index.html', async (ip) => {
+      await ip.waitForFunction(() => document.querySelector('#timer-strip')?.classList.contains('idle'));
+      await ip.screenshot({ path: join(EVIDENCE, 'main-timer-idle.png') });
+      return ip.evaluate(() => {
+        const el = document.querySelector('#timer-strip');
+        return {
+          present: !!el,
+          idle: !!el && el.classList.contains('idle') && !el.classList.contains('running'),
+          clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
+          state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
+          desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
+        };
+      });
+    });
+    const idleOk =
+      idleStrip.present &&
+      idleStrip.idle &&
+      idleStrip.clock === '00:00:00' &&
+      idleStrip.state === 'idle' &&
+      idleStrip.desc === '';
     record(
       'IN_WINDOW_TIMER',
-      cardOk && stripOk,
+      cardOk && stripOk && idleOk,
       `Timer-view card count advanced ${t1} → ${probe.clock} (+${delta}s) ${JSON.stringify(probe)}; ` +
-        `Entries strip ${JSON.stringify(strip)}`,
+        `Entries strip ${JSON.stringify(strip)}; idle strip ${JSON.stringify(idleStrip)}`,
       'timer-view.png',
     );
   });
@@ -577,7 +753,8 @@ async function sceneCrossViewFreshness(browser) {
 
 // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
 // Timer view renders the live clock reading the derived count-up (advances +3s across the
-// pinned-clock step, not reset) with the live-edit-running strip present (no End input).
+// pinned-clock step, not reset) with the live-edit-running strip present (no End input); the
+// clock computes the D06 full Clock role — 38px, tabular numerals, the --num stack.
 // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
 // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
 // container computes position: static — showing the running block with a START drag grip
@@ -591,7 +768,7 @@ async function sceneCrossViewFreshness(browser) {
 // instants land on a deterministic local day/track geometry.
 async function sceneTimerView(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(timerViewRunningState()), {}));
@@ -600,15 +777,25 @@ async function sceneTimerView(browser) {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
     const t1 = await page.textContent('#timer-clock');
-    const before = await page.evaluate(() => ({
-      stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
-      noEnd: !document.querySelector('#live-edit #le-end'),
-      // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
-      startIsText: document.querySelector('#le-start')?.type === 'text',
-      hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-      noSwitch: !document.querySelector('#timer-switch'),
-      state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
-    }));
+    const before = await page.evaluate(() => {
+      // design.html D06 — the Timer-view clock is the full Clock role: 38px, tabular
+      // numerals, on the generated --num stack (all computed style; family lists compare
+      // quote/space-normalized because computed fontFamily re-serializes the stack).
+      const clockCs = getComputedStyle(document.querySelector('#timer-clock'));
+      const famList = (s) => s.split(',').map((f) => f.trim().replace(/^["']|["']$/g, '')).join('|');
+      return {
+        stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
+        noEnd: !document.querySelector('#live-edit #le-end'),
+        // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
+        startIsText: document.querySelector('#le-start')?.type === 'text',
+        hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
+        noSwitch: !document.querySelector('#timer-switch'),
+        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        clockPx: clockCs.fontSize,
+        clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
+        clockNumStack: famList(clockCs.fontFamily) === famList(window.__probe.cssVar('--num')),
+      };
+    });
     // Advance the pinned clock +3s — the card's tick() must advance the live count-up (the
     // count-up never stops while the start is being edited, §05 R06).
     await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
@@ -678,6 +865,9 @@ async function sceneTimerView(browser) {
       before.hasStop &&
       before.noSwitch &&
       before.state === 'running' &&
+      before.clockPx === '38px' &&
+      before.clockTnum &&
+      before.clockNumStack &&
       disc.inFlow &&
       disc.noBackdrop &&
       disc.noDialog &&
@@ -724,7 +914,7 @@ async function sceneTimerView(browser) {
 // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
 async function sceneFutureStartGuard(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(runningState()), { futureStartGuard: true, toggleStarts: true }));
@@ -796,12 +986,13 @@ async function sceneFutureStartGuard(browser) {
 // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
 // (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
 // favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
-// callable for each of the five favorite channels. The scene also DRIVES a pin and a rename
-// TO COMPLETION through the INLINE name affordances (typed + committed on Enter) and asserts
-// the rail repaints — Electron's renderer does not implement window.prompt, so a prompt-based
-// flow would silently no-op in the packaged app (issue #52); this machine-scores the inline
-// replacement end to end. Drive the real renderer twice (seeded + empty) and machine-score
-// the deterministic sub-facts.
+// callable for each of the five favorite channels. The scene also DRIVES a pin, a rename and
+// an unpin TO COMPLETION — the pin/rename through the INLINE name affordances (typed +
+// committed on Enter; Electron's renderer does not implement window.prompt, so a prompt-based
+// flow would silently no-op in the packaged app, issue #52), the unpin through the kebab's
+// Unpin action (unpinFavorite fires exactly once and the chip LEAVES the rail) — so every
+// kebab verb is machine-scored end to end, not merely present (STATES.md Timer × edge).
+// Drive the real renderer twice (seeded + empty) and machine-score the deterministic sub-facts.
 async function sceneFavoritesRail(browser) {
   await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
@@ -856,6 +1047,18 @@ async function sceneFavoritesRail(browser) {
       names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
     }));
 
+    // UNPIN through the SAME kebab menu (STATES.md Timer × edge): kebab → Unpin fires
+    // unpinFavorite EXACTLY once with the chip's ref and the chip LEAVES the rail — back to
+    // the three seeded chips, the renamed name gone.
+    await page.click('.fav-card:has-text("Client invoicing") [data-act="fav-menu"]');
+    await page.click('.fav-card:has-text("Client invoicing") [data-act="fav-unpin"]');
+    await page.waitForFunction(() => document.querySelectorAll('#fav-rail .fav-card').length === 3);
+    const unpinned = await page.evaluate(() => ({
+      calls: (window.__UNPIN_CALLS__ || []).length,
+      payload: window.__UNPINNED__ ?? null,
+      names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+    }));
+
     // The empty-favorites variant: the rail paints its instructive empty state.
     const empty = await withPage(
       browser,
@@ -898,6 +1101,13 @@ async function sceneFavoritesRail(browser) {
       renamed.payload.name === 'Client invoicing' &&
       renamed.names.includes('Client invoicing') &&
       !renamed.names.includes('Invoice prep') &&
+      // The kebab UNPIN really landed: unpinFavorite fired exactly once with the pinned
+      // chip's ref (id 93 — the pin mock's 90 + 3 seeded) and the chip LEFT the rail.
+      unpinned.calls === 1 &&
+      !!unpinned.payload &&
+      unpinned.payload.ref === 93 &&
+      unpinned.names.length === 3 &&
+      !unpinned.names.includes('Client invoicing') &&
       empty.shown &&
       /pin/i.test(empty.text) &&
       /tt fav/i.test(empty.text);
@@ -906,78 +1116,116 @@ async function sceneFavoritesRail(browser) {
       ok,
       `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
         `inline pin ${JSON.stringify(pinned)}; inline rename ${JSON.stringify(renamed)}; ` +
-        `empty ${JSON.stringify(empty)}`,
+        `kebab unpin ${JSON.stringify(unpinned)}; empty ${JSON.stringify(empty)}`,
       'timer-favorites.png',
     );
   });
 }
 
-// ACCENT_DISCIPLINE — accent confined to the primary action and the running-state
-// indicator (styles.css header / §07, §15); the rest of the chrome stays monochrome.
+// ACCENT_DISCIPLINE — design.html D04/D11 (+ PRD §15): the accent FAMILY — --accent
+// (tomato·9, the non-text signal: icons, running marks, grips, ring) and --accent-solid
+// (tomato·11, the filled-primary background) — is confined to the sanctioned uses; the rest
+// of the chrome stays monochrome warm grays. The scan checks BOTH family members as fills
+// and text colours; the sanctioned list is the post-transition truth:
+//   • button.primary — the per-view filled primary, whose FILL is --accent-solid (never raw
+//     --accent: white-on-tomato·9 is the prohibited 3.87:1 pair, D04);
+//   • the running-state surfaces (.entry.running / .timer-card.running / .timer-strip.running
+//     / the running popover / the live-edit strip) — running clock/state accents;
+//   • the picker "me" block's DRAG GRIPS (.stp-block.me .stp-resize's accent bar and the
+//     track-level .stp-grip) — V3 made the block itself accent-weak + accent BORDER (neither
+//     is scanned here: the scan is bg/colour), so the grips are where the accent signal
+//     lives (styles.css comment); the retired solid-accent me-fill would now be an offender;
+//   • the active nav item's ICON only (.nav-item.active .ic, D12) — the chip itself is a
+//     lifted paper chip (NAV_SHELL gates that), so a nav-item FILL of any accent is a break.
+// Deliberately unsanctioned: the .nav-item.active chip as a whole (D12 — selection ≠ accent;
+// only its icon may paint accent) and .stp-d.stp-sel (the selected day is a raised paper
+// chip, not accent) — either painting a family colour is an offender.
 async function sceneAccentDiscipline(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-running.png') });
     const probe = await page.evaluate(() => {
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const primary = getComputedStyle(document.querySelector('button.primary')).backgroundColor;
-      // Scan the *entire* chrome: any element painting the accent as a fill or text
-      // colour is a discipline break unless it is the primary action or part of the
-      // running-state indicator (the two uses styles.css sanctions).
+      // Scan the *entire* chrome: any element painting EITHER accent-family colour as a fill
+      // or text colour is a discipline break unless sanctioned (list above).
       const sanctioned = (el) =>
         el.matches('button.primary') ||
         el.closest('button.primary') ||
         el.closest('.entry.running') ||
         el.closest('.pop.running') ||
         el.closest('.pop:not(.idle)') ||
-        // §12 R04: the in-window Active-Timer card's running affordance — the live count-up
-        // clock and the running-state indicator carry the system accent (mirroring the
-        // popover's running count). The whole running card container is sanctioned so the
-        // count-up accent is not flagged as a stray (the idle card stays monochrome). The
-        // full card lives in the Timer view; the Entries view keeps a
-        // compact strip whose running clock/state carry the SAME sanctioned accent — so the
-        // running `.timer-strip` container is sanctioned alongside `.timer-card`.
+        // §12 R04: the running Active-Timer card / Entries strip — clock + state accents.
         el.closest('.timer-card.running') ||
         el.closest('.timer-strip.running') ||
-        // §12 R14: the live-edit-running strip is part of the running-timer surface (it only
-        // shows while a timer runs). Its dashed accent border + accent header word are the SAME
-        // sanctioned running-context accent the running card uses; the CONTROLS inside it stay
-        // monochrome (neutral wash/rule chrome), so the single primary action keeps the accent.
+        // §12 R14: the live-edit-running strip (accent border + header word while running).
         el.closest('.liveedit') ||
-        // §12 R15: the visual time-range picker's TWO sanctioned accent uses — the dragged
-        // "me" rectangle (the active span the user manipulates) and the picker's single
-        // primary "Apply range" button (.stp .primary, caught by button.primary above), plus
-        // the selected calendar day (.stp-d.stp-sel — the chosen day IS the active span's
-        // day, part of the same "me" surface). Everything else in the picker is monochrome.
-        el.closest('.stp-block.me') ||
-        el.closest('.stp-d.stp-sel') ||
-        // §12 R13: the active left-nav item is marked with the system accent — the one
-        // sanctioned accent use in the window chrome beyond the primary action / running
-        // state (the rail is otherwise monochrome). The marker + its icon are allowed.
-        el.closest('.nav-item.active');
+        // V3/D11: the "me" block's accent DRAG GRIPS (the block fill is accent-weak, border
+        // accent — both unscanned; only the grip bars paint a family colour).
+        el.closest('.stp-block.me .stp-resize') ||
+        el.matches('.stp-grip') ||
+        // D12: the active nav item's ICON only — never the chip or its label.
+        el.closest('.nav-item.active .ic');
       const offenders = [];
       for (const el of document.querySelectorAll('*')) {
         if (sanctioned(el)) continue;
         const cs = getComputedStyle(el);
-        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+        if (
+          cs.backgroundColor === accentRgb || cs.color === accentRgb ||
+          cs.backgroundColor === accentSolidRgb || cs.color === accentSolidRgb
+        ) {
           offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
         }
       }
-      return { accentRgb, primary, offenders };
+      return { accentRgb, accentSolidRgb, primary, offenders };
     });
-    const primaryUsesAccent = probe.primary === probe.accentRgb;
+    const primaryUsesAccentSolid = probe.primary === probe.accentSolidRgb;
     // Accent discipline ("one rationed accent") is a VISUAL design judgement, not a machine gate.
     // Capture the running window + the computed-style probe as evidence, but score it by looking
     // at the screenshot against the mocks — never by failing on a measured-style scan (issue #25).
     record(
       'ACCENT_DISCIPLINE',
       null,
-      `primary=${probe.primary} accent=${probe.accentRgb}; primary-uses-accent=${primaryUsesAccent}; ` +
-        `accent seen on [${probe.offenders.join(', ') || 'only sanctioned surfaces'}]`,
+      `primary=${probe.primary} accent-solid=${probe.accentSolidRgb} (accent=${probe.accentRgb}); ` +
+        `primary-fill-uses-accent-solid=${primaryUsesAccentSolid}; ` +
+        `accent family seen on [${probe.offenders.join(', ') || 'only sanctioned surfaces'}]`,
+      'main-running.png',
+    );
+
+    // ACCENT_SOLID_BUDGET — design.html D11, machine-scored: AT MOST ONE accent-solid-filled
+    // element per view. Route through the five views on the running window and count the
+    // visible elements whose computed background is --accent-solid; every view must count
+    // ≤1, and the running Timer view's count is exactly 1 (its Stop primary) — so the rule
+    // "one filled primary per view, and the most-likely action carries it" is a gate, not
+    // prose. (A second accent-solid fill sneaking into any view flips this false.)
+    const budget = [];
+    for (const view of ['timer', 'entries', 'clients', 'reports', 'settings']) {
+      await page.click(`.nav-item[data-view="${view}"]`);
+      const count = await page.evaluate(() => {
+        const { rgbOf, visible } = window.__probe;
+        const accentSolidRgb = rgbOf('--accent-solid');
+        const filled = [];
+        for (const el of document.querySelectorAll('*')) {
+          if (!visible(el)) continue;
+          if (getComputedStyle(el).backgroundColor === accentSolidRgb) {
+            filled.push(el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${el.className || ''}`);
+          }
+        }
+        return filled;
+      });
+      budget.push({ view, filled: count });
+    }
+    const everyViewWithinBudget = budget.every((b) => b.filled.length <= 1);
+    const timerFillCount = budget.find((b) => b.view === 'timer')?.filled.length ?? 0;
+    const budgetOk = everyViewWithinBudget && timerFillCount === 1;
+    record(
+      'ACCENT_SOLID_BUDGET',
+      budgetOk,
+      `≤1 accent-solid fill per view (D11): ` +
+        budget.map((b) => `${b.view}=[${b.filled.join(', ') || 'none'}]`).join('; ') +
+        `; every view within budget=${everyViewWithinBudget}; ` +
+        `running Timer view carries exactly its Stop primary=${timerFillCount === 1} (count ${timerFillCount})`,
       'main-running.png',
     );
   });
@@ -994,21 +1242,21 @@ async function sceneAccentDiscipline(browser) {
 //   NEGATIVE — known inert text (.wordmark, .day-head, .entry .desc, .entry .time,
 //     .summary) carries NO button-like pill fill (its backgroundColor stays transparent
 //     or the page/wash colour, never the var(--paper)/var(--wash) affordance fill).
-//   ACCENT-PER-VIEW — ONLY the sanctioned accent uses (button.primary / running state /
-//     nav-item.active) carry the accent; the accent never leaks onto an ordinary clickable
-//     affordance, and at least one primary action does carry it — the accent stays reserved
-//     for the view's primary action(s) (the running view's Stop, mirrored on the card +
-//     toolbar, are both the SAME primary Stop action).
+//   ACCENT-PER-VIEW — ONLY the sanctioned accent-family uses carry either --accent or
+//     --accent-solid: button.primary (whose FILL is --accent-solid, design.html D11/D04),
+//     the running-state surfaces, and the active nav item's ICON only (D12 — the chip
+//     itself is a lifted paper chip, so a nav-item accent FILL would be a break). The
+//     family never leaks onto an ordinary clickable affordance, and at least one primary
+//     action carries the accent-solid fill — the accent stays reserved for the view's
+//     primary action(s) (the running view's Stop, mirrored on the card + toolbar, are
+//     both the SAME primary Stop action).
 async function sceneClickability(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-clickability.png') });
     const probe = await page.evaluate(() => {
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      const { rgbOf, visible } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const isTransparent = (c) => !c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
       // A control "carries the affordance" if it paints a non-transparent background OR a
       // visible (non-zero, non-transparent) border on at least one edge.
@@ -1039,13 +1287,6 @@ async function sceneClickability(browser) {
         // (paper bg, 1px line border, 7px radius, raise shadow) — the CHIP carries the affordance,
         // so its inner icon-only op-btns are sub-affordances, exactly like .chip / .seg / .presets.
         !!el.closest('.ops');
-      const visible = (el) => {
-        const cs = getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-        if (el.hidden || el.closest('[hidden]')) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      };
       // POSITIVE: candidate clickable affordances minus the primary (already accent-filled,
       // trivially carries the convention) and the whitelisted sub-affordances.
       const candidates = [
@@ -1061,9 +1302,7 @@ async function sceneClickability(browser) {
       }
       // NEGATIVE: known inert text must NOT wear a button-like pill fill. The affordance
       // fills are var(--paper)/var(--wash); inert text stays transparent or the page bg.
-      const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
-      const wash = getComputedStyle(document.documentElement).getPropertyValue('--wash').trim();
-      const pillFills = new Set([toRgb(paper), toRgb(wash)]);
+      const pillFills = new Set([rgbOf('--paper'), rgbOf('--wash')]);
       const inertSel = '.wordmark, .day-head, .entry .desc, .entry .time, .summary';
       const inertOffenders = [];
       for (const el of document.querySelectorAll(inertSel)) {
@@ -1073,9 +1312,12 @@ async function sceneClickability(browser) {
           inertOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
         }
       }
-      // ACCENT-PER-VIEW: the only elements that may FILL with the accent are the sanctioned
-      // uses (primary action / running state / active nav item). The accent must reach at
-      // least one primary action and never leak onto an ordinary affordance.
+      // ACCENT-PER-VIEW: the only elements that may paint an accent-FAMILY colour (--accent
+      // or --accent-solid, as fill or text) are the sanctioned uses — button.primary (fill =
+      // --accent-solid, D11), the running state, and the active nav item's ICON only (D12:
+      // the chip itself is paper + shadow, so a nav-item fill would be a break). The
+      // accent-solid fill must reach at least one primary action and the family never leaks
+      // onto an ordinary affordance.
       const accentSanctioned = (el) =>
         el.matches('button.primary') ||
         el.closest('button.primary') ||
@@ -1084,15 +1326,19 @@ async function sceneClickability(browser) {
         // §12 R04: the Entries-view compact strip's running clock/state carry the same
         // sanctioned running-state accent as the full card (the strip mirrors the card).
         el.closest('.timer-strip.running') ||
-        el.closest('.nav-item.active');
+        // D12: the active nav item's icon — and only the icon — may take the accent.
+        el.closest('.nav-item.active .ic');
       const accentOffenders = [];
       let primaryAccentCount = 0;
       for (const el of document.querySelectorAll('*')) {
         if (!visible(el)) continue;
         const cs = getComputedStyle(el);
-        const fills = cs.backgroundColor === accentRgb;
-        if (fills && el.matches('button.primary')) primaryAccentCount++;
-        if (!accentSanctioned(el) && (fills || cs.color === accentRgb)) {
+        const fills = cs.backgroundColor === accentRgb || cs.backgroundColor === accentSolidRgb;
+        if (cs.backgroundColor === accentSolidRgb && el.matches('button.primary')) primaryAccentCount++;
+        if (
+          !accentSanctioned(el) &&
+          (fills || cs.color === accentRgb || cs.color === accentSolidRgb)
+        ) {
           accentOffenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
         }
       }
@@ -1108,23 +1354,12 @@ async function sceneClickability(browser) {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
     const timerPrimaryAccentCount = await page.evaluate(() => {
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
-      const visible = (el) => {
-        const cs = getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-        if (el.hidden || el.closest('[hidden]')) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      };
+      const { rgbOf, visible } = window.__probe;
+      const accentSolidRgb = rgbOf('--accent-solid');
       let count = 0;
       for (const el of document.querySelectorAll('button.primary')) {
         if (!visible(el)) continue;
-        if (getComputedStyle(el).backgroundColor === accentRgb) count++;
+        if (getComputedStyle(el).backgroundColor === accentSolidRgb) count++;
       }
       return count;
     });
@@ -1137,7 +1372,7 @@ async function sceneClickability(browser) {
       null,
       `clickable affordances reading as bare prose=[${probe.offenders.join(', ') || 'none'}]; ` +
         `inert text wearing a pill fill=[${probe.inertOffenders.join(', ') || 'none'}]; ` +
-        `stray accent=[${probe.accentOffenders.join(', ') || 'none'}], accent-filled primary action(s)=${primaryAccentCount} ` +
+        `stray accent family=[${probe.accentOffenders.join(', ') || 'none'}], accent-solid-filled primary action(s)=${primaryAccentCount} ` +
         `(Entries ${probe.primaryAccentCount} + Timer ${timerPrimaryAccentCount}; expect ≥1, reserved for the primary action)`,
       'main-clickability.png',
     );
@@ -1359,8 +1594,10 @@ async function sceneRunningSingleAction(browser) {
 //       textarea + client + project SELECTs + a tag chip host + the billable toggle; RIGHT: the
 //       inline interval picker (month calendar + single-day column) over the COLLAPSED Start/Stop
 //       expander (raw text fields), and the form carries NO type=datetime-local input (G1);
-//   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert),
-//       and only the "me" rectangle + Save entry carry the accent (§15);
+//   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert);
+//       accent discipline per design.html D11/V3: the "me" rectangle is the OUTLINE idiom —
+//       accent-weak fill + accent border + ink labels (solid accent is reserved for primary
+//       actions) — and Save entry is the view's single accent-SOLID-filled primary;
 //   (c) DRAGGING the picker "me" block updates the form's start/stop state LIVE (the raw #add-from
 //       /#add-to fields change, span preserved) — before any Save (G7);
 //   (d) clicking Save entry is the SOLE commit — window.__ADDED__ carries the picked (post-drag)
@@ -1375,7 +1612,7 @@ async function sceneRunningSingleAction(browser) {
 // overlap warning the inline banner surfaces.
 async function sceneUnifiedFormAdd(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
@@ -1426,22 +1663,34 @@ async function sceneUnifiedFormAdd(browser) {
       };
     });
 
-    // (b) other entries gray + an overlapping span yellow (warn-only, inert); accent facts.
+    // (b) other entries gray + an overlapping span yellow (warn-only, inert); accent facts —
+    // design.html D11 / V3: the "me" block is the OUTLINE idiom (accent-weak fill + an accent
+    // border + ink labels; solid accent is reserved for primary actions), and Save entry is
+    // the view's single accent-SOLID primary. The retired solid-accent me-fill would fail
+    // meWeakFill; a Save painted raw --accent (white-on-tomato·9, the prohibited pair) would
+    // fail saveSolid.
     const paint = await page.evaluate(() => {
       const picker = document.querySelector('#add-picker');
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentWeakRgb = rgbOf('--accent-weak');
+      const accentSolidRgb = rgbOf('--accent-solid');
+      const inkRgb = rgbOf('--ink');
       const overlaps = [...picker.querySelectorAll('.stp-overlap')];
+      const me = picker.querySelector('.stp-block.me');
+      const meCs = getComputedStyle(me);
+      const meLab = me.querySelector('.stp-lab-top, .stp-lab-bot');
       return {
         others: picker.querySelectorAll('.stp-block.other').length,
         overlaps: overlaps.length,
         overlapInert: overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
-        meAccent: getComputedStyle(picker.querySelector('.stp-block.me')).backgroundColor === accentRgb,
-        saveAccent: getComputedStyle(document.querySelector('#add-go')).backgroundColor === accentRgb,
+        // V3: accent-weak fill + a ≥1px accent border — the outline idiom, not a solid fill.
+        meWeakFill: meCs.backgroundColor === accentWeakRgb,
+        meAccentBorder: meCs.borderTopColor === accentRgb && parseFloat(meCs.borderTopWidth) >= 1,
+        // The block's time labels stay INK (accent-ink on accent-weak is the prohibited pair).
+        meInkLabels: !meLab || getComputedStyle(meLab).color === inkRgb,
+        // D11: Save entry is the single accent-solid-filled primary of the view.
+        saveSolid: getComputedStyle(document.querySelector('#add-go')).backgroundColor === accentSolidRgb,
       };
     });
 
@@ -1519,7 +1768,9 @@ async function sceneUnifiedFormAdd(browser) {
       layout.startText === 'text' &&
       layout.stopText === 'text' &&
       layout.noDatetimeLocal;
-    const paintOk = paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert && paint.meAccent && paint.saveAccent;
+    const paintOk =
+      paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert &&
+      paint.meWeakFill && paint.meAccentBorder && paint.meInkLabels && paint.saveSolid;
     const ok =
       layoutOk &&
       paintOk &&
@@ -1564,7 +1815,7 @@ async function sceneUnifiedFormAdd(browser) {
 // geometry (720px/24h track → 22:00 = 660px from the track top).
 async function sceneUnifiedFormExpander(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState())));
@@ -1745,7 +1996,8 @@ async function sceneUnifiedForm(browser) {
         // The edit-mode footer's two reachability controls.
         hasSplit: !!v('.ef-split'),
         hasDelete: !!v('.ef-delete'),
-        // Only Save entry carries the accent (§15) — it is the single .primary in the footer.
+        // design.html D11: only Save entry carries the accent-solid fill — it is the single
+        // .primary in the footer (the class whose one paint token is --accent-solid).
         footAccent: form ? form.querySelectorAll('.edit-foot .primary').length : 0,
       };
     });
@@ -2321,8 +2573,11 @@ async function sceneWriteRejectionFeedback(browser) {
   }
 }
 
-// MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
-// action; merging entries that DISAGREE on client/billable raises the conflict prompt
+// MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals the merge
+// SELECTION BAR (design.html D11 / V5): a quiet bar ABOVE the calendar whose raised-chip
+// count pill reads "N selected" and whose Merge action is a NEUTRAL small button — never
+// .primary, because the Entries view's single accent-solid primary is the add form's Save
+// entry. Merging entries that DISAGREE on client/billable raises the conflict prompt
 // offering the distinct client choices and a billable choice BEFORE committing
 // (§06 R3, §12 R6). The prompt is hosted in app.js — the `.editor.conflict-prompt` modal.
 // The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
@@ -2336,10 +2591,27 @@ async function sceneMergeConflict(browser) {
     await page.check('.entry[data-id="40"] .sel');
     const barHiddenWithOne = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
     await page.check('.entry[data-id="41"] .sel');
-    const barShownWithTwo = await page.evaluate(() => {
+    // V5: with 2 selected the selection bar shows ABOVE the calendar host, its #merge-count
+    // pill reads "2 selected", and #merge-go is present labelled "Merge" WITHOUT .primary
+    // (a neutral small button — an accent-filled "Merge N entries" primary would fail all three).
+    const barWithTwo = await page.evaluate(() => {
       const bar = document.querySelector('#merge-bar');
-      return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+      const count = bar?.querySelector('#merge-count');
+      const go = bar?.querySelector('#merge-go');
+      return {
+        shown: !!bar && !bar.hidden,
+        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        countText: count?.textContent.trim() ?? '',
+        goLabel: go?.textContent.trim() ?? '',
+        goNeutral: !!go && !go.classList.contains('primary'),
+      };
     });
+    const barShownWithTwo =
+      barWithTwo.shown &&
+      barWithTwo.aboveCalendar &&
+      barWithTwo.countText === '2 selected' &&
+      barWithTwo.goLabel === 'Merge' &&
+      barWithTwo.goNeutral;
     // Click Merge: the selection disagrees, so the app.js-hosted conflict prompt must appear
     // rather than a silent merge.
     await page.click('#merge-go');
@@ -2375,7 +2647,7 @@ async function sceneMergeConflict(browser) {
     record(
       'MERGE_CONFLICT',
       ok,
-      `merge bar hidden until 2 selected (${barShownWithTwo}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}`,
+      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}`,
       'main-merge-conflict.png',
     );
   });
@@ -2596,7 +2868,8 @@ async function sceneConfirmDestructive(browser) {
 // CLIENTS_VIEW — the Clients nav view lists active clients with their projects nested,
 // and offers create/rename/archive in place; archived items drop out of the active list
 // (history kept). Click the Clients nav, assert the clients/projects render with the
-// rename + archive affordances, and that accent discipline holds on the new chrome
+// rename + archive affordances, that accent discipline holds on the chrome, and that every
+// visible icon-only affordance carries an accessible name (design.html D16, machine-gated)
 // (§07, §12). The mutators are wired to the same IPC tt's client/project subcommands use.
 // The create affordances are DRIVEN, not merely present (issue #48: a duplicate
 // id="add-client" dead-ended the "+ Add client" button while every presence-only check
@@ -2604,6 +2877,10 @@ async function sceneConfirmDestructive(browser) {
 // opens, types a name, and asserts the new client LANDS in the active list off the
 // addClient → re-render round trip — then does the same for "+ Add project" (under a
 // client row) and "+ Add tag" (the tag strip), asserting each payload over the IPC.
+// A second, EMPTY-REFERENCE-DATA page (STATES.md Clients × empty, the emptyRefData
+// fixture knob) asserts the never-populated view instructs instead of blanking: the
+// "No clients yet" copy mentions `tt client add` and the "No tags yet" copy mentions
+// `tt tag add` (app.js renderClients/renderTags empty branches).
 async function sceneClientsView(browser) {
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
@@ -2613,7 +2890,6 @@ async function sceneClientsView(browser) {
     await page.screenshot({ path: join(EVIDENCE, 'main-clients.png'), fullPage: true });
     const probe = await page.evaluate(() => {
       const view = document.querySelector('#clients');
-      const visible = !!view && !view.hidden;
       const clients = [...document.querySelectorAll('#clients .client[data-id]')];
       const names = clients.map((c) => c.querySelector('.client-name')?.textContent?.trim());
       // Acme's row carries its two projects nested under it (the project sub-list).
@@ -2628,24 +2904,33 @@ async function sceneClientsView(browser) {
       const projArchive = !!acme?.querySelector('.project [data-act="archive-project"]');
       const addProject = !!acme?.querySelector('[data-act="add-project"]');
       const addClient = !!document.querySelector('#add-client-btn');
-      // Accent discipline (§15): no element inside the Clients chrome paints the accent as
-      // a fill/text colour except a sanctioned .primary confirm (none open by default).
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      // Accent discipline (§15/D16): no element inside the Clients chrome paints the accent
+      // as a fill/text colour except a sanctioned .primary confirm (none open by default) —
+      // create icons included (accent only when an item is active, D16).
+      const { rgbOf, visible: isVisible } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      // SVG's el.className is an SVGAnimatedString — stringify via the class ATTRIBUTE so an
+      // offending icon prints its real classes, not "[object SVGAnimatedString]".
+      const cls = (el) => (typeof el.className === 'string' ? el.className : el.getAttribute('class') || '');
       const offenders = [];
       for (const el of view ? view.querySelectorAll('*') : []) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
         const cs = getComputedStyle(el);
         if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
-          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+          offenders.push(`${el.tagName.toLowerCase()}.${cls(el) || '(no-class)'}`);
         }
       }
+      // design.html D16 — every visible icon-only affordance in the view carries a non-empty
+      // accessible name (aria-label, title, or text); a bare glyph is unusable to AT.
+      const unnamedIconButtons = [];
+      for (const el of view ? view.querySelectorAll('.iconbtn') : []) {
+        if (!isVisible(el)) continue;
+        const name =
+          (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '').trim();
+        if (!name) unnamedIconButtons.push(`${el.tagName.toLowerCase()}.${cls(el) || '(no-class)'}`);
+      }
       return {
-        visible,
+        visible: !!view && !view.hidden,
         names,
         acmeProjects,
         clientRename,
@@ -2655,6 +2940,7 @@ async function sceneClientsView(browser) {
         addProject,
         addClient,
         offenders,
+        unnamedIconButtons,
       };
     });
     // Drive the create flows end to end (issue #48). (1) "+ Add client": the click opens
@@ -2766,6 +3052,30 @@ async function sceneClientsView(browser) {
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-clients-mutated.png'), fullPage: true });
+
+    // The EMPTY-REFERENCE-DATA variant (STATES.md Clients × empty): with no clients, no
+    // projects and no tags ever created, the view paints BOTH instructive empty states —
+    // each naming its `tt` twin — never a blank pane.
+    const refEmpty = await withPage(
+      browser,
+      clientsState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="clients"]');
+        await ep.waitForSelector('#clients:not([hidden]) .clients-empty', { state: 'attached' });
+        await ep.waitForSelector('#tags-list .tags-empty', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'main-clients-empty.png'), fullPage: true });
+        return ep.evaluate(() => ({
+          clientsText:
+            document.querySelector('#clients-list .clients-empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+          tagsText:
+            document.querySelector('#tags-list .tags-empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+          clientRows: document.querySelectorAll('#clients .client[data-id]').length,
+          tagRows: document.querySelectorAll('#tags-list .tag-row[data-id]').length,
+        }));
+      },
+      { emptyRefData: true },
+    );
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -2778,6 +3088,8 @@ async function sceneClientsView(browser) {
       probe.projArchive &&
       probe.addProject &&
       probe.addClient &&
+      // …and the D16 accessible-name fact: every visible icon-only affordance is named.
+      probe.unnamedIconButtons.length === 0 &&
       // …and the DRIVEN create facts (issue #48): each inline field opened (the waits above
       // would have thrown otherwise), each payload went over the IPC, and each created item
       // landed in its active list.
@@ -2802,17 +3114,27 @@ async function sceneClientsView(browser) {
       !norace.clientNames.includes('Globex') &&
       norace.tagNames.includes('deep') &&
       norace.tagNames.includes('billing') &&
-      !norace.tagNames.includes('urgent');
-    // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
-    // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
-    // list is kept in the justification as captured evidence only.
+      !norace.tagNames.includes('urgent') &&
+      // …and the EMPTY-REFERENCE-DATA facts (STATES.md Clients × empty): zero rows with both
+      // instructive copies painting, each naming its `tt` twin.
+      refEmpty.clientRows === 0 &&
+      refEmpty.tagRows === 0 &&
+      /No clients yet/.test(refEmpty.clientsText) &&
+      /tt client add/.test(refEmpty.clientsText) &&
+      /No tags yet/.test(refEmpty.tagsText) &&
+      /tt tag add/.test(refEmpty.tagsText);
+    // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
+    // when their item is active) is judged visually against the mock, not gated on a
+    // computed-style scan (issue #25) — the offender list is kept in the justification as
+    // captured evidence only. The D16 accessible-name fact IS machine-gated above.
     record(
       'CLIENTS_VIEW',
       ok,
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
-        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}`,
+        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}; ` +
+        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}`,
       'main-clients.png',
     );
   });
@@ -3023,9 +3345,12 @@ async function sceneTagChips(browser) {
 //       INLINE affordances (an in-place Rename / Delete menu, the shared inline name field
 //       committed on Enter, and the generic §12 R13 confirm gate) — Electron's renderer
 //       implements neither window.prompt nor window.confirm, so these must be inline — with
-//       renameReport / removeReport firing and the list updating each time.
-// Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
-// output) for rubric review.
+//       renameReport / removeReport firing and the list updating each time;
+//   (h) STATES.md Reports × empty: a second page with ZERO saved defs (the savedReports:[]
+//       fixture knob) paints the visible #rep-defs-empty state reading "No saved reports
+//       yet." with no cards — never a blank list.
+// Captures reports-list.png (the saved-defs list + builder), reports-run.png (the run
+// output) and reports-empty.png (the zero-defs state) for rubric review.
 async function sceneReportsView(browser) {
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
     // Route to the Reports view (the shell router; no IPC) and wait for the saved-defs list.
@@ -3043,20 +3368,30 @@ async function sceneReportsView(browser) {
       const nav = document.querySelector('.shell .nav');
       const r = nav ? nav.getBoundingClientRect() : { width: 0 };
       const active = [...document.querySelectorAll('.nav-item.active')].map((b) => b.dataset.view);
-      // Accent discipline: the only accented affordance in the view is + New report.
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`; };
-      const accentRgb = toRgb(accent);
-      const isAccented = (el) => { if (!el) return false; const cs = getComputedStyle(el); return cs.backgroundColor === accentRgb || cs.color === accentRgb; };
+      // Accent discipline (design.html D11 / V6): the view's single accent affordance is the
+      // + New report primary, FILLED with --accent-solid (tomato·11 — a raw --accent fill
+      // under a white label is the prohibited 3.87:1 pair, D04). Anything else in the view
+      // painting EITHER family colour (--accent or --accent-solid, fill or text) is a break.
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
+      const inFamily = (el) => {
+        if (!el) return false;
+        const cs = getComputedStyle(el);
+        return (
+          cs.backgroundColor === accentRgb || cs.color === accentRgb ||
+          cs.backgroundColor === accentSolidRgb || cs.color === accentSolidRgb
+        );
+      };
       const newBtn = document.querySelector('#rep-new');
-      const otherAccented = [...document.querySelectorAll('.reports-view button, .reports-view .def-run, .reports-view .def-edit, .reports-view .def-kebab')]
-        .filter((b) => b !== newBtn)
-        .some((b) => isAccented(b));
+      const otherAccented = [...document.querySelectorAll('.reports-view *')]
+        .filter((el) => el !== newBtn && !el.closest('#rep-new'))
+        .some((el) => inFamily(el));
       return {
         cards,
         railVisible: !!nav && r.width > 0,
         activeNav: active,
-        newAccented: isAccented(newBtn),
+        newSolidFilled: !!newBtn && getComputedStyle(newBtn).backgroundColor === accentSolidRgb,
         otherAccented,
       };
     });
@@ -3262,6 +3597,29 @@ async function sceneReportsView(browser) {
       count: document.querySelectorAll('#rep-defs .def').length,
     }));
 
+    // (h) STATES.md Reports × empty: with ZERO saved defs the list host is empty and the
+    // #rep-defs-empty state is genuinely on-screen reading "No saved reports yet.".
+    const defsEmpty = await withPage(
+      browser,
+      savedReportsState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="reports"]');
+        await ep.waitForSelector('#rep-defs-empty:not([hidden])', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'reports-empty.png'), fullPage: true });
+        return ep.evaluate(() => {
+          const el = document.querySelector('#rep-defs-empty');
+          const rect = el?.getBoundingClientRect();
+          return {
+            shown: !!el && !el.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0,
+            text: el?.textContent?.trim() ?? '',
+            cards: document.querySelectorAll('#rep-defs .def').length,
+          };
+        });
+      },
+      { savedReports: [] },
+    );
+
     const listOk =
       list.cards.length === 2 &&
       list.cards.every((c) => c.name.length > 0 && c.spec.length > 0 && c.hasRun && c.hasEdit) &&
@@ -3269,7 +3627,9 @@ async function sceneReportsView(browser) {
       // The spec summary reads the stored range + group-by (a recognisable saved-report card).
       list.cards.some((c) => /This week/.test(c.spec) && /project/.test(c.spec));
     const sidebarOk = list.railVisible && list.activeNav.length === 1 && list.activeNav[0] === 'reports';
-    const accentOk = list.newAccented && !list.otherAccented; // §15 / G10: only + New report is accented
+    // design.html D11 / V6: + New report is the view's single accent-solid-filled primary;
+    // nothing else in the view paints either accent-family colour.
+    const accentOk = list.newSolidFilled && !list.otherAccented;
     const builderOk =
       builder.name && builder.range && builder.custom && builder.by && builder.client &&
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
@@ -3348,11 +3708,14 @@ async function sceneReportsView(browser) {
       refuseInverted.warnPersists &&
       /before/i.test(refuseInverted.message) &&
       refuseInverted.cardCount === 2;
-    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk;
+    // (h) STATES.md Reports × empty: the zero-defs page shows the visible instructive state.
+    const emptyOk =
+      defsEmpty.shown && defsEmpty.text === 'No saved reports yet.' && defsEmpty.cards === 0;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk && emptyOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
 }
@@ -3606,12 +3969,13 @@ async function sceneEntriesCalendar(browser) {
 //     .edit-form.entry-form`), and the event carries the `.editing` selection state;
 //   • the RUNNING block carries the future-fade gradient with no end edge;
 //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
-//   • checking two `.ck` boxes reveals #merge-bar.
+//   • checking two `.ck` boxes reveals the #merge-bar selection bar above the calendar —
+//     "2 selected" count pill + a NEUTRAL Merge button (design.html D11 / V5).
 // Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
 // regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
 async function sceneCalendarLayout(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
@@ -3721,15 +4085,31 @@ async function sceneCalendarLayout(browser) {
         document.querySelector('.entry[data-id="5"]')?.classList.contains('editing') === true,
     );
 
-    // Checking two corner checkboxes enters multi-select and reveals the merge bar.
+    // Checking two corner checkboxes enters multi-select and reveals the merge SELECTION BAR
+    // (design.html D11 / V5): above the calendar, "2 selected" in the count pill, and a
+    // NEUTRAL small Merge button (no .primary — Entries' accent-solid primary is Save entry).
     const mergeHiddenBefore = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
     await page.check('.entry[data-id="7"] .ck');
     await page.check('.entry[data-id="2"] .ck');
     await page.waitForFunction(() => !document.querySelector('#merge-bar')?.hidden);
-    const mergeShown = await page.evaluate(() => {
+    const mergeBar = await page.evaluate(() => {
       const bar = document.querySelector('#merge-bar');
-      return !!bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+      const count = bar?.querySelector('#merge-count');
+      const go = bar?.querySelector('#merge-go');
+      return {
+        shown: !!bar && !bar.hidden,
+        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        countText: count?.textContent.trim() ?? '',
+        goLabel: go?.textContent.trim() ?? '',
+        goNeutral: !!go && !go.classList.contains('primary'),
+      };
     });
+    const mergeShown =
+      mergeBar.shown &&
+      mergeBar.aboveCalendar &&
+      mergeBar.countText === '2 selected' &&
+      mergeBar.goLabel === 'Merge' &&
+      mergeBar.goNeutral;
 
     const columnsOk =
       structure.colCount === 7 &&
@@ -3786,7 +4166,7 @@ async function sceneCalendarLayout(browser) {
       ok,
       `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
         `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
-        `merge hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown}`,
+        `selection bar hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
       'main-calendar.png',
     );
     await page.close();
@@ -3801,8 +4181,12 @@ async function sceneCalendarLayout(browser) {
 // "refactor" search then narrows the visible rows to the two IN-WEEK refactor entries (last
 // week's 'refactor planning' stays excluded — the query composes range + search) AND
 // #week-total settles on the selection's 3.50h — the selected range's billable sum. Clearing
-// the search returns both. The strict listEntries mock rejects any query missing the required
-// `by` (exactly like core), so the whole flow also proves no toolbar query throws.
+// the search returns both. A final NO-MATCH search (STATES.md Entries × empty) narrows the
+// query to nothing and asserts the "No matching entries" empty state paints — the
+// query-narrowed-to-nothing copy instructing 'Widen the range…' (app.js emptyEntries),
+// DISTINCT from the never-tracked "No entries yet" copy — with zero rows. The strict
+// listEntries mock rejects any query missing the required `by` (exactly like core), so the
+// whole flow also proves no toolbar query throws.
 async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
@@ -3841,6 +4225,20 @@ async function sceneLiveFilter(browser) {
       weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
+    // NO-MATCH (STATES.md Entries × empty): a search matching nothing paints the
+    // query-narrowed empty state — "No matching entries" + the widen-the-range instruction —
+    // never a blank pane and never the never-tracked "No entries yet" copy.
+    await page.fill('#search', 'no-such-entry-xyzzy');
+    await page.waitForFunction(() =>
+      /No matching entries/.test(document.querySelector('#entries .empty')?.textContent ?? ''),
+    );
+    await page.screenshot({ path: join(EVIDENCE, 'main-no-matching.png'), fullPage: true });
+    const noMatch = await page.evaluate(() => ({
+      rowCount: document.querySelectorAll('#entries .entry').length,
+      text: document.querySelector('#entries .empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      listErrors: window.__LIST_ERRORS__ || 0,
+    }));
+
     const listLiveOk =
       before.rowCount === 7 &&
       onSearch.rowCount === 2 &&
@@ -3855,14 +4253,23 @@ async function sceneLiveFilter(browser) {
       onSearch.listErrors === 0 && // …with no listEntries rejection along the way
       onClear.rowCount === 7 &&
       onClear.weekTotal === '5.00h'; // …and returns with the full set when cleared
-    const ok = listLiveOk && totalLiveOk && noReloadOnSearch;
+    // STATES.md Entries × empty: the no-match query paints the instructive widen-the-range
+    // copy — distinct from the never-tracked copy — with zero rows and zero query rejections.
+    const noMatchOk =
+      noMatch.rowCount === 0 &&
+      /No matching entries/.test(noMatch.text) &&
+      /Widen the range/.test(noMatch.text) &&
+      !/No entries yet/.test(noMatch.text) &&
+      noMatch.listErrors === 0;
+    const ok = listLiveOk && totalLiveOk && noReloadOnSearch && noMatchOk;
     record(
       'LIVE_FILTER',
       ok,
       `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
         `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
         `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
-        `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors})`,
+        `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors}); ` +
+        `no-match empty state ${JSON.stringify(noMatch)}`,
       'main-filtered.png',
     );
   });
@@ -3874,7 +4281,10 @@ async function sceneLiveFilter(browser) {
 // window.stint.setSetting. Drive the real renderer: click the Settings nav, assert all
 // seven controls render and that changing the date-format select fires setSetting with the
 // matching key/value. Captures main-settings.png as the rubric evidence for the controls'
-// look-and-feel, and confirms the panel stays accent-disciplined (no stray accent fill).
+// look-and-feel, confirms the panel stays accent-disciplined (no stray accent-family paint,
+// design.html D11), and asserts the D12 segmented-control selection idiom: the chosen
+// .seg-btn is a raised paper chip (paper bg + ink text + chip-lift shadow) with flat peers —
+// selection never turns accent.
 async function sceneSettingsView(browser) {
   await withPage(browser, settingsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -3885,22 +4295,43 @@ async function sceneSettingsView(browser) {
       // Every §14 setting key has a control in the panel (by its data-key).
       const keys = [...panel.querySelectorAll('[data-key]')].map((el) => el.dataset.key);
       const has = (k) => keys.includes(k);
-      // No stray accent fill/text in the settings chrome except a sanctioned primary (none
-      // here) — the controls are inked/monochrome (§15 accent discipline).
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      // No stray accent-family fill/text (--accent OR --accent-solid) in the settings chrome
+      // except a sanctioned primary (none here at rest) — the controls are inked/monochrome
+      // (design.html D11 accent discipline).
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const offenders = [];
       for (const el of panel.querySelectorAll('*')) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
         const cs = getComputedStyle(el);
-        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+        if (
+          cs.backgroundColor === accentRgb || cs.color === accentRgb ||
+          cs.backgroundColor === accentSolidRgb || cs.color === accentSolidRgb
+        ) {
           offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
         }
       }
+      // design.html D12 — the segmented-control selection idiom: the chosen .seg-btn is a
+      // RAISED PAPER CHIP (computed background --paper, ink text, a non-none chip-lift
+      // shadow), never an accent fill; its unchosen peers stay flat (transparent, no shadow).
+      const paperRgb = rgbOf('--paper');
+      const inkRgb = rgbOf('--ink');
+      const on = panel.querySelector('.seg .seg-btn.on');
+      const offPeers = [...panel.querySelectorAll('.seg .seg-btn:not(.on)')];
+      const onCs = on ? getComputedStyle(on) : null;
+      const segChip = {
+        present: !!on,
+        chipPaper: !!onCs && onCs.backgroundColor === paperRgb,
+        chipInk: !!onCs && onCs.color === inkRgb,
+        chipLifted: !!onCs && onCs.boxShadow !== 'none',
+        peersFlat:
+          offPeers.length > 0 &&
+          offPeers.every((b) => {
+            const cs = getComputedStyle(b);
+            return cs.boxShadow === 'none' && cs.backgroundColor === 'rgba(0, 0, 0, 0)';
+          }),
+      };
       return {
         visible: !document.querySelector('.view[data-view="settings"]').hidden,
         keys,
@@ -3913,6 +4344,7 @@ async function sceneSettingsView(browser) {
           has('globalHotkey') &&
           has('dateFormat'),
         offenders,
+        segChip,
       };
     });
 
@@ -3921,17 +4353,24 @@ async function sceneSettingsView(browser) {
     await page.waitForFunction(() => window.__SET_SETTING__?.key === 'dateFormat');
     const set = await page.evaluate(() => window.__SET_SETTING__);
 
+    const segChipOk =
+      probe.segChip.present &&
+      probe.segChip.chipPaper &&
+      probe.segChip.chipInk &&
+      probe.segChip.chipLifted &&
+      probe.segChip.peersFlat;
     const ok =
       probe.visible &&
       probe.allSeven &&
       probe.offenders.length === 0 &&
+      segChipOk &&
       !!set &&
       set.key === 'dateFormat' &&
       set.value === 'iso';
     record(
       'SETTINGS_VIEW',
       ok,
-      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), date-format edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });
@@ -4128,8 +4567,15 @@ async function sceneTimelineWindowAround(browser) {
 //                          Gatekeeper / first-launch approval beat (no Developer ID).
 //   NO-DB (R04)          — the panel carries the "Updates never touch the database" note (the
 //                          artifact downloads to a temp folder, never beside the data).
+//   ERROR (R04)          — a SECOND page over the downloadError fixture variant (STATES.md
+//                          Settings × error): update.download() REJECTS, and the guided panel
+//                          flips to its error phase — head "Update download failed", an
+//                          announced .update-result.err reading "The update download failed.",
+//                          and the retry "Download & install" action back in place (operable,
+//                          never wedged; no Reveal-installer appears).
 // All fold into one SOFTWARE_UPDATE pass. Captures main-software-update.png (the available +
-// downloading view) as the rubric evidence the SETTINGS_VIEW shot does not cover.
+// downloading view) and main-software-update-error.png (the error phase) as the rubric
+// evidence the SETTINGS_VIEW shot does not cover.
 async function sceneSoftwareUpdate(browser) {
   await withPage(
     browser,
@@ -4195,6 +4641,41 @@ async function sceneSoftwareUpdate(browser) {
       await page.waitForFunction(() => window.__REVEALED__ === true);
       const revealed = await page.evaluate(() => window.__REVEALED__ === true);
 
+      // ERROR PHASE (STATES.md Settings × error): a second page whose update.download()
+      // REJECTS (the downloadError fixture variant). Check now → Download & install → the
+      // rejection flips the panel to its error phase: an announced error line with the
+      // renderer's own message, and the retry download action back in place — never a wedge.
+      const errorPhase = await withPage(
+        browser,
+        softwareUpdateState(),
+        'index.html',
+        async (ep) => {
+          await ep.click('.nav-item[data-view="settings"]');
+          await ep.waitForSelector('#software-update .ver', { state: 'attached' });
+          await ep.click('#update-check');
+          await ep.waitForSelector('#update-download', { state: 'attached' });
+          await ep.click('#update-download');
+          await ep.waitForSelector('#update-panel .update-result.err', { state: 'attached' });
+          await ep.screenshot({ path: join(EVIDENCE, 'main-software-update-error.png'), fullPage: true });
+          return ep.evaluate(() => {
+            const panel = document.querySelector('#update-panel');
+            const err = panel?.querySelector('.update-result.err');
+            const retry = document.querySelector('#update-download');
+            return {
+              downloadFailed: window.__DOWNLOAD_FAILED__ === true,
+              neverCompleted: window.__DOWNLOADED__ !== true,
+              head: panel?.querySelector('.uhd')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+              errShown: !!err && err.textContent.trim().length > 0,
+              errAnnounced: err?.getAttribute('role') === 'status',
+              errMessage: err?.textContent?.trim() ?? '',
+              retryPresent: !!retry && !retry.disabled,
+              noReveal: !document.querySelector('#update-reveal'),
+            };
+          });
+        },
+        { update: { ...UPDATE_FIXTURE, downloadError: true } },
+      );
+
       const versionOk = versionShown === UPDATE_FIXTURE.version;
       const checkOk =
         afterCheck.checked &&
@@ -4214,11 +4695,23 @@ async function sceneSoftwareUpdate(browser) {
         afterDownload.noDbNote &&
         afterDownload.revealPresent &&
         revealed;
+      // STATES.md Settings × error: the rejected download surfaces the announced error phase
+      // with the retry action operable — the failure is worded, never swallowed or wedged.
+      const errorOk =
+        errorPhase.downloadFailed &&
+        errorPhase.neverCompleted &&
+        /Update download failed/.test(errorPhase.head) &&
+        errorPhase.errShown &&
+        errorPhase.errAnnounced &&
+        errorPhase.errMessage === 'The update download failed.' &&
+        errorPhase.retryPresent &&
+        errorPhase.noReveal;
       record(
         'SOFTWARE_UPDATE',
-        versionOk && checkOk && downloadOk,
+        versionOk && checkOk && downloadOk && errorOk,
         `version row=${JSON.stringify(versionShown)} (R06); Check now → ${JSON.stringify(afterCheck)} (R03); ` +
-          `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04)`,
+          `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04); ` +
+          `rejected download → error phase ${JSON.stringify(errorPhase)}`,
         'main-software-update.png',
       );
     },
@@ -4238,7 +4731,13 @@ async function sceneSoftwareUpdate(browser) {
 //   RESTORE GATE  — Restore… is destructive, so it goes through the §12 R13 confirm gate: the
 //                   first click only ARMS the confirm (restoreBackup NOT yet called); only the
 //                   explicit confirm fires window.stint.restoreBackup({name}) — exactly once, with
-//                   the chosen backup's name. Captures main-backups.png as the rubric evidence.
+//                   the chosen backup's name.
+//   EMPTY (STATES.md Settings × empty) — a SECOND page over a never-backed-up launch
+//                   (lastBackupUtc unset + the backups:[] fixture knob): the group paints BOTH
+//                   instructive empty copies — "No backups yet — Stint backs up automatically
+//                   on launch." on the Last-backup row and "No backups to restore from yet."
+//                   on the restore row — with no rows, no verified pill, and the retention
+//                   picker still operable. Captures main-backups.png and main-backups-empty.png.
 async function sceneBackupsSection(browser) {
   await withPage(browser, backupsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -4249,18 +4748,19 @@ async function sceneBackupsSection(browser) {
       const host = document.querySelector('#backups-panel');
       const rows = [...host.querySelectorAll('.backup-item')];
       const ret = host.querySelector('select[data-key="backupRetention"]');
-      // No stray accent in the Backups chrome (§15 — accent stays on the primary action only).
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      // No stray accent-family paint (--accent OR --accent-solid) in the Backups chrome
+      // (design.html D11 — accent stays on the primary action only).
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const offenders = [];
       for (const el of host.querySelectorAll('*')) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
         const cs = getComputedStyle(el);
-        if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
+        if (
+          cs.backgroundColor === accentRgb || cs.color === accentRgb ||
+          cs.backgroundColor === accentSolidRgb || cs.color === accentSolidRgb
+        ) {
           offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
         }
       }
@@ -4289,6 +4789,34 @@ async function sceneBackupsSection(browser) {
     await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
     const restored = await page.evaluate(() => window.__RESTORED_BACKUP__);
 
+    // The EMPTY variant (STATES.md Settings × empty): a never-backed-up launch — no
+    // lastBackupUtc on the snapshot and listBackups → []. Both instructive copies paint and
+    // the group stays operable (the retention picker still renders).
+    const backupsEmpty = await withPage(
+      browser,
+      emptyState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="settings"]');
+        await ep.waitForSelector('#backups-panel .set-grp', { state: 'attached' });
+        await ep.waitForSelector('#backups-panel .set-empty', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'main-backups-empty.png'), fullPage: true });
+        return ep.evaluate(() => {
+          const host = document.querySelector('#backups-panel');
+          const empties = [...host.querySelectorAll('.set-empty')].map((e) =>
+            e.textContent.replace(/\s+/g, ' ').trim(),
+          );
+          return {
+            empties,
+            rows: host.querySelectorAll('.backup-item').length,
+            verifiedPill: !!host.querySelector('.ok'),
+            retentionPresent: !!host.querySelector('select[data-key="backupRetention"]'),
+          };
+        });
+      },
+      { backups: [] },
+    );
+
     const ok =
       probe.lastBackupShown &&
       probe.verifiedPill &&
@@ -4301,7 +4829,14 @@ async function sceneBackupsSection(browser) {
       setRet.value === 10 &&
       armedNotRestored &&
       !!restored &&
-      restored.name === probe.rowNames[0];
+      restored.name === probe.rowNames[0] &&
+      // STATES.md Settings × empty: the never-backed-up variant paints BOTH instructive
+      // copies with zero rows, no verified pill, and the retention picker still operable.
+      backupsEmpty.rows === 0 &&
+      !backupsEmpty.verifiedPill &&
+      backupsEmpty.retentionPresent &&
+      backupsEmpty.empties.some((t) => /No backups yet/.test(t) && /backs up automatically/.test(t)) &&
+      backupsEmpty.empties.some((t) => /No backups to restore from yet/.test(t));
     record(
       'BACKUPS_SECTION',
       ok,
@@ -4309,7 +4844,8 @@ async function sceneBackupsSection(browser) {
         `retention=${probe.retentionValue} (edit fired ${JSON.stringify(setRet)}), ` +
         `restore list rows=${probe.rowCount} ${JSON.stringify(probe.rowNames)} (each Restore… present=${probe.eachHasRestore}); ` +
         `confirm gate: armed-not-restored=${armedNotRestored}, confirmed restore=${JSON.stringify(restored)}; ` +
-        `stray accent=[${probe.offenders.join(', ') || 'none'}]`,
+        `stray accent=[${probe.offenders.join(', ') || 'none'}]; ` +
+        `never-backed-up empty ${JSON.stringify(backupsEmpty)}`,
       'main-backups.png',
     );
   });
@@ -4402,6 +4938,209 @@ async function sceneParityReach(browser) {
   });
 }
 
+// TARGET_SIZE — design.html A03 (WCAG 2.2 SC 2.5.8): every interactive target measures at
+// least 24×24 CSS px, or falls under a WCAG-sanctioned exception. A machine sweep over the
+// running main window routes through all five views and, in each, collects every VISIBLE
+// interactive control (button / a[href] / input / select / textarea / tabbable / [data-act]),
+// excluding controls nested inside another target (the parent carries the target). An
+// undersized control passes only via:
+//   • the SPACING exception, tested as the SC's own Understanding doc specifies it — a
+//     24px-DIAMETER CIRCLE centred on the undersized target must not intersect any other
+//     target's bounding box, nor the circle of any other undersized target; or
+//   • the INLINE exception — an inline link inside a line of text.
+// The tray popover (both its actions) is swept too. The gate is ZERO unsanctioned undersized
+// targets; the spacing-sanctioned undersized controls are named in the justification so each
+// stays a deliberate, reviewable exception (e.g. the corner/billable checkboxes and the
+// settings toggle, whose circles clear every neighbour comfortably).
+function sweepTargets() {
+  const sel = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"]), [data-act]';
+  const { visible } = window.__probe;
+  const targets = [...document.querySelectorAll(sel)]
+    .filter(visible)
+    // A control nested inside another interactive control is a sub-affordance — the parent
+    // is the target the sweep measures.
+    .filter((el) => !el.parentElement?.closest('button, a[href], [data-act]'));
+  const boxes = targets.map((el) => {
+    const r = el.getBoundingClientRect();
+    return {
+      el,
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      rect: r,
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      cx: r.left + r.width / 2,
+      cy: r.top + r.height / 2,
+    };
+  });
+  const undersized = (b) => b.w < 24 || b.h < 24;
+  // SC 2.5.8 spacing test, radius 12: circle-vs-rect for an adequately-sized neighbour
+  // (closest point of the box to the circle centre), circle-vs-circle for an undersized one.
+  const R = 12;
+  const circleHitsRect = (b, r) => {
+    const nx = Math.max(r.left, Math.min(b.cx, r.right));
+    const ny = Math.max(r.top, Math.min(b.cy, r.bottom));
+    return Math.hypot(b.cx - nx, b.cy - ny) < R;
+  };
+  const violations = [];
+  const spacingSanctioned = [];
+  for (const b of boxes) {
+    if (!undersized(b)) continue;
+    const crowd = [];
+    for (const o of boxes) {
+      if (o.el === b.el) continue;
+      const hit = undersized(o)
+        ? Math.hypot(o.cx - b.cx, o.cy - b.cy) < 2 * R
+        : circleHitsRect(b, o.rect);
+      if (hit) crowd.push(o.label);
+    }
+    const entry = { label: b.label, w: b.w, h: b.h, crowd };
+    if (crowd.length === 0) { spacingSanctioned.push(entry); continue; }
+    if (b.el.matches('a') && getComputedStyle(b.el).display === 'inline') continue; // inline-text exemption
+    violations.push(entry);
+  }
+  return { total: boxes.length, violations, spacingSanctioned };
+}
+async function sceneTargetSize(browser) {
+  await withPage(browser, runningState(), 'index.html', async (page) => {
+    const perView = [];
+    for (const view of ['entries', 'timer', 'clients', 'reports', 'settings']) {
+      await page.click(`.nav-item[data-view="${view}"]`);
+      const res = await page.evaluate(sweepTargets);
+      perView.push({ surface: view, ...res });
+      if (view === 'entries') await page.screenshot({ path: join(EVIDENCE, 'main-target-size.png') });
+    }
+    // The popover is its own renderer — sweep both of its tray actions too.
+    const pop = await withPage(browser, runningState(), 'popover.html', async (pp) =>
+      pp.evaluate(sweepTargets),
+    );
+    perView.push({ surface: 'popover', ...pop });
+    const totalTargets = perView.reduce((s, v) => s + v.total, 0);
+    const allViolations = perView.flatMap((v) => v.violations.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} crowded by [${x.crowd.join(', ')}]`));
+    const sanctioned = perView.flatMap((v) => v.spacingSanctioned.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h}`));
+    const ok = totalTargets > 0 && allViolations.length === 0;
+    record(
+      'TARGET_SIZE',
+      ok,
+      `A03 sweep over ${totalTargets} visible targets (five views + popover): ` +
+        `unsanctioned undersized=[${allViolations.join('; ') || 'none'}]; ` +
+        `spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
+      'main-target-size.png',
+    );
+  });
+}
+
+// COLOUR_PAIRING — design.html D05 / A05 (WCAG 1.4.1): colour is never the sole signal —
+// every semantic colour carries a word or icon beside it. Machine facts, one per pairing
+// the design names (the recorded exemption "run-dot when paired with its label" is exactly
+// what fact (a) proves holds):
+//   (a) the run-dot sits BESIDE the literal word 'running' — the Entries strip's dot +
+//       'running' state word, and the Timer card's 'running' state word;
+//   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
+//       the literal 'billable' / 'non-billable' badge;
+//   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
+//       hatch carries the #i-moon icon marker — the yellow band / hatch never stand alone;
+//   (d) the WARN advisory is worded on the flag palette (the overlap banner's sentence over
+//       --flag/--flag-bg), and the ERR block is worded on the DANGER palette
+//       (--danger/--danger-weak) with the Entries mirror carrying .error — two palettes,
+//       both carrying words, so neither state ever rides on colour alone (D15).
+async function sceneColourPairing(browser) {
+  // (a)+(b): the running window — strip pairing on Entries, card pairing + badge on Timer.
+  const pairing = await withPage(browser, runningState(), 'index.html', async (page) => {
+    const strip = await page.evaluate(() => ({
+      dotPresent: !!document.querySelector('#timer-strip.running .strip-dot'),
+      stateWord: document.querySelector('#timer-strip.running .state')?.textContent.trim() ?? '',
+    }));
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('.timer-card.running', { state: 'attached' });
+    const card = await page.evaluate(() => ({
+      stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
+      billableWord:
+        [...document.querySelectorAll('.timer-card .flag')]
+          .map((f) => f.textContent.trim())
+          .find((t) => /billable/.test(t)) ?? '',
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'main-colour-pairing.png') });
+    return { strip, card };
+  });
+  // (c): the calendar's flag markers are worded/iconed, never bare colour.
+  const calendar = await withPage(browser, entriesCalendarState(), 'index.html', async (page) => {
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+    return page.evaluate(() => ({
+      otag: document.querySelector('.dcol .ov .otag')?.textContent.trim() ?? '',
+      moon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
+    }));
+  });
+  // (d) WARN: raise the overlap advisory (the OVERLAP_BANNER drive) and check words + palette.
+  const warn = await withPage(
+    browser,
+    overlapWriteState(),
+    'index.html',
+    async (page) => {
+      await page.click('.entry[data-id="60"] [data-act="edit"]');
+      await page.waitForSelector('.edit-form .edit-start', { state: 'attached' });
+      await page.click('.edit-form button[type="submit"]');
+      await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
+      return page.evaluate(() => {
+        const { rgbOf } = window.__probe;
+        const b = document.querySelector('#overlap-banner');
+        const cs = getComputedStyle(b);
+        return {
+          text: b.textContent.trim(),
+          flagText: cs.color === rgbOf('--flag'),
+          flagBg: cs.backgroundColor === rgbOf('--flag-bg'),
+        };
+      });
+    },
+    { overlap: true },
+  );
+  // (d) ERR: a refused Stop — worded on the danger palette where it was clicked.
+  const err = await withPage(
+    browser,
+    runningState(),
+    'index.html',
+    async (page) => {
+      await page.click('.nav-item[data-view="timer"]');
+      await page.waitForSelector('#timer-stop', { state: 'visible' });
+      await page.click('#timer-stop');
+      await page.waitForSelector('#timer-warning', { state: 'visible' });
+      return page.evaluate(() => {
+        const { rgbOf } = window.__probe;
+        const t = document.querySelector('#timer-warning');
+        const cs = getComputedStyle(t);
+        return {
+          text: t?.textContent.trim() ?? '',
+          dangerText: cs.color === rgbOf('--danger'),
+          dangerBg: cs.backgroundColor === rgbOf('--danger-weak'),
+          mirrorsError: !!document.querySelector('#overlap-banner.error'),
+        };
+      });
+    },
+    { rejectWrites: true },
+  );
+  const ok =
+    pairing.strip.dotPresent &&
+    pairing.strip.stateWord === 'running' &&
+    pairing.card.stateWord === 'running' &&
+    /^(non-)?billable$/.test(pairing.card.billableWord) &&
+    /overlap\s*\d+m/.test(calendar.otag) &&
+    calendar.moon &&
+    /overlap/i.test(warn.text) &&
+    warn.flagText &&
+    warn.flagBg &&
+    err.text.length > 0 &&
+    err.dangerText &&
+    err.dangerBg &&
+    err.mirrorsError;
+  record(
+    'COLOUR_PAIRING',
+    ok,
+    `D05/A05 pairing: run-dot beside 'running' (strip=${JSON.stringify(pairing.strip)}, card state='${pairing.card.stateWord}'); ` +
+      `billable worded ('${pairing.card.billableWord}'); overlap band worded ('${calendar.otag}') + slept hatch carries #i-moon (${calendar.moon}); ` +
+      `warn advisory worded on flag palette=${JSON.stringify(warn)}; err block worded on danger palette=${JSON.stringify(err)}`,
+    'main-colour-pairing.png',
+  );
+}
+
 // DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
 // counted as an automated pass; the screenshots are the evidence a human/LLM
 // scores against acceptance/criteria/judge-rubric.md.
@@ -4428,12 +5167,13 @@ const SCENES = {
   KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], run: sceneKeyboardFocus },
   TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], run: sceneTrayCountup },
   TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], run: sceneTrayPopoverSurface },
+  POPOVER_REJECT: { items: ['POPOVER_REJECT'], run: scenePopoverReject },
   IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], run: sceneInWindowTimer },
   CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], run: sceneCrossViewFreshness },
   TIMER_VIEW: { items: ['TIMER_VIEW'], run: sceneTimerView },
   FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], run: sceneFutureStartGuard },
   FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], run: sceneFavoritesRail },
-  ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE'], run: sceneAccentDiscipline },
+  ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE', 'ACCENT_SOLID_BUDGET'], run: sceneAccentDiscipline },
   CLICKABILITY: { items: ['CLICKABILITY'], run: sceneClickability },
   START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], run: sceneStartAttributes },
   START_FORM: { items: ['START_FORM'], run: sceneStartForm },
@@ -4466,6 +5206,8 @@ const SCENES = {
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
+  TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
+  COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
 };
 

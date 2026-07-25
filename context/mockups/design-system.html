@@ -5,124 +5,127 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stint — Design system (Calm · Warm Paper)</title>
 <style>
-  :root{
-    --paper:#FDFDFC;--canvas:#EAE8E3;--sidebar:#F6F5F2;--sunken:#F2F1ED;--hover:#ECEBE5;
-    --ink:#221F1C;--muted:#6B645D;--faint:#A39B92;--line:#E9E6E0;--line-strong:#D6D1C9;
-    --accent:#C44C38;--accent-ink:#9E3829;--accent-weak:#F8E9E5;
-    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
-    --danger:#B23B2B;--danger-weak:#F8E9E4;
-    --r1:8px;--r2:12px;--r3:16px;
-    --ring:0 0 0 3px #C44C3833;
-    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
-    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
-  }
+/* STINT-TOKENS start — generated from context/design.tokens.json; do not edit by hand */
+:root{
+  --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
+  --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
+  --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
+  --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
+  --danger:#ce2c31;--danger-weak:#feebec;
+  --r1:8px;--r2:12px;--r3:16px;
+  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
+  --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
+  --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
+  --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
+  --sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);
+  --sh-win:0 30px 80px rgba(50,34,14,.22);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+/* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #D6D1C9}
-  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .win{max-width:1040px;margin:32px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A39B92;padding:4px 14px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
-  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
   .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
-  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C44C3822}
+  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
-  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
-  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
-  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
-  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
-  .nav .stat a:hover{background:none;text-decoration:underline}
-  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
-  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C44C3855}
-  .btn.primary:hover{background:#a83c2c}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff;box-shadow:0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent)}
+  .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:#fff}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
-  .btn.sm{height:30px;padding:0 11px;font-size:12px}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .btn.sm{height:30px;padding:0 12px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
-  .seg{display:inline-flex;background:var(--sunken);border:1px solid var(--line);border-radius:var(--r1);padding:3px;gap:3px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
-  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--accent)}.sw.on i{left:17px}
   /* fields */
-  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
   /* card / tag / pill */
-  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
-  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
-  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
-  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
-  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C44C3833}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
+  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
+  .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
+  .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
+  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
   /* Inline messages (PRD §12 R21). A .msg is a full-width notice at the point of action, one
      home for both semantics: .warn is the warn-not-block ADVISORY (an overlap that still saved,
-     --warn tokens); .err is a refused-write BLOCK (--danger tokens) — the write did not land,
+     --flag tokens); .err is a refused-write BLOCK (--danger tokens) — the write did not land,
      the form stays open. Distinct palettes so an advisory never reads as a hard error. */
-  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid}
-  .msg.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
+  .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid}
+  .msg.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
-  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   body{padding:0}
   .doc{max-width:1040px;margin:0 auto 64px;padding:0 8px}
-  h1{font-size:24px;font-weight:680;margin:34px 0 2px;letter-spacing:-.01em}
-  .lead{color:var(--muted);font-size:14px;margin:6px 0 24px;max-width:740px}
-  h2{font-size:15px;font-weight:640;margin:34px 0 14px;padding-bottom:8px;border-bottom:1px solid var(--line)}
-  .panel{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);padding:18px 20px;box-shadow:var(--sh-card)}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  h1{font-size:24px;font-weight:680;margin:32px 0 2px;letter-spacing:-.01em}
+  .lead{color:var(--muted);font-size:14px;margin:8px 0 24px;max-width:740px}
+  h2{font-size:15px;font-weight:640;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+  .panel{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);padding:16px 20px;box-shadow:var(--sh-card)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:720px){.two{grid-template-columns:1fr}}
   .rule{font-size:12.5px;color:var(--muted);margin:0}
   .rule + .rule{margin-top:12px}
   .rule b{color:var(--ink);font-weight:590}
   .swatches{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
-  .sw-c{border:1px solid var(--line);border-radius:var(--r2);overflow:hidden;font-size:11.5px;background:var(--paper)}
+  .sw-c{border:1px solid var(--rule);border-radius:var(--r2);overflow:hidden;font-size:11.5px;background:var(--paper)}
   .sw-c .chip{height:56px}
-  .sw-c .cap2{padding:8px 10px}
+  .sw-c .cap2{padding:8px 12px}
   .sw-c .cap2 b{display:block;color:var(--ink);font-weight:590;font-size:12px}
-  .sw-c .cap2 span{color:var(--faint);font-family:var(--num)}
-  .type-row{display:flex;align-items:baseline;gap:18px;padding:11px 0;border-bottom:1px solid var(--line)}
+  .sw-c .cap2 span{color:var(--muted);font-family:var(--num)}
+  .type-row{display:flex;align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--rule)}
   .type-row:last-child{border-bottom:0}
   .type-row .role{width:160px;flex:none;color:var(--muted);font-size:12px}
-  .type-row .spec{margin-left:auto;color:var(--faint);font-family:var(--num);font-size:11.5px}
+  .type-row .spec{margin-left:auto;color:var(--muted);font-family:var(--num);font-size:11.5px}
   .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px}
-  .icons .i{display:flex;flex-direction:column;align-items:center;gap:8px;padding:14px 6px;border-radius:var(--r1);color:var(--ink)}
+  .icons .i{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:var(--r1);color:var(--ink)}
   .icons .i:hover{background:var(--hover)}
   .icons .i .ic{width:20px;height:20px}
-  .icons .i span{font-size:10.5px;color:var(--faint);font-family:var(--num)}
+  .icons .i span{font-size:11px;color:var(--muted);font-family:var(--num)}
   .demos{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
-  .prov{margin-top:14px}
+  .prov{margin-top:16px}
 </style>
 </head>
 <body>
@@ -186,7 +189,7 @@
 </defs></svg>
 <div class="doc">
   <h1>Stint “Calm” · Warm Paper</h1>
-  <p class="lead">One shared language for every surface — the sidebar, Timer, Entries, Clients, Reports, Settings, the entry editor, the time-range picker, the menu-bar tray popover, and the focused flows (software update, merge, sleep review). Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — a quiet canvas and a single rationed accent. These mockups are the source of truth for style: the app conforms to them, and style is verified by comparing rendered output to them, never by asserting CSS in code (see <a href="process.html">process.html</a>).</p>
+  <p class="lead">One shared language for every surface — the sidebar, Timer, Entries, Clients, Reports, Settings, the entry editor, the time-range picker, and the menu-bar tray popover. This page <b>renders</b> <a href="../design.html">context/design.html</a> — the normative design spec — with the token values from <code>context/design.tokens.json</code>: the spec names the rules, this page is its swatch sheet and component demo, not the source of truth itself. Built on Fluent 2 fundamentals (light, depth, material restraint, motion, scale) with the calm density of Linear and the native grammar of Apple HIG. The goal, per issue&nbsp;#29: <b>less visual noise, more fluency, total consistency</b> — a quiet canvas and a single rationed accent. Verification splits by what each can honestly prove: composition and look-and-feel are judged against renders like this one (JUDGE); token values, contrast, and reduced motion are computed checks (see <a href="../process.html">process.html</a>).</p>
 
   <h2>Principles</h2>
   <div class="two">
@@ -196,8 +199,8 @@
       <p class="rule"><b>The UI speaks for itself.</b> Every element earns its pixels. When shape, position, or state already carry the meaning, the words go — no headings, captions, instructions, or state words the layout makes plain — and a verb that recurs becomes its icon. If something still seems to need explaining, redesign it or move the detail behind an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance instead of printing prose on the surface.</p>
     </div>
     <div class="panel">
-      <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
-      <p class="rule"><b>4px grid, generous air.</b> Every pad, gap, and height is a multiple of 4, with roomy margins. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
+      <p class="rule"><b>Small type ramp, tabular time.</b> Five roles do the work; hierarchy comes from size + weight (450 / 590 / 640 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
+      <p class="rule"><b>Spacing on the 4px grid (2px half-step); component heights free.</b> Every pad, gap, and margin is a multiple of 4 — 2px is the only permitted sub-4 half-step; a control's own height is unconstrained. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
       <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
     </div>
   </div>
@@ -210,10 +213,10 @@
       <p class="rule"><b>Light — draw the eye, don't decorate.</b> Fluent uses light to guide attention (reveal highlight, focus glow). Our only "light" is the clay focus ring (<span class="tnum">--ring</span>) and the warm hover wash (<span class="tnum">--hover</span>). The single primary action is the brightest thing in a view; everything else stays quiet so the eye always lands in one place.</p>
     </div>
     <div class="panel">
-      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>). The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
+      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>), plus the chip lift (<span class="tnum">--sh-chip</span>) as the sub-card selection rung — the raised chip every chosen thing wears. The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <p class="rule"><b>Motion — functional, short, rare.</b> Fluent uses connected animation and parallax for continuity. We keep motion to ~120ms state changes: toggles slide, a chosen segment lifts, the running dot is the one persistent cue. No parallax, no decorative transitions, nothing that moves without meaning.</p>
     </div>
@@ -221,13 +224,13 @@
       <p class="rule"><b>Material — warm paper, not glass.</b> Fluent's acrylic and mica make surfaces translucent. We swap translucency for opaque warm paper on an ivory canvas; the lone nod to material is the menu bar's faint blur where it meets the OS. Material restraint means no tinted, dashed, or decorative boxes — surface is signalled by elevation alone.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel" style="grid-column:1/-1">
-      <p class="rule"><b>Scale — one language, many sizes, on a 4px grid.</b> Fluent scales a single design across form factors from a four-pixel base unit. The same tokens, type ramp, controls and icons run unchanged from the 332px menu-bar tray popover to the 1040px main window — every pad, gap and height a multiple of 4, every corner one of the fixed radius trio (8&nbsp;controls&nbsp;/&nbsp;12&nbsp;cards&nbsp;/&nbsp;16&nbsp;window&nbsp;&amp;&nbsp;overlays).</p>
+      <p class="rule"><b>Scale — one language, many sizes, on a 4px grid.</b> Fluent scales a single design across form factors from a four-pixel base unit. The same tokens, type ramp, controls and icons run unchanged from the 332px menu-bar tray popover to the 1040px main window — every pad, gap and margin a multiple of 4 (heights are free), every corner one of the fixed radius trio (8&nbsp;controls&nbsp;/&nbsp;12&nbsp;cards&nbsp;/&nbsp;16&nbsp;window&nbsp;&amp;&nbsp;overlays).</p>
     </div>
   </div>
 
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <p class="rule"><b>Familiarity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — build on what the user already knows. Native macOS window chrome and the system font stack mean Stint feels like the platform it runs on rather than a web page in a frame.</p>
     </div>
@@ -235,7 +238,7 @@
       <p class="rule"><b>Inclusivity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — hierarchy never rides on colour alone. Size and weight carry structure, so it survives colour-blindness and dimmed screens; every semantic state pairs its colour with a word or icon (the run dot beside "running", the worded warn pill). Tabular numerals keep durations legible and steady.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel" style="grid-column:1/-1">
       <p class="rule"><b>Consistency</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — one of everything. One token set, one line-icon family, one control per choice-shape, one elevation ladder, applied identically across every surface in this set. That single-source discipline is the entire point of this document: a new view should be assemblable from these parts without inventing anything.</p>
     </div>
@@ -243,14 +246,16 @@
 
   <h2>Colour tokens</h2>
   <div class="swatches">
-    <div class="sw-c"><div class="chip" style="background:#FDFDFC"></div><div class="cap2"><b>paper</b><span>#FDFDFC</span></div></div><div class="sw-c"><div class="chip" style="background:#EAE8E3"></div><div class="cap2"><b>canvas</b><span>#EAE8E3</span></div></div><div class="sw-c"><div class="chip" style="background:#F6F5F2"></div><div class="cap2"><b>sidebar</b><span>#F6F5F2</span></div></div><div class="sw-c"><div class="chip" style="background:#ECEBE5"></div><div class="cap2"><b>hover</b><span>#ECEBE5</span></div></div>
-    <div class="sw-c"><div class="chip" style="background:#221F1C"></div><div class="cap2"><b>ink</b><span>#221F1C</span></div></div><div class="sw-c"><div class="chip" style="background:#6B645D"></div><div class="cap2"><b>muted</b><span>#6B645D</span></div></div><div class="sw-c"><div class="chip" style="background:#C44C38"></div><div class="cap2"><b>accent</b><span>#C44C38</span></div></div><div class="sw-c"><div class="chip" style="background:#F8E9E5"></div><div class="cap2"><b>accent-weak</b><span>#F8E9E5</span></div></div>
-    <div class="sw-c"><div class="chip" style="background:#5E8C5A"></div><div class="cap2"><b>running</b><span>#5E8C5A</span></div></div><div class="sw-c"><div class="chip" style="background:#F8EFD8"></div><div class="cap2"><b>warn</b><span>#F8EFD8</span></div></div><div class="sw-c"><div class="chip" style="background:#B23B2B"></div><div class="cap2"><b>danger</b><span>#B23B2B</span></div></div><div class="sw-c"><div class="chip" style="background:#D6D1C9"></div><div class="cap2"><b>line</b><span>#D6D1C9</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#fdfdfc"></div><div class="cap2"><b>paper</b><span>sand·1 · #fdfdfc</span></div></div><div class="sw-c"><div class="chip" style="background:#f9f9f8"></div><div class="cap2"><b>sidebar</b><span>sand·2 · #f9f9f8</span></div></div><div class="sw-c"><div class="chip" style="background:#f1f0ef"></div><div class="cap2"><b>wash</b><span>sand·3 · #f1f0ef</span></div></div><div class="sw-c"><div class="chip" style="background:#e9e8e6"></div><div class="cap2"><b>hover</b><span>sand·4 · #e9e8e6</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#e2e1de"></div><div class="cap2"><b>canvas</b><span>sand·5 · #e2e1de</span></div></div><div class="sw-c"><div class="chip" style="background:#dad9d6"></div><div class="cap2"><b>rule</b><span>sand·6 · #dad9d6</span></div></div><div class="sw-c"><div class="chip" style="background:#bcbbb5"></div><div class="cap2"><b>rule-strong</b><span>sand·8 · #bcbbb5</span></div></div><div class="sw-c"><div class="chip" style="background:#8d8d86"></div><div class="cap2"><b>faint</b><span>sand·9 · #8d8d86</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#63635e"></div><div class="cap2"><b>muted</b><span>sand·11 · #63635e</span></div></div><div class="sw-c"><div class="chip" style="background:#21201c"></div><div class="cap2"><b>ink</b><span>sand·12 · #21201c</span></div></div><div class="sw-c"><div class="chip" style="background:#e54d2e"></div><div class="cap2"><b>accent</b><span>tomato·9 · #e54d2e</span></div></div><div class="sw-c"><div class="chip" style="background:#d13415"></div><div class="cap2"><b>accent-solid</b><span>tomato·11 · #d13415</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#feebe7"></div><div class="cap2"><b>accent-weak</b><span>tomato·3 · #feebe7</span></div></div><div class="sw-c"><div class="chip" style="background:#2a7e3b"></div><div class="cap2"><b>run</b><span>grass·11 · #2a7e3b</span></div></div><div class="sw-c"><div class="chip" style="background:#46a758"></div><div class="cap2"><b>run-dot</b><span>grass·9 · #46a758</span></div></div><div class="sw-c"><div class="chip" style="background:#e9f6e9"></div><div class="cap2"><b>run-weak</b><span>grass·3 · #e9f6e9</span></div></div>
+    <div class="sw-c"><div class="chip" style="background:#4f3422"></div><div class="cap2"><b>flag</b><span>amber·12 · #4f3422</span></div></div><div class="sw-c"><div class="chip" style="background:#fff7c2"></div><div class="cap2"><b>flag-bg</b><span>amber·3 · #fff7c2</span></div></div><div class="sw-c"><div class="chip" style="background:#ce2c31"></div><div class="cap2"><b>danger</b><span>red·11 · #ce2c31</span></div></div><div class="sw-c"><div class="chip" style="background:#feebec"></div><div class="cap2"><b>danger-weak</b><span>red·3 · #feebec</span></div></div>
   </div>
 
   <h2>Type ramp</h2>
-  <div class="panel" style="padding:6px 20px">
-    <div class="type-row"><span class="role">Display / clock</span><span class="tnum" style="font-size:28px;font-weight:680">01:23:45</span><span class="spec">28–46px · 680 · tnum</span></div>
+  <div class="panel" style="padding:8px 20px">
+    <div class="type-row"><span class="role">Clock</span><span class="tnum" style="font-size:38px;font-weight:680;font-family:var(--num)">01:23:45</span><span class="spec">22–38px · 680 · var(--num) · tnum</span></div>
     <div class="type-row"><span class="role">Title</span><span style="font-size:18px;font-weight:640">View &amp; panel titles</span><span class="spec">17–18px · 640</span></div>
     <div class="type-row"><span class="role">Body strong</span><span style="font-size:13px;font-weight:590">Labels &amp; list primary</span><span class="spec">13px · 590</span></div>
     <div class="type-row"><span class="role">Body</span><span style="font-size:13px">Default interface text</span><span class="spec">13px · 450</span></div>
@@ -274,17 +279,20 @@
         <button class="btn ghost"><svg class="ic"><use href="#i-dots"/></svg> Ghost</button>
         <button class="btn danger">Danger</button>
       </div>
-      <p class="rule" style="margin-top:14px"><b>Buttons.</b> Exactly one filled primary per view. Everything else is secondary, ghost, or danger — so the eye always lands on one action.</p>
+      <p class="rule" style="margin-top:16px"><b>Buttons.</b> Exactly one filled primary per view. Everything else is secondary, ghost, or danger — so the eye always lands on one action.</p>
     </div>
     <div class="panel">
       <div class="demos">
         <span class="seg"><button class="on">Day</button><button>Client</button><button>Project</button><button>Tag</button></span>
         <span class="toggle"><span class="sw on"><i></i></span> Toggle</span>
       </div>
-      <p class="rule" style="margin-top:14px"><b>Selection ≠ accent.</b> A chosen segment is a raised chip (surface lift), not a colour. Accent stays a signal, not a highlighter.</p>
+      <div class="demos" style="margin-top:12px">
+        <a href="#" style="display:inline-flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);background:var(--paper);box-shadow:var(--sh-chip);font-weight:590;color:var(--ink);text-decoration:none"><svg class="ic" style="color:var(--accent)"><use href="#i-clock"/></svg>Timer</a>
+      </div>
+      <p class="rule" style="margin-top:16px"><b>Selection ≠ accent.</b> A chosen thing lifts — a raised paper chip with a shadow (the segmented idiom, and the nav rail's active item, shown above) — it never turns accent; only its icon may take the accent colour.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <div class="demos" style="gap:8px">
         <span class="tag">research</span><span class="tag">admin</span>
@@ -292,27 +300,27 @@
         <span class="pill warn">overlap 15m</span>
         <span class="pill accent">update ready</span>
       </div>
-      <p class="rule" style="margin-top:14px"><b>Tags &amp; status pills</b> are the only pill-shaped elements. Status colour is semantic (run / warn / accent), never decorative.</p>
+      <p class="rule" style="margin-top:16px"><b>Tags &amp; status pills</b> are the only pill-shaped elements. Status colour is semantic (run / flag / accent), never decorative.</p>
     </div>
     <div class="panel">
       <div style="max-width:280px"><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
-      <p class="rule" style="margin-top:14px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
+      <p class="rule" style="margin-top:16px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <div class="demos" style="flex-direction:column;align-items:stretch;gap:8px">
         <div class="msg warn">This entry overlaps 1 other entry — allowed, but flagged in reports.</div>
         <div class="msg err">Stop time is before the entry started.</div>
       </div>
-      <p class="rule" style="margin-top:14px"><b>Inline messages</b> (§12 R21) appear at the point of action. A <b>warn</b> advisory is allowed-but-flagged (the write saved); an <b>error</b> is a refused write (the form stays open, nothing changed). Two palettes so an advisory never reads as a hard block.</p>
+      <p class="rule" style="margin-top:16px"><b>Inline messages</b> (§12 R21) appear at the point of action. A <b>warn</b> advisory is allowed-but-flagged (the write saved); an <b>error</b> is a refused write (the form stays open, nothing changed). Two palettes so an advisory never reads as a hard block.</p>
     </div>
     <div class="panel">
       <div class="demos" style="flex-direction:column;align-items:stretch;gap:8px">
         <div class="msg err">A saved report named that already exists.</div>
         <div class="msg err">Pick both a From and a To date for the custom range.</div>
       </div>
-      <p class="rule" style="margin-top:14px">The error message carries the core rejection verbatim (or, for a renderer-local refusal like an incomplete range, focuses the missing field). It is announced (<code>role=status</code>) and persists until the next input.</p>
+      <p class="rule" style="margin-top:16px">The error message carries the core rejection verbatim (or, for a renderer-local refusal like an incomplete range, focuses the missing field). It is announced (<code>role=status</code>) and persists until the next input.</p>
     </div>
   </div>
 </div>
