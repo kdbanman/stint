@@ -87,7 +87,7 @@ that the second half can be regenerated from the first.
 **The specification** — the source, the artifact worth keeping:
 
 ```
-context/       The spec — concept, PRD, glossary, acceptance strategy, process.
+context/       The spec — concept, PRD, glossary, acceptance strategy, process, engineering.
 features/      Gherkin acceptance criteria, run against BOTH surfaces (parity).
 acceptance/
   criteria/    What must hold — coverage matrix, schemas, JUDGE rubric, MANUAL runbook, parity matrix.
@@ -108,12 +108,9 @@ acceptance/
 scripts/       Evidence generator and the no-network backstop.
 ```
 
-The design lives in the styled HTML under [`context/`](context/) — read order:
-[`concept.html`](context/concept.html) → [`prd.html`](context/prd.html) →
-[`glossary.html`](context/glossary.html) →
-[`acceptance.html`](context/acceptance.html), with
-[`design.html`](context/design.html) for the visual system, then
-[`process.html`](context/process.html) for how it's built and verified.
+The design lives in the styled HTML under [`context/`](context/). The
+per-file inventory and read order live in [`CLAUDE.md`](CLAUDE.md)'s Files
+table — one home, so it can't drift from this page.
 
 ### Build & test
 

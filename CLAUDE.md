@@ -52,16 +52,21 @@ place of `<branch>`.
 | `context/architecture.html` | **The shape.** Non-normative architecture overview — consolidates the runtime architecture the PRD spreads across §04/§13/§15/§19/§20 into one place, with topology/write-path/IPC diagrams and the file-level `@stint/core` module map. The PRD still owns the requirements + status; this explains how the pieces fit. |
 | `context/acceptance.html` | **The how-we'll-know.** Acceptance-criteria strategy: five complementary AC methods (BDD, property-based, golden/schema, LLM-judged, manual), a PRD-to-method coverage map, and one worked sample per method. |
 | `context/process.html` | **The how-it's-built.** Process & verification (SDLC) requirements, distinct from the application requirements: the principles, the agentic process (skills, subagents, model level), doc authoring rules, the automatic-vs-manual inventory, branch/PR/release governance, the specified-vs-convention line, and the process glossary. Binding on agent sessions working this repo. |
+| `context/engineering.html` | **The how-it's-coded.** Engineering requirements & conventions — the judgment no gate can check: over/under-engineering and over/under-testing calibration, TypeScript style and type design, test authoring, Electron layering/IPC/security/tray patterns, the comment convention, Gherkin style, and the distilled sources. One requirement-tier rule (test integrity); the rest binds at convention tier. Binding on sessions writing code. |
 | `context/mockups/` | **The spec, illustrated.** Standalone, dependency-free HTML mockups of the GUI views (`timer`, `main`, `reports`, `settings`, `edit-entry`, `clients`, `tray-popover`, `software-update`, `merge-conflict`, `merge-gap`) — illustrations of `context/prd.html` §12 (behavior/layout) and `context/design.html` (style). They show only specified reality; their token blocks are generated from `design.tokens.json`. Keep in sync when GUI requirements change (PRD §18). |
 | `context/mockups/design-system.html` | **The system, rendered.** The component sheet illustrating `context/design.html` — swatches per semantic token, type ramp, line-icon set, and component demos. The spec is normative; this page renders it. |
 | `README.md` | Implementation front door: layout, quick start, `tt` tour, GUI, and how to run the five AC method suites. |
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
 | `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — CLI transcript, screenshots, recordings, judge report). |
 | `features/` | Gherkin specs run against both surfaces (parity). |
+| `.claude/skills/` | The agentic process — the requirements-change skills (process.html §03) and the discovery, triage, and backlog skills (§06). |
+| `packages/gui/qa/` | The QA discovery driver — the real renderer over a real core store, plus the recording overlay. Guarded apparatus, never shipped. |
+| `.github/workflows/`, `scripts/` | The enforcement apparatus process.html's principles constrain: CI/release workflows, evidence generator, no-network backstop, source census. |
 | `LICENSE` | MIT license. |
 
 Read order for newcomers: `context/concept.html` → `context/prd.html` →
 `context/glossary.html` → `context/acceptance.html` (with
 `context/architecture.html` alongside the PRD for how the pieces fit,
-`context/design.html` for the visual system, and
-`context/process.html` for how it's built &amp; verified).
+`context/design.html` for the visual system,
+`context/process.html` for how it's built &amp; verified, and
+`context/engineering.html` before writing any code).

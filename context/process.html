@@ -126,7 +126,7 @@
   <section id="s1">
     <div class="eyebrow"><span class="n">01</span> Scope</div>
     <h2>Two kinds of requirement</h2>
-    <p>The four spec docs (<a href="concept.html">concept</a>, <a href="prd.html">prd</a>, <a href="glossary.html">glossary</a>, <a href="acceptance.html">acceptance</a>) describe the application. This describes the process. The split:</p>
+    <p>The four spec docs (<a href="concept.html">concept</a>, <a href="prd.html">prd</a>, <a href="glossary.html">glossary</a>, <a href="acceptance.html">acceptance</a>) describe the application. This describes the process. A third kind — how the source itself is written: design judgment, style, test craft — lives in <a href="engineering.html">engineering.html</a> at the tiers it declares. The application/process split:</p>
     <table>
       <thead><tr><th>Application requirement</th><th>Process requirement</th></tr></thead>
       <tbody>
@@ -234,8 +234,8 @@
     <h2>Discovery</h2>
     <p>The §05 apparatus proves known requirements; <strong>discovery finds what nobody wrote a requirement about</strong> — defects in the product, and problems in the systems that build and verify it. Four instruments, one downstream. A discovery run gates nothing and produces no green: its output is issues. That is why this section binds at convention tier (§08), not requirement — skipping discovery cannot produce a false green.</p>
 <pre><span class="c">the product                                  the systems that build &amp; verify it</span>
-     │ <span class="k">qa-sweep</span> ▸ <span class="k">bug-report-authoring</span>           │ <span class="k">arch-review</span> (review ▸ grill ▸ file)
-     │ <span class="k">design-audit</span> (review ▸ grill ▸ file)      │
+     │ <span class="k">qa-sweep</span> ▸ <span class="k">bug-report-authoring</span>           │ <span class="k">arch-review</span> (systems · review ▸ grill ▸ file)
+     │ <span class="k">design-audit</span> (review ▸ grill ▸ file)      │ <span class="k">code-quality-review</span> (modules · same phases)
      │ ◂─ <span class="k">sync-assessment</span> (docs ↔ tree drift) ─▸ │
      ▼                                           ▼
 issues: <span class="g">Agentic QA Discovery</span>            issues: <span class="g">Agentic Arch Review Discovery</span>
@@ -253,6 +253,8 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
     <p>The <strong>architecture review</strong> (<code>arch-review</code>) is the same idea aimed at the other target: an adversarial skeptic/researcher critique of the four systems that carry the requirements — the code, the verification apparatus, the SDLC, the <code>context/</code> docs as artifacts — never the requirements themselves. The owner is grilled over every verdict; each problem that survives is filed as one issue: the problem in one sentence, evidence, stakes, severity and confidence. Problem capture only — the grilling confirms the <em>problem</em>; it deliberately decides nothing about the fix.</p>
     <h3>Design audit</h3>
     <p>The <strong>design audit</strong> (<code>design-audit</code>) is the same review▸grill▸file idea as <code>arch-review</code>, aimed instead at how the product looks: a recurring adversarial judgment of the running GUI and the mockups against <a href="design.html">design.html</a> and a distilled craft corpus, the owner grilled over every verdict, each confirmed problem filed as one issue labeled <strong>Agentic Design Review Discovery</strong> into the triage flow. A second output class — an opportunity where the spec is satisfied but the design could still be better — never files as a defect; it appends to the standing Design opportunities issue instead. Problem capture only, same posture as <code>arch-review</code>: the grilling confirms the problem, never the fix.</p>
+    <h3>Code quality review</h3>
+    <p>The <strong>code quality review</strong> (<code>code-quality-review</code>) is the arch review's module-level twin: it reads the implementation and tests against <a href="engineering.html">engineering.html</a> — depth, consistency, abstraction, over-delivery, test quality, comments — weighting attention by change frequency, grilling the owner over every verdict, and filing confirmed findings into the arch-review stream so the existing triage gate carries them. Same posture: issues, never fixes, never a green.</p>
     <h3>Sync assessment</h3>
     <p>The <strong>sync assessment</strong> (<code>sync-assessment</code>) is the standing instrument that asks whether the docs still tell the truth about the tree. Machine-decidable sync facts — a cited path exists, banned markup stays absent — are static-check territory; the assessment owns the judgment half: whether requirement text, coverage-row verdicts, and shipped behavior still agree, in either direction. A doc claiming more than the tree holds is a false green in prose; one claiming less sends readers to re-fix finished work. The run is heavy by design — fanned-out per-section readers over the whole claim surface (<code>context/</code>, <code>acceptance/criteria/</code>, the front doors), behavioral evidence through the QA driver where reading cannot settle a claim — and each finding routes by which side is wrong: shipped behavior diverging from a correct requirement files as a QA-discovery bug report; stale doc text files as an arch-review-style problem issue. Same posture as the other two instruments: no green, no fixes — issues, into the same triage gates.</p>
     <h3>The intent fan-out</h3>
@@ -296,7 +298,7 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
       <li><strong>Every change rides a PR.</strong> Issue-anchored branch → ready (not draft) PR → owner merge. No direct pushes to <code>main</code>. The merge is the one human gate (§03).</li>
       <li><strong>Merge on green only.</strong> The §05 per-PR checks pass before merge; a red check blocks.</li>
       <li><strong>Every merge to main is a release.</strong> <code>release.yml</code> publishes a GitHub Release versioned <code>YYYY.M.D[.N]</code> with the macOS + Linux artifacts. Two reasons: a release path that runs on every merge cannot rot unseen (R02), and shipping is fast by default. A failed release surfaces through GitHub's own workflow-failure email to the repository owner — owner-configured, out-of-repo; an acknowledged residue, not an in-repo gated guarantee (there is deliberately no alerting step in <code>release.yml</code>).</li>
-      <li><strong>Changing this doc.</strong> Process requirements change by grilled PR: interrogate intent before authoring, author directly, merge gates. None of the transition machinery applies — no <code>*-old.html</code> coexistence, no work-list, no swap; there is no generated evidence to migrate.</li>
+      <li><strong>Changing this doc.</strong> Process requirements change by grilled PR: interrogate intent before authoring, author directly, merge gates. None of the transition machinery applies — no <code>*-old.html</code> coexistence, no work-list, no swap; there is no generated evidence to migrate. <a href="engineering.html">engineering.html</a> changes the same way.</li>
     </ul>
     <p>Recorded conventions (reasoned, not binding — §08):</p>
     <ul class="d">
@@ -314,9 +316,9 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
     <table>
       <thead><tr><th>Tier</th><th>Members</th></tr></thead>
       <tbody>
-        <tr><td data-l="tier" class="m">requirement</td><td data-l="members">The principles (§02); the agentic process + skills (§03); authoring rules (§04); the automatic/manual boundary + inventory (§05); the QA-driver parity guard (§06); PR-gated main, merge-on-green, release-per-merge, the process-change rule (§07).</td></tr>
-        <tr><td data-l="tier" class="m">recorded convention</td><td data-l="members">The styled-HTML spec-doc format (§04). Merge commits; tooling branch names; commit-message shape; one issue per change (§07). The discovery conventions (§06): one labeled issue per finding, the triage comment-and-label contract, the <code>qa-evidence</code> branch, per-issue evidence directories with prune-after-close, scratch sweep recipes, the periodic sync-assessment run, the intent fan-out inventory + its Switch-removal baseline.</td></tr>
-        <tr><td data-l="tier" class="m">unspecified</td><td data-l="members">Code style beyond the linter; PR body shape; issue formatting; anything not named in this doc. Absence is information: an unnamed practice is at most convention.</td></tr>
+        <tr><td data-l="tier" class="m">requirement</td><td data-l="members">The principles (§02); the agentic process + skills (§03); authoring rules (§04); the automatic/manual boundary + inventory (§05); the QA-driver parity guard (§06); PR-gated main, merge-on-green, release-per-merge, the process-change rule (§07); the test-integrity rule (<a href="engineering.html">engineering.html</a> §03).</td></tr>
+        <tr><td data-l="tier" class="m">recorded convention</td><td data-l="members">The styled-HTML spec-doc format (§04). Merge commits; tooling branch names; commit-message shape; one issue per change (§07). The discovery conventions (§06): one labeled issue per finding, the triage comment-and-label contract, the <code>qa-evidence</code> branch, per-issue evidence directories with prune-after-close, scratch sweep recipes, the periodic sync-assessment run, the intent fan-out inventory + its Switch-removal baseline. The engineering conventions (<a href="engineering.html">engineering.html</a> — everything but its one requirement block).</td></tr>
+        <tr><td data-l="tier" class="m">unspecified</td><td data-l="members">Code style beyond the linter and <a href="engineering.html">engineering.html</a>; PR body shape; issue formatting; anything not named in this doc or there. Absence is information: an unnamed practice is at most convention.</td></tr>
       </tbody>
     </table>
   </section>
@@ -351,6 +353,7 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
         <tr><td data-l="term" class="m">swap</td><td data-l="meaning">A transition's gated final stage: old docs and scaffolding deleted, front-door docs updated — inside the same PR, whose merge is the human gate.</td></tr>
         <tr><td data-l="term" class="m">sweep</td><td data-l="meaning">One QA-discovery run (§06): drive the GUI as a user over realistic data, file the findings. Produces issues, never a green.</td></tr>
         <tr><td data-l="term" class="m">arch review</td><td data-l="meaning">One architecture-review run (§06): adversarial critique of the systems that build and verify the product, verdicts grilled with the owner, confirmed problems filed. Produces issues, never a green — and never a fix.</td></tr>
+        <tr><td data-l="term" class="m">code quality review</td><td data-l="meaning">One module-level review run (§06): the implementation and tests read against <a href="engineering.html">engineering.html</a>, verdicts grilled, confirmed findings filed into the arch-review stream. Same contract: issues, never a green, never a fix.</td></tr>
         <tr><td data-l="term" class="m">sync assessment</td><td data-l="meaning">One requirements↔implementation synchronization run (§06): judge whether the docs still describe the tree and its behavior, file each drift finding into the discovery stream that owns it. Produces issues, never a green — and never an edit.</td></tr>
         <tr><td data-l="term" class="m">finding</td><td data-l="meaning">What discovery surfaces, filed as one labeled issue (§06): a sweep's reproduced, root-caused defect, or a review's confirmed problem; the sync assessment files its drift findings in whichever of those forms fits. Not a requirement failure until someone writes the requirement.</td></tr>
         <tr><td data-l="term" class="m">triage</td><td data-l="meaning">The gate between a filed finding and workable backlog (§06): category, owner decisions, proof-of-fix plan, routing verdict — one comment, then the <code>Triaged</code> label (<code>Triaged: dedicated session</code> when the verdict routes past the orchestrator). The label is a contract, not a status.</td></tr>
@@ -363,26 +366,9 @@ issues: <span class="g">Agentic QA Discovery</span>            issues: <span cla
   <section id="s10">
     <div class="eyebrow"><span class="n">10</span> Map</div>
     <h2>Where requirements &amp; context live</h2>
-    <p><code>CLAUDE.md</code>'s Files table is the front door.</p>
+    <p><code>CLAUDE.md</code>'s Files table is the one home for the repo inventory — every location, what it specifies, one line each (§04's one-home rule). This section keeps only the facts it owns:</p>
     <p>Under <code>acceptance/</code> the two halves of the AC apparatus are kept apart: <code>criteria/</code> holds the <strong>acceptance criteria</strong> (what must hold — the rubric, schemas, parity matrix, runbook, and coverage map), and <code>evidence/</code> holds the <strong>acceptance-criteria satisfaction evidence</strong> (the generated proof those criteria hold). Criteria are hand-authored and reviewed; evidence is regenerated by the suites.</p>
-    <table>
-      <thead><tr><th>Location</th><th>Specifies</th></tr></thead>
-      <tbody>
-        <tr><td data-l="location" class="m">context/concept.html</td><td data-l="specifies">The why — concept, non-goals.</td></tr>
-        <tr><td data-l="location" class="m">context/prd.html</td><td data-l="specifies">The what — application requirements (§/R).</td></tr>
-        <tr><td data-l="location" class="m">context/glossary.html</td><td data-l="specifies">The words — application domain language.</td></tr>
-        <tr><td data-l="location" class="m">context/acceptance.html</td><td data-l="specifies">How we'll know — AC methods, PRD→method routing.</td></tr>
-        <tr><td data-l="location" class="m">context/process.html</td><td data-l="specifies">How it's built &amp; verified — this doc.</td></tr>
-        <tr><td data-l="location" class="m">context/mockups/</td><td data-l="specifies">The look — standalone GUI design-intent prototypes for §12/§18.</td></tr>
-        <tr><td data-l="location" class="m">acceptance/criteria/</td><td data-l="specifies">The acceptance criteria — what must hold. <code>COVERAGE.md</code> (PRD→proof index), <code>parity-matrix.json</code>, <code>manual/runbook.md</code>, <code>schemas/</code>, <code>judge-rubric.md</code>.</td></tr>
-        <tr><td data-l="location" class="m">acceptance/evidence/</td><td data-l="specifies">The acceptance-criteria satisfaction evidence — proof they hold, generated by the suites. Judge report, screenshots, recordings, CLI transcript.</td></tr>
-        <tr><td data-l="location" class="m">features/</td><td data-l="specifies">Gherkin specs, run against both surfaces.</td></tr>
-        <tr><td data-l="location" class="m">.claude/skills/</td><td data-l="specifies">The agentic process — the requirements-change skills (§03), the discovery, triage, and backlog skills (§06).</td></tr>
-        <tr><td data-l="location" class="m">packages/gui/qa/</td><td data-l="specifies">The QA discovery driver (§06) — the real renderer over a real core store, plus the recording overlay. Guarded apparatus, never shipped.</td></tr>
-        <tr><td data-l="location" class="m">qa-evidence branch</td><td data-l="specifies">Repro evidence for open findings (§06) — orphan branch, one <code>issue-N/</code> dir per issue, never merged.</td></tr>
-        <tr><td data-l="location" class="m">.github/workflows/, scripts/</td><td data-l="specifies">The enforcement apparatus these principles constrain.</td></tr>
-      </tbody>
-    </table>
+    <p>The <code>qa-evidence</code> orphan branch (§06) is the one location CLAUDE.md's table cannot show a reader of the working tree: repro evidence for open findings, one <code>issue-N/</code> dir per issue, never merged.</p>
   </section>
 
   <div class="foot">
