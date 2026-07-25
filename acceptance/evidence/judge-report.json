@@ -12,7 +12,7 @@
     {
       "item": "NAV_SHELL",
       "pass": true,
-      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (480/760/1200) views=312/592/872 → true",
+      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=true {\"bgIsPaper\":true,\"labelIsInk\":true,\"iconIsAccent\":true,\"lifted\":true,\"inactiveFlat\":true,\"inactiveNoAccentIcon\":true}; clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (480/760/1200) views=312/592/872 → true",
       "screenshot": "main-nav.png"
     },
     {
@@ -66,13 +66,19 @@
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": null,
-      "justification": "primary=rgb(196, 76, 56) accent=rgb(196, 76, 56); primary-uses-accent=true; accent seen on [only sanctioned surfaces]",
+      "justification": "primary=rgb(209, 52, 21) accent-solid=rgb(209, 52, 21) (accent=rgb(229, 77, 46)); primary-fill-uses-accent-solid=true; accent family seen on [only sanctioned surfaces]",
+      "screenshot": "main-running.png"
+    },
+    {
+      "item": "ACCENT_SOLID_BUDGET",
+      "pass": true,
+      "justification": "≤1 accent-solid fill per view (D11): timer=[#timer-stop]; entries=[none]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; running Timer view carries exactly its Stop primary=true",
       "screenshot": "main-running.png"
     },
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent=[none], accent-filled primary action(s)=1 (Entries 0 + Timer 1; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent family=[none], accent-solid-filled primary action(s)=1 (Entries 0 + Timer 1; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
@@ -96,7 +102,7 @@
     {
       "item": "UNIFIED_FORM_ADD",
       "pass": true,
-      "justification": "unified add form: layout={\"visible\":true,\"unified\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"clientTag\":\"SELECT\",\"projectTag\":\"SELECT\",\"hasTagChips\":true,\"hasBill\":true,\"pickerCal\":true,\"pickerTrack\":true,\"pickerHours\":25,\"pickerMe\":true,\"expanderCollapsed\":true,\"startText\":\"text\",\"stopText\":\"text\",\"noDatetimeLocal\":true}; picker paint={\"others\":2,\"overlaps\":1,\"overlapInert\":true,\"meAccent\":true,\"saveAccent\":true}; live drag seed={\"from\":\"2026-06-24T22:00\",\"to\":\"2026-06-24T23:00\"}→{\"from\":\"2026-06-24T20:00\",\"to\":\"2026-06-24T21:00\"} (live=true); Save sole commit added={\"fromLocal\":\"2026-06-24T20:00\",\"toLocal\":\"2026-06-24T21:00\",\"billable\":true,\"description\":\"design review\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (patchOk=true); form closed=true, overlap banner=true \"This entry overlaps 1 other entry — allowed, but flagged in reports.\"",
+      "justification": "unified add form: layout={\"visible\":true,\"unified\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"clientTag\":\"SELECT\",\"projectTag\":\"SELECT\",\"hasTagChips\":true,\"hasBill\":true,\"pickerCal\":true,\"pickerTrack\":true,\"pickerHours\":25,\"pickerMe\":true,\"expanderCollapsed\":true,\"startText\":\"text\",\"stopText\":\"text\",\"noDatetimeLocal\":true}; picker paint={\"others\":2,\"overlaps\":1,\"overlapInert\":true,\"meWeakFill\":true,\"meAccentBorder\":true,\"meInkLabels\":true,\"saveSolid\":true}; live drag seed={\"from\":\"2026-06-24T22:00\",\"to\":\"2026-06-24T23:00\"}→{\"from\":\"2026-06-24T20:00\",\"to\":\"2026-06-24T21:00\"} (live=true); Save sole commit added={\"fromLocal\":\"2026-06-24T20:00\",\"toLocal\":\"2026-06-24T21:00\",\"billable\":true,\"description\":\"design review\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (patchOk=true); form closed=true, overlap banner=true \"This entry overlaps 1 other entry — allowed, but flagged in reports.\"",
       "screenshot": "unified-add.png"
     },
     {
@@ -138,7 +144,7 @@
     {
       "item": "MERGE_CONFLICT",
       "pass": true,
-      "justification": "merge bar hidden until 2 selected (true); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
+      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
       "screenshot": "main-merge-conflict.png"
     },
     {
@@ -198,7 +204,7 @@
     {
       "item": "REPORTS_VIEW",
       "pass": true,
-      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newAccented\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"customHidden\":true,\"fromType\":\"date\",\"toType\":\"date\",\"datetimeLocals\":0,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} refuse-incomplete={\"savedYet\":null,\"builderOpen\":true,\"toFocused\":true,\"warnShown\":true} refuse-duplicate={\"builderOpen\":true,\"warnPersists\":true,\"message\":\"a saved report named that already exists\",\"cardCount\":2} refuse-inverted={\"savedYet\":null,\"builderOpen\":true,\"warnPersists\":true,\"message\":\"report range end must not be before its start\",\"cardCount\":2} customSave={\"payload\":{\"name\":\"June window\",\"rangeSpec\":{\"kind\":\"absolute\",\"fromDate\":\"2026-06-01\",\"toDate\":\"2026-06-07\"},\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\"},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\"},{\"name\":\"June window\",\"spec\":\"Custom: 2026-06-01 – 2026-06-07 · by client · billable only · no rounding\"}]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export filtered CSV={\"format\":\"csv\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} all-data CSV={\"format\":\"csv\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} labels={\"filteredCsv\":\"Export CSV\",\"filteredJson\":\"Export JSON\",\"allCsv\":\"Export All Data (CSV)\",\"allJson\":\"Export All Data (JSON)\",\"allStatus\":\"Exported 3 entries (all data) to /tmp/stint-export.json.\"} inline rename={\"payload\":{\"name\":\"June window\",\"newName\":\"June window v2\"},\"names\":[\"Weekly billables — Globex\",\"Monthly — all clients by client\",\"June window v2\"]} armed={\"stillListed\":true,\"removedYet\":null} deleted={\"payload\":{\"name\":\"June window v2\"},\"count\":2}",
+      "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newSolidFilled\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"customHidden\":true,\"fromType\":\"date\",\"toType\":\"date\",\"datetimeLocals\":0,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} refuse-incomplete={\"savedYet\":null,\"builderOpen\":true,\"toFocused\":true,\"warnShown\":true} refuse-duplicate={\"builderOpen\":true,\"warnPersists\":true,\"message\":\"a saved report named that already exists\",\"cardCount\":2} refuse-inverted={\"savedYet\":null,\"builderOpen\":true,\"warnPersists\":true,\"message\":\"report range end must not be before its start\",\"cardCount\":2} customSave={\"payload\":{\"name\":\"June window\",\"rangeSpec\":{\"kind\":\"absolute\",\"fromDate\":\"2026-06-01\",\"toDate\":\"2026-06-07\"},\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\"},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\"},{\"name\":\"June window\",\"spec\":\"Custom: 2026-06-01 – 2026-06-07 · by client · billable only · no rounding\"}]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export filtered CSV={\"format\":\"csv\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} all-data CSV={\"format\":\"csv\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} labels={\"filteredCsv\":\"Export CSV\",\"filteredJson\":\"Export JSON\",\"allCsv\":\"Export All Data (CSV)\",\"allJson\":\"Export All Data (JSON)\",\"allStatus\":\"Exported 3 entries (all data) to /tmp/stint-export.json.\"} inline rename={\"payload\":{\"name\":\"June window\",\"newName\":\"June window v2\"},\"names\":[\"Weekly billables — Globex\",\"Monthly — all clients by client\",\"June window v2\"]} armed={\"stillListed\":true,\"removedYet\":null} deleted={\"payload\":{\"name\":\"June window v2\"},\"count\":2}",
       "screenshot": "reports-list.png"
     },
     {
@@ -210,7 +216,7 @@
     {
       "item": "CALENDAR_LAYOUT",
       "pass": true,
-      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":360,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"weekTotal\":\"17.00h\",\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; crossMidnight=true; editorOpen=true; merge hidden-before=true shown-after-2=true",
+      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":360,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"weekTotal\":\"17.00h\",\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; crossMidnight=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
       "screenshot": "main-calendar.png"
     },
     {
@@ -222,7 +228,7 @@
     {
       "item": "SETTINGS_VIEW",
       "pass": true,
-      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
+      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), D12 raised-chip segment selection=true {\"present\":true,\"chipPaper\":true,\"chipInk\":true,\"chipLifted\":true,\"peersFlat\":true}, date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
       "screenshot": "main-settings.png"
     },
     {
@@ -260,6 +266,18 @@
       "pass": true,
       "justification": "window.stint exposes 45/45 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
+    },
+    {
+      "item": "TARGET_SIZE",
+      "pass": true,
+      "justification": "A03 sweep over 105 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, centre ≥24px from every neighbour)=[entries:#search 185x21 nearest 52px; timer:#le-bill 13x13 nearest 109px; settings:button.set-toggle 38x22 nearest 60px]",
+      "screenshot": "main-target-size.png"
+    },
+    {
+      "item": "COLOUR_PAIRING",
+      "pass": true,
+      "justification": "D05/A05 pairing: run-dot beside 'running' (strip={\"dotPresent\":true,\"stateWord\":\"running\"}, card state='running'); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
+      "screenshot": "main-colour-pairing.png"
     },
     {
       "item": "DESKTOP_FEEL",

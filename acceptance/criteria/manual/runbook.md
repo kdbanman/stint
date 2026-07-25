@@ -241,7 +241,10 @@ terminal pointed at the same database.
 2. Tick the first entry's checkbox.
    - [ ] The **Merge** action stays hidden with only one entry selected.
 3. Tick the second entry's checkbox.
-   - [ ] The **Merge** action appears and reads **"Merge 2 entries"**.
+   - [ ] The **selection bar** appears **above the calendar** (design.html D11 / V5): its
+         count pill reads **"2 selected"** and its **Merge** button is a **neutral** small
+         button (labelled just "Merge" — never accent-filled; the Entries view's accent
+         primary stays the add form's Save entry).
 4. Click **Merge**.
    - [ ] Because the two entries disagree, an inline **conflict prompt** appears asking
          which **client / project** to keep (offering each distinct client as a choice)
@@ -294,7 +297,9 @@ are suppressed while selecting. The conflict prompt is hosted in `app.js`. Runni
          checkbox, and the hover Delete/Split/Edit affordances are suppressed.
    - [ ] The selection bar's **Merge** action stays hidden with only one event checked.
 3. Check the second (contiguous) event's corner checkbox.
-   - [ ] The selection bar appears and reads **"Merge 2 entries"** (the live count).
+   - [ ] The selection bar appears above the calendar, its count pill reading
+         **"2 selected"** (the live count), with the neutral **Merge** button beside it
+         (design.html D11 / V5 — Merge is never the accent primary).
 4. Click **Merge**.
    - [ ] Because the two entries disagree, the **conflict prompt** (a modal, not an inline
          panel) appears asking which **client / project** to keep and which **billable**

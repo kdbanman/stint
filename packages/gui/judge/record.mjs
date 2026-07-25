@@ -1318,8 +1318,9 @@ const RECIPES = {
   },
 
   // §06 R03 — MERGE via multi-select. Two contiguous CLOSED entries that DISAGREE on client
-  // (and billable) are armed by checking their corner checkboxes; the selection bar reveals a
-  // live "Merge 2 entries" count, and Merge raises the app.js-hosted conflict prompt
+  // (and billable) are armed by checking their corner checkboxes; the selection bar reveals
+  // its live "2 selected" count pill beside the NEUTRAL Merge button (design.html D11 / V5),
+  // and Merge raises the app.js-hosted conflict prompt
   // (§06 R3, §12 R6). The prompt resolves the
   // disagreeing client/billable field-by-field, then commits { ids, winnerId, billable } over
   // the same merge IPC — no clientId/projectId resolved in the renderer. To SHOW the merged
@@ -1342,11 +1343,12 @@ const RECIPES = {
       await page.check('.entry[data-id="41"] .sel');
       await page.waitForFunction(() => {
         const bar = document.querySelector('#merge-bar');
-        return bar && !bar.hidden && /Merge 2 entries/.test(bar.textContent);
+        const count = document.querySelector('#merge-count');
+        return bar && !bar.hidden && count && count.textContent.trim() === '2 selected';
       });
       await page.evaluate(() =>
         window.__recCaption &&
-        window.__recCaption('The selection bar shows the live count — Merge 2 entries'));
+        window.__recCaption('The selection bar shows the live count — 2 selected'));
       await wait(page, 900);
 
       // Fold the two source rows into one merged entry on the snapshot so the reload SHOWS the
