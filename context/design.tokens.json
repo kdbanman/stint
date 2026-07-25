@@ -1,0 +1,121 @@
+{
+  "$description": "Stint design tokens — the single source of truth for the visual system (design.html is the normative spec; this file carries the values). W3C DTCG format (stable 2025.10). Layer 1: primitive scales, adopted wholesale from Radix Colors light mode (sand, tomato, red, grass, amber — radix-ui/colors, MIT). Layer 2: semantic tokens, each aliasing one scale step; only semantic tokens may be referenced by mockups and the app. scripts/gen-tokens.mjs generates the CSS custom-property block between STINT-TOKENS markers in every mockup and packages/gui/renderer/styles.css; a guard test asserts parity and the contrast floors in design.html §Accessibility.",
+  "color": {
+    "sand": {
+      "1": { "$type": "color", "$value": "#fdfdfc" },
+      "2": { "$type": "color", "$value": "#f9f9f8" },
+      "3": { "$type": "color", "$value": "#f1f0ef" },
+      "4": { "$type": "color", "$value": "#e9e8e6" },
+      "5": { "$type": "color", "$value": "#e2e1de" },
+      "6": { "$type": "color", "$value": "#dad9d6" },
+      "7": { "$type": "color", "$value": "#cfceca" },
+      "8": { "$type": "color", "$value": "#bcbbb5" },
+      "9": { "$type": "color", "$value": "#8d8d86" },
+      "10": { "$type": "color", "$value": "#82827c" },
+      "11": { "$type": "color", "$value": "#63635e" },
+      "12": { "$type": "color", "$value": "#21201c" }
+    },
+    "tomato": {
+      "1": { "$type": "color", "$value": "#fffcfc" },
+      "2": { "$type": "color", "$value": "#fff8f7" },
+      "3": { "$type": "color", "$value": "#feebe7" },
+      "4": { "$type": "color", "$value": "#ffdcd3" },
+      "5": { "$type": "color", "$value": "#ffcdc2" },
+      "6": { "$type": "color", "$value": "#fdbdaf" },
+      "7": { "$type": "color", "$value": "#f5a898" },
+      "8": { "$type": "color", "$value": "#ec8e7b" },
+      "9": { "$type": "color", "$value": "#e54d2e" },
+      "10": { "$type": "color", "$value": "#dd4425" },
+      "11": { "$type": "color", "$value": "#d13415" },
+      "12": { "$type": "color", "$value": "#5c271f" }
+    },
+    "red": {
+      "1": { "$type": "color", "$value": "#fffcfc" },
+      "2": { "$type": "color", "$value": "#fff7f7" },
+      "3": { "$type": "color", "$value": "#feebec" },
+      "4": { "$type": "color", "$value": "#ffdbdc" },
+      "5": { "$type": "color", "$value": "#ffcdce" },
+      "6": { "$type": "color", "$value": "#fdbdbe" },
+      "7": { "$type": "color", "$value": "#f4a9aa" },
+      "8": { "$type": "color", "$value": "#eb8e90" },
+      "9": { "$type": "color", "$value": "#e5484d" },
+      "10": { "$type": "color", "$value": "#dc3e42" },
+      "11": { "$type": "color", "$value": "#ce2c31" },
+      "12": { "$type": "color", "$value": "#641723" }
+    },
+    "grass": {
+      "1": { "$type": "color", "$value": "#fbfefb" },
+      "2": { "$type": "color", "$value": "#f5fbf5" },
+      "3": { "$type": "color", "$value": "#e9f6e9" },
+      "4": { "$type": "color", "$value": "#daf1db" },
+      "5": { "$type": "color", "$value": "#c9e8ca" },
+      "6": { "$type": "color", "$value": "#b2ddb5" },
+      "7": { "$type": "color", "$value": "#94ce9a" },
+      "8": { "$type": "color", "$value": "#65ba74" },
+      "9": { "$type": "color", "$value": "#46a758" },
+      "10": { "$type": "color", "$value": "#3e9b4f" },
+      "11": { "$type": "color", "$value": "#2a7e3b" },
+      "12": { "$type": "color", "$value": "#203c25" }
+    },
+    "amber": {
+      "1": { "$type": "color", "$value": "#fefdfb" },
+      "2": { "$type": "color", "$value": "#fefbe9" },
+      "3": { "$type": "color", "$value": "#fff7c2" },
+      "4": { "$type": "color", "$value": "#ffee9c" },
+      "5": { "$type": "color", "$value": "#fbe577" },
+      "6": { "$type": "color", "$value": "#f3d673" },
+      "7": { "$type": "color", "$value": "#e9c162" },
+      "8": { "$type": "color", "$value": "#e2a336" },
+      "9": { "$type": "color", "$value": "#ffc53d" },
+      "10": { "$type": "color", "$value": "#ffba18" },
+      "11": { "$type": "color", "$value": "#ab6400" },
+      "12": { "$type": "color", "$value": "#4f3422" }
+    }
+  },
+  "semantic": {
+    "$description": "The only tokens surfaces may use. Text tokens meet 4.5:1 on the surfaces design.html permits them on; signal tokens meet 3:1 non-text. faint is never readable text (3.28:1) — decorative and disabled uses only.",
+    "paper":        { "$type": "color", "$value": "{color.sand.1}",   "$description": "App/window surface." },
+    "sidebar":      { "$type": "color", "$value": "{color.sand.2}",   "$description": "Nav rail surface." },
+    "wash":         { "$type": "color", "$value": "{color.sand.3}",   "$description": "Sunken component background (segmented track, tags, pills)." },
+    "hover":        { "$type": "color", "$value": "{color.sand.4}",   "$description": "Hover wash." },
+    "canvas":       { "$type": "color", "$value": "{color.sand.5}",   "$description": "Backdrop behind the window (mockups/docs only)." },
+    "rule":         { "$type": "color", "$value": "{color.sand.6}",   "$description": "Subtle separator." },
+    "rule-strong":  { "$type": "color", "$value": "{color.sand.8}",   "$description": "Field and control border (fields always carry a visible label — design.html §Accessibility)." },
+    "faint":        { "$type": "color", "$value": "{color.sand.9}",   "$description": "Decorative/disabled only. Never readable text; icon-only affordances use muted instead." },
+    "muted":        { "$type": "color", "$value": "{color.sand.11}",  "$description": "Secondary text. 5.93:1 on paper." },
+    "ink":          { "$type": "color", "$value": "{color.sand.12}",  "$description": "Primary text. 16.02:1 on paper." },
+    "accent":       { "$type": "color", "$value": "{color.tomato.9}", "$description": "The rationed clay signal — icons, running-state marks, focus ring. Non-text only (3.80:1)." },
+    "accent-solid": { "$type": "color", "$value": "{color.tomato.11}", "$description": "Filled primary-action background; white text on it is 4.98:1." },
+    "accent-ink":   { "$type": "color", "$value": "{color.tomato.11}", "$description": "Accent-colored text on paper/sidebar (4.90:1 / 4.73:1)." },
+    "accent-weak":  { "$type": "color", "$value": "{color.tomato.3}", "$description": "Weak accent fill. Not a text surface for accent-ink (4.33:1) — see design.html selection rule." },
+    "run":          { "$type": "color", "$value": "{color.grass.11}", "$description": "Running-state text (4.98:1 on paper, 4.54:1 on run-weak)." },
+    "run-dot":      { "$type": "color", "$value": "{color.grass.9}",  "$description": "The running dot — always paired with a text label." },
+    "run-weak":     { "$type": "color", "$value": "{color.grass.3}",  "$description": "Running pill background." },
+    "flag":         { "$type": "color", "$value": "{color.amber.12}", "$description": "Warn/advisory text — on paper and on flag-bg (11.17:1 / 10.47:1)." },
+    "flag-bg":      { "$type": "color", "$value": "{color.amber.3}",  "$description": "Warn advisory background." },
+    "flag-line":    { "$type": "color", "$value": "{color.amber.6}",  "$description": "Warn advisory border." },
+    "danger":       { "$type": "color", "$value": "{color.red.11}",   "$description": "Refused-write/destructive text (5.12:1 on paper, 4.54:1 on danger-weak)." },
+    "danger-weak":  { "$type": "color", "$value": "{color.red.3}",    "$description": "Refused-write background." }
+  },
+  "radius": {
+    "control": { "$type": "dimension", "$value": "8px",  "$description": "r1 — controls." },
+    "card":    { "$type": "dimension", "$value": "12px", "$description": "r2 — cards." },
+    "surface": { "$type": "dimension", "$value": "16px", "$description": "r3 — window & overlays." }
+  },
+  "space": {
+    "base": { "$type": "dimension", "$value": "4px", "$description": "Spacing grid unit — every padding, gap, and margin is a multiple (design.html §Layout). Component intrinsic heights are free." }
+  },
+  "font": {
+    "sans": { "$type": "fontFamily", "$value": ["-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI Variable", "Segoe UI", "Helvetica Neue", "system-ui", "sans-serif"] },
+    "num":  { "$type": "fontFamily", "$value": ["SF Mono", "ui-monospace", "JetBrains Mono", "Menlo", "Consolas", "monospace"], "$description": "Tabular numerals for every clock and duration." }
+  },
+  "shadow": {
+    "$description": "The warm elevation ladder (chip → card → raise → pop → modal → win). One rung above what a surface covers; never nest cards. chip is not a layer rung — it is the D12 selection lift, below card.",
+    "chip":  { "$type": "shadow", "$value": "0 1px 2px rgba(74,52,24,.12)", "$description": "The D12 raised-chip lift — the selection rung below card: the active nav chip, the chosen segment, the selected calendar day, the selection-count pill." },
+    "card":  { "$type": "shadow", "$value": "0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05)" },
+    "raise": { "$type": "shadow", "$value": "0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06)" },
+    "pop":   { "$type": "shadow", "$value": "0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10)" },
+    "modal": { "$type": "shadow", "$value": "0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14)" },
+    "win":   { "$type": "shadow", "$value": "0 30px 80px rgba(50,34,14,.22)" }
+  }
+}

@@ -6,9 +6,12 @@ This directory holds two kinds of evidence:
    Each `.gif` drives the **real renderer** through the same canned fixtures + pinned
    clock the JUDGE harness uses (`packages/gui/judge/record.mjs`, `npm run record`;
    Playwright `recordVideo` → two-pass palette GIF, slowed ~0.5x with a ~1.5s end-frame
-   hold and a visible cursor). They are ASCII-named by the recipe's requirement id and
-   regenerated wholesale whenever the GUI changes, so every committed GIF shows the
-   current UI. The intermediate `.webm` files are gitignored working artifacts.
+   hold and a visible cursor). They are ASCII-named by the recipe's requirement id — or,
+   for the design-layer close-ups, by its design-rule id — and regenerated wholesale
+   whenever the GUI changes: the whole set was last regenerated **after the design-layer
+   restyle**, so every committed GIF shows the current UI (the tomato accent and its
+   solid primaries, the lifted-chip nav, the retuned spacing). The intermediate `.webm`
+   files are gitignored working artifacts.
 2. **Live MANUAL recordings** — the residual **live, OS-level** half of the MANUAL
    runbook procedures (real sleep/wake, the tray + global hotkey on a real desktop
    session, the live GitHub Releases query, and the OS-level app replacement + one-time
@@ -58,8 +61,23 @@ its JUDGE scene.
 | §20 R05 | `20-r05.gif` | Corruption-recovery notice naming the recovered-from backup + the quarantined file; restore reachable through the confirm gate. |
 | §12 R03 | `12-r03.gif`, `nav-shell.gif` | Window shell: the sidebar is present in every view and holds a fixed 168px width across resize (`12-r03`); `nav-shell` is the five-view routing tour. |
 | §12 R04 | `12-r04.gif` | Active-Timer placement: the full panel lives in the Timer view while Entries keeps the compact strip of the same running timer. |
+| §12 R04 / issue #50 | `cross-view-freshness.gif` | Cross-view freshness: after an Entries-toolbar filter has been touched, the Timer view's card still flips idle → running on the spot when Start is pressed (the count-up ticks, no reload) — the regression path the `CROSS_VIEW_FRESHNESS` judge scene gates. |
 | §12 R01 | `12-r01.gif` | Tray popover while running: Stop + Open Stint only, no Switch button. |
 | §12 (report.html retired) | `12-r-report-html.gif` | The standalone sidebar-less `report.html` is retired; the report function folds into the in-shell Reports view (sidebar present throughout). |
+
+## Design-layer close-ups — the changed idioms
+
+The design layer (`context/design.html`) changed three idioms outright, so each gets a close-up
+of its own alongside the per-view tours above. These GIFs are named for the **design-rule id**
+they show rather than a PRD row, because the rule is what they evidence — and each recipe
+asserts its rule's computed facts against the live tokens while recording, so a regression to
+the retired look FAILS the recording instead of quietly re-recording it.
+
+| Rule id(s) | GIF | What it demonstrates |
+|---|---|---|
+| D12 / V7 | `d12.gif` | Nav selection close-up: the five rail items driven in turn, hovered then clicked — hover is a quiet neutral wash on a still-flat row, while the active item is a **lifted paper chip** (paper fill + chip shadow, ink label, the accent on its icon alone). An on-page badge echoes the live computed chip/lift/label/icon values, and the recipe asserts all four per item — the retired accent-weak marker could not pass. |
+| V5 | `v5.gif` | Merge/selection bar close-up: checking two corner boxes raises the selection bar **above** the calendar with a lifted "2 selected" count pill and a **neutral** Merge (Entries spends its one accent-solid primary on the add form's Save entry, so Merge never takes it); Merge then opens the disagreeing-field conflict prompt. Position and neutrality are both asserted on the way past. |
+| V3 | `v3.gif` | Picker "me" block close-up: the dragged span is an accent **outline over a weak accent fill** with ink labels and accent grips — a body drag moves start+stop together, the bottom grip moves the stop alone, and both write live into the Start/Stop fields (the captions echo the actual values). Ends on the running start-only variant: the same block with no end edge, fading into the future behind a start grip. |
 
 To regenerate: `npm run record` (all recipes) or `node packages/gui/judge/record.mjs
 "<recipe id>"` for one. `--list` prints every recipe id.

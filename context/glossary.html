@@ -96,6 +96,7 @@
       <li><a href="#s7"><span class="tn">07</span>Relationships &amp; cardinality</a></li>
       <li><a href="#s8"><span class="tn">08</span>Language in use</a></li>
       <li><a href="#s9"><span class="tn">09</span>Flagged ambiguities</a></li>
+      <li><a href="#s10"><span class="tn">10</span>Design layer</a></li>
     </ol>
   </nav>
 
@@ -609,9 +610,54 @@
           <td data-l="Ambiguity"><strong>Range preset vs range spec</strong> — the menu choice vs what a saved report stores.</td>
           <td data-l="Resolution"><strong>Range preset</strong> = one of the five named relative windows. <strong>Range spec</strong> = the durable range a <strong>saved report</strong> holds — either a preset (re-resolved each run) or an absolute UTC window. The preset is a value; the spec is the stored definition that may contain one.</td>
         </tr>
+        <tr>
+          <td data-l="Ambiguity"><strong>"Design system" vs "design spec" vs "design tokens"</strong> — three related nouns for the visual layer.</td>
+          <td data-l="Resolution"><strong>Design system</strong> = the visual language itself, "Calm · Warm Paper" (the principles, the look). <strong>Design spec</strong> = <code>context/design.html</code>, the normative doc that states its rules. <strong>Design tokens</strong> = <code>context/design.tokens.json</code>, the file that carries the values those rules resolve to. The language, the doc that specifies it, and the file that carries its numbers are three different things — don't conflate them.</td>
+        </tr>
       </tbody>
     </table>
     <div class="note"><span class="lbl">Process</span>This glossary follows the <em>grill-with-docs</em> approach: fuzzy language gets sharpened through interview, then formalized here. New terms and refinements land in this file as the design tree is walked. It is the thinnest useful documentation layer — a glossary of non-obvious terms plus decisions already made — meant to be read alongside, and to stay consistent with, the concept and the PRD. One standing rejection worth recording so it isn't relitigated: "Switch" is deliberately <em>not</em> a term — it would be a redundant alias of <strong>Start</strong>, which already stops any open entry first as one atomic stop-then-start. Switching tasks <em>is</em> starting; attribute carry-forward is what <strong>Resume</strong> does.</div>
+  </section>
+
+  <section id="s10">
+    <div class="eyebrow"><span class="n">10</span> Design layer</div>
+    <h2>The visual system, named</h2>
+    <p>The vocabulary <a href="design.html">design.html</a> and <code>design.tokens.json</code> introduce for how the app looks — kept in the same term/rejected-synonym idiom as the rest of this glossary.</p>
+    <table>
+      <thead><tr><th>Term</th><th>Definition</th><th>Aliases to avoid</th></tr></thead>
+      <tbody>
+        <tr>
+          <td class="term" data-l="Term">Design token</td>
+          <td data-l="Definition">A named design decision with a single value, held in <code>context/design.tokens.json</code>. Surfaces — mockups, <code>styles.css</code> — reference tokens by name, never a raw value; a raw hex or px literal in a surface is a defect (design.html D01).</td>
+          <td class="avoid" data-l="Avoid"><s>CSS variable</s> (as the decision itself — the token is the decision, a CSS custom property is one rendering of it), <s>theme value</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Scale step</td>
+          <td data-l="Definition">One of the twelve positions in a primitive Radix colour scale (e.g. <code>sand·9</code>). Only the semantic layer of <code>design.tokens.json</code> may reference a step directly — a surface never does.</td>
+          <td class="avoid" data-l="Avoid"><s>shade</s>, <s>tint</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Semantic token</td>
+          <td data-l="Definition">A token naming a <strong>role</strong> — <code>paper</code>, <code>ink</code>, <code>accent-solid</code>, and the rest of design.html §03 — that aliases exactly one scale step. The only tokens a surface may use.</td>
+          <td class="avoid" data-l="Avoid">—</td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Accent discipline</td>
+          <td data-l="Definition">At most one accent-filled (<code>accent-solid</code>) primary action per view — the single most-likely action; everything else is secondary, ghost, or danger (design.html D11). Accent is a signal, never decoration.</td>
+          <td class="avoid" data-l="Avoid"><s>highlight color</s>, <s>brand color</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">State inventory</td>
+          <td data-l="Definition">The per-view × per-state coverage matrix — ideal / empty / error / edge — in <code>acceptance/criteria/STATES.md</code>, each cell evidenced or waived. Apparatus, not itself a GUI requirement.</td>
+          <td class="avoid" data-l="Avoid"><s>screen list</s></td>
+        </tr>
+        <tr>
+          <td class="term" data-l="Term">Design spec</td>
+          <td data-l="Definition"><code>context/design.html</code> — the normative visual requirements: tokens, colour roles, type ramp, layout, component grammar, accessibility floors. The mockups under <code>context/mockups/</code> illustrate it; where a mockup and this doc disagree, the design spec wins.</td>
+          <td class="avoid" data-l="Avoid"><s>style guide</s>, <s>design system doc</s> — "design system" stays the name of the visual language itself (Calm · Warm Paper), not this doc</td>
+        </tr>
+      </tbody>
+    </table>
   </section>
 
   <div class="foot">

@@ -5,105 +5,112 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stint — Software update</title>
 <style>
-  :root{
-    --paper:#FDFDFC;--canvas:#EAE8E3;--sidebar:#F6F5F2;--sunken:#F2F1ED;--hover:#ECEBE5;
-    --ink:#221F1C;--muted:#6B645D;--faint:#A39B92;--line:#E9E6E0;--line-strong:#D6D1C9;
-    --accent:#C44C38;--accent-ink:#9E3829;--accent-weak:#F8E9E5;
-    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
-    --danger:#B23B2B;--danger-weak:#F8E9E4;
-    --r1:8px;--r2:12px;--r3:16px;
-    --ring:0 0 0 3px #C44C3833;
-    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
-    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
-  }
+/* STINT-TOKENS start — generated from context/design.tokens.json; do not edit by hand */
+:root{
+  --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
+  --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
+  --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
+  --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
+  --danger:#ce2c31;--danger-weak:#feebec;
+  --r1:8px;--r2:12px;--r3:16px;
+  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
+  --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
+  --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
+  --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
+  --sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);
+  --sh-win:0 30px 80px rgba(50,34,14,.22);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+/* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 10px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid #D6D1C9}
-  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--line);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .win{max-width:1040px;margin:32px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:#A39B92;padding:4px 14px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
-  .nav{width:212px;flex:none;background:var(--sidebar);border-right:1px solid var(--line);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
+  .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
   .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
-  .nav a.on{background:var(--accent-weak);color:var(--accent-ink);font-weight:590;box-shadow:inset 0 0 0 1px #C44C3822}
+  /* D12/V7: selection ≠ accent — the active nav item lifts as a raised paper chip;
+     only its icon takes accent, the label stays ink. */
+  .nav a.on{background:var(--paper);box-shadow:var(--sh-chip);font-weight:590;color:var(--ink)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
-  .nav .stat{margin:8px 6px 2px;padding:14px 8px 4px;border-top:1px solid var(--line)}
-  .nav .stat .k{font-size:11px;color:var(--faint);letter-spacing:.06em;text-transform:uppercase}
-  .nav .stat .v{font-weight:640;font-size:14px;margin:5px 0 3px}
-  .nav .stat a{display:inline-flex;align-items:center;gap:5px;height:auto;padding:0;background:none;color:var(--accent-ink);font-weight:500;font-size:12px}
-  .nav .stat a:hover{background:none;text-decoration:underline}
-  .nav .stat a .ic{width:13px;height:13px;color:var(--accent-ink)}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
-  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C44C3855}
-  .btn.primary:hover{background:#a83c2c}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff;box-shadow:0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent)}
+  .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:#fff}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
-  .btn.sm{height:30px;padding:0 11px;font-size:12px}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .btn.sm{height:30px;padding:0 12px;font-size:12px}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* fields */
-  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
   select.field{width:auto;min-width:150px}
   /* card / pill */
-  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
-  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
-  .pill.warn{color:var(--warn-ink);background:var(--warn-bg);border-color:var(--warn-line)}
-  .pill.accent{color:var(--accent-ink);background:var(--accent-weak);border-color:#C44C3833}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
+  .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
+  .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   /* settings rows + update flow */
   .view{gap:0}
   .sub{color:var(--muted);font-size:13px;margin:-8px 0 20px}
-  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:640;margin:8px 0 2px}
-  .srow{display:flex;align-items:flex-start;gap:18px;padding:16px 2px;border-bottom:1px solid var(--line)}
+  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:640;margin:8px 0 2px}
+  .srow{display:flex;align-items:flex-start;gap:16px;padding:16px 2px;border-bottom:1px solid var(--rule)}
   .srow .lhs{flex:1;min-width:0}
   .srow .nm{font-weight:590;font-size:13.5px}
-  .srow .ds{color:var(--muted);font-size:12px;margin-top:3px}
+  .srow .ds{color:var(--muted);font-size:12px;margin-top:4px}
   .srow .rhs{display:flex;align-items:center;gap:12px;flex:none}
   .ver{font-family:var(--num);font-size:12.5px;color:var(--ink)}
-  /* update banner */
-  .ubann{display:flex;align-items:center;gap:14px;padding:14px 16px;margin:6px 0 22px;border-radius:var(--r2);background:var(--accent-weak);border:1px solid #C44C3833}
-  .ubann .ic{color:var(--accent)}
+  /* update banner + guided card: MONO. The one legitimate accent-solid primary for this
+     view is the banner's Download & install button (D11 — at most one per view); every
+     other surface here — banner fill/icon, guide card, its icon, its own CTA, and the
+     "update available" pill — stays neutral, no accent fill. */
+  .ubann{display:flex;align-items:center;gap:16px;padding:16px 16px;margin:8px 0 24px;border-radius:var(--r2);background:var(--wash);border:1px solid var(--rule)}
+  .ubann .ic{color:var(--muted)}
   .ubann .ut{flex:1}
   .ubann .ut b{font-weight:640}
-  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:1px}
+  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:2px}
   /* guided install card */
-  .guide{margin-top:22px;padding:20px 22px}
+  .guide{margin-top:24px;padding:20px 24px}
   .guide-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
   .guide-h h3{font-size:15px;font-weight:640;margin:0}
   .guide-h .ver{margin-left:2px;color:var(--muted)}
   .guide-h .btn{margin-left:auto}
   .steps{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
-  .steps li{display:flex;gap:14px;padding:12px 4px;border-top:1px solid var(--line)}
-  .steps li .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--sunken);border:1px solid var(--line-strong);color:var(--muted);font-weight:640;font-size:12px;display:flex;align-items:center;justify-content:center}
-  .steps li .stx{padding-top:1px}
+  .steps li{display:flex;gap:16px;padding:12px 4px;border-top:1px solid var(--rule)}
+  .steps li .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--wash);border:1px solid var(--rule-strong);color:var(--muted);font-weight:640;font-size:12px;display:flex;align-items:center;justify-content:center}
+  .steps li .stx{padding-top:2px}
   .steps li .stx b{font-weight:590}
   .steps li .stx .d{color:var(--muted);font-size:12.5px;margin-top:2px}
-  .guide-foot{margin-top:16px;padding-top:14px;border-top:1px solid var(--line);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
-  .guide-foot .ic{width:14px;height:14px;color:var(--faint)}
+  .guide-foot{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
+  .guide-foot .ic{width:14px;height:14px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -129,7 +136,6 @@
   <a href="reports.html"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
   <a href="settings.html" class="on"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
   <span class="sp"></span>
-  <div class="stat"><div class="k">Version</div><div class="v tnum">2026.6.24</div><a href="#">Update ready · 2026.7.1 <svg class="ic"><use href="#i-arrow"/></svg></a></div>
 </nav>
     <div class="view">
 
@@ -144,7 +150,7 @@
       <div class="group">Version</div>
       <div class="srow">
         <div class="lhs"><div class="nm">Current version</div></div>
-        <div class="rhs"><span class="ver">2026.6.24</span><span class="pill accent">update available</span></div>
+        <div class="rhs"><span class="ver">2026.6.24</span><span class="pill">update available</span></div>
       </div>
       <div class="srow">
         <div class="lhs"><div class="nm">Check for updates</div><div class="ds">Last checked 9:12 AM</div></div>
@@ -157,9 +163,9 @@
 
       <div class="card guide">
         <div class="guide-h">
-          <svg class="ic" style="color:var(--accent)"><use href="#i-download"/></svg>
+          <svg class="ic" style="color:var(--muted)"><use href="#i-download"/></svg>
           <h3>Guided install</h3><span class="ver">2026.7.1</span>
-          <button class="btn primary"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install 2026.7.1</button>
+          <button class="btn"><svg class="ic"><use href="#i-download"/></svg> Download &amp; install 2026.7.1</button>
         </div>
         <ol class="steps">
           <li><span class="n">1</span><div class="stx"><b>Download the new version</b><div class="d">~64 MB</div></div></li>

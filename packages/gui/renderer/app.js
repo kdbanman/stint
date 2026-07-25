@@ -670,14 +670,15 @@ function selectedEntries() {
   return [...selected].map((id) => byId.get(id)).filter(Boolean);
 }
 
-// §06 R3: the Merge action bar. It is hidden until at least two entries are selected —
-// a single row has nothing to merge into — and labels itself with the live count.
+// §06 R3 (design.html V5): the merge selection bar. It is hidden until at least two entries
+// are selected — a single row has nothing to merge into — and the live count reads in the
+// "N selected" chip; the Merge button's label is static (set once in index.html).
 function renderMergeBar() {
   const bar = $('merge-bar');
   if (!bar) return;
   const n = selected.size;
   bar.hidden = n < 2;
-  if (n >= 2) $('merge-go').textContent = `Merge ${n} entries`;
+  if (n >= 2) $('merge-count').textContent = `${n} selected`;
 }
 
 function emptyState() {
@@ -1545,7 +1546,12 @@ async function openEntryForm(row, e) {
   row.classList.add('editing');
   const host = $('entry-form-host');
   host.appendChild(form);
-  host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // design.html D10/A06: the courtesy scroll is motion, so reduced-motion collapses it to a jump
+  // (the CSS half — the reduced-motion media block in styles.css — cannot reach a JS scroll).
+  host.scrollIntoView({
+    block: 'nearest',
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
   form.querySelector('.edit-desc').focus();
 
   // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
@@ -2566,8 +2572,9 @@ function clientRow(c, projects) {
   for (const p of projects.filter((p) => !p.archived)) list.appendChild(projectRow(p));
   for (const p of projects.filter((p) => p.archived)) list.appendChild(archivedProjectRow(p));
   // §07: the Add-project affordance sits at the foot of the client's own project list, in line
-  // with the projects — so it reads as "create a project here", under this client. The accent
-  // rides only the "+" (the rationed create signal).
+  // with the projects — so it reads as "create a project here", under this client. Its "+"
+  // icon reads muted like every icon-only affordance (design.html D16 — accent only when the
+  // item is active).
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'proj-add';
