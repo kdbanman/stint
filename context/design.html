@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Design</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:860px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  ul{margin:0 0 14px;padding-left:22px;color:var(--ink-soft)}
+  li{margin-bottom:6px}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td.term{font-family:var(--mono);font-size:13px;color:var(--ink);white-space:nowrap;font-weight:600}
+  .chip{display:inline-block;width:13px;height:13px;border-radius:3px;border:1px solid var(--rule-strong);vertical-align:-2px;margin-right:7px}
+  .rid{font-family:var(--mono);font-size:12px;color:var(--muted);font-weight:600;margin-right:8px;white-space:nowrap}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){.sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}.toc ol{columns:1}}
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">the&nbsp;look,&nbsp;made&nbsp;law &nbsp;·&nbsp; tt v1</div>
+    </div>
+    <div class="mast-meta">Design · Calm · Warm Paper · normative · light mode</div>
+  </header>
+
+  <p class="lede">The visual system, as requirements. Colour, type, spacing, components, and the
+  accessibility floors — each a rule a change can be checked against, not a vibe a change can drift
+  from.</p>
+
+  <p>PRD §12 owns what the GUI <em>does</em> — views, behavior, layout topology. This doc owns how
+  every surface <em>looks</em>: the tokens, the component grammar, and the numeric floors. The
+  mockups under <code>mockups/</code> illustrate this spec (PRD §18); where a mockup and this doc
+  disagree, this doc wins. Values live in <code>design.tokens.json</code> — this doc names the rules,
+  that file carries the numbers, and nothing else does.</p>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><span class="tn">01</span><a href="#s01">Tokens — one source of truth</a></li>
+      <li><span class="tn">02</span><a href="#s02">Principles</a></li>
+      <li><span class="tn">03</span><a href="#s03">Colour roles</a></li>
+      <li><span class="tn">04</span><a href="#s04">Type ramp</a></li>
+      <li><span class="tn">05</span><a href="#s05">Layout — grid, radii, elevation</a></li>
+      <li><span class="tn">06</span><a href="#s06">Component grammar</a></li>
+      <li><span class="tn">07</span><a href="#s07">Accessibility floors</a></li>
+      <li><span class="tn">08</span><a href="#s08">How this is verified</a></li>
+      <li><span class="tn">09</span><a href="#s09">Sources</a></li>
+    </ol>
+  </nav>
+
+  <section id="s01">
+    <div class="eyebrow"><span class="n">01</span>Tokens</div>
+    <h2>One source of truth</h2>
+    <p><span class="rid">D01</span><strong>Two layers.</strong> <code>design.tokens.json</code>
+    (W3C DTCG format) holds primitive scales — Radix Colors light-mode <code>sand</code>,
+    <code>tomato</code>, <code>red</code>, <code>grass</code>, <code>amber</code>, adopted wholesale —
+    and a semantic layer aliasing one step each. Surfaces reference <strong>semantic tokens only</strong>;
+    a raw scale step or hex literal in a mockup or the app is a defect.</p>
+    <p><span class="rid">D02</span><strong>Generated, never copied.</strong> A generator
+    (<code>scripts/gen-tokens.mjs</code>) writes the CSS custom-property block between
+    <code>/* STINT-TOKENS */</code> markers in every mockup and in
+    <code>packages/gui/renderer/styles.css</code>. Hand-editing inside the markers is a defect; a
+    guard test asserts the generated blocks match the tokens file and stays wired (process.html —
+    protect the guard).</p>
+    <p><span class="rid">D03</span><strong>Room for dark.</strong> The scales carry documented dark
+    counterparts upstream; v1 ships light-only. Dark mode is a tracked opportunity, not a partial
+    presence — no dark token may ship before the whole mode does.</p>
+  </section>
+
+  <section id="s02">
+    <div class="eyebrow"><span class="n">02</span>Principles</div>
+    <h2>Calm · Warm Paper</h2>
+    <p>Six principles govern every rule below. Built on Fluent 2's discipline — light, depth, motion,
+    material, scale — with the showy parts dialed off for a calm, local, single-user tool.</p>
+    <ul>
+      <li><strong>One rationed accent on a quiet canvas.</strong> Near-neutral surfaces; the clay
+      accent marks the one thing that matters in a view — its primary action and the live running
+      state. A signal, never decoration.</li>
+      <li><strong>Depth, not tint.</strong> A region rises by a soft shadow alone, never a coloured
+      or bordered box. One elevation ladder; never nest cards.</li>
+      <li><strong>The UI speaks for itself.</strong> Every element earns its pixels; when shape,
+      position, or state carry the meaning, the words go.</li>
+      <li><strong>Small type ramp, tabular time.</strong> Hierarchy from size + weight, never colour
+      or italics; every clock and duration in tabular numerals.</li>
+      <li><strong>Spacing on the grid, generous air.</strong> Every pad, gap, and margin on the 4px
+      grid (§05); radii a fixed trio.</li>
+      <li><strong>One control per choice-shape.</strong> Toggle = on/off · segmented = ≤4 exclusive
+      peers · select = many. Line icons only — never emoji.</li>
+    </ul>
+  </section>
+
+  <section id="s03">
+    <div class="eyebrow"><span class="n">03</span>Colour</div>
+    <h2>Colour roles</h2>
+    <p><span class="rid">D04</span>Each semantic token has one job; using a token outside its role is
+    a defect. Contrast figures are computed against the WCAG 2.2 formula and enforced (§07, §08).</p>
+    <table>
+      <tr><th>Token</th><th>Step</th><th>Role</th><th>Contrast</th></tr>
+      <tr><td class="term"><span class="chip" style="background:#fdfdfc"></span>paper</td><td>sand·1</td><td>App/window surface</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#f9f9f8"></span>sidebar</td><td>sand·2</td><td>Nav rail surface</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#f1f0ef"></span>wash</td><td>sand·3</td><td>Sunken component background</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#e9e8e6"></span>hover</td><td>sand·4</td><td>Hover wash</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#e2e1de"></span>canvas</td><td>sand·5</td><td>Backdrop behind the window (docs/mockups)</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#dad9d6"></span>rule</td><td>sand·6</td><td>Subtle separator</td><td>decorative</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#bcbbb5"></span>rule-strong</td><td>sand·8</td><td>Field/control border (§07 — fields always labeled)</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#8d8d86"></span>faint</td><td>sand·9</td><td><strong>Decorative &amp; disabled only.</strong> Never readable text; icon-only affordances use <code>muted</code></td><td>3.3:1</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#63635e"></span>muted</td><td>sand·11</td><td>Secondary text</td><td>5.9:1 on paper</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#21201c"></span>ink</td><td>sand·12</td><td>Primary text</td><td>16.0:1 on paper</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#e54d2e"></span>accent</td><td>tomato·9</td><td>Non-text signal: icons, running marks, focus ring</td><td>3.8:1 non-text</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#d13415"></span>accent-solid</td><td>tomato·11</td><td>Filled primary-action background, white label</td><td>5.0:1 white-on</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#d13415"></span>accent-ink</td><td>tomato·11</td><td>Accent text on paper/sidebar</td><td>4.9:1</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#feebe7"></span>accent-weak</td><td>tomato·3</td><td>Weak accent fill — never a surface for accent text (§06 selection rule)</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#2a7e3b"></span>run</td><td>grass·11</td><td>Running-state text</td><td>5.0:1 / 4.5:1</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#46a758"></span>run-dot</td><td>grass·9</td><td>The running dot — always beside a text label</td><td>paired</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#e9f6e9"></span>run-weak</td><td>grass·3</td><td>Running pill background</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#4f3422"></span>flag</td><td>amber·12</td><td>Warn/advisory text</td><td>11.2:1 / 10.5:1</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#fff7c2"></span>flag-bg</td><td>amber·3</td><td>Warn advisory background</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#f3d673"></span>flag-line</td><td>amber·6</td><td>Warn advisory border</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#ce2c31"></span>danger</td><td>red·11</td><td>Refused-write / destructive text</td><td>5.1:1 / 4.5:1</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#feebec"></span>danger-weak</td><td>red·3</td><td>Refused-write background</td><td>—</td></tr>
+    </table>
+    <p><span class="rid">D05</span><strong>Semantic colour is paired colour.</strong> Every semantic
+    state carries a word or icon beside its colour (the run dot beside “running”, the worded warn
+    pill) — hierarchy and state never ride on colour alone.</p>
+  </section>
+
+  <section id="s04">
+    <div class="eyebrow"><span class="n">04</span>Type</div>
+    <h2>Type ramp</h2>
+    <p><span class="rid">D06</span>Five roles; hierarchy from size + weight (450 / 590 / 640 / 680)
+    only. System font stacks (<code>font.sans</code>, <code>font.num</code>) — the app reads as the
+    platform it runs on.</p>
+    <table>
+      <tr><th>Role</th><th>Spec</th><th>Rule</th></tr>
+      <tr><td class="term">Clock</td><td>22–38px · 680 · <code>font.num</code> · tnum</td><td>Every clock and duration: monospace, tabular — digits never jitter. Timer-view clock 38px; strip clock 22px.</td></tr>
+      <tr><td class="term">Title</td><td>17–18px · 640</td><td>View &amp; panel titles.</td></tr>
+      <tr><td class="term">Body strong</td><td>13px · 590</td><td>Labels &amp; list primary.</td></tr>
+      <tr><td class="term">Body</td><td>13px · 450</td><td>Default interface text.</td></tr>
+      <tr><td class="term">Caption</td><td>12px · muted</td><td>Secondary &amp; meta. The smallest readable text is 11px; readable text below 11px is a defect.</td></tr>
+    </table>
+  </section>
+
+  <section id="s05">
+    <div class="eyebrow"><span class="n">05</span>Layout</div>
+    <h2>Grid, radii, elevation</h2>
+    <p><span class="rid">D07</span><strong>Spacing grid.</strong> Every padding, gap, and margin is a
+    multiple of 4px, with 2px permitted as the sub-4 half-step (legal: 2, 4, 8, 12, 16…). Component
+    intrinsic heights are free (a 34px button is legal; its 11px side padding is not — that's 12px).
+    Alignment comes from the grid, not from per-view pixel nudging.</p>
+    <p><span class="rid">D08</span><strong>Radius trio.</strong> 8px controls · 12px cards · 16px
+    window &amp; overlays. No fourth radius.</p>
+    <p><span class="rid">D09</span><strong>One elevation ladder.</strong> canvas → card → raised →
+    popover → modal (<code>shadow.*</code> tokens). A surface sits exactly one rung above what it
+    covers; depth is the only "this is a layer" signal — never a tint or decorative border.</p>
+    <p><span class="rid">D10</span><strong>Motion.</strong> State changes ~120ms; nothing moves
+    without meaning; no parallax, no decorative transitions. Under
+    <code>prefers-reduced-motion</code>, transitions collapse to instant.</p>
+  </section>
+
+  <section id="s06">
+    <div class="eyebrow"><span class="n">06</span>Components</div>
+    <h2>Component grammar</h2>
+    <p><span class="rid">D11</span><strong>Accent discipline.</strong> At most one accent-filled
+    (<code>accent-solid</code>) primary action per view — the single most-likely action. Everything
+    else is secondary (paper + border), ghost, or danger. Clickable text carries the neutral button
+    treatment; inert text never does.</p>
+    <p><span class="rid">D12</span><strong>Selection ≠ accent.</strong> A chosen thing lifts —
+    a raised paper chip with a shadow (the segmented idiom) — it does not turn accent. This includes
+    the nav rail: the active item is a lifted chip whose <em>icon</em> may take accent; its label
+    stays ink. (<code>accent-weak</code> backs non-selection accents only: pills, weak fills.)</p>
+    <p><span class="rid">D13</span><strong>Fields.</strong> One border (<code>rule-strong</code>),
+    one radius (8px), one focus idiom: <code>accent</code> border + the 3px ring. Every field carries
+    a visible label (this is also the §07 border-contrast exemption). Placeholder text uses
+    <code>muted</code>, never <code>faint</code>.</p>
+    <p><span class="rid">D14</span><strong>Pills &amp; tags</strong> are the only pill-shaped
+    elements; their colour is semantic (run / flag / accent), never decorative.</p>
+    <p><span class="rid">D15</span><strong>Inline messages</strong> (PRD §12 R21): a
+    <code>warn</code> advisory (flag tokens) is allowed-but-flagged — the write saved; an
+    <code>err</code> (danger tokens) is a refused write — the form stays open, nothing changed. Two
+    palettes so an advisory never reads as a hard block.</p>
+    <p><span class="rid">D16</span><strong>Icons.</strong> One line family (the <code>#i-*</code>
+    symbol set), 1.6px stroke, <code>currentColor</code>; icons inherit text colour and take accent
+    only when their item is active. Icon-only affordances use <code>muted</code>, never
+    <code>faint</code>, and carry an accessible name.</p>
+  </section>
+
+  <section id="s07">
+    <div class="eyebrow"><span class="n">07</span>Accessibility</div>
+    <h2>Floors — WCAG 2.2 AA, as checkable rules</h2>
+    <table>
+      <tr><th>ID</th><th>Rule</th><th>Floor</th><th>Checked by</th></tr>
+      <tr><td class="term">A01</td><td>Readable text on its permitted surfaces</td><td>4.5:1 (3:1 ≥24px or ≥18.66px bold)</td><td>computed over token pairs</td></tr>
+      <tr><td class="term">A02</td><td>Meaningful non-text: focus ring, icon-only affordances, unpaired state marks</td><td>3:1</td><td>computed + JUDGE</td></tr>
+      <tr><td class="term">A03</td><td>Interactive target size</td><td>≥24×24px (or 24px spacing exception)</td><td>JUDGE</td></tr>
+      <tr><td class="term">A04</td><td>Focus visible on every interactive element, never fully obscured</td><td>the D13 ring idiom</td><td>JUDGE</td></tr>
+      <tr><td class="term">A05</td><td>Colour never the sole signal</td><td>D05 pairing</td><td>JUDGE</td></tr>
+      <tr><td class="term">A06</td><td>Reduced motion honored</td><td>D10</td><td>static check</td></tr>
+    </table>
+    <p><strong>Recorded exemptions</strong> (WCAG-sanctioned, listed so they stay deliberate):
+    disabled controls (A01 does not apply); the run-dot when paired with its label (D05); field
+    borders where the field carries a visible label (D13) — the boundary is not the sole identifier;
+    purely decorative separators (<code>rule</code>).</p>
+  </section>
+
+  <section id="s08">
+    <div class="eyebrow"><span class="n">08</span>Verification</div>
+    <h2>How this is verified</h2>
+    <p><span class="rid">D17</span>Two mechanisms, split by what each can honestly prove
+    (process.html — green is meaningful):</p>
+    <ul>
+      <li><strong>Computed checks</strong> — token parity (generated blocks match
+      <code>design.tokens.json</code>), the A01/A02 contrast floors over the permitted token pairs,
+      and the reduced-motion guard. Cheap, exact, on the PR path.</li>
+      <li><strong>Rendered comparison</strong> — composition, layout, and look-and-feel are judged
+      against the mockups via the JUDGE apparatus over captured screenshots
+      (<code>acceptance/criteria/judge-rubric.md</code>), including the A03/A04/A05 floors.</li>
+    </ul>
+    <p>A mockup that has drifted from this spec is a bug (PRD §18). The per-view × per-state coverage
+    of what gets rendered and judged lives in <code>acceptance/criteria/STATES.md</code>.</p>
+  </section>
+
+  <section id="s09">
+    <div class="eyebrow"><span class="n">09</span>Sources</div>
+    <h2>Sources</h2>
+    <p>One line each; the working corpus and audit checklists live with the
+    <code>design-audit</code> skill, loaded only when an audit runs.</p>
+    <table>
+      <tr><th>Rule family</th><th>Source</th></tr>
+      <tr><td>Colour scales &amp; step roles</td><td>Radix Colors (radix-ui/colors, MIT)</td></tr>
+      <tr><td>Accessibility floors</td><td>WCAG 2.2 AA (1.4.3, 1.4.11, 2.4.7, 2.5.8)</td></tr>
+      <tr><td>Light/depth/motion/material/scale discipline</td><td>Microsoft Fluent 2</td></tr>
+      <tr><td>Platform grammar (menu bar, windows, system font)</td><td>Apple HIG · Win32 notification-area guidance</td></tr>
+      <tr><td>State coverage (STATES.md)</td><td>Hurff's UI Stack</td></tr>
+      <tr><td>Token format</td><td>W3C Design Tokens Community Group, 2025.10</td></tr>
+    </table>
+  </section>
+
+  <footer class="foot">
+    <span>stint · design</span>
+    <span>normative · values in design.tokens.json · illustrated by mockups/</span>
+  </footer>
+
+</main>
+</body>
+</html>
