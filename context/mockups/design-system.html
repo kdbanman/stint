@@ -15,6 +15,7 @@
   --danger:#ce2c31;--danger-weak:#feebec;
   --r1:8px;--r2:12px;--r3:16px;
   --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
   --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
   --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
   --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
@@ -41,7 +42,7 @@
   .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
-  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
   /* view */
@@ -66,7 +67,7 @@
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
@@ -86,7 +87,7 @@
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
-  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:0 1px 2px rgba(74,52,24,.12);font-weight:590}
+  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
   /* Inline messages (PRD §12 R21). A .msg is a full-width notice at the point of action, one
      home for both semantics: .warn is the warn-not-block ADVISORY (an overlap that still saved,
      --flag tokens); .err is a refused-write BLOCK (--danger tokens) — the write did not land,
@@ -212,7 +213,7 @@
       <p class="rule"><b>Light — draw the eye, don't decorate.</b> Fluent uses light to guide attention (reveal highlight, focus glow). Our only "light" is the clay focus ring (<span class="tnum">--ring</span>) and the warm hover wash (<span class="tnum">--hover</span>). The single primary action is the brightest thing in a view; everything else stays quiet so the eye always lands in one place.</p>
     </div>
     <div class="panel">
-      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>). The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
+      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>), plus the chip lift (<span class="tnum">--sh-chip</span>) as the sub-card selection rung — the raised chip every chosen thing wears. The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
     </div>
   </div>
   <div class="two" style="margin-top:16px">
@@ -286,7 +287,7 @@
         <span class="toggle"><span class="sw on"><i></i></span> Toggle</span>
       </div>
       <div class="demos" style="margin-top:12px">
-        <a href="#" style="display:inline-flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);background:var(--paper);box-shadow:0 1px 2px rgba(74,52,24,.12);font-weight:590;color:var(--ink);text-decoration:none"><svg class="ic" style="color:var(--accent)"><use href="#i-clock"/></svg>Timer</a>
+        <a href="#" style="display:inline-flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);background:var(--paper);box-shadow:var(--sh-chip);font-weight:590;color:var(--ink);text-decoration:none"><svg class="ic" style="color:var(--accent)"><use href="#i-clock"/></svg>Timer</a>
       </div>
       <p class="rule" style="margin-top:16px"><b>Selection ≠ accent.</b> A chosen thing lifts — a raised paper chip with a shadow (the segmented idiom, and the nav rail's active item, shown above) — it never turns accent; only its icon may take the accent colour.</p>
     </div>

@@ -15,6 +15,7 @@
   --danger:#ce2c31;--danger-weak:#feebec;
   --r1:8px;--r2:12px;--r3:16px;
   --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
   --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
   --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
   --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
@@ -49,6 +50,8 @@
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
   .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  /* design.html D13: placeholder text reads muted, never faint */
+  ::placeholder{color:var(--muted)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
   /* card / tag / pill */
@@ -116,7 +119,7 @@
      above the block's own stacking context and the overlap band — nothing hides them.
      V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time
      label reads ink — accent-ink text on an accent-weak chip fails contrast. */
-  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
   .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 var(--r1) var(--r1);z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
   .overlap .otag{font-size:11px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:2px 8px}

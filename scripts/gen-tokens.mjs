@@ -27,7 +27,8 @@ const resolveValue = (tokens, value) => {
   const ref = /^\{([^}]+)\}$/.exec(value);
   if (!ref) return value;
   let node = tokens;
-  for (const key of ref[1].split('.')) node = node[key];
+  for (const key of ref[1].split('.')) node = node?.[key];
+  if (node?.$value === undefined) throw new Error(`token alias ${value}: no such token`);
   return node.$value;
 };
 
@@ -46,7 +47,9 @@ export function emitTokenBlock(tokens) {
   const groups = [];
   for (const [name, def] of Object.entries(tokens.semantic)) {
     if (name.startsWith('$')) continue;
-    const scale = /^\{color\.([a-z]+)\./.exec(def.$value)[1];
+    const scaleRef = /^\{color\.([a-z]+)\./.exec(def.$value);
+    if (!scaleRef) throw new Error(`semantic token ${name}: not a scale alias`);
+    const scale = scaleRef[1];
     if (!groups.length || groups[groups.length - 1].scale !== scale) groups.push({ scale, decls: [] });
     groups[groups.length - 1].decls.push(`--${name}:${resolveValue(tokens, def.$value)}`);
   }
@@ -68,7 +71,8 @@ export function emitTokenBlock(tokens) {
   // lives here, beside the only place it becomes CSS
   lines.push('  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);');
 
-  // the elevation ladder, one shadow per line, tokens-file order (card → raised → pop → modal → win)
+  // the elevation ladder, one shadow per line, tokens-file order (chip → card → raised → pop →
+  // modal → win; chip is the D12 selection lift below card, not a layer rung)
   for (const [name, def] of Object.entries(tokens.shadow)) {
     if (name.startsWith('$')) continue;
     lines.push(`  --sh-${name}:${def.$value};`);

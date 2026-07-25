@@ -1,7 +1,8 @@
 /**
- * GOLD — the design-layer guard (design.html D01/D02, A01/A02, A06; transition PR #132).
+ * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A06;
+ * transition PR #132).
  *
- * Three computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
+ * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
  *   1. D02 token parity — every mockup and styles.css carries EXACTLY the block the generator
  *      emits from context/design.tokens.json between its STINT-TOKENS markers. The block comes
@@ -10,23 +11,28 @@
  *      survive it.
  *   2. D01 no-raw-palette-hex — a palette value written as a hex literal outside the markers is
  *      a copy that will silently rot when the tokens change. styles.css is additionally held to
- *      a full no-hex rule (semantic tokens only) with one documented exception below.
+ *      a full no-hex rule (semantic tokens only). The hex scan is deliberately blind to rgb()/
+ *      hsl() re-encodings of a palette value — a copyist writes what the tokens file shows
+ *      (hex); chasing colour-space conversions would buy noise, not protection.
  *   3. A01/A02 contrast floors — recomputed with the WCAG 2.2 relative-luminance formula from
  *      the tokens file (never trusted from a table), over the permitted token pairs design.html
  *      §03 names, plus the prohibited pairs that must stay unusable.
- *
  *   4. D04/D16 faint-is-never-text — `color: var(--faint)` survives only on the sanctioned
- *      disabled-state selectors; everything readable migrated to `muted` (G10).
+ *      disabled-state selectors; everything readable reads `muted` (G10).
+ *   5. D07 spacing grid, D06 readable-text floor, D13 placeholder colour — declaration-scoped
+ *      static scans over styles.css and every mockup's <style> blocks: every padding/margin/gap
+ *      px value sits on the 4px grid (2px as the half-step), no font-size declares below 11px,
+ *      and styles.css carries the one ::placeholder rule colouring var(--muted).
  *
- * Deliberately out of scope: D07 spacing and D08 radii (their AC is JUDGE — a numeric grid scan
- * would block the transition's intermediate commits).
+ * Deliberately out of scope: D08 radii — their AC is JUDGE, and the two recorded off-trio radii
+ * (the progress track, the calendar checkbox) are a pending design.html exemption question, not
+ * scan targets.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — plain-JS apparatus module, no type declarations on purpose.
+// @ts-expect-error — plain-JS apparatus module, no type declarations on purpose.
 import { emitTokenBlock } from '../../../scripts/gen-tokens.mjs';
 
 const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
@@ -141,8 +147,7 @@ describe('no raw palette hex outside the generated block (design.html D01)', () 
     const parts = splitOnMarkers(stylesCss);
     expect(parts).not.toBeNull();
     const hexes = parts?.outside.match(HEX_RE) ?? [];
-    // No exceptions: the last sanctioned literal (the picker "me" block's white label) died
-    // with the V3 restyle to accent-weak + ink labels.
+    // No exceptions — every colour in the app resolves through a semantic token.
     expect(hexes).toEqual([]);
   });
 
@@ -171,7 +176,11 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     ['danger', 'danger-weak', TEXT_FLOOR],
     ['flag', 'paper', TEXT_FLOOR],
     ['flag', 'flag-bg', TEXT_FLOOR],
-    ['accent', 'paper', NON_TEXT_FLOOR], // non-text signal: icons, running marks, focus ring
+    // Non-text signal: icons, running marks, focus. A02's 3:1 floor is carried by the
+    // FULL-STRENGTH accent — the D13 focus BORDER (and icon ink) — which is the pair computed
+    // here; the focus HALO (--ring) paints only a 35% mix and is a redundant echo around that
+    // passing border, not the focus indicator of record.
+    ['accent', 'paper', NON_TEXT_FLOOR],
   ];
   // pairs the spec prohibits BECAUSE they fail the text floor; if a token change ever lifted
   // one above 4.5 the prohibition (and this table) would need a deliberate revisit
@@ -216,6 +225,65 @@ describe('faint is never readable text (design.html D04/D16)', () => {
       if (!allowed.includes(selector)) offenders.push(selector);
     }
     expect(offenders, 'faint used as text colour outside the disabled allowlist').toEqual([]);
+  });
+});
+
+// ---- D07/D06/D13 declaration-scoped scans ------------------------------------------------
+// A surface's scannable CSS is its <style> blocks (mockups) or the whole file (styles.css),
+// with comments stripped first so quoted CSS in prose (a 1.6px stroke width, an example
+// declaration) never reaches the parser.
+const surfaceCss = (): Array<[name: string, css: string]> => [
+  ...mockupNames.map((f): [string, string] => {
+    const text = readFileSync(join(repoRoot, 'context/mockups', f), 'utf8');
+    // group 1 is non-optional in the pattern, so a match guarantees it
+    const css = [...text.matchAll(/<style[^>]*>([^]*?)<\/style>/g)].map((m) => m[1]!).join('\n');
+    return [`context/mockups/${f}`, css.replace(/\/\*[^]*?\*\//g, '')];
+  }),
+  ['packages/gui/renderer/styles.css', stylesCss.replace(/\/\*[^]*?\*\//g, '')],
+];
+
+describe('spacing grid (design.html D07)', () => {
+  // Declaration-scoped: a spacing property matches only directly after `{` or `;`, and only
+  // the longhands whose px values the grid governs. Shorthand values split per-longhand
+  // ("8px 12px" checks both). Non-px tokens (auto, %, em, var(), calc() innards) pass through
+  // untouched — the grid is a rule about literal px spacing, and intrinsic sizes stay free.
+  const SPACING_DECL =
+    /(?:^|[;{])\s*(?:padding|margin|gap|row-gap|column-gap|(?:padding|margin)-(?:top|right|bottom|left))\s*:\s*([^;}]+)/g;
+  const onGrid = (px: number): boolean => px === 0 || px === 2 || px % 4 === 0;
+
+  it('every padding/margin/gap px value is 0, 2, or a multiple of 4, on every surface', () => {
+    for (const [name, css] of surfaceCss()) {
+      const offenders: string[] = [];
+      for (const decl of css.matchAll(SPACING_DECL)) {
+        // group 1 is non-optional in the pattern, so a match guarantees it
+        for (const token of decl[1]!.trim().split(/\s+/)) {
+          const px = /^-?(\d*\.?\d+)px$/.exec(token);
+          if (px && !onGrid(Math.abs(parseFloat(px[1]!)))) offenders.push(decl[0].trim());
+        }
+      }
+      expect(offenders, `${name}: spacing declaration off the 4px grid`).toEqual([]);
+    }
+  });
+});
+
+describe('readable-text floor (design.html D06) and placeholder colour (D13)', () => {
+  it('no font-size declaration below 11px on any surface', () => {
+    // The type ramp's floor: the smallest readable text is 11px. No allowlist — a genuinely
+    // decorative case would earn an explicit entry here with its reason; none exists.
+    for (const [name, css] of surfaceCss()) {
+      const offenders = [...css.matchAll(/(?:^|[;{])\s*font-size\s*:\s*([^;}]+)/g)]
+        // group 1 is non-optional in the pattern, so a match guarantees it
+        .map((m) => m[1]!.trim())
+        .filter((v) => {
+          const px = /^(\d*\.?\d+)px\b/.exec(v);
+          return !!px && parseFloat(px[1]!) < 11;
+        });
+      expect(offenders, `${name}: font-size below the 11px readable floor`).toEqual([]);
+    }
+  });
+
+  it('styles.css paints placeholder text muted via one ::placeholder rule', () => {
+    expect(stylesCss).toMatch(/::placeholder\s*\{\s*color:\s*var\(--muted\);?\s*\}/);
   });
 });
 

@@ -42,7 +42,7 @@
     {
       "item": "IN_WINDOW_TIMER",
       "pass": true,
-      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}; idle strip {\"present\":true,\"idle\":true,\"clock\":\"00:00:00\",\"state\":\"idle\",\"desc\":\"\"}",
+      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"clockPx\":\"22px\",\"clockTnum\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}; idle strip {\"present\":true,\"idle\":true,\"clock\":\"00:00:00\",\"state\":\"idle\",\"desc\":\"\"}",
       "screenshot": "timer-view.png"
     },
     {
@@ -54,7 +54,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\"}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24T21:35:53\"}; grip drag → {\"startLive\":\"2026-06-24T20:35\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24T21:35:53\"}; grip drag → {\"startLive\":\"2026-06-24T20:35\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -78,7 +78,7 @@
     {
       "item": "ACCENT_SOLID_BUDGET",
       "pass": true,
-      "justification": "≤1 accent-solid fill per view (D11): timer=[#timer-stop]; entries=[none]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; running Timer view carries exactly its Stop primary=true",
+      "justification": "≤1 accent-solid fill per view (D11): timer=[#timer-stop]; entries=[none]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; running Timer view carries exactly its Stop primary=true (count 1)",
       "screenshot": "main-running.png"
     },
     {
@@ -186,7 +186,7 @@
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
-      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\",\"svg.[object SVGAnimatedString]\",\"use.[object SVGAnimatedString]\"]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}; rename/archive writes render each record exactly once (issue #66, no duplicate data-id): {\"clientCount\":2,\"projectCount\":3,\"tagCount\":2,\"clientNames\":[\"Acme Corp\",\"Initech\"],\"tagNames\":[\"deep\",\"billing\"],\"dupClientIds\":[],\"dupProjectIds\":[],\"dupTagIds\":[]}; empty reference data instructs (No clients yet / No tags yet): {\"clientsText\":\"No clients yetAdd a client, or run tt client add.\",\"tagsText\":\"No tags yetAdd a tag, or run tt tag add.\",\"clientRows\":0,\"tagRows\":0}",
+      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[],\"unnamedIconButtons\":[]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}; rename/archive writes render each record exactly once (issue #66, no duplicate data-id): {\"clientCount\":2,\"projectCount\":3,\"tagCount\":2,\"clientNames\":[\"Acme Corp\",\"Initech\"],\"tagNames\":[\"deep\",\"billing\"],\"dupClientIds\":[],\"dupProjectIds\":[],\"dupTagIds\":[]}; empty reference data instructs (No clients yet / No tags yet): {\"clientsText\":\"No clients yetAdd a client, or run tt client add.\",\"tagsText\":\"No tags yetAdd a tag, or run tt tag add.\",\"clientRows\":0,\"tagRows\":0}",
       "screenshot": "main-clients.png"
     },
     {
@@ -276,7 +276,7 @@
     {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 105 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, centre ≥24px from every neighbour)=[entries:#search 185x21 nearest 52px; timer:#le-bill 13x13 nearest 109px; settings:button.set-toggle 38x22 nearest 60px]",
+      "justification": "A03 sweep over 105 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
       "screenshot": "main-target-size.png"
     },
     {

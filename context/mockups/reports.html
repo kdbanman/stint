@@ -15,6 +15,7 @@
   --danger:#ce2c31;--danger-weak:#feebec;
   --r1:8px;--r2:12px;--r3:16px;
   --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
   --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
   --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
   --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
@@ -43,7 +44,7 @@
   .nav a:hover{background:var(--hover)}
   /* D12/V7: selection ≠ accent — the active nav item lifts as a raised paper chip;
      only its icon takes accent, the label stays ink. */
-  .nav a.on{background:var(--paper);box-shadow:0 1px 2px rgba(74,52,24,.12);font-weight:590;color:var(--ink)}
+  .nav a.on{background:var(--paper);box-shadow:var(--sh-chip);font-weight:590;color:var(--ink)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
   /* view */
@@ -68,7 +69,7 @@
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}

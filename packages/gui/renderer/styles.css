@@ -36,6 +36,7 @@
   --danger:#ce2c31;--danger-weak:#feebec;
   --r1:8px;--r2:12px;--r3:16px;
   --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
   --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
   --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
   --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
@@ -455,14 +456,15 @@ s {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* design.html D12: the active item is a raised paper chip — surface lift + the shared
-   chip-lift shadow, ink label. Only its icon (below) takes the accent; the chip and label
-   never do (accent-ink on accent-weak was the prohibited 4.33:1 pair). */
+/* design.html D12: the active item is a raised paper chip — surface lift + the chip-lift
+   shadow (--sh-chip, the ladder's sub-card selection rung), ink label. Only its icon (below)
+   takes the accent; the chip and label never do (accent-ink on accent-weak is a prohibited
+   pair — 4.33:1, below the text floor). */
 .nav-item.active {
   background: var(--paper);
   color: var(--ink);
   font-weight: 590;
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
+  box-shadow: var(--sh-chip);
 }
 .nav-item.active .ic { color: var(--accent); }
 
@@ -818,6 +820,9 @@ input[type="search"]:focus:not(:focus-visible),
 select:focus:not(:focus-visible),
 textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 
+/* design.html D13: placeholder text reads muted, never faint — one rule for every field. */
+::placeholder { color: var(--muted); }
+
 /* empty state instructs rather than decorates (§12 R5). */
 .empty,
 .view-placeholder {
@@ -986,21 +991,20 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .merge-bar .cap { flex: 1; }
 .merge-bar[hidden] { display: none; }
-/* design.html D12 (mock main.html .pill.chip): the raised-chip pill variant — the selection
-   count reads as a lifted chip: ink text on paper with the shared chip-lift shadow, no
-   border. The base .pill above is the uppercase archived marker, so the chip variant also
-   restores the mock pill's plain-case 11px geometry. */
-.pill.chip {
+/* design.html D12 (mock main.html .pill.chip): the merge-selection count reads as a lifted
+   chip — ink text on paper with the chip-lift shadow (--sh-chip), no border. Named .sel-count
+   rather than the mockups' .pill.chip: the app's base .pill is the uppercase archived marker,
+   so sharing the class would mean a nine-declaration reset; the mockups keep their own
+   neutral .pill base, where the compound class costs nothing. */
+.sel-count {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 590;
   color: var(--ink);
   background: var(--paper);
-  border-color: transparent;
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
-  font-weight: 590;
-  font-size: 11px;
-  text-transform: none;
-  letter-spacing: normal;
-  margin: 0;
+  border-radius: 999px;
   padding: 2px 8px;
+  box-shadow: var(--sh-chip);
 }
 
 /* §06 R3: the disagreeing-merge conflict prompt is the modal `.editor.conflict-prompt`
@@ -1069,7 +1073,9 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .project-name { font-size: 13px; color: var(--ink); }
 .project-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
-/* The Add-project row sits in line with the projects; the accent rides only the "+" glyph. */
+/* The Add-project row sits in line with the projects. Its "+" icon inherits the base
+   `button .ic` muted ink (design.html D16 — icons take accent only when their item is
+   active; a create affordance at rest is not active). */
 .proj-add {
   display: inline-flex;
   align-items: center;
@@ -1084,7 +1090,6 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--muted);
   padding: 8px 0 2px;
 }
-.proj-add .ic { width: 15px; height: 15px; color: var(--accent); }
 .proj-add:hover { color: var(--ink); }
 .proj-add[hidden] { display: none; }
 
@@ -1220,12 +1225,13 @@ button.danger:hover { background: var(--danger-weak); }
   box-shadow: none;
 }
 .seg .seg-btn:hover:not(.on) { background: transparent; color: var(--ink); }
-/* The chosen segment is a RAISED CHIP — surface lift + shadow, ink text. Not the accent. */
+/* The chosen segment is a RAISED CHIP — surface lift + the --sh-chip shadow, ink text. Not
+   the accent. */
 .seg .seg-btn.on {
   background: var(--paper);
   color: var(--ink);
   font-weight: 590;
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
+  box-shadow: var(--sh-chip);
 }
 
 /* §09 R1: the date-range preset chips (six, incl Custom…). The active chip is a raised
@@ -1245,13 +1251,14 @@ button.danger:hover { background: var(--danger-weak); }
   box-shadow: none;
 }
 .presets .preset:hover:not(.on) { background: var(--hover); color: var(--ink); }
-/* The active range chip — a raised paper chip (surface lift), deliberately NOT the accent. */
+/* The active range chip — a raised paper chip (surface lift), deliberately NOT the accent.
+   Same selection idiom as the segments, so the same --sh-chip lift. */
 .presets .preset.on {
   background: var(--paper);
   border-color: var(--rule-strong);
   color: var(--ink);
   font-weight: 590;
-  box-shadow: var(--sh-card);
+  box-shadow: var(--sh-chip);
 }
 
 /* The custom from/to inputs, revealed only for the Custom chip. */
@@ -1548,10 +1555,6 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .editor .iconbtn:hover,
 .iconbtn:hover { background: var(--hover); color: var(--ink); }
-/* A create affordance keeps the accent as its sole signal, but at icon weight — no heavy pill
-   (the rationed accent rides the one "+" that makes a new thing). */
-.iconbtn.create { color: var(--accent); }
-.iconbtn.create:hover { background: var(--accent-weak); color: var(--accent-ink); }
 .editor .iconbtn .ic,
 .iconbtn .ic { width: 16px; height: 16px; }
 /* body — the field column */
@@ -1681,9 +1684,9 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-d.stp-mut { color: transparent; cursor: default; }
 .stp-d:hover { background: var(--hover); }
-/* the selected day lifts as a raised paper chip (design.html D12 — selection ≠ accent; accent
-   text on an accent fill was also the prohibited 3.87:1 pair). */
-.stp-d.stp-sel { background: var(--paper); color: var(--ink); font-weight: 590; box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12); }
+/* the selected day lifts as a raised paper chip (design.html D12 — selection ≠ accent; white
+   text on the raw accent is also a prohibited pair, 3.87:1). */
+.stp-d.stp-sel { background: var(--paper); color: var(--ink); font-weight: 590; box-shadow: var(--sh-chip); }
 .stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
 
 /* single-day column with hour lines */
@@ -1724,8 +1727,9 @@ button.danger:hover { background: var(--danger-weak); }
   position: absolute; left: 0; right: 0; bottom: -1px; height: 12px;
   cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
 }
-/* the resize grip bar — accent-coloured like the start grip's outline (the drag affordances
-   are where the accent signal lives now that the fill is weak); pill radius (D14). */
+/* the resize grip bar — accent-coloured like the start grip's outline (the block's fill is
+   the weak accent, so the drag affordances carry the full-strength accent signal); pill
+   radius (D14). */
 .stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 999px; background: var(--accent); display: block; }
 /* §05 R06 (G8) — the RUNNING entry on the picker track: a start with no end yet. The block
    dissolves into the future via a transparency mask (mockups/timer.html .block.me.open) —
@@ -2040,7 +2044,7 @@ body.popover { background: var(--canvas); margin: 0; }
   flex: none;
 }
 .step.done .n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
-/* Kept off-trio radius (proposed design.html D08 exemption): the 7px-tall progress track —
+/* 4px — the recorded design.html D08 exemption: the 7px-tall progress track —
    8px would exceed half the box and turn the track into a pill, changing the affordance. */
 .step .bar { width: 200px; height: 7px; border-radius: 4px; background: var(--wash); border: 1px solid var(--rule); overflow: hidden; }
 /* §15 accent discipline (pinned by the renderer-static guard): the guided panel chrome stays
@@ -2276,7 +2280,7 @@ body.popover { background: var(--canvas); margin: 0; }
   margin: 0;
   appearance: none;
   -webkit-appearance: none;
-  /* Kept off-trio radius (proposed design.html D08 exemption): 8px on a 16px checkbox is
+  /* 4px — the recorded design.html D08 exemption: 8px on a 16px checkbox is
      half the box — it would read as a radio/circle, not a checkbox (mock main.html agrees). */
   border-radius: 4px;
   border: 1.5px solid var(--rule-strong);

@@ -2572,8 +2572,9 @@ function clientRow(c, projects) {
   for (const p of projects.filter((p) => !p.archived)) list.appendChild(projectRow(p));
   for (const p of projects.filter((p) => p.archived)) list.appendChild(archivedProjectRow(p));
   // §07: the Add-project affordance sits at the foot of the client's own project list, in line
-  // with the projects — so it reads as "create a project here", under this client. The accent
-  // rides only the "+" (the rationed create signal).
+  // with the projects — so it reads as "create a project here", under this client. Its "+"
+  // icon reads muted like every icon-only affordance (design.html D16 — accent only when the
+  // item is active).
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'proj-add';
