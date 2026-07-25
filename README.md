@@ -119,10 +119,16 @@ npm run build
 npm test                 # PROP · GOLD · BDD · integration · parity
 npm run judge            # GUI screenshots scored against the JUDGE rubric
 npm run evidence         # regenerates acceptance/evidence/cli-transcript.md
+npm run tokens           # regenerates the CSS token blocks from context/design.tokens.json
 npm run verify:no-network
 npm run metrics          # celebratory SLOC + documentation census (--out FILE to save)
 npm run metrics:check    # reconcile-only gate: fails if a file escapes categorization
 ```
+
+`npm run tokens` rewrites the CSS block between the `STINT-TOKENS` markers in
+every mockup and in `packages/gui/renderer/styles.css` from
+`context/design.tokens.json`; a guard test asserts the blocks match the tokens
+file and that the contrast floors hold, so the block is never hand-edited.
 
 `npm run metrics` walks every git-tracked file, buckets it
 (implementation / tests / verification / requirements / design / AI context /
