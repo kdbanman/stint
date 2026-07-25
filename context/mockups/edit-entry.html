@@ -5,52 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Stint — Entry editor (mockup)</title>
 <style>
-  :root{
-    --paper:#FDFDFC;--canvas:#EAE8E3;--sidebar:#F6F5F2;--sunken:#F2F1ED;--hover:#ECEBE5;
-    --ink:#221F1C;--muted:#6B645D;--faint:#A39B92;--line:#E9E6E0;--line-strong:#D6D1C9;
-    --accent:#C44C38;--accent-ink:#9E3829;--accent-weak:#F8E9E5;
-    --run:#5E8C5A;--run-weak:#ECF2E7;--warn-ink:#8A6320;--warn-bg:#F8EFD8;--warn-line:#E7D6AC;
-    --danger:#B23B2B;--danger-weak:#F8E9E4;
-    --r1:8px;--r2:12px;--r3:16px;
-    --ring:0 0 0 3px #C44C3833;
-    --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);--sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);--sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);--sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);--sh-win:0 30px 80px rgba(50,34,14,.22);
-    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
-    --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
-  }
+/* STINT-TOKENS start — generated from context/design.tokens.json; do not edit by hand */
+:root{
+  --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
+  --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
+  --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
+  --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
+  --danger:#ce2c31;--danger-weak:#feebec;
+  --r1:8px;--r2:12px;--r3:16px;
+  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
+  --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
+  --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
+  --sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);
+  --sh-win:0 30px 80px rgba(50,34,14,.22);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+/* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* buttons */
-  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:var(--r1);border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:0 1px 2px #C44C3855}
-  .btn.primary:hover{background:#a83c2c}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff;box-shadow:0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent)}
+  .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:#fff}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
-  .btn.sm{height:30px;padding:0 11px;font-size:12px}
+  .btn.sm{height:30px;padding:0 12px;font-size:12px}
   /* toggle */
-  .toggle{display:inline-flex;align-items:center;gap:10px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:#d7cdba;position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .toggle{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
+  .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--accent)}.sw.on i{left:17px}
   /* fields */
-  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:6px}
-  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--line-strong);border-radius:var(--r1);padding:8px 11px;color:var(--ink)}
+  .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
   /* card / tag / pill */
-  .card{background:var(--paper);border:1px solid var(--line);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:999px;padding:2px 10px;display:inline-flex;align-items:center;gap:6px}
+  .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
+  .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
   .tag b{color:var(--faint);cursor:pointer;font-weight:400}
-  .pill{font-size:11px;border-radius:999px;padding:2px 10px;border:1px solid var(--line-strong);color:var(--muted);background:var(--sunken);white-space:nowrap}
-  .pill.run{color:var(--run);background:var(--run-weak);border-color:#5E8C5A44}
-  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run)}
+  .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
+  .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
+  .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
 
   body{display:flex;flex-direction:column;align-items:center;gap:44px;min-height:100vh;padding:52px 16px 64px}
@@ -62,67 +69,69 @@
   .f{margin-bottom:16px}.f:last-child{margin-bottom:0}
   .fw{width:100%}
   .lab-row{display:flex;align-items:baseline;justify-content:space-between}
-  .tagchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px}
+  .tagchips{display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px}
   .tagchips input{border:0;outline:0;flex:1;min-width:72px;font:inherit;font-size:12.5px;background:none}
 
   /* ── interval picker: month calendar + one-day timeline, inline ── */
-  .picker{flex:1;min-width:0;display:flex;gap:20px;border-left:1px solid var(--line);padding-left:24px}
+  .picker{flex:1;min-width:0;display:flex;gap:20px;border-left:1px solid var(--rule);padding-left:24px}
   .calcol{width:204px;flex:none}
   .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
   .cal-hd .m{font-size:13px;font-weight:640}
-  .cal-hd .nav2{display:flex;gap:6px}
-  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--sunken);border:1px solid var(--line);border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+  .cal-hd .nav2{display:flex;gap:4px}
+  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
   .cal-hd .nav2 .ic{width:14px;height:14px}
-  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-  .grid .dow{font-size:10px;color:var(--faint);text-align:center;padding:3px 0;text-transform:uppercase}
-  .grid .d{text-align:center;padding:5px 0;font-size:12px;border-radius:7px;cursor:pointer;color:var(--ink)}
+  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+  .grid .dow{font-size:10px;color:var(--faint);text-align:center;padding:4px 0;text-transform:uppercase}
+  .grid .d{text-align:center;padding:4px 0;font-size:12px;border-radius:7px;cursor:pointer;color:var(--ink)}
   .grid .d.mut{color:var(--faint)}
-  .grid .d:hover{background:var(--sunken)}
+  .grid .d:hover{background:var(--wash)}
   .grid .d.sel{background:var(--accent);color:#fff;font-weight:640}
 
   /* start/stop disclosure — collapsed to a tabular echo; expands to raw text fields
      that accept any timestamp, so a stop on a later date makes an overnight span */
-  .xp{display:inline-flex;align-items:center;gap:8px;margin-top:16px;border:0;background:none;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;padding:4px 8px 4px 6px;border-radius:6px}
+  .xp{display:inline-flex;align-items:center;gap:8px;margin-top:16px;border:0;background:none;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;padding:4px 8px 4px 4px;border-radius:6px}
   .xp:hover{background:var(--hover)}
   .xp .ic{width:13px;height:13px;color:var(--faint)}
   .xp .tnum{font-weight:590}
-  .xfields{margin-top:8px;padding-left:6px}
+  .xfields{margin-top:8px;padding-left:4px}
   .xfields .f{margin-bottom:12px}
 
   /* day timeline — viewport rests on working hours, scrolls the full 24 h */
   .daycol{flex:1;min-width:0}
   .daywrap{position:relative}
-  .dayview{height:352px;overflow-y:auto;overscroll-behavior:contain}
+  .dayview{height:330px;overflow-y:auto;overscroll-behavior:contain}
   .dayview::-webkit-scrollbar{width:6px}
-  .dayview::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:3px}
+  .dayview::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:3px}
   .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
-  .track{position:relative;height:768px;border-left:1px solid var(--line);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--line) 31px,var(--line) 32px)}
-  .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
+  .track{position:relative;height:720px;border-left:1px solid var(--rule);margin-left:52px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 29px,var(--rule) 29px,var(--rule) 30px)}
+  .hour{position:absolute;left:-52px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
   .block{position:absolute;left:6px;right:10px;border-radius:7px}
-  .block.other{background:var(--sunken);border:1px solid var(--line);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
+  .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
   /* a running entry has a start and no stop yet: the block dissolves into the future */
   .block.me.open{cursor:default;-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* time labels & grips live at track level (not inside the block) so they always sit
-     above the block's own stacking context and the overlap band — nothing hides them */
-  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+     above the block's own stacking context and the overlap band — nothing hides them.
+     V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time
+     label reads ink — accent-ink text on an accent-weak chip fails contrast. */
+  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
-  .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--warn-bg),var(--warn-bg) 7px,#f1e3bc 7px,#f1e3bc 14px);border-top:1px solid var(--warn-line);border-bottom:1px solid var(--warn-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:6px}
-  .overlap .otag{font-size:10.5px;color:var(--warn-ink);background:var(--paper);border:1px solid var(--warn-line);border-radius:999px;padding:1px 9px}
-  .phint{margin-top:10px;display:flex;justify-content:flex-end}
-  .snap{font-size:10px;background:var(--sunken);border:1px solid var(--line);border-radius:10px;padding:1px 9px;color:var(--faint)}
+  .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
+  .overlap .otag{font-size:10.5px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:1px 8px}
+  .phint{margin-top:8px;display:flex;justify-content:flex-end}
+  .snap{font-size:10px;background:var(--wash);border:1px solid var(--rule);border-radius:10px;padding:1px 8px;color:var(--faint)}
 
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
      surfaced here at the point of action; the card stays open and unchanged. --danger block. */
-  .msg{font-size:12px;border-radius:var(--r1);padding:7px 11px;border:1px solid;margin:0 24px 12px}
+  .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin:0 24px 12px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
 
   /* footer */
-  .foot{padding:16px 24px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;background:var(--sunken)}
+  .foot{padding:16px 24px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:var(--wash)}
   .foot .grp{display:flex;gap:8px;align-items:center}
-  .gate{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;color:var(--ink)}
+  .gate{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink)}
   .gate .ic{width:14px;height:14px;color:var(--danger)}
   .gate b{font-weight:590}
 
@@ -171,16 +180,16 @@
         <div class="daywrap">
           <div class="dayview">
             <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:32px">01:00</span><span class="hour tnum" style="top:64px">02:00</span><span class="hour tnum" style="top:96px">03:00</span><span class="hour tnum" style="top:128px">04:00</span><span class="hour tnum" style="top:160px">05:00</span><span class="hour tnum" style="top:192px">06:00</span><span class="hour tnum" style="top:224px">07:00</span><span class="hour tnum" style="top:256px">08:00</span><span class="hour tnum" style="top:288px">09:00</span><span class="hour tnum" style="top:320px">10:00</span><span class="hour tnum" style="top:352px">11:00</span><span class="hour tnum" style="top:384px">12:00</span><span class="hour tnum" style="top:416px">13:00</span><span class="hour tnum" style="top:448px">14:00</span><span class="hour tnum" style="top:480px">15:00</span><span class="hour tnum" style="top:512px">16:00</span><span class="hour tnum" style="top:544px">17:00</span><span class="hour tnum" style="top:576px">18:00</span><span class="hour tnum" style="top:608px">19:00</span><span class="hour tnum" style="top:640px">20:00</span><span class="hour tnum" style="top:672px">21:00</span><span class="hour tnum" style="top:704px">22:00</span><span class="hour tnum" style="top:736px">23:00</span>
-              <div class="block other" style="top:336px;height:32px">Client call</div>
-              <div class="block other" style="top:544px;height:24px">Market research</div>
+              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
+              <div class="block other" style="top:315px;height:30px">Client call</div>
+              <div class="block other" style="top:510px;height:22.5px">Market research</div>
               <!-- the edited entry, stored 09:07:33–11:03:00: painted EXACTLY, off the 5-min
-                   grid (09:07:33 → 292px, 11:03 → 354px at 32px/hour) — never snapped on open -->
-              <div class="block me" style="top:292px;height:62px"></div>
-              <div class="overlap" style="top:336px;height:18px"><span class="otag">overlap 33m</span></div>
-              <span class="tlabel tnum" style="top:297px">09:07</span>
-              <span class="tlabel tnum" style="top:336px">11:03</span>
-              <span class="grip" style="top:351px"></span>
+                   grid (09:07:33 → 273.8px, 11:03 → 331.5px at 30px/hour) — never snapped on open -->
+              <div class="block me" style="top:273.8px;height:57.7px"></div>
+              <div class="overlap" style="top:315px;height:16.5px"><span class="otag">overlap 33m</span></div>
+              <span class="tlabel tnum" style="top:278.8px">09:07</span>
+              <span class="tlabel tnum" style="top:315px">11:03</span>
+              <span class="grip" style="top:328.5px"></span>
             </div>
           </div>
           <i class="fade t"></i><i class="fade b"></i>
@@ -228,16 +237,16 @@
         <div class="daywrap">
           <div class="dayview">
             <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:32px">01:00</span><span class="hour tnum" style="top:64px">02:00</span><span class="hour tnum" style="top:96px">03:00</span><span class="hour tnum" style="top:128px">04:00</span><span class="hour tnum" style="top:160px">05:00</span><span class="hour tnum" style="top:192px">06:00</span><span class="hour tnum" style="top:224px">07:00</span><span class="hour tnum" style="top:256px">08:00</span><span class="hour tnum" style="top:288px">09:00</span><span class="hour tnum" style="top:320px">10:00</span><span class="hour tnum" style="top:352px">11:00</span><span class="hour tnum" style="top:384px">12:00</span><span class="hour tnum" style="top:416px">13:00</span><span class="hour tnum" style="top:448px">14:00</span><span class="hour tnum" style="top:480px">15:00</span><span class="hour tnum" style="top:512px">16:00</span><span class="hour tnum" style="top:544px">17:00</span><span class="hour tnum" style="top:576px">18:00</span><span class="hour tnum" style="top:608px">19:00</span><span class="hour tnum" style="top:640px">20:00</span><span class="hour tnum" style="top:672px">21:00</span><span class="hour tnum" style="top:704px">22:00</span><span class="hour tnum" style="top:736px">23:00</span>
-              <div class="block other" style="top:336px;height:32px">Client call</div>
-              <div class="block other" style="top:544px;height:24px">Market research</div>
+              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
+              <div class="block other" style="top:315px;height:30px">Client call</div>
+              <div class="block other" style="top:510px;height:22.5px">Market research</div>
               <!-- the edited entry, stored 09:07:33–11:03:00: painted EXACTLY, off the 5-min
-                   grid (09:07:33 → 292px, 11:03 → 354px at 32px/hour) — never snapped on open -->
-              <div class="block me" style="top:292px;height:62px"></div>
-              <div class="overlap" style="top:336px;height:18px"><span class="otag">overlap 33m</span></div>
-              <span class="tlabel tnum" style="top:297px">09:07</span>
-              <span class="tlabel tnum" style="top:336px">11:03</span>
-              <span class="grip" style="top:351px"></span>
+                   grid (09:07:33 → 273.8px, 11:03 → 331.5px at 30px/hour) — never snapped on open -->
+              <div class="block me" style="top:273.8px;height:57.7px"></div>
+              <div class="overlap" style="top:315px;height:16.5px"><span class="otag">overlap 33m</span></div>
+              <span class="tlabel tnum" style="top:278.8px">09:07</span>
+              <span class="tlabel tnum" style="top:315px">11:03</span>
+              <span class="grip" style="top:328.5px"></span>
             </div>
           </div>
           <i class="fade t"></i><i class="fade b"></i>
@@ -279,11 +288,11 @@
         <div class="daywrap">
           <div class="dayview">
             <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:32px">01:00</span><span class="hour tnum" style="top:64px">02:00</span><span class="hour tnum" style="top:96px">03:00</span><span class="hour tnum" style="top:128px">04:00</span><span class="hour tnum" style="top:160px">05:00</span><span class="hour tnum" style="top:192px">06:00</span><span class="hour tnum" style="top:224px">07:00</span><span class="hour tnum" style="top:256px">08:00</span><span class="hour tnum" style="top:288px">09:00</span><span class="hour tnum" style="top:320px">10:00</span><span class="hour tnum" style="top:352px">11:00</span><span class="hour tnum" style="top:384px">12:00</span><span class="hour tnum" style="top:416px">13:00</span><span class="hour tnum" style="top:448px">14:00</span><span class="hour tnum" style="top:480px">15:00</span><span class="hour tnum" style="top:512px">16:00</span><span class="hour tnum" style="top:544px">17:00</span><span class="hour tnum" style="top:576px">18:00</span><span class="hour tnum" style="top:608px">19:00</span><span class="hour tnum" style="top:640px">20:00</span><span class="hour tnum" style="top:672px">21:00</span><span class="hour tnum" style="top:704px">22:00</span><span class="hour tnum" style="top:736px">23:00</span>
-              <div class="block other" style="top:240px;height:40px">Email + standup</div>
-              <div class="block me open" style="top:288px;height:320px"></div>
-              <span class="tlabel tnum" style="top:293px">09:00</span>
-              <span class="grip" style="top:285px"></span>
+              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
+              <div class="block other" style="top:225px;height:37.5px">Email + standup</div>
+              <div class="block me open" style="top:270px;height:300px"></div>
+              <span class="tlabel tnum" style="top:275px">09:00</span>
+              <span class="grip" style="top:267px"></span>
             </div>
           </div>
           <i class="fade t"></i><i class="fade b"></i>
@@ -299,6 +308,6 @@
 </div>
 
 <!-- rest each timeline viewport on working hours (07:00–18:00); the track scrolls the full 24 h -->
-<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=224</script>
+<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=210</script>
 </body>
 </html>
