@@ -12,14 +12,15 @@
 //
 // Classic script (window.STP) loaded alongside the bundled SU entry (dist/su.js) and
 // app.js. Pure DOM: no Node imports, no core-package import, no network (the renderer-static
-// guard asserts this). Accent discipline (§15): only the dragged "me" rectangle (.stp-block.me)
-// and the selected calendar day (.stp-d.stp-sel) carry the accent; every other control is
-// monochrome — the JUDGE ACCENT_DISCIPLINE probe sanctions `.stp-block.me` so the picker does
-// not trip the accent scan. There is no primary "Apply" button — the picker writes live and the
-// surrounding form's "Save entry" is the sole commit (G7).
+// guard asserts this). Accent discipline (design.html D11 / V3): the dragged "me" block is
+// accent-OUTLINED over the weak accent fill with ink labels (solid accent is reserved for
+// primary actions; the accent signal rides the block's outline and grips), and the selected
+// calendar day is a raised paper chip (design.html D12); every other control is monochrome.
+// There is no primary "Apply" button — the picker writes live and the surrounding form's
+// "Save entry" is the sole commit (G7).
 //
 // Mirrors context/mockups/edit-entry.html: a month calendar (pick the day) + a single-day
-// column with hour lines; the edited entry is a draggable accent rectangle (drag the BODY
+// column with hour lines; the edited entry is a draggable accent-outlined rectangle (drag the BODY
 // moves start+stop together, drag the BOTTOM handle resizes the stop, both 5-min snap);
 // other entries render gray, overlap regions render yellow (warn-only, never blocks the save).
 // Overnight (stop on a later day) is handled only via the text fields / the Start/Stop expander —
@@ -189,7 +190,7 @@ window.STP = (function () {
    * §05 R06 / §12 R14 (G8) — STP.openStartOnly({ host, startInput, otherEntries, settings })
    * — the Timer view's INLINE start-only disclosure. Renders the single-day track IN FLOW
    * into `host` (no backdrop, no dialog/modal chrome, no Apply): the running entry is the
-   * accent block fading into the future (`.stp-block.me.open`), with a START drag grip only
+   * accent-outlined block fading into the future (`.stp-block.me.open`), with a START drag grip only
    * — no bottom resize grip, no end label, no end echo field. Every grip drag 5-min-snaps
    * and writes the bound start input LIVE (writeBack fires input+change, so the live-edit
    * strip's existing debounced commit path picks it up). This path is STRUCTURALLY incapable

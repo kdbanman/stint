@@ -15,10 +15,11 @@
  *      the tokens file (never trusted from a table), over the permitted token pairs design.html
  *      §03 names, plus the prohibited pairs that must stay unusable.
  *
+ *   4. D04/D16 faint-is-never-text — `color: var(--faint)` survives only on the sanctioned
+ *      disabled-state selectors; everything readable migrated to `muted` (G10).
+ *
  * Deliberately out of scope: D07 spacing and D08 radii (their AC is JUDGE — a numeric grid scan
- * would block the transition's intermediate commits), and the faint-as-text CSS scan (the ~27
- * legacy `color: var(--faint)` sites are the next conformance wave's work; add that scan when
- * they land so it guards the end state, not the migration).
+ * would block the transition's intermediate commits).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -140,10 +141,9 @@ describe('no raw palette hex outside the generated block (design.html D01)', () 
     const parts = splitOnMarkers(stylesCss);
     expect(parts).not.toBeNull();
     const hexes = parts?.outside.match(HEX_RE) ?? [];
-    // The one sanctioned literal: the picker "me" block's white label (#fff on the solid accent
-    // fill). The V3 divergence resolution restyles that block to accent-weak + ink labels —
-    // when it lands, this allowlist shrinks to [].
-    expect(hexes).toEqual(['#fff']);
+    // No exceptions: the last sanctioned literal (the picker "me" block's white label) died
+    // with the V3 restyle to accent-weak + ink labels.
+    expect(hexes).toEqual([]);
   });
 
   it('the app carries no reference to a retired custom property', () => {
@@ -197,6 +197,25 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
         `${fg} on ${bg} now passes 4.5:1 — revisit the design.html prohibition`,
       ).toBeLessThan(TEXT_FLOOR);
     }
+  });
+});
+
+describe('faint is never readable text (design.html D04/D16)', () => {
+  // The one sanctioned faint-as-text use: a disabled control (the WCAG A01 exemption
+  // design.html §07 records). Anything else must read `muted` — faint on paper is 3.3:1.
+  const allowed = ['.report-field:disabled'];
+
+  it('styles.css paints color: var(--faint) only on the sanctioned disabled selectors', () => {
+    // Comments can quote CSS (the doctrine header does), so strip them before parsing rules.
+    const css = stylesCss.replace(/\/\*[^]*?\*\//g, '');
+    const offenders: string[] = [];
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      if (!/color:\s*var\(--faint\)/.test(rule[2]!)) continue;
+      const selector = rule[1]!.trim().replace(/\s+/g, ' ');
+      if (!allowed.includes(selector)) offenders.push(selector);
+    }
+    expect(offenders, 'faint used as text colour outside the disabled allowlist').toEqual([]);
   });
 });
 

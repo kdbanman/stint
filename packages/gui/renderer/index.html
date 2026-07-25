@@ -268,10 +268,16 @@
                 <input id="el-tag" class="report-field" type="text" placeholder="Filter by tag" autocomplete="off" aria-label="Filter by tag" />
               </div>
             </div>
-            <main id="entries"></main>
+            <!-- §06 R3 (design.html D11 / V5): the merge SELECTION BAR — above the calendar,
+                 mock main.html's .selbar: the "N selected" raised-chip count pill, a flex
+                 spacer, and a NEUTRAL Merge button (Entries' single accent-solid primary is
+                 the add form's Save entry, so Merge never takes .primary). -->
             <div id="merge-bar" class="merge-bar" hidden>
-              <button id="merge-go" type="button" class="primary">Merge entries</button>
+              <span class="pill chip" id="merge-count"></span>
+              <span class="cap"></span>
+              <button id="merge-go" type="button" class="small"><svg class="ic" aria-hidden="true"><use href="#i-swap" /></svg>Merge</button>
             </div>
+            <main id="entries"></main>
           </section>
 
           <!-- §07/§12: the Clients view -->
