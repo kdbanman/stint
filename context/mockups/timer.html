@@ -29,12 +29,12 @@
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .win{max-width:1040px;margin:32px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
   .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
@@ -46,7 +46,7 @@
   .nav .sp{flex:1}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
@@ -64,11 +64,11 @@
      surfaced on the Timer view, beside the card controls (the "Stop appears dead" surface, #61). */
   .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin-top:12px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   /* toggle */
@@ -85,16 +85,16 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   .view{gap:20px}
-  .runner{padding:20px 22px}
+  .runner{padding:20px 24px}
   .r-top{display:flex;align-items:flex-start;gap:24px}
   .clock{font-size:38px;font-weight:680;letter-spacing:-.015em;line-height:.95;font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted)}
   .clock.run{color:var(--accent-ink)}
@@ -103,16 +103,16 @@
   .r-desc .d{font-size:16px;font-weight:600}
   .r-desc .m{color:var(--muted);font-size:12.5px;margin-top:4px}
   .r-act{display:flex;gap:8px;flex:none}
-  .r-edit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:16px;margin-top:18px;padding-top:18px;border-top:1px solid var(--rule)}
+  .r-edit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
   .timefield{position:relative}
   .timefield .field{padding-right:32px;font-family:var(--num);font-size:12.5px}
   .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted);cursor:pointer}
   .timefield .cal .ic{width:15px;height:15px}
-  .timefield .cal.on{color:var(--ink);background:var(--wash);box-shadow:inset 0 0 0 1px var(--rule);border-radius:6px;padding:4px;right:6px;bottom:6px}
-  .r-row2{display:flex;align-items:center;gap:18px;margin-top:15px;flex-wrap:wrap}
+  .timefield .cal.on{color:var(--ink);background:var(--wash);box-shadow:inset 0 0 0 1px var(--rule);border-radius:var(--r1);padding:4px;right:6px;bottom:6px}
+  .r-row2{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
   .tagchips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
   .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
-  .pad{padding:20px 22px}
+  .pad{padding:20px 24px}
   .ph{font-size:14px;font-weight:640;margin:0 0 16px}
   /* the favorites rail is the only card beside the runner while a timer runs — the start
      panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51) */
@@ -122,7 +122,7 @@
   .fav .fi{flex:1;min-width:0}
   .fav .fn{font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fav .fm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-  .fav .kebab{color:var(--faint);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
+  .fav .kebab{color:var(--muted);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
   .favfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--muted)}
   /* start disclosure — the calendar affordance expands the day timeline inline, in
      flow below the Start field; the viewport rests on working hours (07:00–18:00)
@@ -138,17 +138,17 @@
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
   .track{position:relative;height:768px;border-left:1px solid var(--rule);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--rule) 31px,var(--rule) 32px)}
-  .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
-  .block{position:absolute;left:6px;right:10px;border-radius:7px}
+  .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:11px;color:var(--muted);transform:translateY(-6px)}
+  .block{position:absolute;left:6px;right:10px;border-radius:var(--r1)}
   .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);z-index:3}
   /* a running entry has a start and no stop yet: the block dissolves into the future */
   .block.me.open{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* the time label & start grip live at track level so nothing hides them */
-  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--accent-ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
   .phint{margin-top:12px;display:flex;justify-content:flex-end}
-  .snap{font-size:10px;background:var(--wash);border:1px solid var(--rule);border-radius:10px;padding:1px 8px;color:var(--faint)}
+  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;color:var(--muted)}
 </style>
 </head>
 <body>

@@ -29,12 +29,12 @@
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .win{max-width:1040px;margin:32px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
   .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
@@ -48,7 +48,7 @@
   .nav .sp{flex:1}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
@@ -62,7 +62,7 @@
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
   .btn.sm{height:30px;padding:0 12px;font-size:12px}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
@@ -75,13 +75,13 @@
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   /* settings rows + update flow */
   .view{gap:0}
   .sub{color:var(--muted);font-size:13px;margin:-8px 0 20px}
-  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);font-weight:640;margin:8px 0 2px}
-  .srow{display:flex;align-items:flex-start;gap:18px;padding:16px 2px;border-bottom:1px solid var(--rule)}
+  .group{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);font-weight:640;margin:8px 0 2px}
+  .srow{display:flex;align-items:flex-start;gap:16px;padding:16px 2px;border-bottom:1px solid var(--rule)}
   .srow .lhs{flex:1;min-width:0}
   .srow .nm{font-weight:590;font-size:13.5px}
   .srow .ds{color:var(--muted);font-size:12px;margin-top:4px}
@@ -91,13 +91,13 @@
      view is the banner's Download & install button (D11 — at most one per view); every
      other surface here — banner fill/icon, guide card, its icon, its own CTA, and the
      "update available" pill — stays neutral, no accent fill. */
-  .ubann{display:flex;align-items:center;gap:16px;padding:16px 16px;margin:6px 0 22px;border-radius:var(--r2);background:var(--wash);border:1px solid var(--rule)}
+  .ubann{display:flex;align-items:center;gap:16px;padding:16px 16px;margin:8px 0 24px;border-radius:var(--r2);background:var(--wash);border:1px solid var(--rule)}
   .ubann .ic{color:var(--muted)}
   .ubann .ut{flex:1}
   .ubann .ut b{font-weight:640}
-  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:1px}
+  .ubann .ut span{color:var(--muted);display:block;font-size:12px;margin-top:2px}
   /* guided install card */
-  .guide{margin-top:22px;padding:20px 22px}
+  .guide{margin-top:24px;padding:20px 24px}
   .guide-h{display:flex;align-items:center;gap:12px;margin-bottom:4px}
   .guide-h h3{font-size:15px;font-weight:640;margin:0}
   .guide-h .ver{margin-left:2px;color:var(--muted)}
@@ -105,11 +105,11 @@
   .steps{list-style:none;margin:16px 0 0;padding:0;display:flex;flex-direction:column;gap:2px}
   .steps li{display:flex;gap:16px;padding:12px 4px;border-top:1px solid var(--rule)}
   .steps li .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--wash);border:1px solid var(--rule-strong);color:var(--muted);font-weight:640;font-size:12px;display:flex;align-items:center;justify-content:center}
-  .steps li .stx{padding-top:1px}
+  .steps li .stx{padding-top:2px}
   .steps li .stx b{font-weight:590}
   .steps li .stx .d{color:var(--muted);font-size:12.5px;margin-top:2px}
   .guide-foot{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule);display:flex;align-items:center;gap:8px;color:var(--muted);font-size:12px}
-  .guide-foot .ic{width:14px;height:14px;color:var(--faint)}
+  .guide-foot .ic{width:14px;height:14px;color:var(--muted)}
 </style>
 </head>
 <body>
