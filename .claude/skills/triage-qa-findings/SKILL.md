@@ -103,7 +103,8 @@ For each issue, work out **where** to add coverage so the bug can't return,
 grounded in the real harness — never a generic "add a test." The recurring
 lesson from the GUI sweep: these are renderer-behavior bugs the suite
 structurally can't see — BDD/PROP run over core+tt with no DOM,
-`packages/gui/test/renderer-static.test.ts` only regex-matches source, and the
+`packages/gui/test/renderer-static.test.ts` holds only static-only contracts
+(banned APIs/glyphs, isolation, unique ids — issue #85), and the
 JUDGE recipes that *do* drive the real renderer often assert control-level facts
 or use fixtures too small to tell "filtered" from "show-all." Name the specific
 layer:
@@ -119,7 +120,9 @@ layer:
     actual renderer over a real store.
   - core contract / invariant → **BDD** (`features/*.feature`, runs core+tt),
     **PROP**, or **GOLD**.
-  - a cheap source-level backstop → `renderer-static.test.ts`.
+  - a static-only contract (banned API/glyph, isolation, structural invariant —
+    something a driven page cannot see) → `renderer-static.test.ts`; renderer
+    *behavior* never lands there (issue #85) — it gets a JUDGE scene.
 
 Point at the actual file and state what the new guard asserts. Where an existing
 guard *should* have caught it, say why it didn't and how to harden it — usually

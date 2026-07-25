@@ -63,35 +63,29 @@ function record(item, pass, justification, screenshot) {
   results.push({ item, pass, justification, screenshot });
 }
 
-async function main() {
-  mkdirSync(EVIDENCE, { recursive: true });
-  const exe = resolveChromium();
-  const browser = await chromium.launch({
-    executablePath: exe,
-    headless: true,
-    args: ['--no-sandbox', '--disable-gpu'],
-  });
-
-  // EMPTY_STATE — the empty main window instructs a concrete next action (§12 R5).
+// EMPTY_STATE — the empty main window instructs a concrete next action (§12 R5).
+async function sceneEmptyState(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const text = await page.textContent('.empty');
     await page.screenshot({ path: join(EVIDENCE, 'main-empty.png') });
     const ok = /tt start/.test(text) && /Ctrl\+Alt\+T/.test(text);
     record('EMPTY_STATE', ok, `empty state reads: ${JSON.stringify(text.trim())}`, 'main-empty.png');
   });
+}
 
-  // NAV_SHELL — §12 R3 (G7): the main window presents a persistent left-hand nav with the five
-  // views (Timer / Entries / Clients / Reports / Settings); the current view is highlighted and
-  // each item routes to its view. The MODIFIED req hardens two G7 guarantees beyond order +
-  // default-active + routing:
-  //   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
-  //     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
-  //     visible each time — no view escapes the shell.
-  //   FIXED_WIDTH_ON_RESIZE — the rail's measured width is byte-identical (168) across viewports
-  //     480/760/1200px while the `.views` column width changes, proving resize lands on the
-  //     content area, not the rail.
-  // All four facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
-  // and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
+// NAV_SHELL — §12 R3 (G7): the main window presents a persistent left-hand nav with the five
+// views (Timer / Entries / Clients / Reports / Settings); the current view is highlighted and
+// each item routes to its view. The MODIFIED req hardens two G7 guarantees beyond order +
+// default-active + routing:
+//   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
+//     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
+//     visible each time — no view escapes the shell.
+//   FIXED_WIDTH_ON_RESIZE — the rail's measured width is byte-identical (168) across viewports
+//     480/760/1200px while the `.views` column width changes, proving resize lands on the
+//     content area, not the rail.
+// All four facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
+// and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
+async function sceneNavShell(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const before = await page.evaluate(() => {
       const items = [...document.querySelectorAll('.nav-item')];
@@ -199,17 +193,19 @@ async function main() {
       'main-nav.png',
     );
   });
+}
 
-  // KEYBOARD_FOCUS — §12 R14 / §14: the keyboard-operability + focus pass. Every interactive
-  // control in the window must be reachable by Tab in reading order (the active element never
-  // gets trapped on <body> or goes null) AND show a visible, accent-disciplined focus ring when
-  // it holds keyboard focus. We drive the REAL renderer on both the empty and the running main
-  // window: collect the focusable controls (querySelectorAll over button / [tabindex] / a[href],
-  // minus the hidden ones), Tab-walk from <body>, and assert (a) the walk advances through every
-  // visible control with activeElement never null/stuck on body, and (b) each focused control,
-  // under :focus-visible (the keyboard-focus class Playwright's Tab walk triggers), paints a
-  // non-default ring (a real outline OR a box-shadow — not the UA `outline: none`). Captures
-  // main-focus.png with the primary toggle focused so the ring is visible evidence.
+// KEYBOARD_FOCUS — §12 R14 / §14: the keyboard-operability + focus pass. Every interactive
+// control in the window must be reachable by Tab in reading order (the active element never
+// gets trapped on <body> or goes null) AND show a visible, accent-disciplined focus ring when
+// it holds keyboard focus. We drive the REAL renderer on both the empty and the running main
+// window: collect the focusable controls (querySelectorAll over button / [tabindex] / a[href],
+// minus the hidden ones), Tab-walk from <body>, and assert (a) the walk advances through every
+// visible control with activeElement never null/stuck on body, and (b) each focused control,
+// under :focus-visible (the keyboard-focus class Playwright's Tab walk triggers), paints a
+// non-default ring (a real outline OR a box-shadow — not the UA `outline: none`). Captures
+// main-focus.png with the primary toggle focused so the ring is visible evidence.
+async function sceneKeyboardFocus(browser) {
   const focusWalk = async (page) => {
     // Tag every control that SHOULD receive focus — visible, not disabled, not removed from the
     // tab order — with a UNIQUE marker (data-focus-id). Identity is per-element, not by tag/class:
@@ -307,8 +303,10 @@ async function main() {
       'main-focus.png',
     );
   });
+}
 
-  // TRAY_COUNTUP (popover) — single running timer counting up; +~3s between captures (§12 R1).
+// TRAY_COUNTUP (popover) — single running timer counting up; +~3s between captures (§12 R1).
+async function sceneTrayCountup(browser) {
   await withPage(browser, runningState(), 'popover.html', async (page) => {
     const t1 = await page.textContent('#count');
     await page.screenshot({ path: join(EVIDENCE, 'popover-running-1.png') });
@@ -326,18 +324,20 @@ async function main() {
     const ok = t1 === '01:24:07' && delta === 3;
     record('TRAY_COUNTUP', ok, `popover count advanced ${t1} → ${t2} (+${delta}s)`, 'popover-running-2.png');
   });
+}
 
-  // TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
-  // surface. The tray's single left-click opens this popover; the dropdown action menu is
-  // removed (the tray's own click/right-click has no host headless — confirmed under MANUAL).
-  // The half that IS headless-checkable: every tray action lives IN the popover, and Switch is
-  // GONE (issue #34 — Start is the atomic stop-then-start, no separate verb). Drive the real
-  // popover renderer twice and assert the surviving actions are present and NO #switch survives —
-  //   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #open present, NO #switch;
-  //   idle snapshot:    #toggle reads 'Start', #open present, NO #switch.
-  // If Stop / Start / Open Stint is absent — or a #switch element reappears in EITHER state —
-  // this fails. Since the dropdown is gone, the popover MUST carry Stop/Start + Open Stint.
-  // Captures popover-tray-surface.png as the evidence that the popover is the one action surface.
+// TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
+// surface. The tray's single left-click opens this popover; the dropdown action menu is
+// removed (the tray's own click/right-click has no host headless — confirmed under MANUAL).
+// The half that IS headless-checkable: every tray action lives IN the popover, and Switch is
+// GONE (issue #34 — Start is the atomic stop-then-start, no separate verb). Drive the real
+// popover renderer twice and assert the surviving actions are present and NO #switch survives —
+//   running snapshot: #toggle reads 'Stop' (aria-pressed=true), #open present, NO #switch;
+//   idle snapshot:    #toggle reads 'Start', #open present, NO #switch.
+// If Stop / Start / Open Stint is absent — or a #switch element reappears in EITHER state —
+// this fails. Since the dropdown is gone, the popover MUST carry Stop/Start + Open Stint.
+// Captures popover-tray-surface.png as the evidence that the popover is the one action surface.
+async function sceneTrayPopoverSurface(browser) {
   await withPage(browser, runningState(), 'popover.html', async (page) => {
     const runningProbe = await page.evaluate(() => {
       const toggle = document.querySelector('#toggle');
@@ -390,20 +390,22 @@ async function main() {
       'popover-tray-surface.png',
     );
   });
+}
 
-  // IN_WINDOW_TIMER (main window) — §12 R04 + R14: the FULL Active-Timer card lives in the
-  // Timer view, and the Entries view keeps only a COMPACT STRIP that mirrors the running
-  // count-up/state/desc and links to the Timer view. Drive the real renderer on index.html
-  // with the running fixture and assert: (a) on the Timer view (reached by clicking the nav
-  // item) the full #timer-card clock reads the derived count-up and advances +3s across a
-  // pinned-clock step (same technique as TRAY_COUNTUP), shows the running state, carries the
-  // running description ('auth refactor') and the client/project label ('Client A / API'), and
-  // exposes a Stop control with NO Switch (Switch is removed — issue #34; the start-with-details
-  // form performs the atomic stop-then-start); and (b) on the Entries view the compact
-  // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
-  // Stop control (and never a #timer-switch). Fails if the full panel stayed on Entries, the
-  // card/strip placement regressed, or a #timer-switch reappeared. Captures timer-view.png (the
-  // full panel) and main-timer.png (the Entries strip).
+// IN_WINDOW_TIMER (main window) — §12 R04 + R14: the FULL Active-Timer card lives in the
+// Timer view, and the Entries view keeps only a COMPACT STRIP that mirrors the running
+// count-up/state/desc and links to the Timer view. Drive the real renderer on index.html
+// with the running fixture and assert: (a) on the Timer view (reached by clicking the nav
+// item) the full #timer-card clock reads the derived count-up and advances +3s across a
+// pinned-clock step (same technique as TRAY_COUNTUP), shows the running state, carries the
+// running description ('auth refactor') and the client/project label ('Client A / API'), and
+// exposes a Stop control with NO Switch (Switch is removed — issue #34; the start-with-details
+// form performs the atomic stop-then-start); and (b) on the Entries view the compact
+// #timer-strip mirrors the running count-up + state + description but carries NO full-panel
+// Stop control (and never a #timer-switch). Fails if the full panel stayed on Entries, the
+// card/strip placement regressed, or a #timer-switch reappeared. Captures timer-view.png (the
+// full panel) and main-timer.png (the Entries strip).
+async function sceneInWindowTimer(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     // Entries view (default) first: the compact strip mirrors the running timer and exposes no
     // full-panel Stop control (it lives on the Timer-view card only); no #timer-switch anywhere.
@@ -477,23 +479,25 @@ async function main() {
       'timer-view.png',
     );
   });
+}
 
-  // CROSS_VIEW_FRESHNESS — §12 R04 (issue #50 regression): the Active-Timer card mirrors
-  // `tt status` EVEN AFTER an Entries-toolbar control has been touched. The renderer latches a
-  // module flag once a range/filter/search control is used; pre-fix, load() early-returned into
-  // the entries-only query and never repainted the shared surfaces, so on the Timer view a
-  // Start click mutated the DB while the card stayed frozen on its idle face (the app's primary
-  // action looked dead). Drive the exact reported path over the idle list fixture: (a) touch an
-  // Entries-toolbar control (the Today range preset — window.__LIST_REQ__ records the query,
-  // proving the toolbar latched), (b) route to the Timer view (the card paints idle), (c) click
-  // Start — the toggle mock mutates the snapshot to a running open row (toggleStarts), exactly
-  // like main's toggleTimer over core — and assert WITHOUT any reload (a window marker set
-  // before the click must survive) that the card flips to running: state text 'running', the
-  // card carries .running, the idle-only start panel hides (§12 R05 / issue #51 — the Start
-  // affordance disappears with it) while the accented #timer-stop primary becomes visible,
-  // and the count-up ADVANCES (+3s across a pinned-clock step — live, not a stale paint).
-  // Fails if the card stays idle/frozen after the toolbar was touched — the exact #50
-  // symptom. Captures timer-cross-view.png.
+// CROSS_VIEW_FRESHNESS — §12 R04 (issue #50 regression): the Active-Timer card mirrors
+// `tt status` EVEN AFTER an Entries-toolbar control has been touched. The renderer latches a
+// module flag once a range/filter/search control is used; pre-fix, load() early-returned into
+// the entries-only query and never repainted the shared surfaces, so on the Timer view a
+// Start click mutated the DB while the card stayed frozen on its idle face (the app's primary
+// action looked dead). Drive the exact reported path over the idle list fixture: (a) touch an
+// Entries-toolbar control (the Today range preset — window.__LIST_REQ__ records the query,
+// proving the toolbar latched), (b) route to the Timer view (the card paints idle), (c) click
+// Start — the toggle mock mutates the snapshot to a running open row (toggleStarts), exactly
+// like main's toggleTimer over core — and assert WITHOUT any reload (a window marker set
+// before the click must survive) that the card flips to running: state text 'running', the
+// card carries .running, the idle-only start panel hides (§12 R05 / issue #51 — the Start
+// affordance disappears with it) while the accented #timer-stop primary becomes visible,
+// and the count-up ADVANCES (+3s across a pinned-clock step — live, not a stale paint).
+// Fails if the card stays idle/frozen after the toolbar was touched — the exact #50
+// symptom. Captures timer-cross-view.png.
+async function sceneCrossViewFreshness(browser) {
   await withPage(
     browser,
     listState(),
@@ -569,21 +573,23 @@ async function main() {
     },
     { toggleStarts: true },
   );
+}
 
-  // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
-  // Timer view renders the live clock reading the derived count-up (advances +3s across the
-  // pinned-clock step, not reset) with the live-edit-running strip present (no End input).
-  // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
-  // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
-  // container computes position: static — showing the running block with a START drag grip
-  // ONLY (no .stp-resize end grip, no end label, no end echo field) and the computed future
-  // transparency fade (mask-image gradient) dissolving the block toward the future; the
-  // snapshot's other same-day entries paint gray. Dragging the grip UP by a known pixel delta
-  // (-30px on the 720px/24h track = -60min) advances the raw #le-start text field LIVE by the
-  // snapped 5-min amount (the exact 21:35:53 → 20:35); the debounced commit then sends an `edit` patch over
-  // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
-  // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
-  // instants land on a deterministic local day/track geometry.
+// TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
+// Timer view renders the live clock reading the derived count-up (advances +3s across the
+// pinned-clock step, not reset) with the live-edit-running strip present (no End input).
+// Clicking the Start field's calendar affordance opens the inline START-ONLY picker
+// disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
+// container computes position: static — showing the running block with a START drag grip
+// ONLY (no .stp-resize end grip, no end label, no end echo field) and the computed future
+// transparency fade (mask-image gradient) dissolving the block toward the future; the
+// snapshot's other same-day entries paint gray. Dragging the grip UP by a known pixel delta
+// (-30px on the 720px/24h track = -60min) advances the raw #le-start text field LIVE by the
+// snapped 5-min amount (the exact 21:35:53 → 20:35); the debounced commit then sends an `edit` patch over
+// IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
+// open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
+// instants land on a deterministic local day/track geometry.
+async function sceneTimerView(browser) {
   {
     const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -703,18 +709,20 @@ async function main() {
     );
     await page.close();
   }
+}
 
-  // FUTURE_START_GUARD — §05 R06 / §03 / §16 (issue #61): a MISTYPED FUTURE start on the running
-  // entry must be REFUSED and surfaced WHERE it was typed, never the silent wedge the bug caused
-  // ("Stop appears dead"). Driving the REAL renderer over the future-start guard mock (edit rejects
-  // a start > now exactly as core's edit() does) plus the state-mutating toggle: typing a next-day
-  // instant into #le-start and letting the debounced live-edit commit fire raises the announced
-  // #timer-warning region with the reason and records NOTHING (window.__EDITED__ stays null) — the
-  // live-edit strip stays present and Stop is still there (the count-up never froze). Correcting the
-  // start to a valid PAST instant then commits cleanly (the warning clears, __EDITED__ carries the
-  // corrected startUtc with NO endUtc — the open row stays open), and clicking Stop flips the status
-  // to idle: the timer never wedged. Pinned to timezoneId 'UTC' so the typed instants map determin-
-  // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
+// FUTURE_START_GUARD — §05 R06 / §03 / §16 (issue #61): a MISTYPED FUTURE start on the running
+// entry must be REFUSED and surfaced WHERE it was typed, never the silent wedge the bug caused
+// ("Stop appears dead"). Driving the REAL renderer over the future-start guard mock (edit rejects
+// a start > now exactly as core's edit() does) plus the state-mutating toggle: typing a next-day
+// instant into #le-start and letting the debounced live-edit commit fire raises the announced
+// #timer-warning region with the reason and records NOTHING (window.__EDITED__ stays null) — the
+// live-edit strip stays present and Stop is still there (the count-up never froze). Correcting the
+// start to a valid PAST instant then commits cleanly (the warning clears, __EDITED__ carries the
+// corrected startUtc with NO endUtc — the open row stays open), and clicking Stop flips the status
+// to idle: the timer never wedged. Pinned to timezoneId 'UTC' so the typed instants map determin-
+// istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
+async function sceneFutureStartGuard(browser) {
   {
     const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -781,18 +789,20 @@ async function main() {
     );
     await page.close();
   }
+}
 
-  // FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
-  // per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
-  // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
-  // (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
-  // favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
-  // callable for each of the five favorite channels. The scene also DRIVES a pin and a rename
-  // TO COMPLETION through the INLINE name affordances (typed + committed on Enter) and asserts
-  // the rail repaints — Electron's renderer does not implement window.prompt, so a prompt-based
-  // flow would silently no-op in the packaged app (issue #52); this machine-scores the inline
-  // replacement end to end. Drive the real renderer twice (seeded + empty) and machine-score
-  // the deterministic sub-facts.
+// FAVORITES_RAIL — §05 R09 / §12 R14: the Timer view's pinned favorites rail renders one row
+// per FavoriteView (name + client/project/billable meta), each with a one-click Resume that
+// fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
+// (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
+// favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
+// callable for each of the five favorite channels. The scene also DRIVES a pin and a rename
+// TO COMPLETION through the INLINE name affordances (typed + committed on Enter) and asserts
+// the rail repaints — Electron's renderer does not implement window.prompt, so a prompt-based
+// flow would silently no-op in the packaged app (issue #52); this machine-scores the inline
+// replacement end to end. Drive the real renderer twice (seeded + empty) and machine-score
+// the deterministic sub-facts.
+async function sceneFavoritesRail(browser) {
   await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
@@ -900,9 +910,11 @@ async function main() {
       'timer-favorites.png',
     );
   });
+}
 
-  // ACCENT_DISCIPLINE — accent confined to the primary action and the running-state
-  // indicator (styles.css header / §07, §15); the rest of the chrome stays monochrome.
+// ACCENT_DISCIPLINE — accent confined to the primary action and the running-state
+// indicator (styles.css header / §07, §15); the rest of the chrome stays monochrome.
+async function sceneAccentDiscipline(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-running.png') });
     const probe = await page.evaluate(() => {
@@ -969,23 +981,25 @@ async function main() {
       'main-running.png',
     );
   });
+}
 
-  // CLICKABILITY — §15 R-clickability / G10: ONE clickability convention across the window.
-  // Over the running main window, walk every clickable text affordance and assert the
-  // convention deterministically:
-  //   POSITIVE — every clickable affordance (button:not(.primary), .nav-item, .nav-link,
-  //     a[href], [data-act]) carries a NON-transparent background OR a visible border, so
-  //     none reads as bare prose. Sanctioned sub-affordances (the in-chip .chip-x, the
-  //     .set-toggle knob, and any control nested inside an already-bordered .chip/.seg/
-  //     .presets) are whitelisted — the parent IS the affordance.
-  //   NEGATIVE — known inert text (.wordmark, .day-head, .entry .desc, .entry .time,
-  //     .summary) carries NO button-like pill fill (its backgroundColor stays transparent
-  //     or the page/wash colour, never the var(--paper)/var(--wash) affordance fill).
-  //   ACCENT-PER-VIEW — ONLY the sanctioned accent uses (button.primary / running state /
-  //     nav-item.active) carry the accent; the accent never leaks onto an ordinary clickable
-  //     affordance, and at least one primary action does carry it — the accent stays reserved
-  //     for the view's primary action(s) (the running view's Stop, mirrored on the card +
-  //     toolbar, are both the SAME primary Stop action).
+// CLICKABILITY — §15 R-clickability / G10: ONE clickability convention across the window.
+// Over the running main window, walk every clickable text affordance and assert the
+// convention deterministically:
+//   POSITIVE — every clickable affordance (button:not(.primary), .nav-item, .nav-link,
+//     a[href], [data-act]) carries a NON-transparent background OR a visible border, so
+//     none reads as bare prose. Sanctioned sub-affordances (the in-chip .chip-x, the
+//     .set-toggle knob, and any control nested inside an already-bordered .chip/.seg/
+//     .presets) are whitelisted — the parent IS the affordance.
+//   NEGATIVE — known inert text (.wordmark, .day-head, .entry .desc, .entry .time,
+//     .summary) carries NO button-like pill fill (its backgroundColor stays transparent
+//     or the page/wash colour, never the var(--paper)/var(--wash) affordance fill).
+//   ACCENT-PER-VIEW — ONLY the sanctioned accent uses (button.primary / running state /
+//     nav-item.active) carry the accent; the accent never leaks onto an ordinary clickable
+//     affordance, and at least one primary action does carry it — the accent stays reserved
+//     for the view's primary action(s) (the running view's Stop, mirrored on the card +
+//     toolbar, are both the SAME primary Stop action).
+async function sceneClickability(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-clickability.png') });
     const probe = await page.evaluate(() => {
@@ -1128,17 +1142,19 @@ async function main() {
       'main-clickability.png',
     );
   });
+}
 
-  // §12 R10: the flags-in-context scene is retired — the entries list is gone, so flags no longer
-  // live on a row. Overlap + slept now render as MARKERS on the readonly calendar (the `.ov` warn
-  // band w/ amount + the `.zz` hatch w/ the moon marker — asserted by CALENDAR_LAYOUT) and their
-  // DETAIL + the reversible subtract/restore control live in the unified editor (the overlap
-  // detail + Subtract/Restore + struck raw-vs-trimmed billable — asserted by UNIFIED_FORM). No
-  // main-flags.png; the successor evidence is main-calendar.png + main-edit.png.
+// §12 R10: the flags-in-context scene is retired — the entries list is gone, so flags no longer
+// live on a row. Overlap + slept now render as MARKERS on the readonly calendar (the `.ov` warn
+// band w/ amount + the `.zz` hatch w/ the moon marker — asserted by CALENDAR_LAYOUT) and their
+// DETAIL + the reversible subtract/restore control live in the unified editor (the overlap
+// detail + Subtract/Restore + struck raw-vs-trimmed billable — asserted by UNIFIED_FORM). No
+// main-flags.png; the successor evidence is main-calendar.png + main-edit.png.
 
-  // START_ATTRIBUTES — the main window's Start offers an optional inline form
-  // (description/client/project/tags/billable); the primary Start stays one-tap and the
-  // submitted payload carries every attribute over the start IPC (§05/§12 R1).
+// START_ATTRIBUTES — the main window's Start offers an optional inline form
+// (description/client/project/tags/billable); the primary Start stays one-tap and the
+// submitted payload carries every attribute over the start IPC (§05/§12 R1).
+async function sceneStartAttributes(browser) {
   await withPage(browser, startFormState(), 'index.html', async (page) => {
     // §12 R05: the start surface lives in the Timer view (the default route is Entries), so
     // route there first, then open the collapsed disclosure, fill the optional fields, submit.
@@ -1168,22 +1184,24 @@ async function main() {
       'main-start-form.png',
     );
   });
+}
 
-  // START_FORM — §12 R5: the start surface as a whole. The Start offers the inline attribute
-  // form (description / client / project / tags / billable) so a timer can start carrying its
-  // attributes immediately (the primary Start stays one-tap behind a disclosure). The surface
-  // is IDLE-ONLY (issue #51): while a timer runs the whole start panel (#toggle + #start-toggle
-  // + #start-form) is hidden, so the running Timer view offers only edit-or-stop — no Switch
-  // affordance either (issue #34; core's start remains the atomic stop-then-start for tt).
-  // The form's Billable box defaults per the §05 R07 client-keyed rule: it opens unchecked
-  // (no client), auto-checks when a client is typed, un-checks when it is cleared, and an
-  // UNTOUCHED box is omitted from the submitted payload so core derives the default — the
-  // same rule the one-tap #toggle start (a parameterless write) reaches in core. Two
-  // snapshots in one item: the idle form (startFormState) opened + its five controls present
-  // + the billable-default dance + an untouched submit carrying NO billable key + primary
-  // reads 'Start' + no #switch; and the running snapshot (runningState) where the start panel
-  // is HIDDEN (no visible #start-form / #start-toggle) and there is still no #switch element.
-  // Captures main-start-form.png (idle form) and main-start-form-running.png (running view).
+// START_FORM — §12 R5: the start surface as a whole. The Start offers the inline attribute
+// form (description / client / project / tags / billable) so a timer can start carrying its
+// attributes immediately (the primary Start stays one-tap behind a disclosure). The surface
+// is IDLE-ONLY (issue #51): while a timer runs the whole start panel (#toggle + #start-toggle
+// + #start-form) is hidden, so the running Timer view offers only edit-or-stop — no Switch
+// affordance either (issue #34; core's start remains the atomic stop-then-start for tt).
+// The form's Billable box defaults per the §05 R07 client-keyed rule: it opens unchecked
+// (no client), auto-checks when a client is typed, un-checks when it is cleared, and an
+// UNTOUCHED box is omitted from the submitted payload so core derives the default — the
+// same rule the one-tap #toggle start (a parameterless write) reaches in core. Two
+// snapshots in one item: the idle form (startFormState) opened + its five controls present
+// + the billable-default dance + an untouched submit carrying NO billable key + primary
+// reads 'Start' + no #switch; and the running snapshot (runningState) where the start panel
+// is HIDDEN (no visible #start-form / #start-toggle) and there is still no #switch element.
+// Captures main-start-form.png (idle form) and main-start-form-running.png (running view).
+async function sceneStartForm(browser) {
   await withPage(browser, startFormState(), 'index.html', async (page) => {
     // §12 R05: route to the Timer view (the start surface's home; the default route is
     // Entries), then open the disclosure and confirm every optional attribute control.
@@ -1275,15 +1293,17 @@ async function main() {
       'main-start-form.png',
     );
   });
+}
 
-  // RUNNING_SINGLE_ACTION — §12 R05 (issue #51): while a timer runs, the Timer view offers
-  // ONLY edit-or-stop of the running entry. The whole start panel is hidden — no visible
-  // #start-form, #start-toggle, or one-tap #toggle — so exactly ONE Description field paints
-  // (the live-edit strip's #le-desc; the Details form's #start-desc is gone with its panel),
-  // and the only primary action is Stop beside the live-edit strip. No "start another"
-  // affordance exists until the running entry is stopped (core's start stays the atomic
-  // stop-then-start for tt and programmatic callers, §05 R01 — only the GUI surfacing of a
-  // start control while running is removed).
+// RUNNING_SINGLE_ACTION — §12 R05 (issue #51): while a timer runs, the Timer view offers
+// ONLY edit-or-stop of the running entry. The whole start panel is hidden — no visible
+// #start-form, #start-toggle, or one-tap #toggle — so exactly ONE Description field paints
+// (the live-edit strip's #le-desc; the Details form's #start-desc is gone with its panel),
+// and the only primary action is Stop beside the live-edit strip. No "start another"
+// affordance exists until the running entry is stopped (core's start stays the atomic
+// stop-then-start for tt and programmatic callers, §05 R01 — only the GUI surfacing of a
+// start control while running is removed).
+async function sceneRunningSingleAction(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
@@ -1330,28 +1350,30 @@ async function main() {
       'timer-running-single-action.png',
     );
   });
+}
 
-  // UNIFIED_FORM_ADD — §12 R07 (G5/G7): the manual-add surface is the ONE unified entry form in
-  // ADD mode, inline in the Entries view (no modal). Drive the REAL renderer end to end and assert
-  // the requirement's gating facts:
-  //   (a) opening #add-toggle reveals a two-column form — LEFT: a 3-line multiline description
-  //       textarea + client + project SELECTs + a tag chip host + the billable toggle; RIGHT: the
-  //       inline interval picker (month calendar + single-day column) over the COLLAPSED Start/Stop
-  //       expander (raw text fields), and the form carries NO type=datetime-local input (G1);
-  //   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert),
-  //       and only the "me" rectangle + Save entry carry the accent (§15);
-  //   (c) DRAGGING the picker "me" block updates the form's start/stop state LIVE (the raw #add-from
-  //       /#add-to fields change, span preserved) — before any Save (G7);
-  //   (d) clicking Save entry is the SOLE commit — window.__ADDED__ carries the picked (post-drag)
-  //       fromLocal/toLocal PLUS description/client/project/tags/billable over the single `add` IPC,
-  //       the form closes, and the overlapping backfill raises the non-blocking overlap banner (§06 R4).
-  // Fails if the form is not the unified two-column form, still carries a datetime-local, the picker
-  // does not drive form state live, or Save is not the sole commit.
-  //
-  // The page is pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
-  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries, making
-  // the gray/overlap geometry deterministic; overlap:true makes the post-save WriteAck carry the
-  // overlap warning the inline banner surfaces.
+// UNIFIED_FORM_ADD — §12 R07 (G5/G7): the manual-add surface is the ONE unified entry form in
+// ADD mode, inline in the Entries view (no modal). Drive the REAL renderer end to end and assert
+// the requirement's gating facts:
+//   (a) opening #add-toggle reveals a two-column form — LEFT: a 3-line multiline description
+//       textarea + client + project SELECTs + a tag chip host + the billable toggle; RIGHT: the
+//       inline interval picker (month calendar + single-day column) over the COLLAPSED Start/Stop
+//       expander (raw text fields), and the form carries NO type=datetime-local input (G1);
+//   (b) the picker paints other entries gray and an overlapping span yellow (warn-only, inert),
+//       and only the "me" rectangle + Save entry carry the accent (§15);
+//   (c) DRAGGING the picker "me" block updates the form's start/stop state LIVE (the raw #add-from
+//       /#add-to fields change, span preserved) — before any Save (G7);
+//   (d) clicking Save entry is the SOLE commit — window.__ADDED__ carries the picked (post-drag)
+//       fromLocal/toLocal PLUS description/client/project/tags/billable over the single `add` IPC,
+//       the form closes, and the overlapping backfill raises the non-blocking overlap banner (§06 R4).
+// Fails if the form is not the unified two-column form, still carries a datetime-local, the picker
+// does not drive form state live, or Save is not the sole commit.
+//
+// The page is pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
+// 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries, making
+// the gray/overlap geometry deterministic; overlap:true makes the post-save WriteAck carry the
+// overlap warning the inline banner surfaces.
+async function sceneUnifiedFormAdd(browser) {
   {
     const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -1517,28 +1539,30 @@ async function main() {
     );
     await page.close();
   }
+}
 
-  // UNIFIED_FORM_EXPANDER — §12 R17 (core: core data entry): the unified add form's collapsed
-  // Start/Stop expander is the exact-entry escape hatch and the ONLY path for an OVERNIGHT span.
-  // Drive the REAL renderer end to end and assert the requirement's gating facts:
-  //   (a) the expander is COLLAPSED by default — the raw Start/Stop text fields are hidden
-  //       (#add-times-body[hidden], toggle aria-expanded=false) while a tabular ECHO of the current
-  //       interval is shown beneath the calendar (.stp-echo, e.g. "22:00 – 23:00");
-  //   (b) clicking the toggle REVEALS the two raw type=text fields (#add-from/#add-to, NOT native
-  //       datetime-local, G1);
-  //   (c) TYPING an overnight span (start 2026-06-24 22:00, stop 2026-06-25 02:00) into those fields
-  //       feeds the ONE shared interval state — the picker column reflects the typed START (the "me"
-  //       block sits at 22:00) and the collapsed echo reflects the typed cross-midnight span
-  //       ("22:00 – 02:00"), while the raw stop field keeps the next-day value verbatim (authoritative,
-  //       never flattened to same-day);
-  //   (d) Save entry is the SOLE commit — window.__ADDED__ carries those EXACT overnight
-  //       fromLocal/toLocal over the single `add` IPC (parity with `tt add --from --to`).
-  // Fails if the expander fields don't feed the shared interval (the picker/echo stay stale), Save
-  // reads a stale picker-only value, or the overnight stop is dropped / coerced to the start's day.
-  //
-  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → 22:00 on
-  // 2026-06-24) is a deterministic local instant, and the typed 22:00/02:00 map to fixed column
-  // geometry (720px/24h track → 22:00 = 660px from the track top).
+// UNIFIED_FORM_EXPANDER — §12 R17 (core: core data entry): the unified add form's collapsed
+// Start/Stop expander is the exact-entry escape hatch and the ONLY path for an OVERNIGHT span.
+// Drive the REAL renderer end to end and assert the requirement's gating facts:
+//   (a) the expander is COLLAPSED by default — the raw Start/Stop text fields are hidden
+//       (#add-times-body[hidden], toggle aria-expanded=false) while a tabular ECHO of the current
+//       interval is shown beneath the calendar (.stp-echo, e.g. "22:00 – 23:00");
+//   (b) clicking the toggle REVEALS the two raw type=text fields (#add-from/#add-to, NOT native
+//       datetime-local, G1);
+//   (c) TYPING an overnight span (start 2026-06-24 22:00, stop 2026-06-25 02:00) into those fields
+//       feeds the ONE shared interval state — the picker column reflects the typed START (the "me"
+//       block sits at 22:00) and the collapsed echo reflects the typed cross-midnight span
+//       ("22:00 – 02:00"), while the raw stop field keeps the next-day value verbatim (authoritative,
+//       never flattened to same-day);
+//   (d) Save entry is the SOLE commit — window.__ADDED__ carries those EXACT overnight
+//       fromLocal/toLocal over the single `add` IPC (parity with `tt add --from --to`).
+// Fails if the expander fields don't feed the shared interval (the picker/echo stay stale), Save
+// reads a stale picker-only value, or the overnight stop is dropped / coerced to the start's day.
+//
+// Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → 22:00 on
+// 2026-06-24) is a deterministic local instant, and the typed 22:00/02:00 map to fixed column
+// geometry (720px/24h track → 22:00 = 660px from the track top).
+async function sceneUnifiedFormExpander(browser) {
   {
     const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -1624,20 +1648,22 @@ async function main() {
     );
     await page.close();
   }
+}
 
-  // UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE in the
-  // SAME view-level host add mode uses (#entry-form-host) — NOT crammed into the ~124px calendar day
-  // column — in the view flow (no modal / backdrop / dialog chrome; position:static). The scene
-  // asserts host identity explicitly: open add mode + record its host, open edit mode + assert the
-  // edit form mounts in that very same element, and the edited calendar event carries the .editing
-  // selection state (its content preserved). Drive the real renderer: both a click on the
-  // entry AND its Edit affordance open it; it seeds EVERY tt-editable field from the entry
-  // (multiline description textarea, client + project selects pre-selected, tag chips, billable
-  // checkbox, and the Start/Stop expander's Start+Stop), Save sends a patch of ONLY the changed
-  // fields over `edit`, and the edit-mode FOOTER carries a Split control plus a two-step Delete
-  // gate that ARMS (a worded confirm appears, nothing removed) then CONFIRMS (remove fires with
-  // the entry id). Fails if edit mode is a modal, omits a seeded field, or the footer lacks Split
-  // or the two-step Delete gate.
+// UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE in the
+// SAME view-level host add mode uses (#entry-form-host) — NOT crammed into the ~124px calendar day
+// column — in the view flow (no modal / backdrop / dialog chrome; position:static). The scene
+// asserts host identity explicitly: open add mode + record its host, open edit mode + assert the
+// edit form mounts in that very same element, and the edited calendar event carries the .editing
+// selection state (its content preserved). Drive the real renderer: both a click on the
+// entry AND its Edit affordance open it; it seeds EVERY tt-editable field from the entry
+// (multiline description textarea, client + project selects pre-selected, tag chips, billable
+// checkbox, and the Start/Stop expander's Start+Stop), Save sends a patch of ONLY the changed
+// fields over `edit`, and the edit-mode FOOTER carries a Split control plus a two-step Delete
+// gate that ARMS (a worded confirm appears, nothing removed) then CONFIRMS (remove fires with
+// the entry id). Fails if edit mode is a modal, omits a seeded field, or the footer lacks Split
+// or the two-step Delete gate.
+async function sceneUnifiedForm(browser) {
   await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="80"]';
     // The unified form (edit mode) opens in the SAME view-level host add mode uses (#entry-form-host),
@@ -2010,12 +2036,14 @@ async function main() {
       'main-edit.png',
     );
   });
+}
 
-  // MULTILINE_DESC — §05 R10 / §12 R07: the entry form's description control is a 3-line
-  // scrollable <textarea>, and a stored description that carries an embedded newline renders
-  // VERBATIM (not flattened to one line). Open the multiline entry's edit form and assert the
-  // .edit-desc control is a textarea with rows=3, is vertically scrollable (overflow-y:auto), and
-  // its .value contains the seeded interior '\n' byte-for-byte.
+// MULTILINE_DESC — §05 R10 / §12 R07: the entry form's description control is a 3-line
+// scrollable <textarea>, and a stored description that carries an embedded newline renders
+// VERBATIM (not flattened to one line). Open the multiline entry's edit form and assert the
+// .edit-desc control is a textarea with rows=3, is vertically scrollable (overflow-y:auto), and
+// its .value contains the seeded interior '\n' byte-for-byte.
+async function sceneMultilineDesc(browser) {
   await withPage(browser, multilineDescState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="30"]';
     await page.click(`${editRow} [data-act="edit"]`);
@@ -2049,17 +2077,19 @@ async function main() {
       'main-multiline-desc.png',
     );
   });
+}
 
-  // §12 R06: the consolidated modal editor (the old INLINE_EDITOR / kebab scene) is retired —
-  // editing is the UNIFIED_FORM inline edit-mode form above (every tt-editable field in one
-  // place, no modal), and the merge selection stays the corner-checkbox path exercised by the
-  // MERGE_CONFLICT / MERGE_NOCONFLICT scenes. No kebab, no modal-editor scene here.
+// §12 R06: the consolidated modal editor (the old INLINE_EDITOR / kebab scene) is retired —
+// editing is the UNIFIED_FORM inline edit-mode form above (every tt-editable field in one
+// place, no modal), and the merge selection stays the corner-checkbox path exercised by the
+// MERGE_CONFLICT / MERGE_NOCONFLICT scenes. No kebab, no modal-editor scene here.
 
-  // OVERLAP_BANNER — a write that creates an overlap surfaces a non-blocking inline
-  // banner AT THE MOMENT of the edit, not only the per-row flag (§06 R4, §12). Drive the
-  // closed row's inline Edit and Save; the overlap-returning write mock makes the renderer
-  // raise #overlap-banner with overlap wording, announced via role=status. The write still
-  // committed — the banner is advisory, allowed-but-flagged.
+// OVERLAP_BANNER — a write that creates an overlap surfaces a non-blocking inline
+// banner AT THE MOMENT of the edit, not only the per-row flag (§06 R4, §12). Drive the
+// closed row's inline Edit and Save; the overlap-returning write mock makes the renderer
+// raise #overlap-banner with overlap wording, announced via role=status. The write still
+// committed — the banner is advisory, allowed-but-flagged.
+async function sceneOverlapBanner(browser) {
   await withPage(
     browser,
     overlapWriteState(),
@@ -2098,11 +2128,13 @@ async function main() {
     },
     { overlap: true },
   );
+}
 
-  // SPLIT_AFFORDANCE — a CLOSED entry exposes a discoverable Split control wired to the
-  // split capability; the open/running entry does not (§06 R2: only a bounded span can
-  // be cut). Drive the inline picker on the closed row and assert it calls the split IPC
-  // with a UTC instant; assert the open row has no Split control at all.
+// SPLIT_AFFORDANCE — a CLOSED entry exposes a discoverable Split control wired to the
+// split capability; the open/running entry does not (§06 R2: only a bounded span can
+// be cut). Drive the inline picker on the closed row and assert it calls the split IPC
+// with a UTC instant; assert the open row has no Split control at all.
+async function sceneSplitAffordance(browser) {
   await withPage(browser, splittableState(), 'index.html', async (page) => {
     const closedRow = '.entry[data-id="30"]';
     const openRow = '.entry[data-id="31"]';
@@ -2163,14 +2195,16 @@ async function main() {
       'main-split.png',
     );
   });
+}
 
-  // WRITE_REJECTION_FEEDBACK — §12 R21: a refused core write is surfaced WHERE it was attempted,
-  // never silently swallowed. Driving the REAL renderer over a STRICT-rejecting mock (the
-  // strict-listEntries precedent, issue #55 — `rejectWrites` makes edit/split/rename/toggle reject
-  // with a StoreError-shaped message), assert each site catches-and-displays: the form stays OPEN
-  // and an ANNOUNCED (role=status + aria-live) message region carries the reason (the Stop/toggle
-  // rejection routes to the banner area). Folds four facts — edit-mode Save, split confirm, inline
-  // rename, Stop/toggle. Captures main-edit-reject.png as the rubric evidence.
+// WRITE_REJECTION_FEEDBACK — §12 R21: a refused core write is surfaced WHERE it was attempted,
+// never silently swallowed. Driving the REAL renderer over a STRICT-rejecting mock (the
+// strict-listEntries precedent, issue #55 — `rejectWrites` makes edit/split/rename/toggle reject
+// with a StoreError-shaped message), assert each site catches-and-displays: the form stays OPEN
+// and an ANNOUNCED (role=status + aria-live) message region carries the reason (the Stop/toggle
+// rejection routes to the banner area). Folds four facts — edit-mode Save, split confirm, inline
+// rename, Stop/toggle. Captures main-edit-reject.png as the rubric evidence.
+async function sceneWriteRejectionFeedback(browser) {
   {
     // (a) EDIT-MODE SAVE — open the unified editor, change a field, Save: the `edit` IPC rejects,
     // and the editor stays open with the reason in the announced .ef-warning region (never closed,
@@ -2285,15 +2319,17 @@ async function main() {
       'main-edit-reject.png',
     );
   }
+}
 
-  // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
-  // action; merging entries that DISAGREE on client/billable raises the conflict prompt
-  // offering the distinct client choices and a billable choice BEFORE committing
-  // (§06 R3, §12 R6). The prompt is hosted in app.js — the `.editor.conflict-prompt` modal.
-  // The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
-  // chosen billable go to the main process, which resolves the names. (The selection surface
-  // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
-  // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
+// MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals a Merge
+// action; merging entries that DISAGREE on client/billable raises the conflict prompt
+// offering the distinct client choices and a billable choice BEFORE committing
+// (§06 R3, §12 R6). The prompt is hosted in app.js — the `.editor.conflict-prompt` modal.
+// The renderer sends no clientId/projectId — the winning entry's id (winnerId) plus the
+// chosen billable go to the main process, which resolves the names. (The selection surface
+// moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
+// then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
+async function sceneMergeConflict(browser) {
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
     const barHiddenInitially = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
@@ -2343,13 +2379,15 @@ async function main() {
       'main-merge-conflict.png',
     );
   });
+}
 
-  // MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
-  // clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
-  // no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
-  // "no unnecessary question" counterpart, NOT proof that the agree path never gates: a
-  // NON-contiguous agreeing selection still gates (MERGE_GAP). The payload carries just the ids
-  // (no winnerId, no allowGap), §06 R3.
+// MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
+// clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
+// no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
+// "no unnecessary question" counterpart, NOT proof that the agree path never gates: a
+// NON-contiguous agreeing selection still gates (MERGE_GAP). The payload carries just the ids
+// (no winnerId, no allowGap), §06 R3.
+async function sceneMergeNoconflict(browser) {
   await withPage(browser, mergeAgreeState(), 'index.html', async (page) => {
     await page.check('.entry[data-id="50"] .sel');
     await page.check('.entry[data-id="51"] .sel');
@@ -2374,13 +2412,15 @@ async function main() {
       'main-merge-conflict.png',
     );
   });
+}
 
-  // MERGE_GAP — selecting two entries that AGREE on client/billable but are NOT contiguous (a
-  // positive gap sits between them) and clicking Merge must NOT fold silently: the Merge button
-  // first swaps into a confirm stating the resulting span/duration (§06 R3, §12 R13 precedent).
-  // Only the explicit "Merge anyway" tap commits, and the payload then carries allowGap so core
-  // accepts the fold. This is the regression guard for the filed bug — a gapped merge that
-  // fabricated the whole gap as billable time with one click, no confirmation.
+// MERGE_GAP — selecting two entries that AGREE on client/billable but are NOT contiguous (a
+// positive gap sits between them) and clicking Merge must NOT fold silently: the Merge button
+// first swaps into a confirm stating the resulting span/duration (§06 R3, §12 R13 precedent).
+// Only the explicit "Merge anyway" tap commits, and the payload then carries allowGap so core
+// accepts the fold. This is the regression guard for the filed bug — a gapped merge that
+// fabricated the whole gap as billable time with one click, no confirmation.
+async function sceneMergeGap(browser) {
   await withPage(browser, mergeGapState(), 'index.html', async (page) => {
     await page.check('.entry[data-id="60"] .sel');
     await page.check('.entry[data-id="61"] .sel');
@@ -2426,9 +2466,11 @@ async function main() {
       'main-merge-gap.png',
     );
   });
+}
 
-  // DELETE_CONFIRM — Delete is destructive, so the first click only arms a confirm
-  // affordance; the entry is not removed until an explicit confirm tap (§06 R1).
+// DELETE_CONFIRM — Delete is destructive, so the first click only arms a confirm
+// affordance; the entry is not removed until an explicit confirm tap (§06 R1).
+async function sceneDeleteConfirm(browser) {
   await withPage(browser, editingState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="20"]';
     await page.click(`${editRow} [data-act="delete"]`);
@@ -2445,14 +2487,16 @@ async function main() {
     const ok = probe.confirmShown && probe.confirmText && probe.confirmBtn && !probe.removed;
     record('DELETE_CONFIRM', ok, `delete arms a confirm step, no immediate remove: ${JSON.stringify(probe)}`, 'main-edit.png');
   });
+}
 
-  // CONFIRM_DELETE — §12 R13: destructive actions confirm in the window. A single Delete
-  // click must surface an in-window confirm and must NOT destroy the entry; only the
-  // explicit confirm tap removes it, exactly once. Drive the real renderer: click the row's
-  // Delete, assert (a) the inline confirm appears (the generic .confirm gate with a
-  // confirm-delete + cancel-delete control), (b) the instrumented window.stint.remove was
-  // NOT called by that first click (__REMOVE_CALLS__ stays empty — a stray click is safe),
-  // and (c) clicking the confirm button fires remove exactly once, carrying the entry id.
+// CONFIRM_DELETE — §12 R13: destructive actions confirm in the window. A single Delete
+// click must surface an in-window confirm and must NOT destroy the entry; only the
+// explicit confirm tap removes it, exactly once. Drive the real renderer: click the row's
+// Delete, assert (a) the inline confirm appears (the generic .confirm gate with a
+// confirm-delete + cancel-delete control), (b) the instrumented window.stint.remove was
+// NOT called by that first click (__REMOVE_CALLS__ stays empty — a stray click is safe),
+// and (c) clicking the confirm button fires remove exactly once, carrying the entry id.
+async function sceneConfirmDelete(browser) {
   await withPage(browser, editingState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="20"]';
     await page.click(`${editRow} [data-act="delete"]`);
@@ -2490,13 +2534,15 @@ async function main() {
       'main-confirm-delete.png',
     );
   });
+}
 
-  // CONFIRM_DESTRUCTIVE — §17 R11: destructive actions confirm before acting. The §17
-  // framing of the gate, captured as its own evidence: a single Delete click must surface
-  // the in-window confirm and the entry must STILL BE PRESENT (no destroy on a stray click);
-  // only the explicit confirm removes it, after which the entry is GONE from the list. The
-  // remove mock drops the entry from the snapshot, so the post-confirm reload reflects the
-  // real deletion — present pre-confirm, absent post-confirm, never on the bare first click.
+// CONFIRM_DESTRUCTIVE — §17 R11: destructive actions confirm before acting. The §17
+// framing of the gate, captured as its own evidence: a single Delete click must surface
+// the in-window confirm and the entry must STILL BE PRESENT (no destroy on a stray click);
+// only the explicit confirm removes it, after which the entry is GONE from the list. The
+// remove mock drops the entry from the snapshot, so the post-confirm reload reflects the
+// real deletion — present pre-confirm, absent post-confirm, never on the bare first click.
+async function sceneConfirmDestructive(browser) {
   await withPage(browser, editingState(), 'index.html', async (page) => {
     const editRow = '.entry[data-id="20"]';
     const presentBefore = await page.evaluate(() => !!document.querySelector('.entry[data-id="20"]'));
@@ -2545,18 +2591,20 @@ async function main() {
   // Switch's ABSENCE — no #switch / #timer-switch element survives in any run state — and the
   // running-popover / running-main stills they shared are captured in TRAY_POPOVER_SURFACE
   // (popover-running.png) and ACCENT_DISCIPLINE (main-running.png).)
+}
 
-  // CLIENTS_VIEW — the Clients nav view lists active clients with their projects nested,
-  // and offers create/rename/archive in place; archived items drop out of the active list
-  // (history kept). Click the Clients nav, assert the clients/projects render with the
-  // rename + archive affordances, and that accent discipline holds on the new chrome
-  // (§07, §12). The mutators are wired to the same IPC tt's client/project subcommands use.
-  // The create affordances are DRIVEN, not merely present (issue #48: a duplicate
-  // id="add-client" dead-ended the "+ Add client" button while every presence-only check
-  // passed): the scene clicks "+ Add client" and asserts the inline "New client" field
-  // opens, types a name, and asserts the new client LANDS in the active list off the
-  // addClient → re-render round trip — then does the same for "+ Add project" (under a
-  // client row) and "+ Add tag" (the tag strip), asserting each payload over the IPC.
+// CLIENTS_VIEW — the Clients nav view lists active clients with their projects nested,
+// and offers create/rename/archive in place; archived items drop out of the active list
+// (history kept). Click the Clients nav, assert the clients/projects render with the
+// rename + archive affordances, and that accent discipline holds on the new chrome
+// (§07, §12). The mutators are wired to the same IPC tt's client/project subcommands use.
+// The create affordances are DRIVEN, not merely present (issue #48: a duplicate
+// id="add-client" dead-ended the "+ Add client" button while every presence-only check
+// passed): the scene clicks "+ Add client" and asserts the inline "New client" field
+// opens, types a name, and asserts the new client LANDS in the active list off the
+// addClient → re-render round trip — then does the same for "+ Add project" (under a
+// client row) and "+ Add tag" (the tag strip), asserting each payload over the IPC.
+async function sceneClientsView(browser) {
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
     // The view renders its clients/projects from the async listClients/listProjects mock;
@@ -2768,15 +2816,17 @@ async function main() {
       'main-clients.png',
     );
   });
+}
 
-  // CONFIRM_ARCHIVE — §12 R13: archiving a REFERENCED client/project hides a record that carries
-  // history, so it is destructive and takes the same two-step gate as Delete. Drive the real
-  // renderer: click the referenced Acme client's Archive, assert (a) the inline .confirm-archive
-  // gate appears (a confirm-archive + cancel-archive control) and Acme is STILL listed, (b) the
-  // instrumented archiveClient was NOT called by that first click (__ARCHIVE_CLIENT_CALLS__ empty
-  // — a stray click archives nothing), and (c) the explicit confirm archives exactly once, with
-  // Acme's id, after which Acme detaches. (An UNREFERENCED client archives directly — that path
-  // is the Globex archive the CLIENTS_VIEW scene drives.)
+// CONFIRM_ARCHIVE — §12 R13: archiving a REFERENCED client/project hides a record that carries
+// history, so it is destructive and takes the same two-step gate as Delete. Drive the real
+// renderer: click the referenced Acme client's Archive, assert (a) the inline .confirm-archive
+// gate appears (a confirm-archive + cancel-archive control) and Acme is STILL listed, (b) the
+// instrumented archiveClient was NOT called by that first click (__ARCHIVE_CLIENT_CALLS__ empty
+// — a stray click archives nothing), and (c) the explicit confirm archives exactly once, with
+// Acme's id, after which Acme detaches. (An UNREFERENCED client archives directly — that path
+// is the Globex archive the CLIENTS_VIEW scene drives.)
+async function sceneConfirmArchive(browser) {
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
     await page.waitForSelector('#clients:not([hidden]) .client[data-id="1"]', { state: 'attached' });
@@ -2814,12 +2864,14 @@ async function main() {
       'main-confirm-archive.png',
     );
   });
+}
 
-  // RESTORE_ARCHIVED — §12 R13: archive is a REVERSIBLE hide. Archived records are out of the
-  // active list by default; a "Show archived" toggle reveals them (with an "archived" pill) each
-  // carrying a Restore button, and Restore returns the record to the active list. Drive the real
-  // renderer: assert the archived client/tag are hidden by default, reveal them, and Restore the
-  // archived client — asserting the restoreClient payload and that it lands back active.
+// RESTORE_ARCHIVED — §12 R13: archive is a REVERSIBLE hide. Archived records are out of the
+// active list by default; a "Show archived" toggle reveals them (with an "archived" pill) each
+// carrying a Restore button, and Restore returns the record to the active list. Drive the real
+// renderer: assert the archived client/tag are hidden by default, reveal them, and Restore the
+// archived client — asserting the restoreClient payload and that it lands back active.
+async function sceneRestoreArchived(browser) {
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
     await page.waitForSelector('#clients:not([hidden]) .client[data-id="1"]', { state: 'attached' });
@@ -2866,16 +2918,18 @@ async function main() {
       'main-clients-archived.png',
     );
   });
+}
 
-  // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
-  // running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
-  // (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
-  // asserts both: (a) the display — the fixture's open event carries 2 tags and its closed event 1,
-  // so the events paint exactly 3 chips, plus the 2 on the running summary, each tag's text visible;
-  // and (b) the capability — open the closed entry's unified form, REMOVE a tag chip and ADD a new
-  // one in the form's chip editor, Save, and the `edit` patch carries the minimal
-  // addTags/removeTags (and touches ONLY tags). Fails if a per-row tags control survives, or the
-  // form's chip editor cannot add + remove a tag over the one `edit` commit.
+// TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
+// running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
+// (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
+// asserts both: (a) the display — the fixture's open event carries 2 tags and its closed event 1,
+// so the events paint exactly 3 chips, plus the 2 on the running summary, each tag's text visible;
+// and (b) the capability — open the closed entry's unified form, REMOVE a tag chip and ADD a new
+// one in the form's chip editor, Save, and the `edit` patch carries the minimal
+// addTags/removeTags (and touches ONLY tags). Fails if a per-row tags control survives, or the
+// form's chip editor cannot add + remove a tag over the one `edit` commit.
+async function sceneTagChips(browser) {
   await withPage(browser, taggedState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-tags.png'), fullPage: true });
     const probe = await page.evaluate(() => {
@@ -2945,32 +2999,34 @@ async function main() {
       'main-tags.png',
     );
   });
+}
 
-  // REPORTS_VIEW — §12 R08 / §09 R08–R09 (G11): the in-shell Reports view is the PRIMARY
-  // surface for SAVED report definitions (it replaces the retired standalone report.html, so
-  // the sidebar is present). This one scene drives the REAL index.html Reports view under the
-  // pinned JUDGE clock with the savedReportsState fixture and folds five facts into one pass:
-  //   (a) the saved-definition list paints ONE card per saved def with its name + spec summary
-  //       and Run / Edit affordances;
-  //   (b) clicking + New report (and Edit) opens the inline builder with name / range / group-by
-  //       / filter / rounding controls;
-  //   (c) clicking Run paints the grouped run-output summary with overlap + unreviewed-sleep
-  //       flags ON the affected rows (reusing the REPORT_SUMMARY shape) plus the resolved-range
-  //       header;
-  //   (d) Export CSV / Export JSON drive a real exportEntries call carrying the saved ref;
-  //   (e) the sidebar nav is present with Reports active;
-  //   (f) §09 R01 (G3): the builder's CUSTOM range is a pair of PLAIN DATES — the two range
-  //       inputs are type="date" (zero datetime-local anywhere in the builder), the Custom…
-  //       chip reveals them, and saving a filled custom def fires a saveReport whose captured
-  //       rangeSpec is exactly { kind:'absolute', fromDate, toDate } (raw YYYY-MM-DD strings,
-  //       no time component, no 'T'), with the new card's spec summary printing the date pair;
-  //   (g) issue #52: the card kebab RENAMES and DELETES a saved def TO COMPLETION through the
-  //       INLINE affordances (an in-place Rename / Delete menu, the shared inline name field
-  //       committed on Enter, and the generic §12 R13 confirm gate) — Electron's renderer
-  //       implements neither window.prompt nor window.confirm, so these must be inline — with
-  //       renameReport / removeReport firing and the list updating each time.
-  // Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
-  // output) for rubric review.
+// REPORTS_VIEW — §12 R08 / §09 R08–R09 (G11): the in-shell Reports view is the PRIMARY
+// surface for SAVED report definitions (it replaces the retired standalone report.html, so
+// the sidebar is present). This one scene drives the REAL index.html Reports view under the
+// pinned JUDGE clock with the savedReportsState fixture and folds five facts into one pass:
+//   (a) the saved-definition list paints ONE card per saved def with its name + spec summary
+//       and Run / Edit affordances;
+//   (b) clicking + New report (and Edit) opens the inline builder with name / range / group-by
+//       / filter / rounding controls;
+//   (c) clicking Run paints the grouped run-output summary with overlap + unreviewed-sleep
+//       flags ON the affected rows (reusing the REPORT_SUMMARY shape) plus the resolved-range
+//       header;
+//   (d) Export CSV / Export JSON drive a real exportEntries call carrying the saved ref;
+//   (e) the sidebar nav is present with Reports active;
+//   (f) §09 R01 (G3): the builder's CUSTOM range is a pair of PLAIN DATES — the two range
+//       inputs are type="date" (zero datetime-local anywhere in the builder), the Custom…
+//       chip reveals them, and saving a filled custom def fires a saveReport whose captured
+//       rangeSpec is exactly { kind:'absolute', fromDate, toDate } (raw YYYY-MM-DD strings,
+//       no time component, no 'T'), with the new card's spec summary printing the date pair;
+//   (g) issue #52: the card kebab RENAMES and DELETES a saved def TO COMPLETION through the
+//       INLINE affordances (an in-place Rename / Delete menu, the shared inline name field
+//       committed on Enter, and the generic §12 R13 confirm gate) — Electron's renderer
+//       implements neither window.prompt nor window.confirm, so these must be inline — with
+//       renameReport / removeReport firing and the list updating each time.
+// Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
+// output) for rubric review.
+async function sceneReportsView(browser) {
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
     // Route to the Reports view (the shell router; no IPC) and wait for the saved-defs list.
     await page.click('.nav-item[data-view="reports"]');
@@ -3299,23 +3355,25 @@ async function main() {
       `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
     );
   });
+}
 
-  // ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
-  // readonly entries calendar. There is NO grouping control here — grouped breakdowns moved to
-  // Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT — but every toolbar QUERY
-  // still carries the REQUIRED grouping key by:'day' (ListEntriesQuery.by; the calendar's day
-  // layout — issue #55: a query without it throws in core and the calendar silently shows
-  // everything). Hardened per the issue-#55 triage: over the MULTI-WEEK, multi-client,
-  // mixed-billable fixture, EACH toolbar control (range preset, billable toggle, client,
-  // project, tag, search) is driven in turn and the VISIBLE EVENT COUNT + #week-total are
-  // asserted to move to the expected subset — counts, not just pixels — with NO listEntries
-  // call rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
-  // §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields — #el-range-from/#el-range-to
-  // are input[type="date"] (no time component), there is NO #el-range-apply button, and setting
-  // both dates drives a listEntries call carrying the raw { fromDate, toDate } strings (no
-  // derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE. Deterministic sub-facts are
-  // machine-scored under the pinned JUDGE clock (Wed 2026-06-24, weekStart monday); the calendar
-  // looks are captured (entries-search.png / entries-calendar.png).
+// ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
+// readonly entries calendar. There is NO grouping control here — grouped breakdowns moved to
+// Reports (§09 R02 / `tt report --by`, G11), so #el-by-seg is ABSENT — but every toolbar QUERY
+// still carries the REQUIRED grouping key by:'day' (ListEntriesQuery.by; the calendar's day
+// layout — issue #55: a query without it throws in core and the calendar silently shows
+// everything). Hardened per the issue-#55 triage: over the MULTI-WEEK, multi-client,
+// mixed-billable fixture, EACH toolbar control (range preset, billable toggle, client,
+// project, tag, search) is driven in turn and the VISIBLE EVENT COUNT + #week-total are
+// asserted to move to the expected subset — counts, not just pixels — with NO listEntries
+// call rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
+// §09 R01 (G3): the CUSTOM range is a pair of PLAIN DATE fields — #el-range-from/#el-range-to
+// are input[type="date"] (no time component), there is NO #el-range-apply button, and setting
+// both dates drives a listEntries call carrying the raw { fromDate, toDate } strings (no
+// derived fromUtc/toUtc, no 'T') that narrows the calendar LIVE. Deterministic sub-facts are
+// machine-scored under the pinned JUDGE clock (Wed 2026-06-24, weekStart monday); the calendar
+// looks are captured (entries-search.png / entries-calendar.png).
+async function sceneEntriesCalendar(browser) {
   await withPage(browser, listState(), 'index.html', async (page) => {
     const probe = () =>
       page.evaluate(() => ({
@@ -3523,33 +3581,35 @@ async function main() {
       'entries-calendar.png',
     );
   });
+}
 
-  // CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
-  // entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
-  // calendar half is ENTRIES_CALENDAR above). Deterministic sub-facts, machine-scored under the
-  // pinned JUDGE clock with the page pinned to timezoneId 'UTC' so the fixture's UTC instants map
-  // to a stable local-time geometry on the 24h track:
-  //   • fixed & EQUAL-width day columns (never stretched to fill) — every `.dcol` measures the same
-  //     comfortable width; the week does not fit, so the strip scrolls horizontally
-  //     (`.cstrip` scrollWidth > clientWidth);
-  //   • the viewport DEFAULTS to working hours (scrollTop lands on the 07:00 offset, > 0) over a
-  //     FULL 24h track (`.dt` ~24h tall) that SCROLLS, never clips — an entry BEFORE working-start
-  //     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
-  //   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
-  //     toolbar range chip (#week-total) shows the week total (9.25h);
-  //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
-  //   • §12 R16 (issue #71): a CROSS-MIDNIGHT span (id 8, 22:30→06:15 next day) renders as TWO
-  //     `.ev` segments sharing its data-id — a start-day segment (22:30 → the track bottom, a true
-  //     height, never the 18px sliver) and an end-day segment (the track top → 06:15) — while its
-  //     billable time counts ONLY on its start day (the 22nd's header reads 12.00h, the week 17.00h);
-  //   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
-  //   • clicking an `.ev` body opens the unified editor in the view-level host (`#entry-form-host
-  //     .edit-form.entry-form`), and the event carries the `.editing` selection state;
-  //   • the RUNNING block carries the future-fade gradient with no end edge;
-  //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
-  //   • checking two `.ck` boxes reveals #merge-bar.
-  // Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
-  // regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
+// CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
+// entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
+// calendar half is ENTRIES_CALENDAR above). Deterministic sub-facts, machine-scored under the
+// pinned JUDGE clock with the page pinned to timezoneId 'UTC' so the fixture's UTC instants map
+// to a stable local-time geometry on the 24h track:
+//   • fixed & EQUAL-width day columns (never stretched to fill) — every `.dcol` measures the same
+//     comfortable width; the week does not fit, so the strip scrolls horizontally
+//     (`.cstrip` scrollWidth > clientWidth);
+//   • the viewport DEFAULTS to working hours (scrollTop lands on the 07:00 offset, > 0) over a
+//     FULL 24h track (`.dt` ~24h tall) that SCROLLS, never clips — an entry BEFORE working-start
+//     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
+//   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
+//     toolbar range chip (#week-total) shows the week total (9.25h);
+//   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
+//   • §12 R16 (issue #71): a CROSS-MIDNIGHT span (id 8, 22:30→06:15 next day) renders as TWO
+//     `.ev` segments sharing its data-id — a start-day segment (22:30 → the track bottom, a true
+//     height, never the 18px sliver) and an end-day segment (the track top → 06:15) — while its
+//     billable time counts ONLY on its start day (the 22nd's header reads 12.00h, the week 17.00h);
+//   • hovering an `.ev` reveals the ops (Delete / Split / Edit) + the corner `.ck` checkbox;
+//   • clicking an `.ev` body opens the unified editor in the view-level host (`#entry-form-host
+//     .edit-form.entry-form`), and the event carries the `.editing` selection state;
+//   • the RUNNING block carries the future-fade gradient with no end edge;
+//   • an overlap `.ov` warn band and a slept `.zz` hatch render;
+//   • checking two `.ck` boxes reveals #merge-bar.
+// Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
+// regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
+async function sceneCalendarLayout(browser) {
   {
     const page = await browser.newPage({ viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -3731,17 +3791,19 @@ async function main() {
     );
     await page.close();
   }
+}
 
-  // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
-  // visible list AND the report total, with no getState reload during the keystroke. Hardened
-  // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
-  // week / last month, all-time billable 8.00h): the idle chip must be the WEEK-BOUNDED billable
-  // sum (5.00h — the §12 R16 "This week" chip, NOT the all-time total, issue #55 Part B); a
-  // "refactor" search then narrows the visible rows to the two IN-WEEK refactor entries (last
-  // week's 'refactor planning' stays excluded — the query composes range + search) AND
-  // #week-total settles on the selection's 3.50h — the selected range's billable sum. Clearing
-  // the search returns both. The strict listEntries mock rejects any query missing the required
-  // `by` (exactly like core), so the whole flow also proves no toolbar query throws.
+// LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
+// visible list AND the report total, with no getState reload during the keystroke. Hardened
+// per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
+// week / last month, all-time billable 8.00h): the idle chip must be the WEEK-BOUNDED billable
+// sum (5.00h — the §12 R16 "This week" chip, NOT the all-time total, issue #55 Part B); a
+// "refactor" search then narrows the visible rows to the two IN-WEEK refactor entries (last
+// week's 'refactor planning' stays excluded — the query composes range + search) AND
+// #week-total settles on the selection's 3.50h — the selected range's billable sum. Clearing
+// the search returns both. The strict listEntries mock rejects any query missing the required
+// `by` (exactly like core), so the whole flow also proves no toolbar query throws.
+async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
     const before = await page.evaluate(() => ({
@@ -3804,14 +3866,16 @@ async function main() {
       'main-filtered.png',
     );
   });
+}
 
-  // SETTINGS_VIEW — §12 R11: the in-window Settings view. Routing to Settings renders an
-  // editable control for every §14 setting (rounding toggle, rounding increment, week start,
-  // first check-in, check-in interval, global hotkey, date format), each wired to
-  // window.stint.setSetting. Drive the real renderer: click the Settings nav, assert all
-  // seven controls render and that changing the date-format select fires setSetting with the
-  // matching key/value. Captures main-settings.png as the rubric evidence for the controls'
-  // look-and-feel, and confirms the panel stays accent-disciplined (no stray accent fill).
+// SETTINGS_VIEW — §12 R11: the in-window Settings view. Routing to Settings renders an
+// editable control for every §14 setting (rounding toggle, rounding increment, week start,
+// first check-in, check-in interval, global hotkey, date format), each wired to
+// window.stint.setSetting. Drive the real renderer: click the Settings nav, assert all
+// seven controls render and that changing the date-format select fires setSetting with the
+// matching key/value. Captures main-settings.png as the rubric evidence for the controls'
+// look-and-feel, and confirms the panel stays accent-disciplined (no stray accent fill).
+async function sceneSettingsView(browser) {
   await withPage(browser, settingsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
     await page.waitForSelector('#settings-panel [data-key]', { state: 'attached' });
@@ -3871,28 +3935,30 @@ async function main() {
       'main-settings.png',
     );
   });
+}
 
-  // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
-  // and the ONE viewport derivation they drive. Three machine-scored fact groups:
-  //   (a) The Settings → Timeline group renders controls for all four data-keys
-  //       (workingHoursStart / workingHoursEnd / pickerWindowMode / pickerAroundHours),
-  //       the HH:MM inputs read the STORED (non-default) 09:00 / 15:00, and the Around
-  //       select is disabled (row class 'off') while the mode is working_hours; flipping
-  //       the Picker-window segment fires setSetting({key:'pickerWindowMode',
-  //       value:'around_now'}) over the EXISTING channel (no new IPC) and the re-render
-  //       enables the Around select.
-  //   (b) SU.timelineWindow — the single source of the window math (G16; §12 R15's picker
-  //       and §12 R16's calendar must consume it, never re-derive it) — evaluated in-page
-  //       under the pinned JUDGE_NOW clock: the working-hours fixture yields exactly
-  //       540–900 minutes (09:00–15:00) and the around_now/8 fixture yields the page-local
-  //       JUDGE_NOW ± 4h clamped to the 24h track (deterministic, consumer-independent).
-  //   (c) The timeline consumers (§12 R15 picker / §12 R16 calendar) open as a FULL-24h
-  //       scrollable track — scrollHeight > clientHeight, scrollTop matching the configured
-  //       window: a scroll default, never a clipped one. The consumers mark their scroll
-  //       container with the `data-timeline-track` hook; until §12 R15/R16 land there is no
-  //       track in the DOM, so (c) reports "pending" WITHOUT failing — it is re-verified in
-  //       the post-wave AC pass once the consumer rows land (this scene is their dependency,
-  //       not the reverse).
+// TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
+// and the ONE viewport derivation they drive. Three machine-scored fact groups:
+//   (a) The Settings → Timeline group renders controls for all four data-keys
+//       (workingHoursStart / workingHoursEnd / pickerWindowMode / pickerAroundHours),
+//       the HH:MM inputs read the STORED (non-default) 09:00 / 15:00, and the Around
+//       select is disabled (row class 'off') while the mode is working_hours; flipping
+//       the Picker-window segment fires setSetting({key:'pickerWindowMode',
+//       value:'around_now'}) over the EXISTING channel (no new IPC) and the re-render
+//       enables the Around select.
+//   (b) SU.timelineWindow — the single source of the window math (G16; §12 R15's picker
+//       and §12 R16's calendar must consume it, never re-derive it) — evaluated in-page
+//       under the pinned JUDGE_NOW clock: the working-hours fixture yields exactly
+//       540–900 minutes (09:00–15:00) and the around_now/8 fixture yields the page-local
+//       JUDGE_NOW ± 4h clamped to the 24h track (deterministic, consumer-independent).
+//   (c) The timeline consumers (§12 R15 picker / §12 R16 calendar) open as a FULL-24h
+//       scrollable track — scrollHeight > clientHeight, scrollTop matching the configured
+//       window: a scroll default, never a clipped one. The consumers mark their scroll
+//       container with the `data-timeline-track` hook; until §12 R15/R16 land there is no
+//       track in the DOM, so (c) reports "pending" WITHOUT failing — it is re-verified in
+//       the post-wave AC pass once the consumer rows land (this scene is their dependency,
+//       not the reverse).
+async function sceneTimelineWindow(browser) {
   await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
     await page.waitForSelector('#settings-panel [data-key="pickerWindowMode"]', { state: 'attached' });
@@ -4012,11 +4078,13 @@ async function main() {
       'timeline-window.png',
     );
   });
+}
 
-  // TIMELINE_WINDOW around_now snapshot — the Settings view painted FROM an around_now
-  // fixture: the Around select renders enabled with the stored span selected (the inverse
-  // of the working_hours-disabled fact above), proving the off/disabled state follows the
-  // STORED mode, not a hardcoded default. Folded into the TIMELINE_WINDOW rubric row.
+// TIMELINE_WINDOW around_now snapshot — the Settings view painted FROM an around_now
+// fixture: the Around select renders enabled with the stored span selected (the inverse
+// of the working_hours-disabled fact above), proving the off/disabled state follows the
+// STORED mode, not a hardcoded default. Folded into the TIMELINE_WINDOW rubric row.
+async function sceneTimelineWindowAround(browser) {
   await withPage(browser, timelineAroundState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
     await page.waitForSelector('#settings-panel select[data-key="pickerAroundHours"]', { state: 'attached' });
@@ -4042,25 +4110,27 @@ async function main() {
       'timeline-window.png',
     );
   });
+}
 
-  // SOFTWARE_UPDATE — §19 R03/R04/R06 (G3): the Settings → Software Update group. Routing to
-  // Settings (with the GUI-only window.stint.update bridge injected — the SAME getVersion /
-  // check / download / reveal / onUpdateProgress shape production's preload exposes) renders:
-  //   VERSION (R06)        — the Current-version row prints the stamped APP_VERSION read over
-  //                          update.getVersion() (the value tt --version reports; here 2026.6.24).
-  //   CHECK (R03)          — a "Check now" button whose click calls update.check() and paints the
-  //                          verdict: an "Update available · <newer version>" result line + the
-  //                          .pill.new linking the release (here 2026.7.1).
-  //   GUIDED DOWNLOAD (R04)— a "Download & install <version>" primary action whose click calls
-  //                          update.download(); the replayed progress frames drive a live
-  //                          progress bar (.step .bar, ~42% mid-download) and, on the terminal
-  //                          'ready' frame, flip the action to "Reveal installer" wired to
-  //                          update.reveal(). The numbered guided steps include the one-time
-  //                          Gatekeeper / first-launch approval beat (no Developer ID).
-  //   NO-DB (R04)          — the panel carries the "Updates never touch the database" note (the
-  //                          artifact downloads to a temp folder, never beside the data).
-  // All fold into one SOFTWARE_UPDATE pass. Captures main-software-update.png (the available +
-  // downloading view) as the rubric evidence the SETTINGS_VIEW shot does not cover.
+// SOFTWARE_UPDATE — §19 R03/R04/R06 (G3): the Settings → Software Update group. Routing to
+// Settings (with the GUI-only window.stint.update bridge injected — the SAME getVersion /
+// check / download / reveal / onUpdateProgress shape production's preload exposes) renders:
+//   VERSION (R06)        — the Current-version row prints the stamped APP_VERSION read over
+//                          update.getVersion() (the value tt --version reports; here 2026.6.24).
+//   CHECK (R03)          — a "Check now" button whose click calls update.check() and paints the
+//                          verdict: an "Update available · <newer version>" result line + the
+//                          .pill.new linking the release (here 2026.7.1).
+//   GUIDED DOWNLOAD (R04)— a "Download & install <version>" primary action whose click calls
+//                          update.download(); the replayed progress frames drive a live
+//                          progress bar (.step .bar, ~42% mid-download) and, on the terminal
+//                          'ready' frame, flip the action to "Reveal installer" wired to
+//                          update.reveal(). The numbered guided steps include the one-time
+//                          Gatekeeper / first-launch approval beat (no Developer ID).
+//   NO-DB (R04)          — the panel carries the "Updates never touch the database" note (the
+//                          artifact downloads to a temp folder, never beside the data).
+// All fold into one SOFTWARE_UPDATE pass. Captures main-software-update.png (the available +
+// downloading view) as the rubric evidence the SETTINGS_VIEW shot does not cover.
+async function sceneSoftwareUpdate(browser) {
   await withPage(
     browser,
     softwareUpdateState(),
@@ -4154,20 +4224,22 @@ async function main() {
     },
     { update: UPDATE_FIXTURE },
   );
+}
 
-  // BACKUPS_SECTION — §20 R04 / §17 R12: the Settings → Backups group. Routing to Settings (with
-  // the canned listBackups mock + the backupsState snapshot carrying lastBackupUtc + the retention
-  // count) renders, as DETERMINISTIC Playwright facts (not just PARITY_REACH IPC presence):
-  //   LAST BACKUP   — the "Last backup" status line prints the newest backup's timestamp + a
-  //                   "verified" pill (off state.lastBackupUtc).
-  //   RETENTION     — the retention picker (backupRetention) reflects the snapshot's value (5) and
-  //                   persists a change over the SAME setSetting channel `tt config set` uses.
-  //   RESTORE LIST  — one row per window.stint.listBackups() entry (name · createdUtc · size), each
-  //                   with a Restore… action.
-  //   RESTORE GATE  — Restore… is destructive, so it goes through the §12 R13 confirm gate: the
-  //                   first click only ARMS the confirm (restoreBackup NOT yet called); only the
-  //                   explicit confirm fires window.stint.restoreBackup({name}) — exactly once, with
-  //                   the chosen backup's name. Captures main-backups.png as the rubric evidence.
+// BACKUPS_SECTION — §20 R04 / §17 R12: the Settings → Backups group. Routing to Settings (with
+// the canned listBackups mock + the backupsState snapshot carrying lastBackupUtc + the retention
+// count) renders, as DETERMINISTIC Playwright facts (not just PARITY_REACH IPC presence):
+//   LAST BACKUP   — the "Last backup" status line prints the newest backup's timestamp + a
+//                   "verified" pill (off state.lastBackupUtc).
+//   RETENTION     — the retention picker (backupRetention) reflects the snapshot's value (5) and
+//                   persists a change over the SAME setSetting channel `tt config set` uses.
+//   RESTORE LIST  — one row per window.stint.listBackups() entry (name · createdUtc · size), each
+//                   with a Restore… action.
+//   RESTORE GATE  — Restore… is destructive, so it goes through the §12 R13 confirm gate: the
+//                   first click only ARMS the confirm (restoreBackup NOT yet called); only the
+//                   explicit confirm fires window.stint.restoreBackup({name}) — exactly once, with
+//                   the chosen backup's name. Captures main-backups.png as the rubric evidence.
+async function sceneBackupsSection(browser) {
   await withPage(browser, backupsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
     await page.waitForSelector('#backups-panel .set-grp', { state: 'attached' });
@@ -4241,12 +4313,14 @@ async function main() {
       'main-backups.png',
     );
   });
+}
 
-  // RECOVERY_NOTICE — §20 R05 / §17 R12: the corruption-recovery banner. With a snapshot carrying a
-  // non-null recoveryNotice (the DB was recovered from a backup on launch), routing to Settings
-  // renders a one-shot banner that names BOTH the backup it recovered from (recoveredFrom) AND the
-  // quarantined `.corrupted` file it set aside (quarantinedTo), as a deterministic Playwright fact.
-  // The Backups group + a reachable Restore… still render alongside it. Captures main-recovery.png.
+// RECOVERY_NOTICE — §20 R05 / §17 R12: the corruption-recovery banner. With a snapshot carrying a
+// non-null recoveryNotice (the DB was recovered from a backup on launch), routing to Settings
+// renders a one-shot banner that names BOTH the backup it recovered from (recoveredFrom) AND the
+// quarantined `.corrupted` file it set aside (quarantinedTo), as a deterministic Playwright fact.
+// The Backups group + a reachable Restore… still render alongside it. Captures main-recovery.png.
+async function sceneRecoveryNotice(browser) {
   await withPage(browser, recoveryState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
     await page.waitForSelector('#backups-panel #recovery-notice', { state: 'attached' });
@@ -4276,18 +4350,20 @@ async function main() {
       'main-recovery.png',
     );
   });
+}
 
-  // PARITY_REACH — §17 R8: the rendered window surfaces an affordance for EVERY capability,
-  // so nothing tt can do is unreachable from the GUI. Two parts in one item:
-  //   (1) DETERMINISTIC sub-fact (machine-scored): the injected window.stint — the same
-  //       preload surface production exposes — provides a callable method for EVERY IPC
-  //       channel in CHANNELS (the parity-matrix's GUI side). A channel with no method is a
-  //       capability the renderer literally cannot invoke; this fails the moment one appears
-  //       without a backing method, guarding every future channel addition.
-  //   (2) REACH evidence (subjective, scored over screenshots): the persistent left-nav
-  //       routes to each of the five views (Timer / Entries / Clients / Reports / Settings)
-  //       and each view exposes its actions — captured as one screenshot per view so a
-  //       human/LLM can confirm the discoverable affordance for each capability class.
+// PARITY_REACH — §17 R8: the rendered window surfaces an affordance for EVERY capability,
+// so nothing tt can do is unreachable from the GUI. Two parts in one item:
+//   (1) DETERMINISTIC sub-fact (machine-scored): the injected window.stint — the same
+//       preload surface production exposes — provides a callable method for EVERY IPC
+//       channel in CHANNELS (the parity-matrix's GUI side). A channel with no method is a
+//       capability the renderer literally cannot invoke; this fails the moment one appears
+//       without a backing method, guarding every future channel addition.
+//   (2) REACH evidence (subjective, scored over screenshots): the persistent left-nav
+//       routes to each of the five views (Timer / Entries / Clients / Reports / Settings)
+//       and each view exposes its actions — captured as one screenshot per view so a
+//       human/LLM can confirm the discoverable affordance for each capability class.
+async function sceneParityReach(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     // (1) Every CHANNELS entry is exposed as a callable on window.stint.
     const methodProbe = await page.evaluate((channels) => {
@@ -4324,16 +4400,97 @@ async function main() {
       'parity-settings.png',
     );
   });
+}
 
-  // DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
-  // counted as an automated pass; the screenshots are the evidence a human/LLM
-  // scores against acceptance/criteria/judge-rubric.md.
+// DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
+// counted as an automated pass; the screenshots are the evidence a human/LLM
+// scores against acceptance/criteria/judge-rubric.md.
+async function sceneDesktopFeel() {
   record(
     'DESKTOP_FEEL',
     null,
     'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
     'main-running.png',
   );
+}
+
+/**
+ * The declarative rubric-row -> scene table (issue #85). Each entry binds the
+ * acceptance/criteria/judge-rubric.md row id(s) a scene proves to the function that
+ * drives it; the driver runs them in order and throws if a scene records an item it
+ * does not declare — or misses one it does — so rubric↔scene drift fails loud instead
+ * of silently accumulating. `node run-judge.mjs --list-items` prints the bound row ids
+ * for the bind test without launching a browser.
+ */
+const SCENES = {
+  EMPTY_STATE: { items: ['EMPTY_STATE'], run: sceneEmptyState },
+  NAV_SHELL: { items: ['NAV_SHELL'], run: sceneNavShell },
+  KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], run: sceneKeyboardFocus },
+  TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], run: sceneTrayCountup },
+  TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], run: sceneTrayPopoverSurface },
+  IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], run: sceneInWindowTimer },
+  CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], run: sceneCrossViewFreshness },
+  TIMER_VIEW: { items: ['TIMER_VIEW'], run: sceneTimerView },
+  FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], run: sceneFutureStartGuard },
+  FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], run: sceneFavoritesRail },
+  ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE'], run: sceneAccentDiscipline },
+  CLICKABILITY: { items: ['CLICKABILITY'], run: sceneClickability },
+  START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], run: sceneStartAttributes },
+  START_FORM: { items: ['START_FORM'], run: sceneStartForm },
+  RUNNING_SINGLE_ACTION: { items: ['RUNNING_SINGLE_ACTION'], run: sceneRunningSingleAction },
+  UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], run: sceneUnifiedFormAdd },
+  UNIFIED_FORM_EXPANDER: { items: ['UNIFIED_FORM_EXPANDER'], run: sceneUnifiedFormExpander },
+  UNIFIED_FORM: { items: ['UNIFIED_FORM'], run: sceneUnifiedForm },
+  MULTILINE_DESC: { items: ['MULTILINE_DESC'], run: sceneMultilineDesc },
+  OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
+  SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
+  WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
+  MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
+  MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], run: sceneMergeNoconflict },
+  MERGE_GAP: { items: ['MERGE_GAP'], run: sceneMergeGap },
+  DELETE_CONFIRM: { items: ['DELETE_CONFIRM'], run: sceneDeleteConfirm },
+  CONFIRM_DELETE: { items: ['CONFIRM_DELETE'], run: sceneConfirmDelete },
+  CONFIRM_DESTRUCTIVE: { items: ['CONFIRM_DESTRUCTIVE'], run: sceneConfirmDestructive },
+  CLIENTS_VIEW: { items: ['CLIENTS_VIEW'], run: sceneClientsView },
+  CONFIRM_ARCHIVE: { items: ['CONFIRM_ARCHIVE'], run: sceneConfirmArchive },
+  RESTORE_ARCHIVED: { items: ['RESTORE_ARCHIVED'], run: sceneRestoreArchived },
+  TAG_CHIPS: { items: ['TAG_CHIPS'], run: sceneTagChips },
+  REPORTS_VIEW: { items: ['REPORTS_VIEW'], run: sceneReportsView },
+  ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], run: sceneEntriesCalendar },
+  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
+  LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
+  SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
+  TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindow },
+  TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindowAround },
+  SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], run: sceneSoftwareUpdate },
+  BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
+  RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
+  PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
+  DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
+};
+
+async function main() {
+  mkdirSync(EVIDENCE, { recursive: true });
+  const exe = resolveChromium();
+  const browser = await chromium.launch({
+    executablePath: exe,
+    headless: true,
+    args: ['--no-sandbox', '--disable-gpu'],
+  });
+
+  for (const [name, scene] of Object.entries(SCENES)) {
+    const before = results.length;
+    await scene.run(browser);
+    const recorded = [...new Set(results.slice(before).map((r) => r.item))];
+    const missing = scene.items.filter((i) => !recorded.includes(i));
+    const undeclared = recorded.filter((i) => !scene.items.includes(i));
+    if (missing.length || undeclared.length) {
+      throw new Error(
+        `scene ${name} drifted from its declared rubric rows — ` +
+          `missing: [${missing.join(', ')}] undeclared: [${undeclared.join(', ')}]`,
+      );
+    }
+  }
 
   await browser.close();
 
@@ -4366,7 +4523,13 @@ async function main() {
   );
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv.includes('--list-items')) {
+  // The bind-test listing mode (the record.mjs precedent): every rubric row id the
+  // scene table declares, one per line, no browser.
+  for (const id of [...new Set(Object.values(SCENES).flatMap((s) => s.items))]) console.log(id);
+} else {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}
