@@ -3,7 +3,7 @@ name: change-requirements
 description: >-
   Use when the user wants to add, change, or remove Stint product
   requirements — anything that alters the context/ spec docs (prd, concept,
-  glossary, acceptance). Designs the change; does not execute it.
+  glossary, acceptance, architecture). Designs the change; does not execute it.
 ---
 
 # Change requirements (Stint)
@@ -40,7 +40,7 @@ Read first for house style and the target shape:
 1. Capture the user's raw list of requested changes verbatim. Do not start
    editing anything.
 2. Skim the current docs that the changes touch (`context/prd.html`, `context/concept.html`,
-   `context/glossary.html`, `context/acceptance.html`) and the mockups in `context/mockups/` so your
+   `context/glossary.html`, `context/acceptance.html`, `context/architecture.html`) and the mockups in `context/mockups/` so your
    questions are grounded in what exists. **Consult the codebase directly for
    anything code can answer** (current schema, current CLI surface, current GUI
    views) instead of asking the user.
@@ -105,8 +105,8 @@ workflow's swap stage. Only rename docs that actually change.
 ### 2b. Author the new docs
 
 Author the new `context/prd.html` / `context/concept.html` / `context/glossary.html` / `context/acceptance.html`
-in the house style (per the `context/process.html` §04 authoring rules),
-reflecting every signed-off decision:
+/ `context/architecture.html` in the house style (per the `context/process.html`
+§04 authoring rules), reflecting every signed-off decision:
 
 - `context/prd.html` — full requirements including new sections and the `core` badges
   (Step 3). Renumber within each section as needed; the transition doc's
@@ -116,6 +116,11 @@ reflecting every signed-off decision:
   list rejected synonyms).
 - `context/acceptance.html` — the AC strategy and PRD-to-method coverage map, updated for
   the new/changed requirements.
+- `context/architecture.html` — the non-normative runtime rendering, updated wherever a
+  changed requirement moves the topology, write path, IPC surface, or module
+  map it consolidates. It is a deliberate second rendering of PRD facts
+  (process.html §06's fan-out inventory) — leaving it out of the rewrite is
+  how it drifts.
 
 ### 2c. Author `requirements-transition.md` (the work-list)
 
