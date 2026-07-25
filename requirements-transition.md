@@ -168,3 +168,74 @@ test applies). Both loop into a bounded improvement pass before recordings.
   11 mockups.
 
 The human gate is the **PR merge**.
+
+---
+
+## H. Execution handoff (session-only facts the tree can't tell you)
+
+Authored by the change-requirements session; consumed by the
+`requirements-transition` run. Authoring is DONE — do not re-run
+change-requirements.
+
+**Anchors.** The transition's single PR is **#132** (this branch); the
+opportunities collector is issue **#131**; branch CI is green as of `4767fb3`
+(the only failure ever was the sloc census, fixed by categorizing the two new
+files — `gen-tokens.mjs` and the guard test will auto-categorize under
+existing `scripts/` and `test/` rules).
+
+**Token-block contract.** All 11 mockups already carry the generated CSS block
+between `/* STINT-TOKENS start */ … /* STINT-TOKENS end */` markers —
+hand-landed at authoring time and **byte-identical across files; they are the
+format oracle**. `scripts/gen-tokens.mjs` must emit exactly that block from
+`context/design.tokens.json` (its first run over the mockups must be a no-op
+diff). `packages/gui/renderer/styles.css` has NO markers yet: the generator's
+first run replaces its `:root` token declarations (~lines 27–78), which
+retires `--ink-soft` (V8) and renames nothing else app-side (the app names
+were already canonical).
+
+**Contrast oracle for the guard test** (WCAG 2.2 relative luminance; assert
+permitted pairs ≥ floor, and that prohibited pairs stay out of surfaces):
+
+| Pair | Ratio | Status |
+|---|---|---|
+| ink on paper / muted on paper | 16.02 / 5.93 | permitted, ≥4.5 |
+| muted on hover / muted on wash | 4.93 / 5.31 | permitted, ≥4.5 |
+| accent-ink on paper / on sidebar | 4.90 / 4.73 | permitted, ≥4.5 |
+| white on accent-solid | 4.98 | permitted, ≥4.5 |
+| run on paper / run on run-weak | 4.98 / 4.54 | permitted, ≥4.5 |
+| danger on paper / on danger-weak | 5.12 / 4.54 | permitted, ≥4.5 |
+| flag on paper / on flag-bg | 11.17 / 10.47 | permitted, ≥4.5 |
+| accent (ring/icons) on paper | 3.80 | permitted non-text, ≥3 |
+| faint on paper | 3.28 | **prohibited as text** (decorative/disabled only) |
+| accent-ink on accent-weak | 4.33 | **prohibited pair** (D04) |
+| white on accent (tomato·9) | 3.87 | **prohibited pair** — why accent-solid exists |
+| run-dot on paper | 2.98 | exempt: always paired with label (D05) |
+
+**Known residue the conformance waves must close** (found at authoring, left
+deliberately for gated execution):
+
+1. **Off-grid spacing survives in mockups and app**: values like 18/22/26/34
+   px paddings/margins (`.vhead`, `.editor`, `.win` margins, etc.) violate
+   D07's legal set {2,4,8,12,16,20,…}. Retune mockups and `styles.css`
+   together so JUDGE compares like with like.
+2. **Radius one-offs vs D08's trio**: 7px calendar cells, 6px nav
+   arrows/disclosure, 10px snap pill, 5px seg buttons. Expected resolution:
+   retune to 8px (controls); if any genuinely needs a sub-radius, that is a
+   design.html amendment to raise with the user, not a silent exception.
+3. **`styles.css` is entirely pre-transition**: old palette values throughout;
+   app-side V-rows V3/V5/V7/V8 unimplemented; JUDGE screenshot baselines and
+   all evidence will churn — regenerate per Stage 3, never hand-edit.
+4. **STATES.md carries 10 `TODO(transition)` cells** (all empty states + the
+   update-download-error and popover-refusal paths) — §R review 1 treats each
+   unclosed cell as an insufficiency.
+5. **JUDGE `NAV_SHELL`** (and any scene asserting the old accent-weak
+   `.nav-item.active` marker) must be updated to the D12 lifted-chip idiom
+   before baselines regenerate, or the judge will pin the retired look.
+
+**Sequencing hint.** Land `gen-tokens.mjs` + the guard test in the first wave:
+every later conformance wave is then caught by the guard instead of by review.
+
+**Provenance.** Scale values fetched verbatim from
+`radix-ui/colors` `src/light.ts` (main, July 2026); contrast ratios computed
+with the standard WCAG formula — recompute from `design.tokens.json`, don't
+trust this table blindly.
