@@ -24,8 +24,8 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — inline start-only picker disclosure | Opens in flow under the field, start grip only, future-fade mask | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — start panel hidden while running | `#start-panel`/`#toggle` hidden; exactly one Description field (`#le-desc`) | JUDGE `RUNNING_SINGLE_ACTION` — `timer-running-single-action.png` | |
 | **Ideal** — favorites rail populated | One row per favorite, Resume + kebab, monochrome chrome | JUDGE `FAVORITES_RAIL` — `timer-favorites.png` | |
-| **Edge** — pin-as-favorite form | Pin affordance present, fires `pinFavorite` on submit | JUDGE `FAVORITES_RAIL` (presence only) | Submit path not machine-driven — TODO(transition) |
-| **Edge** — favorites kebab (rename/unpin) | Kebab exposes rename/unpin per row | JUDGE `FAVORITES_RAIL` (presence), GOLD `parity.test.ts` (channels callable) | Click-through rename/unpin flow undriven — TODO(transition) |
+| **Edge** — pin-as-favorite form | Pin affordance present, fires `pinFavorite` on submit | JUDGE `FAVORITES_RAIL` (inline pin driven to completion: the typed name committed on Enter fires `pinFavorite` and the chip lands in the rail) — `timer-favorites.png` | |
+| **Edge** — favorites kebab (rename/unpin) | Kebab exposes rename/unpin per row | JUDGE `FAVORITES_RAIL` (kebab rename and unpin each driven to completion: `renameFavorite` renames the chip in place; `unpinFavorite` fires exactly once and the chip leaves the rail) — `timer-favorites.png`; GOLD `parity.test.ts` (channels callable) | |
 | **Empty** — `#fav-empty` | "pin a favorite" copy + mentions `tt fav` | JUDGE `FAVORITES_RAIL` — `timer-favorites-empty.png` | |
 
 ## Entries view (`index.html` `data-view="entries"`, `app.js`)
@@ -33,7 +33,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | State | What it looks like | Evidence | Notes/Waiver |
 |---|---|---|---|
 | **Ideal** — compact timer strip, running | Mirrors running count-up/desc, no Stop control | JUDGE `IN_WINDOW_TIMER` — `main-timer.png` | |
-| **Edge** — compact timer strip, idle | 00:00:00, empty description, still painted (`app.js:624-638`) | — | Idle strip case not machine-scored by `IN_WINDOW_TIMER` — TODO(transition) |
+| **Edge** — compact timer strip, idle | 00:00:00, empty description, still painted (`app.js:624-638`) | JUDGE `IN_WINDOW_TIMER` (idle page) — `main-timer-idle.png` | |
 | **Edge** — overlap warn banner (`#overlap-banner`) | "This entry overlaps N… allowed, but flagged" | JUDGE `OVERLAP_BANNER` — `main-overlap-banner.png` | |
 | **Error** — `.banner.error` variant | Refused write reworded as a block on the same banner region | JUDGE `WRITE_REJECTION_FEEDBACK` (site d) — `main-edit-reject.png` | |
 | **Ideal** — unified add form | Two-column card, inline picker, Save-only commit | JUDGE `UNIFIED_FORM_ADD` — `unified-add.png`; BDD `reachable_by_hand.feature` "Backfill a completed past entry by hand" | |
@@ -47,7 +47,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — inline split form | Hover Split opens instant picker defaulting to midpoint | JUDGE `SPLIT_AFFORDANCE` — `main-split.png`; BDD `reachable_by_hand.feature` "Split an entry by hand" | |
 | **Edge** — two-step delete gate | Arm click shows confirm, no `remove` call; explicit confirm removes once | JUDGE `CONFIRM_DELETE`, `DELETE_CONFIRM` — `main-confirm-delete.png`, `main-confirm.png`; BDD "Deleting an entry without confirmation is refused" | |
 | **Empty** — "No entries yet" | Never-tracked instruct copy ("press Ctrl+Alt+T" / `tt start`) | JUDGE `EMPTY_STATE` — `main-empty.png`; `app.js:683-691` | |
-| **Empty** — "No matching entries" | Query-narrowed-to-nothing instruct copy ("Widen the range…") | `app.js:697-707` | No dedicated JUDGE scene/screenshot for this variant — TODO(transition) |
+| **Empty** — "No matching entries" | Query-narrowed-to-nothing instruct copy ("Widen the range…") | JUDGE `LIVE_FILTER` (no-match search) — `main-no-matching.png`; `app.js:698-708` | |
 
 ## Merge-conflict modal (the app's only modal, `.editor.conflict-prompt` in `app.js`)
 
@@ -69,15 +69,15 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — unreferenced archive (direct) | Archive commits with no confirm step | JUDGE `CLIENTS_VIEW` (Globex path) — `main-clients.png` | |
 | **Edge** — archived restore list | "Show archived" toggle reveals archived rows with `.pill` + Restore | JUDGE `RESTORE_ARCHIVED` — `main-clients-archived.png` | |
 | **Ideal** — tags strip | Active tags with rename/archive in place | JUDGE `TAG_CHIPS` — `main-tags.png`; BDD "Tag lifecycle by hand" | |
-| **Empty** — "No clients yet" | Instruct copy, mentions `tt client add` (`app.js:2443-2449`) | — | No dedicated JUDGE scene/screenshot — TODO(transition) |
-| **Empty** — "No tags yet" | Instruct copy, mentions `tt tag add` (`app.js:2482-2489`) | — | No dedicated JUDGE scene/screenshot — TODO(transition) |
+| **Empty** — "No clients yet" | Instruct copy, mentions `tt client add` (`app.js:2449-2455`) | JUDGE `CLIENTS_VIEW` (empty-reference-data page) — `main-clients-empty.png` | |
+| **Empty** — "No tags yet" | Instruct copy, mentions `tt tag add` (`app.js:2488-2496`) | JUDGE `CLIENTS_VIEW` (empty-reference-data page) — `main-clients-empty.png` | |
 
 ## Reports view (`index.html` `data-view="reports"`, `reports.js`)
 
 | State | What it looks like | Evidence | Notes/Waiver |
 |---|---|---|---|
 | **Ideal** — saved-definition list | One card per def: name, spec summary, Run/Edit | JUDGE `REPORTS_VIEW` — `reports-list.png`; BDD "Build a grouped report by hand" | |
-| **Empty** — `#rep-defs-empty` | "No saved reports yet." (`index.html:304`) | — | No dedicated JUDGE scene/screenshot — TODO(transition) |
+| **Empty** — `#rep-defs-empty` | "No saved reports yet." (`index.html:312`) | JUDGE `REPORTS_VIEW` (zero-saved-defs page) — `reports-empty.png` | |
 | **Edge** — card kebab (rename/delete) | Swaps in place to Rename/Delete, Delete behind the confirm gate | JUDGE `REPORTS_VIEW` (Edit/Delete sub-fact); BDD `saved_reports.feature` "Renaming then deleting a saved report removes it from the list" | |
 | **Ideal** — builder (new/edit) | Range presets + Custom date pair, group-by, filters, rounding | JUDGE `REPORTS_VIEW` — `reports-list.png`, `reports-run.png` | |
 | **Error** — `#rep-warning`, incomplete custom range | No-op save, builder stays open, missing field takes focus | JUDGE `REPORTS_VIEW` (§12 R21 sub-facts) | |
@@ -95,9 +95,9 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — Check-now busy text swap | Button disables, reads "Checking…" | `settings.js:309-310` | This is the app's one loading affordance (see preamble); not separately screenshotted |
 | **Ideal** — update-available pill | "Update available · vX" + `.pill.new` link | JUDGE `SOFTWARE_UPDATE` — `main-software-update.png` | |
 | **Edge** — guided download/downloading phase | Live progress bar, numbered steps incl. Gatekeeper beat | JUDGE `SOFTWARE_UPDATE` — `main-software-update.png` | |
-| **Error** — guided panel error phase | Download failure flips panel to an error phase (`settings.js:337-339`) | — | No dedicated JUDGE scene/screenshot — TODO(transition) |
+| **Error** — guided panel error phase | Download failure flips panel to an error phase (`settings.js:336-345`) | JUDGE `SOFTWARE_UPDATE` (rejecting-download page) — `main-software-update-error.png` | |
 | **Ideal** — Backups: verified pill + Last-backup status | "Last backup …" line with a "verified" pill | JUDGE `BACKUPS_SECTION` — `main-backups.png` | |
-| **Empty** — Backups: no-backups-yet copy | "No backups yet…" / "No backups to restore from yet." (`settings.js:421,445`) | — | No dedicated JUDGE scene/screenshot — TODO(transition) |
+| **Empty** — Backups: no-backups-yet copy | "No backups yet…" / "No backups to restore from yet." (`settings.js:421,445`) | JUDGE `BACKUPS_SECTION` (never-backed-up page) — `main-backups-empty.png` | |
 | **Edge** — restore list + per-item confirm | One row per backup, Restore… arms then confirms exactly once | JUDGE `BACKUPS_SECTION` — `main-backups.png` | |
 | **Error** — one-shot corruption-recovery banner (`.banner.recovery`) | Names both `recoveredFrom` and `quarantinedTo` | JUDGE `RECOVERY_NOTICE` — `main-recovery.png`; BDD `backup_recovery.feature` "A corrupted database is recovered from the latest backup without data loss" | |
 
@@ -107,10 +107,10 @@ waiver with a reason; a new view or state added without a row here is a coverage
 |---|---|---|---|
 | **Ideal** — idle popover | Bare dot, 00:00:00, "nothing running" | JUDGE `TRAY_POPOVER_SURFACE` (idle snapshot) — `popover-tray-surface.png` | |
 | **Ideal** — running popover | Count-up, "since HH:MM", description, client/project, tags | JUDGE `TRAY_COUNTUP`, `TRAY_POPOVER_SURFACE` — `popover-running-1.png`, `popover-running-2.png`, `popover-running.png` | |
-| **Error** — refused toggle (`#pop-warning`) | Announced region shows the refusal message (`popover.js:66-79`) | — | No dedicated JUDGE scene/screenshot exercises a rejected popover toggle — TODO(transition) |
+| **Error** — refused toggle (`#pop-warning`) | Announced region shows the refusal message (`popover.js:66-79`) | JUDGE `POPOVER_REJECT` — `popover-reject.png` | |
 | **Empty** — N/A | Popover is binary idle/running, no zero-data variant | — | Waived — no empty state applies |
 
 ## How this wires into COVERAGE.md
 
-COVERAGE.md gains a row under the §12 section pointing here as the GUI presentation
-layer's per-state proof; STATES.md is not edited into COVERAGE.md by this change.
+COVERAGE.md carries a row under the §12 section pointing here as the GUI presentation
+layer's per-view × per-state proof; STATES.md is not edited into COVERAGE.md.
