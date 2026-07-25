@@ -1545,7 +1545,12 @@ async function openEntryForm(row, e) {
   row.classList.add('editing');
   const host = $('entry-form-host');
   host.appendChild(form);
-  host.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  // design.html D10/A06: the courtesy scroll is motion, so reduced-motion collapses it to a jump
+  // (the CSS half — the reduced-motion media block in styles.css — cannot reach a JS scroll).
+  host.scrollIntoView({
+    block: 'nearest',
+    behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+  });
   form.querySelector('.edit-desc').focus();
 
   // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
