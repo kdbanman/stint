@@ -17,8 +17,8 @@ Two kinds of output, routed differently:
 
 - **Defects** — the spec or a checklist rule is violated (a token bypassed, a
   floor missed, a state unhandled, a misalignment): one GitHub issue per
-  confirmed problem, labeled **Agentic Design Review Discovery**, into the
-  standing triage flow.
+  confirmed problem, labeled **Agentic Design Review Discovery**, triaged by
+  the `triage-arch-findings` skill (its scope covers both discovery labels).
 - **Opportunities** — the spec is satisfied but the design could be better (a
   new idiom, a palette evolution, dark mode): appended to the standing
   **Design opportunities** issue, one-line handle each. Never filed as defects.

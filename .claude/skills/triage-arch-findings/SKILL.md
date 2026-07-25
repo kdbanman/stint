@@ -2,8 +2,9 @@
 name: triage-arch-findings
 description: >-
   Use when issues filed by an architecture review (labeled "Agentic Arch
-  Review Discovery") need triage into the Triaged backlog. Decides and
-  routes; does not fix.
+  Review Discovery") or a design audit (labeled "Agentic Design Review
+  Discovery") need triage into the Triaged backlog. Decides and routes;
+  does not fix.
 ---
 
 # Triage architecture findings (Stint)
@@ -26,7 +27,10 @@ and labels, then hands each issue to the right downstream path.
 
 `arch-review` critiques the four systems (code, verification apparatus,
 SDLC/process, the `context/` docs as artifacts), grills the owner, and files
-one issue per confirmed problem. This skill triages those issues into the
+one issue per confirmed problem. `design-audit` does the same for the visual
+surface — its grilled findings arrive equally triage-ready, citing
+`design.html` rule ids, and take the identical path here. This skill triages
+those issues into the
 **same `Triaged` contract `triage-qa-findings` produces**, so
 `process-triaged-issues` consumes both streams identically. Its most
 important output is the routing verdict — which issues that orchestrator
