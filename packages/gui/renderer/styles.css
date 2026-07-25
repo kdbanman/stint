@@ -6,11 +6,13 @@
  * overlays), and one strict elevation ladder: canvas → card → raised → popover → modal.
  *
  * ONE RATIONED ACCENT (--accent, the design system's clay, unconditional — not a setting and never
- * overridden at runtime): only each view's single primary action (button.primary), the active nav item,
- * the running-state indicator, and the keyboard focus ring carry it — never decoratively.
+ * overridden at runtime): only each view's single primary action (button.primary), the
+ * running-state indicator, the active nav item's ICON, and the keyboard focus ring carry it —
+ * never decoratively.
  *
- * SELECTION ≠ ACCENT: a chosen segmented-control option / range chip is a RAISED CHIP
- * (warm-paper lift + a soft shadow), NOT a colour fill — the accent stays a signal.
+ * SELECTION ≠ ACCENT (design.html D12): a chosen thing LIFTS — a raised paper chip with a soft
+ * shadow — everywhere, including the nav rail: the active item is a lifted chip whose icon may
+ * take the accent; its chip and label never do.
  *
  * §15 R-clickability / G10 — ONE clickability convention across the whole window:
  *   • clickable text affordance → carries the neutral button background (a non-transparent
@@ -19,7 +21,7 @@
  *   • inert text (.wordmark, .summary, .day-head, .entry .desc/.time, …) → NO button
  *     background; it stays bare prose. The JUDGE CLICKABILITY scan enforces both halves.
  *   • accent → reserved for each view's single primary action + the running state + the active
- *     nav item; never on an ordinary clickable affordance.
+ *     nav item's icon; never on an ordinary clickable affordance.
  *   In-control SUB-affordances (the chip remove glyph, the toggle knob, controls inside an
  *   already-bordered chip/segment/preset row) are the sanctioned exception — the parent
  *   carries the convention.
@@ -108,7 +110,7 @@ header.mast {
 /* The OS title bar already names the app and the strip below carries the running state, so the
    in-content wordmark stays a quiet label rather than a second masthead (design-system: less
    visual noise). */
-.wordmark { font-size: 12px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.wordmark { font-size: 12px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 /* The running state already shows in the compact strip directly below the mast, so the mast's
    duplicate running summary stays hidden — one running indicator, not two (design-system). */
 .summary { display: none; font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -148,7 +150,7 @@ header.mast {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   margin-bottom: 4px;
 }
 .timer-card .clock {
@@ -158,7 +160,7 @@ header.mast {
   line-height: 1.05;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--muted);
 }
 /* The running count-up is one of the two sanctioned accent uses on this card. */
 .timer-card.running .clock { color: var(--accent); }
@@ -167,7 +169,7 @@ header.mast {
 .timer-card .state {
   display: none;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -181,9 +183,9 @@ header.mast {
 .timer-card .ctx .desc { font-size: 15px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
 .timer-card.idle .ctx .desc { color: var(--muted); font-weight: 450; }
 .timer-card .ctx .meta { font-size: 12.5px; color: var(--muted); }
-.timer-card .ctx .flags { display: flex; gap: 6px; margin-top: 8px; }
+.timer-card .ctx .flags { display: flex; gap: 8px; margin-top: 8px; }
 .timer-card .ctx .flags:empty { display: none; }
-.timer-card .btns { display: flex; gap: 9px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
+.timer-card .btns { display: flex; gap: 8px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
 
 /* §12 R14 (G5): the LIVE-EDIT-RUNNING strip — edit the open entry's attributes + start
    time without stopping it. It sits on the warm-paper canvas; its single accent signal is
@@ -192,7 +194,7 @@ header.mast {
    so the single primary action (Stop) keeps the accent. Hidden while idle. */
 .liveedit {
   margin-bottom: 20px;
-  padding: 14px 16px 14px 18px;
+  padding: 16px 16px 16px 16px;
   border: 1px solid var(--rule);
   border-left: 3px solid var(--accent);
   border-radius: var(--r2);
@@ -219,7 +221,7 @@ header.mast {
   background: var(--wash);
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px 8px;
 }
 .liveedit .le-grid {
   display: grid;
@@ -231,39 +233,39 @@ header.mast {
   font-size: 12px;
   color: var(--muted);
 }
-.liveedit .le-editable { color: var(--faint); }
+.liveedit .le-editable { color: var(--muted); }
 /* §12 R14 (G1): the running-start field #le-start is a RAW text input (localInputValue
    format) — there is no native datetime-local on this surface; the calendar affordance is
    the inline start-only picker disclosure below the field. */
 .liveedit .le-field input[type='text'] {
   display: block;
   width: 100%;
-  margin-top: 6px;
+  margin-top: 8px;
   font-family: inherit;
   font-size: 13px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 11px;
+  padding: 8px 12px;
 }
 .liveedit .le-row2 {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   margin-top: 12px;
   flex-wrap: wrap;
 }
 .liveedit .le-bill {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
   color: var(--ink);
 }
 .liveedit .le-note {
   font-size: 11.5px;
-  color: var(--faint);
+  color: var(--muted);
   margin-left: auto;
 }
 
@@ -288,7 +290,7 @@ header.mast {
   transition: background 0.12s, box-shadow 0.12s;
 }
 .timer-strip:hover { box-shadow: var(--sh-raise); }
-.timer-strip .strip-clock-block { display: flex; align-items: center; gap: 9px; flex: none; }
+.timer-strip .strip-clock-block { display: flex; align-items: center; gap: 8px; flex: none; }
 .timer-strip .strip-dot {
   width: 8px;
   height: 8px;
@@ -304,7 +306,7 @@ header.mast {
   line-height: 1;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--muted);
 }
 /* The running count-up is one of the sanctioned accent uses on the strip. */
 .timer-strip.running .clock { color: var(--accent); }
@@ -340,7 +342,7 @@ header.mast {
   background: var(--flag-bg);
   border: 1px solid var(--flag-line);
   border-radius: var(--r1);
-  padding: 7px 11px;
+  padding: 8px 12px;
   margin-bottom: 12px;
 }
 .banner[hidden] { display: none; }
@@ -364,7 +366,7 @@ header.mast {
   gap: 8px;
 }
 .entry-form .ef-flags[hidden] { display: none; }
-.entry-form .ef-sleep { display: flex; align-items: center; gap: 10px; }
+.entry-form .ef-sleep { display: flex; align-items: center; gap: 12px; }
 .entry-form .ef-dur {
   font-family: var(--num);
   font-size: 12.5px;
@@ -375,19 +377,19 @@ header.mast {
 
 /* §12 R10: the struck-through raw duration beside a slept entry's trimmed billable, shown in the
    editor once the slept time is subtracted. The trimmed value reads as the live figure; the raw
-   one is struck in a faint gray. No accent. */
+   one is struck in the muted ink (design.html D04 — faint is never readable text). No accent. */
 .struck,
 s {
   text-decoration: line-through;
-  color: var(--faint);
+  color: var(--muted);
 }
 
 /* The report view's in-page back/forward nav — a small horizontal row of monochrome links.
    Scoped to the bare `.nav` so the main-window left rail (`.shell .nav`, below) is unaffected. */
 .nav {
   display: flex;
-  gap: 6px;
-  padding: 10px 0 0;
+  gap: 8px;
+  padding: 12px 0 0;
 }
 .nav .nav-link {
   background: var(--paper);
@@ -395,7 +397,7 @@ s {
   color: var(--muted);
   font-size: 13px;
   font-weight: 500;
-  padding: 6px 12px;
+  padding: 8px 12px;
   border-radius: var(--r1);
 }
 .nav .nav-link:hover { background: var(--hover); color: var(--ink); }
@@ -407,10 +409,9 @@ s {
 }
 
 /* §12 R3 / R13: the main window's persistent left-hand nav rail. A fixed-width warm-sidebar
-   column of line-icon items. The active item alone is marked with the accent (R13) via the
-   soft accent wash + accent ink + an inset accent hairline — the one sanctioned accent use in
-   the window chrome beyond the primary action / running state. Items are <button>s, keyboard-
-   reachable with a visible focus ring. */
+   column of line-icon items. The active item is a LIFTED paper chip (design.html D12 —
+   selection ≠ accent): ink label + the shared chip-lift shadow, with only its ICON taking
+   the accent. Items are <button>s, keyboard-reachable with a visible focus ring. */
 .shell .nav {
   /* §12 R3 (G7): the rail is a FIXED width on resize — spell out every flex term so a wide
      or narrow window can never squeeze or grow it; the views column absorbs it all. The
@@ -454,17 +455,18 @@ s {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-/* The active item is the one place the rail uses the accent: a soft accent wash + accent
-   ink + an inset accent hairline. Sanctioned in the JUDGE accent scan. */
+/* design.html D12: the active item is a raised paper chip — surface lift + the shared
+   chip-lift shadow, ink label. Only its icon (below) takes the accent; the chip and label
+   never do (accent-ink on accent-weak was the prohibited 4.33:1 pair). */
 .nav-item.active {
-  background: var(--accent-weak);
-  color: var(--accent-ink);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+  background: var(--paper);
+  color: var(--ink);
   font-weight: 590;
+  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
 }
 .nav-item.active .ic { color: var(--accent); }
 
-.toolbar { display: flex; gap: 10px; align-items: center; padding: 4px 0 12px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 12px; align-items: center; padding: 4px 0 12px; flex-wrap: wrap; }
 .toolbar[hidden] { display: none; }
 
 /* The toolbar search box — a restrained warm field, pushed to the right. Never the accent. */
@@ -475,7 +477,7 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 7px 11px;
+  padding: 8px 12px;
   margin-left: auto;
   min-width: 200px;
 }
@@ -490,7 +492,7 @@ s {
 .entries-ctrl {
   display: grid;
   grid-template-columns: 64px 1fr;
-  gap: 10px 14px;
+  gap: 12px 16px;
   align-items: center;
   padding: 4px 2px 16px;
   margin-bottom: 4px;
@@ -504,7 +506,7 @@ s {
 .start-panel {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   margin-bottom: 20px;
   padding: 16px 20px;
   border: 1px solid var(--rule);
@@ -517,9 +519,9 @@ s {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
 }
-.start-panel .sp-actions { display: flex; gap: 9px; align-items: center; }
+.start-panel .sp-actions { display: flex; gap: 8px; align-items: center; }
 /* §12 R05 (issue #51): the start panel is idle-only — renderTimerCard sets [hidden] while a
    timer runs, and the explicit display:none keeps it winning over the flex display above. */
 .start-panel[hidden] { display: none; }
@@ -528,15 +530,15 @@ s {
 .start-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px 16px;
   margin-bottom: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--r2);
   background: var(--wash);
 }
 .start-form[hidden] { display: none; }
-.start-form .start-row { display: flex; gap: 10px; }
+.start-form .start-row { display: flex; gap: 12px; }
 .start-form input[type="text"] {
   flex: 1;
   font-family: var(--sans);
@@ -545,12 +547,12 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 11px;
+  padding: 8px 12px;
 }
 .start-form .start-bill {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
   color: var(--ink);
 }
@@ -569,7 +571,7 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 11px;
+  padding: 8px 12px;
   min-height: calc(3 * 1.4em + 16px);
   overflow-y: auto;
   resize: vertical;
@@ -583,16 +585,16 @@ s {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 16px 16px;
   margin-bottom: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--r2);
   background: var(--wash);
 }
 .unified-form[hidden] { display: none; }
-.unified-form .uf-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 18px; }
-.unified-form .uf-fields { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-.unified-form .uf-picker { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.unified-form .uf-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
+.unified-form .uf-fields { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.unified-form .uf-picker { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .unified-form .uf-field {
   display: flex;
   align-items: center;
@@ -611,11 +613,11 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 11px;
+  padding: 8px 12px;
 }
 .unified-form .uf-select:disabled { color: var(--muted); background: var(--wash); }
 .unified-form .uf-tags { align-items: flex-start; }
-.unified-form .uf-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; flex: 1; min-width: 0; }
+.unified-form .uf-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; min-width: 0; }
 .unified-form .uf-tag-add {
   flex: 1;
   min-width: 90px;
@@ -625,20 +627,20 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 5px 9px;
+  padding: 4px 8px;
 }
 .unified-form .uf-bill {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
   color: var(--ink);
 }
 /* §12 R17: the collapsed Start/Stop expander under the picker — a quiet disclosure over the raw
    exact-time fields (the exact / overnight escape hatch). Monochrome; no accent. */
 .unified-form .uf-times { display: flex; flex-direction: column; gap: 8px; }
-.unified-form .uf-times .ef-times-body { display: flex; gap: 10px; }
-.unified-form .uf-foot { display: flex; gap: 9px; align-items: center; }
+.unified-form .uf-times .ef-times-body { display: flex; gap: 12px; }
+.unified-form .uf-foot { display: flex; gap: 8px; align-items: center; }
 .unified-form .uf-foot-spacer { flex: 1; }
 
 /* Legacy add-form range-field chrome (kept for other surfaces that still pair a text input with
@@ -663,13 +665,13 @@ s {
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 10px;
+  padding: 8px 12px;
   cursor: pointer;
 }
 .range-pick-btn:hover { background: var(--hover); color: var(--ink); }
 /* §15 accent discipline: the picker trigger is a secondary ghost field-trigger, not a primary
-   action — it carries the NEUTRAL keyboard ring (only button.primary / .nav-item.active take the
-   accent ring). Matches the input/select :focus-visible ring. */
+   action — it carries the NEUTRAL keyboard ring (only button.primary and the nav rail items
+   take the accent ring). Matches the input/select :focus-visible ring. */
 .range-pick-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 
 .add-warning {
@@ -678,7 +680,7 @@ s {
   background: var(--flag-bg);
   border: 1px solid var(--flag-line);
   border-radius: var(--r1);
-  padding: 7px 11px;
+  padding: 8px 12px;
 }
 .add-warning[hidden] { display: none; }
 
@@ -693,8 +695,8 @@ s {
   background: var(--danger-weak);
   border: 1px solid var(--danger);
   border-radius: var(--r1);
-  padding: 7px 11px;
-  margin-top: 10px;
+  padding: 8px 12px;
+  margin-top: 12px;
 }
 .form-error[hidden] { display: none; }
 /* The split-confirm + inline-rename regions sit on one baseline with the field + buttons, so
@@ -725,7 +727,7 @@ button {
   background: var(--paper);
   color: var(--ink);
   border-radius: var(--r1);
-  padding: 8px 14px;
+  padding: 8px 16px;
   cursor: pointer;
   white-space: nowrap;
   transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
@@ -746,11 +748,11 @@ button.primary:hover { background: color-mix(in srgb, var(--accent-solid) 88%, b
    neutral button background, staying quieter than .primary only via muted ink / .small sizing. */
 button.ghost { color: var(--muted); }
 button.ghost:hover { color: var(--ink); }
-button.small { font-size: 12px; padding: 6px 11px; }
+button.small { font-size: 12px; padding: 8px 12px; }
 /* The .small.primary cascade made explicit — keeps the .small sizing while .primary's accent
    fill still applies (Clients view #add-client-btn / #add-tag). No visual change, just one rule
    instead of tracking button / button.primary / button.small together. */
-button.small.primary { font-size: 12px; padding: 6px 11px; }
+button.small.primary { font-size: 12px; padding: 8px 12px; }
 /* An icon inside a .btn sizes down per the system. */
 .btn .ic { width: 15px; height: 15px; }
 button[hidden] { display: none; }
@@ -829,30 +831,30 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   font-family: var(--num);
   background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: var(--r1);
+  padding: 2px 4px;
   color: var(--ink);
 }
 
-.day { margin-top: 22px; }
+.day { margin-top: 24px; }
 .day-head {
   font-weight: 640;
   font-size: 13px;
   color: var(--ink);
   border-bottom: 1px solid var(--rule);
-  padding: 16px 6px 9px;
+  padding: 16px 8px 8px;
   display: flex;
   justify-content: space-between;
   align-items: baseline;
 }
-.day-head .dsum { font-weight: 450; color: var(--faint); font-size: 12px; }
+.day-head .dsum { font-weight: 450; color: var(--muted); font-size: 12px; }
 
 .entry {
   display: grid;
   grid-template-columns: 20px 96px 1fr auto;
-  gap: 14px;
+  gap: 16px;
   align-items: center;
-  padding: 11px 6px;
+  padding: 12px 8px;
   border-bottom: 1px solid var(--rule);
 }
 .entry:hover { background: var(--wash); }
@@ -862,28 +864,28 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
 .entry .time { font-family: var(--num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
-.entry .nonbill { color: var(--faint); }
+.entry .nonbill { color: var(--muted); }
 
 /* §07: tag chips shown in-context on the entry row. Monochrome — the accent stays on the
    primary action / running state, so no chip rule references var(--accent). */
-.chips { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
+.chips { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
 .chip {
   font-size: 11.5px;
   color: var(--muted);
   background: var(--wash);
   border: 1px solid var(--rule);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px 8px;
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
 }
 /* The removable × is a SUB-affordance INSIDE the already-bordered chip — the one sanctioned
    in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
-.chip .chip-x { color: var(--faint); cursor: pointer; font-weight: 400; }
+.chip .chip-x { color: var(--muted); cursor: pointer; font-weight: 400; }
 .chip .chip-x:hover { color: var(--ink); }
 
-.flags { display: inline-flex; gap: 6px; margin-left: 8px; vertical-align: middle; }
+.flags { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; }
 /* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
 .flag {
   font-size: 11px;
@@ -892,7 +894,7 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   background: var(--flag-bg);
   border: 1px solid var(--flag-line);
   border-radius: 999px;
-  padding: 1px 9px;
+  padding: 2px 8px;
 }
 /* §12 R06 (G5): the unified entry form in EDIT MODE — the SAME view-level card add mode uses
    (#entry-form-host), NOT crammed into the calendar event. It sits in the view flow with the
@@ -902,7 +904,7 @@ textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent);
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 16px 16px;
   margin-bottom: 8px;
   border: 1px solid var(--rule);
   border-radius: var(--r2);
@@ -963,23 +965,42 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 5px 9px;
+  padding: 4px 8px;
 }
 
-/* §06 R3: the Merge action bar — a warm-paper card under the list once a contiguous
-   selection of 2+ closed entries is armed. Only Merge carries the accent (button.primary). */
+/* §06 R3 (design.html D11 / V5): the merge SELECTION BAR — a quiet sunken bar ABOVE the
+   calendar once 2+ entries are selected: the raised-chip count pill ("N selected"), a flex
+   spacer, and a NEUTRAL small Merge button. Merge never takes the accent — the Entries
+   view's single accent-solid primary stays the add form's Save entry (mock main.html
+   .selbar, adopted verbatim). */
 .merge-bar {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 12px;
-  margin-top: 18px;
-  padding: 14px 16px;
+  padding: 12px 16px;
+  margin-bottom: 4px;
+  border-radius: var(--r1);
+  background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: var(--r2);
-  background: var(--paper);
-  box-shadow: var(--sh-card);
 }
+.merge-bar .cap { flex: 1; }
 .merge-bar[hidden] { display: none; }
+/* design.html D12 (mock main.html .pill.chip): the raised-chip pill variant — the selection
+   count reads as a lifted chip: ink text on paper with the shared chip-lift shadow, no
+   border. The base .pill above is the uppercase archived marker, so the chip variant also
+   restores the mock pill's plain-case 11px geometry. */
+.pill.chip {
+  color: var(--ink);
+  background: var(--paper);
+  border-color: transparent;
+  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.12);
+  font-weight: 590;
+  font-size: 11px;
+  text-transform: none;
+  letter-spacing: normal;
+  margin: 0;
+  padding: 2px 8px;
+}
 
 /* §06 R3: the disagreeing-merge conflict prompt is the modal `.editor.conflict-prompt`
    (hosted in app.js, styled below with the shared editor chrome) — no longer an inline
@@ -993,7 +1014,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 6px 0 14px;
+  padding: 8px 0 16px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--rule);
 }
@@ -1009,8 +1030,8 @@ button.danger:hover { background: var(--danger-weak); }
   font-family: var(--num);
   background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: var(--r1);
+  padding: 2px 4px;
   color: var(--ink);
 }
 
@@ -1020,7 +1041,7 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   box-shadow: var(--sh-card);
   margin-top: 12px;
-  padding: 14px 16px;
+  padding: 16px 16px;
 }
 .client-head {
   display: flex;
@@ -1029,13 +1050,13 @@ button.danger:hover { background: var(--danger-weak); }
   gap: 8px;
 }
 .client-name { font-size: 14px; font-weight: 590; color: var(--ink); }
-.client-actions, .project-actions { display: inline-flex; gap: 6px; }
+.client-actions, .project-actions { display: inline-flex; gap: 8px; }
 
 .project-list {
   display: flex;
   flex-direction: column;
-  margin-top: 10px;
-  padding-left: 14px;
+  margin-top: 12px;
+  padding-left: 16px;
   border-left: 2px solid var(--rule);
 }
 .project {
@@ -1043,10 +1064,10 @@ button.danger:hover { background: var(--danger-weak); }
   justify-content: space-between;
   align-items: center;
   gap: 8px;
-  padding: 6px 0;
+  padding: 8px 0;
 }
 .project-name { font-size: 13px; color: var(--ink); }
-.project-empty { font-size: 12px; color: var(--faint); padding: 4px 0; }
+.project-empty { font-size: 12px; color: var(--muted); padding: 4px 0; }
 /* The Add-project row sits in line with the projects; the accent rides only the "+" glyph. */
 .proj-add {
   display: inline-flex;
@@ -1060,7 +1081,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
-  padding: 7px 0 2px;
+  padding: 8px 0 2px;
 }
 .proj-add .ic { width: 15px; height: 15px; color: var(--accent); }
 .proj-add:hover { color: var(--ink); }
@@ -1076,14 +1097,14 @@ button.danger:hover { background: var(--danger-weak); }
 .project.archived .project-name,
 .tag-row.archived .tag-row-name { color: var(--muted); }
 .pill {
-  font-size: 10.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
-  padding: 1px 8px;
+  padding: 2px 8px;
   margin-right: auto;
   margin-left: 4px;
 }
@@ -1109,7 +1130,7 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 6px 10px;
+  padding: 8px 12px;
 }
 
 /* ---- tag management strip (§12 R10) ------------------------------------ */
@@ -1117,7 +1138,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 0 14px;
+  padding: 16px 0 16px;
   margin-top: 12px;
   border-bottom: 1px solid var(--rule);
 }
@@ -1132,8 +1153,8 @@ button.danger:hover { background: var(--danger-weak); }
   font-family: var(--num);
   background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: var(--r1);
+  padding: 2px 4px;
   color: var(--ink);
 }
 .tag-row {
@@ -1145,8 +1166,8 @@ button.danger:hover { background: var(--danger-weak); }
   border-bottom: 1px solid var(--rule);
 }
 .tag-row-name { font-size: 13px; color: var(--ink); }
-.tag-row-actions { display: inline-flex; gap: 6px; }
-.tag-add { padding-top: 10px; }
+.tag-row-actions { display: inline-flex; gap: 8px; }
+.tag-add { padding-top: 12px; }
 .tag-new-input {
   font-family: var(--sans);
   font-size: 13px;
@@ -1154,7 +1175,7 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 6px 10px;
+  padding: 8px 12px;
 }
 
 /* ---- report builder (§08 R3, §09, §12 R8) ------------------------------ */
@@ -1166,7 +1187,7 @@ button.danger:hover { background: var(--danger-weak); }
   grid-template-columns: 88px 1fr;
   gap: 12px 16px;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 .report-lab { font-size: 12px; color: var(--muted); text-align: right; }
 /* In the Entries control grid the segments/presets hug their options instead of stretching to
@@ -1174,15 +1195,15 @@ button.danger:hover { background: var(--danger-weak); }
 .entries-ctrl .seg,
 .entries-ctrl .presets,
 .entries-ctrl .report-row { justify-self: start; }
-.report-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.report-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 
 .seg {
   display: inline-flex;
   background: var(--wash);
   border: 1px solid var(--rule);
   border-radius: var(--r1);
-  padding: 3px;
-  gap: 3px;
+  padding: 4px;
+  gap: 4px;
 }
 .seg .seg-btn {
   border: none;
@@ -1191,10 +1212,10 @@ button.danger:hover { background: var(--danger-weak); }
   font-family: var(--sans);
   font-size: 12px;
   font-weight: 500;
-  padding: 5px 12px;
+  padding: 4px 12px;
   height: 26px;
   cursor: pointer;
-  border-radius: 6px;
+  border-radius: var(--r1);
   box-shadow: none;
 }
 .seg .seg-btn:hover:not(.on) { background: transparent; color: var(--ink); }
@@ -1208,7 +1229,7 @@ button.danger:hover { background: var(--danger-weak); }
 
 /* §09 R1: the date-range preset chips (six, incl Custom…). The active chip is a raised
    pill chip — surface lift, not the accent. */
-.presets { flex-wrap: wrap; gap: 6px; background: transparent; border: none; border-radius: 0; padding: 0; }
+.presets { flex-wrap: wrap; gap: 8px; background: transparent; border: none; border-radius: 0; padding: 0; }
 .presets .preset {
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
@@ -1217,7 +1238,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-family: var(--sans);
   font-size: 12.5px;
   font-weight: 500;
-  padding: 5px 13px;
+  padding: 4px 12px;
   height: auto;
   cursor: pointer;
   box-shadow: none;
@@ -1241,12 +1262,12 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 13px;
   font-weight: 590;
   color: var(--ink);
-  padding: 8px 14px;
+  padding: 8px 16px;
 }
 
 /* The resolved window the report covers, painted under the head from core's bounds. */
 .report-range {
-  padding: 8px 14px;
+  padding: 8px 16px;
   font-size: 12.5px;
   color: var(--muted);
   background: var(--wash);
@@ -1254,7 +1275,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-variant-numeric: tabular-nums;
 }
 
-.report-toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--ink); }
+.report-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
 .report-field {
   font-family: var(--sans);
   font-size: 13px;
@@ -1262,7 +1283,7 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 7px 10px;
+  padding: 8px 12px;
 }
 /* §09 R3: the project filter is disabled until a client is chosen. Dimmed, monochrome. */
 .report-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
@@ -1278,7 +1299,7 @@ button.danger:hover { background: var(--danger-weak); }
 .report-head {
   display: flex;
   justify-content: space-between;
-  padding: 11px 14px;
+  padding: 12px 16px;
   background: var(--wash);
   border-bottom: 1px solid var(--rule);
   font-size: 13px;
@@ -1287,12 +1308,12 @@ button.danger:hover { background: var(--danger-weak); }
 .report-head b { color: var(--ink); font-weight: 640; }
 .report-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--paper); }
 .report-table td,
-.report-table th { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--rule); }
+.report-table th { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
 .report-table th {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--faint);
+  color: var(--muted);
   background: var(--wash);
   font-weight: 590;
 }
@@ -1313,7 +1334,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: inline-block;
   font-size: 11px;
   font-weight: 500;
-  padding: 1px 8px;
+  padding: 2px 8px;
   border-radius: 999px;
   vertical-align: middle;
   color: var(--flag);
@@ -1323,15 +1344,15 @@ button.danger:hover { background: var(--danger-weak); }
 /* §09 R6: the Export CSV / Export JSON action row. Monochrome secondary buttons. */
 .report-export {
   display: flex;
-  gap: 10px;
+  gap: 12px;
   align-items: center;
-  margin-top: 14px;
+  margin-top: 16px;
 }
 .report-export-btn {
   font-family: inherit;
   font-size: 13px;
   font-weight: 590;
-  padding: 8px 14px;
+  padding: 8px 16px;
   color: var(--ink);
 }
 .report-export-status { font-size: 12px; color: var(--muted); }
@@ -1347,7 +1368,7 @@ button.danger:hover { background: var(--danger-weak); }
    rule above it and a lighter margin mark it as the data-out escape hatch, not the report. */
 .report-export-all {
   margin-top: 20px;
-  padding-top: 14px;
+  padding-top: 16px;
   border-top: 1px solid var(--rule);
 }
 
@@ -1359,7 +1380,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 0 14px;
+  padding: 8px 0 16px;
   margin-bottom: 16px;
   border-bottom: 1px solid var(--rule);
 }
@@ -1370,7 +1391,7 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 13px;
   font-weight: 590;
   border-radius: var(--r1);
-  padding: 8px 14px;
+  padding: 8px 16px;
   border: 1px solid var(--accent-solid);
   background: var(--accent-solid);
   color: white;
@@ -1399,7 +1420,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 14px 16px;
+  padding: 16px 16px;
   border-bottom: 1px solid var(--rule);
 }
 .def:last-child { border-bottom: 0; }
@@ -1409,7 +1430,7 @@ button.danger:hover { background: var(--danger-weak); }
 .def .dname { font-size: 13.5px; font-weight: 590; margin-bottom: 4px; }
 .def .dspec { font-size: 12px; color: var(--muted); }
 .def .dspec .k { color: var(--ink); font-weight: 590; }
-.def .dactions { display: flex; gap: 7px; flex: none; align-items: center; }
+.def .dactions { display: flex; gap: 8px; flex: none; align-items: center; }
 /* The card actions read as the standard small button family (.btn.sm / .btn.ghost.sm / .iconbtn)
    but keep their pinned class names. None may be accented (only #rep-new is). */
 .def .def-run,
@@ -1417,19 +1438,19 @@ button.danger:hover { background: var(--danger-weak); }
 .def .def-kebab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-family: inherit;
   font-size: 12px;
   font-weight: 590;
   color: var(--ink);
   height: 30px;
-  padding: 0 11px;
+  padding: 0 12px;
 }
 /* the ghost variant — quieter via muted ink, same size */
 .def .def-edit { border-color: transparent; background: transparent; color: var(--muted); }
 .def .def-edit:hover { color: var(--ink); }
 /* the icon-only kebab */
-.def .def-kebab { width: 30px; height: 30px; padding: 0; justify-content: center; border: 0; background: none; color: var(--faint); }
+.def .def-kebab { width: 30px; height: 30px; padding: 0; justify-content: center; border: 0; background: none; color: var(--muted); }
 .def .def-kebab:hover { color: var(--ink); }
 /* issue #52: the kebab swaps IN PLACE into an inline Rename / Delete menu (Electron's
    renderer implements neither window.prompt nor window.confirm, so there is no native
@@ -1437,23 +1458,23 @@ button.danger:hover { background: var(--danger-weak); }
 .def .def-menu {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex: none;
 }
-.defs-empty { font-size: 13px; color: var(--muted); padding: 14px 2px; }
+.defs-empty { font-size: 13px; color: var(--muted); padding: 16px 2px; }
 
 /* §09 R08: the inline builder — create / edit a definition. A warm-paper card (not the
    accent) so the accent stays on + New report alone; the controls reuse .report-ctrl / .seg. */
 .builder {
   border: 1px solid var(--rule);
   border-radius: var(--r2);
-  padding: 16px 18px 18px;
-  margin: 14px 0 4px;
+  padding: 16px 16px 16px;
+  margin: 16px 0 4px;
   background: var(--wash);
   box-shadow: var(--sh-card);
 }
 .builder[hidden] { display: none; }
-.builder-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.builder-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
 .builder-title { font-size: 14px; margin: 0; font-weight: 640; flex: none; }
 .builder-name {
   flex: 1;
@@ -1461,13 +1482,13 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 14px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 11px;
+  padding: 8px 12px;
   background: var(--paper);
   color: var(--ink);
 }
 .builder-name:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
-.builder-note { font-size: 11.5px; color: var(--faint); flex: none; }
-.builder-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 12px; }
+.builder-note { font-size: 11.5px; color: var(--muted); flex: none; }
+.builder-foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 
 /* §06 R3: the modal chrome for the merge-conflict prompt (app.js openMergeConflict) — a centred
    dialog (the ladder's top rung, --sh-modal) over a dim backdrop. The consolidated modal entry
@@ -1505,7 +1526,7 @@ button.danger:hover { background: var(--danger-weak); }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 18px 22px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--rule);
 }
 .editor .ed-title { font-size: 16px; font-weight: 640; color: var(--ink); }
@@ -1520,7 +1541,7 @@ button.danger:hover { background: var(--danger-weak); }
   border-radius: var(--r1);
   border: 0;
   background: none;
-  color: var(--faint);
+  color: var(--muted);
   cursor: pointer;
   padding: 0;
 }
@@ -1536,16 +1557,16 @@ button.danger:hover { background: var(--danger-weak); }
 .editor .ed-body {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 20px 22px;
+  gap: 16px;
+  padding: 20px 24px;
 }
 /* foot — justified row, hairline top, washed; the conflict prompt's Cancel + Merge live here */
 .editor .ed-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 14px 22px;
+  gap: 12px;
+  padding: 16px 24px;
   border-top: 1px solid var(--rule);
   background: var(--wash);
 }
@@ -1557,18 +1578,18 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--faint);
+  color: var(--muted);
   font-weight: 640;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
 }
-.editor.conflict-prompt .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.editor.conflict-prompt .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .editor.conflict-prompt .mc-opt {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 9px 11px;
+  padding: 8px 12px;
   cursor: pointer;
   background: var(--paper);
   font-size: 13px;
@@ -1601,7 +1622,7 @@ button.danger:hover { background: var(--danger-weak); }
 .editor.conflict-prompt .agree {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   color: var(--muted);
   font-size: 12.5px;
 }
@@ -1613,10 +1634,12 @@ button.danger:hover { background: var(--danger-weak); }
 /* §12 R15 (G5/G7): the inline interval picker (timepicker.js / window.STP). */
 /* An IN-FLOW picker column (NO modal, no backdrop, no Apply) over the        */
 /* authoritative time text fields: a month calendar + a single-day track      */
-/* where the edited entry is a DRAGGABLE accent rectangle written back LIVE    */
-/* on every drag (Save entry is the sole commit, G7). Accent discipline: only  */
-/* the dragged "me" rectangle (.stp-block.me) carries the accent; the selected */
-/* calendar day is a raised chip (design.html D12) — no Apply-button accent.   */
+/* where the edited entry is a DRAGGABLE accent-outlined block written back   */
+/* LIVE on every drag (Save entry is the sole commit, G7). Accent discipline  */
+/* (design.html D11 / V3): the accent rides only the "me" block's OUTLINE and */
+/* grips — its fill is accent-weak and its labels ink, because solid accent   */
+/* is reserved for primary actions; the selected calendar day is a raised     */
+/* chip (design.html D12) — no Apply-button accent.                           */
 
 /* The Timer-view running-start disclosure's calendar affordance keeps the shared .range-pick-btn
    trigger (defined once above); the bare .range-field only adds the positioning context. */
@@ -1636,10 +1659,10 @@ button.danger:hover { background: var(--danger-weak); }
 .entry-form .edit-picker { width: 100%; }
 
 /* month calendar */
-.stp-cal { border-right: 1px solid var(--rule); padding: 18px; }
-.stp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.stp-cal { border-right: 1px solid var(--rule); padding: 16px; }
+.stp-cal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .stp-month { font-size: 13px; font-weight: 590; color: var(--ink); }
-.stp-nav { display: flex; gap: 6px; }
+.stp-nav { display: flex; gap: 8px; }
 .stp-nav button {
   cursor: pointer; color: var(--muted); background: var(--paper);
   border: 1px solid var(--rule-strong); border-radius: var(--r1);
@@ -1649,9 +1672,9 @@ button.danger:hover { background: var(--danger-weak); }
 .stp-nav button .ic { width: 14px; height: 14px; }
 .stp-nav button:hover { background: var(--hover); color: var(--ink); }
 .stp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-.stp-dow { font-size: 10px; color: var(--faint); text-align: center; padding: 3px 0; text-transform: uppercase; }
+.stp-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; }
 .stp-d {
-  text-align: center; padding: 6px 0; font-size: 12.5px; border-radius: 6px;
+  text-align: center; padding: 8px 0; font-size: 12.5px; border-radius: var(--r1);
   cursor: pointer; color: var(--ink); background: var(--paper);
   border: 1px solid transparent;
 }
@@ -1664,7 +1687,7 @@ button.danger:hover { background: var(--danger-weak); }
 
 /* single-day column with hour lines */
 .stp-day { padding: 16px 20px 16px 8px; }
-.stp-day-lbl { font-size: 12px; color: var(--muted); margin: 0 0 10px 52px; }
+.stp-day-lbl { font-size: 12px; color: var(--muted); margin: 0 0 12px 52px; }
 .stp-track {
   position: relative; height: 720px;
   border-left: 1px solid var(--rule); margin-left: 52px;
@@ -1672,25 +1695,27 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-hour {
   position: absolute; left: -52px; width: 46px; text-align: right;
-  font-size: 10.5px; color: var(--faint); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
   transform: translateY(-6px);
 }
-.stp-block { position: absolute; left: 8px; right: 14px; border-radius: 7px; }
+.stp-block { position: absolute; left: 8px; right: 14px; border-radius: var(--r1); }
 /* other entries — light gray, monochrome */
 .stp-block.other {
   background: var(--wash); border: 1px solid var(--rule-strong);
-  color: var(--muted); font-size: 11px; padding: 3px 8px; overflow: hidden; z-index: 2;
+  color: var(--muted); font-size: 11px; padding: 4px 8px; overflow: hidden; z-index: 2;
 }
-/* this entry — the solid accent rectangle, draggable (sanctioned accent use) */
+/* this entry — the draggable block (design.html D11 / V3): an accent OUTLINE over the weak
+   accent fill — solid accent is reserved for primary actions — with ink labels and the
+   card-rung shadow (mock edit-entry.html .block.me). */
 .stp-block.me {
-  background: var(--accent); color: #fff; border: 1px solid var(--accent);
-  box-shadow: 0 4px 12px color-mix(in srgb, var(--accent) 32%, transparent);
+  background: var(--accent-weak); border: 1.5px solid var(--accent);
+  box-shadow: var(--sh-card);
   cursor: grab; z-index: 3; touch-action: none; user-select: none;
 }
 .stp-block.me:active { cursor: grabbing; }
 .stp-block.me .stp-lab-top, .stp-block.me .stp-lab-bot {
   position: absolute; left: 0; font-size: 11px; font-weight: 590;
-  font-variant-numeric: tabular-nums; padding: 0 9px;
+  font-variant-numeric: tabular-nums; padding: 0 8px; color: var(--ink);
 }
 .stp-block.me .stp-lab-top { top: 4px; }
 .stp-block.me .stp-lab-bot { bottom: 4px; }
@@ -1698,7 +1723,9 @@ button.danger:hover { background: var(--danger-weak); }
   position: absolute; left: 0; right: 0; bottom: -1px; height: 12px;
   cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
 }
-.stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 2px; background: rgba(255, 255, 255, 0.85); display: block; }
+/* the resize grip bar — accent-coloured like the start grip's outline (the drag affordances
+   are where the accent signal lives now that the fill is weak); pill radius (D14). */
+.stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 999px; background: var(--accent); display: block; }
 /* §05 R06 (G8) — the RUNNING entry on the picker track: a start with no end yet. The block
    dissolves into the future via a transparency mask (mockups/timer.html .block.me.open) —
    nothing paints an end edge, because no end exists until the timer is stopped. */
@@ -1718,23 +1745,23 @@ button.danger:hover { background: var(--danger-weak); }
 .stp-tlabel {
   position: absolute; left: 8px; font-size: 11px; font-weight: 590;
   font-variant-numeric: tabular-nums; color: var(--ink);
-  background: var(--wash); border-radius: 6px; padding: 1px 8px; z-index: 7;
+  background: var(--wash); border-radius: var(--r1); padding: 2px 8px; z-index: 7;
 }
 /* §05 R06 / §12 R14 — the Timer view's IN-FLOW start-only disclosure (#le-start-disc):
    plain block flow below the Start field — no backdrop, no positioning, no modal chrome.
    The picker renders inline (.stp-inline) with a scrollable day viewport (G16: a scroll
    window over the full 24h track, never a clipped one). */
-.le-start-disc { margin-top: 10px; }
+.le-start-disc { margin-top: 12px; }
 .le-start-disc[hidden] { display: none; }
 .stp-inline {
   position: static; width: auto; max-width: 420px;
   border: 1px solid var(--rule); border-radius: var(--r1); background: var(--paper);
   box-shadow: none; /* in flow — none of the popover's modal chrome */
-  padding: 12px 16px 10px;
+  padding: 12px 16px 12px;
 }
 .stp-inline .stp-dayview {
   position: relative; height: 352px; overflow-y: auto; overscroll-behavior: contain;
-  padding: 6px 4px 6px 0;
+  padding: 8px 4px 8px 0;
 }
 .stp-inline .stp-snaphint { margin-left: 52px; }
 
@@ -1742,13 +1769,13 @@ button.danger:hover { background: var(--danger-weak); }
    a month calendar beside a scrollable single-day column, rendered in flow (no modal chrome).
    Reuses the popover's .stp-cal / .stp-track / .stp-block visuals; the .stp-dayview is the
    scroll window (G16: a scroll window over the full 24h track, never a clipped one). */
-.stp-range { max-width: none; padding: 12px 14px 10px; }
+.stp-range { max-width: none; padding: 12px 16px 12px; }
 .stp-range .stp-body { display: grid; grid-template-columns: 196px 1fr; gap: 0; }
-.stp-range .stp-cal { border-right: 1px solid var(--rule); padding: 4px 14px 4px 0; }
+.stp-range .stp-cal { border-right: 1px solid var(--rule); padding: 4px 16px 4px 0; }
 .stp-range .stp-day { padding: 0 0 0 16px; }
 .stp-range .stp-dayview {
   position: relative; height: 300px; overflow-y: auto; overscroll-behavior: contain;
-  padding: 6px 4px 6px 0;
+  padding: 8px 4px 8px 0;
 }
 .stp-range .stp-day-lbl { margin-left: 52px; }
 .stp-range .stp-snaphint { margin-left: 0; margin-top: 8px; }
@@ -1756,16 +1783,16 @@ button.danger:hover { background: var(--danger-weak); }
 /* overlap region — warn hatch, never blocks Apply */
 .stp-overlap {
   position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;
-  border: 1px solid var(--flag-line); border-radius: 0 0 7px 7px;
+  border: 1px solid var(--flag-line); border-radius: 0 0 var(--r1) var(--r1);
   background: repeating-linear-gradient(45deg, var(--flag-bg), var(--flag-bg) 7px, color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px, color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);
 }
 .stp-overlap .stp-otag {
-  position: absolute; right: 8px; top: 8px; font-size: 10px; color: var(--flag);
+  position: absolute; right: 8px; top: 8px; font-size: 11px; color: var(--flag);
   background: var(--flag-bg); border: 1px solid var(--flag-line);
-  border-radius: 999px; padding: 0 7px;
+  border-radius: 999px; padding: 0 8px;
 }
-.stp-snaphint { font-size: 11px; color: var(--muted); margin: 10px 0 0 52px; display: flex; align-items: center; gap: 8px; }
-.stp-snaphint .stp-pill { font-size: 10px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 1px 9px; }
+.stp-snaphint { font-size: 11px; color: var(--muted); margin: 12px 0 0 52px; display: flex; align-items: center; gap: 8px; }
+.stp-snaphint .stp-pill { font-size: 11px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 2px 8px; }
 
 /* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
@@ -1782,7 +1809,7 @@ body.popover { background: var(--canvas); margin: 0; }
   overflow: hidden;
 }
 /* top block: state line · clock · description · context · tags */
-.pop-top { padding: 18px 18px 16px; }
+.pop-top { padding: 16px 16px 16px; }
 .pop-state {
   display: flex;
   align-items: center;
@@ -1805,26 +1832,26 @@ body.popover { background: var(--canvas); margin: 0; }
   line-height: 1.05;
   margin: 8px 0 4px;
   font-variant-numeric: tabular-nums;
-  color: var(--faint);
+  color: var(--muted);
 }
-/* only the running state carries the accent — the clock is faint when idle */
+/* only the running state carries the accent — the clock is muted when idle */
 .pop.running .pop-clock { color: var(--accent); }
 .pop-desc { font-weight: 590; font-size: 14px; color: var(--ink); }
 .pop-desc[hidden] { display: none; }
 .pop-ctx { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
-.pop-tags { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.pop-tags { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pop-tags[hidden] { display: none; }
 /* action row: Stop/Start (primary) — a single full-width centered button */
-.pop-act { display: flex; gap: 9px; padding: 0 18px 16px; }
+.pop-act { display: flex; gap: 8px; padding: 0 16px 16px; }
 .pop-act .btn { flex: 1; justify-content: center; }
 /* foot: Open Stint — a quiet full-width link row, one rung quieter than the actions */
-.pop-foot { border-top: 1px solid var(--rule); display: flex; align-items: center; padding: 6px 8px; }
+.pop-foot { border-top: 1px solid var(--rule); display: flex; align-items: center; padding: 8px 8px; }
 .pop-open {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 12px;
   border-radius: var(--r1);
   color: var(--ink);
   font-weight: 560;
@@ -1842,23 +1869,23 @@ body.popover { background: var(--canvas); margin: 0; }
 /* The in-window Settings panel. Monochrome — the week-start segment selects via a RAISED CHIP
    (not the accent); the rounding toggle's ON state is inked (--ink), not accented, so the
    accent stays on the primary action / running state. */
-.settings-head { padding: 6px 0 4px; }
+.settings-head { padding: 8px 0 4px; }
 .settings-title { font-size: 18px; margin: 0; font-weight: 640; color: var(--ink); letter-spacing: -0.01em; }
-.settings-sub { color: var(--muted); font-size: 13px; margin: 6px 0 8px; }
+.settings-sub { color: var(--muted); font-size: 13px; margin: 8px 0 8px; }
 .settings-sub code {
   font-family: var(--num);
   background: var(--wash);
   border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 1px 6px;
+  border-radius: var(--r1);
+  padding: 2px 4px;
   color: var(--ink);
 }
-.settings-panel { margin-top: 6px; }
+.settings-panel { margin-top: 8px; }
 .set-grp {
   font-size: 13px;
   font-weight: 640;
   color: var(--ink);
-  margin: 26px 0 2px;
+  margin: 24px 0 2px;
   padding-bottom: 8px;
   border-bottom: 1px solid var(--rule-strong);
 }
@@ -1867,12 +1894,12 @@ body.popover { background: var(--canvas); margin: 0; }
   grid-template-columns: 1fr 330px;
   align-items: center;
   gap: 20px;
-  padding: 13px 2px;
+  padding: 12px 2px;
 }
 .set-row + .set-row { border-top: 1px solid var(--rule); }
 .set-k { font-size: 13px; color: var(--ink); }
 .set-k small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
-.set-ctrl { display: inline-flex; align-items: center; gap: 10px; justify-self: end; }
+.set-ctrl { display: inline-flex; align-items: center; gap: 12px; justify-self: end; }
 .set-field {
   font-family: var(--sans);
   font-size: 13px;
@@ -1880,7 +1907,7 @@ body.popover { background: var(--canvas); margin: 0; }
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 7px 10px;
+  padding: 8px 12px;
   min-width: 160px;
 }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
@@ -1936,7 +1963,7 @@ body.popover { background: var(--canvas); margin: 0; }
   color: var(--ink);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 5px 10px;
+  padding: 4px 12px;
   background: var(--wash);
   box-shadow: 0 1px 0 var(--rule-strong);
   cursor: pointer;
@@ -1951,7 +1978,7 @@ body.popover { background: var(--canvas); margin: 0; }
   font-size: 13px;
   font-weight: 590;
   color: var(--ink);
-  padding: 7px 12px;
+  padding: 8px 12px;
 }
 .set-update-btn:disabled { color: var(--muted); cursor: default; background: var(--wash); }
 .set-update-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
@@ -1961,7 +1988,7 @@ body.popover { background: var(--canvas); margin: 0; }
   background: var(--flag-bg);
   border: 1px solid var(--flag-line);
   border-radius: 999px;
-  padding: 1px 10px;
+  padding: 2px 8px;
   font-size: 12px;
   text-decoration: none;
 }
@@ -1980,7 +2007,7 @@ body.popover { background: var(--canvas); margin: 0; }
   border: 1px solid var(--flag-line);
   background: var(--flag-bg);
   border-radius: var(--r2);
-  padding: 14px 16px;
+  padding: 16px 16px;
 }
 .update .uhd {
   font-size: 13px;
@@ -1989,14 +2016,14 @@ body.popover { background: var(--canvas); margin: 0; }
   margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   justify-content: space-between;
 }
 /* the head's icon + text span — lays out the line-icon (i-download / i-check) with the head
    text and takes the available width so the action button is pushed to the right edge. */
-.update .uhd-t { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.update .uhd-t { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .steps { display: flex; flex-direction: column; gap: 8px; }
-.step { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink); }
+.step { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--ink); }
 .step .n {
   width: 18px;
   height: 18px;
@@ -2012,13 +2039,15 @@ body.popover { background: var(--canvas); margin: 0; }
   flex: none;
 }
 .step.done .n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+/* Kept off-trio radius (proposed design.html D08 exemption): the 7px-tall progress track —
+   8px would exceed half the box and turn the track into a pill, changing the affordance. */
 .step .bar { width: 200px; height: 7px; border-radius: 4px; background: var(--wash); border: 1px solid var(--rule); overflow: hidden; }
 /* §15 accent discipline (pinned by the renderer-static guard): the guided panel chrome stays
    monochrome — only the Download primary button carries the accent — so the progress fill is
    inked, not accented. (The mockup uses the accent here; the harness keeps the panel mono.) */
 .step .bar i { display: block; height: 100%; width: 0%; background: var(--ink); transition: width 0.12s ease; }
-.update .restore-note { display: flex; align-items: flex-start; gap: 7px; font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
-.update .restore-note .ic { color: var(--faint); margin-top: 1px; }
+.update .restore-note { display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.update .restore-note .ic { color: var(--muted); margin-top: 2px; }
 
 /* §20 R04/R05 — the Settings → Backups group. The "verified" pill uses the calm green run
    tokens; the restore list + retention picker + the corruption-recovery banner all stay
@@ -2027,24 +2056,24 @@ body.popover { background: var(--canvas); margin: 0; }
 .ok {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: 11.5px;
   color: var(--run);
   background: var(--run-weak);
   border: 1px solid color-mix(in srgb, var(--run) 30%, transparent);
   border-radius: 999px;
-  padding: 1px 9px;
+  padding: 2px 8px;
 }
 .ok .ic { width: 14px; height: 14px; }
 /* The recovery notice: the warn .banner block laid out as an icon + wrapping text, with the
    quarantined path in the mono face so it reads as a filename. */
 .banner.recovery { display: flex; align-items: flex-start; gap: 8px; line-height: 1.45; }
-.banner.recovery .ic { color: var(--flag); margin-top: 1px; flex: none; }
+.banner.recovery .ic { color: var(--flag); margin-top: 2px; flex: none; }
 .banner.recovery .recovery-quar { font-family: var(--num); font-size: 11px; word-break: break-all; }
 /* The restore list spans the FULL panel width (the timestamped filenames are long), so its row
    drops the two-column grid and stacks the label above a full-width list. */
 .set-row.backup-restore-row { display: block; }
-.set-row.backup-restore-row .set-k { margin-bottom: 10px; }
+.set-row.backup-restore-row .set-k { margin-bottom: 12px; }
 .set-ctrl-list { display: block; width: 100%; }
 .backup-list { display: flex; flex-direction: column; gap: 8px; }
 .backup-item {
@@ -2055,7 +2084,7 @@ body.popover { background: var(--canvas); margin: 0; }
   background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: var(--r1);
-  padding: 8px 10px;
+  padding: 8px 12px;
 }
 .backup-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .backup-name { font-family: var(--num); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
@@ -2073,17 +2102,17 @@ body.popover { background: var(--canvas); margin: 0; }
   font-size: 12.5px;
   font-weight: 590;
   color: var(--ink);
-  padding: 7px 12px;
+  padding: 8px 12px;
 }
-.fav-rail { display: flex; flex-wrap: wrap; gap: 10px; }
+.fav-rail { display: flex; flex-wrap: wrap; gap: 12px; }
 .fav-card {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 12px;
   border: 1px solid var(--rule);
   border-radius: var(--r2);
-  padding: 10px 12px;
+  padding: 12px 12px;
   background: var(--paper);
   box-shadow: var(--sh-card);
 }
@@ -2113,7 +2142,7 @@ body.popover { background: var(--canvas); margin: 0; }
 .fav-card .resume {
   flex: none;
   color: var(--ink);
-  padding: 6px 12px;
+  padding: 8px 12px;
   font-size: 12px;
   font-weight: 590;
 }
@@ -2131,13 +2160,13 @@ body.popover { background: var(--canvas); margin: 0; }
   flex-direction: column;
   gap: 4px;
   margin-top: 4px;
-  padding: 5px;
+  padding: 4px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
   background: var(--paper);
   box-shadow: var(--sh-pop);
 }
-.fav-empty { color: var(--faint); font-size: 13px; }
+.fav-empty { color: var(--muted); font-size: 13px; }
 /* issue #52: the inline name fields on the favorites surface (the Pin control swaps into
    .fav-pin-form; a chip's Rename swaps its name into .fav-rename). They reuse the shared
    .rename-form chrome; only the input is narrowed so the row's controls stay on one line. */
@@ -2156,11 +2185,11 @@ body.popover { background: var(--canvas); margin: 0; }
    calendar event (`.ev.entry`) overrides the old grid row cleanly while keeping the
    `.entry` hooks the editing/merge/flag JUDGE scenes target.
    ========================================================================== */
-.calwrap { position: relative; margin-top: 10px; }
+.calwrap { position: relative; margin-top: 12px; }
 /* Both axes scroll: horizontal for the week's columns, vertical over the 24h track.
    A fixed max-height bounds the vertical viewport so the working-hours scroll is a real
    scroll (the track is taller than the viewport) — never a clip. */
-.cstrip { overflow: auto; max-height: 60vh; padding-bottom: 6px; }
+.cstrip { overflow: auto; max-height: 60vh; padding-bottom: 8px; }
 .cgrid { display: flex; min-width: max-content; }
 .gut { width: 48px; flex: none; }
 .gut .sp2 { height: 52px; border-bottom: 1px solid var(--rule); }
@@ -2168,8 +2197,8 @@ body.popover { background: var(--canvas); margin: 0; }
 .hlab {
   position: absolute;
   right: 8px;
-  font-size: 10.5px;
-  color: var(--faint);
+  font-size: 11px;
+  color: var(--muted);
   transform: translateY(-6px);
   font-variant-numeric: tabular-nums;
 }
@@ -2177,10 +2206,10 @@ body.popover { background: var(--canvas); margin: 0; }
    scrolls when the range does not fit (the property the JUDGE scene asserts). */
 .dcol { width: 124px; flex: none; border-left: 1px solid var(--rule); }
 .dcol.end { border-right: 1px solid var(--rule); }
-.dh { height: 52px; padding: 9px 10px 0; border-bottom: 1px solid var(--rule); }
+.dh { height: 52px; padding: 8px 12px 0; border-bottom: 1px solid var(--rule); }
 .dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
-.dh .dd { font-size: 13px; font-weight: 640; margin-left: 3px; }
-.dh .ds { display: block; font-size: 11px; color: var(--faint); margin-top: 1px; }
+.dh .dd { font-size: 13px; font-weight: 640; margin-left: 4px; }
+.dh .ds { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
 .dt {
   position: relative;
   background: repeating-linear-gradient(
@@ -2198,9 +2227,9 @@ body.popover { background: var(--canvas); margin: 0; }
   position: absolute;
   left: 6px;
   right: 6px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  border-radius: 7px;
+  border-radius: var(--r1);
   background: var(--accent-weak);
   color: inherit;
   cursor: pointer;
@@ -2217,10 +2246,10 @@ body.popover { background: var(--canvas); margin: 0; }
 .dt .ev:hover { background: var(--accent-weak); box-shadow: var(--sh-raise); border-color: var(--accent); z-index: 3; }
 .dt .ev.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
 .ev .bd { display: block; font-size: 12px; font-weight: 590; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ev .bd .run-dot { margin-right: 5px; }
+.ev .bd .run-dot { margin-right: 4px; }
 .ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ev .bt { display: block; font-size: 10.5px; color: var(--faint); margin-top: 3px; }
-.ev .nonbill { color: var(--faint); }
+.ev .bt { display: block; font-size: 11px; color: var(--muted); margin-top: 4px; }
+.ev .nonbill { color: var(--muted); }
 /* §07: the entry's tag chips stay in the DOM but fold away visually on the readonly calendar — the
    calendar is a calm at-a-glance surface, so tags (like the flag detail) read in the unified editor.
    Overlap paints as the `.ov` band and sleep as the `.zz` hatch; the flag DETAIL + reversible
@@ -2246,6 +2275,8 @@ body.popover { background: var(--canvas); margin: 0; }
   margin: 0;
   appearance: none;
   -webkit-appearance: none;
+  /* Kept off-trio radius (proposed design.html D08 exemption): 8px on a 16px checkbox is
+     half the box — it would read as a radio/circle, not a checkbox (mock main.html agrees). */
   border-radius: 4px;
   border: 1.5px solid var(--rule-strong);
   background: var(--paper);
@@ -2279,7 +2310,7 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 2px;
   margin: 0;
   float: none;
-  border-radius: 7px;
+  border-radius: var(--r1);
   border: 1px solid transparent;
   transition: background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
 }
@@ -2287,7 +2318,7 @@ body.popover { background: var(--canvas); margin: 0; }
    stay Playwright-clickable at rest — the proven pattern the row affordances use). */
 .ev:hover .ops,
 .ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
-.ev:hover { padding-top: 30px; }
+.ev:hover { padding-top: 32px; }
 .ev .ops .op-btn {
   display: inline-flex;
   align-items: center;
@@ -2296,7 +2327,7 @@ body.popover { background: var(--canvas); margin: 0; }
   height: 22px;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--r1);
   background: none;
   color: var(--muted);
   opacity: 0;
@@ -2310,7 +2341,7 @@ body.popover { background: var(--canvas); margin: 0; }
 /* Running/open event: fades into the future, no bottom edge (G8). */
 .dt .ev.run {
   border: 0;
-  border-radius: 7px 7px 0 0;
+  border-radius: var(--r1) var(--r1) 0 0;
   background: linear-gradient(
     180deg,
     var(--accent-weak) 0%,
@@ -2365,12 +2396,12 @@ body.popover { background: var(--canvas); margin: 0; }
   right: 4px;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--flag);
   background: var(--paper);
   border: 1px solid var(--flag-line);
   border-radius: 999px;
-  padding: 0 7px;
+  padding: 0 8px;
   white-space: nowrap;
 }
 /* §12 R06: the event being edited carries a subtle selection state on the calendar (the unified

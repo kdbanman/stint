@@ -670,14 +670,15 @@ function selectedEntries() {
   return [...selected].map((id) => byId.get(id)).filter(Boolean);
 }
 
-// §06 R3: the Merge action bar. It is hidden until at least two entries are selected —
-// a single row has nothing to merge into — and labels itself with the live count.
+// §06 R3 (design.html V5): the merge selection bar. It is hidden until at least two entries
+// are selected — a single row has nothing to merge into — and the live count reads in the
+// "N selected" chip; the Merge button's label is static (set once in index.html).
 function renderMergeBar() {
   const bar = $('merge-bar');
   if (!bar) return;
   const n = selected.size;
   bar.hidden = n < 2;
-  if (n >= 2) $('merge-go').textContent = `Merge ${n} entries`;
+  if (n >= 2) $('merge-count').textContent = `${n} selected`;
 }
 
 function emptyState() {
