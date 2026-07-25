@@ -21,12 +21,16 @@ issues.
 
 Load before starting; they set the goals and vocabulary:
 
-- Matt Pocock's `improve-codebase-architecture` and `codebase-design` skills —
-  fetch from `https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/<name>/SKILL.md`.
-  Use the codebase-design glossary exactly (**module**, **interface**,
-  **depth**, **seam**, **adapter**, **leverage**, **locality**, the deletion
-  test); don't drift into "component," "service," "boundary."
+- `context/engineering.html` — §02/§03 are the design and testing vocabulary
+  (**module**, **interface**, **depth**, **seam**, the balance rules); use it
+  exactly, don't drift into "component," "service," "boundary." (Lineage:
+  distilled from Matt Pocock's `improve-codebase-architecture` and
+  `codebase-design` skills, once fetched from
+  `github.com/mattpocock/skills` at run time.)
 - The repo's `grill-me` skill for phase 2's interview stance.
+
+For module-level code and test findings, prefer the `code-quality-review`
+skill — this review targets the systems, not individual modules.
 
 ## Phase 1 — review
 
