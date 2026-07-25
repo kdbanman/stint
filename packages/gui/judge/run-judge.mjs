@@ -447,6 +447,67 @@ async function sceneTrayPopoverSurface(browser) {
   });
 }
 
+// POPOVER_REJECT — §12 R21 / §12 R01 (STATES.md Popover × error): a REFUSED Stop/Start from
+// the tray popover is surfaced in the popover's OWN announced message region (#pop-warning,
+// popover.js), never a silent no-op — the tray twin of the main window's banner-routed toggle
+// rejection (WRITE_REJECTION_FEEDBACK site d, which uses the same rejectWrites toggle mock).
+// Drive the REAL popover renderer over the running snapshot with the strict-rejecting mock:
+// clicking #toggle (Stop) rejects ('stop time is before the entry started'), and the popover
+//   SURFACES it — #pop-warning is visible, non-empty, and announced (role=status + aria-live);
+//   STAYS OPERABLE — #toggle is still present, enabled and still reads 'Stop' (the running
+//     state never wedged; the refusal did not fake a stop), and Open Stint is still there;
+//   a SECOND click rejects again and the warning region persists (repeatable, not one-shot).
+// Captures popover-reject.png as the rubric evidence.
+async function scenePopoverReject(browser) {
+  await withPage(browser, runningState(), 'popover.html', async (page) => {
+    await page.click('#toggle');
+    await page.waitForSelector('#pop-warning', { state: 'visible' });
+    const refused = await page.evaluate(() => {
+      const warn = document.querySelector('#pop-warning');
+      const rect = warn?.getBoundingClientRect();
+      const toggle = document.querySelector('#toggle');
+      const open = document.querySelector('#open');
+      return {
+        shown: !!warn && !warn.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0 && warn.textContent.trim().length > 0,
+        announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+        message: warn?.textContent.trim() ?? '',
+        // Operability: the toggle survives the refusal — present, enabled, still reading
+        // 'Stop' (the popover never pretended the stop landed), with Open Stint reachable.
+        toggleLive: !!toggle && !toggle.disabled && /Stop/.test(toggle.textContent),
+        stillRunning: !!document.querySelector('#pop.running'),
+        openPresent: !!open && !open.disabled,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'popover-reject.png') });
+
+    // Repeatable, not one-shot: a second Stop attempt rejects again and the announced
+    // region still carries the reason — the popover remains a live surface throughout.
+    await page.click('#toggle');
+    await page.waitForSelector('#pop-warning', { state: 'visible' });
+    const again = await page.evaluate(() => ({
+      shown: !document.querySelector('#pop-warning').hidden &&
+        document.querySelector('#pop-warning').textContent.trim().length > 0,
+      toggleLive: !document.querySelector('#toggle').disabled,
+    }));
+
+    const ok =
+      refused.shown &&
+      refused.announced &&
+      /stop time is before the entry started/.test(refused.message) &&
+      refused.toggleLive &&
+      refused.stillRunning &&
+      refused.openPresent &&
+      again.shown &&
+      again.toggleLive;
+    record(
+      'POPOVER_REJECT',
+      ok,
+      `refused popover toggle surfaced + operable: ${JSON.stringify(refused)}; second attempt ${JSON.stringify(again)}`,
+      'popover-reject.png',
+    );
+  }, { rejectWrites: true });
+}
+
 // IN_WINDOW_TIMER (main window) — §12 R04 + R14: the FULL Active-Timer card lives in the
 // Timer view, and the Entries view keeps only a COMPACT STRIP that mirrors the running
 // count-up/state/desc and links to the Timer view. Drive the real renderer on index.html
@@ -457,9 +518,12 @@ async function sceneTrayPopoverSurface(browser) {
 // exposes a Stop control with NO Switch (Switch is removed — issue #34; the start-with-details
 // form performs the atomic stop-then-start); and (b) on the Entries view the compact
 // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
-// Stop control (and never a #timer-switch). Fails if the full panel stayed on Entries, the
-// card/strip placement regressed, or a #timer-switch reappeared. Captures timer-view.png (the
-// full panel) and main-timer.png (the Entries strip).
+// Stop control (and never a #timer-switch). A third, IDLE page (STATES.md Entries × edge)
+// asserts the strip is STILL PAINTED with nothing running — its idle face: 00:00:00 clock,
+// state 'idle', empty description (app.js renderTimerStrip's idle branch). Fails if the full
+// panel stayed on Entries, the card/strip placement regressed, a #timer-switch reappeared,
+// or the idle strip vanished/kept stale running data. Captures timer-view.png (the full
+// panel), main-timer.png (the Entries strip) and main-timer-idle.png (the idle strip).
 async function sceneInWindowTimer(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     // Entries view (default) first: the compact strip mirrors the running timer and exposes no
@@ -526,11 +590,34 @@ async function sceneInWindowTimer(browser) {
       strip.desc === 'auth refactor' &&
       strip.noStop &&
       strip.noSwitch;
+
+    // The IDLE strip page (STATES.md Entries × edge): with nothing running the Entries view
+    // still paints the compact strip in its idle face — 00:00:00, state 'idle', empty desc.
+    const idleStrip = await withPage(browser, emptyState(), 'index.html', async (ip) => {
+      await ip.waitForFunction(() => document.querySelector('#timer-strip')?.classList.contains('idle'));
+      await ip.screenshot({ path: join(EVIDENCE, 'main-timer-idle.png') });
+      return ip.evaluate(() => {
+        const el = document.querySelector('#timer-strip');
+        return {
+          present: !!el,
+          idle: !!el && el.classList.contains('idle') && !el.classList.contains('running'),
+          clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
+          state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
+          desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
+        };
+      });
+    });
+    const idleOk =
+      idleStrip.present &&
+      idleStrip.idle &&
+      idleStrip.clock === '00:00:00' &&
+      idleStrip.state === 'idle' &&
+      idleStrip.desc === '';
     record(
       'IN_WINDOW_TIMER',
-      cardOk && stripOk,
+      cardOk && stripOk && idleOk,
       `Timer-view card count advanced ${t1} → ${probe.clock} (+${delta}s) ${JSON.stringify(probe)}; ` +
-        `Entries strip ${JSON.stringify(strip)}`,
+        `Entries strip ${JSON.stringify(strip)}; idle strip ${JSON.stringify(idleStrip)}`,
       'timer-view.png',
     );
   });
@@ -851,12 +938,13 @@ async function sceneFutureStartGuard(browser) {
 // fires window.stint.startFavorite({name}) exactly once, plus a Pin-as-favorite affordance
 // (pinFavorite) and a kebab exposing rename/unpin; the empty-favorites state instructs ('pin a
 // favorite' / mentions `tt fav`); the rail chrome is monochrome; and window.stint exposes a
-// callable for each of the five favorite channels. The scene also DRIVES a pin and a rename
-// TO COMPLETION through the INLINE name affordances (typed + committed on Enter) and asserts
-// the rail repaints — Electron's renderer does not implement window.prompt, so a prompt-based
-// flow would silently no-op in the packaged app (issue #52); this machine-scores the inline
-// replacement end to end. Drive the real renderer twice (seeded + empty) and machine-score
-// the deterministic sub-facts.
+// callable for each of the five favorite channels. The scene also DRIVES a pin, a rename and
+// an unpin TO COMPLETION — the pin/rename through the INLINE name affordances (typed +
+// committed on Enter; Electron's renderer does not implement window.prompt, so a prompt-based
+// flow would silently no-op in the packaged app, issue #52), the unpin through the kebab's
+// Unpin action (unpinFavorite fires exactly once and the chip LEAVES the rail) — so every
+// kebab verb is machine-scored end to end, not merely present (STATES.md Timer × edge).
+// Drive the real renderer twice (seeded + empty) and machine-score the deterministic sub-facts.
 async function sceneFavoritesRail(browser) {
   await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
@@ -911,6 +999,18 @@ async function sceneFavoritesRail(browser) {
       names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
     }));
 
+    // UNPIN through the SAME kebab menu (STATES.md Timer × edge): kebab → Unpin fires
+    // unpinFavorite EXACTLY once with the chip's ref and the chip LEAVES the rail — back to
+    // the three seeded chips, the renamed name gone.
+    await page.click('.fav-card:has-text("Client invoicing") [data-act="fav-menu"]');
+    await page.click('.fav-card:has-text("Client invoicing") [data-act="fav-unpin"]');
+    await page.waitForFunction(() => document.querySelectorAll('#fav-rail .fav-card').length === 3);
+    const unpinned = await page.evaluate(() => ({
+      calls: (window.__UNPIN_CALLS__ || []).length,
+      payload: window.__UNPINNED__ ?? null,
+      names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+    }));
+
     // The empty-favorites variant: the rail paints its instructive empty state.
     const empty = await withPage(
       browser,
@@ -953,6 +1053,13 @@ async function sceneFavoritesRail(browser) {
       renamed.payload.name === 'Client invoicing' &&
       renamed.names.includes('Client invoicing') &&
       !renamed.names.includes('Invoice prep') &&
+      // The kebab UNPIN really landed: unpinFavorite fired exactly once with the pinned
+      // chip's ref (id 93 — the pin mock's 90 + 3 seeded) and the chip LEFT the rail.
+      unpinned.calls === 1 &&
+      !!unpinned.payload &&
+      unpinned.payload.ref === 93 &&
+      unpinned.names.length === 3 &&
+      !unpinned.names.includes('Client invoicing') &&
       empty.shown &&
       /pin/i.test(empty.text) &&
       /tt fav/i.test(empty.text);
@@ -961,7 +1068,7 @@ async function sceneFavoritesRail(browser) {
       ok,
       `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
         `inline pin ${JSON.stringify(pinned)}; inline rename ${JSON.stringify(renamed)}; ` +
-        `empty ${JSON.stringify(empty)}`,
+        `kebab unpin ${JSON.stringify(unpinned)}; empty ${JSON.stringify(empty)}`,
       'timer-favorites.png',
     );
   });
@@ -2762,6 +2869,10 @@ async function sceneConfirmDestructive(browser) {
 // opens, types a name, and asserts the new client LANDS in the active list off the
 // addClient → re-render round trip — then does the same for "+ Add project" (under a
 // client row) and "+ Add tag" (the tag strip), asserting each payload over the IPC.
+// A second, EMPTY-REFERENCE-DATA page (STATES.md Clients × empty, the emptyRefData
+// fixture knob) asserts the never-populated view instructs instead of blanking: the
+// "No clients yet" copy mentions `tt client add` and the "No tags yet" copy mentions
+// `tt tag add` (app.js renderClients/renderTags empty branches).
 async function sceneClientsView(browser) {
   await withPage(browser, clientsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="clients"]');
@@ -2924,6 +3035,30 @@ async function sceneClientsView(browser) {
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-clients-mutated.png'), fullPage: true });
+
+    // The EMPTY-REFERENCE-DATA variant (STATES.md Clients × empty): with no clients, no
+    // projects and no tags ever created, the view paints BOTH instructive empty states —
+    // each naming its `tt` twin — never a blank pane.
+    const refEmpty = await withPage(
+      browser,
+      clientsState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="clients"]');
+        await ep.waitForSelector('#clients:not([hidden]) .clients-empty', { state: 'attached' });
+        await ep.waitForSelector('#tags-list .tags-empty', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'main-clients-empty.png'), fullPage: true });
+        return ep.evaluate(() => ({
+          clientsText:
+            document.querySelector('#clients-list .clients-empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+          tagsText:
+            document.querySelector('#tags-list .tags-empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+          clientRows: document.querySelectorAll('#clients .client[data-id]').length,
+          tagRows: document.querySelectorAll('#tags-list .tag-row[data-id]').length,
+        }));
+      },
+      { emptyRefData: true },
+    );
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -2960,7 +3095,15 @@ async function sceneClientsView(browser) {
       !norace.clientNames.includes('Globex') &&
       norace.tagNames.includes('deep') &&
       norace.tagNames.includes('billing') &&
-      !norace.tagNames.includes('urgent');
+      !norace.tagNames.includes('urgent') &&
+      // …and the EMPTY-REFERENCE-DATA facts (STATES.md Clients × empty): zero rows with both
+      // instructive copies painting, each naming its `tt` twin.
+      refEmpty.clientRows === 0 &&
+      refEmpty.tagRows === 0 &&
+      /No clients yet/.test(refEmpty.clientsText) &&
+      /tt client add/.test(refEmpty.clientsText) &&
+      /No tags yet/.test(refEmpty.tagsText) &&
+      /tt tag add/.test(refEmpty.tagsText);
     // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
     // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
     // list is kept in the justification as captured evidence only.
@@ -2970,7 +3113,8 @@ async function sceneClientsView(browser) {
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
-        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}`,
+        `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}; ` +
+        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}`,
       'main-clients.png',
     );
   });
@@ -3181,9 +3325,12 @@ async function sceneTagChips(browser) {
 //       INLINE affordances (an in-place Rename / Delete menu, the shared inline name field
 //       committed on Enter, and the generic §12 R13 confirm gate) — Electron's renderer
 //       implements neither window.prompt nor window.confirm, so these must be inline — with
-//       renameReport / removeReport firing and the list updating each time.
-// Captures reports-list.png (the saved-defs list + builder) and reports-run.png (the run
-// output) for rubric review.
+//       renameReport / removeReport firing and the list updating each time;
+//   (h) STATES.md Reports × empty: a second page with ZERO saved defs (the savedReports:[]
+//       fixture knob) paints the visible #rep-defs-empty state reading "No saved reports
+//       yet." with no cards — never a blank list.
+// Captures reports-list.png (the saved-defs list + builder), reports-run.png (the run
+// output) and reports-empty.png (the zero-defs state) for rubric review.
 async function sceneReportsView(browser) {
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
     // Route to the Reports view (the shell router; no IPC) and wait for the saved-defs list.
@@ -3431,6 +3578,29 @@ async function sceneReportsView(browser) {
       count: document.querySelectorAll('#rep-defs .def').length,
     }));
 
+    // (h) STATES.md Reports × empty: with ZERO saved defs the list host is empty and the
+    // #rep-defs-empty state is genuinely on-screen reading "No saved reports yet.".
+    const defsEmpty = await withPage(
+      browser,
+      savedReportsState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="reports"]');
+        await ep.waitForSelector('#rep-defs-empty:not([hidden])', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'reports-empty.png'), fullPage: true });
+        return ep.evaluate(() => {
+          const el = document.querySelector('#rep-defs-empty');
+          const rect = el?.getBoundingClientRect();
+          return {
+            shown: !!el && !el.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0,
+            text: el?.textContent?.trim() ?? '',
+            cards: document.querySelectorAll('#rep-defs .def').length,
+          };
+        });
+      },
+      { savedReports: [] },
+    );
+
     const listOk =
       list.cards.length === 2 &&
       list.cards.every((c) => c.name.length > 0 && c.spec.length > 0 && c.hasRun && c.hasEdit) &&
@@ -3519,11 +3689,14 @@ async function sceneReportsView(browser) {
       refuseInverted.warnPersists &&
       /before/i.test(refuseInverted.message) &&
       refuseInverted.cardCount === 2;
-    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk;
+    // (h) STATES.md Reports × empty: the zero-defs page shows the visible instructive state.
+    const emptyOk =
+      defsEmpty.shown && defsEmpty.text === 'No saved reports yet.' && defsEmpty.cards === 0;
+    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk && emptyOk;
     record(
       'REPORTS_VIEW',
       ok,
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
 }
@@ -3989,8 +4162,12 @@ async function sceneCalendarLayout(browser) {
 // "refactor" search then narrows the visible rows to the two IN-WEEK refactor entries (last
 // week's 'refactor planning' stays excluded — the query composes range + search) AND
 // #week-total settles on the selection's 3.50h — the selected range's billable sum. Clearing
-// the search returns both. The strict listEntries mock rejects any query missing the required
-// `by` (exactly like core), so the whole flow also proves no toolbar query throws.
+// the search returns both. A final NO-MATCH search (STATES.md Entries × empty) narrows the
+// query to nothing and asserts the "No matching entries" empty state paints — the
+// query-narrowed-to-nothing copy instructing 'Widen the range…' (app.js emptyEntries),
+// DISTINCT from the never-tracked "No entries yet" copy — with zero rows. The strict
+// listEntries mock rejects any query missing the required `by` (exactly like core), so the
+// whole flow also proves no toolbar query throws.
 async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
@@ -4029,6 +4206,20 @@ async function sceneLiveFilter(browser) {
       weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
+    // NO-MATCH (STATES.md Entries × empty): a search matching nothing paints the
+    // query-narrowed empty state — "No matching entries" + the widen-the-range instruction —
+    // never a blank pane and never the never-tracked "No entries yet" copy.
+    await page.fill('#search', 'no-such-entry-xyzzy');
+    await page.waitForFunction(() =>
+      /No matching entries/.test(document.querySelector('#entries .empty')?.textContent ?? ''),
+    );
+    await page.screenshot({ path: join(EVIDENCE, 'main-no-matching.png'), fullPage: true });
+    const noMatch = await page.evaluate(() => ({
+      rowCount: document.querySelectorAll('#entries .entry').length,
+      text: document.querySelector('#entries .empty')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      listErrors: window.__LIST_ERRORS__ || 0,
+    }));
+
     const listLiveOk =
       before.rowCount === 7 &&
       onSearch.rowCount === 2 &&
@@ -4043,14 +4234,23 @@ async function sceneLiveFilter(browser) {
       onSearch.listErrors === 0 && // …with no listEntries rejection along the way
       onClear.rowCount === 7 &&
       onClear.weekTotal === '5.00h'; // …and returns with the full set when cleared
-    const ok = listLiveOk && totalLiveOk && noReloadOnSearch;
+    // STATES.md Entries × empty: the no-match query paints the instructive widen-the-range
+    // copy — distinct from the never-tracked copy — with zero rows and zero query rejections.
+    const noMatchOk =
+      noMatch.rowCount === 0 &&
+      /No matching entries/.test(noMatch.text) &&
+      /Widen the range/.test(noMatch.text) &&
+      !/No entries yet/.test(noMatch.text) &&
+      noMatch.listErrors === 0;
+    const ok = listLiveOk && totalLiveOk && noReloadOnSearch && noMatchOk;
     record(
       'LIVE_FILTER',
       ok,
       `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
         `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
         `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
-        `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors})`,
+        `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors}); ` +
+        `no-match empty state ${JSON.stringify(noMatch)}`,
       'main-filtered.png',
     );
   });
@@ -4352,8 +4552,15 @@ async function sceneTimelineWindowAround(browser) {
 //                          Gatekeeper / first-launch approval beat (no Developer ID).
 //   NO-DB (R04)          — the panel carries the "Updates never touch the database" note (the
 //                          artifact downloads to a temp folder, never beside the data).
+//   ERROR (R04)          — a SECOND page over the downloadError fixture variant (STATES.md
+//                          Settings × error): update.download() REJECTS, and the guided panel
+//                          flips to its error phase — head "Update download failed", an
+//                          announced .update-result.err reading "The update download failed.",
+//                          and the retry "Download & install" action back in place (operable,
+//                          never wedged; no Reveal-installer appears).
 // All fold into one SOFTWARE_UPDATE pass. Captures main-software-update.png (the available +
-// downloading view) as the rubric evidence the SETTINGS_VIEW shot does not cover.
+// downloading view) and main-software-update-error.png (the error phase) as the rubric
+// evidence the SETTINGS_VIEW shot does not cover.
 async function sceneSoftwareUpdate(browser) {
   await withPage(
     browser,
@@ -4419,6 +4626,41 @@ async function sceneSoftwareUpdate(browser) {
       await page.waitForFunction(() => window.__REVEALED__ === true);
       const revealed = await page.evaluate(() => window.__REVEALED__ === true);
 
+      // ERROR PHASE (STATES.md Settings × error): a second page whose update.download()
+      // REJECTS (the downloadError fixture variant). Check now → Download & install → the
+      // rejection flips the panel to its error phase: an announced error line with the
+      // renderer's own message, and the retry download action back in place — never a wedge.
+      const errorPhase = await withPage(
+        browser,
+        softwareUpdateState(),
+        'index.html',
+        async (ep) => {
+          await ep.click('.nav-item[data-view="settings"]');
+          await ep.waitForSelector('#software-update .ver', { state: 'attached' });
+          await ep.click('#update-check');
+          await ep.waitForSelector('#update-download', { state: 'attached' });
+          await ep.click('#update-download');
+          await ep.waitForSelector('#update-panel .update-result.err', { state: 'attached' });
+          await ep.screenshot({ path: join(EVIDENCE, 'main-software-update-error.png'), fullPage: true });
+          return ep.evaluate(() => {
+            const panel = document.querySelector('#update-panel');
+            const err = panel?.querySelector('.update-result.err');
+            const retry = document.querySelector('#update-download');
+            return {
+              downloadFailed: window.__DOWNLOAD_FAILED__ === true,
+              neverCompleted: window.__DOWNLOADED__ !== true,
+              head: panel?.querySelector('.uhd')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+              errShown: !!err && err.textContent.trim().length > 0,
+              errAnnounced: err?.getAttribute('role') === 'status',
+              errMessage: err?.textContent?.trim() ?? '',
+              retryPresent: !!retry && !retry.disabled,
+              noReveal: !document.querySelector('#update-reveal'),
+            };
+          });
+        },
+        { update: { ...UPDATE_FIXTURE, downloadError: true } },
+      );
+
       const versionOk = versionShown === UPDATE_FIXTURE.version;
       const checkOk =
         afterCheck.checked &&
@@ -4438,11 +4680,23 @@ async function sceneSoftwareUpdate(browser) {
         afterDownload.noDbNote &&
         afterDownload.revealPresent &&
         revealed;
+      // STATES.md Settings × error: the rejected download surfaces the announced error phase
+      // with the retry action operable — the failure is worded, never swallowed or wedged.
+      const errorOk =
+        errorPhase.downloadFailed &&
+        errorPhase.neverCompleted &&
+        /Update download failed/.test(errorPhase.head) &&
+        errorPhase.errShown &&
+        errorPhase.errAnnounced &&
+        errorPhase.errMessage === 'The update download failed.' &&
+        errorPhase.retryPresent &&
+        errorPhase.noReveal;
       record(
         'SOFTWARE_UPDATE',
-        versionOk && checkOk && downloadOk,
+        versionOk && checkOk && downloadOk && errorOk,
         `version row=${JSON.stringify(versionShown)} (R06); Check now → ${JSON.stringify(afterCheck)} (R03); ` +
-          `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04)`,
+          `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04); ` +
+          `rejected download → error phase ${JSON.stringify(errorPhase)}`,
         'main-software-update.png',
       );
     },
@@ -4462,7 +4716,13 @@ async function sceneSoftwareUpdate(browser) {
 //   RESTORE GATE  — Restore… is destructive, so it goes through the §12 R13 confirm gate: the
 //                   first click only ARMS the confirm (restoreBackup NOT yet called); only the
 //                   explicit confirm fires window.stint.restoreBackup({name}) — exactly once, with
-//                   the chosen backup's name. Captures main-backups.png as the rubric evidence.
+//                   the chosen backup's name.
+//   EMPTY (STATES.md Settings × empty) — a SECOND page over a never-backed-up launch
+//                   (lastBackupUtc unset + the backups:[] fixture knob): the group paints BOTH
+//                   instructive empty copies — "No backups yet — Stint backs up automatically
+//                   on launch." on the Last-backup row and "No backups to restore from yet."
+//                   on the restore row — with no rows, no verified pill, and the retention
+//                   picker still operable. Captures main-backups.png and main-backups-empty.png.
 async function sceneBackupsSection(browser) {
   await withPage(browser, backupsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -4518,6 +4778,34 @@ async function sceneBackupsSection(browser) {
     await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
     const restored = await page.evaluate(() => window.__RESTORED_BACKUP__);
 
+    // The EMPTY variant (STATES.md Settings × empty): a never-backed-up launch — no
+    // lastBackupUtc on the snapshot and listBackups → []. Both instructive copies paint and
+    // the group stays operable (the retention picker still renders).
+    const backupsEmpty = await withPage(
+      browser,
+      emptyState(),
+      'index.html',
+      async (ep) => {
+        await ep.click('.nav-item[data-view="settings"]');
+        await ep.waitForSelector('#backups-panel .set-grp', { state: 'attached' });
+        await ep.waitForSelector('#backups-panel .set-empty', { state: 'attached' });
+        await ep.screenshot({ path: join(EVIDENCE, 'main-backups-empty.png'), fullPage: true });
+        return ep.evaluate(() => {
+          const host = document.querySelector('#backups-panel');
+          const empties = [...host.querySelectorAll('.set-empty')].map((e) =>
+            e.textContent.replace(/\s+/g, ' ').trim(),
+          );
+          return {
+            empties,
+            rows: host.querySelectorAll('.backup-item').length,
+            verifiedPill: !!host.querySelector('.ok'),
+            retentionPresent: !!host.querySelector('select[data-key="backupRetention"]'),
+          };
+        });
+      },
+      { backups: [] },
+    );
+
     const ok =
       probe.lastBackupShown &&
       probe.verifiedPill &&
@@ -4530,7 +4818,14 @@ async function sceneBackupsSection(browser) {
       setRet.value === 10 &&
       armedNotRestored &&
       !!restored &&
-      restored.name === probe.rowNames[0];
+      restored.name === probe.rowNames[0] &&
+      // STATES.md Settings × empty: the never-backed-up variant paints BOTH instructive
+      // copies with zero rows, no verified pill, and the retention picker still operable.
+      backupsEmpty.rows === 0 &&
+      !backupsEmpty.verifiedPill &&
+      backupsEmpty.retentionPresent &&
+      backupsEmpty.empties.some((t) => /No backups yet/.test(t) && /backs up automatically/.test(t)) &&
+      backupsEmpty.empties.some((t) => /No backups to restore from yet/.test(t));
     record(
       'BACKUPS_SECTION',
       ok,
@@ -4538,7 +4833,8 @@ async function sceneBackupsSection(browser) {
         `retention=${probe.retentionValue} (edit fired ${JSON.stringify(setRet)}), ` +
         `restore list rows=${probe.rowCount} ${JSON.stringify(probe.rowNames)} (each Restore… present=${probe.eachHasRestore}); ` +
         `confirm gate: armed-not-restored=${armedNotRestored}, confirmed restore=${JSON.stringify(restored)}; ` +
-        `stray accent=[${probe.offenders.join(', ') || 'none'}]`,
+        `stray accent=[${probe.offenders.join(', ') || 'none'}]; ` +
+        `never-backed-up empty ${JSON.stringify(backupsEmpty)}`,
       'main-backups.png',
     );
   });
@@ -4861,6 +5157,7 @@ const SCENES = {
   KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], run: sceneKeyboardFocus },
   TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], run: sceneTrayCountup },
   TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], run: sceneTrayPopoverSurface },
+  POPOVER_REJECT: { items: ['POPOVER_REJECT'], run: scenePopoverReject },
   IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], run: sceneInWindowTimer },
   CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], run: sceneCrossViewFreshness },
   TIMER_VIEW: { items: ['TIMER_VIEW'], run: sceneTimerView },
