@@ -54,11 +54,11 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   body{display:flex;flex-direction:column;align-items:center;gap:44px;min-height:100vh;padding:52px 16px 64px}
 
@@ -78,20 +78,20 @@
   .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
   .cal-hd .m{font-size:13px;font-weight:640}
   .cal-hd .nav2{display:flex;gap:4px}
-  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:6px;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);width:24px;height:24px;display:flex;align-items:center;justify-content:center}
   .cal-hd .nav2 .ic{width:14px;height:14px}
   .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-  .grid .dow{font-size:10px;color:var(--faint);text-align:center;padding:4px 0;text-transform:uppercase}
-  .grid .d{text-align:center;padding:4px 0;font-size:12px;border-radius:7px;cursor:pointer;color:var(--ink)}
+  .grid .dow{font-size:11px;color:var(--muted);text-align:center;padding:4px 0;text-transform:uppercase}
+  .grid .d{text-align:center;padding:4px 0;font-size:12px;border-radius:var(--r1);cursor:pointer;color:var(--ink)}
   .grid .d.mut{color:var(--faint)}
   .grid .d:hover{background:var(--wash)}
   .grid .d.sel{background:var(--accent);color:#fff;font-weight:640}
 
   /* start/stop disclosure — collapsed to a tabular echo; expands to raw text fields
      that accept any timestamp, so a stop on a later date makes an overnight span */
-  .xp{display:inline-flex;align-items:center;gap:8px;margin-top:16px;border:0;background:none;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;padding:4px 8px 4px 4px;border-radius:6px}
+  .xp{display:inline-flex;align-items:center;gap:8px;margin-top:16px;border:0;background:none;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;padding:4px 8px 4px 4px;border-radius:var(--r1)}
   .xp:hover{background:var(--hover)}
-  .xp .ic{width:13px;height:13px;color:var(--faint)}
+  .xp .ic{width:13px;height:13px;color:var(--muted)}
   .xp .tnum{font-weight:590}
   .xfields{margin-top:8px;padding-left:4px}
   .xfields .f{margin-bottom:12px}
@@ -106,8 +106,8 @@
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
   .track{position:relative;height:720px;border-left:1px solid var(--rule);margin-left:52px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 29px,var(--rule) 29px,var(--rule) 30px)}
-  .hour{position:absolute;left:-52px;width:38px;text-align:right;font-size:10px;color:var(--faint);transform:translateY(-6px)}
-  .block{position:absolute;left:6px;right:10px;border-radius:7px}
+  .hour{position:absolute;left:-52px;width:38px;text-align:right;font-size:11px;color:var(--muted);transform:translateY(-6px)}
+  .block{position:absolute;left:6px;right:10px;border-radius:var(--r1)}
   .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
   /* a running entry has a start and no stop yet: the block dissolves into the future */
@@ -116,12 +116,12 @@
      above the block's own stacking context and the overlap band — nothing hides them.
      V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time
      label reads ink — accent-ink text on an accent-weak chip fails contrast. */
-  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:1px 8px;border-radius:6px;z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
-  .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 7px 7px;z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
-  .overlap .otag{font-size:10.5px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:1px 8px}
+  .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 var(--r1) var(--r1);z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
+  .overlap .otag{font-size:11px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:2px 8px}
   .phint{margin-top:8px;display:flex;justify-content:flex-end}
-  .snap{font-size:10px;background:var(--wash);border:1px solid var(--rule);border-radius:10px;padding:1px 8px;color:var(--faint)}
+  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;color:var(--muted)}
 
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
      surfaced here at the point of action; the card stays open and unchanged. --danger block. */

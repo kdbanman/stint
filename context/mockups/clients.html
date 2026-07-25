@@ -29,12 +29,12 @@
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .win{max-width:1040px;margin:32px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
   .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
@@ -48,7 +48,7 @@
   .nav .sp{flex:1}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
@@ -62,12 +62,12 @@
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
   .btn.sm{height:30px;padding:0 12px;font-size:12px}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   .iconbtn.create{color:var(--accent)}.iconbtn.create:hover{background:var(--accent-weak);color:var(--accent-ink)}
   /* segmented */
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   /* toggle */
@@ -84,16 +84,16 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   /* clients view */
-  .view{gap:22px}
+  .view{gap:24px}
   .sec-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
   .sec-h h3{font-size:14px;font-weight:640;margin:0}
   .sec-h .cap{margin-left:8px;font-weight:400}
@@ -104,15 +104,15 @@
   .cl-row .nm{font-weight:590;font-size:13.5px}
   .cl-row.client .nm{font-size:14px;font-weight:640}
   .cl-row .acts{margin-left:auto;display:flex;gap:4px;align-items:center}
-  .cl-row .count{color:var(--faint);font-size:11.5px;margin-left:2px}
-  .proj{position:relative;margin-left:18px;padding-left:18px;border-left:2px solid var(--rule-strong)}
+  .cl-row .count{color:var(--muted);font-size:11.5px;margin-left:2px}
+  .proj{position:relative;margin-left:16px;padding-left:16px;border-left:2px solid var(--rule-strong)}
   .proj .cl-row{padding:8px 12px}
   .proj .cl-row .nm{font-weight:500;color:var(--ink)}
   .proj-add{display:inline-flex;align-items:center;gap:8px;border:0;background:none;cursor:pointer;font:inherit;font-size:13px;font-weight:500;color:var(--muted);padding:8px 12px}
   .proj-add .ic{width:15px;height:15px;color:var(--accent)}
   .proj-add:hover{color:var(--ink)}
   .cl.arch .cl-row.client .nm{color:var(--muted)}
-  .empty{color:var(--faint);font-size:12px;padding:8px 12px}
+  .empty{color:var(--muted);font-size:12px;padding:8px 12px}
   .taglist{display:flex;flex-direction:column}
   .tg-row{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:var(--r1)}
   .tg-row:hover{background:var(--wash)}
@@ -214,7 +214,7 @@
 
           <div class="card cl arch">
             <div class="cl-row client">
-              <svg class="ic" style="color:var(--faint)"><use href="#i-users"/></svg>
+              <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Initech</span><span class="pill">archived</span>
               <span class="acts">
                 <button class="btn sm ghost"><svg class="ic"><use href="#i-restore"/></svg> Restore</button>

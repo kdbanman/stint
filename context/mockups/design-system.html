@@ -29,12 +29,12 @@
   .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
-  .win{max-width:1040px;margin:34px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
+  .win{max-width:1040px;margin:32px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
   .bar{height:42px;display:flex;align-items:center;background:#F1EBE0;border-bottom:1px solid var(--rule);position:relative}
-  .lights{display:flex;gap:8px;padding-left:18px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
+  .lights{display:flex;gap:8px;padding-left:16px}.lights i{width:12px;height:12px;border-radius:50%;display:block}
   .lights .r{background:#e8795f}.lights .y{background:#e7b34e}.lights .g{background:#7fae6a}
   .bar .t{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);font-weight:590;pointer-events:none}
-  .prov{max-width:1040px;margin:0 auto 30px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
+  .prov{max-width:1040px;margin:0 auto 32px;text-align:center;font-size:11px;color:var(--faint);padding:4px 16px}
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
@@ -46,7 +46,7 @@
   .nav .sp{flex:1}
   /* view */
   .view{flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px}
-  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+  .vhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .vtitle{font-size:18px;font-weight:640;margin:0;letter-spacing:-.01em}
   /* buttons */
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
@@ -60,11 +60,11 @@
   .btn.danger{color:var(--danger);border-color:transparent;background:transparent}
   .btn.danger:hover{background:var(--danger-weak)}
   .btn.sm{height:30px;padding:0 12px;font-size:12px}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--faint);cursor:pointer}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
-  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:5px;cursor:pointer;white-space:nowrap}
+  .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
   /* toggle */
@@ -81,7 +81,7 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
-  .tag b{color:var(--faint);cursor:pointer;font-weight:400}
+  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
@@ -95,15 +95,15 @@
   .msg.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
-  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--faint)}
+  .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   body{padding:0}
   .doc{max-width:1040px;margin:0 auto 64px;padding:0 8px}
-  h1{font-size:24px;font-weight:680;margin:34px 0 2px;letter-spacing:-.01em}
+  h1{font-size:24px;font-weight:680;margin:32px 0 2px;letter-spacing:-.01em}
   .lead{color:var(--muted);font-size:14px;margin:8px 0 24px;max-width:740px}
-  h2{font-size:15px;font-weight:640;margin:34px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
-  .panel{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);padding:18px 20px;box-shadow:var(--sh-card)}
-  .two{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  h2{font-size:15px;font-weight:640;margin:32px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+  .panel{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);padding:16px 20px;box-shadow:var(--sh-card)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   @media(max-width:720px){.two{grid-template-columns:1fr}}
   .rule{font-size:12.5px;color:var(--muted);margin:0}
   .rule + .rule{margin-top:12px}
@@ -113,16 +113,16 @@
   .sw-c .chip{height:56px}
   .sw-c .cap2{padding:8px 12px}
   .sw-c .cap2 b{display:block;color:var(--ink);font-weight:590;font-size:12px}
-  .sw-c .cap2 span{color:var(--faint);font-family:var(--num)}
-  .type-row{display:flex;align-items:baseline;gap:18px;padding:12px 0;border-bottom:1px solid var(--rule)}
+  .sw-c .cap2 span{color:var(--muted);font-family:var(--num)}
+  .type-row{display:flex;align-items:baseline;gap:16px;padding:12px 0;border-bottom:1px solid var(--rule)}
   .type-row:last-child{border-bottom:0}
   .type-row .role{width:160px;flex:none;color:var(--muted);font-size:12px}
-  .type-row .spec{margin-left:auto;color:var(--faint);font-family:var(--num);font-size:11.5px}
+  .type-row .spec{margin-left:auto;color:var(--muted);font-family:var(--num);font-size:11.5px}
   .icons{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:4px}
   .icons .i{display:flex;flex-direction:column;align-items:center;gap:8px;padding:16px 8px;border-radius:var(--r1);color:var(--ink)}
   .icons .i:hover{background:var(--hover)}
   .icons .i .ic{width:20px;height:20px}
-  .icons .i span{font-size:10.5px;color:var(--faint);font-family:var(--num)}
+  .icons .i span{font-size:11px;color:var(--muted);font-family:var(--num)}
   .demos{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
   .prov{margin-top:16px}
 </style>
@@ -198,7 +198,7 @@
       <p class="rule"><b>The UI speaks for itself.</b> Every element earns its pixels. When shape, position, or state already carry the meaning, the words go — no headings, captions, instructions, or state words the layout makes plain — and a verb that recurs becomes its icon. If something still seems to need explaining, redesign it or move the detail behind an <svg class="ic" style="width:13px;height:13px"><use href="#i-info"/></svg> affordance instead of printing prose on the surface.</p>
     </div>
     <div class="panel">
-      <p class="rule"><b>Small type ramp, tabular time.</b> Four roles do the work; hierarchy comes from size + weight (450 / 590 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
+      <p class="rule"><b>Small type ramp, tabular time.</b> Five roles do the work; hierarchy comes from size + weight (450 / 590 / 640 / 680), never colour or italics. Every clock and duration uses tabular numerals so digits never jitter.</p>
       <p class="rule"><b>Spacing on the 4px grid (2px half-step); component heights free.</b> Every pad, gap, and margin is a multiple of 4 — 2px is the only permitted sub-4 half-step; a control's own height is unconstrained. Radii are a fixed trio — 8px controls, 12px cards, 16px window & overlays.</p>
       <p class="rule"><b>One control per choice-shape.</b> Toggle = on/off · segmented = ≤4 exclusive peers · select = many options. Running state is a small green dot. Line icons only — never emoji.</p>
     </div>
@@ -215,7 +215,7 @@
       <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>). The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <p class="rule"><b>Motion — functional, short, rare.</b> Fluent uses connected animation and parallax for continuity. We keep motion to ~120ms state changes: toggles slide, a chosen segment lifts, the running dot is the one persistent cue. No parallax, no decorative transitions, nothing that moves without meaning.</p>
     </div>
@@ -223,13 +223,13 @@
       <p class="rule"><b>Material — warm paper, not glass.</b> Fluent's acrylic and mica make surfaces translucent. We swap translucency for opaque warm paper on an ivory canvas; the lone nod to material is the menu bar's faint blur where it meets the OS. Material restraint means no tinted, dashed, or decorative boxes — surface is signalled by elevation alone.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel" style="grid-column:1/-1">
-      <p class="rule"><b>Scale — one language, many sizes, on a 4px grid.</b> Fluent scales a single design across form factors from a four-pixel base unit. The same tokens, type ramp, controls and icons run unchanged from the 332px menu-bar tray popover to the 1040px main window — every pad, gap and height a multiple of 4, every corner one of the fixed radius trio (8&nbsp;controls&nbsp;/&nbsp;12&nbsp;cards&nbsp;/&nbsp;16&nbsp;window&nbsp;&amp;&nbsp;overlays).</p>
+      <p class="rule"><b>Scale — one language, many sizes, on a 4px grid.</b> Fluent scales a single design across form factors from a four-pixel base unit. The same tokens, type ramp, controls and icons run unchanged from the 332px menu-bar tray popover to the 1040px main window — every pad, gap and margin a multiple of 4 (heights are free), every corner one of the fixed radius trio (8&nbsp;controls&nbsp;/&nbsp;12&nbsp;cards&nbsp;/&nbsp;16&nbsp;window&nbsp;&amp;&nbsp;overlays).</p>
     </div>
   </div>
 
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <p class="rule"><b>Familiarity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — build on what the user already knows. Native macOS window chrome and the system font stack mean Stint feels like the platform it runs on rather than a web page in a frame.</p>
     </div>
@@ -237,7 +237,7 @@
       <p class="rule"><b>Inclusivity</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — hierarchy never rides on colour alone. Size and weight carry structure, so it survives colour-blindness and dimmed screens; every semantic state pairs its colour with a word or icon (the run dot beside "running", the worded warn pill). Tabular numerals keep durations legible and steady.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel" style="grid-column:1/-1">
       <p class="rule"><b>Consistency</b> <span class="cap">(Fluent&nbsp;2 principle)</span> — one of everything. One token set, one line-icon family, one control per choice-shape, one elevation ladder, applied identically across every surface in this set. That single-source discipline is the entire point of this document: a new view should be assemblable from these parts without inventing anything.</p>
     </div>
@@ -291,7 +291,7 @@
       <p class="rule" style="margin-top:16px"><b>Selection ≠ accent.</b> A chosen thing lifts — a raised paper chip with a shadow (the segmented idiom, and the nav rail's active item, shown above) — it never turns accent; only its icon may take the accent colour.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <div class="demos" style="gap:8px">
         <span class="tag">research</span><span class="tag">admin</span>
@@ -306,7 +306,7 @@
       <p class="rule" style="margin-top:16px"><b>Fields</b> share one border, one radius, one focus ring. Labels are caption-weight; helper text is rare and quiet.</p>
     </div>
   </div>
-  <div class="two" style="margin-top:18px">
+  <div class="two" style="margin-top:16px">
     <div class="panel">
       <div class="demos" style="flex-direction:column;align-items:stretch;gap:8px">
         <div class="msg warn">This entry overlaps 1 other entry — allowed, but flagged in reports.</div>
