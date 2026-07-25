@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Engineering Requirements &amp; Conventions</title>
+<style>
+  :root{
+    --paper:#ffffff;--wash:#f5f5f4;--ink:#15151a;--ink-soft:#3c3c43;
+    --muted:#737380;--faint:#a6a6b0;--rule:#e6e6e3;--rule-strong:#d2d2ce;
+    --code-bg:#f3f3f1;--ok:#2c2c30;
+    --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,system-ui,sans-serif;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--wash);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;font-feature-settings:"kern" 1}
+  .sheet{max-width:820px;margin:40px auto;background:var(--paper);border:1px solid var(--rule);border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.03),0 12px 40px rgba(0,0,0,.05);padding:60px 70px 80px}
+  .mast{border-bottom:1px solid var(--ink);padding-bottom:18px;margin-bottom:36px}
+  .mast-row{display:flex;justify-content:space-between;align-items:baseline;gap:16px;flex-wrap:wrap}
+  .wordmark{font-size:28px;font-weight:680;letter-spacing:-.02em;line-height:1}
+  .clock{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+  .clock b{color:var(--ink-soft);font-weight:600}
+  .mast-meta{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);margin-top:13px}
+  .lede{font-size:18px;line-height:1.5;color:var(--ink);font-weight:450;margin:0 0 6px}
+  .toc{margin:30px 0 8px;border:1px solid var(--rule);border-radius:6px;padding:18px 22px;background:#fbfbfa}
+  .toc h4{margin:0 0 12px;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .toc ol{margin:0;padding:0;list-style:none;columns:2;column-gap:34px}
+  .toc li{margin:0 0 7px;font-size:14px;break-inside:avoid}
+  .toc a{color:var(--ink-soft);text-decoration:none}
+  .toc a:hover{color:var(--ink);text-decoration:underline}
+  .toc .tn{font-family:var(--mono);color:var(--faint);font-size:12px;margin-right:8px}
+  section{margin-top:48px;scroll-margin-top:20px}
+  .eyebrow{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .eyebrow .n{color:var(--faint)}
+  .eyebrow::after{content:"";flex:1;height:1px;background:var(--rule)}
+  h2{font-size:20px;font-weight:640;letter-spacing:-.015em;margin:0 0 12px;line-height:1.25}
+  h3{font-size:15px;font-weight:660;margin:24px 0 7px;letter-spacing:-.005em}
+  p{margin:0 0 14px;color:var(--ink-soft)}
+  p strong,li strong,td strong{color:var(--ink);font-weight:620}
+  code{font-family:var(--mono);font-size:.85em;background:var(--code-bg);padding:1px 5px;border-radius:4px;color:var(--ink)}
+  ul.d{margin:0 0 14px;padding:0;list-style:none}
+  ul.d li{position:relative;padding-left:20px;margin-bottom:9px;color:var(--ink-soft)}
+  ul.d li::before{content:"—";position:absolute;left:0;color:var(--faint);font-family:var(--mono)}
+  table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;border-bottom:1px solid var(--ink);padding:0 14px 8px 0;vertical-align:bottom}
+  td{padding:9px 14px 9px 0;border-bottom:1px solid var(--rule);color:var(--ink-soft);vertical-align:top}
+  td:last-child,th:last-child{padding-right:0}
+  td code{font-size:12.5px;white-space:nowrap}
+  td.m{font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+  .note{border-left:2px solid var(--ink);padding:2px 0 2px 20px;margin:18px 0;color:var(--ink)}
+  .note .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:4px}
+  .foot{margin-top:56px;padding-top:18px;border-top:1px solid var(--rule);font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  a{color:var(--ink)}
+  @media (max-width:680px){
+    .sheet{margin:0;border:0;border-radius:0;padding:34px 20px 56px;box-shadow:none}
+    .toc ol{columns:1}
+    table,thead,tbody,th,td,tr{display:block}
+    thead{display:none}
+    td{padding:3px 0;border:0}
+    tr{display:block;border-bottom:1px solid var(--rule);padding:12px 0}
+    td::before{content:attr(data-l);font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:1px}
+    td.m{white-space:normal}
+  }
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:0;margin:0;max-width:none}.toc{break-inside:avoid}section{break-inside:avoid}}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <header class="mast">
+    <div class="mast-row">
+      <div class="wordmark">stint</div>
+      <div class="clock">how it's coded · tt v1</div>
+    </div>
+    <div class="mast-meta">Engineering Requirements &amp; Conventions · v1</div>
+  </header>
+
+  <p class="lede"><a href="prd.html">prd.html</a> specifies the product; <a href="process.html">process.html</a> specifies the apparatus that proves it. This specifies the code and tests themselves — the judgment calls no gate can check: how much to build, how much to test, how to write what gets built.</p>
+
+  <p>The primary reader is the agent session writing code (process.html §03). The default failure mode of such a session is not sloppiness but <strong>over-delivery</strong>: extra abstraction, speculative flexibility, tests for cases that cannot occur — all of which pass every gate and compound silently. Most of this doc exists to calibrate that balance. Content is distilled from the named external sources (§09) and <em>vendored</em>: guidance that lives only at a URL cannot bind an offline session.</p>
+
+  <nav class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#s1"><span class="tn">01</span>A third kind of requirement</a></li>
+      <li><a href="#s2"><span class="tn">02</span>Engineering balance</a></li>
+      <li><a href="#s3"><span class="tn">03</span>Testing balance</a></li>
+      <li><a href="#s4"><span class="tn">04</span>TypeScript</a></li>
+      <li><a href="#s5"><span class="tn">05</span>Test authoring</a></li>
+      <li><a href="#s6"><span class="tn">06</span>Electron</a></li>
+      <li><a href="#s7"><span class="tn">07</span>Comments</a></li>
+      <li><a href="#s8"><span class="tn">08</span>Gherkin</a></li>
+      <li><a href="#s9"><span class="tn">09</span>Sources</a></li>
+    </ol>
+  </nav>
+
+  <section id="s1">
+    <div class="eyebrow"><span class="n">01</span> Scope</div>
+    <h2>A third kind of requirement</h2>
+    <p>Application requirements say what the product does. Process requirements say how it is built, verified, and released. This doc holds the third kind: how the source is written — design judgment, style, test craft. Everything here binds at <strong>recorded-convention tier</strong> (process.html §08) unless marked as a requirement in a labeled block; there is exactly one such block (§03, test integrity), because only it can produce a false green.</p>
+    <p>One home per fact still rules: <a href="acceptance.html">acceptance.html</a> owns <em>which method</em> proves a criterion; this doc owns <em>whether and how</em> code and tests get written at all; <a href="glossary.html">glossary.html</a> owns the domain words that name things; <a href="architecture.html">architecture.html</a> owns the runtime shape the code lives in.</p>
+  </section>
+
+  <section id="s2">
+    <div class="eyebrow"><span class="n">02</span> Balance</div>
+    <h2>Engineering balance</h2>
+    <p>Under-engineering fails visibly — gates go red, behavior is wrong. Over-engineering passes everything and is only caught by judgment, so the rules below lean against it. The vocabulary is the deep-module school: a <strong>module</strong> is judged by the ratio of behavior delivered to interface imposed; a <strong>shallow</strong> module's interface costs more than its implementation saves; a <strong>seam</strong> is where behavior can be observed or replaced without reaching inside.</p>
+    <ul class="d">
+      <li><strong>Every changed line traces to the request.</strong> Behavior nobody asked for is scope creep — a review defect even when the code is correct. Say "considered X, chose not to build it" instead of building it.</li>
+      <li><strong>A presumptive capability has four costs:</strong> build, delay (what didn't ship instead), carry (every future reader pays it), repair (the guess was probably wrong anyway). YAGNI wins even when the guess is right, because carry and delay were paid regardless. YAGNI never excuses skipping refactoring or tests — those keep change cheap; skipping them is debt, not thrift.</li>
+      <li><strong>Modules deep, not many.</strong> Much behavior behind a small interface. Both extremes fail: the god module is unmanageable, but splitting further once interfaces dominate subtracts value. Two functions that can only be understood by flipping between them are one function — merge them back.</li>
+      <li><strong>Duplication is cheaper than the wrong abstraction.</strong> Copy on the second occurrence; abstract on the third only if the copies have been changing in lockstep. Inside a wrong abstraction (parameters and conditionals accreting per caller), the fastest way forward is back: re-inline into every caller, delete each caller's dead branches, then see what abstraction — if any — remains.</li>
+      <li><strong>Prefer fixes that delete structure.</strong> The best structural fix removes the condition that let the defect exist; a fix that adds a layer, a knob, or a guard for callers who may never come is usually the wrong one.</li>
+      <li><strong>Design it twice.</strong> For a nontrivial interface, sketch two genuinely different shapes before committing; record the rejected shape where the decision lands (PR body or file-header comment). Prefer the somewhat-general interface — one <code>insert(text)</code> over three key-specific mutators — when it is <em>deeper</em>, not merely bigger.</li>
+      <li><strong>Simple-design priority order:</strong> passes the tests &gt; reveals intention &gt; no duplication &gt; fewest elements. Never satisfy a lower rule by sacrificing a higher one — deduplication that obscures intent is a net loss.</li>
+    </ul>
+    <h3>Match investment to subdomain</h3>
+    <p>Design and test effort follow the subdomain, not the file that happens to be open:</p>
+    <table>
+      <thead><tr><th>Tier</th><th>Stint members</th><th>Treatment</th></tr></thead>
+      <tbody>
+        <tr><td data-l="tier" class="m">core</td><td data-l="members">Entry/timer state transitions, invariants, merge/gap/sleep resolution, report &amp; rounding math (<code>@stint/core</code>).</td><td data-l="treatment">Deep design, thorough tests, glossary-exact names.</td></tr>
+        <tr><td data-l="tier" class="m">supporting</td><td data-l="members">Settings, CSV/JSON export shaping, tray/window plumbing, favorites.</td><td data-l="treatment">Built plainly. Straight-line code is correct here, not shameful.</td></tr>
+        <tr><td data-l="tier" class="m">generic</td><td data-l="members">SQLite, Electron, packaging, the update mechanism.</td><td data-l="treatment">Adopted, configured, never re-invented.</td></tr>
+      </tbody>
+    </table>
+    <p>Applying core-tier patterns to supporting code is the named form of gold-plating — an event-sourced settings store is the canonical violation.</p>
+  </section>
+
+  <section id="s3">
+    <div class="eyebrow"><span class="n">03</span> Balance</div>
+    <h2>Testing balance</h2>
+    <p>Which code deserves tests is decided by two axes — domain significance/complexity, and collaborator count — not by coverage or by mirroring source files:</p>
+    <table>
+      <thead><tr><th>Code</th><th>Stint members</th><th>Testing</th></tr></thead>
+      <tbody>
+        <tr><td data-l="code"><strong>Domain logic</strong>, few collaborators</td><td data-l="members">core transitions, invariants, report math; the Electron-free <code>gui/src</code> projections.</td><td data-l="testing">Unit-test thoroughly — highest value per test, cheapest to keep.</td></tr>
+        <tr><td data-l="code"><strong>Glue</strong>, many collaborators</td><td data-l="members">CLI command handlers, <code>ipc-handlers.ts</code>, <code>main.ts</code> wiring.</td><td data-l="testing">Few integration tests over real seams — the longest happy path plus what units can't reach.</td></tr>
+        <tr><td data-l="code"><strong>Trivial</strong></td><td data-l="members">Getters, pass-through mappers, constant tables.</td><td data-l="testing">None. A test here is pure carry cost.</td></tr>
+        <tr><td data-l="code"><strong>Complex glue</strong></td><td data-l="members">(none tolerated)</td><td data-l="testing">Don't mock it into testability — split it into domain + glue. Untestability is a design smell.</td></tr>
+      </tbody>
+    </table>
+    <ul class="d">
+      <li><strong>Stopping rule:</strong> write a test where a failure would be scary; stop when enumerating further cases is boring. Boredom is the signal that marginal cases carry no information.</li>
+      <li><strong>Don't test what can't break:</strong> the compiler's job (a wrongly-typed input is not a test case), the standard library, SQLite, Electron itself.</li>
+      <li><strong>Don't add a test that</strong> duplicates another test's failure conditions; asserts a mock was called; computes its expected value by the same algorithm as the code (tautological); or exists to raise a coverage number. Coverage is a gauge, never a target — targets get gamed.</li>
+      <li><strong>Deleting a test is a legitimate move</strong> when it never fails, fails only on refactors, or pins behavior that is gone — subject to the requirement below.</li>
+      <li><strong>Apparatus is code with a budget.</strong> A new guard must name the defect it catches; a guard whose defect costs less than the guard's upkeep is over-testing. This is the counterweight to process.html R03/R05, which only push toward more apparatus.</li>
+    </ul>
+    <div class="note">
+      <span class="lbl">Requirement — test integrity</span>
+      Never weaken an assertion, delete or skip a test, or fit an expected value to observed output <em>in order to reach green</em>. Each of those is sometimes right — but only as a declared decision, named in the PR with its reason, never as a silent step of getting a suite to pass. A test quietly bent toward the code is a false green manufactured at the source.
+    </div>
+  </section>
+
+  <section id="s4">
+    <div class="eyebrow"><span class="n">04</span> Language</div>
+    <h2>TypeScript</h2>
+    <h3>Style rules</h3>
+    <ul class="d">
+      <li><strong>Named exports only;</strong> minimize each module's export surface. No <code>export let</code> — mutable state goes behind functions.</li>
+      <li><strong>Assertions are guilty until proven safe.</strong> <code>as</code> and <code>!</code> need either a runtime check instead (<code>instanceof</code>, narrowing) or a comment proving why the assertion holds. <code>@ts-ignore</code>/<code>@ts-nocheck</code>: never. <code>@ts-expect-error</code>: tests only.</li>
+      <li><strong><code>any</code> triad:</strong> prefer a precise type; else <code>unknown</code>; else the narrowest possible <code>any</code> hidden inside one well-typed function, with a comment saying why.</li>
+      <li><strong>Throw only <code>Error</code> subclasses;</strong> catch as <code>unknown</code>; map to exit codes / user copy once, at the entry point (<code>bin.ts</code>), never mid-stack. Empty catch requires a comment naming what is deliberately swallowed (<code>store.ts:210</code> is the house example).</li>
+      <li><strong>Nullability lives at the use site.</strong> No <code>|null</code>/<code>|undefined</code> inside a type alias; optional fields (<code>?</code>) over <code>|undefined</code>; handle null where it arises, don't pass it along.</li>
+      <li><strong><code>interface</code> over object-literal <code>type</code></strong>; union-of-literals over <code>enum</code>; <code>T[]</code> for simple element types; <code>===</code> always (<code>== null</code> allowed to cover both nils).</li>
+      <li><strong>Inference discipline:</strong> no annotation on trivially-inferred initializers; annotate exported function signatures.</li>
+    </ul>
+    <h3>Type design</h3>
+    <ul class="d">
+      <li><strong>Types represent only valid states.</strong> The house example is the keystone idea itself: a running timer is the row whose <code>end</code> is null — the state <em>is</em> the shape, not a flag beside it. Prefer tagged unions to parallel optional fields; a type where two optionals can't both be set is lying about its states.</li>
+      <li><strong>Parse, don't validate.</strong> Every edge — argv, DB row, IPC payload, settings JSON — starts as <code>unknown</code> and passes through one parser that returns a domain type carrying the proof. Past the edge, functions accept domain types and never re-check; scattered re-checking (shotgun parsing) lets bad data get discovered after side effects.</li>
+      <li><strong>Name types in glossary language</strong> (glossary.html — one canonical term, no synonyms). Prefer precise types to naked <code>string</code>/<code>number</code> for domain values; consider brands where two ids can be confused.</li>
+      <li><strong>Non-fatal outcomes are values, not exceptions:</strong> <code>WriteResult&lt;T&gt;</code>'s <code>{ value, warnings }</code> is how "warned, not blocked" is typed. Exceptions are for refusals and faults only.</li>
+      <li><strong>The store boundary maps representations:</strong> <code>snake_case</code> columns to <code>camelCase</code> domain fields via private row interfaces, in the store, once.</li>
+    </ul>
+  </section>
+
+  <section id="s5">
+    <div class="eyebrow"><span class="n">05</span> Tests</div>
+    <h2>Test authoring</h2>
+    <p>The four properties a test is judged by: protection against regressions, <strong>resistance to refactoring</strong>, speed, maintainability — multiplied, so any factor at zero zeroes the test. Resistance to refactoring is non-negotiable: a test that breaks on a behavior-preserving refactor is a false-alarm generator and erodes trust in red.</p>
+    <ul class="d">
+      <li><strong>Test behaviors at public seams, not methods or internals.</strong> One behavior per test, named for the behavior. No test file mirrors a source file's function list.</li>
+      <li><strong>Assert state and output, not interactions.</strong> Call counts, call order, and private state are implementation details; a test asserting them serves a third user — the test itself — that nobody ships to.</li>
+      <li><strong>Mock only unowned boundaries.</strong> The SQLite file is a managed dependency — always real (<code>Store.openMemory</code> or a temp file), never stubbed. Time is already a seam (<code>TT_NOW</code>, the <code>mutableClock</code> fixture, <code>page.clock</code>) — use it; never sleep. Nothing in <code>packages/*</code> mocks another Stint module. The one unmanaged dependency is the update check's network edge — stub exactly that.</li>
+      <li><strong>DAMP over DRY; no logic in tests.</strong> A test is readable start-to-finish without helpers hiding the cause–effect chain; expected values are literals from an independent source, never computed the way the code computes them. If a test needs a loop or a conditional, it is doing too much.</li>
+      <li><strong>The ideal test never changes</strong> until the requirement it pins changes. Refactors, other features, and unrelated fixes should not touch it.</li>
+      <li><strong>Flaky means fixed or deleted,</strong> never retried into submission — a suite that cries wolf stops gating anything.</li>
+      <li><strong>Source-text guards are a last resort:</strong> a regex over source belongs only where the defect is invisible to a driven page (<code>tray.test.ts</code>, <code>renderer-isolation.test.ts</code> — no host exists under headless Chromium). A source regex breaks on a rename and passes on a bug; anywhere a JUDGE scene can see the behavior, the scene is the guard.</li>
+    </ul>
+    <p>Whether code deserves a test at all is §03's table; <em>which method</em> proves an acceptance criterion is acceptance.html's routing rule. This section only governs how the resulting test is written.</p>
+  </section>
+
+  <section id="s6">
+    <div class="eyebrow"><span class="n">06</span> Electron</div>
+    <h2>Electron</h2>
+    <h3>The layering rule</h3>
+    <p><strong>Core owns every decision; <code>gui/src</code> owns Electron-free projections; <code>main.ts</code> stays thin wiring; the renderer owns chrome only.</strong> The renderer never re-derives what core can compute — it imports (<code>su.ts</code> bundles <code>formatDuration</code>, <code>deriveView</code> from core) rather than hand-mirroring. Where new logic goes:</p>
+    <table>
+      <thead><tr><th>The logic…</th><th>Home</th></tr></thead>
+      <tbody>
+        <tr><td data-l="the logic">could serve both surfaces, or decides anything</td><td data-l="home" class="m">packages/core</td></tr>
+        <tr><td data-l="the logic">is GUI-only but pure (a projection, a menu model, a label)</td><td data-l="home" class="m">gui/src/*.ts — Electron-free, unit-tested</td></tr>
+        <tr><td data-l="the logic">needs an Electron API</td><td data-l="home" class="m">main.ts — thin, delegating to the above</td></tr>
+        <tr><td data-l="the logic">is display behavior only</td><td data-l="home" class="m">renderer/*.js</td></tr>
+      </tbody>
+    </table>
+    <p>This is the humble-object discipline that keeps §03's quadrants clean: what can't run under vitest is kept too thin to hide a decision.</p>
+    <h3>Adding an IPC channel — the five-file ritual</h3>
+    <p>One channel touches five files, and three bind tests catch a missed step (<code>ipc-handlers.test.ts</code>, <code>qa-driver.test.ts</code>, <code>parity.test.ts</code>). Do it in order rather than learning it from CI:</p>
+    <ul class="d">
+      <li><code>gui/src/ipc.ts</code> — the channel name in <code>CHANNELS</code> (this generates the preload bridge).</li>
+      <li><code>gui/src/ipc-handlers.ts</code> — the handler, delegating to core.</li>
+      <li><code>gui/qa/driver.mjs</code> — the QA driver's port of the handler.</li>
+      <li><code>acceptance/criteria/parity-matrix.json</code> — the capability row.</li>
+      <li><code>cli/src/program.ts</code> — the <code>tt</code> twin (parity is a requirement, not a hope).</li>
+    </ul>
+    <h3>Security posture</h3>
+    <ul class="d">
+      <li><strong>Never flip an isolation default:</strong> <code>contextIsolation</code> on, <code>nodeIntegration</code> off, renderer sandboxed. Most of the official checklist is "don't undo a default" — guarded here by <code>renderer-isolation.test.ts</code>.</li>
+      <li><strong>Local-only content narrows the checklist.</strong> Stint loads only bundled HTML, so the remote-content items (permission handlers, navigation limiting, webview hardening) are N/A by construction — the no-network backstop (process.html R07) is what keeps that construction true.</li>
+      <li><strong>Still live for a local-only app:</strong> the CSP in <code>index.html</code>; never exposing raw <code>ipcRenderer</code> through the bridge (only named <code>CHANNELS</code> wrappers); <code>shell.openExternal</code> only on vetted URLs; packaging-time fuses (<code>runAsNode</code> off in the shipped app — dev/test builds keep inspect fuses on because the tooling needs them).</li>
+      <li><strong>Main is the UI broker — never block it.</strong> No sync IPC, no long work on the main thread, no polling where an event exists (<code>powerMonitor</code>, the DB file watcher).</li>
+    </ul>
+    <h3>Tray facts</h3>
+    <ul class="d">
+      <li>Keep a persistent reference to the <code>Tray</code> or it is garbage-collected and the icon vanishes.</li>
+      <li>macOS: tray icons are Template images (<code>iconTemplate.png</code> + <code>@2x</code>) so the OS handles menu-bar inversion; setting a context menu suppresses click events — click-opens-popover and native-menu are exclusive per platform choice.</li>
+      <li>Linux: tray click behavior varies by desktop; never design Linux UX around left-click, and re-call <code>setContextMenu</code> after mutating a menu item.</li>
+    </ul>
+    <h3>Testing the Electron band</h3>
+    <p>The harness strategy is settled: the JUDGE/QA harnesses drive the <em>real renderer over real core</em> in headless Chromium — faster and more deterministic than driving Electron itself, and the official custom-test-driver pattern is this approach's published ancestor. Playwright's Electron mode (still experimental upstream) is reserved for the thin band nothing else can reach — real <code>BrowserWindow</code>/<code>Tray</code>/preload wiring — which today is covered by static guards plus the MANUAL runbook. Don't migrate the harness to it.</p>
+    <h3>Recorded traps</h3>
+    <ul class="d">
+      <li><code>gui/tsconfig.main.json</code> uses an explicit file list — a new <code>gui/src</code> module is invisible to the build until added there.</li>
+      <li><code>gui/judge/</code> and <code>gui/qa/</code> are ESLint-exempt apparatus — nothing lints them, so read twice before trusting.</li>
+    </ul>
+  </section>
+
+  <section id="s7">
+    <div class="eyebrow"><span class="n">07</span> Comments</div>
+    <h2>Comments</h2>
+    <p>House style is comment-dense — roughly a third of implementation lines, more in <code>gui/src</code> — but the density is a side effect, not the rule. The rule: <strong>a comment earns its place only by carrying what the code cannot.</strong></p>
+    <ul class="d">
+      <li><strong>Every module opens with a header</strong> stating what it owns and why it exists, citing the PRD section (<code>§NN Rxx</code>) and issues that shaped it.</li>
+      <li><strong>Inline comments carry decisions, constraints, and warnings:</strong> why this ordering, why the obvious alternative is wrong, which incident this line answers (<code>app.js</code>'s issue-#50 post-mortem at the site of the fix is the model). Cite <code>§/R</code> and <code>#issue</code> so the trail survives the session that knew it.</li>
+      <li><strong>Never mechanics, never narration</strong> — not what the next line does, not where code was moved from, not why a change is correct (that is PR talk, dead the moment it merges).</li>
+      <li><strong>The stopping rule:</strong> delete the comment mentally; if the code still tells the reader everything the comment did, it was noise. If deleting it loses a decision, it stays.</li>
+    </ul>
+  </section>
+
+  <section id="s8">
+    <div class="eyebrow"><span class="n">08</span> Gherkin</div>
+    <h2>Gherkin</h2>
+    <p>The features run against both surfaces, so declarative style is not taste — it is what makes parity provable. A step that names a widget, a flag, or a selector can only be true of one surface: <strong>a mechanism in a step is a parity bug by construction.</strong></p>
+    <ul class="d">
+      <li><strong>Steps state intent and outcome</strong> ("When I start a timer for Client A"), never mechanics ("When I click the tray button"). Mechanics live in the step definitions, once per surface.</li>
+      <li><strong>One behavior per scenario</strong> — one When→Then pair; a second pair means a second scenario. Healthy scenarios run 3–7 steps.</li>
+      <li><strong>Given is state, When is the one action, Then is observable outcome only.</strong> No assertions in Given/When; no actions in Then.</li>
+      <li><strong>Key examples, not combinatorics:</strong> the smallest example set that pins each rule's boundaries; each scenario illustrates exactly one rule. Exhaustive tables are over-testing wearing a requirements hat — exhaustiveness is PROP's job.</li>
+      <li><strong>No incidental detail:</strong> a name, a date, or a tag appears in a scenario only if the behavior depends on it.</li>
+      <li><strong>Readable cold:</strong> a reader who has never seen the code understands the feature file, or it has failed as specification.</li>
+    </ul>
+  </section>
+
+  <section id="s9">
+    <div class="eyebrow"><span class="n">09</span> Sources</div>
+    <h2>Sources</h2>
+    <p>Distilled, vendored, and adapted — this doc is the home; the sources are lineage, and divergence from a source here is deliberate. The <code>arch-review</code> and <code>code-quality-review</code> skills load this doc for their vocabulary instead of fetching any of these.</p>
+    <table>
+      <thead><tr><th>Source</th><th>Taken</th></tr></thead>
+      <tbody>
+        <tr><td data-l="source">Ousterhout, <em>A Philosophy of Software Design</em> (+ the APoSD-vs-Clean-Code dialogue); Pocock's <code>codebase-design</code> skill</td><td data-l="taken">Deep modules, complexity symptoms, design-it-twice, the module vocabulary (§02).</td></tr>
+        <tr><td data-l="source">Fowler, <em>Yagni</em>; Metz, <em>The Wrong Abstraction</em>; Beck's four rules; Abramov, <em>Goodbye Clean Code</em></td><td data-l="taken">The four costs, the re-inline exit procedure, the priority order (§02).</td></tr>
+        <tr><td data-l="source">Khononov, <em>Learning DDD</em></td><td data-l="taken">Subdomain triage as an anti-gold-plating tool (§02).</td></tr>
+        <tr><td data-l="source">Khorikov, <em>Unit Testing Principles, Practices, and Patterns</em></td><td data-l="taken">The four pillars, the code quadrant, managed vs unmanaged dependencies (§03, §05).</td></tr>
+        <tr><td data-l="source"><em>Software Engineering at Google</em> ch. 11–13</td><td data-l="taken">Behaviors not methods, DAMP, no logic in tests, unchanging tests, flakiness discipline (§05).</td></tr>
+        <tr><td data-l="source">Beck (<em>TDD by Example</em>, Test Desiderata); Kent C. Dodds; Pocock's <code>tdd</code> skill</td><td data-l="taken">Fear→boredom, the test user, tautological tests, resemblance principle (§03, §05).</td></tr>
+        <tr><td data-l="source">Google TypeScript Style Guide; Vanderkam, <em>Effective TypeScript</em></td><td data-l="taken">The style rules and type-design items (§04).</td></tr>
+        <tr><td data-l="source">Wlaschin, <em>Domain Modeling Made Functional</em>; King, <em>Parse, don't validate</em></td><td data-l="taken">Illegal states unrepresentable, parsing at edges (§04).</td></tr>
+        <tr><td data-l="source">Electron official docs (security, process model, IPC, performance, automated testing); Playwright Electron docs; the <code>menubar</code> pattern</td><td data-l="taken">§06 wholesale.</td></tr>
+        <tr><td data-l="source">Cucumber BDD docs; Adzic, <em>Specification by Example</em>; Automation Panda's Gherkin rules</td><td data-l="taken">§08 wholesale.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="foot">
+    <span>stint · engineering requirements &amp; conventions</span>
+    <span>v1</span>
+  </div>
+
+</main>
+</body>
+</html>
