@@ -64,7 +64,7 @@
   .btn.sm{height:30px;padding:0 12px;font-size:12px}
   /* pill */
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
-  .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
+  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:0 1px 2px rgba(74,52,24,.12);font-weight:590}
   .cap{font-size:12px;color:var(--muted)}
   /* entries list */
   .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13.5px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
@@ -123,7 +123,7 @@
            silently, the button swaps in place into a confirm stating the resulting span/duration
            and the gap it would bill (the confirmInline delete-confirm precedent, §12 R13). -->
       <div class="selbar">
-        <span class="pill accent">2 selected</span>
+        <span class="pill chip">2 selected</span>
         <span class="grow"></span>
         <div class="confirm" role="group" aria-label="Confirm non-contiguous merge">
           <svg class="ic" style="color:var(--danger)"><use href="#i-alert"/></svg>

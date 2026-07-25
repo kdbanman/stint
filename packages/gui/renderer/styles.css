@@ -750,8 +750,9 @@ button.ghost { color: var(--muted); }
 button.ghost:hover { color: var(--ink); }
 button.small { font-size: 12px; padding: 8px 12px; }
 /* The .small.primary cascade made explicit — keeps the .small sizing while .primary's accent
-   fill still applies (Clients view #add-client-btn / #add-tag). No visual change, just one rule
-   instead of tracking button / button.primary / button.small together. */
+   fill still applies (Clients view #add-client-btn; #add-tag is neutral per D11 — one
+   accent-solid primary per view). No visual change, just one rule instead of tracking
+   button / button.primary / button.small together. */
 button.small.primary { font-size: 12px; padding: 8px 12px; }
 /* An icon inside a .btn sizes down per the system. */
 .btn .ic { width: 15px; height: 15px; }
@@ -2295,11 +2296,13 @@ body.popover { background: var(--canvas); margin: 0; }
     center / 11px no-repeat;
 }
 /* §12 R16 (mockup main.html): the hover ops chip — a raised paper chip holding three icon-only
-   22×22 line-icon buttons (Delete · Split · Edit). The chip carries the affordance (paper bg,
-   1px line border, 7px radius, raise shadow) on hover; the buttons stay in the DOM and clickable
-   via opacity at rest so every `data-act` selector is intact. DOM order matches the mockup, so no
-   row-reverse. Icon-only + a fixed 22px width keeps the chip compact (~74px) so it clears the
-   top-left corner checkbox even in a narrow day column — no occlusion. */
+   24×24 line-icon buttons (Delete · Split · Edit; design.html A03 — a 22px button beside an
+   overlapping neighbour's ops fell inside the 24px spacing exception's floor, so the buttons
+   meet the 24×24 target size outright). The chip carries the affordance (paper bg, 1px line
+   border, raise shadow) on hover; the buttons stay in the DOM and clickable via opacity at rest
+   so every `data-act` selector is intact. DOM order matches the mockup, so no row-reverse.
+   Icon-only + a fixed 24px width keeps the chip compact (~84px) so it clears the top-left
+   corner checkbox even in a narrow day column — no occlusion. */
 .ev .ops {
   position: absolute;
   top: 4px;
@@ -2318,13 +2321,13 @@ body.popover { background: var(--canvas); margin: 0; }
    stay Playwright-clickable at rest — the proven pattern the row affordances use). */
 .ev:hover .ops,
 .ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
-.ev:hover { padding-top: 32px; }
+.ev:hover { padding-top: 36px; }
 .ev .ops .op-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: 0;
   border-radius: var(--r1);
