@@ -15,6 +15,7 @@
   --danger:#ce2c31;--danger-weak:#feebec;
   --r1:8px;--r2:12px;--r3:16px;
   --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 2px rgba(74,52,24,.12);
   --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
   --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
   --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
@@ -41,7 +42,7 @@
   .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
-  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   .nav a.on .ic{color:var(--accent)}
   .nav .sp{flex:1}
   /* view */
@@ -66,7 +67,7 @@
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
-  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:0 1px 2px rgba(74,52,24,.12)}
+  .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
@@ -76,6 +77,8 @@
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
   .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
   .field:focus{outline:none;border-color:var(--accent);box-shadow:var(--ring)}
+  /* design.html D13: placeholder text reads muted, never faint */
+  ::placeholder{color:var(--muted)}
   textarea.field{resize:vertical;min-height:42px}
   select.field{width:auto;min-width:150px}
   .field.date{width:118px;text-align:center;font-family:var(--num);font-size:12px;padding:8px 12px}
@@ -87,7 +90,7 @@
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.accent{color:var(--accent-ink);background:var(--paper);border-color:color-mix(in srgb, var(--accent) 30%, transparent)}
-  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:0 1px 2px rgba(74,52,24,.12);font-weight:590}
+  .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 

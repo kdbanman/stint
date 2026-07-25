@@ -191,9 +191,14 @@
     intrinsic heights are free (a 34px button is legal; its 11px side padding is not — that's 12px).
     Alignment comes from the grid, not from per-view pixel nudging.</p>
     <p><span class="rid">D08</span><strong>Radius trio.</strong> 8px controls · 12px cards · 16px
-    window &amp; overlays. No fourth radius.</p>
+    window &amp; overlays. No fourth radius. Recorded exemption: a functional mark whose control
+    radius would exceed half its own box — the calendar corner checkbox and the progress-bar
+    track — keeps 4px, because rounding further changes what the control reads as (a circular
+    checkbox reads as a radio). The exemption list is closed; a new sub-radius is a spec change,
+    not a precedent.</p>
     <p><span class="rid">D09</span><strong>One elevation ladder.</strong> canvas → card → raised →
-    popover → modal (<code>shadow.*</code> tokens). A surface sits exactly one rung above what it
+    popover → modal (<code>shadow.*</code> tokens), plus the chip lift (<code>shadow.chip</code>)
+    as the sub-card selection rung (D12). A surface sits exactly one rung above what it
     covers; depth is the only "this is a layer" signal — never a tint or decorative border.</p>
     <p><span class="rid">D10</span><strong>Motion.</strong> State changes ~120ms; nothing moves
     without meaning; no parallax, no decorative transitions. Under

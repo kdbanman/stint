@@ -42,8 +42,38 @@ function resolveChromium() {
 
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 
+// The shared in-page probe (window.__probe), injected into every scene page so the
+// colour-space and visibility trivia lives once: cssVar reads a custom property off :root,
+// toRgb normalizes a token hex to the computed-style rgb() form, rgbOf composes the two, and
+// visible is the harness-wide visibility predicate (laid out, not display:none/visibility:
+// hidden, outside any [hidden] ancestor). Scene ASSERTIONS and their sanctioned/whitelist
+// tables stay inline in each scene — only these mechanics are shared.
+const PROBE_HELPERS = `window.__probe = {
+  cssVar: (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(),
+  toRgb: (hex) => {
+    const n = parseInt(hex.replace('#', ''), 16);
+    return 'rgb(' + ((n >> 16) & 255) + ', ' + ((n >> 8) & 255) + ', ' + (n & 255) + ')';
+  },
+  rgbOf: (name) => window.__probe.toRgb(window.__probe.cssVar(name)),
+  visible: (el) => {
+    if (!el || el.hidden || el.closest('[hidden]')) return false;
+    const cs = getComputedStyle(el);
+    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0;
+  },
+};`;
+
+// Every scene page — withPage's and the hand-built ones — comes through here so the probe
+// helpers are always installed before the renderer loads.
+async function newScenePage(browser, pageOpts) {
+  const page = await browser.newPage(pageOpts);
+  await page.addInitScript(PROBE_HELPERS);
+  return page;
+}
+
 async function withPage(browser, state, name, fn, initOpts = {}) {
-  const page = await browser.newPage({ viewport: { width: 760, height: 620 }, colorScheme: 'light' });
+  const page = await newScenePage(browser, { viewport: { width: 760, height: 620 }, colorScheme: 'light' });
   // Pin the page clock so derived count-ups and the captured evidence are
   // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -75,19 +105,19 @@ async function sceneEmptyState(browser) {
 
 // NAV_SHELL — §12 R3 (G7) + design.html D12: the main window presents a persistent left-hand
 // nav with the five views (Timer / Entries / Clients / Reports / Settings); the current view
-// is highlighted and each item routes to its view. The MODIFIED req hardens two G7 guarantees
-// beyond order + default-active + routing:
+// is highlighted and each item routes to its view. Beyond order + default-active + routing,
+// two hardened G7 guarantees:
 //   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
 //     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
 //     visible each time — no view escapes the shell.
 //   FIXED_WIDTH_ON_RESIZE — the rail's measured width is FIXED across the 480/760/1200px
 //     viewports while the `.views` column width changes, proving resize lands on the content
-//     area, not the rail (168px is the JUDGE-pinned V1 value, not asserted as a magic number).
+//     area, not the rail (168px is the JUDGE-pinned width, not asserted as a magic number).
 //   D12 LIFTED CHIP — selection ≠ accent: the ACTIVE item is a raised paper chip (computed
 //     background === --paper, label === --ink, a non-none chip-lift box-shadow) whose ICON —
 //     and only its icon — takes the accent (--accent); the four inactive items are flat
-//     (box-shadow none, no accent icon). The retired accent-weak active fill (pre-transition)
-//     would fail every one of these.
+//     (box-shadow none, no accent icon). An accent-weak active fill would fail every one
+//     of these.
 // All the facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
 // and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
 async function sceneNavShell(browser) {
@@ -112,14 +142,10 @@ async function sceneNavShell(browser) {
     // background, ink label, a real chip-lift shadow, accent confined to the icon. Inactive
     // items stay flat (no shadow) with non-accent icons.
     const chip = await page.evaluate(() => {
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const paper = toRgb(css('--paper'));
-      const ink = toRgb(css('--ink'));
-      const accent = toRgb(css('--accent'));
+      const { rgbOf } = window.__probe;
+      const paper = rgbOf('--paper');
+      const ink = rgbOf('--ink');
+      const accent = rgbOf('--accent');
       const active = document.querySelector('.nav-item.active');
       const inactive = [...document.querySelectorAll('.nav-item:not(.active)')];
       const cs = active ? getComputedStyle(active) : null;
@@ -173,7 +199,7 @@ async function sceneNavShell(browser) {
 
     // FIXED_WIDTH_ON_RESIZE: measure the rail (and the views column, to show it is the one that
     // moves) at three viewport widths; the rail must hold ONE fixed width across all three
-    // (168px is the JUDGE-pinned V1 value; the assertion pins fixedness, not the number).
+    // (168px is the JUDGE-pinned width; the assertion pins fixedness, not the number).
     const measure = () =>
       page.evaluate(() => {
         const nav = document.querySelector('.shell .nav');
@@ -520,7 +546,8 @@ async function scenePopoverReject(browser) {
 // #timer-strip mirrors the running count-up + state + description but carries NO full-panel
 // Stop control (and never a #timer-switch). A third, IDLE page (STATES.md Entries × edge)
 // asserts the strip is STILL PAINTED with nothing running — its idle face: 00:00:00 clock,
-// state 'idle', empty description (app.js renderTimerStrip's idle branch). Fails if the full
+// state 'idle', empty description (app.js renderTimerStrip's idle branch). The strip clock
+// also computes the D06 compact Clock role: 22px, tabular numerals. Fails if the full
 // panel stayed on Entries, the card/strip placement regressed, a #timer-switch reappeared,
 // or the idle strip vanished/kept stale running data. Captures timer-view.png (the full
 // panel), main-timer.png (the Entries strip) and main-timer-idle.png (the idle strip).
@@ -530,10 +557,15 @@ async function sceneInWindowTimer(browser) {
     // full-panel Stop control (it lives on the Timer-view card only); no #timer-switch anywhere.
     const strip = await page.evaluate(() => {
       const el = document.querySelector('#timer-strip');
+      // design.html D06 — the strip clock is the compact Clock role: 22px, tabular numerals
+      // (computed style, so a stylesheet regression cannot hide behind the right markup).
+      const clockCs = getComputedStyle(document.querySelector('#strip-clock'));
       return {
         present: !!el,
         running: !!el && el.classList.contains('running'),
         clock: document.querySelector('#strip-clock')?.textContent?.trim() ?? null,
+        clockPx: clockCs.fontSize,
+        clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
         state: document.querySelector('#strip-state')?.textContent?.trim() ?? null,
         desc: document.querySelector('#strip-desc')?.textContent?.trim() ?? null,
         // The strip must NOT carry the full Stop panel control (it belongs to the card).
@@ -586,6 +618,8 @@ async function sceneInWindowTimer(browser) {
       strip.present &&
       strip.running &&
       strip.clock === '01:24:07' &&
+      strip.clockPx === '22px' &&
+      strip.clockTnum &&
       strip.state === 'running' &&
       strip.desc === 'auth refactor' &&
       strip.noStop &&
@@ -719,7 +753,8 @@ async function sceneCrossViewFreshness(browser) {
 
 // TIMER_VIEW (full Timer view, G5) — §12 R14 / §05 R06: the START-ONLY scene. Routing to the
 // Timer view renders the live clock reading the derived count-up (advances +3s across the
-// pinned-clock step, not reset) with the live-edit-running strip present (no End input).
+// pinned-clock step, not reset) with the live-edit-running strip present (no End input); the
+// clock computes the D06 full Clock role — 38px, tabular numerals, the --num stack.
 // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
 // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
 // container computes position: static — showing the running block with a START drag grip
@@ -733,7 +768,7 @@ async function sceneCrossViewFreshness(browser) {
 // instants land on a deterministic local day/track geometry.
 async function sceneTimerView(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(timerViewRunningState()), {}));
@@ -742,15 +777,25 @@ async function sceneTimerView(browser) {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
     const t1 = await page.textContent('#timer-clock');
-    const before = await page.evaluate(() => ({
-      stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
-      noEnd: !document.querySelector('#live-edit #le-end'),
-      // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
-      startIsText: document.querySelector('#le-start')?.type === 'text',
-      hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
-      noSwitch: !document.querySelector('#timer-switch'),
-      state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
-    }));
+    const before = await page.evaluate(() => {
+      // design.html D06 — the Timer-view clock is the full Clock role: 38px, tabular
+      // numerals, on the generated --num stack (all computed style; family lists compare
+      // quote/space-normalized because computed fontFamily re-serializes the stack).
+      const clockCs = getComputedStyle(document.querySelector('#timer-clock'));
+      const famList = (s) => s.split(',').map((f) => f.trim().replace(/^["']|["']$/g, '')).join('|');
+      return {
+        stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
+        noEnd: !document.querySelector('#live-edit #le-end'),
+        // §12 R14 (G1): #le-start is a RAW text field, not a native datetime-local.
+        startIsText: document.querySelector('#le-start')?.type === 'text',
+        hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
+        noSwitch: !document.querySelector('#timer-switch'),
+        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        clockPx: clockCs.fontSize,
+        clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
+        clockNumStack: famList(clockCs.fontFamily) === famList(window.__probe.cssVar('--num')),
+      };
+    });
     // Advance the pinned clock +3s — the card's tick() must advance the live count-up (the
     // count-up never stops while the start is being edited, §05 R06).
     await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
@@ -820,6 +865,9 @@ async function sceneTimerView(browser) {
       before.hasStop &&
       before.noSwitch &&
       before.state === 'running' &&
+      before.clockPx === '38px' &&
+      before.clockTnum &&
+      before.clockNumStack &&
       disc.inFlow &&
       disc.noBackdrop &&
       disc.noDialog &&
@@ -866,7 +914,7 @@ async function sceneTimerView(browser) {
 // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
 async function sceneFutureStartGuard(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(runningState()), { futureStartGuard: true, toggleStarts: true }));
@@ -1089,19 +1137,16 @@ async function sceneFavoritesRail(browser) {
 //     lives (styles.css comment); the retired solid-accent me-fill would now be an offender;
 //   • the active nav item's ICON only (.nav-item.active .ic, D12) — the chip itself is a
 //     lifted paper chip (NAV_SHELL gates that), so a nav-item FILL of any accent is a break.
-// Dropped from the old sanctioned list: the whole .nav-item.active (D12 — selection ≠
-// accent) and .stp-d.stp-sel (the selected day is now a raised paper chip, not accent).
+// Deliberately unsanctioned: the .nav-item.active chip as a whole (D12 — selection ≠ accent;
+// only its icon may paint accent) and .stp-d.stp-sel (the selected day is a raised paper
+// chip, not accent) — either painting a family colour is an offender.
 async function sceneAccentDiscipline(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-running.png') });
     const probe = await page.evaluate(() => {
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(css('--accent'));
-      const accentSolidRgb = toRgb(css('--accent-solid'));
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const primary = getComputedStyle(document.querySelector('button.primary')).backgroundColor;
       // Scan the *entire* chrome: any element painting EITHER accent-family colour as a fill
       // or text colour is a discipline break unless sanctioned (list above).
@@ -1158,19 +1203,8 @@ async function sceneAccentDiscipline(browser) {
     for (const view of ['timer', 'entries', 'clients', 'reports', 'settings']) {
       await page.click(`.nav-item[data-view="${view}"]`);
       const count = await page.evaluate(() => {
-        const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-        const toRgb = (hex) => {
-          const n = parseInt(hex.replace('#', ''), 16);
-          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-        };
-        const accentSolidRgb = toRgb(css('--accent-solid'));
-        const visible = (el) => {
-          const cs = getComputedStyle(el);
-          if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-          if (el.hidden || el.closest('[hidden]')) return false;
-          const r = el.getBoundingClientRect();
-          return r.width > 0 && r.height > 0;
-        };
+        const { rgbOf, visible } = window.__probe;
+        const accentSolidRgb = rgbOf('--accent-solid');
         const filled = [];
         for (const el of document.querySelectorAll('*')) {
           if (!visible(el)) continue;
@@ -1182,15 +1216,16 @@ async function sceneAccentDiscipline(browser) {
       });
       budget.push({ view, filled: count });
     }
-    const budgetOk =
-      budget.every((b) => b.filled.length <= 1) &&
-      budget.find((b) => b.view === 'timer')?.filled.length === 1;
+    const everyViewWithinBudget = budget.every((b) => b.filled.length <= 1);
+    const timerFillCount = budget.find((b) => b.view === 'timer')?.filled.length ?? 0;
+    const budgetOk = everyViewWithinBudget && timerFillCount === 1;
     record(
       'ACCENT_SOLID_BUDGET',
       budgetOk,
       `≤1 accent-solid fill per view (D11): ` +
         budget.map((b) => `${b.view}=[${b.filled.join(', ') || 'none'}]`).join('; ') +
-        `; running Timer view carries exactly its Stop primary=${budgetOk}`,
+        `; every view within budget=${everyViewWithinBudget}; ` +
+        `running Timer view carries exactly its Stop primary=${timerFillCount === 1} (count ${timerFillCount})`,
       'main-running.png',
     );
   });
@@ -1219,13 +1254,9 @@ async function sceneClickability(browser) {
   await withPage(browser, runningState(), 'index.html', async (page) => {
     await page.screenshot({ path: join(EVIDENCE, 'main-clickability.png') });
     const probe = await page.evaluate(() => {
-      const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(cssVar('--accent'));
-      const accentSolidRgb = toRgb(cssVar('--accent-solid'));
+      const { rgbOf, visible } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const isTransparent = (c) => !c || c === 'transparent' || c === 'rgba(0, 0, 0, 0)';
       // A control "carries the affordance" if it paints a non-transparent background OR a
       // visible (non-zero, non-transparent) border on at least one edge.
@@ -1256,13 +1287,6 @@ async function sceneClickability(browser) {
         // (paper bg, 1px line border, 7px radius, raise shadow) — the CHIP carries the affordance,
         // so its inner icon-only op-btns are sub-affordances, exactly like .chip / .seg / .presets.
         !!el.closest('.ops');
-      const visible = (el) => {
-        const cs = getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-        if (el.hidden || el.closest('[hidden]')) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      };
       // POSITIVE: candidate clickable affordances minus the primary (already accent-filled,
       // trivially carries the convention) and the whitelisted sub-affordances.
       const candidates = [
@@ -1278,9 +1302,7 @@ async function sceneClickability(browser) {
       }
       // NEGATIVE: known inert text must NOT wear a button-like pill fill. The affordance
       // fills are var(--paper)/var(--wash); inert text stays transparent or the page bg.
-      const paper = getComputedStyle(document.documentElement).getPropertyValue('--paper').trim();
-      const wash = getComputedStyle(document.documentElement).getPropertyValue('--wash').trim();
-      const pillFills = new Set([toRgb(paper), toRgb(wash)]);
+      const pillFills = new Set([rgbOf('--paper'), rgbOf('--wash')]);
       const inertSel = '.wordmark, .day-head, .entry .desc, .entry .time, .summary';
       const inertOffenders = [];
       for (const el of document.querySelectorAll(inertSel)) {
@@ -1332,19 +1354,8 @@ async function sceneClickability(browser) {
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
     const timerPrimaryAccentCount = await page.evaluate(() => {
-      const accentSolid = getComputedStyle(document.documentElement).getPropertyValue('--accent-solid').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentSolidRgb = toRgb(accentSolid);
-      const visible = (el) => {
-        const cs = getComputedStyle(el);
-        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-        if (el.hidden || el.closest('[hidden]')) return false;
-        const r = el.getBoundingClientRect();
-        return r.width > 0 && r.height > 0;
-      };
+      const { rgbOf, visible } = window.__probe;
+      const accentSolidRgb = rgbOf('--accent-solid');
       let count = 0;
       for (const el of document.querySelectorAll('button.primary')) {
         if (!visible(el)) continue;
@@ -1601,7 +1612,7 @@ async function sceneRunningSingleAction(browser) {
 // overlap warning the inline banner surfaces.
 async function sceneUnifiedFormAdd(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
@@ -1660,15 +1671,11 @@ async function sceneUnifiedFormAdd(browser) {
     // fail saveSolid.
     const paint = await page.evaluate(() => {
       const picker = document.querySelector('#add-picker');
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(css('--accent'));
-      const accentWeakRgb = toRgb(css('--accent-weak'));
-      const accentSolidRgb = toRgb(css('--accent-solid'));
-      const inkRgb = toRgb(css('--ink'));
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentWeakRgb = rgbOf('--accent-weak');
+      const accentSolidRgb = rgbOf('--accent-solid');
+      const inkRgb = rgbOf('--ink');
       const overlaps = [...picker.querySelectorAll('.stp-overlap')];
       const me = picker.querySelector('.stp-block.me');
       const meCs = getComputedStyle(me);
@@ -1808,7 +1815,7 @@ async function sceneUnifiedFormAdd(browser) {
 // geometry (720px/24h track → 22:00 = 660px from the track top).
 async function sceneUnifiedFormExpander(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState())));
@@ -2586,7 +2593,7 @@ async function sceneMergeConflict(browser) {
     await page.check('.entry[data-id="41"] .sel');
     // V5: with 2 selected the selection bar shows ABOVE the calendar host, its #merge-count
     // pill reads "2 selected", and #merge-go is present labelled "Merge" WITHOUT .primary
-    // (a neutral small button — the old accent "Merge 2 entries" card would fail all three).
+    // (a neutral small button — an accent-filled "Merge N entries" primary would fail all three).
     const barWithTwo = await page.evaluate(() => {
       const bar = document.querySelector('#merge-bar');
       const count = bar?.querySelector('#merge-count');
@@ -2861,7 +2868,8 @@ async function sceneConfirmDestructive(browser) {
 // CLIENTS_VIEW — the Clients nav view lists active clients with their projects nested,
 // and offers create/rename/archive in place; archived items drop out of the active list
 // (history kept). Click the Clients nav, assert the clients/projects render with the
-// rename + archive affordances, and that accent discipline holds on the new chrome
+// rename + archive affordances, that accent discipline holds on the chrome, and that every
+// visible icon-only affordance carries an accessible name (design.html D16, machine-gated)
 // (§07, §12). The mutators are wired to the same IPC tt's client/project subcommands use.
 // The create affordances are DRIVEN, not merely present (issue #48: a duplicate
 // id="add-client" dead-ended the "+ Add client" button while every presence-only check
@@ -2882,7 +2890,6 @@ async function sceneClientsView(browser) {
     await page.screenshot({ path: join(EVIDENCE, 'main-clients.png'), fullPage: true });
     const probe = await page.evaluate(() => {
       const view = document.querySelector('#clients');
-      const visible = !!view && !view.hidden;
       const clients = [...document.querySelectorAll('#clients .client[data-id]')];
       const names = clients.map((c) => c.querySelector('.client-name')?.textContent?.trim());
       // Acme's row carries its two projects nested under it (the project sub-list).
@@ -2897,24 +2904,33 @@ async function sceneClientsView(browser) {
       const projArchive = !!acme?.querySelector('.project [data-act="archive-project"]');
       const addProject = !!acme?.querySelector('[data-act="add-project"]');
       const addClient = !!document.querySelector('#add-client-btn');
-      // Accent discipline (§15): no element inside the Clients chrome paints the accent as
-      // a fill/text colour except a sanctioned .primary confirm (none open by default).
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(accent);
+      // Accent discipline (§15/D16): no element inside the Clients chrome paints the accent
+      // as a fill/text colour except a sanctioned .primary confirm (none open by default) —
+      // create icons included (accent only when an item is active, D16).
+      const { rgbOf, visible: isVisible } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      // SVG's el.className is an SVGAnimatedString — stringify via the class ATTRIBUTE so an
+      // offending icon prints its real classes, not "[object SVGAnimatedString]".
+      const cls = (el) => (typeof el.className === 'string' ? el.className : el.getAttribute('class') || '');
       const offenders = [];
       for (const el of view ? view.querySelectorAll('*') : []) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
         const cs = getComputedStyle(el);
         if (cs.backgroundColor === accentRgb || cs.color === accentRgb) {
-          offenders.push(`${el.tagName.toLowerCase()}.${el.className || '(no-class)'}`);
+          offenders.push(`${el.tagName.toLowerCase()}.${cls(el) || '(no-class)'}`);
         }
       }
+      // design.html D16 — every visible icon-only affordance in the view carries a non-empty
+      // accessible name (aria-label, title, or text); a bare glyph is unusable to AT.
+      const unnamedIconButtons = [];
+      for (const el of view ? view.querySelectorAll('.iconbtn') : []) {
+        if (!isVisible(el)) continue;
+        const name =
+          (el.getAttribute('aria-label') || el.getAttribute('title') || el.textContent || '').trim();
+        if (!name) unnamedIconButtons.push(`${el.tagName.toLowerCase()}.${cls(el) || '(no-class)'}`);
+      }
       return {
-        visible,
+        visible: !!view && !view.hidden,
         names,
         acmeProjects,
         clientRename,
@@ -2924,6 +2940,7 @@ async function sceneClientsView(browser) {
         addProject,
         addClient,
         offenders,
+        unnamedIconButtons,
       };
     });
     // Drive the create flows end to end (issue #48). (1) "+ Add client": the click opens
@@ -3071,6 +3088,8 @@ async function sceneClientsView(browser) {
       probe.projArchive &&
       probe.addProject &&
       probe.addClient &&
+      // …and the D16 accessible-name fact: every visible icon-only affordance is named.
+      probe.unnamedIconButtons.length === 0 &&
       // …and the DRIVEN create facts (issue #48): each inline field opened (the waits above
       // would have thrown otherwise), each payload went over the IPC, and each created item
       // landed in its active list.
@@ -3104,9 +3123,10 @@ async function sceneClientsView(browser) {
       /tt client add/.test(refEmpty.clientsText) &&
       /No tags yet/.test(refEmpty.tagsText) &&
       /tt tag add/.test(refEmpty.tagsText);
-    // Accent discipline (the create "+" carries the accent, the rest stay neutral) is judged
-    // visually against the mock, not gated on a computed-style scan (issue #25) — the offender
-    // list is kept in the justification as captured evidence only.
+    // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
+    // when their item is active) is judged visually against the mock, not gated on a
+    // computed-style scan (issue #25) — the offender list is kept in the justification as
+    // captured evidence only. The D16 accessible-name fact IS machine-gated above.
     record(
       'CLIENTS_VIEW',
       ok,
@@ -3352,10 +3372,9 @@ async function sceneReportsView(browser) {
       // + New report primary, FILLED with --accent-solid (tomato·11 — a raw --accent fill
       // under a white label is the prohibited 3.87:1 pair, D04). Anything else in the view
       // painting EITHER family colour (--accent or --accent-solid, fill or text) is a break.
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => { const n = parseInt(hex.replace('#', ''), 16); return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`; };
-      const accentRgb = toRgb(css('--accent'));
-      const accentSolidRgb = toRgb(css('--accent-solid'));
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const inFamily = (el) => {
         if (!el) return false;
         const cs = getComputedStyle(el);
@@ -3956,7 +3975,7 @@ async function sceneEntriesCalendar(browser) {
 // regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
 async function sceneCalendarLayout(browser) {
   {
-    const page = await browser.newPage({ viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
@@ -4279,13 +4298,9 @@ async function sceneSettingsView(browser) {
       // No stray accent-family fill/text (--accent OR --accent-solid) in the settings chrome
       // except a sanctioned primary (none here at rest) — the controls are inked/monochrome
       // (design.html D11 accent discipline).
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(css('--accent'));
-      const accentSolidRgb = toRgb(css('--accent-solid'));
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const offenders = [];
       for (const el of panel.querySelectorAll('*')) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
@@ -4300,8 +4315,8 @@ async function sceneSettingsView(browser) {
       // design.html D12 — the segmented-control selection idiom: the chosen .seg-btn is a
       // RAISED PAPER CHIP (computed background --paper, ink text, a non-none chip-lift
       // shadow), never an accent fill; its unchosen peers stay flat (transparent, no shadow).
-      const paperRgb = toRgb(css('--paper'));
-      const inkRgb = toRgb(css('--ink'));
+      const paperRgb = rgbOf('--paper');
+      const inkRgb = rgbOf('--ink');
       const on = panel.querySelector('.seg .seg-btn.on');
       const offPeers = [...panel.querySelectorAll('.seg .seg-btn:not(.on)')];
       const onCs = on ? getComputedStyle(on) : null;
@@ -4735,13 +4750,9 @@ async function sceneBackupsSection(browser) {
       const ret = host.querySelector('select[data-key="backupRetention"]');
       // No stray accent-family paint (--accent OR --accent-solid) in the Backups chrome
       // (design.html D11 — accent stays on the primary action only).
-      const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-      const toRgb = (hex) => {
-        const n = parseInt(hex.replace('#', ''), 16);
-        return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-      };
-      const accentRgb = toRgb(css('--accent'));
-      const accentSolidRgb = toRgb(css('--accent-solid'));
+      const { rgbOf } = window.__probe;
+      const accentRgb = rgbOf('--accent');
+      const accentSolidRgb = rgbOf('--accent-solid');
       const offenders = [];
       for (const el of host.querySelectorAll('*')) {
         if (el.matches('button.primary') || el.closest('button.primary')) continue;
@@ -4933,22 +4944,17 @@ async function sceneParityReach(browser) {
 // interactive control (button / a[href] / input / select / textarea / tabbable / [data-act]),
 // excluding controls nested inside another target (the parent carries the target). An
 // undersized control passes only via:
-//   • the SPACING exception — its centre lies ≥24px from every other target's centre
-//     (undersized-but-uncrowded, the SC's own escape hatch), or
+//   • the SPACING exception, tested as the SC's own Understanding doc specifies it — a
+//     24px-DIAMETER CIRCLE centred on the undersized target must not intersect any other
+//     target's bounding box, nor the circle of any other undersized target; or
 //   • the INLINE exception — an inline link inside a line of text.
 // The tray popover (both its actions) is swept too. The gate is ZERO unsanctioned undersized
 // targets; the spacing-sanctioned undersized controls are named in the justification so each
 // stays a deliberate, reviewable exception (e.g. the corner/billable checkboxes and the
-// settings toggle, all of which clear the 24px spacing comfortably).
+// settings toggle, whose circles clear every neighbour comfortably).
 function sweepTargets() {
   const sel = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"]), [data-act]';
-  const visible = (el) => {
-    const cs = getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden') return false;
-    if (el.hidden || el.closest('[hidden]')) return false;
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
-  };
+  const { visible } = window.__probe;
   const targets = [...document.querySelectorAll(sel)]
     .filter(visible)
     // A control nested inside another interactive control is a sub-affordance — the parent
@@ -4959,24 +4965,36 @@ function sweepTargets() {
     return {
       el,
       label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      rect: r,
       w: Math.round(r.width),
       h: Math.round(r.height),
       cx: r.left + r.width / 2,
       cy: r.top + r.height / 2,
     };
   });
+  const undersized = (b) => b.w < 24 || b.h < 24;
+  // SC 2.5.8 spacing test, radius 12: circle-vs-rect for an adequately-sized neighbour
+  // (closest point of the box to the circle centre), circle-vs-circle for an undersized one.
+  const R = 12;
+  const circleHitsRect = (b, r) => {
+    const nx = Math.max(r.left, Math.min(b.cx, r.right));
+    const ny = Math.max(r.top, Math.min(b.cy, r.bottom));
+    return Math.hypot(b.cx - nx, b.cy - ny) < R;
+  };
   const violations = [];
   const spacingSanctioned = [];
   for (const b of boxes) {
-    if (b.w >= 24 && b.h >= 24) continue;
-    let nearest = Infinity;
+    if (!undersized(b)) continue;
+    const crowd = [];
     for (const o of boxes) {
       if (o.el === b.el) continue;
-      const d = Math.hypot(o.cx - b.cx, o.cy - b.cy);
-      if (d < nearest) nearest = d;
+      const hit = undersized(o)
+        ? Math.hypot(o.cx - b.cx, o.cy - b.cy) < 2 * R
+        : circleHitsRect(b, o.rect);
+      if (hit) crowd.push(o.label);
     }
-    const entry = { label: b.label, w: b.w, h: b.h, nearest: Math.round(nearest) };
-    if (nearest >= 24) { spacingSanctioned.push(entry); continue; }
+    const entry = { label: b.label, w: b.w, h: b.h, crowd };
+    if (crowd.length === 0) { spacingSanctioned.push(entry); continue; }
     if (b.el.matches('a') && getComputedStyle(b.el).display === 'inline') continue; // inline-text exemption
     violations.push(entry);
   }
@@ -4997,15 +5015,15 @@ async function sceneTargetSize(browser) {
     );
     perView.push({ surface: 'popover', ...pop });
     const totalTargets = perView.reduce((s, v) => s + v.total, 0);
-    const allViolations = perView.flatMap((v) => v.violations.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} nearest ${x.nearest}px`));
-    const sanctioned = perView.flatMap((v) => v.spacingSanctioned.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} nearest ${x.nearest}px`));
+    const allViolations = perView.flatMap((v) => v.violations.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} crowded by [${x.crowd.join(', ')}]`));
+    const sanctioned = perView.flatMap((v) => v.spacingSanctioned.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h}`));
     const ok = totalTargets > 0 && allViolations.length === 0;
     record(
       'TARGET_SIZE',
       ok,
       `A03 sweep over ${totalTargets} visible targets (five views + popover): ` +
         `unsanctioned undersized=[${allViolations.join('; ') || 'none'}]; ` +
-        `spacing-exception (undersized, centre ≥24px from every neighbour)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
+        `spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
       'main-target-size.png',
     );
   });
@@ -5063,17 +5081,13 @@ async function sceneColourPairing(browser) {
       await page.click('.edit-form button[type="submit"]');
       await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
       return page.evaluate(() => {
-        const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-        const toRgb = (hex) => {
-          const n = parseInt(hex.replace('#', ''), 16);
-          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-        };
+        const { rgbOf } = window.__probe;
         const b = document.querySelector('#overlap-banner');
         const cs = getComputedStyle(b);
         return {
           text: b.textContent.trim(),
-          flagText: cs.color === toRgb(css('--flag')),
-          flagBg: cs.backgroundColor === toRgb(css('--flag-bg')),
+          flagText: cs.color === rgbOf('--flag'),
+          flagBg: cs.backgroundColor === rgbOf('--flag-bg'),
         };
       });
     },
@@ -5090,17 +5104,13 @@ async function sceneColourPairing(browser) {
       await page.click('#timer-stop');
       await page.waitForSelector('#timer-warning', { state: 'visible' });
       return page.evaluate(() => {
-        const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-        const toRgb = (hex) => {
-          const n = parseInt(hex.replace('#', ''), 16);
-          return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
-        };
+        const { rgbOf } = window.__probe;
         const t = document.querySelector('#timer-warning');
         const cs = getComputedStyle(t);
         return {
           text: t?.textContent.trim() ?? '',
-          dangerText: cs.color === toRgb(css('--danger')),
-          dangerBg: cs.backgroundColor === toRgb(css('--danger-weak')),
+          dangerText: cs.color === rgbOf('--danger'),
+          dangerBg: cs.backgroundColor === rgbOf('--danger-weak'),
           mirrorsError: !!document.querySelector('#overlap-banner.error'),
         };
       });
