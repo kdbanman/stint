@@ -745,8 +745,10 @@ renders the grouped `Report` (human) with the saved grouping/rounding, while
 `--csv|--json` EXPORT THE FILTERED SET the report shows (the rows behind the
 totals, `--json` validated against `export-entry.schema.json` ) via
 `exportSavedReport` ; an unknown name exits non-zero with a clear error. The GUI
-`runReport` IPC (`{ ref }`) returns the SAME core `Report` via
-`reportview.ts buildSavedReportView` ; the Reports view's saved-definitions rail
+`runReport` IPC (`{ ref }`) returns the SAME core `Report` straight from
+`store.runReport` — the handler calls core directly, with no GUI wrapper
+between them (issue #175: the wrapper was a pass-through whose tests asserted
+the identity function) ; the Reports view's saved-definitions rail
 (`renderer/index.html` Reports view / `reports.js` ) lists definitions with a
 Run button (→ `window.stint.runReport` ) painting the run-output panel (per-line
 + grand totals, overlap/unreviewed-sleep flags in context via
@@ -769,8 +771,7 @@ exports the FILTERED entries validated against `export-entry.schema.json` ;
 `run --csv` byte-identical to the ad-hoc filtered `report --csv` and NOT to the
 raw `tt export` ; human `run` prints the renderReport totals; a range edit
 re-resolves which rows the export carries; unknown name exits non-zero); GUI
-`gui/test/reportview.test.ts` (`buildSavedReportView` is a faithful
-pass-through, by name and by id; `resolveExportDefinition` 's two scopes —
+`gui/test/reportview.test.ts` (`resolveExportDefinition` 's two scopes —
 'filtered' == the report's rows (byte-identical to `exportSavedReport` ), 'all'
 == the raw range (byte-identical to `tt export` ), and a 'filtered' request
 without a saved ref is rejected). **GUI parity** — the Reports view's
@@ -1546,12 +1547,25 @@ The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — light/dark, system type and accent-on-primary already shipped, the
 residual was the keyboard/focus dimension): focus/keyboard is a pure renderer
-concern (no IPC), so it lives entirely under `gui/renderer/` — `styles.css` adds
-an explicit `:focus-visible` ring (scoped to keyboard focus so a mouse click
-paints none, keeping the quiet desktop feel), **accent-disciplined**: ordinary
-controls take a NEUTRAL `--rule-strong` ring while only
-`button.primary:focus-visible` carries the `--accent` ring (accent stays
-confined to the primary action / running state, §15); the entry-row action
+concern (no IPC), so it lives entirely under `gui/renderer/` — `styles.css`
+carries the ONE focus idiom design.html D13/A04 name, on a single bare
+`:focus-visible` rule (scoped to keyboard focus so a mouse click paints none,
+keeping the quiet desktop feel): a full-strength `--accent` boundary — the only
+token clearing A02's 3:1 floor on all three surfaces a focus stop sits on (paper
+3.80:1, sidebar 3.67:1, wash 3.40:1) — with a field adding D13's 3px `--ring`
+halo inside it. The boundary is an `outline` rather than a border because no
+component rule in the file sets `outline`, so nothing can outrank it, where a
+border loses the cascade to any more specific field chrome. Focus is the one
+place accent is not confined to the primary action (design.html §03 lists focus
+beside icons and running marks as non-text signal); a neutral `--rule-strong`
+ring is prohibited — it reads 1.89:1 (issue #137). **GOLD**
+`packages/gui/test/design-guard.test.ts` pins the token side deterministically:
+a **declaration census** over every focus rule on every surface (the tokens the
+CSS actually names, read off the source, must be exactly the one design.html
+sanctions — so an off-table pairing fails instead of passing by omission), that
+`outline` is declared nowhere but the focus rule, that `--ring` paints under a
+selector a browser can match, and the A02 floors recomputed from
+`design.tokens.json`; the entry-row action
 buttons stay native `<button>` s (Enter/Space-activatable, tab-reachable for
 free), `index.html` /`popover.html` give `#toggle` an `aria-label` +
 `aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
@@ -2069,10 +2083,13 @@ guard `scripts/check-no-auto-publish.mjs` (`npm run verify:no-publish`, in the
 `verify` job — asserts every distributable-producing `electron-builder`
 invocation disables publishing, no network), whose logic is pinned by **GOLD**
 `packages/core/test/gold/no-auto-publish.test.ts` (it catches a flag-less
-distributable build and is not vacuously green) and whose invariant + CI wiring
-are frozen by **GOLD** `packages/gui/test/build-matrix.test.ts` ("pack never
-auto-publishes in CI (§19 R05)" — the `pack` script passes `--publish never` and
-`ci.yml` runs `verify:no-publish`). R05 *consumes* the R01 artifact build and
+distributable build and is not vacuously green) and whose CI wiring is frozen
+by **GOLD** `packages/gui/test/build-matrix.test.ts` ("pack never auto-publishes
+in CI (§19 R05)" — `ci.yml` runs `verify:no-publish`, so the scanner cannot be
+un-wired from the PR path). The invariant itself has ONE home, the scanner test
+above: build-matrix's own `--publish never` regex over the `pack` script
+asserted the same failure condition a second time and was deleted with issue
+#175. R05 *consumes* the R01 artifact build and
 the R06 version string. **R06 date/build versioning** (AC=**GOLD**/MANUAL): the
 release version is `YYYY.M.D[.N]` (month/day NOT zero-padded, e.g. `2026.6.27` /
 `2026.6.27.2`), stamped into the **single shared `@stint/core` `APP_VERSION`
