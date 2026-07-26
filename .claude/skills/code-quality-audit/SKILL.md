@@ -1,11 +1,11 @@
 ---
-name: code-quality-review
-description: Run a module-level code & test quality review — sweep the implementation and tests against engineering.html's balance rules, grill the owner over the verdicts, then file the confirmed findings as issues. Use when the user asks for a code quality review, a consistency review, or a codebase sweep.
+name: code-quality-audit
+description: Run a module-level code & test quality audit — read the implementation and tests against engineering.html's balance rules, grill the owner over the verdicts, then file the confirmed findings as issues. Use when the user asks for a code quality audit or review, a consistency review, or a codebase sweep.
 ---
 
-# Code quality review
+# Code quality audit
 
-The module-level twin of `arch-review`: that skill critiques the four *systems*
+The module-level twin of `arch-audit`: that skill critiques the four *systems*
 that carry the requirements; this one reads the *code and tests themselves*
 against `context/engineering.html`. Same posture as every discovery instrument
 (process.html §06): the run gates nothing, fixes nothing, and produces no
@@ -16,9 +16,9 @@ never about what the product should do.
 One session, three phases, run as the operator holding judgment between them
 (process.html R13). Load `context/engineering.html` before starting; its §02
 vocabulary (module, interface, depth, seam, shallow) and §03 quadrants are the
-review's language — don't drift into "component," "service," "layer."
+audit's language — don't drift into "component," "service," "layer."
 
-## Phase 1 — sweep
+## Phase 1 — read
 
 Fan read-only subagents across the implementation (`packages/*/src`,
 `packages/gui/renderer`) and tests (`packages/*/test`, `features/`), each
@@ -62,8 +62,10 @@ whether it is one.
 
 ## Phase 3 — file the findings
 
-One issue per confirmed problem, labeled **Agentic Arch Review Discovery** so
-it rides the existing triage gate (`triage-arch-findings`). Problem capture
+One issue per confirmed problem, labeled **Agentic Discovery** (the family
+label every discovery instrument applies — `triage-discoveries` intakes on it)
+plus **Agentic Code Quality Audit** (the provenance label, this instrument's
+alone; findings are traceable to the audit that filed them). Problem capture
 only — no solution sections. Each issue is self-contained: the problem in one
 sentence (the handle), evidence (file:line, both sites for consistency
 findings, numbers where they exist), why it costs (what drifts, what a future

@@ -16,13 +16,14 @@ one human gate (`context/process.html` §07).
 
 ## Where this fits
 
-- Upstream, two streams into one contract (`context/process.html` §06):
-  - `qa-sweep` discovers → `bug-report-authoring` files →
-    `triage-qa-findings` categorizes, records owner decisions, and labels.
-  - `arch-review` critiques and files → `triage-arch-findings` decides fix
-    direction, names proof of fix, and labels.
-  Both end at the same `Triaged` comment-and-label contract; this skill does
-  not care which stream an issue came from, only that the contract holds.
+- Upstream, five discovery instruments into one gate
+  (`context/process.html` §06): `qa-audit` (via `bug-report-authoring`),
+  `arch-audit`, `design-audit`, `code-quality-audit`, and `sync-audit` file
+  their findings; `triage-discoveries` categorizes each against the doc that
+  owns it, records the owner's fix direction, names the proof of fix, and
+  labels. Every finding ends at the same `Triaged` comment-and-label contract;
+  this skill does not care which instrument an issue came from, only that the
+  contract holds.
 - This skill: interview once, delegate, deliver PRs.
 - For issue-scale requirement changes it substitutes for the
   `change-requirements` → `requirements-transition` pair: the batched interview
@@ -53,12 +54,14 @@ change-requirements-style grill **once across the whole batch**:
 - Every question carries a recommended answer and a one-line rationale.
 - Consult the codebase, don't ask what code can answer (schema, CLI command
   table, renderer, mockups).
-- Cover per issue: the exact §/R text delta — in `context/prd.html` for
-  product-shaped issues, in `context/process.html` for process-shaped ones
-  (arch findings often land there; the product questions below don't apply to
-  them) — parity (a new capability is reachable from both `tt` and the GUI
-  unless the user explicitly waives it), data-loss/integrity consequences,
-  which mockup depicts the change, and where the ACs land.
+- Cover per issue: the exact §/R text delta, in whichever doc owns the
+  behavior — `context/prd.html` for product-shaped issues,
+  `context/process.html` for process-shaped ones, `context/design.html` for
+  visual rules, `context/engineering.html` for code and test conventions (the
+  triage comment names it). The product questions that follow apply only to
+  product-shaped issues: parity (a new capability is reachable from both `tt`
+  and the GUI unless the user explicitly waives it), data-loss/integrity
+  consequences, which mockup depicts the change, and where the ACs land.
 - Triage-time decisions are givens; the interview goes one level deeper — the
   threshold behind a decided confirm, the canonical glossary term, comparator
   edge cases, CLI flag shapes.

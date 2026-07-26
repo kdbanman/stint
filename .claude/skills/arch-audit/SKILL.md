@@ -1,13 +1,14 @@
 ---
-name: arch-review
-description: Run an adversarial architecture review session — critique the systems that specify, implement, verify, and deliver the product, grill the owner over the verdicts, then file the confirmed problems as issues. Use when the user asks for an architecture or design review.
+name: arch-audit
+description: Run an adversarial architecture audit — critique the systems that specify, implement, verify, and deliver the product, grill the owner over the verdicts, then file the confirmed problems as issues. Use when the user asks for an architecture audit or review. For the visual surface use design-audit; for modules and tests use code-quality-audit.
 ---
 
-# Adversarial architecture review
+# Adversarial architecture audit
 
-One session, three phases in order: the skeptic/researcher review cycle, a
+One session, three phases in order: the skeptic/researcher critique cycle, a
 grilled owner pass over its verdicts, and one GitHub issue per confirmed
-problem labeled **Agentic Arch Review Discovery**. The charter never changes:
+problem labeled **Agentic Discovery** + **Agentic Arch Audit**. The charter
+never changes:
 **preserve requirements and functionality** — critique the four systems that
 carry them (code, verification apparatus, SDLC/process, the `context/` docs as
 artifacts), not the product's requirements.
@@ -29,10 +30,10 @@ Load before starting; they set the goals and vocabulary:
   `github.com/mattpocock/skills` at run time.)
 - The repo's `grill-me` skill for phase 2's interview stance.
 
-For module-level code and test findings, prefer the `code-quality-review`
-skill — this review targets the systems, not individual modules.
+For module-level code and test findings, prefer the `code-quality-audit`
+skill — this audit targets the systems, not individual modules.
 
-## Phase 1 — review
+## Phase 1 — critique
 
 Two persistent agents, messages shuttled by the operator:
 
@@ -52,7 +53,7 @@ The skeptic must re-ask harder when an answer lacks evidence; the researcher
 must correct the skeptic's premises when wrong — both directions happen and
 matter.
 
-At saturation the skeptic drafts the review: provenance (method, date, commit
+At saturation the skeptic drafts the report: provenance (method, date, commit
 reviewed), a standalone map of the four systems, then **Good / Questionable /
 Bad decisions** (each entry: decision, evidence, judgment in the design
 vocabulary — including suspicions the evidence refuted; honesty about
@@ -80,7 +81,9 @@ doc records it.
 
 ## Phase 3 — file the problems
 
-One issue per confirmed problem, labeled **Agentic Arch Review Discovery**.
+One issue per confirmed problem, labeled **Agentic Discovery** (the family
+label every discovery instrument applies — `triage-discoveries` intakes on it)
+plus **Agentic Arch Audit** (the provenance label, this instrument's alone).
 Problem capture only — no solution sections; fixes are the fix-PR's job. Each
 issue is self-contained: the problem in one sentence; evidence (file:line,
 doc §, commit); why it's a problem (what drifts, what false-greens, what it
