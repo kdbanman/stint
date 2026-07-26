@@ -800,6 +800,9 @@ async function sceneCrossViewFreshness(browser) {
 // Timer view renders the live clock reading the derived count-up (advances +3s across the
 // pinned-clock step, not reset) with the live-edit-running strip present (no End input); the
 // clock computes the D06 full Clock role — 38px, tabular numerals, the --num stack.
+// The card also SAYS it is running (design.html D05/A05, issue #142): the word is in the
+// card's rendered innerText, painted by the state line, with an accent-filled dot beside it —
+// so the state does not ride on the recoloured count-up alone, as it did until that issue.
 // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
 // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
 // container computes position: static — showing the running block with a START drag grip
@@ -828,6 +831,10 @@ async function sceneTimerView(browser) {
       // quote/space-normalized because computed fontFamily re-serializes the stack).
       const clockCs = getComputedStyle(document.querySelector('#timer-clock'));
       const famList = (s) => s.split(',').map((f) => f.trim().replace(/^["']|["']$/g, '')).join('|');
+      // Absent rather than thrown: a missing dot or state line is the regression this scene
+      // scores, so it must arrive as a false in the record, not an exception that kills the run.
+      const dot = document.querySelector('#timer-card .tc-dot');
+      const stateEl = document.querySelector('#timer-state');
       return {
         stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
         noEnd: !document.querySelector('#live-edit #le-end'),
@@ -835,7 +842,21 @@ async function sceneTimerView(browser) {
         startIsText: document.querySelector('#le-start')?.type === 'text',
         hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
         noSwitch: !document.querySelector('#timer-switch'),
-        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        // design.html D05/A05 (issue #142): the card must SAY it is running, not merely hold a
+        // #timer-state node that says so. The probe here used to read that node's textContent,
+        // which a display:none state line satisfied for as long as the bug shipped — so the
+        // OUTCOME is scored instead: the rendered card text (innerText skips display:none
+        // subtrees, which is exactly what hid the word), and the word coming from the state
+        // line rather than from elsewhere on the card (the IDLE description reads "nothing
+        // running", so an unanchored text match would pass on a card that had lost the line).
+        // innerText on the ELEMENT could not settle this — the HTML spec falls it back to
+        // textContent when the element is not rendered, i.e. exactly in the failing case.
+        cardText: document.querySelector('#timer-card').innerText.toLowerCase(),
+        statePainted: window.__probe.visible(stateEl) && stateEl.textContent.trim() === 'running',
+        // Beside the word, the dot: laid out, and carrying the accent that the count-up carries.
+        dotVisible: window.__probe.visible(dot),
+        dotFill: dot ? getComputedStyle(dot).backgroundColor : null,
+        accentRgb: window.__probe.rgbOf('--accent'),
         clockPx: clockCs.fontSize,
         clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
         clockNumStack: famList(clockCs.fontFamily) === famList(window.__probe.cssVar('--num')),
@@ -912,7 +933,13 @@ async function sceneTimerView(browser) {
       before.startIsText &&
       before.hasStop &&
       before.noSwitch &&
-      before.state === 'running' &&
+      // D05/A05 (issue #142) — the word reaches the rendered card, it comes from the state
+      // line, and the dot beside it is laid out and accent-filled. Colour alone no longer
+      // carries the app's most important state.
+      before.cardText.includes('running') &&
+      before.statePainted &&
+      before.dotVisible &&
+      before.dotFill === before.accentRgb &&
       before.clockPx === '38px' &&
       before.clockTnum &&
       before.clockNumStack &&
@@ -2916,6 +2943,12 @@ async function sceneAddRefusalPalette(browser) {
 // chosen billable go to the main process, which resolves the names. (The selection surface
 // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
 // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
+//
+// The scene closes on the modal's KEYBOARD EXIT (issue 147): the app's only modal ignored
+// Escape, so a keyboard user mid-merge had no way out of it — craft checklist §4, "Esc
+// closes/cancels the innermost thing". The guard lives here rather than in a scene of its own
+// because it is the same prompt on the same fixture, and it is scored on the OUTCOME (gone AND
+// unmerged), which is what separates a cancel from a silent confirm.
 async function sceneMergeConflict(browser) {
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
@@ -2965,6 +2998,19 @@ async function sceneMergeConflict(browser) {
         merged: window.__MERGED__,
       };
     });
+    // Escape dismisses the prompt as a CANCEL (issue 147). Asserted on the OUTCOME, not just
+    // the dismissal: the element must leave the DOM AND __MERGED__ must still be undefined —
+    // an Escape that silently confirmed the merge would clear the DOM just the same and pass a
+    // "prompt is gone" check on its way to writing the fold nobody asked for.
+    await page.keyboard.press('Escape');
+    const afterEscape = await page.evaluate(() => ({
+      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      backdropShown: !!document.querySelector('.editor-backdrop'),
+      // `?? null` so the recorded justification SHOWS the unmerged fact — JSON.stringify drops
+      // an undefined value, and "no merge was written" is the half of this that matters.
+      merged: window.__MERGED__ ?? null,
+    }));
+    const escapeCancels = !afterEscape.promptShown && !afterEscape.backdropShown && !afterEscape.merged;
     const ok =
       barHiddenInitially &&
       barHiddenWithOne &&
@@ -2975,11 +3021,13 @@ async function sceneMergeConflict(browser) {
       probe.clientChoiceCount === 2 &&
       probe.offersBillable &&
       // The prompt appeared BEFORE any merge committed (no payload sent yet).
-      !probe.merged;
+      !probe.merged &&
+      escapeCancels;
     record(
       'MERGE_CONFLICT',
       ok,
-      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}`,
+      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}; ` +
+        `Escape cancels the prompt — dismissed with nothing merged (${escapeCancels}): ${JSON.stringify(afterEscape)}`,
       'main-merge-conflict.png',
     );
   });
@@ -5997,6 +6045,161 @@ async function sceneParityReach(browser) {
   });
 }
 
+/**
+ * The in-page field-label sweep (FIELD_LABELS). Collects every VISIBLE form control inside the
+ * currently-routed view and records, per control, HOW it is named — which is the whole question
+ * design.html D13 asks. Three naming idioms count, and they are the three the app actually uses:
+ *
+ *   label       — a wrapping `<label>` or a `label[for=id]` carrying visible text (the D13 idiom);
+ *   labelledby  — `aria-labelledby` resolving to a VISIBLE element;
+ *   row-heading — the control-bar / settings-row idiom, where the visible name is the row's
+ *                 heading (`.report-lab` before a `.report-row`, `.set-k` inside a `.set-row`)
+ *                 and `aria-label` carries the programmatic half.
+ *
+ * `placeholder` is deliberately NOT an idiom: a placeholder disappears on the first keystroke,
+ * which is the defect (issue 136). `aria-label` alone is not one either — it names the control for
+ * a screen reader and for nobody else, and D13 asks for a visible label.
+ *
+ * `field` marks the population D13's visible-label rule governs: the bordered-box controls the
+ * rule describes ("one border, one radius, one focus idiom") — text inputs, selects, textareas.
+ * A checkbox is not one of those: it is named by the word beside it, and the calendar's corner
+ * select box is an ICON-ONLY affordance, which design.html D16 / A02 govern instead — those owe
+ * an accessible name, not a visible label. So the sweep asks BOTH populations for a name and only
+ * the fields for a visible one.
+ *
+ * Scope: form controls (`input` / `select` / `textarea`). The Settings global-hotkey CAPTURE
+ * control is a `[tabindex]` span rather than a field, and is covered by HOTKEY_NO_TRAP.
+ */
+function sweepFieldLabels() {
+  const { visible } = window.__probe;
+  const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const view = document.querySelector('.views .view:not([hidden])');
+  const controls = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+    .filter((el) => el.type !== 'hidden')
+    .filter(visible);
+  const fields = controls.map((el) => {
+    const own = el.closest('label') ?? (el.id ? document.querySelector(`label[for="${el.id}"]`) : null);
+    // A wrapping label's text includes the control's own; a `<select>` contributes its option
+    // list, so strip every descendant control's text before reading the label's own words.
+    const labelText = (() => {
+      if (!own || !visible(own)) return '';
+      const clone = own.cloneNode(true);
+      for (const c of clone.querySelectorAll('input, select, textarea')) c.remove();
+      return text(clone);
+    })();
+    const byText = (el.getAttribute('aria-labelledby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id))
+      .filter((t) => t && visible(t))
+      .map(text)
+      .join(' ')
+      .trim();
+    const headEl = el.closest('.set-row')?.querySelector('.set-k')
+      ?? (el.closest('.report-row')?.previousElementSibling?.classList?.contains('report-lab')
+        ? el.closest('.report-row').previousElementSibling
+        : null);
+    const headText = headEl && visible(headEl) ? text(headEl) : '';
+    const idiom = labelText ? 'label' : byText ? 'labelledby' : headText ? 'row-heading' : 'none';
+    return {
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      idiom,
+      name: labelText || byText || headText,
+      field: !(el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')),
+      // The programmatic name, ignoring `placeholder` and `title` — the four start-* fields had
+      // none at all, which is the "no accessible name" half of the issue.
+      named: !!(el.getAttribute('aria-label')?.trim() || labelText || byText),
+      // A persistent, on-screen element names it — the "no visible label" half.
+      visiblyNamed: !!(labelText || byText || headText),
+    };
+  });
+  return { total: fields.length, fields };
+}
+
+// FIELD_LABELS — design.html D13 (and A01, whose field-border exemption is CONDITIONED on the
+// label being there): every field carries a VISIBLE label. Issue 136 measured four fields with no
+// accessible name AT ALL (the start form's description / client / project / tags) and three more
+// named only by a placeholder + an invisible `aria-label` (#add-desc, #search, #rep-name) — so the
+// name either vanished on the first keystroke or never existed. Nothing could catch it: the GOLD
+// design guard scores tokens, contrast and spacing, and label presence is a structural fact about
+// the DRIVEN DOM. This scene drives the real renderer through all five views and, in each, sweeps
+// every visible form control for TWO facts: EVERY control has a programmatic name that is not its
+// placeholder (D13's floor, and D16/A02's for the icon-shaped ones), and every FIELD — the bordered
+// controls D13's rule describes, so not the checkboxes — has a persistent VISIBLE element supplying
+// that name. The views are driven into the states that
+// hold fields — the Timer start-details disclosure, the Entries add form + Custom range, the
+// Reports builder + Custom range, and Settings; the Clients view carries no field at rest (its
+// create/rename micro-forms are transient surfaces of their own and are not swept here).
+// Every row-heading-idiom control is NAMED in the justification, so that population stays
+// reviewable the way TARGET_SIZE's spacing exceptions do.
+async function sceneFieldLabels(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState())));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+
+  const surfaces = [];
+  const sweep = async (surface) => surfaces.push({ surface, ...(await page.evaluate(sweepFieldLabels)) });
+
+  // Timer — the start-details disclosure holds the four fields the issue found nameless. It is
+  // idle-only (§12 R05), and this snapshot is idle.
+  await page.click('.nav-item[data-view="timer"]');
+  await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+  await page.click('#start-toggle');
+  await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+  await sweep('timer (start details)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-timer.png') });
+
+  // Entries — the toolbar search, the unified add form, and the Custom range's date pair.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.click('#el-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('entries (add form + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
+
+  // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
+  await page.click('.nav-item[data-view="clients"]');
+  await sweep('clients');
+
+  // Reports — the builder's name field and its Custom range.
+  await page.click('.nav-item[data-view="reports"]');
+  await page.click('#rep-new');
+  await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+  await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('reports (builder + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-reports.png') });
+
+  // Settings — every §14 control, plus the Backups group's retention picker.
+  await page.click('.nav-item[data-view="settings"]');
+  await page.waitForSelector('#settings-panel .set-row', { state: 'attached' });
+  await sweep('settings');
+  await page.close();
+
+  const all = surfaces.flatMap((s) => s.fields.map((f) => ({ surface: s.surface, ...f })));
+  const fields = all.filter((f) => f.field);
+  const unnamed = all.filter((f) => !f.named).map((f) => `${f.surface}:${f.label}`);
+  const placeholderOnly = fields.filter((f) => !f.visiblyNamed).map((f) => `${f.surface}:${f.label}`);
+  const rowIdiom = fields.filter((f) => f.idiom === 'row-heading').map((f) => `${f.label} → '${f.name}'`);
+  // Guard-the-guard: an empty sweep satisfies both emptiness assertions vacuously. The five views
+  // hold well over 20 visible fields across these states, so a sweep that has gone blind fails.
+  const ok = fields.length >= 20 && unnamed.length === 0 && placeholderOnly.length === 0;
+  record(
+    'FIELD_LABELS',
+    ok,
+    `D13 sweep over ${all.length} visible controls, ${fields.length} of them fields ` +
+      `(${surfaces.map((s) => `${s.surface}=${s.total}`).join(', ')}): ` +
+      `no accessible name at all (every control, D13 + D16)=[${unnamed.join('; ') || 'none'}]; ` +
+      `field named but not by a visible element (placeholder / aria-label only)=[${placeholderOnly.join('; ') || 'none'}]; ` +
+      `row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[${rowIdiom.join('; ') || 'none'}]`,
+    'field-labels-timer.png',
+  );
+}
+
 // TARGET_SIZE — design.html A03 (WCAG 2.2 SC 2.5.8): every interactive target measures at
 // least 24×24 CSS px, or falls under a WCAG-sanctioned exception. A machine sweep over the
 // running main window routes through all five views and, in each, collects every VISIBLE
@@ -6092,8 +6295,13 @@ async function sceneTargetSize(browser) {
 // every semantic colour carries a word or icon beside it. Machine facts, one per pairing
 // the design names (the recorded exemption "run-dot when paired with its label" is exactly
 // what fact (a) proves holds):
-//   (a) the run-dot sits BESIDE the literal word 'running' — the Entries strip's dot +
-//       'running' state word, and the Timer card's 'running' state word;
+//   (a) the run-dot sits BESIDE the literal word 'running', and — the part this scene used to
+//       miss — BOTH are read as RENDERED, not merely present. Reading textContent alone passed
+//       a Timer card whose state word and dot were `display: none` for as long as issue #142
+//       shipped: the card signalled running by a recoloured clock and nothing else, which is
+//       the one thing D05 forbids. The pairing is now scored per running surface — the Entries
+//       strip carries a visible dot (its word stays hidden; D05 asks word OR icon), and the
+//       Timer card, the surface whose whole purpose is the timer, carries BOTH;
 //   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
 //       the literal 'billable' / 'non-billable' badge;
 //   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
@@ -6106,12 +6314,15 @@ async function sceneColourPairing(browser) {
   // (a)+(b): the running window — strip pairing on Entries, card pairing + badge on Timer.
   const pairing = await withPage(browser, runningState(), 'index.html', async (page) => {
     const strip = await page.evaluate(() => ({
-      dotPresent: !!document.querySelector('#timer-strip.running .strip-dot'),
+      dotVisible: window.__probe.visible(document.querySelector('#timer-strip.running .strip-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('#timer-strip.running .state')),
       stateWord: document.querySelector('#timer-strip.running .state')?.textContent.trim() ?? '',
     }));
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('.timer-card.running', { state: 'attached' });
     const card = await page.evaluate(() => ({
+      dotVisible: window.__probe.visible(document.querySelector('.timer-card.running .tc-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('.timer-card.running .state')),
       stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
       billableWord:
         [...document.querySelectorAll('.timer-card .flag')]
@@ -6177,8 +6388,15 @@ async function sceneColourPairing(browser) {
     { rejectWrites: true },
   );
   const ok =
-    pairing.strip.dotPresent &&
+    // The strip pairs by its dot — D05 takes a word OR an icon, and the strip's word is the
+    // deliberately hidden one (one running indicator per surface, not two).
+    pairing.strip.dotVisible &&
     pairing.strip.stateWord === 'running' &&
+    // The card must carry BOTH (issue #142): the word is what a screen reader and a colour-
+    // blind user get, the dot is the mark beside it. Presence is not enough — it had both in
+    // the DOM, display:none, the whole time the bug shipped.
+    pairing.card.wordVisible &&
+    pairing.card.dotVisible &&
     pairing.card.stateWord === 'running' &&
     /^(non-)?billable$/.test(pairing.card.billableWord) &&
     /overlap\s*\d+m/.test(calendar.otag) &&
@@ -6193,7 +6411,7 @@ async function sceneColourPairing(browser) {
   record(
     'COLOUR_PAIRING',
     ok,
-    `D05/A05 pairing: run-dot beside 'running' (strip=${JSON.stringify(pairing.strip)}, card state='${pairing.card.stateWord}'); ` +
+    `D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip=${JSON.stringify(pairing.strip)}, card=${JSON.stringify({ stateWord: pairing.card.stateWord, wordVisible: pairing.card.wordVisible, dotVisible: pairing.card.dotVisible })}); ` +
       `billable worded ('${pairing.card.billableWord}'); overlap band worded ('${calendar.otag}') + slept hatch carries #i-moon (${calendar.moon}); ` +
       `warn advisory worded on flag palette=${JSON.stringify(warn)}; err block worded on danger palette=${JSON.stringify(err)}`,
     'main-colour-pairing.png',
@@ -6273,6 +6491,7 @@ const SCENES = {
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
+  FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
   TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
