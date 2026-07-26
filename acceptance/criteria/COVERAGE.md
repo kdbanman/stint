@@ -1106,9 +1106,12 @@ now the entries list is gone, §12 R10): the overlapped entry's editor carries a
 previous/next relation from core's `describeOverlaps`
 (`packages/core/src/report.ts`, built on the one `spansOverlap` rule so the
 detail amount can never drift from the report flag; `detectOverlaps` is now
-`new Set(describeOverlaps(...).keys())` ), surfaced through `gui/src/uistate.ts`
-(`overlapMinutes`/`overlapRelation`/`rawSeconds` on the entry, `gui/src/ipc.ts`
-`EntryRowView` ) and painted by `gui/renderer/app.js` `overlapBannerHtml`
+`new Set(describeOverlaps(...).keys())` ), projected onto the row by the ONE
+builder `gui/src/entryrow.ts` `toEntryRowView`
+(`overlapMinutes`/`overlapRelation`/`rawSeconds` on the entry, shape declared in
+`gui/src/ipc.ts` `EntryRowView` ) for BOTH listing paths — the day-grouped
+`gui/src/uistate.ts` snapshot and the `gui/src/ipc-handlers.ts` Entries query
+(issue #166) — and painted by `gui/renderer/app.js` `overlapBannerHtml`
 ("Overlap: Nm with previous/next entry") inside the editor's `.ef-flags` region;
 a **trimmed slept entry** shows its raw duration **struck through** beside the
 live trimmed billable (`app.js` `durHtml` → `<s class="struck">` , `styles.css`
