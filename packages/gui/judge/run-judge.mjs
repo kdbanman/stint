@@ -4729,6 +4729,146 @@ async function sceneSettingsView(browser) {
   });
 }
 
+// HOTKEY_NO_TRAP — WCAG 2.2 §2.1.2 (no keyboard trap) + design.html A04, over the one control
+// in the app that captures raw keystrokes: the Settings global-hotkey field. A capture field
+// binds a chord by swallowing the key, so it needs an explicit hatch for the traversal keys or
+// focus enters and never leaves — issue 135, where `preventDefault()` ran as the handler's first
+// statement and stranded the four controls after the field in DOM order (Date & number format,
+// Check now, Backup retention, Restore…). KEYBOARD_FOCUS's Tab-walk cannot see this: it walks the
+// default view, where the whole Settings section sits behind [hidden] and its controls are out of
+// the tab order. So this scene walks focus from INSIDE the field:
+//   (a) Tab from the field advances — activeElement leaves and lands on the next control;
+//   (b) Shift-Tab from the field retreats — and writes NOTHING. This is the sharp end of the
+//       regression: `toAccelerator` reads Shift-Tab as the chord 'Shift+Tab', so the unfixed
+//       field did not merely trap focus, it silently rebound the global hotkey to Shift+Tab on
+//       the way. The setSetting spy must still be untouched after the press;
+//   (c) Escape releases the field (craft checklist §4 — Esc cancels the innermost thing, which
+//       for a capture field is the capture) and likewise binds nothing;
+//   (d) a plain Tab-walk starting in the field reaches all four of the stranded controls;
+//   (e) capture itself is UNBROKEN — a real chord (Ctrl+Shift+J) still persists as the Electron
+//       accelerator 'CommandOrControl+Shift+J'. The hatch must not have disarmed the field;
+//   (f) A04: the field paints a ring under :focus-visible as a computed DELTA against its own
+//       unfocused signature (the same predicate KEYBOARD_FOCUS uses, applied to the tabindex'd
+//       <span> that the bare `:focus-visible` outline rule exists to cover).
+// Captures settings-hotkey-focus.png with the field holding keyboard focus.
+async function sceneHotkeyNoTrap(browser) {
+  await withPage(browser, settingsState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#settings-panel .set-hotkey');
+    // The Backups group renders on its own async pass; wait for the last of the four stranded
+    // controls so the walk below cannot pass for want of a control that had not painted yet.
+    await page.waitForSelector('.backup-restore');
+    // Tag the four controls stranded by issue 135 so the walk identifies them per-element,
+    // and record the field's UNFOCUSED outline/box-shadow signature for the A04 delta.
+    const setup = await page.evaluate(() => {
+      const targets = {
+        dateFormat: 'select.set-field[data-key="dateFormat"]',
+        updateCheck: '#update-check',
+        backupRetention: 'select.set-field[data-key="backupRetention"]',
+        backupRestore: '.backup-restore',
+      };
+      const present = {};
+      for (const [name, sel] of Object.entries(targets)) {
+        const el = document.querySelector(sel);
+        if (el) el.setAttribute('data-trap-probe', name);
+        present[name] = !!el;
+      }
+      const hk = document.querySelector('#settings-panel .set-hotkey');
+      const cs = getComputedStyle(hk);
+      return {
+        present,
+        allPresent: Object.values(present).every(Boolean),
+        restSig: `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}`,
+      };
+    });
+
+    // Where is focus now, and has anything been written? One probe, used after every press.
+    const probe = () =>
+      page.evaluate(() => {
+        const el = document.activeElement;
+        const cs = el && el !== document.body ? getComputedStyle(el) : null;
+        return {
+          onHotkey: !!el && el.classList && el.classList.contains('set-hotkey'),
+          onBody: !el || el === document.body || el === document.documentElement,
+          probe: el && el.getAttribute ? el.getAttribute('data-trap-probe') : null,
+          label: !el || el === document.body ? '(body)' : el.id || `${el.tagName.toLowerCase()}.${el.className || ''}`,
+          sig: cs ? `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}` : null,
+          wrote: window.__SET_SETTING__ ?? null,
+        };
+      });
+    // Arrive the way a keyboard user does: focus the control BEFORE the field and Tab in. Not a
+    // detail — a programmatic .focus() on a tabindex'd <span> does not match `:focus-visible` in
+    // Chromium, so only a keyboard arrival paints the ring (f) checks. It also proves the field
+    // is reachable going forwards, not merely escapable.
+    const focusField = async () => {
+      await page.focus('select.set-field[data-key="checkinIntervalMin"]');
+      await page.keyboard.press('Tab');
+    };
+
+    // (f) + the evidence shot: the field holding keyboard focus, ring painted.
+    await focusField();
+    const focused = await probe();
+    await page.screenshot({ path: join(EVIDENCE, 'settings-hotkey-focus.png'), fullPage: true });
+    const ringDelta = focused.onHotkey && focused.sig !== setup.restSig;
+
+    // (a) Tab advances out of the field.
+    await page.keyboard.press('Tab');
+    const afterTab = await probe();
+
+    // (b) Shift-Tab retreats out of the field — and binds nothing on the way.
+    await focusField();
+    await page.keyboard.press('Shift+Tab');
+    const afterShiftTab = await probe();
+
+    // (c) Escape releases the field — and binds nothing.
+    await focusField();
+    await page.keyboard.press('Escape');
+    const afterEscape = await probe();
+
+    // (d) a Tab-walk that STARTS in the field reaches all four stranded controls. The budget is
+    // the four stops plus slack for the intervening ones; a trap exhausts it having reached none.
+    await focusField();
+    const reached = new Set();
+    const path = [];
+    for (let i = 0; i < 12 && reached.size < 4; i++) {
+      await page.keyboard.press('Tab');
+      const step = await probe();
+      path.push(step.label);
+      if (step.probe) reached.add(step.probe);
+    }
+
+    // (e) capture still works: a real chord persists as an Electron accelerator. Last, because
+    // persist() re-renders the panel and replaces the field's node.
+    await focusField();
+    await page.keyboard.press('Control+Shift+J');
+    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'globalHotkey').catch(() => {});
+    const captured = await page.evaluate(() => window.__SET_SETTING__ ?? null);
+
+    const escaped = !afterTab.onHotkey && !afterTab.onBody;
+    const retreated = !afterShiftTab.onHotkey && afterShiftTab.wrote === null;
+    const released = !afterEscape.onHotkey && afterEscape.wrote === null;
+    const reachedAll = reached.size === 4;
+    const captureWorks =
+      !!captured && captured.key === 'globalHotkey' && captured.value === 'CommandOrControl+Shift+J';
+    const ok =
+      setup.allPresent && focused.onHotkey && ringDelta && escaped && retreated && released &&
+      reachedAll && captureWorks;
+    record(
+      'HOTKEY_NO_TRAP',
+      ok,
+      `Tab INTO .set-hotkey from the control before it landed on the field (${focused.onHotkey}); ` +
+        `Tab from .set-hotkey advanced to ${afterTab.label} (escaped=${escaped}); ` +
+        `Shift-Tab retreated to ${afterShiftTab.label} writing nothing (${retreated}); ` +
+        `Escape released to ${afterEscape.label} writing nothing (${released}); ` +
+        `Tab-walk from the field reached ${reached.size}/4 stranded controls ` +
+        `[${[...reached].join(', ') || 'none'}] via ${JSON.stringify(path)}; ` +
+        `capture intact — Ctrl+Shift+J persisted ${JSON.stringify(captured)} (${captureWorks}); ` +
+        `A04 focus-ring delta on the field=${ringDelta} (rest ${setup.restSig} → focused ${focused.sig})`,
+      'settings-hotkey-focus.png',
+    );
+  });
+}
+
 // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
 // and the ONE viewport derivation they drive. Three machine-scored fact groups:
 //   (a) The Settings → Timeline group renders controls for all four data-keys
@@ -5598,6 +5738,7 @@ const SCENES = {
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
+  HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], run: sceneHotkeyNoTrap },
   TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindow },
   TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindowAround },
   SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], run: sceneSoftwareUpdate },
