@@ -131,9 +131,13 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // returned UiState is painted exactly as getState's is.
     search: (payload) => buildUiState(store, { search: payload?.query }),
     listEntries: (payload) => listEntries(store, payload),
-    // A write IPC channel returns a WriteAck carrying the core write's warnings (PRD §06 R4:
-    // overlap is allowed but flagged) so the renderer can surface an inline banner at the moment
-    // of the edit. getState/report/list-style channels stay value-returning.
+    // Write channels come in three result shapes, and which one a channel takes is decided, not
+    // free: a channel that writes an entry's SPAN returns a WriteAck, because only a span write
+    // can land on an overlap (PRD §06 R4 allows it but flags it) and the renderer raises an
+    // inline banner from that ack at the moment of the write. Every other mutator returns `void`
+    // and lets refreshAll repaint — except where the renderer cannot re-derive the record just
+    // written (a saved report, a favorite, a client/project/tag, a restore), which returns that
+    // record's renderer-safe view. Reads return their view.
     // PRD §12 R2 — the same toggle the tray click and the global hotkey fire (toggle.ts owns
     // the decision and the write); main.ts binds those two to it directly.
     toggle: () => toggleTimer(store, refreshAll),
@@ -143,17 +147,17 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       // instant that overlaps an existing entry — warned, not blocked.
       const res = startWithAttributes(store, payload ?? {});
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     stop: () => {
       const res = store.stop({});
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     resume: () => {
       const res = store.resume();
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     add: (payload) => {
       // §12 R7 / §05 R5: backfill a completed entry from explicit from/to times. Mirror `tt add`
@@ -176,7 +180,7 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
         ...(payload.billable !== undefined ? { billable: payload.billable } : {}),
       });
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     edit: (payload) => {
       // Editing a start/end can move an entry onto an instant that overlaps another (PRD §06 R4);
@@ -184,12 +188,12 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       // banner at the moment of the edit.
       const res = store.edit(payload.id, payload.patch);
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     split: (payload) => {
-      // split returns the two new entries (not a WriteResult); cutting a span in place cannot create
-      // a NEW overlap, so there is nothing to warn about — but the channel still returns the uniform
-      // WriteAck so the renderer's write path stays one shape.
+      // split returns the two new entries (not a WriteResult); cutting a span in place cannot
+      // create a NEW overlap, so the ack is always empty — split keeps the WriteAck shape because
+      // it is a span write, not because it has anything to report.
       store.split(payload.id, payload.atUtc);
       refreshAll();
       return { warnings: [] };
@@ -217,7 +221,7 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       refreshAll();
       // A merge folds adjacent spans into one; the folded span can still overlap a third entry
       // outside the selection (PRD §06 R4), so return any overlap warning.
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     remove: (payload) => {
       store.remove(payload.id);
@@ -287,7 +291,7 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     startFavorite: (payload) => {
       const res = store.startFromFavorite(payload.name);
       refreshAll();
-      return { warnings: res.warnings ?? [] };
+      return { warnings: res.warnings };
     },
     exportEntries: (payload) => {
       // §09 R06/R09: the Reports view's exports. The renderer cannot reach Node/fs, so the export
