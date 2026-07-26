@@ -228,7 +228,6 @@ function render() {
 // window height, which is what makes the working-hours default a real SCROLL, never a clip (G16).
 const CAL_HOUR_PX = 44;
 const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never clip)
-const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter spacer (.sp2)
 const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
 const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -413,7 +412,12 @@ function renderCalendar(host) {
     new Date().toISOString(),
     null,
   );
-  strip.scrollTop = CAL_HEADER_PX + Math.round(win.startMin * CAL_PX_PER_MIN);
+  // The header band is STICKY (styles.css `.dh`, issue #145), so it stays pinned to the
+  // scrollport's top edge and no longer scrolls out of the way: the working-hours row must land
+  // BELOW it, not behind it. The strip's content is the 52px header band followed by the 24h
+  // track, so scrolling by the track offset ALONE puts working-start at the band's bottom edge —
+  // adding the band's own height back would hide the first 52px of the working day behind it.
+  strip.scrollTop = Math.round(win.startMin * CAL_PX_PER_MIN);
 }
 
 // The fixed hour gutter: a header spacer aligned with the day headers, then 00:00–24:00 labels
