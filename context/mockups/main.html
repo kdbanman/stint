@@ -116,14 +116,19 @@
   /* calendar */
   .calwrap{position:relative;margin:12px -28px 0;padding:0 28px}
   .calwrap::after{content:"";position:absolute;left:28px;right:28px;bottom:14px;height:36px;background:linear-gradient(to bottom,rgba(253,253,252,0),var(--paper) 88%);pointer-events:none}
-  .cstrip{overflow-x:auto;padding-bottom:8px}
+  .cstrip{position:relative;z-index:0;overflow-x:auto;padding-bottom:8px}
   .cgrid{display:flex;min-width:max-content}
-  .gut{width:48px;flex:none}
-  .gut .sp2{height:52px;border-bottom:1px solid var(--rule)}
+  /* issue #145: the strip's labels STICK to the scrollport rather than scrolling out of it — the
+     hour gutter to the left edge, the day headers (and the corner spacer where the two bands
+     cross) to the top edge. Each takes an opaque --paper fill so events pass behind it, and the
+     strip is its own stacking context so those ranks stay above the event chrome (.ck z-6) and
+     below anything drawn over the calendar. The week's columns scroll; the labels do not. */
+  .gut{position:sticky;left:0;z-index:9;width:48px;flex:none;background:var(--paper)}
+  .gut .sp2{position:sticky;top:0;z-index:1;height:52px;border-bottom:1px solid var(--rule);background:var(--paper)}
   .gut .gtr{position:relative;height:484px}
   .hlab{position:absolute;right:8px;font-size:11px;color:var(--muted);transform:translateY(-6px);font-variant-numeric:tabular-nums}
   .dcol{width:124px;flex:none;border-left:1px solid var(--rule)}
-  .dh{height:52px;padding:8px 12px 0;border-bottom:1px solid var(--rule)}
+  .dh{position:sticky;top:0;z-index:8;height:52px;padding:8px 12px 0;border-bottom:1px solid var(--rule);background:var(--paper)}
   .dh .dw{font-size:11px;color:var(--muted);font-weight:590}
   .dh .dd{font-size:13px;font-weight:640;margin-left:4px}
   .dh .ds{display:block;font-size:11px;color:var(--muted);margin-top:2px}

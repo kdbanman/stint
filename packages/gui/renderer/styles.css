@@ -2235,11 +2235,38 @@ body.popover { background: var(--canvas); margin: 0; }
 .calwrap { position: relative; margin-top: 12px; }
 /* Both axes scroll: horizontal for the week's columns, vertical over the 24h track.
    A fixed max-height bounds the vertical viewport so the working-hours scroll is a real
-   scroll (the track is taller than the viewport) — never a clip. */
-.cstrip { overflow: auto; max-height: 60vh; padding-bottom: 8px; }
+   scroll (the track is taller than the viewport) — never a clip.
+   `position: relative; z-index: 0` makes the strip its own STACKING CONTEXT, so the sticky
+   axes below can outrank the event chrome inside (`.ck` is z-6, `.ops` z-5, `.ov` z-4) without
+   those high numbers leaking out to outrank anything drawn over the calendar. Nothing inside
+   needs to escape: `overflow: auto` already clips the strip's descendants to its box. */
+.cstrip { position: relative; z-index: 0; overflow: auto; max-height: 60vh; padding-bottom: 8px; }
 .cgrid { display: flex; min-width: max-content; }
-.gut { width: 48px; flex: none; }
-.gut .sp2 { height: 52px; border-bottom: 1px solid var(--rule); }
+/* issue 145 (unhashed — the D01 scan over this file reads a hashed three-digit number as a colour
+   literal): both axes' labels STICK to the scrollport instead of scrolling out of it. The strip
+   opens scrolled to working hours (app.js) and is wider than its viewport whenever the range does
+   not fit, so a static header band and a static gutter are label rows the default view never
+   shows — the per-day billable total §12 R16/G13 requires was painted and then scrolled away.
+   The scroll is specified, so the scroll stays and the LABELS stop moving with it: `.dh` sticks to
+   the top edge, `.gut` to the left edge, and `.sp2` — the corner where the two bands cross —
+   sticks to both. Each carries an opaque `--paper` fill (the surface it already sat on) so events
+   pass behind it, and outranks the event chrome it now overlaps. */
+.gut {
+  position: sticky;
+  left: 0;
+  z-index: 9;
+  width: 48px;
+  flex: none;
+  background: var(--paper);
+}
+.gut .sp2 {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 52px;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
 .gut .gtr { position: relative; }
 .hlab {
   position: absolute;
@@ -2253,7 +2280,15 @@ body.popover { background: var(--canvas); margin: 0; }
    scrolls when the range does not fit (the property the JUDGE scene asserts). */
 .dcol { width: 124px; flex: none; border-left: 1px solid var(--rule); }
 .dcol.end { border-right: 1px solid var(--rule); }
-.dh { height: 52px; padding: 8px 12px 0; border-bottom: 1px solid var(--rule); }
+.dh {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  height: 52px;
+  padding: 8px 12px 0;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
+}
 .dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
 .dh .dd { font-size: 13px; font-weight: 640; margin-left: 4px; }
 .dh .ds { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
