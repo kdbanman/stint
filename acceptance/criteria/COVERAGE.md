@@ -1463,7 +1463,27 @@ accent"). The per-day + range **billable totals** the
 calendar's headers/chip present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
 — including an empty day"), and the never-clip / fixed-width / working-hours-default / empty-column
-behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **R17 Exact time entry (NEW, `core` — the
+behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **The event BLOCK
+itself** — that an event contains its own content, and that hovering one moves
+nothing — is JUDGE
+`CALENDAR_ENTRY_BLOCK` (`main-calendar-short.png` over
+`shortEntriesCalendarState` , the design audit's own 10 / 30 / 60 / 180-minute
+durations under a UTC-pinned page): a block's height is duration-driven
+(0.733px/min, floored at 18px) while its content height is fixed by text flow
+(~55px), so the two cross at ~75 minutes and every shorter entry has more
+content than block. The block **clips** (design.html D09) so a short entry
+truncates deliberately (description first, dropping client/project then the
+time) instead of painting into the hour rows beneath, which belong to other
+entries; and the hover ops chip is a pure **overlay** reserving no flow space,
+so there is **no layout shift on hover** (design.html §4). Containment is
+asserted by **hit-testing**, not by comparing layout rects — `overflow: hidden`
+clips paint, not layout, and the defect lived in the clip chain (the first
+non-visible-overflow ancestor was `.cstrip` , three levels up). The scene also
+asserts its own **fixture realism**: the three sub-75-minute blocks must
+genuinely lay out more content than they have height for, so reseeding the
+scene with comfortable entries reddens it rather than quietly greening it — the
+audit's retracted first kill of this finding was taken on a 132px block, very
+nearly the longest plausible entry. **R17 Exact time entry (NEW, `core` — the
 overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
 expander** — raw start/stop **text** fields beneath the inline interval picker
 (§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT

@@ -908,6 +908,55 @@ export function denseCalendarState() {
 }
 
 /**
+ * §12 R16 (issues #187 / #151) — the SHORT-ENTRY calendar fixture. One day carrying the four
+ * durations the design audit measured — 10 / 30 / 60 / 180 minutes — because the block height is
+ * `duration × 0.733px/min` (floored at 18px) while the content height is fixed by text flow at
+ * ~55px, so the two cross at about 75 minutes and only a fixture that reaches BELOW that line can
+ * catch a spill. Fixture realism is the whole guard: the audit first killed a narrower version of
+ * this finding by measuring a 132px block — very nearly the longest plausible entry — and a scene
+ * seeded only with hour-plus entries would repeat that mistake. A 30-minute standup is the common
+ * case, not an edge case.
+ *
+ * Every entry is billable, unflagged and same-day, so the CALENDAR_ENTRY_CONTAINMENT scene reads
+ * pure geometry: no overlap band, slept hatch or cross-midnight segment perturbs the blocks. The
+ * 180-minute entry is the control — it has room to spare, so a containment assertion that passes
+ * only on it proves nothing.
+ */
+export function shortEntriesCalendarState() {
+  const ev = (o) => ({
+    overlapped: false,
+    overlapMinutes: 0,
+    overlapRelation: null,
+    sleptThrough: false,
+    excludedSeconds: 0,
+    rawSeconds: o.billableSeconds,
+    tags: [],
+    billable: true,
+    ...o,
+  });
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-24',
+        entries: [
+          // 10 min → an 18px block (the floor): only the description can fit.
+          ev({ id: 201, description: 'quick call', clientLabel: 'Acme / API', startUtc: '2026-06-24T08:00:00Z', endUtc: '2026-06-24T08:10:00Z', billableSeconds: 600 }),
+          // 30 min → 22px: the ordinary standup the audit named.
+          ev({ id: 202, description: 'standup', clientLabel: 'Acme / API', startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T09:30:00Z', billableSeconds: 1800 }),
+          // 60 min → 44px: still 11px short of the content's 55px.
+          ev({ id: 203, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T10:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 3600 }),
+          // 180 min → 132px: the control, with room for every line.
+          ev({ id: 204, description: 'deep work', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T13:00:00Z', endUtc: '2026-06-24T16:00:00Z', billableSeconds: 10800 }),
+        ],
+      },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * §12 R11 — the Settings-view fixture. The panel renders from getState().settings (the
  * eight §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
  * SETTINGS_VIEW scene opens the panel, asserts a control for every setting, and screenshots

@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -90,6 +90,41 @@ const readsClean = (message) => typeof message === 'string' && message.length > 
 // and collapses under prefers-reduced-motion, is A06's own static check.
 const noMotion = (page) =>
   page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+
+// Click a calendar event's INERT BODY — the "a click anywhere that is not an action control opens
+// the unified editor" path (§12 R06). Aiming at a line selector (`.bd`, `.bt`) does not work:
+// Playwright aims at an element's CENTRE, and a calendar event's centre-line real estate is
+// contested. The ops chip is an overlay that reserves no flow space (issue #151 — hover must not
+// move the text under the cursor), so it sits ON the top-right of the first line; the corner
+// checkbox holds the top-left; a line below the block's height is clipped away entirely (issue
+// #187); and an overlapping neighbour stacks over the block's tail. Which of those applies depends
+// on the entry's duration and its neighbours, so the point is FOUND rather than assumed: scan the
+// block for a spot that actually hit-tests to its own inert body, exactly as a user's eye does,
+// and click there. Throws if the block has no clickable body left — itself worth failing on, since
+// the click-to-edit affordance would then be unreachable.
+async function clickEventBody(page, selector) {
+  // Hit-testing is viewport-relative, so an off-hours event still below the 24h track's fold
+  // would probe as empty. Bring it in first — the same scroll a user makes to reach it.
+  await page.locator(selector).scrollIntoViewIfNeeded();
+  const point = await page.evaluate((sel) => {
+    const ev = document.querySelector(sel);
+    const r = ev.getBoundingClientRect();
+    // The renderer's own exclusion list (app.js wire()): a click on one of these is an action,
+    // not a body click, and never opens the form.
+    const inert = (el) =>
+      el && ev.contains(el) && !el.closest('[data-act], input, button, a, .confirm, .split-at');
+    for (let y = r.top + 3; y < r.bottom - 2; y += 3) {
+      for (let x = r.left + 3; x < r.right - 2; x += 3) {
+        if (inert(document.elementFromPoint(Math.round(x), Math.round(y)))) {
+          return { x: Math.round(x), y: Math.round(y) };
+        }
+      }
+    }
+    return null;
+  }, selector);
+  if (!point) throw new Error(`no clickable inert body on ${selector} — click-to-edit unreachable`);
+  await page.mouse.click(point.x, point.y);
+}
 
 const results = [];
 // `pass` is true/false for the deterministic, gating facts; null marks an item that
@@ -2116,9 +2151,9 @@ async function sceneUnifiedForm(browser) {
     // per the mockup's full-width offset-stack layout (main.html §Tue: the later event stacks on
     // top of the earlier one's tail), covers the lower part of entry 80. Reach it the way a user
     // does: move the cursor ONTO the entry first — hover raises it above the overlapping neighbour
-    // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its description body.
+    // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its inert body.
     await page.hover(editRow);
-    await page.click(`${editRow} .desc`);
+    await clickEventBody(page, editRow);
     await page.waitForSelector(editForm, { state: 'attached' });
     const clickOpens = await page.evaluate(
       () => !!document.querySelector('.edit-form.entry-form') &&
@@ -4360,11 +4395,9 @@ async function sceneCalendarLayout(browser) {
     });
 
     // Clicking an event body opens the unified editor (an off-hours event, so this also exercises
-    // the scroll-into-view reachability of the never-clipped 24h track). Hover first so the event
-    // settles into its hovered layout (its `.bd` shifts clear of the revealed ops overlay) before
-    // the body click lands.
-    await page.hover('.entry[data-id="5"]');
-    await page.click('.entry[data-id="5"] .bd');
+    // the scroll-into-view reachability of the never-clipped 24h track). The hover changes nothing
+    // geometrically (CALENDAR_ENTRY_BLOCK guards that), so the title is where it was at rest.
+    await clickEventBody(page, '.entry[data-id="5"]');
     await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
     const editorOpen = await page.evaluate(
       // The form opens in the view-level host (not inside the event); the event carries .editing.
@@ -4686,6 +4719,122 @@ async function sceneSelectionLift(browser) {
       `states=${stateOk} chosen-lifts-off-the-rest=${liftOk} no-accent-on-selection=${noAccentOk} ` +
       `checkbox-is-paper=${checkOk} accent-budget-held=${budgetOk}`,
     'selection-lift.png',
+  );
+}
+
+// CALENDAR_ENTRY_BLOCK — §12 R16 / design.html D09 + §4 (issues #187, #151): a calendar event
+// CONTAINS its own content, and hovering one moves nothing. Both halves are one fix — the ops chip
+// is an overlay that reserves no flow space, so the block can clip to its duration without the
+// hover padding shoving text out of the bottom — so one scene guards both.
+//
+// The fixture (shortEntriesCalendarState) seeds the four durations the design audit measured —
+// 10 / 30 / 60 / 180 minutes. Block height is duration-driven (0.733px/min, floored at 18px) while
+// content height is fixed by text flow (~55px), so they cross at ~75 minutes and only the sub-75
+// blocks can spill. This matters more than usual: the audit first KILLED a narrower version of the
+// finding after measuring a 132px block, and a scene seeded with hour-plus entries alone would
+// reproduce that mistake exactly. The 180-minute block is the control.
+//
+// Containment is asserted by HIT-TESTING, not by comparing layout rects. `overflow: hidden` clips
+// paint, not layout — a clipped `.bt` still reports a getBoundingClientRect() below the block — so
+// a rect comparison would either measure nothing (before the fix it fails for the right reason;
+// after it, it still fails) or, worse, pin CSS. `document.elementFromPoint` sees what a user's
+// pointer sees, through the real clip chain, which is precisely what broke: the first non-visible
+// overflow ancestor used to be `.cstrip`, three levels up, so text painted into the hour rows
+// beneath. Deterministic sub-facts, machine-scored:
+//   • LIVE — every block hit-tests to ITSELF at its own centre (the probes below are meaningful,
+//     not silently off-screen);
+//   • CONTAINED — no point just BELOW a block (its own column, +4px and +12px) hit-tests into that
+//     entry: nothing of the entry paints in hours it does not own;
+//   • SHORTFALL REAL — the 10 / 30 / 60-minute blocks each LAY OUT more content than they have
+//     height for (the `.bt` layout box overhangs the block). This is the fixture-realism guard: if
+//     someone reseeds the scene with comfortable entries, the containment fact stops proving
+//     anything and this fact goes red instead of the scene going quietly green;
+//   • CONTROL INTACT — the 180-minute block, which HAS the room, shows all three lines fully
+//     inside it: truncation happens only where the duration demands it (§4 deliberate truncation),
+//     never as a blanket clip;
+//   • NO HOVER SHIFT — the same event's `.bd` title, measured hovered and not, moves ZERO px. The
+//     audit's own measurement (763 → 795, +32px) kept as the guard.
+// Captures main-calendar-short.png.
+async function sceneCalendarEntryBlock(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(shortEntriesCalendarState()), {}));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 4);
+
+  const blocks = await page.evaluate(() => {
+    const within = (el, root) => !!el && (el === root || root.contains(el));
+    return [...document.querySelectorAll('.dcol .ev')].map((ev) => {
+      const r = ev.getBoundingClientRect();
+      const midX = Math.round(r.left + r.width / 2);
+      // Does the block hit-test to itself? If not, it is off-screen and its spill probes are void.
+      const self = document.elementFromPoint(midX, Math.round(r.top + r.height / 2));
+      // Two probes below the foot: one hugging the edge, one a line further down — the audit
+      // measured spills of 11px (60 min) to 37px (10 min), so both depths are in range.
+      const below = [4, 12].map((dy) => {
+        const hit = document.elementFromPoint(midX, Math.round(r.bottom + dy));
+        return { dy, intoEntry: within(hit, ev), tag: hit ? hit.className || hit.tagName : null };
+      });
+      const line = (sel) => {
+        const el = ev.querySelector(sel);
+        if (!el) return null;
+        const lr = el.getBoundingClientRect();
+        return { top: Math.round(lr.top - r.top), bottom: Math.round(lr.bottom - r.top) };
+      };
+      return {
+        id: ev.dataset.id,
+        height: Math.round(r.height),
+        selfHit: within(self, ev),
+        below,
+        bd: line('.bd'),
+        bc: line('.bc'),
+        bt: line('.bt'),
+      };
+    });
+  });
+
+  // The hover half (#151). The 180-minute control block has room for every line, so a shift would
+  // be a pure hover artefact, not a truncation side effect: measure its title, hover, measure again.
+  const titleTop = () =>
+    page.evaluate(() => {
+      const bd = document.querySelector('.dcol .ev[data-id="204"] .bd');
+      const ev = document.querySelector('.dcol .ev[data-id="204"]');
+      return { title: bd.getBoundingClientRect().top, block: ev.getBoundingClientRect().top };
+    });
+  const atRest = await titleTop();
+  await page.hover('.dcol .ev[data-id="204"]');
+  await page.waitForFunction(
+    () => parseFloat(getComputedStyle(document.querySelector('.dcol .ev[data-id="204"] .ops .op-btn')).opacity) > 0.5,
+  );
+  const hovered = await titleTop();
+  await page.screenshot({ path: join(EVIDENCE, 'main-calendar-short.png') });
+  await page.close();
+
+  const byId = Object.fromEntries(blocks.map((b) => [b.id, b]));
+  const liveOk = blocks.length === 4 && blocks.every((b) => b.selfHit);
+  const containedOk = blocks.every((b) => b.below.every((p) => !p.intoEntry));
+  // The three sub-75-minute blocks must genuinely overflow their height — otherwise the fixture
+  // stopped exercising the defect and `containedOk` is proving nothing.
+  const shortfallReal = ['201', '202', '203'].every((id) => {
+    const b = byId[id];
+    return !!b && !!b.bt && b.bt.bottom > b.height;
+  });
+  const control = byId['204'];
+  const controlIntact =
+    !!control &&
+    [control.bd, control.bc, control.bt].every((l) => !!l && l.top >= 0 && l.bottom <= control.height);
+  const titleShift = Math.abs(hovered.title - atRest.title);
+  const blockShift = Math.abs(hovered.block - atRest.block);
+  const noHoverShift = titleShift === 0 && blockShift === 0;
+  record(
+    'CALENDAR_ENTRY_BLOCK',
+    liveOk && containedOk && shortfallReal && controlIntact && noHoverShift,
+    `short-entry blocks=${JSON.stringify(blocks)}; live=${liveOk} contained=${containedOk} ` +
+      `shortfall-real=${shortfallReal} control-intact=${controlIntact}; ` +
+      `hover title ${atRest.title}->${hovered.title} (delta ${titleShift}px), ` +
+      `block ${atRest.block}->${hovered.block} (delta ${blockShift}px)`,
+    'main-calendar-short.png',
   );
 }
 
@@ -5910,6 +6059,8 @@ const SCENES = {
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
+
+  CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], run: sceneCalendarEntryBlock },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
   HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], run: sceneHotkeyNoTrap },
