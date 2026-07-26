@@ -16,13 +16,8 @@
  */
 import { describe, expect } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
-import { Store, elapsedSeconds, toUtc, type Clock } from '@stint/core';
-
-/** A clock whose "now" can be repointed, for deterministic skew. */
-function settableClock(startMs: number): { clock: Clock; set: (ms: number) => void } {
-  let nowMs = startMs;
-  return { clock: () => new Date(nowMs), set: (ms) => (nowMs = ms) };
-}
+import { Store, elapsedSeconds, toUtc } from '@stint/core';
+import { mutableClock } from '../support/clock.js';
 
 const BASE = Date.parse('2026-01-01T00:00:00Z');
 
@@ -70,7 +65,7 @@ describe('PROP: an open entry never reports negative derived elapsed under clock
   test.prop([
     fc.integer({ min: 1, max: 10_000_000_000 }), // backward skew ms (now strictly before start)
   ])('a backward clock jump clamps rawSeconds / billableSeconds to 0', (backwardMs) => {
-    const { clock, set } = settableClock(BASE);
+    const { clock, set } = mutableClock(BASE);
     const store = Store.openMemory(clock);
     try {
       // Open an entry at the fixed BASE start.
@@ -91,7 +86,7 @@ describe('PROP: an open entry never reports negative derived elapsed under clock
   test.prop([
     fc.integer({ min: 0, max: 10_000_000 }), // forward skew ms
   ])('a forward clock yields the expected positive clamped elapsed', (forwardMs) => {
-    const { clock, set } = settableClock(BASE);
+    const { clock, set } = mutableClock(BASE);
     const store = Store.openMemory(clock);
     try {
       const id = store.start().value.id;

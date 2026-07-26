@@ -62,11 +62,11 @@ describe('shipping IPC handler-map parity (issue #87)', () => {
  * and format reach the dialog; a canceled dialog writes NOTHING and says so.
  */
 describe('GOLD — exportEntries writes the chosen scope to the save target (§09 R06/R09)', () => {
-  const NOW_ISO = '2026-06-24T18:00:00Z';
+  const NOW = new Date('2026-06-24T18:00:00Z');
 
   /** A real store with one billable and one non-billable closed entry this week. */
   function seeded(): Store {
-    const store = Store.openMemory(() => new Date(NOW_ISO));
+    const store = Store.openMemory(() => NOW);
     const { clientId, projectId } = store.resolveClientProjectByName({ client: 'Acme', project: 'API' });
     store.add({
       description: 'auth refactor',
@@ -125,7 +125,7 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
       // …the file exists with the same bytes core's toCsv produces for those entries (so the
       // file the GUI lands and `tt export --week --csv` are the same bytes)…
       const written = readFileSync(target, 'utf8');
-      expect(written).toBe(toCsv(rawWindow(store), new Date(NOW_ISO)));
+      expect(written).toBe(toCsv(rawWindow(store), NOW));
       // …including the non-billable row, because 'all' does not narrow.
       expect(written).toMatch(/,admin,/);
       // The dialog was asked once, for the right format, with a dated default name.
@@ -150,7 +150,7 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
       expect(res).toEqual({ written: rawWindow(store).length, path: target });
       const written = readFileSync(target, 'utf8');
       expect(written.endsWith('\n')).toBe(true);
-      expect(JSON.parse(written)).toEqual(toJsonEntries(rawWindow(store), new Date(NOW_ISO)));
+      expect(JSON.parse(written)).toEqual(toJsonEntries(rawWindow(store), NOW));
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });

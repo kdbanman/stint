@@ -25,8 +25,7 @@
 import { describe, it, expect } from 'vitest';
 import { CHANNELS } from '../src/ipc.js';
 import { createIpcHandlers, type IpcHandlerDeps } from '../dist/ipc-handlers.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — plain-JS apparatus module, no type declarations on purpose.
+// @ts-expect-error — plain-JS apparatus module, no type declarations on purpose.
 import { createHandlers } from '../qa/driver.mjs';
 
 // Building either map only creates closures — no dep is invoked, no store is touched — so

@@ -8,8 +8,11 @@ import { describe, it, expect } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
 import { Store, StoreError } from '@stint/core';
 
-const NOW = '2026-05-10T18:00:00Z';
-const mem = () => Store.openMemory(() => new Date(NOW));
+// The pinned clock. NOW_UTC is the same instant in core's stored form, for the timestamps
+// this file passes across the API and reads back.
+const NOW_UTC = '2026-05-10T18:00:00Z';
+const NOW = new Date(NOW_UTC);
+const mem = () => Store.openMemory(() => NOW);
 
 describe('edit amends a field without touching the others (§05 R6, §06 R1)', () => {
   it('changing the description leaves times, client, billable intact', () => {
@@ -63,8 +66,8 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
   it('allows moving the running entry start up to (and including) now (#61)', () => {
     const store = mem();
     const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T09:00:00Z' });
-    store.edit(open.id, { startUtc: NOW }); // NOW is the fixed clock — the boundary
-    expect(store.getEntry(open.id)!.startUtc).toBe(NOW);
+    store.edit(open.id, { startUtc: NOW_UTC }); // NOW_UTC is the fixed clock — the boundary
+    expect(store.getEntry(open.id)!.startUtc).toBe(NOW_UTC);
     store.edit(open.id, { startUtc: '2026-05-10T17:59:59Z' }); // one second before now
     expect(store.getEntry(open.id)!.startUtc).toBe('2026-05-10T17:59:59Z');
     store.close();
@@ -76,8 +79,8 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
     const store = mem();
     const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T17:00:00Z' });
     expect(() => store.edit(open.id, { startUtc: '2026-05-10T20:00:00Z' })).toThrow(StoreError);
-    const { value: stopped } = store.stop({ atUtc: NOW });
-    expect(stopped.endUtc).toBe(NOW);
+    const { value: stopped } = store.stop({ atUtc: NOW_UTC });
+    expect(stopped.endUtc).toBe(NOW_UTC);
     expect(Date.parse(stopped.endUtc!)).toBeGreaterThanOrEqual(Date.parse(stopped.startUtc));
     store.close();
   });
@@ -112,7 +115,7 @@ describe('edit amends a field without touching the others (§05 R6, §06 R1)', (
       const store = mem();
       try {
         const { value: open } = store.start({ description: 'work', atUtc: '2026-05-10T12:00:00Z' });
-        const target = new Date(Date.parse(NOW) + deltaS * 1000).toISOString().replace('.000Z', 'Z');
+        const target = new Date(NOW.getTime() + deltaS * 1000).toISOString().replace('.000Z', 'Z');
         if (deltaS > 0) {
           expect(() => store.edit(open.id, { startUtc: target })).toThrow(StoreError);
           expect(store.getEntry(open.id)!.startUtc).toBe('2026-05-10T12:00:00Z'); // unchanged
@@ -256,7 +259,7 @@ describe('billable override (§08)', () => {
 
   it('clientless internal time can be flagged billable', () => {
     const store = mem();
-    const { value: e } = store.start({ description: 'rare billable admin', billable: true, atUtc: NOW });
+    const { value: e } = store.start({ description: 'rare billable admin', billable: true, atUtc: NOW_UTC });
     expect(e.billable).toBe(true);
     expect(e.clientId).toBeNull();
     store.close();
