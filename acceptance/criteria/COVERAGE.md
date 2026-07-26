@@ -1720,7 +1720,14 @@ clamp (an around-now window at 00:30 or 23:30 meets 0 / 1440 instead of leaving
 the track), and an edited interval re-centering the window while KEEPING the
 mode's span (a running interval, `endUtc: null` , centering on its start) —
 reached through the same bundle-eval harness the equivalence facts use, because
-`su.ts` is a classic-script entry with no named exports. The one branch left
+`su.ts` is a classic-script entry with no named exports. That suite also pins
+WHERE 07:00–18:00 comes from — the fallback window must equal core's
+`DEFAULT_SETTINGS.workingHoursStart` / `workingHoursEnd`, not a renderer copy of
+them (#168: the pair was re-hardcoded as `7 * 60` / `18 * 60` in `su.ts` and
+twice more in `timepicker.js`, so a user who moved their working hours got the
+right window from `timelineWindow` and the wrong one from every fallback path;
+`timepicker.js` now calls `SU.timelineWindow` unguarded, like every other SU
+call, since the bundled SU entry loads first). The one branch left
 unpinned is the degenerate-after-clamp fallback (`su.ts` "should not happen off
 validated settings"): it is unreachable, since the window's span is always ≥ 60
 minutes and its center always inside [0, 1440], so no input produces
@@ -2445,7 +2452,22 @@ filesystem / network)
 covered — the no-Node/no-core/no-network source walk in
 `gui/test/renderer-static.test.ts`; the isolation posture itself (context
 isolation on, no node integration, preload bridge, renderer speaks only
-`ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35)
+`ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35). The same
+static file walk also pins the renderer's ONE-HOME rule (#168): `su.ts` is the
+sole definition of a helper more than one page needs — no other renderer file
+may define `escapeHtml`, `errMessage`, `localMinuteOfDay` or
+`exactMinuteOfDay`, and the minutes-of-day arithmetic
+(`getHours() * 60 + getMinutes()`) appears exactly once across
+`gui/renderer/`. Static-only by construction: a duplicated helper renders fine
+on a driven page right up until the copies diverge, which they had —
+`escapeHtml` existed in two dialects escaping different character sets (the
+`app.js` one spared `'` across 20 call sites) and `popover.js` escaped nothing,
+while `errMessage` was re-typed at four sites, one dropping the `.message`
+unwrap. `popover.html` is a second document that can reach nothing `app.js`
+defines, so `su.ts` is the only home serving every page. The behavior of the
+hoisted helpers (the single-quote escape, the unwrap-then-strip message rule,
+the exact minute's seconds fraction) is GOLD
+`gui/test/renderer-bundle.test.ts`, run through the bundle the pages load.
 
 ### §05
 

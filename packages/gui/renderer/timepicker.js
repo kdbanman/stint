@@ -67,26 +67,19 @@ window.STP = (function () {
   function pad(n) {
     return String(n).padStart(2, '0');
   }
-  // The single local-time seed format (`YYYY-MM-DDTHH:mm`, no timezone) the picker writes back
-  // into the bound text inputs — the ONE shared helper on window.SU (loaded first), so the
-  // picker, the raw Start/Stop fields, and the split instant all agree byte-for-byte.
-  const localInputValue = (date) => window.SU.localInputValue(date);
+  // The shared display helpers, off window.SU (dist/su.js loads first in index.html — the
+  // picker never reaches core itself). localInputValue is the single local-time seed format
+  // (`YYYY-MM-DDTHH:mm`, no timezone) written back into the bound text inputs, so the picker,
+  // the raw Start/Stop fields, and the split instant agree byte-for-byte; localMinuteOfDay /
+  // exactMinuteOfDay are the ONE minutes-of-day derivation every timeline surface positions
+  // against, so a timezone or DST fix has a single site to find (issue #168).
+  const { localInputValue, localMinuteOfDay, exactMinuteOfDay, timelineWindow } = window.SU;
   function hhmm(minutes) {
     // Floor, not round: an exact seed carries fractional minutes (seconds ride the fraction,
     // issue #49), and 09:07:33 must label as 09:07 — the minute the bound field shows — not 09:08.
     // Dragged values are whole grid minutes, for which floor and round agree.
     const m = Math.floor(minutes);
     return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
-  }
-  // Minute-of-day for a Date in local time.
-  function localMinuteOfDay(date) {
-    return date.getHours() * 60 + date.getMinutes();
-  }
-  // §12 R15 (issue #49): the EXACT minute-of-day, seconds riding the fraction (09:07:33 →
-  // 547.55). Seeds and reseeds use THIS — never snapTo5 — so the painted block and any value
-  // written back (dateAtMinute inverts the fraction to seconds) preserve the stored instant.
-  function exactMinuteOfDay(date) {
-    return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
   }
   // The local Y-M-D the column is drawn against; the calendar selection sets this.
   function sameLocalDay(a, b) {
@@ -276,13 +269,12 @@ window.STP = (function () {
     renderTrack();
 
     // Default scroll window (§14/G16): SU.timelineWindow centered on the running interval.
-    const win =
-      window.SU && typeof window.SU.timelineWindow === 'function'
-        ? window.SU.timelineWindow(opts.settings || null, new Date().toISOString(), {
-            startUtc: startDate.toISOString(),
-            endUtc: null,
-          })
-        : { startMin: 7 * 60, endMin: 18 * 60 };
+    // Unguarded, like every other SU call: dist/su.js is loaded first, so a local fallback
+    // window would be dead code that re-hardcodes a working-hours default core owns (#168).
+    const win = timelineWindow(opts.settings || null, new Date().toISOString(), {
+      startUtc: startDate.toISOString(),
+      endUtc: null,
+    });
     viewport.scrollTop = Math.round(minutesToY(win.startMin));
     return box;
   }
@@ -611,13 +603,10 @@ window.STP = (function () {
     }
 
     // Default scroll window (§14/G16): SU.timelineWindow centered on the seeded interval.
-    const win =
-      window.SU && typeof window.SU.timelineWindow === 'function'
-        ? window.SU.timelineWindow(opts.settings || null, new Date().toISOString(), {
-            startUtc: dateAtMinute(columnDay, startMin).toISOString(),
-            endUtc: dateAtMinute(columnDay, endMin).toISOString(),
-          })
-        : { startMin: 7 * 60, endMin: 18 * 60 };
+    const win = timelineWindow(opts.settings || null, new Date().toISOString(), {
+      startUtc: dateAtMinute(columnDay, startMin).toISOString(),
+      endUtc: dateAtMinute(columnDay, endMin).toISOString(),
+    });
     viewport.scrollTop = Math.round(minutesToY(win.startMin));
     return box;
   }

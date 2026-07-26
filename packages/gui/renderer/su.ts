@@ -15,8 +15,13 @@
  *
  * Everything below those imports is renderer-only display chrome with no other home.
  * Display only: elapsed is always derived (now − start), never stored.
+ *
+ * It is also the ONE home for a helper more than one renderer script needs. popover.html is
+ * a SEPARATE document and can reach nothing app.js defines, so this file is the only route
+ * that serves every page — a helper re-typed in a second file is a fork by construction, and
+ * the copies diverge silently (issue #168). `renderer-static.test.ts` fails the second copy.
  */
-import { formatDuration, formatHours } from '@stint/core';
+import { DEFAULT_SETTINGS, formatDuration, formatHours } from '@stint/core';
 import { countUpSeconds } from '../src/timerview.js';
 import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
@@ -32,6 +37,52 @@ function fmtHours(seconds: number): string {
 /** The live count-up for an open entry — timerview.ts's rule with `now` taken here. */
 function elapsed(startUtc: string, excludedSeconds = 0): number {
   return countUpSeconds(startUtc, new Date(), excludedSeconds);
+}
+
+// §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
+// `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
+// (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
+// human string the message region shows, stripping the "Error:" prefix. EVERY rejection
+// surface reads through this one function (the entry forms, the split confirm, the inline
+// rename, the report builder, the exports, the popover's toggle), so "how a refused write
+// reads to the user" has a single definition: unwrap `.message`, then strip the prefix. The
+// report builder's own version skipped the unwrap and rendered `[object Object]` (issue #168).
+function errMessage(err: unknown): string {
+  return String((err as { message?: unknown })?.message || err).replace(/^Error:\s*/, '');
+}
+
+// The ONE HTML escape for renderer text interpolated into innerHTML. FIVE characters,
+// including the single quote: the renderers write both `"…"` and `'…'` attribute values, so
+// an escape that spares `'` is an injection through user text the moment someone writes
+// `title='${escapeHtml(name)}'`. Two dialects existed (a 4-char one in app.js over 20 call
+// sites, this 5-char one in reports.js) and the popover escaped nothing at all — issue #168.
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+function escapeHtml(s: unknown): string {
+  return String(s).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
+}
+
+// The ONE local minutes-of-day derivation (0–1440) — every timeline surface positions against
+// it: the picker's seeds and reseeds, the entries calendar's event geometry, and this file's
+// own window math. Display only; the stored instant is always UTC ISO. Takes a Date or an ISO
+// string because both call shapes exist and neither should re-type the arithmetic (issue #168).
+function localMinuteOfDay(when: Date | string): number {
+  const d = when instanceof Date ? when : new Date(when);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+// §12 R15 (issue #49): the EXACT minute-of-day, seconds riding the fraction (09:07:33 →
+// 547.55). The picker seeds and reseeds with THIS — never a snapped minute — so the painted
+// block and any value written back (dateAtMinute inverts the fraction) preserve the stored
+// instant to the second.
+function exactMinuteOfDay(when: Date | string): number {
+  const d = when instanceof Date ? when : new Date(when);
+  return localMinuteOfDay(d) + d.getSeconds() / 60;
 }
 
 // §12 R11: the chosen date/number format. 'system' renders the runner's locale; 'iso'
@@ -103,6 +154,25 @@ function localInputValue(date: Date): string {
   );
 }
 
+/** §14's strict zero-padded HH:MM — the shape core validates on write ('07:00', never '7:00'). */
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** An HH:MM setting as local minutes-of-day, or null when it is not a readable HH:MM. */
+function hhmmToMin(hhmm: string | undefined | null): number | null {
+  const s = String(hhmm ?? '');
+  return HHMM.test(s) ? Number(s.slice(0, 2)) * 60 + Number(s.slice(3, 5)) : null;
+}
+
+// §14 — the window every timeline fallback lands on. CORE owns the working-hours default
+// (settings.ts DEFAULT_SETTINGS), so it is READ from there: a re-typed 7/18 in the renderer
+// hands a user who moved their working hours the right window from timelineWindow and the
+// wrong one from every fallback path (issue #168). Core's own defaults are validated HH:MM,
+// so hhmmToMin never returns null here — the track edges only satisfy the type.
+const DEFAULT_WINDOW = {
+  startMin: hhmmToMin(DEFAULT_SETTINGS.workingHoursStart) ?? 0,
+  endMin: hhmmToMin(DEFAULT_SETTINGS.workingHoursEnd) ?? 1440,
+};
+
 /** The settings fields the timeline-viewport derivation reads (a stale/partial snapshot tolerated). */
 interface TimelineSettings {
   workingHoursStart?: string;
@@ -128,34 +198,25 @@ function timelineWindow(
   nowUtcIso: string,
   editedInterval?: { startUtc?: string; endUtc?: string | null } | null,
 ): { startMin: number; endMin: number } {
-  const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
-  const toMin = (hhmm: string | undefined, fallback: number) =>
-    HHMM.test(String(hhmm || ''))
-      ? Number(String(hhmm).slice(0, 2)) * 60 + Number(String(hhmm).slice(3, 5))
-      : fallback;
-  const localMin = (iso: string) => {
-    const d = new Date(iso);
-    return d.getHours() * 60 + d.getMinutes();
-  };
   const s = settings || {};
-  let start = toMin(s.workingHoursStart, 7 * 60);
-  let end = toMin(s.workingHoursEnd, 18 * 60);
+  let start = hhmmToMin(s.workingHoursStart) ?? DEFAULT_WINDOW.startMin;
+  let end = hhmmToMin(s.workingHoursEnd) ?? DEFAULT_WINDOW.endMin;
   if (end <= start) {
-    start = 7 * 60;
-    end = 18 * 60;
+    start = DEFAULT_WINDOW.startMin;
+    end = DEFAULT_WINDOW.endMin;
   }
   if (s.pickerWindowMode === 'around_now') {
     const hours =
       Number.isInteger(s.pickerAroundHours) && s.pickerAroundHours! >= 1 && s.pickerAroundHours! <= 24
         ? s.pickerAroundHours!
         : 8;
-    const nowMin = localMin(nowUtcIso);
+    const nowMin = localMinuteOfDay(nowUtcIso);
     start = nowMin - (hours * 60) / 2;
     end = nowMin + (hours * 60) / 2;
   }
   if (editedInterval && editedInterval.startUtc) {
-    const a = localMin(editedInterval.startUtc);
-    const b = editedInterval.endUtc ? localMin(editedInterval.endUtc) : a;
+    const a = localMinuteOfDay(editedInterval.startUtc);
+    const b = editedInterval.endUtc ? localMinuteOfDay(editedInterval.endUtc) : a;
     const span = end - start;
     const mid = (a + b) / 2;
     start = mid - span / 2;
@@ -168,9 +229,9 @@ function timelineWindow(
   let endMin = clamp(end);
   if (endMin <= startMin) {
     // Degenerate after clamping (should not happen off validated settings) — fall back to
-    // the documented working-hours default rather than a zero-height viewport.
-    startMin = 7 * 60;
-    endMin = 18 * 60;
+    // core's working-hours default rather than a zero-height viewport.
+    startMin = DEFAULT_WINDOW.startMin;
+    endMin = DEFAULT_WINDOW.endMin;
   }
   return { startMin, endMin };
 }
@@ -255,8 +316,12 @@ const SU = {
   lineFlags,
   friendlyHotkey,
   localInputValue,
+  localMinuteOfDay,
+  exactMinuteOfDay,
   timelineWindow,
   applyDateFormat,
+  errMessage,
+  escapeHtml,
   tagDiff,
   deriveView,
   ICON_SPRITE,
