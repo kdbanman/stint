@@ -35,10 +35,8 @@ export type RangePreset = 'today' | 'week' | 'last-week' | 'month' | 'last-month
 //
 // The plain-date → half-open-window rule (resolveDateRange) and its inverse
 // (utcWindowToDatePair) live in core, next to the resolveRange presets that share their
-// inclusive-end-day convention (issue #83 — GUI range resolution gets a core home). They
-// are re-exported here because this module is the GUI's report/export façade: main.ts's
-// listEntries handler and the saved-report rangeSpec conversions below route through it.
-export { resolveDateRange, utcWindowToDatePair };
+// inclusive-end-day convention (issue #83 — GUI range resolution gets a core home). Every
+// caller imports them straight from there; this module only consumes them below.
 
 /** What the renderer's Export buttons send over the `exportEntries` IPC channel. */
 export interface ExportRequest {
