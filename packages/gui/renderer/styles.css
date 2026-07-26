@@ -814,12 +814,16 @@ button:hover { background: var(--hover); }
    one that is, state by state, is the accent-handoff rule below). The fill is --accent-solid
    (tomato·11), never --accent: a white label reads 4.98:1 on the solid but fails the A01 floor on
    tomato·9 (design.html D04/D11 — why accent-solid exists). */
+/* Issue 154: the lift is the ladder's sub-card rung (--sh-chip), not a clay glow. D09 gives ONE
+   elevation ladder and the chip lift below it; the hand-rolled `0 1px 2px accent 35%` that used to
+   sit here was a sixth depth signal that also broke "depth, not tint" by colouring the shadow. Same
+   geometry, so the button still lifts off the card — the ladder's warm brown instead of the tint. */
 button.primary {
   background: var(--accent-solid);
   border-color: var(--accent-solid);
   color: white;
   font-weight: 590;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: var(--sh-chip);
 }
 button.primary:hover { background: color-mix(in srgb, var(--accent-solid) 88%, black); }
 
@@ -1874,7 +1878,9 @@ button.danger:hover { background: var(--danger-weak); }
 .stp-grip {
   position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: var(--r1);
   background: var(--paper); border: 1.5px solid var(--accent);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
+  /* Issue 154: the same clay glow as the primary button but at 30% — one effect at two strengths.
+     Both now name the ladder's chip rung; the accent stays where it belongs, on the border. */
+  box-shadow: var(--sh-chip);
   cursor: ns-resize; z-index: 7; touch-action: none;
 }
 .stp-tlabel {
@@ -2096,7 +2102,9 @@ body.popover { background: var(--canvas); margin: 0; }
   flex: none;
   transition: background 0.12s;
 }
-/* The knob keeps its 18px; 3px of top offset is what centres it in the 24px track. */
+/* The knob keeps its 18px; 3px of top offset is what centres it in the 24px track. Issue 154: its
+   lift was --sh-chip's exact geometry hand-written at DOUBLE the token's opacity, so it now names
+   the rung and lifts at the strength the ladder sets. */
 .set-toggle i {
   position: absolute;
   top: 3px;
@@ -2105,7 +2113,7 @@ body.popover { background: var(--canvas); margin: 0; }
   height: 18px;
   border-radius: 50%;
   background: var(--paper);
-  box-shadow: 0 1px 2px rgba(74, 52, 24, 0.25);
+  box-shadow: var(--sh-chip);
   transition: left 0.12s ease;
 }
 .set-toggle.on { background: var(--ink); }

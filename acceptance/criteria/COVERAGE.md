@@ -1752,7 +1752,18 @@ still declare a radius, so the closed list cannot rot into a permissive blob.
 The audit counted 504 pill-shaped elements that were neither pill nor tag,
 including the six-button date-range control sitting beside an 8px segment doing
 the same job. D14's second clause — that a pill's colour is semantic, never
-decorative — stays a rendered JUDGE call. The calendar entry's
+decorative — stays a rendered JUDGE call. The same shape covers D09's
+**elevation ladder** (issue #154): the census runs per comma-separated LAYER,
+and every layer that paints depth must NAME a `shadow.*` rung — the literal
+value of a rung is refused even though it is on the ladder, because a
+hand-copied shadow rots when the token moves exactly as D01 says a hex literal
+does. Layers that paint a boundary rather than depth (D13's focus ring, a
+keycap's 1px bottom edge, the hairlines drawn inset so a 24px target keeps its
+box) sit on a literal value-to-selectors table with the same mirror test. Four
+hand-rolled shadows had accumulated outside the ladder, two of them clay glows
+at 35% and 30% — one effect at two strengths — and one of them `--sh-chip`'s
+exact geometry at double the token's opacity, which is the drift a rendered
+check cannot see because it looks like the rung. The calendar entry's
 action
 buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being

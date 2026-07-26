@@ -1,6 +1,6 @@
 /**
- * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D13, D14, A01/A02, A04,
- * A06; transition PR #132, issues #137, #141, #152 and #153).
+ * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D13, D14, A01/A02,
+ * A04, A06; transition PR #132, issues #137, #141, #152, #153 and #154).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -45,6 +45,11 @@
  *      JUDGE and the off-trio values were a pending exemption question; #164 settled the question
  *      (nothing new is exempt) and #153's audit showed what the gap cost — 504 rendered elements
  *      pill-shaped, including a six-button segmented control.
+ *  10. D09 the elevation ladder — the same census over `box-shadow`, layer by layer: every layer
+ *      that paints depth names a `shadow.*` rung, and every layer that paints something ELSE (the
+ *      D13 focus ring, a hairline drawn as an inset, a keycap's bottom edge) sits on a literal
+ *      value→sites table. Four hand-rolled shadows had accumulated outside the ladder, two of them
+ *      accent-tinted at 35% and 30% — one effect at two strengths (issue #154).
  *
  * Deliberately out of scope: D14's SECOND clause — that a pill's colour is semantic (run / flag /
  * accent), never decorative. Which colours read as decorative on which pill is a rendered
@@ -962,5 +967,188 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
     expect(dead, 'an off-trio radius is licensed for a selector that no longer writes it').toEqual(
       [],
     );
+  });
+});
+
+// ---- the elevation ladder: one ladder, and nothing that only LOOKS like a rung (issue 154) ----
+// D09 gives one ladder — canvas → card → raised → popover → modal, plus the chip lift as the
+// sub-card rung — and says "depth is the only 'this is a layer' signal … never a tint or
+// decorative border". The §01 principle behind it is blunter: "A region rises by a soft shadow
+// alone, never a coloured or bordered box."
+//
+// Four shadows had been written by hand instead. Two were clay glows — the primary button at
+// `accent 35%` and the interval picker's drag grip at `accent 30%`: the same effect shipped at two
+// strengths for no stated reason, and a TINTED shadow at that, which is the thing D09's second
+// clause names. The switch knob wrote --sh-chip's EXACT geometry at double the token's opacity,
+// and that is the most instructive of the four — it looked like the rung, so nothing rendered ever
+// flagged it, and it would have drifted the moment the token moved. The mockups carried the same
+// drift plus a third grip opacity (18%) and a danger-tinted copy of the button glow.
+//
+// Direction, as with the censuses above: read what the CSS SAYS and hold all of it to the ladder.
+// The check runs per LAYER (a `box-shadow` is a comma-separated list) because the one legitimately
+// mixed site — the merge checkbox — writes a drawn boundary and a rung in the same declaration.
+//
+// A rung must be NAMED, not spelled out: --sh-chip's literal value is NOT accepted here even
+// though it is on the ladder. That is the whole lesson of the switch knob. A hand-copied rung is a
+// copy that rots when the token moves — exactly what D01 says of a hex literal — and reading it as
+// on-ladder would leave this guard blind to the one drift shape that has already happened once.
+
+describe('the elevation ladder (design.html D09 — issue 154)', () => {
+  /** The rungs, recomputed from design.tokens.json rather than transcribed — the same stance the
+   *  contrast block and the radius trio take. `none` is not a rung but the absence of one: the
+   *  canvas floor, which a day-block segment or the in-flow picker declares to opt out of a lift
+   *  it would otherwise inherit. */
+  const LADDER = new Set<string>([
+    'none',
+    ...Object.keys(tokens.shadow)
+      .filter((n) => !n.startsWith('$'))
+      .map((n) => `var(--sh-${n})`),
+  ]);
+
+  /** Layers that are not elevation at all, each paired with the selectors that may write it —
+   *  LITERAL and matched EXACTLY, the shape #153 settled on, so a new selector reaching for an
+   *  existing licence fails rather than inheriting it. Every row paints a BOUNDARY, not depth: no
+   *  offset and no blur means no light source, so D09 does not govern it, and the rule that does
+   *  is named per row. */
+  const NOT_ELEVATION: ReadonlyArray<readonly [layer: string, sites: ReadonlySet<string>]> = [
+    // D13's focus idiom — "accent border + the 3px ring". The ring is a property of its own, which
+    // the generator synthesizes, and the focus census above already owns which token may paint it;
+    // this row only records that a ring is not a rung.
+    [
+      'var(--ring)',
+      new Set([
+        '.field:focus',
+        'input:focus-visible, select:focus-visible, textarea:focus-visible',
+      ]),
+    ],
+    // The same ring geometry in the danger colour, on an invalid field. Mockup-only: the shipped
+    // renderer has no invalid-field paint, so this licence is spent in reports.html alone.
+    ['0 0 0 3px var(--danger-weak)', new Set(['.field.invalid'])],
+    // A keycap's bottom edge. Zero blur, zero spread, in the rule colour: a 1px LINE, drawn as a
+    // shadow only because a real border would change the box the hotkey field lays out in.
+    ['0 1px 0 var(--rule-strong)', new Set(['.set-hotkey', '.kbd'])],
+    // Hairline boundaries drawn INSET for the same reason — the merge checkbox keeps its 24px
+    // target (issue #148) by holding a transparent border and painting its 1.5px edge inside it,
+    // and the calendar's today-marker and the open-calendar button ring their box without moving
+    // anything. `.ev .ck:checked` writes this AND --sh-chip, which is why the census runs per
+    // layer rather than per declaration.
+    ['inset 0 0 0 1.5px var(--rule-strong)', new Set(['.ev .ck', '.ev .ck:checked', '.ev .ck.on'])],
+    ['inset 0 0 0 1px var(--accent)', new Set(['.stp-d.stp-today'])],
+    ['inset 0 0 0 1px var(--rule)', new Set(['.timefield .cal.on'])],
+  ];
+
+  /** Split a `box-shadow` value into its comma-separated layers, ignoring the commas inside
+   *  `rgba(...)` / `color-mix(...)`. A naive `.split(',')` would shred exactly the hand-rolled
+   *  values this census exists to catch, and every fragment would then fail for the wrong reason. */
+  const layers = (value: string): string[] => {
+    const out: string[] = [];
+    let depth = 0;
+    let current = '';
+    for (const ch of value) {
+      if (ch === '(') depth++;
+      else if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) {
+        out.push(current);
+        current = '';
+      } else current += ch;
+    }
+    out.push(current);
+    return out.map((l) => l.trim().replace(/\s+/g, ' ')).filter(Boolean);
+  };
+
+  /** NOT global: `.test()` on a /g regex carries `lastIndex` between calls and would skip every
+   *  other site. Only the longhand — `box-shadow` has no shorthand to hide inside. */
+  const SHADOW_DECL = /(?:^|[;{])\s*box-shadow\s*:\s*([^;}]+)/;
+
+  const shadowDeclarations = (): Array<{ where: string; site: string; value: string }> =>
+    styledSites().flatMap((s) =>
+      // group 1 is non-optional in the pattern, so a match guarantees it
+      [...s.declarations.matchAll(new RegExp(SHADOW_DECL, 'g'))].map((m) => ({
+        where: `${s.surface}: ${s.site}`,
+        site: s.site,
+        value: m[1]!.trim(),
+      })),
+    );
+
+  const licensed = (layer: string, site: string): boolean =>
+    NOT_ELEVATION.some(([value, sites]) => value === layer && sites.has(site));
+
+  it('every authored shadow layer, on every surface, is a ladder rung or a listed non-shadow', () => {
+    const declarations = shadowDeclarations();
+    // Guard-the-guard: 133 box-shadow declarations stand today across the eleven mockups,
+    // styles.css and the two renderer documents. The assertion below is an emptiness check, so a
+    // census that stopped matching would report no offenders and read green.
+    expect(
+      declarations.length,
+      'the shadow census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(100);
+    expect(
+      declarations.some((d) => d.where.startsWith('packages/gui/renderer/styles.css')),
+      'the SHIPPED renderer contributed no box-shadow — only the mockups were scanned',
+    ).toBe(true);
+    expect(
+      declarations.some((d) => d.where.startsWith('context/mockups/')),
+      'no mockup contributed a box-shadow — only the shipped renderer was scanned',
+    ).toBe(true);
+    // The layer splitter is the one piece of machinery here that can fail SILENTLY: a splitter
+    // that broke inside `rgba(…)` would hand every check fragments, and fragments match nothing on
+    // the ladder, so it would fail loudly — but one that stopped splitting at all would read a
+    // mixed declaration as a single unknown layer and, worse, could be "fixed" by licensing the
+    // whole string. Pin the behaviour on a value no surface writes.
+    expect(
+      layers('inset 0 0 0 1px rgba(1, 2, 3, .4), var(--sh-chip)'),
+      'the layer splitter broke a value at a comma inside a function',
+    ).toEqual(['inset 0 0 0 1px rgba(1, 2, 3, .4)', 'var(--sh-chip)']);
+    // The inline `style=` half of styledSites() is scanned here too — one box-shadow is authored
+    // that way today, design-system.html's chip swatch. Its reach is floored by the type-ramp test
+    // above, where enough inline declarations stand for a floor to mean something.
+
+    const offenders = declarations
+      .filter((d) => !layers(d.value).every((l) => LADDER.has(l) || licensed(l, d.site)))
+      .map((d) => `${d.where} → box-shadow: ${d.value}`);
+    expect(
+      offenders,
+      'D09 gives one elevation ladder; a shadow off it is a depth signal nobody declared',
+    ).toEqual([]);
+  });
+
+  it('every listed non-shadow still spends its licence (the lists stay earned)', () => {
+    // The mirror of the test above, and the reason the table cannot rot into a permissive blob: a
+    // row whose selector has stopped writing the layer it is licensed for is a licence nobody is
+    // using, sitting there ready to legalise whatever reclaims the name.
+    const spent = new Map<string, Set<string>>();
+    for (const d of shadowDeclarations()) {
+      const written = spent.get(d.site) ?? new Set<string>();
+      for (const l of layers(d.value)) written.add(l);
+      spent.set(d.site, written);
+    }
+    const dead = NOT_ELEVATION.flatMap(([value, sites]) =>
+      [...sites].filter((site) => !spent.get(site)?.has(value)).map((site) => `${site} → ${value}`),
+    );
+    expect(dead, 'a non-shadow layer is licensed for a selector that no longer writes it').toEqual(
+      [],
+    );
+  });
+
+  it('the ladder the guard reads is the ladder the generator emits', () => {
+    // LADDER is derived, which cuts both ways: a token RENAME would quietly retire a rung and
+    // leave every site naming the old one failing for a confusing reason, and a NEW `shadow.*`
+    // entry would license itself here before anything on any surface wrote it. Pin both ends —
+    // the rungs D09 names, spelled the way the generator spells them.
+    expect([...LADDER].sort()).toEqual([
+      'none',
+      'var(--sh-card)',
+      'var(--sh-chip)',
+      'var(--sh-modal)',
+      'var(--sh-pop)',
+      'var(--sh-raise)',
+      'var(--sh-win)',
+    ]);
+    for (const rung of [...LADDER].filter((r) => r !== 'none')) {
+      expect(
+        generatedBlock,
+        `${rung} is on the ladder but the generator emits no such property`,
+      ).toContain(`  ${rung.slice(4, -1)}:`);
+    }
   });
 });
