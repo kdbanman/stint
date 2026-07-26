@@ -1725,7 +1725,8 @@ browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
 (acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
-`FIELD_LABELS` + GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+`FIELD_LABELS` + `FIELD_CHROME` + GOLD `gui/test/design-guard.test.ts` are the
+whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
 out of the tab order and unwalked — the blind spot issue 135 fell through, where
 the Settings global-hotkey field swallowed Tab as a chord and stranded the four
@@ -1787,22 +1788,47 @@ placeholder, and a persistent VISIBLE element supplying it — through a
 settings rows use (`.report-lab` / `.set-k`), whose members are named in the
 justification so the population stays reviewable. Nothing caught this before
 because `design-guard.test.ts` scores tokens, contrast and spacing; label
-presence is a structural fact about the DRIVEN DOM. JUDGE `TARGET_SIZE`
-(`main-target-size.png` / `target-size-add-form.png`, issue 148) carries
-design.html **A03** — every interactive target is ≥24×24 CSS px or stands ≥24px
-clear of its nearest neighbour. Eight targets sat under the floor, three of them
-(the calendar's 16×16 corner select checkbox, the tag remover at 10×17, the
-picker's 31 day cells at 23.84px) with 0–2px of spacing to fall back on, and the
-sweep passed anyway for three reasons it now closes: it ROUNDED each box before
-comparing (23.84 read as 24), the remover was a `<b>` with a click listener and
-so matched no interactive selector at all, and the undersized controls live on
+presence is a structural fact about the DRIVEN DOM. JUDGE `FIELD_CHROME`
+(`field-chrome-search-focus.png`, issue 149) carries the REST of **D13** — one
+border (`rule-strong`), one radius (8px), one focus idiom — with the **D07**
+grid under a field's padding, read off the DRIVEN DOM. The toolbar search box
+painted TWO nested fields: the chrome sat on the `.search` `<span>` WRAPPING
+the input and nothing reset the input, so Chromium's UA border, square corners
+and off-grid `padding: 1px 2px` rendered a second field inside the designed one
+— and D13's focus idiom landed on that inner box, a square accent rectangle
+floating inside a rounded grey one. `#search`'s 1px paddings were the only
+off-grid padding values in the running app. The static half could not see it:
+`design-guard.test.ts` scores the 4px grid over the AUTHORED values in
+`styles.css`, and every authored value was on-grid; these came from the UA
+stylesheet. That is the limit of a source scan rather than a bug in it, and the
+case belongs to the driven-DOM half of design.html §08's split. The scene
+drives the same five views `FIELD_LABELS` does, over the same field population,
+and asks what each field LOOKS LIKE: one solid `--rule-strong` border of one
+width on all four sides, the same width every other field draws (agreement, not
+a pinned px literal — every compared value is resolved from the token layer at
+probe time, so this is a computed check of the rule rather than the CSS pin
+process.html §02 forbids), an `--r1` radius on all four corners, computed
+padding on the 4px grid — no exemptions, because the app really does paint
+every field the same — and then Tabs onto `#search` to prove the accent border
+and the 3px ring resolve on the element that HOLDS focus, its wrapper painting
+nothing. That second fact is what a wrapper-styled field can never satisfy, and
+is why the fix moved the chrome onto the input rather than resetting the input
+and leaving the wrapper as the box. JUDGE `TARGET_SIZE` (`main-target-size.png`
+/ `target-size-add-form.png`, issue 148) carries design.html **A03** — every
+interactive target is ≥24×24 CSS px or stands ≥24px clear of its nearest
+neighbour. Eight targets sat under the floor, three of them (the calendar's
+16×16 corner select checkbox, the tag remover at 10×17, the picker's 31 day
+cells at 23.84px) with 0–2px of spacing to fall back on, and the sweep passed
+anyway for three reasons it now closes: it ROUNDED each box before comparing
+(23.84 read as 24), the remover was a `<b>` with a click listener and so
+matched no interactive selector at all, and the undersized controls live on
 transient surfaces the five-views-at-rest route never opened. The scene drives
 nine surfaces (the five views, the add form, the unified editor, the Timer
-start-details disclosure, the Reports builder, the popover), compares raw CSS px,
-measures a `<label>`-wrapped checkbox as its LABEL — the whole label is what a
-pointer aims at — and asserts the three named elements are PRESENT in the swept
-set, so a remover that regresses to bare prose fails here as well as at the
-keyboard. No new IPC channel (pure renderer), so
+start-details disclosure, the Reports builder, the popover), compares raw CSS
+px, measures a `<label>`-wrapped checkbox as its LABEL — the whole label is
+what a pointer aims at — and asserts the three named elements are PRESENT in
+the swept set, so a remover that regresses to bare prose fails here as well as
+at the keyboard. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
