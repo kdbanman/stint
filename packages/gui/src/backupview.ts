@@ -2,10 +2,8 @@
  * The GUI's backups plumbing (PRD §20 R04/R05, §17 R12) — Electron-free so it is unit-testable
  * without a main process, mirroring favorites.ts/reportview.ts. All backup LOGIC lives in
  * @stint/core (store.listBackups / backupNow / restoreFromBackup over the file-level backup
- * module); these are the pure pieces the Settings → Backups IPC handlers wrap: project a core
- * BackupInfo to the renderer-safe view shape (no core import in the page), list the backups the
- * restore picker paints, format a row for display, and resolve the restore selection (a chosen
- * backup name, or the newest when the user asks for "latest") to the name core restores by.
+ * module); these are the pure pieces the Settings → Backups IPC handlers wrap, projecting core
+ * shapes to renderer-safe views so the page itself never imports core.
  */
 import type { Store, BackupInfo } from '@stint/core';
 import type { BackupInfoView } from './ipc.js';
