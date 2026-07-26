@@ -1591,11 +1591,15 @@ describe('canvas is a backdrop, never a shipped surface (design.html D04 — iss
     // ban is only honest while the token still has the job it was banned FROM the app in favour
     // of. If the mockups stopped painting canvas, `canvas` would be a token nothing spends, and
     // the right change would be to retire it from design.tokens.json rather than to keep a rule
-    // about it. It is also the blindness floor for the test above — eleven body backdrops.
-    const painted = canvasSites();
+    // about it. It is also the blindness floor for the test above — eleven body backdrops, so a
+    // census that had stopped reading declarations shows up here rather than as an empty ban.
+    const painted = new Set(canvasSites().map((s) => s.surface));
+    const silent = mockupNames
+      .map((f) => `context/mockups/${f}`)
+      .filter((name) => !painted.has(name));
     expect(
-      painted.map((s) => s.surface).sort(),
-      'the mockups no longer paint the backdrop — canvas is now a token with no job at all',
-    ).toEqual(mockupNames.map((f) => `context/mockups/${f}`));
+      silent,
+      'a mockup stopped painting the backdrop — canvas is drifting toward a token with no job',
+    ).toEqual([]);
   });
 });
