@@ -329,7 +329,9 @@ unified entry form's edit mode + footer two-step Delete), BDD `features/reachabl
 and `remove`→`tt rm` (`parity-matrix.json`). **R2 GUI split affordance** (a
 closed entry exposes a Split control; the open/running entry does not): JUDGE
 `SPLIT_AFFORDANCE` (`main-split.png`), parity `split`→`tt split`
-(`parity-matrix.json`). Split is thus proven on all three surfaces — BDD core+tt
+(`parity-matrix.json`); where that picker RENDERS is JUDGE
+`INLINE_GATE_CONTAINMENT` (`main-inline-gate.png`, detailed in the §12 R13 row).
+Split is thus proven on all three surfaces — BDD core+tt
 round-trip (split-then-merge restores the original span) and JUDGE for the
 renderer affordance. **R3 GUI merge** (multi-select closed entries → a Merge
 action; disagreeing client/project/billable raises a conflict prompt that picks
@@ -1651,6 +1653,20 @@ over the surface-neutral BDD `features/overlap_and_editing.feature` "Deleting an
 entry without confirmation is refused". No new IPC channel is added for the gate (`remove` /
 `archiveClient` / `archiveProject` already exist), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are intentionally unchanged.
+WHERE the gate renders is proven too (issue #146, design.html D09): a gate armed
+from a CALENDAR event — the delete confirm or the §06 R2 split picker — is a
+LAYER over the calendar, not content of the ~124px day column its button sat in.
+Laid out in flow both escaped that column with no surface at all (the split
+picker measured 348px against a 124px column and ran 16px off the WINDOW's left
+edge, transparent, 0px radius, no shadow), so `placeInlineGate`
+(`gui/renderer/app.js`) promotes a calendar-armed gate to the popover-rung
+`.cal-gate` layer and clamps its box inside the calendar's visible region, while
+gates armed elsewhere (the unified form footer, the Clients rows, the Reports
+builder) stay in flow inside surfaces that already fit them. JUDGE
+`INLINE_GATE_CONTAINMENT` (`main-inline-gate.png`) arms both gates through the
+real hover affordance on the week's FIRST and LAST day columns — the only places
+the escape is visible — and scores each one inside the calendar's visible box
+with an opaque `--paper` fill, a radius and a shadow.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — light/dark, system type and accent-on-primary already shipped, the
