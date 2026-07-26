@@ -18,7 +18,7 @@
     {
       "item": "KEYBOARD_FOCUS",
       "pass": true,
-      "justification": "Tab-walk reached 20/20 controls (empty) and 22/22 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "justification": "Tab-walk reached 20/20 controls (empty) and 21/21 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
@@ -256,6 +256,12 @@
       "screenshot": "main-calendar-short.png"
     },
     {
+      "item": "CALENDAR_KEYBOARD",
+      "pass": true,
+      "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 71 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
+      "screenshot": "calendar-keyboard-focus.png"
+    },
+    {
       "item": "LIVE_FILTER",
       "pass": true,
       "justification": "live filter: list 7→2→7 rows, report total 5.00h→3.50h→5.00h (week-bounded idle, range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
@@ -312,7 +318,7 @@
     {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 105 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
+      "justification": "A03 sweep over 106 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
       "screenshot": "main-target-size.png"
     },
     {

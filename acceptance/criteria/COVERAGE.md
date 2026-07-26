@@ -1483,7 +1483,12 @@ asserts its own **fixture realism**: the three sub-75-minute blocks must
 genuinely lay out more content than they have height for, so reseeding the
 scene with comfortable entries reddens it rather than quietly greening it — the
 audit's retracted first kill of this finding was taken on a 132px block, very
-nearly the longest plausible entry. **R17 Exact time entry (NEW, `core` — the
+nearly the longest plausible entry. **How the block is REACHED from the
+keyboard** — one tab stop per entry, its four hover-revealed controls on a
+roving ← / → focus, and none of them focusable while invisible — is JUDGE
+`CALENDAR_KEYBOARD` (`calendar-keyboard-focus.png` over the same three-week
+`denseCalendarState` , issue 140); the model and its guard are detailed in the
+§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry (NEW, `core` — the
 overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
 expander** — raw start/stop **text** fields beneath the inline interval picker
 (§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT
@@ -1638,9 +1643,11 @@ selector a browser can match, and the A02 floors recomputed from
 design.html's text roles, and each `--accent` site — a 3:1 colour the running
 clocks borrow — scored against the size and weight that site resolves to, so
 A01 picks the right floor instead of the guard scoring only pairs someone
-remembered to list. The entry-row action
-buttons stay native `<button>` s (Enter/Space-activatable, tab-reachable for
-free), `index.html` /`popover.html` give `#toggle` an `aria-label` +
+remembered to list. The calendar entry's action
+buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
+are `tabindex="-1"` and reached from the block that holds them rather than being
+top-level stops of their own (issue 140, the roving focus below),
+`index.html` /`popover.html` give `#toggle` an `aria-label` +
 `aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
 keep `aria-pressed` /`aria-label` current on every render so the running/idle
 state is announced, with each dynamic action button carrying a discernible
@@ -1660,7 +1667,41 @@ the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). No new IPC channel (pure renderer), so
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). `KEYBOARD_FOCUS` also walks
+the default view at ONE entry of data, which is the second blind spot: it scores
+the ring on every stop but never asks what the stops COST, so the Entries
+calendar shipped four hover-revealed controls per entry as four top-level tab
+stops — ~200 of them over three weeks of work, fifty of which were the merge
+checkbox (`.ev .ck`), carrying `:hover` / `:checked` / `.on` opacity clauses and
+no focus clause at all; `opacity` takes the outline with it, so a focused
+checkbox painted neither the 16×16 control nor its ring (issue 140, A04's "never
+fully obscured"). The repaired model is a ROVING FOCUS
+in `gui/renderer/app.js` (`calEvent` / `blockKeys`): the block is one tab stop —
+a focusable `role="group"` labelled with the entry it stands for — its four
+controls are `tabindex="-1"` and are reached with ← / → from it, Escape returns
+to the block, Enter opens the unified editor (the keyboard twin of the
+click-anywhere-on-the-body affordance), and `styles.css` extends the
+`.ev:focus-within` opacity clause `.op-btn` already had to `.ck`, so a focused
+control is never at zero opacity and arriving at an entry is also how a keyboard
+user learns the controls are there. Focus follows the two inline gates rather
+than being stranded when the button that opened them is replaced —
+`confirmInline` hands it to CANCEL, not the destructive confirm (Enter fires a
+button on keydown, so focusing the confirm would let one held Enter arm and then
+commit on its own auto-repeat), `openSplitForm` hands it to the instant field,
+and either Cancel hands it back. JUDGE `CALENDAR_KEYBOARD`
+(`packages/gui/judge/`, `calendar-keyboard-focus.png`) is the density guard
+`KEYBOARD_FOCUS` cannot be: over the three-week `denseCalendarState` (51 blocks
+holding 202 controls — asserted, so reseeding it comfortable reddens the scene
+rather than greening it) one Tab cycle walks the whole window in 71 stops, 51 of
+them in the calendar and every one of those a block; every stop of that cycle
+holds a non-zero EFFECTIVE opacity (its own multiplied up its ancestor chain)
+and a non-`none` outline while focused; and real ← / → presses walk a sample
+block's four controls in DOM order, Escape lands back on the block, and Tab
+leaves for the next block. Both halves were verified to fail without the fix
+rather than taken on trust: against `origin/main` 's renderer the same walk
+reports 202 calendar stops, none of them blocks, and 50 stops focused at zero
+opacity — all of them the checkbox; with only the CSS clause reverted, the
+roving probe reads the focused checkbox at `opacity: 0`. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the

@@ -133,7 +133,12 @@
   .ev .bc{display:block;font-size:11px;color:var(--muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ev .bt{display:block;font-size:11px;color:var(--muted);margin-top:4px;font-variant-numeric:tabular-nums}
   /* Hover is a lift — never geometry (design.html §4). The ops chip overlays the block's first
-     line; it reserves no flow space, so the text under the pointer holds still. */
+     line; it reserves no flow space, so the text under the pointer holds still.
+     `.hov` is also the FOCUSED state (issue 140): the block is the calendar's one tab stop per
+     entry, and its checkbox + ops open on `:focus-within` exactly as they do on hover, so the
+     four controls a keyboard reaches with the arrow keys are never at zero opacity (A04). The
+     block comes forward for the same reason a hovered one does — the focus outline is drawn
+     outside it, and a neighbour later in the column would otherwise paint over the ring. */
   .ev.hov{box-shadow:var(--sh-raise);z-index:3}
   /* design.html D12 (issue #144): a chosen block LIFTS, it does not turn accent. The block rests
      on the ladder's lowest rung and hovers at --sh-raise, so selection takes the next rung up —
