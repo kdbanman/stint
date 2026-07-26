@@ -180,7 +180,12 @@ describe('liveEditStripPatch — the strip seed-vs-field diff, byte-compared (§
   // Second-granular seeds: the field seeds carry seconds, so the untouched-field rule holds to the
   // second, not the whole minute. startUtc is the stored instant; seedStart is the localInputValue
   // string renderLiveEdit put in #le-start; start is the field's current text.
-  const SEED_START = '2026-06-24T09:07:33'; // localInputValue string (seconds kept)
+  //
+  // This literal MUST stay byte-identical to what SU.localInputValue produces — it is the whole
+  // point of the byte gate. It moved from '2026-06-24T09:07:33' to the space spelling with issue
+  // #159 (the field shows the string a user retypes, not a wire instant); renderer-bundle.test.ts
+  // pins the producing side of that same string so the two can never drift apart silently.
+  const SEED_START = '2026-06-24 09:07:33'; // localInputValue string (seconds always rendered)
   const STORED_ISO = '2026-06-24T09:07:33.000Z'; // the exact stored instant (UTC test env)
   const stripInput = (over: Partial<LiveEditStripInput> = {}): LiveEditStripInput => ({
     seedDescription: 'auth refactor',
@@ -211,8 +216,8 @@ describe('liveEditStripPatch — the strip seed-vs-field diff, byte-compared (§
     // field against its seed skips it. Desc-only edit ⇒ only description rides.
     const patch = liveEditStripPatch(
       stripInput({
-        seedStart: '2024-11-03T01:30:00',
-        start: '2024-11-03T01:30:00', // untouched
+        seedStart: '2024-11-03 01:30:00',
+        start: '2024-11-03 01:30:00', // untouched
         startUtc: '2024-11-03T07:30:00.000Z', // the real stored instant, an hour off the reparse
         description: 'note',
         seedDescription: 'auth refactor',
@@ -223,13 +228,15 @@ describe('liveEditStripPatch — the strip seed-vs-field diff, byte-compared (§
   });
 
   it('a genuinely edited start rides along (byte-different, parseable, a new instant)', () => {
-    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T08:30:00' }));
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24 08:30:00' }));
     expect(patch.startUtc).toBe('2026-06-24T08:30:00.000Z');
     expect('endUtc' in patch).toBe(false); // still never closes the open row
   });
 
   it('a half-typed unparseable start contributes nothing (the NaN guard)', () => {
-    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T08:' }));
+    // Half-typed in the SPACE spelling — the case the engine's legacy parser would happily read
+    // as 08:00 and commit mid-keystroke (issue #159); parseLocalInput refuses it outright.
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24 08:' }));
     expect('startUtc' in patch).toBe(false);
   });
 
@@ -237,8 +244,17 @@ describe('liveEditStripPatch — the strip seed-vs-field diff, byte-compared (§
     // An equivalent representation of the seed (a trailing .000 on the seconds) differs byte-wise
     // from the seed, so it passes the byte gate and is parsed — but it lands on the SAME stored
     // instant, so the double-guard drops it and no startUtc key is emitted.
-    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T09:07:33.000' }));
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24 09:07:33.000' }));
     expect('startUtc' in patch).toBe(false);
+  });
+
+  it('a start retyped in the OLD `T` spelling is still read (issue #159 back-compat)', () => {
+    // #159 changed what the field RENDERS, not what it accepts. Someone with the `T` form in
+    // muscle memory (or pasted from `tt`) types it over the seed: byte-different, so it is
+    // parsed — and it must resolve to the wall clock it names, not be dropped as unreadable.
+    const patch = liveEditStripPatch(stripInput({ start: '2026-06-24T08:30:00' }));
+    expect(patch.startUtc).toBe('2026-06-24T08:30:00.000Z');
+    expect('endUtc' in patch).toBe(false);
   });
 
   it('the billable toggle rides the same patch, still no endUtc', () => {

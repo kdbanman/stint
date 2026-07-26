@@ -1995,7 +1995,8 @@ const RECIPES = {
       await page.waitForFunction(() => {
         const from = document.querySelector('.edit-form .edit-start')?.value ?? '';
         const to = document.querySelector('.edit-form .edit-end')?.value ?? '';
-        return /:33$/.test(from) && to.length === 16 && Number(to.slice(14, 16)) % 5 === 0;
+        // 19 chars: the field renders YYYY-MM-DD HH:mm:ss, seconds always (issue #159).
+        return /:33$/.test(from) && to.length === 19 && Number(to.slice(14, 16)) % 5 === 0;
       });
       await wait(page, 1600);
     },
