@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -819,6 +819,11 @@ async function sceneCrossViewFreshness(browser) {
 // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
 // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
 // instants land on a deterministic local day/track geometry.
+// A second page over the same card scores the ATTRIBUTE-VS-ADVISORY split (design.html D04/D14,
+// issue #160): with an open entry that is billable AND slept through, the card's attribute row
+// carries both roles at once, and `slept` must take the whole --flag warn triple while `billable`
+// — the normal state of nearly every entry — stays the quiet --muted label, with no pill chrome
+// and no part of that triple. Scored as one pair, because the bug guarded painted BOTH amber.
 async function sceneTimerView(browser) {
   {
     const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
@@ -975,15 +980,84 @@ async function sceneTimerView(browser) {
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
       edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
+    await page.close();
+
+    // design.html D04/D14 (issue #160) — AN ATTRIBUTE IS NOT AN ADVISORY. The same running card,
+    // over a fixture whose open entry is billable AND slept through, so both kinds of thing paint
+    // in the one attribute row and the distinction itself is what gets measured. `slept` is the
+    // advisory and takes the whole --flag warn triple; `billable` — the normal, overwhelmingly
+    // common state of a tracked entry — is the quiet neutral --muted label, with no pill chrome
+    // and none of the flag triple. Both are worded (D05: colour is never the only signal), and
+    // neither is the accent, which stays on the running clock/state and Stop (§15). Scored as one
+    // pair on purpose: the shipped bug painted BOTH labels amber, and every check that reads one
+    // colour in isolation passes on exactly that — amber `billable` is a perfectly good warn pill.
+    const palettePage = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await palettePage.clock.install({ time: new Date(JUDGE_NOW) });
+    await palettePage.clock.pauseAt(new Date(JUDGE_NOW));
+    await palettePage.addInitScript(initScript(JSON.stringify(timerViewSleptRunningState()), {}));
+    await palettePage.goto(fileUrl('index.html'));
+    await palettePage.click('.nav-item[data-view="timer"]');
+    await palettePage.waitForSelector('[data-view="timer"]:not([hidden]) #timer-flags .flag', { state: 'attached' });
+    await noMotion(palettePage); // a paint assertion reads the cascade, never a mid-transition frame
+    await palettePage.screenshot({ path: join(EVIDENCE, 'timer-card-attr-vs-flag.png'), fullPage: true });
+    const paint = await palettePage.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const row = document.querySelector('#timer-flags');
+      // Selected by ROLE, not by position: the bug was the two roles sharing one class, so a
+      // probe that read "the first label in the row" could not have told them apart at all.
+      const attr = row?.querySelector('.attr') ?? null;
+      const flag = row?.querySelector('.flag') ?? null;
+      const csA = attr ? getComputedStyle(attr) : null;
+      const csF = flag ? getComputedStyle(flag) : null;
+      return {
+        attrShown: visible(attr),
+        flagShown: visible(flag),
+        attrText: attr ? attr.textContent.trim() : '',
+        flagText: flag ? flag.textContent.trim() : '',
+        attrColor: csA ? csA.color : null,
+        attrBg: csA ? csA.backgroundColor : null,
+        attrBorderWidth: csA ? csA.borderTopWidth : null,
+        attrRadius: csA ? csA.borderTopLeftRadius : null,
+        flagPaint: csF ? [csF.color, csF.backgroundColor, csF.borderTopColor] : null,
+        flagRadius: csF ? csF.borderTopLeftRadius : null,
+        flagTriple: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+        muted: rgbOf('--muted'),
+        accent: rgbOf('--accent'),
+        accentSolid: rgbOf('--accent-solid'),
+        accentWeak: rgbOf('--accent-weak'),
+      };
+    });
+    await palettePage.close();
+    const paletteOk =
+      // Both roles reach the rendered card, each said in a word.
+      paint.attrShown &&
+      paint.flagShown &&
+      paint.attrText === 'billable' &&
+      paint.flagText === 'slept' &&
+      // The ADVISORY keeps the warn palette whole — text, fill and rule — and its pill shape.
+      !!paint.flagPaint &&
+      paint.flagPaint.every((v, i) => v === paint.flagTriple[i]) &&
+      paint.flagRadius === '999px' &&
+      // The ATTRIBUTE is the neutral text role, and carries NO part of the warn chrome: not its
+      // text colour, not its fill (transparent, so not --flag-bg), not a rule, not a pill.
+      paint.attrColor === paint.muted &&
+      paint.attrColor !== paint.flagTriple[0] &&
+      paint.attrBg === 'rgba(0, 0, 0, 0)' &&
+      paint.attrBorderWidth === '0px' &&
+      paint.attrRadius === '0px' &&
+      // …nor is it the accent fill the function's own comment was already watching for (§15).
+      paint.attrColor !== paint.accent &&
+      paint.attrColor !== paint.accentSolid &&
+      paint.attrBg !== paint.accentWeak;
     record(
       'TIMER_VIEW',
-      ok,
+      ok && paletteOk,
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
         `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
-        `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'})`,
+        `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'}); ` +
+        `attribute-vs-advisory paint ${JSON.stringify(paint)}`,
       'timer-view-full.png',
     );
-    await page.close();
   }
 }
 
@@ -2678,6 +2752,139 @@ async function sceneSplitAffordance(browser) {
   });
 }
 
+// INLINE_GATE_CONTAINMENT — design.html D09 (issue #146): a transient gate armed FROM a calendar
+// event — the split picker (.split-at) and the two-step delete confirm (.confirm) — is a LAYER
+// OVER the calendar, not content of the 124px day column whose button armed it. Both shipped laid
+// out IN FLOW inside that column and with no surface of their own: the split picker measured 348px
+// against a 124px column, running 264px past the column and, in the leftmost one, 16px off the left
+// edge of the WINDOW, over a transparent background with a 0px radius and no shadow — a raised
+// region reading as loose text floating over the entries.
+//
+// Driven through the REAL hover affordance on the two EDGE columns (edgeColumnState pins an entry
+// to the week's first and last), never asserted off the stylesheet, so the check survives a
+// restyle: whatever the gates are made of, each must (a) sit wholly inside the calendar as the
+// user can see it — the scroller's visible box clipped to the window — and (b) resolve to a real
+// surface on the elevation ladder: an opaque `--paper` fill, a radius, and a shadow. Both edges
+// are probed because a clamp that only pulls the left edge in still spills off the right.
+//
+// (c) is the interaction with issue #145, which pinned the two axes INSIDE this scrollport: the
+// day-header band (`.dh`) holds its top edge and the hour gutter (`.gut`) its left, both on opaque
+// paper and both outranking the event chrome the gate is mounted in (`.ops` is z-5, the bands 8 and
+// 9). Landing in the scrollport is therefore no longer enough to be SEEN — a gate under either band
+// is as invisible as one off the window. So each block is scrolled hard into the scrollport's
+// TOP-LEFT CORNER before the gate is armed, which is the worst case for both bands at once, and the
+// gate is then required to clear their rects AND to hit-test as the topmost element at its own
+// corners — the restyle-proof form of "nothing is painted over it".
+async function sceneInlineGateContainment(browser) {
+  await withPage(browser, edgeColumnState(), 'index.html', async (page) => {
+    // The gate's chrome is asserted on COMPUTED colour, and D10 fades background/shadow over
+    // 120ms — with the clock pinned, a probe would otherwise read a frozen mid-fade frame.
+    await noMotion(page);
+    const arm = async (row, act, gate) => {
+      // The edge columns are off the default horizontal scroll, and the entries sit on the 24h
+      // track — reach them the way a user does before hovering.
+      await page.locator(row).scrollIntoViewIfNeeded();
+      // Hover the block's own TOP STRIP rather than its centre: the first column's entry carries
+      // an overlapping neighbour whose block owns the centre, and Playwright aims at the centre.
+      // This is also where a user reaches for the ops chip, which sits on that same first line.
+      await page.hover(row, { position: { x: 40, y: 5 } });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="${act}"]`, { state: 'attached' });
+      await page.click(`${row} [data-act="${act}"]`);
+      await page.waitForSelector(`${row} ${gate}`, { state: 'attached' });
+      return page.evaluate(([r, g]) => {
+        const el = document.querySelector(`${r} ${g}`);
+        const strip = el.closest('.cstrip');
+        const box = strip.getBoundingClientRect();
+        // The calendar AS SEEN: the scroller's visible box (border box less scrollbar gutters),
+        // clipped to the window — the region the gate has to land in to be whole and on screen.
+        const view = {
+          left: Math.max(box.left, 0),
+          top: Math.max(box.top, 0),
+          right: Math.min(box.left + strip.clientWidth, document.documentElement.clientWidth),
+          bottom: Math.min(box.top + strip.clientHeight, document.documentElement.clientHeight),
+        };
+        const rect = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        // rgb() with no alpha component is opaque; rgba(...) carries the alpha the defect had at 0.
+        const alpha = Number(/rgba?\(([^)]*)\)/.exec(cs.backgroundColor)?.[1].split(',')[3] ?? 1);
+        // The two STICKY axes issue #145 pinned inside this scrollport. Both are opaque and both
+        // outrank the gate's own chrome, so overlapping either one hides the gate behind it.
+        const overlaps = (a) => {
+          if (!a) return false;
+          const b = a.getBoundingClientRect();
+          return rect.left < b.right - 0.5 && rect.right > b.left + 0.5 &&
+            rect.top < b.bottom - 0.5 && rect.bottom > b.top + 0.5;
+        };
+        // …and the fact that geometry only stands in for: everywhere across the gate, the element
+        // the browser actually hits belongs to the gate. Survives any restyle of either band, and
+        // catches an occluder the rect test cannot — a layer that overlaps no BAND but is still
+        // punched through by chrome drawn above it (the block's own corner checkbox is z-6).
+        // Sampled on a grid inset past the layer's own corner radius: a rounded corner is not part
+        // of the element, so probing the literal corners would read "occluded" on every pass.
+        const pad = Math.max(14, parseFloat(cs.borderTopLeftRadius) + 2);
+        const grid = [];
+        for (let i = 0; i <= 4; i++) {
+          for (let j = 0; j <= 2; j++) {
+            grid.push([
+              rect.left + pad + ((rect.width - 2 * pad) * i) / 4,
+              rect.top + pad + ((rect.height - 2 * pad) * j) / 2,
+            ]);
+          }
+        }
+        // Plus the operative half: every control the gate exists to offer must hit-test to ITSELF
+        // at its own centre — the property a user has when nothing is painted over the gate.
+        const controls = [...el.querySelectorAll('button, input')];
+        return {
+          inside:
+            rect.left >= view.left - 0.5 &&
+            rect.right <= view.right + 0.5 &&
+            rect.top >= view.top - 0.5 &&
+            rect.bottom <= view.bottom + 0.5,
+          escapes: {
+            left: Math.round(Math.min(0, rect.left - view.left)),
+            right: Math.round(Math.max(0, rect.right - view.right)),
+          },
+          clearsStickyAxes: !overlaps(strip.querySelector('.dh')) && !overlaps(strip.querySelector('.gut')),
+          topmost: grid.every(([x, y]) => {
+            const hit = document.elementFromPoint(Math.round(x), Math.round(y));
+            return !!hit && (hit === el || el.contains(hit));
+          }),
+          controlsReachable:
+            controls.length > 0 &&
+            controls.every((c) => {
+              const b = c.getBoundingClientRect();
+              const hit = document.elementFromPoint(Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2));
+              return !!hit && (hit === c || c.contains(hit));
+            }),
+          opaque: alpha > 0,
+          paper: cs.backgroundColor === window.__probe.rgbOf('--paper'),
+          raised: cs.boxShadow !== 'none',
+          rounded: cs.borderTopLeftRadius !== '0px',
+          // Reported, not gated: the gate is far wider than the column it sprang from, which is
+          // WHY it has to be a positioned layer. A future redesign may legitimately shrink it.
+          widthVsColumn: `${Math.round(rect.width)}/${Math.round(el.closest('.dcol').getBoundingClientRect().width)}`,
+        };
+      }, [row, gate]);
+    };
+
+    // (a) the split picker on the FIRST day column — the case the issue measured off the window.
+    const split = await arm('.entry[data-id="40"]', 'split', '.split-at');
+    await page.screenshot({ path: join(EVIDENCE, 'main-inline-gate.png'), fullPage: true });
+    // (b) the delete confirm on the LAST day column — the mirror a left-only clamp would miss.
+    const confirm = await arm('.entry[data-id="41"]', 'delete', '.confirm');
+
+    const contained = split.inside && confirm.inside;
+    const chromed = [split, confirm].every((g) => g.opaque && g.paper && g.raised && g.rounded);
+    const unoccluded = [split, confirm].every((g) => g.clearsStickyAxes && g.topmost && g.controlsReachable);
+    record(
+      'INLINE_GATE_CONTAINMENT',
+      contained && chromed && unoccluded,
+      `split picker (first column) ${JSON.stringify(split)}; delete confirm (last column) ${JSON.stringify(confirm)}`,
+      'main-inline-gate.png',
+    );
+  });
+}
+
 // WRITE_REJECTION_FEEDBACK — §12 R21: a refused core write is surfaced WHERE it was attempted,
 // never silently swallowed. Driving the REAL renderer over a STRICT-rejecting mock (the
 // strict-listEntries precedent, issue #55 — `rejectWrites` makes edit/split/rename/toggle reject
@@ -3564,6 +3771,65 @@ async function sceneClientsView(browser) {
       },
       { emptyRefData: true },
     );
+
+    // FOCUS ORDER FOLLOWS THE VISUAL ORDER (design.html A04, the craft checklist's §4 keyboard
+    // clause) — the Clients view is the one surface where the design audit reported it broken
+    // (issue 161: "the tag rows are visited bottom-first", 976,763 → 938,623). The DOM order was
+    // never wrong; the MEASUREMENT was. The audit read each focus stop's VIEWPORT-relative y,
+    // and Tabbing to a control below the fold scrolls it into view, so the next stop's viewport y
+    // is SMALLER than the previous one's even though it sits lower on the page. Reproduced on this
+    // branch: at a viewport short enough to scroll, the Clients walk reads 398 → 210 viewport-
+    // relative and 398 → 444 page-relative, from the same two adjacent, correctly ordered rows.
+    // So this is the guard the finding was really asking for, written so it cannot repeat the
+    // mistake: each stop is measured RELATIVE TO the #clients section's own box in the same frame,
+    // which a scroll moves together with the control, and asserted to advance in READING order —
+    // down the page, and left-to-right within a row. Walked with "show archived" ON, the view's
+    // one real ordering hazard: archived clients and archived tags are appended in a SECOND pass
+    // after every active row, so a regression that painted them anywhere but last would break the
+    // order here first.
+    const focusOrder = await withPage(browser, clientsState(), 'index.html', async (fp) => {
+      await fp.click('.nav-item[data-view="clients"]');
+      await fp.waitForSelector('#clients:not([hidden]) .client .project', { state: 'attached' });
+      await fp.click('#show-archived');
+      await fp.waitForSelector('#clients .client.archived[data-id="3"]', { state: 'attached' });
+      await fp.waitForSelector('#tags-list .tag-row.archived[data-id="3"]', { state: 'attached' });
+      // Enter the view at its first control and Tab until focus leaves it again.
+      await fp.focus('#show-archived');
+      const stops = [];
+      for (let i = 0; i < 200; i++) {
+        const stop = await fp.evaluate(() => {
+          const el = document.activeElement;
+          const view = document.querySelector('#clients');
+          if (!el || !view || !view.contains(el)) return null;
+          const r = el.getBoundingClientRect();
+          const v = view.getBoundingClientRect();
+          const name = (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim();
+          return {
+            x: Math.round(r.left - v.left + r.width / 2),
+            y: Math.round(r.top - v.top + r.height / 2),
+            name: `${el.dataset.act || el.id || (typeof el.className === 'string' ? el.className : el.tagName.toLowerCase())}[${name.slice(0, 20)}]`,
+          };
+        });
+        if (!stop) break;
+        stops.push(stop);
+        await fp.keyboard.press('Tab');
+      }
+      // Two stops share a visual ROW when their centres sit within 8px — comfortably under the
+      // ~47px pitch between rows, and comfortably over the few px by which controls of different
+      // heights miscentre against each other. A row's controls must then run left-to-right; any
+      // other pair must run down the page.
+      const SAME_ROW = 8;
+      const backwards = [];
+      for (let i = 1; i < stops.length; i++) {
+        const [a, b] = [stops[i - 1], stops[i]];
+        const sameRow = Math.abs(b.y - a.y) <= SAME_ROW;
+        if (sameRow ? b.x < a.x : b.y < a.y) {
+          backwards.push(`${a.name}@(${a.x},${a.y}) → ${b.name}@(${b.x},${b.y})`);
+        }
+      }
+      return { stopCount: stops.length, backwards, firstStop: stops[0]?.name ?? null, lastStop: stops.at(-1)?.name ?? null };
+    });
+
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -3610,7 +3876,13 @@ async function sceneClientsView(browser) {
       /No clients yet/.test(refEmpty.clientsText) &&
       /tt client add/.test(refEmpty.clientsText) &&
       /No tags yet/.test(refEmpty.tagsText) &&
-      /tt tag add/.test(refEmpty.tagsText);
+      /tt tag add/.test(refEmpty.tagsText) &&
+      // …and the FOCUS-ORDER fact (issue 161): the Tab-walk over the archived-inclusive view
+      // advances in reading order at every step. The stop floor guards the guard — a walk that
+      // has gone blind (a selector rename, a view that never routed) finds nothing to disorder
+      // and would otherwise pass vacuously.
+      focusOrder.stopCount >= 15 &&
+      focusOrder.backwards.length === 0;
     // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
     // when their item is active) is judged visually against the mock, not gated on a
     // computed-style scan (issue #25) — the offender list is kept in the justification as
@@ -3622,7 +3894,9 @@ async function sceneClientsView(browser) {
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
         `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}; ` +
-        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}`,
+        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}; ` +
+        `the Tab-walk over the archived-inclusive view advances in reading order, measured against ` +
+        `the view's own box so a scroll cannot fake a backwards step (issue 161): ${JSON.stringify(focusOrder)}`,
       'main-clients.png',
     );
   });
@@ -5051,11 +5325,20 @@ async function sceneCalendarEntryBlock(browser) {
 
   // The hover half (#151). The 180-minute control block has room for every line, so a shift would
   // be a pure hover artefact, not a truncation side effect: measure its title, hover, measure again.
+  // Measured against the calendar strip's own SCROLL CONTENT rather than the viewport, because
+  // Playwright's hover scrolls its target into view when it has to and a viewport reading books
+  // that scroll as a layout shift — the same viewport-vs-page measuring error issue 161 turned out
+  // to be. It surfaced here the moment the Entries toolbar above the calendar grew 2px, which
+  // moved the block 2px past the fold and gave the hover a scroll to do. The claim under test is
+  // that hovering moves the block nothing RELATIVE TO THE PAGE, so measure it that way: subtract
+  // the strip's own box (which scrolls with its contents) and add back its scrollTop.
   const titleTop = () =>
     page.evaluate(() => {
-      const bd = document.querySelector('.dcol .ev[data-id="204"] .bd');
       const ev = document.querySelector('.dcol .ev[data-id="204"]');
-      return { title: bd.getBoundingClientRect().top, block: ev.getBoundingClientRect().top };
+      const strip = document.querySelector('.cstrip');
+      const s = strip.getBoundingClientRect();
+      const at = (el) => Math.round(el.getBoundingClientRect().top - s.top + strip.scrollTop);
+      return { title: at(ev.querySelector('.bd')), block: at(ev) };
     });
   const atRest = await titleTop();
   await page.hover('.dcol .ev[data-id="204"]');
@@ -6400,6 +6683,203 @@ async function sceneFieldLabels(browser) {
   );
 }
 
+/**
+ * The in-page field-chrome sweep (FIELD_CHROME). Reads, per visible field in the currently-
+ * routed view, the four facts design.html D13 states about what a field looks like — the
+ * border, the radius, the padding grid D07 puts under it, and (for the one field asked to
+ * hold focus) the focus idiom.
+ *
+ * `field` is the same population FIELD_LABELS scores: the bordered-box controls D13's rule
+ * describes (text inputs, selects, textareas), never the checkboxes.
+ *
+ * Every fact is read off the COMPUTED style, which is the whole point. A field inherits a
+ * complete set of these declarations from the UA stylesheet whether the app writes them or
+ * not, so "what does styles.css say" and "what does the field look like" are different
+ * questions — and a static scan of the source can only answer the first one.
+ *
+ * This is NOT a px/hex pin on named selectors (process.html §02 forbids those — they fight
+ * every restyle and prove nothing about how the app looks). Every value compared here is
+ * resolved from the token layer at probe time (`--rule-strong`, `--r1`), so a restyle that
+ * moves a token moves the expectation with it; the one literal, the 4px grid, is D07 itself.
+ * Border WIDTH is deliberately not pinned to a number — it is scored for uniformity, which
+ * is what "one border" means and what a leaked UA border breaks.
+ */
+function sweepFieldChrome() {
+  const { visible, cssVar, rgbOf } = window.__probe;
+  const onGrid = (v) => {
+    const n = parseFloat(v);
+    return n === 0 || n === 2 || n % 4 === 0;
+  };
+  const ruleStrong = rgbOf('--rule-strong');
+  const radius = cssVar('--r1');
+  const view = document.querySelector('.views .view:not([hidden])');
+  const fields = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+    .filter((el) => !['hidden', 'checkbox', 'radio'].includes(el.type))
+    .filter(visible);
+  return fields.map((el) => {
+    const cs = getComputedStyle(el);
+    const sides = ['Top', 'Right', 'Bottom', 'Left'];
+    const widths = sides.map((s) => cs[`border${s}Width`]);
+    const styles = sides.map((s) => cs[`border${s}Style`]);
+    const colours = sides.map((s) => cs[`border${s}Color`]);
+    const pads = sides.map((s) => cs[`padding${s}`]);
+    const radii = ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft'].map((c) => cs[`border${c}Radius`]);
+    return {
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      // ONE border: a single hairline, same on all four sides, drawn solid in --rule-strong.
+      // The UA's own text-control border is `2px inset rgb(118, 118, 118)` — it fails the
+      // style and the colour clause, and its width is compared against the app's own below.
+      oneBorder:
+        parseFloat(widths[0]) > 0 &&
+        widths.every((w) => w === widths[0]) &&
+        styles.every((s) => s === 'solid') &&
+        colours.every((c) => c === ruleStrong),
+      width: widths[0],
+      border: `${widths[0]} ${styles[0]} ${colours[0]}`,
+      // ONE radius: 8px on all four corners (the UA leaves a text control square).
+      oneRadius: radii.every((r) => r === radius),
+      radius: radii[0],
+      // D07's grid, over the COMPUTED padding — where an unreset UA `padding: 1px 2px` shows up.
+      onGrid: pads.every(onGrid),
+      padding: pads.join(' '),
+    };
+  });
+}
+
+// FIELD_CHROME — design.html D13 ("One border (rule-strong), one radius (8px), one focus
+// idiom: accent border + the 3px ring") + D07's grid under its padding, machine-scored over
+// the DRIVEN DOM. Issue 149: the toolbar search box painted TWO nested fields. The border,
+// radius and padding sat on the `.search` <span> WRAPPING the input, and nothing reset the
+// input itself — so Chromium's UA chrome (a `2px inset` border, square corners, an off-grid
+// `padding: 1px 2px`) rendered a second, smaller field inside the designed one, and D13's
+// focus idiom landed on that inner box: a square accent rectangle floating inside a rounded
+// grey one. `#search`'s 1px paddings were the only off-grid values in the running app.
+//
+// Nothing could catch it. GOLD `design-guard.test.ts` scores the 4px grid over the AUTHORED
+// values in styles.css, and every authored value was on-grid — these came from the UA
+// stylesheet, which a static scan of the source cannot see. That is the limit of the static
+// half rather than a bug in it: this case belongs to the driven-DOM half of design.html §08's
+// split, which is where this scene puts it. FIELD_LABELS drives the same five views for the
+// same field population and asks how each is NAMED; this one asks what each LOOKS LIKE.
+//
+// Two facts. (a) The SWEEP — every visible field in all five views, each routed into the state
+// that holds its fields, resolves to one solid --rule-strong border of one width on all four
+// sides (and the same width as every other field in the app — "one border" across the window,
+// scored as agreement so a restyle that thickens them all stays legal), an --r1 radius on all
+// four corners, and computed padding on the 4px grid. No exemptions: the app
+// really does paint every one of its fields the same, so a field that differs is news. (b) The
+// FOCUS IDIOM lands on the field itself — Tab to #search and the accent border and 3px ring
+// resolve on the element that holds focus, which still carries D13's 8px radius. Fact (b) is
+// what a wrapper-styled field can never satisfy, and is why the fix moves the chrome onto the
+// input rather than resetting the input's border and leaving the wrapper as the box.
+async function sceneFieldChrome(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState())));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+  // D10 gives border-colour a 120ms fade; with the clock pinned, a probe taken mid-transition
+  // reads an arbitrary intermediate colour instead of the cascade. Same reason ACCENT_DISCIPLINE
+  // switches motion off.
+  await noMotion(page);
+
+  const surfaces = [];
+  const sweep = async (surface) => surfaces.push({ surface, fields: await page.evaluate(sweepFieldChrome) });
+
+  // Timer — the start-details disclosure (idle-only, §12 R05) holds this view's four fields.
+  await page.click('.nav-item[data-view="timer"]');
+  await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+  await page.click('#start-toggle');
+  await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+  await sweep('timer (start details)');
+
+  // Entries — the toolbar search (the issue's field), the unified add form, the Custom range.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.click('#el-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('entries (add form + custom range)');
+
+  // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
+  await page.click('.nav-item[data-view="clients"]');
+  await sweep('clients');
+
+  // Reports — the builder's name field and its Custom range.
+  await page.click('.nav-item[data-view="reports"]');
+  await page.click('#rep-new');
+  await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+  await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('reports (builder + custom range)');
+
+  // Settings — every §14 control, plus the Backups group's retention picker.
+  await page.click('.nav-item[data-view="settings"]');
+  await page.waitForSelector('#settings-panel .set-row', { state: 'attached' });
+  await sweep('settings');
+
+  // Fact (b): KEYBOARD focus on the issue's own field. Tab to it rather than calling .focus(),
+  // so the :focus-visible the D13 idiom hangs off is the one a keyboard user gets.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.waitForSelector('#search', { state: 'attached' });
+  // The toolbar control immediately before the search label — one Tab lands on the field.
+  await page.evaluate(() => document.querySelector('#report-btn').focus());
+  await page.keyboard.press('Tab');
+  const focus = await page.evaluate(() => {
+    const el = document.querySelector('#search');
+    const cs = getComputedStyle(el);
+    const accent = window.__probe.rgbOf('--accent');
+    return {
+      onField: document.activeElement === el,
+      accentBorder: [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor]
+        .every((c) => c === accent),
+      ring: cs.boxShadow !== 'none' && cs.boxShadow !== '',
+      radius: cs.borderTopLeftRadius,
+      // The ring must be the FIELD's; a wrapper that still painted a box would leave the
+      // element the user sees bordered undressed.
+      wrapperBare: (() => {
+        const w = el.parentElement;
+        const ws = getComputedStyle(w);
+        return parseFloat(ws.borderTopWidth) === 0 && ws.boxShadow === 'none';
+      })(),
+    };
+  });
+  await page.screenshot({
+    path: join(EVIDENCE, 'field-chrome-search-focus.png'),
+    clip: await page.evaluate(() => {
+      const r = document.querySelector('.search-field').getBoundingClientRect();
+      return { x: r.left - 16, y: r.top - 14, width: r.width + 32, height: r.height + 28 };
+    }),
+  });
+  await page.close();
+
+  const all = surfaces.flatMap((s) => s.fields.map((f) => ({ surface: s.surface, ...f })));
+  const offenders = all
+    .filter((f) => !f.oneBorder || !f.oneRadius || !f.onGrid)
+    .map((f) => `${f.surface}:${f.label} border=${f.border} radius=${f.radius} padding=${f.padding}`);
+  // "One border" across the app, not just within each field: every field draws its hairline at
+  // the SAME width as every other. Scored as agreement rather than against a pinned px value,
+  // so a restyle that thickens every field's border stays legal and one field that disagrees
+  // does not (which is what a leaked UA border is).
+  const widths = [...new Set(all.map((f) => f.width))];
+  const focusOk = focus.onField && focus.accentBorder && focus.ring && focus.wrapperBare;
+  // Guard-the-guard: the five views hold well over 20 visible fields in these states, so a
+  // sweep that has gone blind fails instead of passing on an empty set.
+  const ok = all.length >= 20 && offenders.length === 0 && widths.length === 1 && focusOk;
+  record(
+    'FIELD_CHROME',
+    ok,
+    `D13/D07 sweep over ${all.length} visible fields ` +
+      `(${surfaces.map((s) => `${s.surface}=${s.fields.length}`).join(', ')}): ` +
+      `not one solid --rule-strong border + --r1 radius + on-grid padding=[${offenders.join('; ') || 'none'}]; ` +
+      `border widths in use across every field=[${widths.join(', ')}]; ` +
+      `#search under keyboard focus: on the field=${focus.onField}, accent border on all four sides=` +
+      `${focus.accentBorder}, 3px ring=${focus.ring}, radius=${focus.radius}, wrapper paints nothing=${focus.wrapperBare}`,
+    'field-chrome-search-focus.png',
+  );
+}
+
 // TARGET_SIZE — design.html A03: every interactive target measures at least 24×24 CSS px, or
 // stands at least 24px clear of its nearest interactive neighbour. A machine sweep collects
 // every VISIBLE interactive control (button / a[href] / input / select / textarea / tabbable /
@@ -6564,7 +7044,9 @@ async function sceneTargetSize(browser) {
 //       strip carries a visible dot (its word stays hidden; D05 asks word OR icon), and the
 //       Timer card, the surface whose whole purpose is the timer, carries BOTH;
 //   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
-//       the literal 'billable' / 'non-billable' badge;
+//       the literal 'billable' / 'non-billable' label (a quiet `.attr`, not the warn `.flag`
+//       pill it wore until issue #160 — the wording is this scene's claim, the palette split
+//       is TIMER_VIEW's);
 //   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
 //       hatch carries the #i-moon icon marker — the yellow band / hatch never stand alone;
 //   (d) the WARN advisory is worded on the flag palette (the overlap banner's sentence over
@@ -6585,8 +7067,12 @@ async function sceneColourPairing(browser) {
       dotVisible: window.__probe.visible(document.querySelector('.timer-card.running .tc-dot')),
       wordVisible: window.__probe.visible(document.querySelector('.timer-card.running .state')),
       stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
+      // The whole attribute row, whatever class each label carries: this scene's claim is that
+      // billable-ness is SAID, and D04/D14 (issue #160) moved the saying of it off the warn
+      // `.flag` pill onto the quiet `.attr` label. Which palette each role takes is TIMER_VIEW's
+      // assertion; here the row is read by position so a palette move can never mute the word.
       billableWord:
-        [...document.querySelectorAll('.timer-card .flag')]
+        [...document.querySelectorAll('.timer-card .flags > *')]
           .map((f) => f.textContent.trim())
           .find((t) => /billable/.test(t)) ?? '',
     }));
@@ -6723,6 +7209,7 @@ const SCENES = {
   MULTILINE_DESC: { items: ['MULTILINE_DESC'], run: sceneMultilineDesc },
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
+  INLINE_GATE_CONTAINMENT: { items: ['INLINE_GATE_CONTAINMENT'], run: sceneInlineGateContainment },
   WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
   ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], run: sceneAddRefusalPalette },
   MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
@@ -6753,6 +7240,7 @@ const SCENES = {
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
   FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
+  FIELD_CHROME: { items: ['FIELD_CHROME'], run: sceneFieldChrome },
   TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
