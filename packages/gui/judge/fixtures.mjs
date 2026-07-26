@@ -238,15 +238,21 @@ export function flaggedState() {
  * from the in-flow run that shipped — the escape only becomes visible where there is no
  * neighbouring column left to spill into. Two entries, not one, so a clamp that only pulls
  * the left edge in (or only the right) fails on the other.
+ *
+ * Entry 42 OVERLAPS 40 in the first column so the gate opens with a neighbouring block's own
+ * chrome across it. That chrome is not incidental: a block at rest sets no z-index, so its
+ * corner checkbox competes at z-6 in the strip's stacking context — above the ops chip (z-5)
+ * the gate is mounted in. Without the neighbour the layer would only ever be probed over empty
+ * track, and nothing would hold the gate's rank against the chrome it actually has to cover.
  */
 export function edgeColumnState() {
-  const entry = (id, day, description) => ({
+  const entry = (id, day, description, fromHour = 10, toHour = 12) => ({
     id,
     description,
     clientLabel: 'Acme / API',
-    startUtc: `${day}T10:00:00Z`,
-    endUtc: `${day}T12:00:00Z`,
-    billableSeconds: 7200,
+    startUtc: `${day}T${String(fromHour).padStart(2, '0')}:00:00Z`,
+    endUtc: `${day}T${String(toHour).padStart(2, '0')}:00:00Z`,
+    billableSeconds: (toHour - fromHour) * 3600,
     billable: true,
     overlapped: false,
     sleptThrough: false,
@@ -255,7 +261,16 @@ export function edgeColumnState() {
   return {
     status: { running: false, entry: null },
     days: [
-      { day: '2026-06-22', entries: [entry(40, '2026-06-22', 'first column')] },
+      {
+        day: '2026-06-22',
+        entries: [
+          entry(40, '2026-06-22', 'first column'),
+          // Starts 50 minutes into 40's span — far enough down that 40's own top line (its ops
+          // chip and the strip the scene hovers) stays clear, close enough that the neighbour's
+          // block and its z-6 corner checkbox land inside the ~50px band the gate opens across.
+          { ...entry(42, '2026-06-22', 'overlapping neighbour', 10, 13), startUtc: '2026-06-22T10:50:00Z' },
+        ],
+      },
       { day: '2026-06-28', entries: [entry(41, '2026-06-28', 'last column')] },
     ],
     sleepFlaggedIds: [],

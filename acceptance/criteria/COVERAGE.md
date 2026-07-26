@@ -1479,8 +1479,15 @@ equal fixed-width columns that never stretch + horizontal scroll (`.cstrip`
 scrollWidth > clientWidth); a full 24h `.dt` track whose default scroll lands on
 working hours with the off-hours (pre-07:00 / post-18:00) entries present and
 reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
-Wed 1.00h) + the `#week-total` range chip (17.00h); an empty present-but-empty
-`.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
+Wed 1.00h) + the `#week-total` range chip (17.00h), read ON SCREEN at the
+post-render scroll position rather than merely present in the DOM — all seven
+`.dh` measured inside the `.cstrip` scrollport, the totals visible with the hour
+labels beside them, and both bands still there once the strip is scrolled fully
+right — because the `.dh` band and the `.gut` gutter are sticky, so the scroll
+on either axis moves the CONTENT past the labels instead of carrying the labels
+off with it (issue #145: the header band was painted and then scrolled away by
+the same render, and the presence-only assertion here passed straight through
+it); an empty present-but-empty `.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
 `.ev` segments sharing its `data-id` — a `.seg-start` reaching the track foot at
 a true height (never the 18px sliver) and a `.seg-end` from the track head —
 with its 7.75h counted ONLY on its start day (Mon reads 12.00h = 4.25h same-day
@@ -1666,7 +1673,14 @@ builder) stay in flow inside surfaces that already fit them. JUDGE
 `INLINE_GATE_CONTAINMENT` (`main-inline-gate.png`) arms both gates through the
 real hover affordance on the week's FIRST and LAST day columns — the only places
 the escape is visible — and scores each one inside the calendar's visible box
-with an opaque `--paper` fill, a radius and a shadow.
+with an opaque `--paper` fill, a radius and a shadow. Landing inside the
+scrollport stopped being enough once §12 R16's two axes were PINNED inside it
+(issue #145): the sticky day-header band and hour gutter are opaque and outrank
+the ops chip the gate mounts in, so the clamp region subtracts both bands and the
+scene additionally scores each gate as un-occluded — clear of both bands' rects,
+hit-testing as itself across its face, every control inside it reachable — over a
+fixture whose first column carries an OVERLAPPING neighbour, so the gate's rank
+is held against real chrome rather than empty track.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — light/dark, system type and accent-on-primary already shipped, the
