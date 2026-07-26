@@ -1,0 +1,19 @@
+<!--
+  The Stint mark — the app icon (dock, launcher, Finder, About, notifications).
+
+  Two back-to-back calendar events on a paper field: the elapsed one solid, the next
+  one waiting. Always the IDLE composition — an app icon is an identity, not a state
+  readout, so it never switches to the running form (design.html D19).
+
+  Geometry: 1024 canvas, an 832 field inset 96 all round (the macOS icon grid's
+  breathing room), bars 456 wide (55% of the field) centred as one 400-tall block.
+
+  Fills come from CLASSES, never attributes — scripts/gen-icons.mjs injects the
+  palette from context/design.tokens.json at render time, so a colour here cannot
+  drift from the tokens (design.html D18).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect class="field" x="96" y="96" width="832" height="832" rx="196"/>
+  <rect class="bar-strong" x="284" y="312" width="456" height="176" rx="52"/>
+  <rect class="bar-weak" x="284" y="536" width="456" height="176" rx="52"/>
+</svg>

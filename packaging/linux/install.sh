@@ -42,12 +42,12 @@ fi
 if ${SUDO} mkdir -p /opt/stint 2>/dev/null && [ -w /opt/stint -o -n "${SUDO}" ]; then
   OPT_DIR="/opt/stint"
   DESKTOP_DIR="/usr/share/applications"
-  ICON_DIR="/usr/share/icons/hicolor/512x512/apps"
+  ICON_BASE="/usr/share/icons/hicolor"
   RUN="${SUDO}"
 else
   OPT_DIR="${HOME}/.local/opt/stint"
   DESKTOP_DIR="${HOME}/.local/share/applications"
-  ICON_DIR="${HOME}/.local/share/icons/hicolor/512x512/apps"
+  ICON_BASE="${HOME}/.local/share/icons/hicolor"
   RUN=""
   mkdir -p "${OPT_DIR}"
 fi
@@ -77,9 +77,25 @@ Categories=Utility;Office;
 EOF
 ${RUN} chmod 644 "${DESKTOP_FILE}"
 
-# Refresh the desktop database if the tool exists (non-fatal).
+# The app mark (PRD §19 R02, design.html §09). `Icon=stint` above is a THEME NAME, not a
+# path: the launcher resolves it through the freedesktop icon theme, so without these copies
+# the entry shows a generic placeholder no matter what the AppImage contains. Install every
+# committed size — the theme picks the one that fits the surface asking.
+ICON_SRC="${SCRIPT_DIR}/icons"
+for icon in "${ICON_SRC}"/stint-*.png; do
+  [ -f "${icon}" ] || continue
+  size=$(basename "${icon}" .png | sed 's/^stint-//')
+  ${RUN} mkdir -p "${ICON_BASE}/${size}x${size}/apps"
+  ${RUN} cp "${icon}" "${ICON_BASE}/${size}x${size}/apps/stint.png"
+  ${RUN} chmod 644 "${ICON_BASE}/${size}x${size}/apps/stint.png"
+done
+
+# Refresh the desktop + icon caches if the tools exist (non-fatal).
 if command -v update-desktop-database >/dev/null 2>&1; then
   ${RUN} update-desktop-database "${DESKTOP_DIR}" 2>/dev/null || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  ${RUN} gtk-update-icon-cache -f -t "${ICON_BASE}" 2>/dev/null || true
 fi
 
 # --- (b) CLI: symlink tt onto PATH -----------------------------------------

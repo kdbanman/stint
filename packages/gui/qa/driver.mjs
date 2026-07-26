@@ -25,7 +25,7 @@
  *
  * Usage:  node packages/gui/qa/driver.mjs        (STINT_QA_DIR overrides the work dir)
  */
-import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -204,6 +204,9 @@ export function createHandlers(store, deps = {}) {
 // ------------------------------------------------------------------ sweep loop
 async function main() {
   const { chromium } = await import('playwright-core');
+  // Dynamic, like every import in this block: the module pulls in playwright-core, and
+  // qa-driver.test.ts must read createHandlers' keys without a browser or a build.
+  const { resolveChromium } = await import('../../../scripts/resolve-chromium.mjs');
   const { installOverlay, makeCine } = await import('./cine.mjs');
   const core = await import('@stint/core');
   const { buildUiState } = await import('../dist/uistate.js');
@@ -233,15 +236,12 @@ async function main() {
   });
   const all = { ...handlers, ...updateHandlers };
 
-  const CHROME = (() => {
-    const base = '/opt/pw-browsers';
-    if (existsSync(base)) {
-      const dir = readdirSync(base).find((d) => /^chromium-\d+$/.test(d));
-      if (dir) return join(base, dir, 'chrome-linux', 'chrome');
-    }
-    return chromium.executablePath();
-  })();
-  const launch = () => chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox', '--disable-gpu'] });
+  const launch = () =>
+    chromium.launch({
+      executablePath: resolveChromium(),
+      headless: true,
+      args: ['--no-sandbox', '--disable-gpu'],
+    });
   let browser = await launch();
 
   async function makePage(file, viewport, ctxOpts = {}) {

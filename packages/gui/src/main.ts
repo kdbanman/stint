@@ -57,6 +57,10 @@ import { platform as osPlatform } from 'node:os';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(__dirname, '..', 'renderer');
+// The generated mark (design.html §09, scripts/gen-icons.mjs). These are RUNTIME assets, so
+// they must sit in electron-builder.yml's `files:` glob — `buildResources: build` feeds the
+// packager only and ships nothing into the bundle (the why is recorded there).
+const ASSETS = join(__dirname, '..', 'assets');
 
 let store: Store;
 let tray: Tray | null = null;
@@ -75,33 +79,28 @@ let pendingCheckinOverrideMin: number | undefined;
 
 // ----------------------------------------------------------------- tray icon
 
-/** A monochrome clock glyph drawn into an RGBA bitmap — no binary asset to ship. */
-function trayIcon(): Electron.NativeImage {
-  const size = 22;
-  const buf = Buffer.alloc(size * size * 4);
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 2;
-  const ink = nativeTheme.shouldUseDarkColors ? 235 : 30;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = (y * size + x) * 4;
-      const dx = x + 0.5 - cx;
-      const dy = y + 0.5 - cy;
-      const dist = Math.hypot(dx, dy);
-      const ring = Math.abs(dist - r) < 1.3;
-      // Clock hands: 12 o'clock and 3 o'clock.
-      const hand = (Math.abs(dx) < 1 && dy < 0 && dy > -r + 2) || (Math.abs(dy) < 1 && dx > 0 && dx < r - 3);
-      const on = ring || (hand && dist < r - 1);
-      buf[i] = ink;
-      buf[i + 1] = ink;
-      buf[i + 2] = ink;
-      buf[i + 3] = on ? 255 : 0;
-    }
+/**
+ * The tray glyph for a state (PRD §12 R01, design.html D20). Running and idle are two
+ * DISTINCT images on every platform — two bars idle, one fused block running.
+ *
+ * The state must ride on the image, not on the count-up title: `tray.setTitle` is macOS-only
+ * in Electron, so on Linux a title-borne state is no state at all, and the tooltip only pays
+ * out on hover. That was issue #162.
+ *
+ * macOS gets the `…Template` pair — black + alpha, which the menu bar recolours for light and
+ * dark appearance; createFromPath picks up the `@2x` sibling by filename. Colour is discarded
+ * there, which is exactly why the two states differ by SHAPE. Linux panels do no such
+ * recolouring, so they get the accent-coloured pair at a size the panel can scale down.
+ */
+function trayImage(running: boolean): Electron.NativeImage {
+  if (process.platform === 'darwin') {
+    const img = nativeImage.createFromPath(
+      join(ASSETS, `tray${running ? 'Running' : 'Idle'}Template.png`),
+    );
+    img.setTemplateImage(true);
+    return img;
   }
-  const img = nativeImage.createFromBitmap(buf, { width: size, height: size });
-  img.setTemplateImage(true);
-  return img;
+  return nativeImage.createFromPath(join(ASSETS, `tray-${running ? 'running' : 'idle'}-panel.png`));
 }
 
 // ---------------------------------------------------------------- transitions
@@ -201,6 +200,9 @@ function fireCheckin(open: EntryView): void {
     title: 'Still tracking?',
     body: `${context} — ${formatDuration(open.billableSeconds)} so far.`,
     actions,
+    // Linux passes this through to the notification daemon; macOS ignores it and shows the
+    // bundle icon. Without it a check-in arrives wearing the desktop's generic fallback.
+    icon: join(ASSETS, 'icon-128.png'),
   });
   n.on('action', (_e, index) => {
     const choice = intervalForIndex(index);
@@ -233,13 +235,22 @@ function maybeWriteLastSeen(): void {
 
 // ----------------------------------------------------------------------- tray
 
+/**
+ * Paint the tray for the current state. The GLYPH is the signal (§12 R01): it changes on
+ * every state change, so the running state is visible on macOS and Linux alike.
+ *
+ * The count-up title is a macOS-only enrichment beside it — `setTitle` is a no-op elsewhere,
+ * and treating it as the signal is what left Linux with a hover-only running state (#162).
+ * It stays guarded so that can never silently regress.
+ */
 function updateTray(open: EntryView | null = store.openEntry()): void {
   if (!tray) return;
+  tray.setImage(trayImage(!!open));
   if (open) {
-    tray.setTitle(` ${formatDuration(open.billableSeconds)}`);
+    if (process.platform === 'darwin') tray.setTitle(` ${formatDuration(open.billableSeconds)}`);
     tray.setToolTip(`Stint — ${open.description ?? 'running'}`);
   } else {
-    tray.setTitle('');
+    if (process.platform === 'darwin') tray.setTitle('');
     tray.setToolTip('Stint — idle');
   }
 }
@@ -281,6 +292,10 @@ function showMainWindow(): void {
     minHeight: 600,
     show: true,
     title: 'Stint',
+    // Linux window managers read the window's own icon for the taskbar and alt-tab; without
+    // it they fall back to the stock Electron logo. macOS ignores it and uses the bundle's
+    // .icns, so this costs nothing there.
+    icon: join(ASSETS, 'icon-256.png'),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#1b1b1d' : '#ffffff',
     webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, sandbox: false },
   });
@@ -503,7 +518,8 @@ function init(): void {
   registerIpc();
   registerUpdateIpc();
 
-  tray = new Tray(trayIcon());
+  // Seeded idle; updateTray() below paints the real state (and every state change after).
+  tray = new Tray(trayImage(false));
   tray.setContextMenu(buildTrayMenu());
   tray.on('click', () => togglePopover());
   tray.on('right-click', () => tray?.setContextMenu(buildTrayMenu()));

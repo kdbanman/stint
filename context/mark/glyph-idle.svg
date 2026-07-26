@@ -1,0 +1,16 @@
+<!--
+  The idle tray glyph — the mark's two bars with the field dropped.
+
+  A menu-bar extra is ~16pt tall; the enclosing rounded square costs the bars half
+  their height and turns both into mush, so the periphery wears the bars alone
+  (design.html D19).
+
+  Its bounding box is identical to glyph-running.svg's — both blocks span y 4→20 —
+  so the menu bar never shifts when the timer starts or stops.
+
+  Fills come from CLASSES, never attributes (design.html D18); see mark.svg.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <rect class="bar-strong" x="3" y="4" width="18" height="7" rx="2.25"/>
+  <rect class="bar-weak" x="3" y="13" width="18" height="7" rx="2.25"/>
+</svg>
