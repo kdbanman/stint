@@ -114,21 +114,6 @@ export function buildReportView(
 }
 
 /**
- * §09 R09 — run a SAVED report and return the core Report the Reports view's run-output
- * panel paints. A thin pass-through to store.runReport (which resolves the stored RangeSpec
- * through core's resolveReportDef and reuses the one report() path), so the renderer never
- * re-derives a range, grouping, rounding, or totals — it paints the same Report shape the
- * ad-hoc `report` channel returns. `ref` is the saved definition's name or id.
- */
-export function buildSavedReportView(
-  store: Pick<Store, 'runReport'>,
-  ref: string | number,
-  now: Date,
-): Report {
-  return store.runReport(ref, now);
-}
-
-/**
  * §09 R06/R09 — resolve an export request to its absolute range AND the entries it covers,
  * honouring the request's SCOPE so the two honest export meanings live in one place:
  *

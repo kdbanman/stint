@@ -745,8 +745,10 @@ renders the grouped `Report` (human) with the saved grouping/rounding, while
 `--csv|--json` EXPORT THE FILTERED SET the report shows (the rows behind the
 totals, `--json` validated against `export-entry.schema.json` ) via
 `exportSavedReport` ; an unknown name exits non-zero with a clear error. The GUI
-`runReport` IPC (`{ ref }`) returns the SAME core `Report` via
-`reportview.ts buildSavedReportView` ; the Reports view's saved-definitions rail
+`runReport` IPC (`{ ref }`) returns the SAME core `Report` straight from
+`store.runReport` — the handler calls core directly, with no GUI wrapper
+between them (issue #175: the wrapper was a pass-through whose tests asserted
+the identity function) ; the Reports view's saved-definitions rail
 (`renderer/index.html` Reports view / `reports.js` ) lists definitions with a
 Run button (→ `window.stint.runReport` ) painting the run-output panel (per-line
 + grand totals, overlap/unreviewed-sleep flags in context via
@@ -769,8 +771,7 @@ exports the FILTERED entries validated against `export-entry.schema.json` ;
 `run --csv` byte-identical to the ad-hoc filtered `report --csv` and NOT to the
 raw `tt export` ; human `run` prints the renderReport totals; a range edit
 re-resolves which rows the export carries; unknown name exits non-zero); GUI
-`gui/test/reportview.test.ts` (`buildSavedReportView` is a faithful
-pass-through, by name and by id; `resolveExportDefinition` 's two scopes —
+`gui/test/reportview.test.ts` (`resolveExportDefinition` 's two scopes —
 'filtered' == the report's rows (byte-identical to `exportSavedReport` ), 'all'
 == the raw range (byte-identical to `tt export` ), and a 'filtered' request
 without a saved ref is rejected). **GUI parity** — the Reports view's
@@ -2069,10 +2070,13 @@ guard `scripts/check-no-auto-publish.mjs` (`npm run verify:no-publish`, in the
 `verify` job — asserts every distributable-producing `electron-builder`
 invocation disables publishing, no network), whose logic is pinned by **GOLD**
 `packages/core/test/gold/no-auto-publish.test.ts` (it catches a flag-less
-distributable build and is not vacuously green) and whose invariant + CI wiring
-are frozen by **GOLD** `packages/gui/test/build-matrix.test.ts` ("pack never
-auto-publishes in CI (§19 R05)" — the `pack` script passes `--publish never` and
-`ci.yml` runs `verify:no-publish`). R05 *consumes* the R01 artifact build and
+distributable build and is not vacuously green) and whose CI wiring is frozen
+by **GOLD** `packages/gui/test/build-matrix.test.ts` ("pack never auto-publishes
+in CI (§19 R05)" — `ci.yml` runs `verify:no-publish`, so the scanner cannot be
+un-wired from the PR path). The invariant itself has ONE home, the scanner test
+above: build-matrix's own `--publish never` regex over the `pack` script
+asserted the same failure condition a second time and was deleted with issue
+#175. R05 *consumes* the R01 artifact build and
 the R06 version string. **R06 date/build versioning** (AC=**GOLD**/MANUAL): the
 release version is `YYYY.M.D[.N]` (month/day NOT zero-padded, e.g. `2026.6.27` /
 `2026.6.27.2`), stamped into the **single shared `@stint/core` `APP_VERSION`
