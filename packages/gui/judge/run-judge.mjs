@@ -2782,6 +2782,129 @@ async function sceneWriteRejectionFeedback(browser) {
   }
 }
 
+// ADD_REFUSAL_PALETTE — design.html D15 (issue 139): the add form's ONE message region serves
+// BOTH message kinds, so the palette — not the region — is what tells them apart. A refused Save
+// is a BLOCK (nothing was written, the form is still open) and must read in the --danger notice;
+// an overlap is allowed-but-flagged (the entry SAVED) and must read in the --flag advisory. The
+// app shipped the inversion: the refusal wore flag chrome, so colour said "saved with a caveat"
+// while the sentence said "nothing was written".
+//
+// Both states are driven on the same form and scored on COMPUTED colour, because a palette is
+// exactly the fact a screenshot-only check lets rot: (a) a refused Save paints #add-warning in
+// danger; (b) dismissing the form and reopening it returns the region to its flag base chrome —
+// the refusal's state class does not outlive the message and repaint the next advisory; (c) an
+// overlapping backfill that COMMITS raises its advisory in flag. Fails if a refusal reads flag,
+// if the two states resolve to the same triple, or if the refused write records anything.
+async function sceneAddRefusalPalette(browser) {
+  // Palette probe over one region: the three painted surfaces plus both token triples, so the
+  // justification line shows what was measured against what — not just a boolean.
+  const probeAddWarning = () => {
+    const { rgbOf } = window.__probe;
+    const el = document.querySelector('#add-warning');
+    const cs = getComputedStyle(el);
+    return {
+      erred: el.classList.contains('error'),
+      color: cs.color,
+      background: cs.backgroundColor,
+      border: cs.borderTopColor,
+      danger: [rgbOf('--danger'), rgbOf('--danger-weak'), rgbOf('--danger')],
+      flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+    };
+  };
+  const painted = (p) => [p.color, p.background, p.border];
+  const same = (a, b) => a.every((v, i) => v === b[i]);
+
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState()), { rejectWrites: true }));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+  await noMotion(page); // a paint assertion reads the cascade, never a frozen mid-transition frame
+
+  // (a) REFUSED SAVE — the `add` IPC rejects like core refusing an inverted span, and the form
+  // holds its ground: open, announced, nothing written, and painted as the BLOCK it is.
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+  await page.fill('#add-desc', 'a backfill core will refuse');
+  await page.click('#add-go');
+  await page.waitForSelector('#add-warning:not([hidden])', { state: 'attached' });
+  await page.screenshot({ path: join(EVIDENCE, 'add-refusal-palette.png'), fullPage: true });
+  const refused = {
+    ...(await page.evaluate(probeAddWarning)),
+    ...(await page.evaluate(() => {
+      const el = document.querySelector('#add-warning');
+      return {
+        formOpen: !document.querySelector('#add-form').hidden,
+        shown: window.__probe.visible(el) && el.textContent.trim().length > 0,
+        announced: el.getAttribute('role') === 'status' && el.hasAttribute('aria-live'),
+        message: el.textContent.trim(),
+        notWritten: window.__ADDED__ == null,
+      };
+    })),
+  };
+
+  // (b) THE REGION'S OTHER STATE — Cancel and reopen: the region is back to its advisory base
+  // chrome. (A refusal that left its state class behind would dress the next overlap warning,
+  // which is on the same region, as a hard block — the same inversion pointing the other way.)
+  await page.click('#add-cancel');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+  const reopened = await page.evaluate(probeAddWarning);
+  await page.close();
+
+  // (c) THE ADVISORY SIBLING — the same form, a backfill that COMMITS onto an overlapping span:
+  // the write landed, so its inline banner is the --flag advisory, never the block palette.
+  const advisory = await withPage(browser, addFormState(), 'index.html', async (p) => {
+    await p.waitForSelector('.entry', { state: 'attached' });
+    await noMotion(p);
+    await p.click('#add-toggle');
+    await p.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+    await p.click('#add-go');
+    await p.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
+    return p.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const el = document.querySelector('#overlap-banner');
+      const cs = getComputedStyle(el);
+      return {
+        shown: visible(el),
+        written: window.__ADDED__ != null,
+        text: el.textContent.trim(),
+        erred: el.classList.contains('error'),
+        color: cs.color,
+        background: cs.backgroundColor,
+        border: cs.borderTopColor,
+        flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+      };
+    });
+  }, { overlap: true });
+
+  const refusalReadsDanger = refused.erred && same(painted(refused), refused.danger);
+  const advisoryChromeIntact = !reopened.erred && same(painted(reopened), reopened.flag);
+  const advisoryReadsFlag =
+    !advisory.erred && same([advisory.color, advisory.background, advisory.border], advisory.flag);
+  // The two palettes are only a split if they DIFFER — pin it here so a token edit that collapsed
+  // danger onto flag could not make every assertion above pass vacuously.
+  const palettesDiffer = !same(refused.danger, refused.flag);
+  const ok =
+    refused.formOpen && refused.shown && refused.announced && refused.notWritten &&
+    refused.message === 'stop time must be after start time' && readsClean(refused.message) &&
+    refusalReadsDanger &&
+    advisoryChromeIntact &&
+    advisory.shown && advisory.written && /allowed, but flagged/i.test(advisory.text) &&
+    advisoryReadsFlag &&
+    palettesDiffer;
+  record(
+    'ADD_REFUSAL_PALETTE',
+    ok,
+    `refused save=${JSON.stringify(refused)} (danger=${refusalReadsDanger}); reopened=${JSON.stringify(reopened)} ` +
+      `(flag base intact=${advisoryChromeIntact}); overlap advisory=${JSON.stringify(advisory)} (flag=${advisoryReadsFlag}); ` +
+      `palettes differ=${palettesDiffer}`,
+    'add-refusal-palette.png',
+  );
+}
+
 // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals the merge
 // SELECTION BAR (design.html D11 / V5): a quiet bar ABOVE the calendar whose raised-chip
 // count pill reads "N selected" and whose Merge action is a NEUTRAL small button — never
@@ -5795,6 +5918,161 @@ async function sceneParityReach(browser) {
   });
 }
 
+/**
+ * The in-page field-label sweep (FIELD_LABELS). Collects every VISIBLE form control inside the
+ * currently-routed view and records, per control, HOW it is named — which is the whole question
+ * design.html D13 asks. Three naming idioms count, and they are the three the app actually uses:
+ *
+ *   label       — a wrapping `<label>` or a `label[for=id]` carrying visible text (the D13 idiom);
+ *   labelledby  — `aria-labelledby` resolving to a VISIBLE element;
+ *   row-heading — the control-bar / settings-row idiom, where the visible name is the row's
+ *                 heading (`.report-lab` before a `.report-row`, `.set-k` inside a `.set-row`)
+ *                 and `aria-label` carries the programmatic half.
+ *
+ * `placeholder` is deliberately NOT an idiom: a placeholder disappears on the first keystroke,
+ * which is the defect (issue 136). `aria-label` alone is not one either — it names the control for
+ * a screen reader and for nobody else, and D13 asks for a visible label.
+ *
+ * `field` marks the population D13's visible-label rule governs: the bordered-box controls the
+ * rule describes ("one border, one radius, one focus idiom") — text inputs, selects, textareas.
+ * A checkbox is not one of those: it is named by the word beside it, and the calendar's corner
+ * select box is an ICON-ONLY affordance, which design.html D16 / A02 govern instead — those owe
+ * an accessible name, not a visible label. So the sweep asks BOTH populations for a name and only
+ * the fields for a visible one.
+ *
+ * Scope: form controls (`input` / `select` / `textarea`). The Settings global-hotkey CAPTURE
+ * control is a `[tabindex]` span rather than a field, and is covered by HOTKEY_NO_TRAP.
+ */
+function sweepFieldLabels() {
+  const { visible } = window.__probe;
+  const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const view = document.querySelector('.views .view:not([hidden])');
+  const controls = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+    .filter((el) => el.type !== 'hidden')
+    .filter(visible);
+  const fields = controls.map((el) => {
+    const own = el.closest('label') ?? (el.id ? document.querySelector(`label[for="${el.id}"]`) : null);
+    // A wrapping label's text includes the control's own; a `<select>` contributes its option
+    // list, so strip every descendant control's text before reading the label's own words.
+    const labelText = (() => {
+      if (!own || !visible(own)) return '';
+      const clone = own.cloneNode(true);
+      for (const c of clone.querySelectorAll('input, select, textarea')) c.remove();
+      return text(clone);
+    })();
+    const byText = (el.getAttribute('aria-labelledby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id))
+      .filter((t) => t && visible(t))
+      .map(text)
+      .join(' ')
+      .trim();
+    const headEl = el.closest('.set-row')?.querySelector('.set-k')
+      ?? (el.closest('.report-row')?.previousElementSibling?.classList?.contains('report-lab')
+        ? el.closest('.report-row').previousElementSibling
+        : null);
+    const headText = headEl && visible(headEl) ? text(headEl) : '';
+    const idiom = labelText ? 'label' : byText ? 'labelledby' : headText ? 'row-heading' : 'none';
+    return {
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      idiom,
+      name: labelText || byText || headText,
+      field: !(el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')),
+      // The programmatic name, ignoring `placeholder` and `title` — the four start-* fields had
+      // none at all, which is the "no accessible name" half of the issue.
+      named: !!(el.getAttribute('aria-label')?.trim() || labelText || byText),
+      // A persistent, on-screen element names it — the "no visible label" half.
+      visiblyNamed: !!(labelText || byText || headText),
+    };
+  });
+  return { total: fields.length, fields };
+}
+
+// FIELD_LABELS — design.html D13 (and A01, whose field-border exemption is CONDITIONED on the
+// label being there): every field carries a VISIBLE label. Issue 136 measured four fields with no
+// accessible name AT ALL (the start form's description / client / project / tags) and three more
+// named only by a placeholder + an invisible `aria-label` (#add-desc, #search, #rep-name) — so the
+// name either vanished on the first keystroke or never existed. Nothing could catch it: the GOLD
+// design guard scores tokens, contrast and spacing, and label presence is a structural fact about
+// the DRIVEN DOM. This scene drives the real renderer through all five views and, in each, sweeps
+// every visible form control for TWO facts: EVERY control has a programmatic name that is not its
+// placeholder (D13's floor, and D16/A02's for the icon-shaped ones), and every FIELD — the bordered
+// controls D13's rule describes, so not the checkboxes — has a persistent VISIBLE element supplying
+// that name. The views are driven into the states that
+// hold fields — the Timer start-details disclosure, the Entries add form + Custom range, the
+// Reports builder + Custom range, and Settings; the Clients view carries no field at rest (its
+// create/rename micro-forms are transient surfaces of their own and are not swept here).
+// Every row-heading-idiom control is NAMED in the justification, so that population stays
+// reviewable the way TARGET_SIZE's spacing exceptions do.
+async function sceneFieldLabels(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState())));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+
+  const surfaces = [];
+  const sweep = async (surface) => surfaces.push({ surface, ...(await page.evaluate(sweepFieldLabels)) });
+
+  // Timer — the start-details disclosure holds the four fields the issue found nameless. It is
+  // idle-only (§12 R05), and this snapshot is idle.
+  await page.click('.nav-item[data-view="timer"]');
+  await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+  await page.click('#start-toggle');
+  await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+  await sweep('timer (start details)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-timer.png') });
+
+  // Entries — the toolbar search, the unified add form, and the Custom range's date pair.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.click('#el-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('entries (add form + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
+
+  // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
+  await page.click('.nav-item[data-view="clients"]');
+  await sweep('clients');
+
+  // Reports — the builder's name field and its Custom range.
+  await page.click('.nav-item[data-view="reports"]');
+  await page.click('#rep-new');
+  await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+  await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('reports (builder + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-reports.png') });
+
+  // Settings — every §14 control, plus the Backups group's retention picker.
+  await page.click('.nav-item[data-view="settings"]');
+  await page.waitForSelector('#settings-panel .set-row', { state: 'attached' });
+  await sweep('settings');
+  await page.close();
+
+  const all = surfaces.flatMap((s) => s.fields.map((f) => ({ surface: s.surface, ...f })));
+  const fields = all.filter((f) => f.field);
+  const unnamed = all.filter((f) => !f.named).map((f) => `${f.surface}:${f.label}`);
+  const placeholderOnly = fields.filter((f) => !f.visiblyNamed).map((f) => `${f.surface}:${f.label}`);
+  const rowIdiom = fields.filter((f) => f.idiom === 'row-heading').map((f) => `${f.label} → '${f.name}'`);
+  // Guard-the-guard: an empty sweep satisfies both emptiness assertions vacuously. The five views
+  // hold well over 20 visible fields across these states, so a sweep that has gone blind fails.
+  const ok = fields.length >= 20 && unnamed.length === 0 && placeholderOnly.length === 0;
+  record(
+    'FIELD_LABELS',
+    ok,
+    `D13 sweep over ${all.length} visible controls, ${fields.length} of them fields ` +
+      `(${surfaces.map((s) => `${s.surface}=${s.total}`).join(', ')}): ` +
+      `no accessible name at all (every control, D13 + D16)=[${unnamed.join('; ') || 'none'}]; ` +
+      `field named but not by a visible element (placeholder / aria-label only)=[${placeholderOnly.join('; ') || 'none'}]; ` +
+      `row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[${rowIdiom.join('; ') || 'none'}]`,
+    'field-labels-timer.png',
+  );
+}
+
 // TARGET_SIZE — design.html A03 (WCAG 2.2 SC 2.5.8): every interactive target measures at
 // least 24×24 CSS px, or falls under a WCAG-sanctioned exception. A machine sweep over the
 // running main window routes through all five views and, in each, collects every VISIBLE
@@ -6043,6 +6321,7 @@ const SCENES = {
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
   WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
+  ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], run: sceneAddRefusalPalette },
   MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
   MERGE_CHOICE_LIFT: { items: ['MERGE_CHOICE_LIFT'], run: sceneMergeChoiceLift },
   MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], run: sceneMergeNoconflict },
@@ -6070,6 +6349,7 @@ const SCENES = {
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
+  FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
   TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
