@@ -54,7 +54,9 @@ Times accept absolute (`14:30`, `2026-06-24T14:30`) and relative (`-90m`,
 npm run gui     # needs an Electron binary (see Install)
 ```
 
-A tray timer counts up; one click starts or stops. `Ctrl+Alt+T`
+A tray timer counts up; one click starts or stops. The glyph itself says whether a
+timer is running — two stacked bars idle, one fused block running — so the state is
+visible at a glance on macOS and Linux alike, without hovering. `Ctrl+Alt+T`
 toggles it from anywhere. The main window groups the day's entries, shows flags
 in context, and builds reports with CSV/JSON export. Anything the window does,
 `tt` does too.
@@ -120,6 +122,7 @@ npm test                 # PROP · GOLD · BDD · integration · parity
 npm run judge            # GUI screenshots scored against the JUDGE rubric
 npm run evidence         # regenerates acceptance/evidence/cli-transcript.md
 npm run tokens           # regenerates the CSS token blocks from context/design.tokens.json
+npm run icons            # regenerates the app mark + tray glyphs from context/mark/ (needs Chromium)
 npm run verify:no-network
 npm run metrics          # celebratory SLOC + documentation census (--out FILE to save)
 npm run metrics:check    # reconcile-only gate: fails if a file escapes categorization
@@ -129,6 +132,13 @@ npm run metrics:check    # reconcile-only gate: fails if a file escapes categori
 every mockup and in `packages/gui/renderer/styles.css` from
 `context/design.tokens.json`; a guard test asserts the blocks match the tokens
 file and that the contrast floors hold, so the block is never hand-edited.
+
+`npm run icons` does the same job for the images the OS draws rather than the app:
+it rasterizes the three SVG sources in `context/mark/` into the app icon, the
+running/idle tray glyph pair, and the Linux installer's icon ladder, injecting the
+palette from the same token file. It is **not** on the build path — rasterizing needs
+Chromium — so the PNGs are committed, and a guard test fails if a source ever renders
+to nothing. The rules live in `context/design.html` §09.
 
 `npm run metrics` walks every git-tracked file, buckets it
 (implementation / tests / verification / requirements / design / AI context /

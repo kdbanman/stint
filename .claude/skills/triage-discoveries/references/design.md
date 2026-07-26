@@ -6,7 +6,7 @@ it, where its proof of fix lives. The procedure is in `SKILL.md`.
 ## Finding shape
 
 A confirmed violation of the visual spec: the problem in one sentence, the
-violated rule id (D01–D17, A01–A06) or checklist item, evidence (screenshot,
+violated rule id (D01–D21, A01–A06) or checklist item, evidence (screenshot,
 measurement, file:line), severity and confidence. Problem capture only.
 
 Two shapes an audit deliberately does **not** send here:

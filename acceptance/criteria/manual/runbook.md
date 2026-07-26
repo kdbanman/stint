@@ -59,14 +59,28 @@ bundled Node ≥ 22.5 — see PRD §15). The CLI and GUI share the same database
 
 §12 R01 (G8) requires the tray's **single left-click to open the compact popover only**
 — the old 3-item Start/Stop + Open Stint **dropdown action menu is removed**, and the
-popover is the sole surface for those actions. Verify on a real desktop session (no
-tray host headless, so this is the gating evidence for the tray's own click behavior).
+popover is the sole surface for those actions. It also requires the **glyph itself to state
+whether a timer is running**, on every platform. Verify on a real desktop session (no tray
+host headless, so this is the gating evidence for both the tray's click behavior and the
+rendered mark).
 
-1. With the app running, observe the tray/menu-bar title.
-   - [ ] While a timer runs, the tray title counts up once per second.
+1. With the app running, observe the tray/menu-bar **glyph** as you start and stop a timer.
+   - [ ] **Idle** shows the mark's **two stacked bars**; **running** shows a **single
+         fused block** (design.html D20). The change is visible **without hovering** —
+         a state you can only discover from the tooltip is a FAIL.
+   - [ ] The glyph occupies the same space in both states — the menu bar does not shift.
+   - [ ] **macOS only:** the glyph is monochrome and follows light/dark menu-bar
+         appearance, and the count-up title runs beside it once per second. On **Linux**
+         there is no title — the glyph alone must carry the state (issue #162).
    - [ ] Pressing the global hotkey (default `Ctrl+Alt+T`) from another application
-         toggles the timer — stops if running, resumes the last entry if idle.
-2. Click the tray icon and observe the click behavior (§12 R01).
+         toggles the timer — stops if running, resumes the last entry if idle — and the
+         **glyph flips with it**.
+2. Check the app mark outside the tray.
+   - [ ] The dock (macOS) / launcher entry (Linux) shows the Stint mark, **not** a
+         generic placeholder or the stock Electron logo.
+   - [ ] **Linux only:** the main window's taskbar and alt-tab entries show the mark, and
+         a check-in notification carries it rather than the desktop's fallback icon.
+3. Click the tray icon and observe the click behavior (§12 R01).
    - [ ] A single **LEFT-click** opens the **compact popover only** — **no dropdown
          menu appears**.
    - [ ] The popover shows **Stop** while a timer runs, **Start** while idle, and
