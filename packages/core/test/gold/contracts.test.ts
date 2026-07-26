@@ -635,12 +635,151 @@ describe('GOLD: describeOverlaps detail (§12 R9)', () => {
   });
 });
 
+/**
+ * Local midnight on a LITERAL calendar date, as the UTC instant a range bound carries.
+ *
+ * Range bounds are local-midnight instants, so a fully hard-coded `Z` string would only be
+ * right in one timezone. A `new Date(y, monthIndex, day)` construction names the exact day
+ * the boundary must land on while holding in whatever timezone the suite runs — the same
+ * form `gui/test/reportview.test.ts` pins `resolveDateRange` with.
+ */
+const localMidnight = (year: number, monthIndex: number, day: number) =>
+  new Date(year, monthIndex, day).toISOString();
+
+describe('GOLD: resolveRange preset windows (§09 R01)', () => {
+  // The five presets are the windows every report and export is measured over, so each
+  // boundary is pinned to a literal calendar date read off a 2026 calendar — never to a
+  // second call of resolveRange, which would only prove the function agrees with itself.
+  // Flip the week-start offset, drop a day, or swap a month and the named day changes and
+  // these redden. `now` is likewise built from local parts, so its local calendar day (and
+  // weekday) is the same everywhere the suite runs.
+  const WEDNESDAY = new Date(2026, 5, 24, 18, 0, 0); // 2026-06-24 18:00 local — a Wednesday
+
+  it('this week runs from the Monday on or before now to the following Monday (weekStart=monday)', () => {
+    expect(resolveRange('week', 'monday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
+    });
+  });
+
+  it('this week runs from the Sunday on or before now to the following Sunday (weekStart=sunday)', () => {
+    expect(resolveRange('week', 'sunday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 21), // Sun 2026-06-21
+      toUtc: localMidnight(2026, 5, 28), // Sun 2026-06-28
+    });
+  });
+
+  it('a Sunday belongs to the week that started the PREVIOUS Monday (weekStart=monday)', () => {
+    // The week-start offset's hardest day: Sunday is day 0, so a Monday-start week must
+    // reach six days BACK, not zero. A mid-week `now` cannot tell the two rules apart.
+    expect(resolveRange('week', 'monday', new Date(2026, 5, 28, 12, 0, 0))).toEqual({
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
+    });
+  });
+
+  it('a Monday belongs to the week that started the PREVIOUS Sunday (weekStart=sunday)', () => {
+    // The mirror case: under a Sunday-start week a Monday `now` reaches one day back.
+    expect(resolveRange('week', 'sunday', new Date(2026, 5, 22, 12, 0, 0))).toEqual({
+      fromUtc: localMidnight(2026, 5, 21), // Sun 2026-06-21
+      toUtc: localMidnight(2026, 5, 28), // Sun 2026-06-28
+    });
+  });
+
+  it('last week is the seven days ending where this week begins (weekStart=monday)', () => {
+    expect(resolveRange('last-week', 'monday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 15), // Mon 2026-06-15
+      toUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+    });
+  });
+
+  it('last week is the seven days ending where this week begins (weekStart=sunday)', () => {
+    expect(resolveRange('last-week', 'sunday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 14), // Sun 2026-06-14
+      toUtc: localMidnight(2026, 5, 21), // Sun 2026-06-21
+    });
+  });
+
+  it('a week spanning the year boundary keeps running into January', () => {
+    // Thu 2026-12-31 sits in the week Mon 2026-12-28 … Mon 2027-01-04.
+    expect(resolveRange('week', 'monday', new Date(2026, 11, 31, 9, 0, 0))).toEqual({
+      fromUtc: localMidnight(2026, 11, 28), // Mon 2026-12-28
+      toUtc: localMidnight(2027, 0, 4), // Mon 2027-01-04
+    });
+  });
+
+  it('a week spanning a DST transition still runs local-midnight to local-midnight', () => {
+    // 2026-03-08 is the US spring-forward. The week containing it is 167 or 169 hours long
+    // on a US host, so `+ 7 × 24h` would land an hour off the Monday midnight; calendar
+    // day arithmetic lands on it exactly. Wed 2026-03-11 sits in Mon 03-09 … Mon 03-16.
+    expect(resolveRange('week', 'monday', new Date(2026, 2, 11, 12, 0, 0))).toEqual({
+      fromUtc: localMidnight(2026, 2, 9), // Mon 2026-03-09
+      toUtc: localMidnight(2026, 2, 16), // Mon 2026-03-16
+    });
+  });
+
+  it('this month runs from the 1st to the 1st of the next month', () => {
+    expect(resolveRange('month', 'monday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 1), // 2026-06-01
+      toUtc: localMidnight(2026, 6, 1), // 2026-07-01
+    });
+  });
+
+  it('last month runs from the previous 1st to this month’s 1st', () => {
+    expect(resolveRange('last-month', 'monday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 4, 1), // 2026-05-01
+      toUtc: localMidnight(2026, 5, 1), // 2026-06-01
+    });
+  });
+
+  it('last month from January reaches back into the previous year', () => {
+    expect(resolveRange('last-month', 'monday', new Date(2026, 0, 15, 12, 0, 0))).toEqual({
+      fromUtc: localMidnight(2025, 11, 1), // 2025-12-01
+      toUtc: localMidnight(2026, 0, 1), // 2026-01-01
+    });
+  });
+
+  it('the 31st of a month still resolves to whole-month bounds, and back to a short February', () => {
+    // Day-of-month never leaks into the bounds: from the 31st of March, this month is
+    // 03-01 … 04-01 and last month is 02-01 … 03-01 (February 2026 has 28 days).
+    const lastDayOfMarch = new Date(2026, 2, 31, 23, 30, 0);
+    expect(resolveRange('month', 'monday', lastDayOfMarch)).toEqual({
+      fromUtc: localMidnight(2026, 2, 1), // 2026-03-01
+      toUtc: localMidnight(2026, 3, 1), // 2026-04-01
+    });
+    expect(resolveRange('last-month', 'monday', lastDayOfMarch)).toEqual({
+      fromUtc: localMidnight(2026, 1, 1), // 2026-02-01
+      toUtc: localMidnight(2026, 2, 1), // 2026-03-01
+    });
+  });
+
+  it('today is the local calendar day now falls on, to the next local midnight', () => {
+    expect(resolveRange('today', 'monday', WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 24), // 2026-06-24
+      toUtc: localMidnight(2026, 5, 25), // 2026-06-25
+    });
+  });
+
+  it('today on a DST-transition day ends at the true next local midnight, never +24h', () => {
+    // A 23- or 25-hour local day (2026-03-08 in the US) — the day-after bound is calendar
+    // arithmetic, so on such a host it differs from the naive `+ 24h` result.
+    expect(resolveRange('today', 'monday', new Date(2026, 2, 8, 12, 0, 0))).toEqual({
+      fromUtc: localMidnight(2026, 2, 8), // 2026-03-08
+      toUtc: localMidnight(2026, 2, 9), // 2026-03-09
+    });
+  });
+});
+
 describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
   // The artefact-is-criterion contract: a saved report's RELATIVE preset spec re-resolves
-  // to the SAME {fromUtc,toUtc} as the ad-hoc resolveRange (so a saved and an ad-hoc report
+  // to the same {fromUtc,toUtc} the ad-hoc path produces (so a saved and an ad-hoc report
   // over the same window can never diverge), and an ABSOLUTE spec round-trips its exact
   // bounds. Fails if the preset/absolute discrimination or the resolution drifts.
-  it('a stored this-week preset resolves to the same window as resolveRange("week")', () => {
+  //
+  // The re-resolved window is pinned to the literal week FIXED_NOW falls in, not to a call
+  // of resolveRange — comparing the two functions would pass just as happily if both were
+  // wrong together, which is the whole failure mode a saved report can't afford.
+  it('a stored this-week preset re-resolves to the literal week now falls in', () => {
     const now = new Date(FIXED_NOW);
     const store = Store.openMemory(() => now);
     store.saveReport({
@@ -654,7 +793,11 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     const def = store.getReport('Weekly')!;
     expect(def.rangeSpec).toEqual({ kind: 'preset', preset: 'week' });
     const resolved = resolveSavedRange(def.rangeSpec, store.settings().weekStart, now);
-    expect(resolved).toEqual(resolveRange('week', store.settings().weekStart, now));
+    // FIXED_NOW is Wed 2026-06-24; the default weekStart is monday.
+    expect(resolved).toEqual({
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
+    });
     store.close();
   });
 
@@ -704,10 +847,12 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       rounding: false,
       roundingIncrementMin: 15,
     });
-    const range = resolveRange('week', store.settings().weekStart, now);
+    // The ad-hoc arm is driven from the literal week FIXED_NOW (Wed 2026-06-24) falls in,
+    // so "saved agrees with ad-hoc" is anchored to a known window rather than to whatever
+    // resolveRange happens to return on both sides.
     const adhoc = store.report({
-      fromUtc: range.fromUtc,
-      toUtc: range.toUtc,
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
       by: 'client',
       billableFilter: 'billable',
       rounding: false,
@@ -716,8 +861,8 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     const run = store.runReport('Weekly', now);
     expect(run.grandTotalSeconds).toBe(adhoc.grandTotalSeconds);
     expect(run.grandTotalSeconds).toBe(3600);
-    expect(run.rangeFromUtc).toBe(range.fromUtc);
-    expect(run.rangeToUtc).toBe(range.toUtc);
+    expect(run.rangeFromUtc).toBe(localMidnight(2026, 5, 22));
+    expect(run.rangeToUtc).toBe(localMidnight(2026, 5, 29));
     store.close();
   });
 
@@ -740,10 +885,9 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     const def = store.getReport('Filtered')!;
     const ws = store.settings().weekStart;
     const resolved = resolveReportDef(def, ws, now);
-    const range = resolveRange('week', ws, now);
     expect(resolved).toEqual({
-      fromUtc: range.fromUtc,
-      toUtc: range.toUtc,
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22 — the week FIXED_NOW falls in
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
       by: 'project',
       billableFilter: 'all',
       rounding: true,
