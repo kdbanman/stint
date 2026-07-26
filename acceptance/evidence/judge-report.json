@@ -256,6 +256,12 @@
       "screenshot": "main-settings.png"
     },
     {
+      "item": "HOTKEY_NO_TRAP",
+      "pass": true,
+      "justification": "Tab INTO .set-hotkey from the control before it landed on the field (true); Tab from .set-hotkey advanced to select.set-field (escaped=true); Shift-Tab retreated to select.set-field writing nothing (true); Escape released to (body) writing nothing (true); Tab-walk from the field reached 4/4 stranded controls [dateFormat, updateCheck, backupRetention, backupRestore] via [\"select.set-field\",\"update-check\",\"select.set-field\",\"button.set-update-btn backup-restore\"]; capture intact — Ctrl+Shift+J persisted {\"key\":\"globalHotkey\",\"value\":\"CommandOrControl+Shift+J\"} (true); A04 focus-ring delta on the field=true (rest none|0px|rgb(33, 32, 28)|rgb(188, 187, 181) 0px 1px 0px 0px → focused solid|2px|rgb(229, 77, 46)|rgb(188, 187, 181) 0px 1px 0px 0px)",
+      "screenshot": "settings-hotkey-focus.png"
+    },
+    {
       "item": "TIMELINE_WINDOW",
       "pass": true,
       "justification": "Timeline group renders all four keys (allFour=true) with stored 09:00–15:00 (09:00–15:00); Around disabled while working_hours (disabled=true, row off=true); mode flip fired setSetting={\"key\":\"pickerWindowMode\",\"value\":\"around_now\"} and enabled Around (true); SU.timelineWindow working={\"startMin\":540,\"endMin\":900} (exact 540–900: true), around_now/8={\"startMin\":1140,\"endMin\":1440} vs expected {\"startMin\":1140,\"endMin\":1440} (true), calendar-forced-working-hours ok=true; consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)",

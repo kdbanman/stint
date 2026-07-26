@@ -551,6 +551,19 @@
       el.setAttribute('tabindex', '0');
       el.title = 'Click and press a key combination';
       el.addEventListener('keydown', (ev) => {
+        // The field captures a chord by swallowing the key — so the traversal keys need an
+        // explicit hatch BEFORE the swallow, or focus can enter and never leave by keyboard
+        // (WCAG 2.2 §2.1.2 no keyboard trap; design.html A04). Issue 135: preventDefault ran
+        // first with no hatch, which stranded every control after this one in DOM order.
+        //   Tab / Shift-Tab — pass through uncaptured so the browser moves focus on. A chord
+        //     on Tab is unbindable here as a result; the escape hatch outranks it.
+        //   Escape — cancels the innermost thing (craft checklist §4), which for a capture
+        //     field is the capture itself: release focus and bind nothing.
+        if (ev.key === 'Tab') return;
+        if (ev.key === 'Escape') {
+          el.blur();
+          return;
+        }
         ev.preventDefault();
         const accel = toAccelerator(ev);
         if (accel) void persist(el.dataset.key, accel);
