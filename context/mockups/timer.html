@@ -76,7 +76,7 @@
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
-  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
   .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
@@ -115,24 +115,27 @@
   .r-row2{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
   .tagchips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
   .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
-  .pad{padding:20px 24px}
-  .ph{font-size:14px;font-weight:640;margin:0 0 16px}
-  /* the favorites rail is the only card beside the runner while a timer runs — the start
-     panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51) */
-  .favrail{background:var(--sidebar);max-width:460px}
-  .fav{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r1);padding:12px 12px;margin-bottom:8px;box-shadow:var(--sh-card)}
+  .ph{font-size:14px;font-weight:640;margin:0 0 12px}
+  /* the favorites rail is the only surface beside the runner while a timer runs — the start
+     panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51).
+     The rail itself is NOT a card: D09 forbids nesting cards and tinting a sub-region, so the
+     rail is a bare column on the view surface and each favorite is the card (the shipped
+     .favorites / .fav-card pair). */
+  .favrail{max-width:460px}
+  .fav{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r2);padding:12px 12px;margin-bottom:12px;box-shadow:var(--sh-card)}
   .fav .star{color:var(--muted)}.fav .star .ic{width:15px;height:15px}
   .fav .fi{flex:1;min-width:0}
   .fav .fn{font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .fav .fm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
   .fav .kebab{color:var(--muted);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
   .favfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--muted)}
-  /* start disclosure — the calendar affordance expands the day timeline inline, in
-     flow below the Start field; the viewport rests on working hours (07:00–18:00)
-     and scrolls the full 24 h */
-  .startdisc{grid-column:3;margin-top:2px}
-  /* while the disclosure is open, Billable + tags sit in the freed left columns */
-  .r-edit .r-row2{grid-column:1/3;grid-row:2;align-self:start;margin-top:2px}
+  /* start disclosure — the calendar affordance expands the day timeline inline, in flow
+     below the Start field: a bordered paper box on the same row width the shipped
+     #le-start-disc / .stp-inline pair uses, no popover chrome and no shadow. The viewport
+     rests on working hours (07:00–18:00) and scrolls the full 24 h. */
+  .startdisc{grid-column:1/-1;max-width:420px;border:1px solid var(--rule);border-radius:var(--r1);background:var(--paper);padding:12px 16px}
+  /* Billable + tags follow the disclosure, as they do in the running Timer view */
+  .r-edit .r-row2{grid-column:1/-1;margin-top:0}
   .daywrap{position:relative}
   .dayview{height:352px;overflow-y:auto;overscroll-behavior:contain}
   .dayview::-webkit-scrollbar{width:6px}
@@ -140,8 +143,10 @@
   .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
-  .track{position:relative;height:768px;border-left:1px solid var(--rule);margin-left:44px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 31px,var(--rule) 31px,var(--rule) 32px)}
-  .hour{position:absolute;left:-44px;width:38px;text-align:right;font-size:11px;color:var(--muted);transform:translateY(-6px)}
+  /* the track is 30px an hour over the full 24 h, on the hour gutter the shipped picker
+     uses (.stp-track / .stp-hour) — the same geometry edit-entry.html's picker draws */
+  .track{position:relative;height:720px;border-left:1px solid var(--rule);margin-left:52px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 29px,var(--rule) 29px,var(--rule) 30px)}
+  .hour{position:absolute;left:-52px;width:38px;text-align:right;font-size:11px;color:var(--muted);transform:translateY(-6px)}
   .block{position:absolute;left:6px;right:10px;border-radius:var(--r1)}
   .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);z-index:3}
@@ -217,11 +222,7 @@
         <div class="r-edit">
           <div><label class="lab">Description</label><input class="field" value="Drafting proposals"></div>
           <div><label class="lab">Client</label><input class="field" value="Globex Corp"></div>
-          <div class="timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-27 09:00"><span class="cal on" title="Adjust start"><svg class="ic"><use href="#i-cal"/></svg></span></div>
-          <div class="r-row2">
-            <span class="toggle"><span class="sw on"><i></i></span> Billable</span>
-            <div class="tagchips"><span class="tag">admin <b>×</b></span><span class="tag">proposal <b>×</b></span><input placeholder="add a tag…"></div>
-          </div>
+          <div class="timefield"><label class="lab">Start</label><input class="field tnum" value="2026-06-27T09:00"><span class="cal on" title="Adjust start"><svg class="ic"><use href="#i-cal"/></svg></span></div>
           <!-- the calendar affordance discloses the day timeline inline, in flow (no
                popover, no modal); a running entry has a draggable start edge only —
                no bottom grip, no end label — and dissolves into the future -->
@@ -229,16 +230,20 @@
             <div class="daywrap">
               <div class="dayview">
                 <div class="track">
-                  <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:32px">01:00</span><span class="hour tnum" style="top:64px">02:00</span><span class="hour tnum" style="top:96px">03:00</span><span class="hour tnum" style="top:128px">04:00</span><span class="hour tnum" style="top:160px">05:00</span><span class="hour tnum" style="top:192px">06:00</span><span class="hour tnum" style="top:224px">07:00</span><span class="hour tnum" style="top:256px">08:00</span><span class="hour tnum" style="top:288px">09:00</span><span class="hour tnum" style="top:320px">10:00</span><span class="hour tnum" style="top:352px">11:00</span><span class="hour tnum" style="top:384px">12:00</span><span class="hour tnum" style="top:416px">13:00</span><span class="hour tnum" style="top:448px">14:00</span><span class="hour tnum" style="top:480px">15:00</span><span class="hour tnum" style="top:512px">16:00</span><span class="hour tnum" style="top:544px">17:00</span><span class="hour tnum" style="top:576px">18:00</span><span class="hour tnum" style="top:608px">19:00</span><span class="hour tnum" style="top:640px">20:00</span><span class="hour tnum" style="top:672px">21:00</span><span class="hour tnum" style="top:704px">22:00</span><span class="hour tnum" style="top:736px">23:00</span>
-                  <div class="block other" style="top:240px;height:40px">Email + standup</div>
-                  <div class="block me open" style="top:288px;height:320px"></div>
-                  <span class="tlabel tnum" style="top:293px">09:00</span>
-                  <span class="grip" style="top:285px"></span>
+                  <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
+                  <div class="block other" style="top:240px;height:22.5px">Email + standup</div>
+                  <div class="block me open" style="top:270px;height:300px"></div>
+                  <span class="tlabel tnum" style="top:275px">09:00</span>
+                  <span class="grip" style="top:267px"></span>
                 </div>
               </div>
               <i class="fade t"></i><i class="fade b"></i>
             </div>
             <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
+          </div>
+          <div class="r-row2">
+            <span class="toggle"><span class="sw on"><i></i></span> Billable</span>
+            <div class="tagchips"><span class="tag">admin <b>×</b></span><span class="tag">proposal <b>×</b></span><input placeholder="add a tag…"></div>
           </div>
         </div>
       </div>
@@ -248,7 +253,7 @@
            form — is drawn only in the IDLE state, so no second Description field and no
            start affordance appears beside the runner card. The favorites rail stays: a
            one-click Resume is §05 R09's own verb (core inherits the atomic stop-then-start). -->
-      <div class="card favrail pad">
+      <div class="favrail">
         <h3 class="ph">Favorites</h3>
         <div class="fav">
           <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
@@ -274,6 +279,6 @@
   </div>
 </div>
 <!-- rest the timeline viewport on working hours (07:00–18:00); the track scrolls the full 24 h -->
-<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=224</script>
+<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=210</script>
 </body>
 </html>
