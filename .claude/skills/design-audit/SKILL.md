@@ -26,6 +26,14 @@ Two kinds of output, routed differently:
 Nothing else lands in the repo: the session's outputs are the report shown to
 the user, the issues, and the opportunity lines.
 
+A third kind is never deliberate but always present: an **acceptance** — a
+killed lead, a Conforming verdict, an opportunity line, a proposed spec change.
+Each writes *not a problem* into the repo, attached to a reason that will stop
+the next audit looking again. **Hold acceptances to a higher bar than
+accusations**, and when one flips, withdraw it in the open. Two outputs leaning
+on one unexamined premise are one output: they can corroborate each other and
+still be wrong together.
+
 ## Load before starting
 
 - `context/design.html` + `context/design.tokens.json` — the binding rules;
@@ -54,6 +62,9 @@ an orchestration script — process.html R13):
   rendered pair), and reports inconvenient findings as readily as convenient
   ones. Never asserts taste; only facts with file:line or pixel evidence.
 
+A lead dies only to evidence from the case most likely to break it — the
+shortest span, the longest name, the emptiest list. Otherwise it stays open.
+
 At saturation the auditor drafts the report: provenance (commit, date, method),
 then **Conforming / Questionable / Violating** findings — each with the rule
 id, the evidence (screenshot or measurement), and severity — then the
@@ -67,10 +78,13 @@ Verdicts are the auditor's; the grilling is the bar. Run a `grill-me` session
 over every questionable/violating finding (cluster what would be one issue):
 one question at a time, recommended answer first, until each finding is either
 a **confirmed problem**, an **accepted deviation** (the owner's rationale gets
-recorded — an accepted deviation with no recorded rationale in the spec is
-itself a finding: the spec should say so), or an **opportunity** (rerouted to
-the standing issue). Taste calls the owner can't articulate a rule for become
-opportunities, not defects.
+recorded), or an **opportunity** (rerouted to the standing issue). Taste calls
+the owner can't articulate a rule for become opportunities, not defects.
+
+Grill the acceptances too, and harder — every killed lead, Conforming verdict
+and opportunity routing. Nothing else here pressure-tests them. Where a routing
+rule stands in for an absent owner it settles the defect/opportunity split only;
+it never authorizes an acceptance.
 
 ## Phase 3 — file
 
@@ -81,5 +95,8 @@ opportunities, not defects.
   confidence, honestly. Problem capture only — no solution sections.
 - Append opportunities to the **Design opportunities** issue (create it if
   missing), one line each.
-- Accepted deviations that the spec should record → one issue against
-  `context/design.html` (a spec gap, not a product defect).
+- **Only an owner accepts a deviation.** Before calling the spec silent, settle
+  the case from rules other than the one cited — most apparent silences aren't.
+  If it is genuinely silent, one issue against `context/design.html` asks the
+  owner to decide; it never proposes which way, and never argues that the app
+  deviates and the app is right.
