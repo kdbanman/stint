@@ -22,7 +22,6 @@ import { createIpcHandlers, type IpcHandlerDeps } from '../src/ipc-handlers.js';
 const deps: IpcHandlerDeps = {
   store: {} as unknown as IpcHandlerDeps['store'],
   refreshAll: () => {},
-  toggleTimer: () => ({ warnings: [] }),
   showSaveDialog: () => undefined,
   rebindGlobalHotkey: () => {},
 };
