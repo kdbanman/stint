@@ -1,6 +1,6 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A04, A06;
- * transition PR #132, issues #137 and #141).
+ * transition PR #132, issues #137, #141 and #152).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -32,6 +32,11 @@
  *      each site resolves to, because A01 picks its floor from the type. Every token painted as
  *      text must be one design.html gives a text role, and `accent` — a 3:1 non-text colour the
  *      running clocks borrow — must clear 24px wherever it is text (issue #141).
+ *   8. D06 the type ramp — the same census over `font-size`/`font-weight`, from both stylesheets
+ *      and inline `style=` attributes: every authored size and weight is a step §04 names, so a
+ *      sixth role cannot accumulate a site at a time (issue #152). The 11px floor in (5) is one
+ *      end of that rule; this is the whole of it. Paired with the tabular check the same issue
+ *      names, since a clock that is not tabular is off the Clock role even at the right size.
  *
  * Deliberately out of scope: D08 radii — their AC is JUDGE, and the two recorded off-trio radii
  * (the progress track, the calendar checkbox) are a pending design.html exemption question, not
@@ -485,13 +490,21 @@ interface Typography {
   readonly px?: number;
   readonly weight?: number;
   readonly display?: string;
+  readonly family?: string;
+  readonly numeric?: string;
 }
 
-/** The font-size, font-weight and display a site resolves to on one surface. `px` is left
- *  undefined when no rule declares a literal px size — an unreadable site, which callers that
- *  need a size must treat as a failure rather than a pass. */
+/** The font-size, font-weight, display, font-family and font-variant-numeric a site resolves to
+ *  on one surface. `px` is left undefined when no rule declares a literal px size — an unreadable
+ *  site, which callers that need a size must treat as a failure rather than a pass. */
 const typographyAt = (css: string, site: string): Typography => {
-  const resolved: { px?: number; weight?: number; display?: string } = {};
+  const resolved: {
+    px?: number;
+    weight?: number;
+    display?: string;
+    family?: string;
+    numeric?: string;
+  } = {};
   for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
     const sel = rule[1]!.trim().replace(/\s+/g, ' ');
@@ -507,6 +520,10 @@ const typographyAt = (css: string, site: string): Typography => {
         resolved.weight = value === 'bold' ? 700 : value === 'normal' ? 400 : Number(value);
       } else if (parsed[1] === 'display') {
         resolved.display = value;
+      } else if (parsed[1] === 'font-family') {
+        resolved.family = value;
+      } else if (parsed[1] === 'font-variant-numeric') {
+        resolved.numeric = value;
       }
     }
   }
@@ -595,5 +612,174 @@ describe('text colour: every token painted as text, on the floor it earns (desig
       .filter((h) => h.type.weight !== 680)
       .map((h) => `${h.surface}: ${h.selector} → ${h.type.weight ?? 'no font-weight'}`);
     expect(offenders, 'D06 puts every clock at 680').toEqual([]);
+  });
+});
+
+// ---- the type ramp: five roles, and nothing between them (issue 152) -------------------------
+// The readable-text floor above is one END of D06's type rule; this is the whole of it. §04 gives
+// five roles and no sixth — Clock 24–38px/680, Title 17–18px/640, Body strong 13px/590, Body
+// 13px/450, Caption 12px, with 11px named in the Caption row as the smallest readable step — and
+// says hierarchy comes from size and weight ONLY. So a size or weight that is not on the table is
+// a sixth role nobody declared, and the audit counted 45 of them in styles.css alone (35 sizes,
+// 10 weights) with another 85 across the mockups: a 12.5px here, a 500 there, each harmless alone
+// and collectively a ramp that no longer constrains anything.
+//
+// Direction, as with the censuses above: this reads what the CSS SAYS and holds ALL of it to the
+// table. Scoring a list of selectors someone remembered would let the drift walk straight back in
+// through whatever the list omits — the same shape of hole that let a 1.89:1 focus ring and an
+// accent-as-text clock ship green.
+
+interface StyledSite {
+  readonly surface: string;
+  /** The rule's selector, or `style=` for a declaration written inline on an element. */
+  readonly site: string;
+  readonly declarations: string;
+}
+
+/** Documents whose ELEMENTS can carry a `style=` attribute: the mockups plus the two renderer
+ *  HTML files. Not decoration — design-system.html writes its whole type-ramp demo inline, so a
+ *  census that read only stylesheets would score the ramp's own illustration not at all. */
+const markupDocuments = (): Array<[name: string, markup: string]> => [
+  ...mockupNames.map((f): [string, string] => [
+    `context/mockups/${f}`,
+    readFileSync(join(repoRoot, 'context/mockups', f), 'utf8'),
+  ]),
+  ...['index.html', 'popover.html'].map((f): [string, string] => [
+    `packages/gui/renderer/${f}`,
+    readFileSync(join(repoRoot, 'packages/gui/renderer', f), 'utf8'),
+  ]),
+];
+
+/** Every place a declaration can be authored, from both halves of every surface. */
+const styledSites = (): StyledSite[] => {
+  const sites: StyledSite[] = [];
+  for (const [surface, css] of surfaceCss()) {
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      sites.push({
+        surface,
+        site: rule[1]!.trim().replace(/\s+/g, ' '),
+        declarations: rule[2]!,
+      });
+    }
+  }
+  for (const [surface, markup] of markupDocuments()) {
+    // group 1 is non-optional in the pattern, so a match guarantees it
+    for (const attr of markup.matchAll(/style="([^"]*)"/g)) {
+      sites.push({ surface, site: `style="${attr[1]!}"`, declarations: attr[1]! });
+    }
+  }
+  return sites;
+};
+
+describe('the type ramp (design.html D06 §04 — issue 152)', () => {
+  const RAMP_WEIGHTS = new Set([450, 590, 640, 680]);
+  /** The §04 size steps: the three discrete roles, plus the two the table writes as ranges. */
+  const sizeOnRamp = (px: number): boolean =>
+    px === 11 || px === 12 || px === 13 || (px >= 17 && px <= 18) || (px >= 24 && px <= 38);
+
+  const TYPE_DECL = /(?:^|[;{])\s*(font-size|font-weight)\s*:\s*([^;}]+)/g;
+
+  it('every authored size and weight, on every surface, is a step the §04 table names', () => {
+    const declarations = styledSites().flatMap((s) =>
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      [...s.declarations.matchAll(TYPE_DECL)].map((m) => ({
+        where: `${s.surface}: ${s.site}`,
+        property: m[1]!,
+        value: m[2]!.trim(),
+      })),
+    );
+    // Guard-the-guard: 554 typography declarations stand today across the eleven mockups,
+    // styles.css and the two renderer documents. The assertion below is an emptiness check, so a
+    // census that stopped matching would report no offenders and read green.
+    expect(
+      declarations.length,
+      'the type census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(400);
+    expect(
+      declarations.some((d) => d.where.startsWith('packages/gui/renderer/styles.css')),
+      'the SHIPPED renderer contributed no type declaration — only the mockups were scanned',
+    ).toBe(true);
+    expect(
+      declarations.some((d) => d.where.includes(': style="')),
+      'the inline-attribute half of the census found nothing — the type ramp demo is written there',
+    ).toBe(true);
+
+    const offenders = declarations
+      .filter((d) => {
+        if (d.property === 'font-size') {
+          const px = /^(\d*\.?\d+)px$/.exec(d.value);
+          // A size the scan cannot read is a FAILURE, not a skip: the ramp is a set of px steps,
+          // so a relative size (em/%/inherit) leaves the rendered step unknowable here. None
+          // exists today, and one arriving is a spec question, not something to wave through.
+          return !px || !sizeOnRamp(parseFloat(px[1]!));
+        }
+        // `bold`/`normal` are 700/400 spelled as words — both off the ramp, and read as such
+        // rather than skipped, so the keyword is not a way around the numbers.
+        const weight = d.value === 'bold' ? 700 : d.value === 'normal' ? 400 : Number(d.value);
+        return !RAMP_WEIGHTS.has(weight);
+      })
+      .map((d) => `${d.where} → ${d.property}: ${d.value}`);
+    expect(offenders, 'D06 gives five type roles; this is a sixth').toEqual([]);
+  });
+
+  it('no surface hides a size in the `font` shorthand, where the census cannot see it', () => {
+    // `font: inherit` is the one shorthand the app writes — a button adopting the page's type,
+    // which introduces no size at all. A shorthand carrying its own size would set a role the
+    // census above never scores, so the property is allowed only in that size-free form.
+    const strays = styledSites()
+      .flatMap((s) =>
+        // group 1 is non-optional in the pattern, so a match guarantees it
+        [...s.declarations.matchAll(/(?:^|[;{])\s*font\s*:\s*([^;}]+)/g)].map((m) => ({
+          where: `${s.surface}: ${s.site}`,
+          value: m[1]!.trim(),
+        })),
+      )
+      .filter((d) => /\d\s*(?:px|pt|em|rem|ex|ch|%)/.test(d.value))
+      .map((d) => `${d.where} → font: ${d.value}`);
+    expect(strays, 'a `font` shorthand carrying its own size').toEqual([]);
+  });
+});
+
+describe('every clock and duration is tabular (design.html D06 — issue 152)', () => {
+  it('no surface writes font-variant-numeric to anything but tabular-nums', () => {
+    // D06's "digits never jitter" has no opposite case: nothing in this app wants proportional
+    // figures. Writing `normal` would be the one way to opt a clock out of the idiom while still
+    // looking like it had been considered.
+    const offenders = styledSites()
+      .flatMap((s) =>
+        // group 1 is non-optional in the pattern, so a match guarantees it
+        [...s.declarations.matchAll(/(?:^|[;{])\s*font-variant-numeric\s*:\s*([^;}]+)/g)].map(
+          (m) => ({ where: `${s.surface}: ${s.site}`, value: m[1]!.trim() }),
+        ),
+      )
+      .filter((d) => d.value !== 'tabular-nums')
+      .map((d) => `${d.where} → font-variant-numeric: ${d.value}`);
+    expect(offenders, 'D06: every clock and duration is tabular').toEqual([]);
+  });
+
+  it('every backup timestamp the renderer prints lands in a monospace, tabular site', () => {
+    // Reach, stated plainly: CSS cannot see that a string is a TIME, so "every clock and duration"
+    // is not decidable from the stylesheet alone. What IS decidable is the other direction — take
+    // a formatter that produces a time and check where its output is painted. `backupLabel()` is
+    // the one the audit caught: it feeds two sites, and only `.ver` carried the idiom while
+    // `.backup-meta` printed "Jul 26, 2026, 00:30" in the proportional sans (issue 152).
+    const settingsJs = readFileSync(join(repoRoot, 'packages/gui/renderer/settings.js'), 'utf8');
+    const css = stylesCss.replace(/\/\*[^]*?\*\//g, '');
+    const sites = [...settingsJs.matchAll(/class="([^"]+)">\$\{esc\(backupLabel\(/g)]
+      // group 1 is the class list, which a match guarantees; `a b` becomes the compound `.a.b`
+      .map((m) => `.${m[1]!.trim().split(/\s+/).join('.')}`);
+    // Guard-the-guard: two such sites stand today. A markup reshuffle that broke the match would
+    // otherwise leave nothing to score.
+    expect(sites.length, 'the backupLabel census found fewer than the two known sites').toBeGreaterThanOrEqual(2);
+
+    const offenders = sites
+      .map((site) => ({ site, type: typographyAt(css, site) }))
+      .filter((h) => h.type.family !== 'var(--num)' || h.type.numeric !== 'tabular-nums')
+      .map(
+        (h) =>
+          `${h.site} → ${h.type.family ?? 'no font-family'} / ${h.type.numeric ?? 'no font-variant-numeric'}`,
+      );
+    expect(offenders, 'D06 puts every clock and duration in the numeric face, tabular').toEqual([]);
   });
 });

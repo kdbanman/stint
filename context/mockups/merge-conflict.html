@@ -38,7 +38,7 @@
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
-  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:450}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
   /* D12/V7: selection ≠ accent — the active nav item lifts as a raised paper chip;
@@ -63,7 +63,7 @@
   .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
+  .tag{font-size:11px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
   .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
@@ -71,26 +71,26 @@
 
   /* faded entries backdrop */
   .scroll{filter:saturate(.96)}
-  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13.5px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
-  .day-h .dsum{font-weight:400;color:var(--muted);font-size:12px}
+  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
+  .day-h .dsum{font-weight:450;color:var(--muted);font-size:12px}
   .row{display:grid;grid-template-columns:18px 120px 1fr auto;align-items:center;gap:16px;padding:12px 4px;border-bottom:1px solid var(--rule)}
   .row.sel{background:var(--wash);box-shadow:var(--sh-chip)}
   /* design.html D12 (issue #144): the checked box is a tick, not a colour — paper fill, neutral
      edge, chip lift, ink mark. The accent is never spent on a selection. */
   .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
   .row .ck .ic{width:12px;height:12px;color:var(--ink)}
-  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
+  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
   .row .what{display:flex;align-items:center;gap:8px;min-width:0}
   .row .what .where{color:var(--muted)}
-  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12.5px;justify-self:end}
+  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12px;justify-self:end}
   .selbar{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;border-radius:var(--r1);background:var(--wash);border:1px solid var(--rule)}
   .selbar .cap{flex:1}
   /* modal */
   .scrim{position:absolute;inset:0;background:rgba(40,30,14,.34);display:flex;align-items:center;justify-content:center;padding:16px}
   .modal{width:480px;max-width:100%;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden}
   .m-head{padding:20px 24px 16px;border-bottom:1px solid var(--rule)}
-  .m-head h3{margin:0;font-size:16px;font-weight:640}
-  .m-head p{margin:4px 0 0;color:var(--muted);font-size:12.5px}
+  .m-head h3{margin:0;font-size:17px;font-weight:640}
+  .m-head p{margin:4px 0 0;color:var(--muted);font-size:12px}
   .m-body{padding:16px 24px}
   /* source preview */
   .srcs{display:flex;gap:8px;margin-bottom:16px}
@@ -113,9 +113,9 @@
   .opt.on{background:var(--paper);box-shadow:var(--sh-chip)}
   .rad{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--rule-strong);flex:none;position:relative}
   .opt.on .rad::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink)}
-  .opt .ot b{font-weight:590;font-size:12.5px}
+  .opt .ot b{font-weight:590;font-size:12px}
   .opt .ot span{display:block;color:var(--muted);font-size:11px}
-  .agree{display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--rule);color:var(--muted);font-size:12.5px}
+  .agree{display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--rule);color:var(--muted);font-size:12px}
   .agree .ic{width:15px;height:15px;color:var(--run)}
   .agree b{color:var(--ink);font-weight:590}
   .agree .val{margin-left:auto;font-family:var(--num);font-size:12px}
