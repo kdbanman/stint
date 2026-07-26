@@ -54,7 +54,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -154,9 +154,15 @@
       "screenshot": "main-edit-reject.png"
     },
     {
+      "item": "ADD_REFUSAL_PALETTE",
+      "pass": true,
+      "justification": "refused save={\"erred\":true,\"color\":\"rgb(206, 44, 49)\",\"background\":\"rgb(254, 235, 236)\",\"border\":\"rgb(206, 44, 49)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"stop time must be after start time\",\"notWritten\":true} (danger=true); reopened={\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag base intact=true); overlap advisory={\"shown\":true,\"written\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag=true); palettes differ=true",
+      "screenshot": "add-refusal-palette.png"
+    },
+    {
       "item": "MERGE_CONFLICT",
       "pass": true,
-      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
+      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}; Escape cancels the prompt — dismissed with nothing merged (true): {\"promptShown\":false,\"backdropShown\":false,\"merged\":null}",
       "screenshot": "main-merge-conflict.png"
     },
     {
@@ -252,7 +258,7 @@
     {
       "item": "CALENDAR_ENTRY_BLOCK",
       "pass": true,
-      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 677->677 (delta 0px), block 672->672 (delta 0px)",
+      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 722->722 (delta 0px), block 717->717 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
@@ -316,6 +322,12 @@
       "screenshot": "parity-settings.png"
     },
     {
+      "item": "FIELD_LABELS",
+      "pass": true,
+      "justification": "D13 sweep over 34 visible controls, 29 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=8): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "screenshot": "field-labels-timer.png"
+    },
+    {
       "item": "TARGET_SIZE",
       "pass": true,
       "justification": "A03 sweep over 106 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
@@ -324,7 +336,7 @@
     {
       "item": "COLOUR_PAIRING",
       "pass": true,
-      "justification": "D05/A05 pairing: run-dot beside 'running' (strip={\"dotPresent\":true,\"stateWord\":\"running\"}, card state='running'); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
+      "justification": "D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip={\"dotVisible\":true,\"wordVisible\":false,\"stateWord\":\"running\"}, card={\"stateWord\":\"running\",\"wordVisible\":true,\"dotVisible\":true}); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
       "screenshot": "main-colour-pairing.png"
     },
     {

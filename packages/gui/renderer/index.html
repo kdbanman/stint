@@ -68,7 +68,11 @@
             <section class="timer-card idle" id="timer-card">
               <div class="tc-clock-block">
                 <div class="clock tnum" id="timer-clock">00:00:00</div>
-                <div class="state" id="timer-state">idle</div>
+                <!-- design.html D05/A05: the running state is said in a word AND marked with a
+                     dot, so it never rides on the recoloured count-up alone (issue #142). The
+                     dot is decorative to assistive tech — #timer-state-word carries the state
+                     in text, and #timer-state's own textContent is that word. -->
+                <div class="state" id="timer-state"><span class="tc-dot" aria-hidden="true"></span><span id="timer-state-word">idle</span></div>
               </div>
               <div class="ctx">
                 <div class="desc" id="timer-desc">nothing running</div>
@@ -137,13 +141,24 @@
                 <button class="primary" id="toggle" data-standing-primary aria-label="Start timer" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Start</button>
                 <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">Details</button>
               </div>
+              <!-- design.html D13 (issue 136): every field carries a VISIBLE label. These four were
+                   named by their PLACEHOLDER alone, so the only name vanished on the first keystroke
+                   and a screen reader read four unnamed text inputs. The wrapping label is the same
+                   stacked idiom the live-edit strip above uses (.le-field) and the mockups draw as
+                   `.lab` — and it is what keeps design.html §07's field-border exemption (A01), which
+                   is CONDITIONED on the label being there. The placeholders go with it: a placeholder
+                   repeating its own label is noise, not a hint. -->
               <form id="start-form" class="start-form" hidden>
-                <input id="start-desc" type="text" placeholder="Description" autocomplete="off" />
+                <label class="sp-field"><span>Description</span>
+                  <input id="start-desc" type="text" autocomplete="off" /></label>
                 <div class="start-row">
-                  <input id="start-client" type="text" placeholder="Client" autocomplete="off" />
-                  <input id="start-project" type="text" placeholder="Project" autocomplete="off" />
+                  <label class="sp-field"><span>Client</span>
+                    <input id="start-client" type="text" autocomplete="off" /></label>
+                  <label class="sp-field"><span>Project</span>
+                    <input id="start-project" type="text" autocomplete="off" /></label>
                 </div>
-                <input id="start-tags" type="text" placeholder="Tags" autocomplete="off" />
+                <label class="sp-field"><span>Tags</span>
+                  <input id="start-tags" type="text" autocomplete="off" /></label>
                 <label class="start-bill"><input id="start-bill" type="checkbox" /> Billable</label>
                 <button id="start-go" type="submit" class="primary">Start</button>
               </form>
@@ -182,10 +197,17 @@
                    (app.js's syncStandingPrimary), so the budget is spent once either way. -->
               <button id="add-toggle" class="primary" data-standing-primary aria-expanded="false" aria-controls="add-form"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add entry</button>
               <button id="report-btn" class="ghost" aria-label="Open this week's report">This week <span id="week-total">0.00h</span></button>
-              <span class="search">
-                <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
-                <input type="search" id="search" placeholder="Search" autocomplete="off" aria-label="Search entries" />
-              </span>
+              <!-- design.html D13 (issue 136): the search box's only name was its placeholder plus an
+                   invisible aria-label — D13 asks for a VISIBLE one, so the field chrome now sits
+                   inside a label that says so on screen. The aria-label is gone with it: a visible
+                   label IS the accessible name, and a second, different one only invites the two to
+                   disagree (WCAG 2.5.3). -->
+              <label class="search-field"><span class="search-lab">Search</span>
+                <span class="search">
+                  <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
+                  <input type="search" id="search" autocomplete="off" />
+                </span>
+              </label>
             </div>
             <!-- §12 R06/R07 (G5): the ONE view-level host for the unified entry form. BOTH modes
                  mount here, in the view flow (no modal) — ADD mode is the static #add-form below;
@@ -204,8 +226,11 @@
                 <div class="uf-fields">
                   <!-- §05 R10 — multiline description: a 3-line scrollable textarea keeps the
                        interior newlines a user types (stored verbatim; the calendar/table display
-                       may truncate, the record never does). -->
-                  <textarea id="add-desc" class="desc-field" rows="3" placeholder="Description" autocomplete="off"></textarea>
+                       may truncate, the record never does). design.html D13 (issue 136): it was the
+                       ONE unlabelled field in a form whose Client / Project / Tags siblings below
+                       all carry a visible one — the same `.uf-field` label now names it too. -->
+                  <label class="uf-field uf-desc"><span>Description</span>
+                    <textarea id="add-desc" class="desc-field" rows="3" autocomplete="off"></textarea></label>
                   <label class="uf-field"><span>Client</span>
                     <select id="add-client" class="uf-select" aria-label="Client"></select></label>
                   <label class="uf-field"><span>Project</span>
@@ -336,7 +361,11 @@
             <form class="builder" id="rep-builder" hidden>
               <div class="builder-head">
                 <h3 class="builder-title" id="rep-builder-title">New report</h3>
-                <input id="rep-name" class="builder-name" type="text" placeholder="Report name" autocomplete="off" aria-label="Report name" />
+                <!-- design.html D13 (issue 136): the name field was named by placeholder + an
+                     invisible aria-label. The stacked visible label mirrors reports.html's own
+                     `.en` block, which has drawn "Report name" above the field all along. -->
+                <label class="builder-name-field"><span>Report name</span>
+                  <input id="rep-name" class="builder-name" type="text" autocomplete="off" /></label>
               </div>
 
               <div class="report-ctrl">
