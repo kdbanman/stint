@@ -10,9 +10,10 @@
  * count-up and a real global-hotkey press have no host here and stay under MANUAL.
  */
 import { chromium } from 'playwright-core';
-import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
 import { emptyState, runningState, flaggedState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
@@ -23,22 +24,6 @@ import { CHANNELS } from '../dist/ipc.js';
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
 const EVIDENCE = join(here, '..', '..', '..', 'acceptance', 'evidence', 'screenshots');
-
-function resolveChromium() {
-  const base = '/opt/pw-browsers';
-  if (existsSync(base)) {
-    const dir = readdirSync(base).find((d) => /^chromium-\d+$/.test(d));
-    if (dir) {
-      const exe = join(base, dir, 'chrome-linux', 'chrome');
-      if (existsSync(exe)) return exe;
-    }
-  }
-  try {
-    return chromium.executablePath();
-  } catch {
-    return undefined;
-  }
-}
 
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 

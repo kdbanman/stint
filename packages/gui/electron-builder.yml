@@ -34,6 +34,17 @@ directories:
   output: dist-pack
   buildResources: build
 
+# The app mark (PRD §19 R01, design.html §09). One 1024px source: electron-builder derives
+# the macOS .icns and every packaged Linux size from it, so no per-size asset is declared here.
+# Regenerate with `npm run icons` after changing context/mark/ or the palette tokens.
+#
+# CAUTION — `buildResources: build` feeds the PACKAGER, not the bundle. Nothing under build/
+# is copied into the installed app. Assets the app loads at RUNTIME (the tray glyph pair, the
+# window and notification icons) must therefore appear in the `files:` glob below — see the
+# `assets/**` entry. Putting a runtime asset in build/ and stopping there yields an app that
+# works from source and ships with a blank tray, and only a real pack reveals it.
+icon: build/icon.png
+
 # The bundle's app root (Contents/Resources/app on macOS, resources/app on Linux)
 # is this gui package. The single installer (§19 R02) needs TWO extra trees inside
 # that root, so they MUST be in this glob or the installer breaks:
@@ -49,6 +60,9 @@ directories:
 files:
   - dist/**
   - renderer/**
+  # Runtime mark assets — the tray glyph pair + the Linux window/notification icons, loaded
+  # by main.ts at run time (NOT the packager's build/icon.png, which never reaches the app).
+  - assets/**
   - package.json
   - node_modules/@stint/core/**
   # The CLI's one runtime dependency (commander). Bundled bin.js resolves it by

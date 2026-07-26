@@ -37,7 +37,7 @@ still be wrong together.
 ## Load before starting
 
 - `context/design.html` + `context/design.tokens.json` — the binding rules;
-  every finding cites a rule id (D01–D17, A01–A06) or names the checklist item.
+  every finding cites a rule id (D01–D21, A01–A06) or names the checklist item.
 - `acceptance/criteria/STATES.md` — the state matrix; the audit walks it.
 - `references/checklist.md` — the working checklist (floors, heuristics,
   micro-details, states).

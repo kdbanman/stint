@@ -41,6 +41,18 @@ for base in "/opt/stint:/usr/share/applications:${SUDO}" \
     echo "uninstall: removed ${OPT_DIR}"
     removed_any=1
   fi
+  # The icon-theme copies install.sh made (one per committed size).
+  ICON_BASE=$(printf '%s' "${DESKTOP_DIR}" | sed 's#/applications$#/icons/hicolor#')
+  for iconfile in "${ICON_BASE}"/*/apps/stint.png; do
+    if [ -f "${iconfile}" ]; then
+      ${RUN} rm -f "${iconfile}"
+      removed_any=1
+    fi
+  done
+  if command -v gtk-update-icon-cache >/dev/null 2>&1 && [ -d "${ICON_BASE}" ]; then
+    ${RUN} gtk-update-icon-cache -f -t "${ICON_BASE}" 2>/dev/null || true
+  fi
+
   DESKTOP_FILE="${DESKTOP_DIR}/stint.desktop"
   if [ -f "${DESKTOP_FILE}" ]; then
     ${RUN} rm -f "${DESKTOP_FILE}"
