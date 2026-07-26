@@ -363,6 +363,22 @@ export interface UpdateProgress {
   message: string | null;
 }
 
+/**
+ * §19 R03/R04 (issue 138) — what a failed update check or download READS AS, whatever the
+ * transport called it. Both cross this seam as the `message` above (or `UpdateCheck`'s), and
+ * both were once a forwarded `err.message`: Settings reported `net::ERR_NAME_NOT_RESOLVED`, a
+ * Chromium error code, to a user who can only try again. update.ts applies them
+ * (`updateFailureMessage`); they live HERE, beside the shapes that carry them, because they
+ * are renderer-facing values and this module is the seam's electron-free home — so the JUDGE
+ * fixtures can read the shipping strings instead of re-typing them (the copy would drift the
+ * first time it was reworded, and the scene would still pass).
+ */
+export const UPDATE_CHECK_FAILED =
+  'Could not check for updates — GitHub could not be reached. Check your connection and try again.';
+
+export const UPDATE_DOWNLOAD_FAILED =
+  'Could not download the update — the transfer did not finish. Check your connection and try again.';
+
 // ------------------------------------------------------------- typed IPC seam
 //
 // The one seam Electron forces (renderer ↔ main) is the only place a payload used to

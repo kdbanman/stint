@@ -2,6 +2,13 @@
 // the real renderer through an injected window.stint mock so the agent can capture
 // screenshots and score them against the rubric.
 
+// The SHIPPING update-failure copy, from the built main bundle — the same import discipline
+// run-judge.mjs uses for CHANNELS. A fixture that re-typed the sentence would keep passing
+// after the copy was reworded (or reverted to forwarding a transport code), which is exactly
+// the regression issue 138 fixed. ipc.ts is electron-free, so plain node can read it.
+import { UPDATE_CHECK_FAILED } from '../dist/ipc.js';
+export { UPDATE_CHECK_FAILED };
+
 const DEFAULT_SETTINGS = {
   rounding: false,
   roundingIncrementMin: 15,
@@ -994,6 +1001,11 @@ export function recoveryState() {
  *                  a mid-download 'downloading' frame (drives the progress bar) and the terminal
  *                  'ready' frame, carrying the numbered guided steps incl. the one-time Gatekeeper
  *                  beat (download → replace the app → approve once at first launch, no Developer ID).
+ *   - `failedVerdict` — the R03 FAILED-check verdict (STATES.md Settings × error): the error
+ *                  result checkForUpdates returns when it cannot reach GitHub. Its message is
+ *                  the SHIPPING copy, imported from the built ipc.js — the Check-now button
+ *                  used to report the transport's words instead (`net::ERR_NAME_NOT_RESOLVED`,
+ *                  issue 138), and a re-typed sentence here would keep passing after a reword.
  */
 export const UPDATE_FIXTURE = {
   version: '2026.6.24',
@@ -1002,6 +1014,11 @@ export const UPDATE_FIXTURE = {
     currentVersion: '2026.6.24',
     latestVersion: '2026.7.1',
     releaseUrl: 'https://github.com/kdbanman/stint/releases/tag/v2026.7.1',
+  },
+  failedVerdict: {
+    status: 'error',
+    currentVersion: '2026.6.24',
+    message: UPDATE_CHECK_FAILED,
   },
   steps: [
     'Download the new version',
@@ -1518,6 +1535,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
     // renderer SURFACES it (an announced message region, the form staying open) instead of
     // swallowing it. Off by default → every other scene's writes resolve as before.
     window.__REJECT_WRITES__ = ${rejectWrites ? 'true' : 'false'};
+    // Issue 138: every mocked rejection rejects the way ELECTRON does — ipcRenderer.invoke wraps
+    // the reason in its own sentence and the thrown class name ("Error invoking remote method
+    // 'edit': StoreError: <reason>"), and the app used to paint the whole string. A mock that
+    // rejects with a pre-cleaned reason makes any "what does the user read" assertion vacuous:
+    // there is nothing to strip, so a renderer that stripped nothing would still pass. This is
+    // the shape the QA driver reproduces verbatim (packages/gui/qa/driver.mjs).
+    window.__IPC_REJECT__ = (channel, reason) =>
+      Promise.reject(new Error("Error invoking remote method '" + channel + "': StoreError: " + reason));
     // §05 R06 / §03 / issue #61 (FUTURE_START_GUARD) — when set, the edit mock refuses a live
     // start edit that lands AFTER now exactly as core's edit() refuses a future start on the open
     // row, so the scene can drive the REAL live-edit commit of a mistyped future start and assert
@@ -1663,7 +1688,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       toggle: () => {
         // §12 R21: a strict core can refuse a stop (e.g. stop time before the entry started,
         // #61). The renderer must route it to the banner area, never a silent no-op.
-        if (window.__REJECT_WRITES__) return Promise.reject(new Error('stop time is before the entry started'));
+        if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('toggle', 'stop time is before the entry started');
         // issue #50 (CROSS_VIEW_FRESHNESS): the opt-in state-mutating toggle — see
         // window.__TOGGLE_STARTS__ above. Mirrors main.ts toggleTimer over core: stop the
         // open row when running, else start a fresh open row at the pinned now.
@@ -1777,7 +1802,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // AND drives the broadcast repaint on top of the handler's own direct renderClients call.
       addClient: function (p) { window.__ADDED_CLIENT__ = p; const c = { id: 99, name: (p && p.name) || '', archived: false }; this.__CLIENTS__.push(c); this.__FIRE_CHANGED__(); return Promise.resolve(c); },
       addProject: function (p) { window.__ADDED_PROJECT__ = p; const pr = { id: 98, clientId: (p && p.clientId), name: (p && p.name) || '', archived: false }; (this.__PROJECTS__[pr.clientId] = this.__PROJECTS__[pr.clientId] || []).push(pr); this.__FIRE_CHANGED__(); return Promise.resolve(pr); },
-      renameClient: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a client named that already exists')); window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameClient: function (p) { if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('renameClient', 'a client named that already exists'); window.__RENAMED_CLIENT__ = p; const c = this.__CLIENTS__.find((x) => x.id === (p && p.id)); if (c && p && p.name) c.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R13: __ARCHIVE_CLIENT_CALLS__ records EACH archiveClient invocation so the
       // CONFIRM_ARCHIVE scene can assert the stray first click fired ZERO and only the explicit
       // confirm fired exactly ONE. restoreClient/Project/Tag re-add the record (archived → active).
@@ -1789,7 +1814,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // moves back. Seeded with one archived client/project/tag so the RESTORE_ARCHIVED scene can
       // reveal them (listClients/listProjects/listTags with includeArchived) and Restore each.
       __ARCHIVED_STORE__: ${emptyRefData ? `{ clients: [], projects: [], tags: [] }` : `{ clients: [{ id: 3, name: 'Initech', archived: true, referenced: true }], projects: [{ id: 13, clientId: 1, name: 'Legacy', archived: true, referenced: true }], tags: [{ id: 3, name: 'stale', archived: true }] }`},
-      renameProject: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a project named that already exists')); window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameProject: function (p) { if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('renameProject', 'a project named that already exists'); window.__RENAMED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { const pr = this.__PROJECTS__[k].find((x) => x.id === (p && p.id)); if (pr && p && p.name) pr.name = p.name; } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveProject: function (p) { window.__ARCHIVED_PROJECT__ = p; for (const k of Object.keys(this.__PROJECTS__)) { this.__PROJECTS__[k] = this.__PROJECTS__[k].filter((x) => x.id !== (p && p.id)); } this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §12 R10: the tag-management channels the Clients view's tag strip drives (parity
       // with tt tag ls/add/rename/archive). listTags returns the canned active tags; the
@@ -1799,7 +1824,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __TAGS__: ${JSON.stringify(emptyRefData ? [] : [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }])},
       listTags: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__TAGS__.concat(this.__ARCHIVED_STORE__.tags) : this.__TAGS__); },
       addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
-      renameTag: function (p) { if (window.__REJECT_WRITES__) return Promise.reject(new Error('a tag named that already exists')); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
+      renameTag: function (p) { if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('renameTag', 'a tag named that already exists'); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §09 R7: the free-text search the search box drives (parity with tt list --search).
       // Returns the same UiState the renderer paints from, narrowed to matching rows — the
@@ -1865,14 +1890,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // §12 R21: under __REJECT_WRITES__ the edit rejects like core refusing a Stop-before-Start
       // (§05 R11), so the WRITE_REJECTION_FEEDBACK scene can assert the editor surfaces it inline.
       edit: (p) => {
-        if (window.__REJECT_WRITES__) return Promise.reject(new Error('entry end must be after its start'));
+        if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('edit', 'entry end must be after its start');
         // §05 R06 / issue #61: under the future-start guard, a live start edit landing AFTER now is
         // refused exactly as core's edit() refuses it (a future start on the running row bricks Stop),
         // so the FUTURE_START_GUARD scene can assert the Timer view surfaces it, never a swallowed
         // rejection. A start at-or-before now still records + resolves, so the corrected retype commits.
         if (window.__FUTURE_START_GUARD__ && p && p.patch && p.patch.startUtc &&
             Date.parse(p.patch.startUtc) > Date.parse(window.__JUDGE_NOW__)) {
-          return Promise.reject(new Error('start time is in the future'));
+          return window.__IPC_REJECT__('edit', 'start time is in the future');
         }
         window.__EDITED__ = p; return Promise.resolve(window.__ACK__);
       },
@@ -1880,7 +1905,7 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // picker without erroring; core owns the in-span rule, so the mock just resolves.
       // §12 R21: under __REJECT_WRITES__ it rejects like core's strictly-in-span rule.
       split: (p) => {
-        if (window.__REJECT_WRITES__) return Promise.reject(new Error('split point must be strictly inside the entry span'));
+        if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('split', 'split point must be strictly inside the entry span');
         window.__SPLIT__ = p; return Promise.resolve(window.__ACK__);
       },
       // Records the merge payload so the MERGE_CONFLICT / MERGE_NOCONFLICT scenes can
@@ -2007,13 +2032,13 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         // refusal fact drives a real rejection. Rejects BEFORE recording, so nothing persists.
         const rs = p && p.rangeSpec;
         if (rs && rs.kind === 'absolute' && rs.fromDate && rs.toDate && rs.fromDate > rs.toDate) {
-          return Promise.reject(new Error('report range end must not be before its start'));
+          return window.__IPC_REJECT__('saveReport', 'report range end must not be before its start');
         }
         // §12 R21 / §13: core refuses a duplicate report name (UNIQUE COLLATE NOCASE). The mock
         // mirrors that guard (case-insensitive) so the REPORTS_VIEW duplicate-name refusal fact
         // drives a real rejection — it rejects BEFORE recording, so a refused save leaves no trace.
         const dup = this.__SAVED_REPORTS__.some((d) => d.name.toLowerCase() === String((p && p.name) || '').toLowerCase());
-        if (dup) return Promise.reject(new Error('a saved report named that already exists'));
+        if (dup) return window.__IPC_REJECT__('saveReport', 'a saved report named that already exists');
         window.__SAVED_REPORT__ = p;
         const def = { id: 99, createdUtc: '2026-06-24T00:00:00.000Z', ...p };
         this.__SAVED_REPORTS__.push(def);
@@ -2088,7 +2113,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       window.__UPDATE_LISTENERS__ = [];
       window.stint.update = {
         getVersion: () => Promise.resolve(window.__UPDATE__.version),
-        check: () => { window.__CHECKED__ = true; return Promise.resolve(window.__UPDATE__.verdict); },
+        // §19 R03 / issue 138 — with checkFails set, Check now resolves the FAILED verdict
+        // (checkForUpdates never throws; a failure is a value), so the scene can assert what
+        // the Settings result line READS when the check cannot reach GitHub.
+        check: () => {
+          window.__CHECKED__ = true;
+          const u = window.__UPDATE__;
+          return Promise.resolve(u.checkFails ? u.failedVerdict : u.verdict);
+        },
         download: () => {
           // §19 R04 (STATES.md Settings × error): with the fixture's downloadError flag set the
           // download REJECTS before any progress frame — the failed-fetch path — so the scene
