@@ -1347,7 +1347,12 @@ button.danger:hover { background: var(--danger-weak); }
 }
 
 /* §09 R1: the date-range preset chips (six, incl Custom…). The active chip is a raised
-   pill chip — surface lift, not the accent. */
+   pill chip — surface lift, not the accent.
+   D06 / issue 161: the presets and the Billable segment are ONE idiom — two rows of mutually
+   exclusive choices sitting one above the other in the same .entries-ctrl grid — so they take
+   ONE metric. The segment is the established spelling, so the presets converge on it: 12px
+   (the D06 Caption size; 12.5px was off-ramp) / 500 / 26px tall, matching the .seg .seg-btn
+   rule above. Two sizes for one idiom, side by side, is what that rule forbids. */
 .presets { flex-wrap: wrap; gap: 8px; background: transparent; border: none; border-radius: 0; padding: 0; }
 .presets .preset {
   border: 1px solid var(--rule-strong);
@@ -1355,10 +1360,10 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   color: var(--muted);
   font-family: var(--sans);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 500;
   padding: 4px 12px;
-  height: auto;
+  height: 26px;
   cursor: pointer;
   box-shadow: none;
 }
