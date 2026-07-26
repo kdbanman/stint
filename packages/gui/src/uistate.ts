@@ -4,6 +4,7 @@
  */
 import { Store, describeOverlaps, buildEntryList, joinClientProject, APP_VERSION } from '@stint/core';
 import type { UiState } from './ipc.js';
+import { toEntryRowView } from './entryrow.js';
 
 /**
  * How far back the main window shows day-grouped history. A long-lived tracker would
@@ -34,33 +35,9 @@ export function buildUiState(
   // query path can never drift on how a day bucket is keyed or ordered.
   const days = buildEntryList(all, { by: 'day' }).groups.map((g) => ({
     day: g.key,
-    entries: g.entries.map((e) => {
-      const overlap = overlaps.get(e.id);
-      return {
-        id: e.id,
-        description: e.description,
-        clientLabel: joinClientProject(e.clientName, e.projectName),
-        // §09 R7 (issue #84): the names ride separately so the live search matches each
-        // field on its own, never the joined label.
-        clientName: e.clientName,
-        projectName: e.projectName,
-        startUtc: e.startUtc,
-        endUtc: e.endUtc,
-        billableSeconds: e.billableSeconds,
-        billable: e.billable,
-        overlapped: overlap !== undefined,
-        // §12 R9: the detailed overlap banner reads minutes + which neighbour (previous/
-        // next); rounded from the core-owned overlap seconds so it cannot drift.
-        overlapMinutes: overlap ? Math.round(overlap.overlapSeconds / 60) : 0,
-        overlapRelation: overlap ? overlap.relation : null,
-        sleptThrough: e.sleptThrough,
-        excludedSeconds: e.excludedSeconds,
-        // §12 R9: the un-trimmed wall-clock duration, so a slept entry whose billable was
-        // trimmed can paint the raw duration struck through beside the live billable one.
-        rawSeconds: e.rawSeconds,
-        tags: e.tags,
-      };
-    }),
+    // The row projection itself is entryrow.ts's one job (issue #166) — the Entries-view
+    // query path builds its rows through the same function, so the two can never drift.
+    entries: g.entries.map((e) => toEntryRowView(e, overlaps.get(e.id))),
   }));
 
   const status = store.status();
