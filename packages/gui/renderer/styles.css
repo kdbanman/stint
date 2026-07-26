@@ -1346,17 +1346,22 @@ button.danger:hover { background: var(--danger-weak); }
   box-shadow: var(--sh-chip);
 }
 
-/* §09 R1: the date-range preset chips (six, incl Custom…). The active chip is a raised
-   pill chip — surface lift, not the accent.
+/* §09 R1: the date-range preset buttons (six, incl Custom…). The active one is a raised
+   chip — surface lift, not the accent.
    D06 / issue 161: the presets and the Billable segment are ONE idiom — two rows of mutually
    exclusive choices sitting one above the other in the same .entries-ctrl grid — so they take
    ONE metric. The segment is the established spelling, so the presets converge on it: 12px
-   (the D06 Caption size; 12.5px was off-ramp) / 500 / 26px tall, matching the .seg .seg-btn
-   rule above. Two sizes for one idiom, side by side, is what that rule forbids. */
+   (the D06 Caption size; 12.5px was off-ramp) / 450 / 26px tall, matching the .seg .seg-btn
+   rule above. Two sizes for one idiom, side by side, is what that rule forbids.
+   D08/D14 / issue 153: the radius is the last half of that convergence. These were 999px —
+   fully-rounded pills sitting directly above 8px segments doing the same job — and D14 makes
+   pills and tags the ONLY pill-shaped elements. A row of mutually exclusive choices is a
+   segmented control, so it takes the control radius (mockups/main.html renders this row as a
+   .seg and always did). */
 .presets { flex-wrap: wrap; gap: 8px; background: transparent; border: none; border-radius: 0; padding: 0; }
 .presets .preset {
   border: 1px solid var(--rule-strong);
-  border-radius: 999px;
+  border-radius: var(--r1);
   background: var(--paper);
   color: var(--muted);
   font-family: var(--sans);
@@ -1848,9 +1853,12 @@ button.danger:hover { background: var(--danger-weak); }
   cursor: ns-resize; display: flex; align-items: flex-start; justify-content: center; touch-action: none;
 }
 /* the resize grip bar — accent-coloured like the start grip's outline (the block's fill is
-   the weak accent, so the drag affordances carry the full-strength accent signal); pill
-   radius (D14). */
-.stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: 999px; background: var(--accent); display: block; }
+   the weak accent, so the drag affordances carry the full-strength accent signal).
+   Issue 153: this read `border-radius: 999px` and cited D14 as its licence, which D14 does not
+   grant — D14 says pills and tags are the ONLY pill-shaped elements, so a drag bar is exactly
+   what it excludes. On a 4px-tall bar the control radius clamps to 2px, so the affordance is
+   unchanged and the rule is honoured. */
+.stp-block.me .stp-resize i { width: 34px; height: 4px; border-radius: var(--r1); background: var(--accent); display: block; }
 /* §05 R06 (G8) — the RUNNING entry on the picker track: a start with no end yet. The block
    dissolves into the future via a transparency mask (mockups/timer.html .block.me.open) —
    nothing paints an end edge, because no end exists until the timer is stopped. */
@@ -1861,8 +1869,10 @@ button.danger:hover { background: var(--danger-weak); }
 }
 /* the start GRIP and time label live at TRACK level so the fade never hides them; the grip
    is the one drag affordance of the start-only variant (no bottom resize grip anywhere). */
+/* Issue 153: the control radius, not a pill (D14) — on a 6px-tall grip 8px clamps to 3px, so
+   the drag affordance reads as it always did. */
 .stp-grip {
-  position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: 999px;
+  position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: var(--r1);
   background: var(--paper); border: 1.5px solid var(--accent);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 30%, transparent);
   cursor: ns-resize; z-index: 7; touch-action: none;
@@ -1920,7 +1930,12 @@ button.danger:hover { background: var(--danger-weak); }
   border-radius: 999px; padding: 0 8px;
 }
 .stp-snaphint { font-size: 11px; color: var(--muted); margin: 12px 0 0 52px; display: flex; align-items: center; gap: 8px; }
-.stp-snaphint .stp-pill { font-size: 11px; background: var(--wash); border: 1px solid var(--rule); border-radius: 999px; padding: 2px 8px; }
+/* Issue 153: the snap hint. It was a pill-shaped chip in neutral wash, which fails D14 twice
+   over — it is neither a pill nor a tag, and a decoratively-neutral pill has no semantic colour
+   to justify the shape. It keeps the neutral colour (it is an inert hint, not a signal) and
+   drops the shape: the control radius. Renamed off `.stp-pill` so the class stops asserting a
+   shape it no longer has; `.snap` in mockups/timer.html is the same element. */
+.stp-snaphint .stp-snap { font-size: 11px; background: var(--wash); border: 1px solid var(--rule); border-radius: var(--r1); padding: 2px 8px; }
 
 /* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
@@ -2070,7 +2085,9 @@ body.popover { background: var(--canvas); margin: 0; }
   /* 24px, the design.html A03 floor (issue 148) — the track used to be 22px tall, which left it
      depending on the 25px of clearance around it rather than clearing the floor outright. */
   height: 24px;
-  border-radius: 999px;
+  /* Issue 153: the control radius. A switch track is not a pill or a tag, which is all D14
+     licenses the shape for; the knob below stays circular because a knob is round. */
+  border-radius: var(--r1);
   background: var(--rule-strong);
   border: none;
   position: relative;
@@ -2159,10 +2176,13 @@ body.popover { background: var(--canvas); margin: 0; }
 .update .uhd-t { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .steps { display: flex; flex-direction: column; gap: 8px; }
 .step { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink); }
+/* Issue 153 (from #164's withdrawn blanket circle exemption): the numbered step badge is the
+   one circle in the app with nothing entailing the shape — it is not a dot, a radio or a knob,
+   just a small box with a number in it — so D08 gives it the control radius. */
 .step .n {
   width: 18px;
   height: 18px;
-  border-radius: 50%;
+  border-radius: var(--r1);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   color: var(--ink);

@@ -1,6 +1,6 @@
 /**
- * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A04, A06;
- * transition PR #132, issues #137, #141 and #152).
+ * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D13, D14, A01/A02, A04,
+ * A06; transition PR #132, issues #137, #141, #152 and #153).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -37,10 +37,19 @@
  *      sixth role cannot accumulate a site at a time (issue #152). The 11px floor in (5) is one
  *      end of that rule; this is the whole of it. Paired with the tabular check the same issue
  *      names, since a clock that is not tabular is off the Clock role even at the right size.
+ *   9. D08/D14 the radius trio — the same census over `border-radius`, against three LITERAL
+ *      lists: the two recorded 4px exemptions, the circles something else already entails, and
+ *      D14's pill-and-tag population. D08 closes its exemption list by spec, so the guard states
+ *      it as a closed list too, and a value off the trio with no listed licence fails (issue
+ *      #153). This header used to record radii as out of scope on the grounds that their AC is
+ *      JUDGE and the off-trio values were a pending exemption question; #164 settled the question
+ *      (nothing new is exempt) and #153's audit showed what the gap cost — 504 rendered elements
+ *      pill-shaped, including a six-button segmented control.
  *
- * Deliberately out of scope: D08 radii — their AC is JUDGE, and the two recorded off-trio radii
- * (the progress track, the calendar checkbox) are a pending design.html exemption question, not
- * scan targets.
+ * Deliberately out of scope: D14's SECOND clause — that a pill's colour is semantic (run / flag /
+ * accent), never decorative. Which colours read as decorative on which pill is a rendered
+ * judgement, and the JUDGE makes it; what is decidable from source, and checked in (9), is which
+ * elements may carry the shape at all.
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -574,8 +583,11 @@ describe('text colour: every token painted as text, on the floor it earns (desig
   });
 
   /** Every VISIBLE accent-as-text site, with the typography it resolves to. Hidden sites are not
-   *  text: both `.state` words are display:none permanently — kept in the DOM for assistive tech,
-   *  which reads them without a contrast ratio (styles.css §12 R04). */
+   *  text: the compact strip's `.state` word is display:none permanently — kept in the DOM for
+   *  assistive tech, which reads it without a contrast ratio (styles.css §12 R04). The Timer
+   *  card's `.state` is NOT hidden any more (issue #142 gave the card the worded+dotted treatment
+   *  the strip already had), and it inks rather than taking the accent, so it is scored as text
+   *  like everything else. */
   const accentTextSites = (): Array<CensusHit & { type: Typography }> => {
     const surfaces = new Map(surfaceCss());
     return textColour()
@@ -781,5 +793,174 @@ describe('every clock and duration is tabular (design.html D06 — issue 152)', 
           `${h.site} → ${h.type.family ?? 'no font-family'} / ${h.type.numeric ?? 'no font-variant-numeric'}`,
       );
     expect(offenders, 'D06 puts every clock and duration in the numeric face, tabular').toEqual([]);
+  });
+});
+
+// ---- the radius trio: three radii, and a closed list of exceptions (issue 153) ---------------
+// D08 gives three radii — 8px controls, 12px cards, 16px window & overlays — and says "No fourth
+// radius … The exemption list is closed". D14 adds the shape rule the trio does not cover: pills
+// and tags are the ONLY pill-shaped elements. Together those make every authored radius decidable
+// from source, which is what lets this be a census rather than a JUDGE impression: a value sits on
+// the trio, or on the recorded exemption list, or on a shape something else already entails, or it
+// is a defect.
+//
+// The gap that let it drift: the JUDGE scores what a view LOOKS like, and a pill among pills looks
+// deliberate. The audit had to count computed styles across all six surfaces to see it — 504
+// rendered elements at `border-radius: 999px` whose selectors were neither pill nor tag, including
+// the six-button date-range control sitting in the same grid as the 8px Billable segment (#153).
+//
+// The three lists below are LITERAL and matched EXACTLY against the rule's selector, which is the
+// design and not a shortcut. D08 closes its exemption list by spec, so the guard states it as a
+// closed list too: a sixth radius fails, and so does a NEW selector reaching for an existing
+// exception. A predicate over selector NAMES would have been the wrong shape — `/pill|tag/` waves
+// through `.stp-pill`, the decoratively-neutral pill that was a fifth of this issue.
+
+describe('the radius trio (design.html D08/D14 — issue 153)', () => {
+  /** The trio, recomputed from design.tokens.json rather than transcribed — the same stance the
+   *  contrast block takes. Both spellings are legal: the custom property the generator emits, and
+   *  the px literal it resolves to. `0` is not a fourth radius but the absence of one (a square
+   *  corner — the neutraliser `.presets` writes, and the mid-segments of a split day block). */
+  const TRIO = new Set<string>([
+    ...Object.values<{ $value: string }>(tokens.radius).map((d) => d.$value),
+    'var(--r1)',
+    'var(--r2)',
+    'var(--r3)',
+    '0',
+    '0px',
+  ]);
+
+  /** The exemption design.html D08 records — "a functional mark whose control radius would exceed
+   *  half its own box" — and the only selectors that may spell it. Two marks, three sites: the
+   *  7px progress track in the app and in mockups/settings.html, and the calendar corner checkbox
+   *  in the two merge mockups. The SHIPPED checkbox is absent on purpose: since issue #148 gave it
+   *  a 24×24 target it reaches the same painted 4px corner as `var(--r1)` minus a 4px transparent
+   *  border, so it declares a trio value and never needs this list. */
+  const EXEMPT_4PX = new Set<string>(['.step .bar', '.prog .bar', '.row .ck']);
+
+  /** Circles, judged one at a time. Issue #164 proposed a blanket "circles are a fourth D08
+   *  exemption" and was withdrawn for exactly the reason a blanket is tempting: it would license
+   *  every future circle. Each entry below instead names what ALREADY entails the shape, so the
+   *  exemption list stays closed and this list adds nothing to it. The one circle with no
+   *  entailment behind it — the numbered step badge — was fixed to the control radius, not
+   *  listed. */
+  const ENTAILED_CIRCLES = new Set<string>([
+    // Dots. design.html §03 names a `run-dot` token and describes it as "The running dot"; a dot
+    // is round. Four of them: the Timer card, the Entries strip, the tray popover, the mockups.
+    '.run-dot',
+    '.timer-strip .strip-dot',
+    '.timer-card .tc-dot',
+    '.pop-dot',
+    '.dot',
+    // Radios. D08's own prose reasons that "a circular checkbox reads as a radio" — which entails
+    // the circle for an actual radio, and for the inner fill that marks it chosen.
+    '.editor.conflict-prompt .mc-opt .rad',
+    '.editor.conflict-prompt .mc-opt.on .rad::after',
+    '.rad',
+    '.opt.on .rad::after',
+    // The switch KNOB. A knob is round; the TRACK it slides in is not, and that track was one of
+    // this issue's five populations.
+    '.set-toggle i',
+    '.sw i',
+    // Not a Stint element at all: the mockups draw a host window titlebar to establish context,
+    // and its traffic lights are round because the OS draws them round. D08 governs Stint's own
+    // controls, cards and windows — not a picture of someone else's.
+    '.lights i',
+  ]);
+
+  /** D14's pill-shaped population: pills and tags, and nothing else. Naming them is what the rule
+   *  means — "the ONLY pill-shaped elements" is a claim about a closed set — so a new pill is a
+   *  deliberate line here rather than a shape that accumulated. */
+  const PILLS_AND_TAGS = new Set<string>([
+    // the app
+    '.chip', // an entry row's tag chip
+    '.flag', // billable / flagged
+    '.ok', // the backup "verified" pill
+    '.pill', // the shared pill idiom
+    '.pill.new, .update-result.new', // the update-available pill
+    '.report-flag', // a report row's flag
+    '.sel-count', // the selection count
+    '.liveedit .le-pill',
+    '.ov .otag', // the calendar overlap tag
+    '.stp-overlap .stp-otag', // the same tag inside the interval picker
+    // the mockups
+    '.tag',
+    '.overlap .otag',
+  ]);
+
+  /** Every radius longhand and the shorthand. NOT global: `.test()` on a /g regex carries
+   *  `lastIndex` between calls and would skip every other site. */
+  const RADIUS_DECL = /(?:^|[;{])\s*border(?:-[a-z]+)*-radius\s*:\s*([^;}]+)/;
+
+  const radiusDeclarations = (): Array<{ where: string; site: string; value: string }> =>
+    styledSites().flatMap((s) =>
+      // group 1 is non-optional in the pattern, so a match guarantees it
+      [...s.declarations.matchAll(new RegExp(RADIUS_DECL, 'g'))].map((m) => ({
+        where: `${s.surface}: ${s.site}`,
+        site: s.site,
+        value: m[1]!.trim(),
+      })),
+    );
+
+  it('every authored radius, on every surface, is the trio or one of the listed exceptions', () => {
+    const declarations = radiusDeclarations();
+    // Guard-the-guard: 269 radius declarations stand today across the eleven mockups, styles.css
+    // and the two renderer documents. The assertion below is an emptiness check, so a census that
+    // stopped matching would report no offenders and read green.
+    expect(
+      declarations.length,
+      'the radius census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(200);
+    expect(
+      declarations.some((d) => d.where.startsWith('packages/gui/renderer/styles.css')),
+      'the SHIPPED renderer contributed no radius — only the mockups were scanned',
+    ).toBe(true);
+    // The inline `style=` half of styledSites() is scanned here too — one radius is authored that
+    // way today, design-system.html's swatch. Its reach is floored by the type-ramp test above,
+    // where enough inline declarations stand for a floor to mean something.
+
+    const offenders = declarations
+      .filter((d) => {
+        // The shorthand carries up to four corners and an optional `/` elliptical half; every
+        // component must be legal on its own, so `var(--r1) var(--r1) 0 0` passes and
+        // `999px 999px 0 0` does not.
+        const parts = d.value.split(/[\s/]+/).filter(Boolean);
+        return !parts.every(
+          (p) =>
+            TRIO.has(p) ||
+            (p === '50%' && ENTAILED_CIRCLES.has(d.site)) ||
+            (p === '999px' && PILLS_AND_TAGS.has(d.site)) ||
+            (p === '4px' && EXEMPT_4PX.has(d.site)),
+        );
+      })
+      .map((d) => `${d.where} → border-radius: ${d.value}`);
+    expect(
+      offenders,
+      'D08 gives three radii and closes its exemption list; D14 gives the pill shape to pills and tags alone',
+    ).toEqual([]);
+  });
+
+  it('every listed exception still spends its licence (the lists stay earned)', () => {
+    // The mirror of the test above, and the reason the lists cannot rot into a permissive blob: an
+    // entry whose selector has stopped writing the value it is licensed for is a licence nobody is
+    // using, sitting there ready to legalise whatever reclaims the name. Checking merely that the
+    // selector still declares SOME radius is not enough — `.ok` moving from 999px to the control
+    // radius would leave the pill licence standing unspent.
+    const spent = new Map<string, Set<string>>();
+    for (const d of radiusDeclarations()) {
+      const parts = spent.get(d.site) ?? new Set<string>();
+      for (const p of d.value.split(/[\s/]+/).filter(Boolean)) parts.add(p);
+      spent.set(d.site, parts);
+    }
+    const licences: Array<[Set<string>, string]> = [
+      [EXEMPT_4PX, '4px'],
+      [ENTAILED_CIRCLES, '50%'],
+      [PILLS_AND_TAGS, '999px'],
+    ];
+    const dead = licences.flatMap(([list, value]) =>
+      [...list].filter((site) => !spent.get(site)?.has(value)).map((site) => `${site} → ${value}`),
+    );
+    expect(dead, 'an off-trio radius is licensed for a selector that no longer writes it').toEqual(
+      [],
+    );
   });
 });
