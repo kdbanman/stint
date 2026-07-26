@@ -7,7 +7,7 @@
  * The line: a guard belongs here only if the defect it catches is invisible to a driven
  * page. Banned APIs that headless Chromium happily implements but packaged Electron does
  * not (window.prompt/confirm), banned glyph classes, module-isolation rules, and
- * structural invariants (duplicate ids) qualify. Assertions about renderer BEHAVIOR do
+ * structural invariants (duplicate ids, a shared helper defined twice) qualify. Assertions about renderer BEHAVIOR do
  * not — a source regex breaks on a rename and passes on a bug, so those were retired to
  * the judge's scenes (issue #85), not maintained here.
  */
@@ -76,6 +76,40 @@ describe('renderer static contract', () => {
       const src = read(f);
       for (const re of forbidden) expect(src, `${f} must not use ${re}`).not.toMatch(re);
     }
+  });
+
+  it('su.ts is the ONLY home for a shared renderer helper — no second definition anywhere (issue #168)', () => {
+    // A duplicated helper is invisible to a driven page: both copies render, and the page looks
+    // right until the two DIVERGE. They had. `escapeHtml` existed twice escaping DIFFERENT
+    // character sets (app.js spared the single quote across 20 call sites, reports.js did not)
+    // and popover.js escaped nothing; `errMessage` was re-typed at four sites, one of which
+    // dropped the `.message` unwrap and rendered `[object Object]`. popover.html is a SEPARATE
+    // document and can reach nothing app.js defines, so su.ts is the only home that serves
+    // every page — this binds that, since these had already been re-typed twice.
+    const shared = ['escapeHtml', 'errMessage', 'localMinuteOfDay', 'exactMinuteOfDay'];
+    const su = read('su.ts');
+    const defines = (src: string, name: string) =>
+      // A DEFINITION (`function f(`, `const f =`), never a `const { f } = window.SU` import.
+      new RegExp(`(?:function\\s+${name}\\s*\\(|(?:const|let|var)\\s+${name}\\s*=)`).test(src);
+    for (const name of shared) {
+      expect(defines(su, name), `su.ts must define ${name} — it is the declared home`).toBe(true);
+      for (const f of ['app.js', 'timepicker.js', 'popover.js', 'reports.js', 'settings.js']) {
+        expect(defines(read(f), name), `${f} must consume window.SU.${name}, not redefine it`).toBe(false);
+      }
+    }
+  });
+
+  it('local minutes-of-day is derived in exactly one place (issue #168)', () => {
+    // The expression `getHours() * 60 + getMinutes()` positions every timeline surface — the
+    // picker's seeds, the entries calendar's event geometry, SU.timelineWindow's own math. It
+    // was written four times. A timezone or DST fix must have ONE site to find, so count the
+    // arithmetic itself across the renderer rather than trusting the helper's name.
+    const dir = fileURLToPath(new URL('../renderer/', import.meta.url));
+    const files = readdirSync(dir).filter((f) => /\.(js|ts)$/.test(f));
+    const sites = files.flatMap((f) =>
+      [...read(f).matchAll(/getHours\(\)\s*\*\s*60/g)].map(() => f),
+    );
+    expect(sites, 'minutes-of-day must be derived only by su.ts localMinuteOfDay').toEqual(['su.ts']);
   });
 
   it('the renderer never calls window.prompt or window.confirm — Electron implements neither (issue #52)', () => {
