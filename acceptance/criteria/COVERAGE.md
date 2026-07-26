@@ -1045,7 +1045,24 @@ the presence-only `#timer-state.textContent` probe that the shipped bug
 satisfied. JUDGE `COLOUR_PAIRING` , the A05 scene, was fooled by the same
 presence-only read and now scores each running surface as RENDERED: the strip
 pairs by its visible dot (D05 takes a word OR an icon), the card by a visible
-word AND a visible dot. **The card stays fresh across views (issue #50):** JUDGE
+word AND a visible dot. **An attribute is not an advisory (design.html D04/D14,
+issue #160):** the card's attribute row carries two different kinds of thing, so
+it paints them in two palettes — `slept` is the advisory and keeps the `--flag`
+warn pill, while `billable` /`non-billable` is the entry's normal state and reads
+as the quiet `.attr` /`--muted` label the entry row already gives billability
+(`.entry .nonbill`). Shipping all three through one `.flag` class painted the
+default state of every running entry in the colour reserved for "look at this",
+so amber stopped meaning anything — and the function's own comment guarded
+against these reading as an accent fill without ever noticing it had reached for
+warn instead. JUDGE `TIMER_VIEW` scores the DISTINCTION rather than one colour:
+a second page over an open entry that is billable AND slept through reads both
+labels at once — `slept` on the whole `--flag` triple (text, fill, rule) plus
+the pill radius, `billable` on `--muted` with a transparent fill, no rule, no
+radius and no part of that triple, neither of them the accent. Scored as a pair
+because the bug painted BOTH amber, and read on its own an amber `billable` is a
+perfectly good warn pill. `COLOUR_PAIRING` keeps the other half — that
+billability is SAID at all — and reads the attribute row by position, so a
+palette move can never mute the word. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
 Entries-toolbar control is touched (the Today preset latches the renderer's
 entries query), routing to the Timer view and clicking Start flips the card to

@@ -990,7 +990,7 @@ textarea:focus-visible {
 .chip .chip-x:hover { color: var(--ink); }
 .chip .chip-x:hover .ic { color: var(--ink); }
 
-.flags { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; }
+.flags { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; align-items: center; }
 /* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
 .flag {
   font-size: 11px;
@@ -1000,6 +1000,18 @@ textarea:focus-visible {
   border: 1px solid var(--flag-line);
   border-radius: 999px;
   padding: 2px 8px;
+}
+/* An ATTRIBUTE is not an advisory (design.html D04/D14, issue 160). `billable` is the normal,
+   overwhelmingly common state of a tracked entry; painting it in the --flag warn chrome beside
+   `slept` — the one thing in that row the warn palette is actually for — spends the amber on the
+   default case and collapses the distinction the two-palette system exists to make. So the
+   attribute states itself quietly in --muted (the same neutral treatment `.entry .nonbill`
+   already gives billability on the row), carries no pill chrome at all, and leaves --flag to the
+   flags beside it. Neither is the accent: that stays on the running clock/state and Stop (§15). */
+.attr {
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
 }
 /* §12 R06 (G5): the unified entry form in EDIT MODE — the SAME view-level card add mode uses
    (#entry-form-host), NOT crammed into the calendar event. It sits in the view flow with the
