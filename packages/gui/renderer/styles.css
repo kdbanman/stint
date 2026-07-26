@@ -2241,16 +2241,24 @@ body.popover { background: var(--canvas); margin: 0; }
   box-shadow: var(--sh-chip);
   color: inherit;
   cursor: pointer;
-  /* Visible, NOT clipped: the per-line text (.bd/.bc/.bt) clips itself with its own ellipsis, so
-     the block reads clean, while the hover ops and the inline confirm/split/tag affordances — which
-     are wider than a calendar event — extend beyond the block and stay clickable rather than being
-     clipped away (the delete/split/confirm JUDGE scenes drive them on middle-column events). */
-  overflow: visible;
+  /* design.html D09 — a region is signalled by its surface, so an event's content NEVER paints
+     outside its own block. A block's height comes from its duration while its text height is fixed
+     by text flow, so anything under ~75 minutes has less block than content; clipping makes that
+     shortfall DELIBERATE TRUNCATION (§4) — the description first, then client/project, then the
+     time label, each dropping as the block shortens — instead of a spill into the hour rows below,
+     which belong to other entries (issue 187). The per-line ellipsis on .bd/.bc handles the
+     horizontal axis; this handles the vertical one. */
+  overflow: hidden;
   grid-template-columns: none;
   gap: 0;
   margin: 0;
   border-bottom: 1px solid var(--rule-strong);
 }
+/* The one exception to the clip: while an inline gate is MOUNTED on the event — the two-step delete
+   confirm (.confirm) or the split picker (.split-at) — the block hosts a transient control that is
+   wider than a day column and is not the entry's own content. Clipping it would hide the Cancel the
+   gate exists to offer, so the block opens up for exactly as long as the gate is up. */
+.dt .ev:has(.confirm, .split-at) { overflow: visible; }
 /* Hover is a LIFT, not a tint (D09): the block climbs the ladder chip → raise and comes forward.
    It keeps its paper fill and neutral edge — the accent stays spent on the running state. */
 .dt .ev:hover { box-shadow: var(--sh-raise); z-index: 3; }
@@ -2350,7 +2358,12 @@ body.popover { background: var(--canvas); margin: 0; }
    border, raise shadow) on hover; the buttons stay in the DOM and clickable via opacity at rest
    so every `data-act` selector is intact. DOM order matches the mockup, so no row-reverse.
    Icon-only + a fixed 24px width keeps the chip compact (~84px) so it clears the top-left
-   corner checkbox even in a narrow day column — no occlusion. */
+   corner checkbox even in a narrow day column — no occlusion.
+   design.html §4 — "no layout shift on hover/selection": the chip is a pure OVERLAY. It reserves
+   no flow space at rest and claims none on hover, so the text under the pointer never moves
+   (issue 151). The checklist's parenthetical remedy — reserve the space at rest — is refused
+   here on purpose: an 18px block cannot spare 36px of padding, so reserving would only trade
+   this defect for issue 187's. The chip overlaps the first line instead; the body stays put. */
 .ev .ops {
   position: absolute;
   top: 4px;
@@ -2369,7 +2382,6 @@ body.popover { background: var(--canvas); margin: 0; }
    stay Playwright-clickable at rest — the proven pattern the row affordances use). */
 .ev:hover .ops,
 .ev:focus-within .ops { background: var(--paper); border-color: var(--rule); box-shadow: var(--sh-raise); }
-.ev:hover { padding-top: 36px; }
 .ev .ops .op-btn {
   display: inline-flex;
   align-items: center;
