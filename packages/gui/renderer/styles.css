@@ -2397,6 +2397,34 @@ body.popover { background: var(--canvas); margin: 0; }
    wider than a day column and is not the entry's own content. Clipping it would hide the Cancel the
    gate exists to offer, so the block opens up for exactly as long as the gate is up. */
 .dt .ev:has(.confirm, .split-at) { overflow: visible; }
+/* design.html D09 (issue 146, unhashed — the D01 scan over this file reads a hashed three-digit
+   number as a colour literal): a transient gate armed FROM a calendar event is a LAYER OVER the
+   calendar, not content of the 124px day column its button sat in. Laid out in flow it was an
+   inline run 2–3× the column's width with no surface at all: the split picker measured 348px
+   inside a 124px column — 264px past its own column and 16px off the left edge of the WINDOW —
+   with a transparent background, a 0px radius and no shadow, so a raised region read as loose
+   text floating over the entries. Depth and containment are the same fix, because a positioned
+   layer is no longer bound by the column it sprang from: the gate takes the ladder's POPOVER rung
+   (one above the raised block it covers), the paper fill and neutral edge every layer carries, and
+   is positioned rather than laid out — app.js's placeInlineGate anchors it at the block and clamps
+   its box inside the calendar viewport. `width: max-content` keeps the controls on one row; the
+   max-width lets the split picker's refusal message wrap to a second row (the .split-warning
+   flex-basis above) instead of stretching the layer off screen. Gates armed outside the calendar
+   are in-flow content of a surface that already fits them, so they never take `.cal-gate`. */
+.dt .ev .cal-gate {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  flex-wrap: wrap;
+  width: max-content;
+  max-width: 420px;
+  padding: 8px 12px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  background: var(--paper);
+  box-shadow: var(--sh-pop);
+}
 /* Hover is a LIFT, not a tint (D09): the block climbs the ladder chip → raise and comes forward.
    It keeps its paper fill and neutral edge — the accent stays spent on the running state.
    `:focus-within` is the keyboard's hover (issue 140): the block is one tab stop and its controls
@@ -2430,6 +2458,23 @@ body.popover { background: var(--canvas); margin: 0; }
 .dt .ev.editing,
 .dt .ev.on:hover,
 .dt .ev.editing:hover { box-shadow: var(--sh-pop); z-index: 3; }
+/* The block HOSTING a gate outranks every other block in the track AND the chrome those blocks
+   carry, so the layer it holds is never drawn under a neighbour's corner checkbox (`.ck`, z-6 —
+   a block at rest sets no z-index, so its checkbox competes at 6 in the strip's own stacking
+   context), ops chip (z-5) or warn band (z-4), nor under a lifted (hovered / chosen) neighbour.
+   Deliberately more specific than the `.on:hover` pair above and placed after it, so a selected
+   block's own z-index cannot win.
+   7 is the ceiling, not an arbitrary number: it clears all of that and stays BELOW the two sticky
+   axes issue 145 pinned inside this scrollport (`.dh` is 8, `.gut` 9). A gate must never hide
+   behind those bands, but an entry block must not paint over them either — that would undo the
+   pinning. Rank does not have to settle that conflict, because app.js's placeInlineGate clamps the
+   gate into the region the bands leave CLEAR: the two never overlap, and the block keeps scrolling
+   behind the pinned header exactly as it does with no gate up. */
+.dt .ev.entry:has(.confirm, .split-at) { z-index: 7; }
+/* Inside that block, the gate's own host — the ops chip it replaced a button in — has to clear the
+   block's OWN corner checkbox (`.ck`, z-6), which otherwise punches through the layer at its
+   top-left corner. Scoped to `:has` so the chip keeps its resting rank whenever no gate is up. */
+.ev .ops:has(.confirm, .split-at) { z-index: 7; }
 .ev .bd { display: block; font-size: 12px; font-weight: 590; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .bd .run-dot { margin-right: 4px; }
 .ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

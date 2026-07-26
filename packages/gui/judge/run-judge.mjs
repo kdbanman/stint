@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2674,6 +2674,139 @@ async function sceneSplitAffordance(browser) {
       ok,
       `closed row exposes Split (open row none=${!before.openHasSplit}); ops chip clears the corner checkbox=${geom.noOverlap}, chip in column=${geom.chipInColumn}; split input is plain text=${splitForm.splitInputIsText}, no datetime-local=${splitForm.noDatetimeLocal}; split IPC: ${JSON.stringify(split)}`,
       'main-split.png',
+    );
+  });
+}
+
+// INLINE_GATE_CONTAINMENT — design.html D09 (issue #146): a transient gate armed FROM a calendar
+// event — the split picker (.split-at) and the two-step delete confirm (.confirm) — is a LAYER
+// OVER the calendar, not content of the 124px day column whose button armed it. Both shipped laid
+// out IN FLOW inside that column and with no surface of their own: the split picker measured 348px
+// against a 124px column, running 264px past the column and, in the leftmost one, 16px off the left
+// edge of the WINDOW, over a transparent background with a 0px radius and no shadow — a raised
+// region reading as loose text floating over the entries.
+//
+// Driven through the REAL hover affordance on the two EDGE columns (edgeColumnState pins an entry
+// to the week's first and last), never asserted off the stylesheet, so the check survives a
+// restyle: whatever the gates are made of, each must (a) sit wholly inside the calendar as the
+// user can see it — the scroller's visible box clipped to the window — and (b) resolve to a real
+// surface on the elevation ladder: an opaque `--paper` fill, a radius, and a shadow. Both edges
+// are probed because a clamp that only pulls the left edge in still spills off the right.
+//
+// (c) is the interaction with issue #145, which pinned the two axes INSIDE this scrollport: the
+// day-header band (`.dh`) holds its top edge and the hour gutter (`.gut`) its left, both on opaque
+// paper and both outranking the event chrome the gate is mounted in (`.ops` is z-5, the bands 8 and
+// 9). Landing in the scrollport is therefore no longer enough to be SEEN — a gate under either band
+// is as invisible as one off the window. So each block is scrolled hard into the scrollport's
+// TOP-LEFT CORNER before the gate is armed, which is the worst case for both bands at once, and the
+// gate is then required to clear their rects AND to hit-test as the topmost element at its own
+// corners — the restyle-proof form of "nothing is painted over it".
+async function sceneInlineGateContainment(browser) {
+  await withPage(browser, edgeColumnState(), 'index.html', async (page) => {
+    // The gate's chrome is asserted on COMPUTED colour, and D10 fades background/shadow over
+    // 120ms — with the clock pinned, a probe would otherwise read a frozen mid-fade frame.
+    await noMotion(page);
+    const arm = async (row, act, gate) => {
+      // The edge columns are off the default horizontal scroll, and the entries sit on the 24h
+      // track — reach them the way a user does before hovering.
+      await page.locator(row).scrollIntoViewIfNeeded();
+      // Hover the block's own TOP STRIP rather than its centre: the first column's entry carries
+      // an overlapping neighbour whose block owns the centre, and Playwright aims at the centre.
+      // This is also where a user reaches for the ops chip, which sits on that same first line.
+      await page.hover(row, { position: { x: 40, y: 5 } });
+      await page.waitForSelector(`${row} .ops .op-btn[data-act="${act}"]`, { state: 'attached' });
+      await page.click(`${row} [data-act="${act}"]`);
+      await page.waitForSelector(`${row} ${gate}`, { state: 'attached' });
+      return page.evaluate(([r, g]) => {
+        const el = document.querySelector(`${r} ${g}`);
+        const strip = el.closest('.cstrip');
+        const box = strip.getBoundingClientRect();
+        // The calendar AS SEEN: the scroller's visible box (border box less scrollbar gutters),
+        // clipped to the window — the region the gate has to land in to be whole and on screen.
+        const view = {
+          left: Math.max(box.left, 0),
+          top: Math.max(box.top, 0),
+          right: Math.min(box.left + strip.clientWidth, document.documentElement.clientWidth),
+          bottom: Math.min(box.top + strip.clientHeight, document.documentElement.clientHeight),
+        };
+        const rect = el.getBoundingClientRect();
+        const cs = getComputedStyle(el);
+        // rgb() with no alpha component is opaque; rgba(...) carries the alpha the defect had at 0.
+        const alpha = Number(/rgba?\(([^)]*)\)/.exec(cs.backgroundColor)?.[1].split(',')[3] ?? 1);
+        // The two STICKY axes issue #145 pinned inside this scrollport. Both are opaque and both
+        // outrank the gate's own chrome, so overlapping either one hides the gate behind it.
+        const overlaps = (a) => {
+          if (!a) return false;
+          const b = a.getBoundingClientRect();
+          return rect.left < b.right - 0.5 && rect.right > b.left + 0.5 &&
+            rect.top < b.bottom - 0.5 && rect.bottom > b.top + 0.5;
+        };
+        // …and the fact that geometry only stands in for: everywhere across the gate, the element
+        // the browser actually hits belongs to the gate. Survives any restyle of either band, and
+        // catches an occluder the rect test cannot — a layer that overlaps no BAND but is still
+        // punched through by chrome drawn above it (the block's own corner checkbox is z-6).
+        // Sampled on a grid inset past the layer's own corner radius: a rounded corner is not part
+        // of the element, so probing the literal corners would read "occluded" on every pass.
+        const pad = Math.max(14, parseFloat(cs.borderTopLeftRadius) + 2);
+        const grid = [];
+        for (let i = 0; i <= 4; i++) {
+          for (let j = 0; j <= 2; j++) {
+            grid.push([
+              rect.left + pad + ((rect.width - 2 * pad) * i) / 4,
+              rect.top + pad + ((rect.height - 2 * pad) * j) / 2,
+            ]);
+          }
+        }
+        // Plus the operative half: every control the gate exists to offer must hit-test to ITSELF
+        // at its own centre — the property a user has when nothing is painted over the gate.
+        const controls = [...el.querySelectorAll('button, input')];
+        return {
+          inside:
+            rect.left >= view.left - 0.5 &&
+            rect.right <= view.right + 0.5 &&
+            rect.top >= view.top - 0.5 &&
+            rect.bottom <= view.bottom + 0.5,
+          escapes: {
+            left: Math.round(Math.min(0, rect.left - view.left)),
+            right: Math.round(Math.max(0, rect.right - view.right)),
+          },
+          clearsStickyAxes: !overlaps(strip.querySelector('.dh')) && !overlaps(strip.querySelector('.gut')),
+          topmost: grid.every(([x, y]) => {
+            const hit = document.elementFromPoint(Math.round(x), Math.round(y));
+            return !!hit && (hit === el || el.contains(hit));
+          }),
+          controlsReachable:
+            controls.length > 0 &&
+            controls.every((c) => {
+              const b = c.getBoundingClientRect();
+              const hit = document.elementFromPoint(Math.round(b.left + b.width / 2), Math.round(b.top + b.height / 2));
+              return !!hit && (hit === c || c.contains(hit));
+            }),
+          opaque: alpha > 0,
+          paper: cs.backgroundColor === window.__probe.rgbOf('--paper'),
+          raised: cs.boxShadow !== 'none',
+          rounded: cs.borderTopLeftRadius !== '0px',
+          // Reported, not gated: the gate is far wider than the column it sprang from, which is
+          // WHY it has to be a positioned layer. A future redesign may legitimately shrink it.
+          widthVsColumn: `${Math.round(rect.width)}/${Math.round(el.closest('.dcol').getBoundingClientRect().width)}`,
+        };
+      }, [row, gate]);
+    };
+
+    // (a) the split picker on the FIRST day column — the case the issue measured off the window.
+    const split = await arm('.entry[data-id="40"]', 'split', '.split-at');
+    await page.screenshot({ path: join(EVIDENCE, 'main-inline-gate.png'), fullPage: true });
+    // (b) the delete confirm on the LAST day column — the mirror a left-only clamp would miss.
+    const confirm = await arm('.entry[data-id="41"]', 'delete', '.confirm');
+
+    const contained = split.inside && confirm.inside;
+    const chromed = [split, confirm].every((g) => g.opaque && g.paper && g.raised && g.rounded);
+    const unoccluded = [split, confirm].every((g) => g.clearsStickyAxes && g.topmost && g.controlsReachable);
+    record(
+      'INLINE_GATE_CONTAINMENT',
+      contained && chromed && unoccluded,
+      `split picker (first column) ${JSON.stringify(split)}; delete confirm (last column) ${JSON.stringify(confirm)}`,
+      'main-inline-gate.png',
     );
   });
 }
@@ -6799,6 +6932,7 @@ const SCENES = {
   MULTILINE_DESC: { items: ['MULTILINE_DESC'], run: sceneMultilineDesc },
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
+  INLINE_GATE_CONTAINMENT: { items: ['INLINE_GATE_CONTAINMENT'], run: sceneInlineGateContainment },
   WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
   ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], run: sceneAddRefusalPalette },
   MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
