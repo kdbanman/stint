@@ -1763,7 +1763,34 @@ box) sit on a literal value-to-selectors table with the same mirror test. Four
 hand-rolled shadows had accumulated outside the ladder, two of them clay glows
 at 35% and 30% — one effect at two strengths — and one of them `--sh-chip`'s
 exact geometry at double the token's opacity, which is the drift a rendered
-check cannot see because it looks like the rung. The calendar entry's
+check cannot see because it looks like the rung. The same shape finally covers
+**D01 itself** (issue #157): the rule reads "surfaces reference semantic tokens
+only; a raw scale step OR HEX LITERAL is a defect", and the guard used to
+enforce roughly one of those clauses — mockup hits were filtered to Radix
+palette values, so every non-palette colour rode through, and the styles.css
+half was hex-only and therefore keyword-blind (`color: white`) and
+encoding-blind (`stroke='%23fff'` inside a data URI). A **colour census** now
+reads every colour-accepting declaration on every surface, stylesheets and
+inline `style=` alike, and holds each colour it names to being a semantic token
+or a literal on a closed, reasoned list: the host macOS chrome the mockups draw
+to establish context (not a Stint surface — the same reasoning D08 already
+applies to the traffic lights), `black` as a `color-mix` shade operand, and the
+white label on a solid fill, which is BLOCKED on #164 because
+`design.tokens.json` has no `on-accent` token to reference. The tokenizer
+inverts the direction that made the holes possible: instead of listing the
+colours — a list that can never be complete, which is exactly how a keyword
+passed a hex regex — it lists the words that are NOT colours and reads every
+other bare identifier as one, so a new spelling arrives as an unlicensed term
+rather than passing by omission. Beside it, a reach check (every hex a mockup
+writes sits in a declaration the census scores, so a colour cannot hide in
+markup), a ban on declaring a custom property outside the generated markers, a
+requirement that every `var(--x)` names a property the generator emits, and the
+same mirror test keeping the licence list earned. What the widening found was
+mostly stale mockups: a `#fff` switch knob where the app paints `--paper`, a
+hand-rolled scrim and calendar fade, and an `edit-entry.html` selected day
+still filled with `--accent` under a white label — the pairing design.html
+PROHIBITS and this guard already asserts must stay below 4.5:1, three issues
+after the shipped picker moved to D12's raised paper chip. The calendar entry's
 action
 buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
