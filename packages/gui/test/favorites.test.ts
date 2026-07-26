@@ -2,21 +2,21 @@
  * GOLD — the GUI favorites plumbing (PRD §05 R09, §12 R14). The favorites rail's Pin /
  * list / rename / unpin all delegate to @stint/core; this drives the Electron-free helpers
  * (the units main.ts's pinFavorite / listFavorites IPC handlers wrap) against an in-memory
- * Store and proves: pinFavorite resolves client/project names through core and captures the
+ * Store and proves: pinFavoriteFromView resolves client/project names through core and captures the
  * template (so the rail reaches nothing tt cannot), favoriteToView is a faithful projection,
  * and a source-entry pin captures that entry's exact attributes.
  */
 import { describe, it, expect } from 'vitest';
 import { Store } from '@stint/core';
-import { pinFavorite, listFavorites, favoriteToView } from '../src/favorites.js';
+import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from '../src/favorites.js';
 
 const NOW = new Date('2026-06-24T18:00:00Z');
 const mem = () => Store.openMemory(() => NOW);
 
-describe('pinFavorite — resolve names + capture template (§05 R09)', () => {
+describe('pinFavoriteFromView — resolve names + capture template (§05 R09)', () => {
   it('from explicit attributes resolves client/project names through core', () => {
     const store = mem();
-    const view = pinFavorite(store, {
+    const view = pinFavoriteFromView(store, {
       name: 'Deep work',
       client: 'Acme',
       project: 'API',
@@ -32,7 +32,7 @@ describe('pinFavorite — resolve names + capture template (§05 R09)', () => {
     expect(typeof view.clientId).toBe('number');
     expect(typeof view.projectId).toBe('number');
     // …and it equals the favorite core actually stored.
-    expect(listFavorites(store)).toEqual([view]);
+    expect(listFavoriteViews(store)).toEqual([view]);
     store.close();
   });
 
@@ -48,7 +48,7 @@ describe('pinFavorite — resolve names + capture template (§05 R09)', () => {
       fromUtc: '2026-06-24T09:00:00Z',
       toUtc: '2026-06-24T10:00:00Z',
     });
-    const view = pinFavorite(store, { name: 'Ops sync', fromEntryId: entry.id });
+    const view = pinFavoriteFromView(store, { name: 'Ops sync', fromEntryId: entry.id });
     expect(view).toMatchObject({
       name: 'Ops sync',
       description: 'ops sync',
@@ -64,7 +64,7 @@ describe('pinFavorite — resolve names + capture template (§05 R09)', () => {
     const store = mem();
     const acme = store.addClient('Acme');
     store.start({ description: 'standup', clientId: acme.id, billable: true, tags: ['daily'] });
-    const view = pinFavorite(store, { name: 'Standup', fromEntryId: 'open' });
+    const view = pinFavoriteFromView(store, { name: 'Standup', fromEntryId: 'open' });
     expect(view).toMatchObject({
       name: 'Standup',
       description: 'standup',
@@ -77,8 +77,8 @@ describe('pinFavorite — resolve names + capture template (§05 R09)', () => {
 
   it('a duplicate name rejects (the duplicate-name rule lives in core)', () => {
     const store = mem();
-    pinFavorite(store, { name: 'Deep', billable: false, tags: ['focus'] });
-    expect(() => pinFavorite(store, { name: 'deep', billable: false })).toThrow(/already exists/);
+    pinFavoriteFromView(store, { name: 'Deep', billable: false, tags: ['focus'] });
+    expect(() => pinFavoriteFromView(store, { name: 'deep', billable: false })).toThrow(/already exists/);
     store.close();
   });
 });
@@ -108,12 +108,12 @@ describe('favoriteToView — faithful projection (§05 R09)', () => {
   });
 });
 
-describe('listFavorites — name-ordered renderer-safe views (§05 R09)', () => {
+describe('listFavoriteViews — name-ordered renderer-safe views (§05 R09)', () => {
   it('lists the pinned favorites name-ordered as views', () => {
     const store = mem();
-    pinFavorite(store, { name: 'Zed', billable: false });
-    pinFavorite(store, { name: 'Alpha', billable: false });
-    expect(listFavorites(store).map((f) => f.name)).toEqual(['Alpha', 'Zed']);
+    pinFavoriteFromView(store, { name: 'Zed', billable: false });
+    pinFavoriteFromView(store, { name: 'Alpha', billable: false });
+    expect(listFavoriteViews(store).map((f) => f.name)).toEqual(['Alpha', 'Zed']);
     store.close();
   });
 });

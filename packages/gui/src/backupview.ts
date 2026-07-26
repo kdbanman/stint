@@ -21,7 +21,7 @@ export function backupToView(b: BackupInfo): BackupInfoView {
 }
 
 /** List backups (newest-first) in the renderer-safe shape (PRD §20 R04). A read — no refresh. */
-export function listBackups(store: Store): BackupInfoView[] {
+export function listBackupViews(store: Store): BackupInfoView[] {
   return store.listBackups().map(backupToView);
 }
 
