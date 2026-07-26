@@ -162,7 +162,7 @@
     {
       "item": "MERGE_CONFLICT",
       "pass": true,
-      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
+      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}; Escape cancels the prompt — dismissed with nothing merged (true): {\"promptShown\":false,\"backdropShown\":false,\"merged\":null}",
       "screenshot": "main-merge-conflict.png"
     },
     {
