@@ -187,8 +187,7 @@ it just can't be fire-and-forget.
    a copy-pasteable prompt giving the batch's **sequencing, batching and
    dependency** — what lands first, which issues share a load-bearing file,
    what is blocked on what. Only what the per-issue comments cannot carry, never
-   a restated category or fix direction (§04). Close it when the batch is
-   through.
+   a restated category or fix direction (§04).
 6. **Report and route.** Summarize: issue → category → route table, the owner
    decisions made, which issues are now `Triaged` backlog and which go where
    instead. **Do not open PRs or fix anything.**
