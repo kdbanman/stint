@@ -352,16 +352,54 @@ describe('PROP: split then merge is identity on the span (§06)', () => {
 });
 
 describe('PROP: duration is UTC math, zone-/DST-safe (§04, §16)', () => {
-  test.prop([
-    fc.integer({ min: 1, max: 1_000_000 }),
-    fc.constantFrom('UTC', 'America/New_York', 'Asia/Kolkata', 'Pacific/Auckland', 'Europe/Berlin'),
-  ])('raw duration is invariant across the zone it is rendered in', (durationS, tz) => {
-    const start = '2026-03-08T05:00:00Z'; // straddles a US DST change in local zones
-    const end = new Date(Date.parse(start) + durationS * 1000).toISOString();
-    // Rendering in any zone is display only; the duration is fixed UTC math.
-    renderLocal(start, { timeZone: tz });
-    expect(secondsBetween(start, end)).toBe(durationS);
-  });
+  // A stored span is a pair of UTC instants, so a DST transition inside it moves the WALL
+  // CLOCK its endpoints read at without moving the duration. Both spans below straddle a
+  // real 2026 US transition, and every expected value is read off the calendar — the real
+  // elapsed seconds, and each zone's literal local rendering. Nothing here is recomputed
+  // the way the code computes it, and the zone drives live assertions: a duration derived
+  // from the endpoints' local hours, or a rendering that ignored the transition, reddens.
+
+  // 2026-03-08 spring forward: America/New_York jumps 02:00 EST (UTC-5) → 03:00 EDT
+  // (UTC-4). 06:00Z is 01:00 EST and 08:00Z is 04:00 EDT, so the New York wall clock
+  // advances THREE hours over a span of two — 02:00 never happened that day.
+  const SPRING_FORWARD = { startUtc: '2026-03-08T06:00:00Z', endUtc: '2026-03-08T08:00:00Z' };
+  const springForwardZones = fc.constantFrom(
+    { tz: 'UTC', startsAt: '2026-03-08, 06:00:00', endsAt: '2026-03-08, 08:00:00' },
+    { tz: 'America/New_York', startsAt: '2026-03-08, 01:00:00', endsAt: '2026-03-08, 04:00:00' },
+    { tz: 'Asia/Kolkata', startsAt: '2026-03-08, 11:30:00', endsAt: '2026-03-08, 13:30:00' },
+    { tz: 'Pacific/Auckland', startsAt: '2026-03-08, 19:00:00', endsAt: '2026-03-08, 21:00:00' },
+    { tz: 'Europe/Berlin', startsAt: '2026-03-08, 07:00:00', endsAt: '2026-03-08, 09:00:00' },
+  );
+
+  test.prop([springForwardZones])(
+    'a span across the spring-forward is its real two hours in every zone that renders it',
+    ({ tz, startsAt, endsAt }) => {
+      expect(secondsBetween(SPRING_FORWARD.startUtc, SPRING_FORWARD.endUtc)).toBe(2 * 3600);
+      expect(renderLocal(SPRING_FORWARD.startUtc, { timeZone: tz })).toBe(startsAt);
+      expect(renderLocal(SPRING_FORWARD.endUtc, { timeZone: tz })).toBe(endsAt);
+    },
+  );
+
+  // 2026-11-01 fall back: America/New_York repeats 02:00 EDT (UTC-4) → 01:00 EST (UTC-5).
+  // 05:00Z and 06:00Z are an hour apart yet BOTH read 01:00 in New York — the case where
+  // local wall clocks cannot tell a one-hour span from a zero-hour one.
+  const FALL_BACK = { startUtc: '2026-11-01T05:00:00Z', endUtc: '2026-11-01T06:00:00Z' };
+  const fallBackZones = fc.constantFrom(
+    { tz: 'UTC', startsAt: '2026-11-01, 05:00:00', endsAt: '2026-11-01, 06:00:00' },
+    { tz: 'America/New_York', startsAt: '2026-11-01, 01:00:00', endsAt: '2026-11-01, 01:00:00' },
+    { tz: 'Asia/Kolkata', startsAt: '2026-11-01, 10:30:00', endsAt: '2026-11-01, 11:30:00' },
+    { tz: 'Pacific/Auckland', startsAt: '2026-11-01, 18:00:00', endsAt: '2026-11-01, 19:00:00' },
+    { tz: 'Europe/Berlin', startsAt: '2026-11-01, 06:00:00', endsAt: '2026-11-01, 07:00:00' },
+  );
+
+  test.prop([fallBackZones])(
+    'a span across the fall-back is its real hour even where both ends read the same wall clock',
+    ({ tz, startsAt, endsAt }) => {
+      expect(secondsBetween(FALL_BACK.startUtc, FALL_BACK.endUtc)).toBe(3600);
+      expect(renderLocal(FALL_BACK.startUtc, { timeZone: tz })).toBe(startsAt);
+      expect(renderLocal(FALL_BACK.endUtc, { timeZone: tz })).toBe(endsAt);
+    },
+  );
 });
 
 describe('PROP: rounding is display/export-only and to the nearest increment (§09 R04)', () => {

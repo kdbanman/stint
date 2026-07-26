@@ -23,12 +23,12 @@ import {
   resolveRange,
   buildEntryList,
   describeOverlaps,
-  joinClientProject,
   type Store,
   type EntryGroupBy,
 } from '@stint/core';
 import type { IpcHandlers, ListEntriesQuery, EntryListView } from './ipc.js';
 import { buildUiState } from './uistate.js';
+import { toEntryRowView } from './entryrow.js';
 import { toggleTimer } from './toggle.js';
 import { startWithAttributes } from './start.js';
 import {
@@ -105,29 +105,11 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
     groups: groups.map((g) => ({
       key: g.key,
       billableSeconds: g.entries.reduce((s, e) => s + e.billableSeconds, 0),
+      // The row projection itself is entryrow.ts's one job (issue #166) — the day-grouped
+      // getState path builds its rows through the same function, so the two can never drift.
       entries: g.entries.map((e) => {
         const full = byId.get(e.id)!;
-        const overlap = overlaps.get(full.id);
-        return {
-          id: full.id,
-          description: full.description,
-          clientLabel: joinClientProject(full.clientName, full.projectName),
-          // §09 R7 (issue #84): the names ride separately so the live search matches each
-          // field on its own, never the joined label.
-          clientName: full.clientName,
-          projectName: full.projectName,
-          startUtc: full.startUtc,
-          endUtc: full.endUtc,
-          billableSeconds: full.billableSeconds,
-          billable: full.billable,
-          overlapped: overlap !== undefined,
-          overlapMinutes: overlap ? Math.round(overlap.overlapSeconds / 60) : 0,
-          overlapRelation: overlap ? overlap.relation : null,
-          sleptThrough: full.sleptThrough,
-          excludedSeconds: full.excludedSeconds,
-          rawSeconds: full.rawSeconds,
-          tags: full.tags,
-        };
+        return toEntryRowView(full, overlaps.get(full.id));
       }),
     })),
     rangeFromUtc: range.fromUtc,
