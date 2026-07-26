@@ -1,8 +1,24 @@
 /**
  * snake_case JSON serializers for `--json` output — the scripting contract
  * (PRD §11, validated against acceptance/criteria/schemas/*.json).
+ *
+ * Which home a `--json` shape belongs in (issue #171): core owns the shapes core itself
+ * exports — `toJsonEntries` is core's export shape, shared with `tt export`, and stays in
+ * @stint/core. This module owns every snake_case shape `tt` invents for `--json`, including
+ * the ones the `emitList` `toJson` slot reaches for. A published contract is read before it
+ * is extended, so it gets one reading order rather than a per-command guess.
  */
-import { type Report, type Status, type SavedReport, type Favorite, type BackupInfo } from '@stint/core';
+import {
+  type Report,
+  type Status,
+  type SavedReport,
+  type Favorite,
+  type BackupInfo,
+  type Client,
+  type Project,
+  type Tag,
+  type EntryView,
+} from '@stint/core';
 
 export function statusJson(status: Status): unknown {
   if (!status.running || !status.entry) return { running: false, entry: null };
@@ -118,4 +134,37 @@ export function backupJson(b: BackupInfo): unknown {
 /** §20 R04 — a list of backups (the `tt backup ls --json` array, newest-first). */
 export function backupListJson(backups: BackupInfo[]): unknown {
   return backups.map(backupJson);
+}
+
+/** §07 — the client scripting shape (`tt client ls --json`, client.schema.json). */
+export function clientListJson(clients: Client[]): unknown {
+  return clients.map((c) => ({ id: c.id, name: c.name, archived: c.archived }));
+}
+
+/** §07 — the project scripting shape (`tt project ls --json`, project.schema.json). */
+export function projectListJson(projects: Project[]): unknown {
+  return projects.map((p) => ({ id: p.id, client_id: p.clientId, name: p.name, archived: p.archived }));
+}
+
+/** §07 — the tag scripting shape (`tt tag ls --json`, tag.schema.json). */
+export function tagListJson(tags: Tag[]): unknown {
+  return tags.map((t) => ({ id: t.id, name: t.name, archived: t.archived }));
+}
+
+/**
+ * §10a — the sleep-flagged-entry scripting shape (`tt sleep ls --json`, sleep.schema.json):
+ * the entry's identity plus the seconds subtracting would exclude and every span behind that
+ * number, so a script can review a flagged entry without a second call.
+ */
+export function sleepListJson(entries: EntryView[]): unknown {
+  return entries.map((e) => ({
+    id: e.id,
+    description: e.description,
+    excluded_s: e.excludedSeconds,
+    spans: e.sleepSpans.map((sp) => ({
+      sleep_utc: sp.sleepUtc,
+      wake_utc: sp.wakeUtc,
+      source: sp.source,
+    })),
+  }));
 }
