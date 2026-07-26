@@ -76,7 +76,11 @@
                 <div class="flags" id="timer-flags"></div>
               </div>
               <div class="btns">
-                <button class="primary" id="timer-stop" hidden><svg class="ic" aria-hidden="true"><use href="#i-stop" /></svg>Stop</button>
+                <!-- design.html D11: the Timer view's standing primary while a timer RUNS — the
+                     idle face of the same standing action is #toggle below, and exactly one of the
+                     two is ever on screen (§12 R05). Marked so the accent handoff reaches it too:
+                     Stop + an open pin-as-favorite field would otherwise be two accent fills. -->
+                <button class="primary" id="timer-stop" data-standing-primary hidden><svg class="ic" aria-hidden="true"><use href="#i-stop" /></svg>Stop</button>
                 <button type="button" id="timer-pin" class="ghost" hidden><svg class="ic" aria-hidden="true"><use href="#i-star" /></svg>Pin</button>
               </div>
               <!-- §12 R21: a refused Stop/toggle is surfaced HERE, on the Timer view where the
@@ -124,7 +128,13 @@
                  from the payload so core derives the default). -->
             <section class="start-panel" id="start-panel">
               <div class="sp-actions">
-                <button class="primary" id="toggle" aria-label="Start timer" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Start</button>
+                <!-- design.html D11: the Timer view's STANDING primary — the most-likely action
+                     with nothing open. `data-standing-primary` is the marker app.js's
+                     syncStandingPrimary reads: while an inline form is open (the Details form's own
+                     Start, the Pin-as-favorite field's Pin) this one gives the `primary` class up
+                     and paints as the D11 secondary, so the view never shows two accent fills —
+                     and never two buttons reading "Start". -->
+                <button class="primary" id="toggle" data-standing-primary aria-label="Start timer" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-play" /></svg>Start</button>
                 <button id="start-toggle" class="ghost" aria-expanded="false" aria-controls="start-form">Details</button>
               </div>
               <form id="start-form" class="start-form" hidden>
@@ -165,7 +175,12 @@
             </button>
             <div id="overlap-banner" class="banner" hidden role="status" aria-live="polite"></div>
             <div class="toolbar">
-              <button id="add-toggle" class="ghost" aria-expanded="false" aria-controls="add-form"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add entry</button>
+              <!-- design.html D11: the Entries view's STANDING primary. Adding an entry by hand is
+                   the view's most-likely action, and it used to be a `.ghost` while the view carried
+                   no accent-filled primary at all (mock main.html has always drawn it filled). It
+                   hands the accent to the unified form's Save entry for as long as the form is open
+                   (app.js's syncStandingPrimary), so the budget is spent once either way. -->
+              <button id="add-toggle" class="primary" data-standing-primary aria-expanded="false" aria-controls="add-form"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add entry</button>
               <button id="report-btn" class="ghost" aria-label="Open this week's report">This week <span id="week-total">0.00h</span></button>
               <span class="search">
                 <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
@@ -271,8 +286,9 @@
             </div>
             <!-- §06 R3 (design.html D11 / V5): the merge SELECTION BAR — above the calendar,
                  mock main.html's .selbar: the "N selected" raised-chip count pill, a flex
-                 spacer, and a NEUTRAL Merge button (Entries' single accent-solid primary is
-                 the add form's Save entry, so Merge never takes .primary). -->
+                 spacer, and a NEUTRAL Merge button. Merge never takes .primary: the Entries
+                 view's one accent-solid primary is its standing Add entry, handed to the unified
+                 form's Save entry (or the conflict prompt's Merge) while one is open. -->
             <div id="merge-bar" class="merge-bar" hidden>
               <span class="sel-count" id="merge-count"></span>
               <span class="cap"></span>
@@ -288,7 +304,9 @@
               <span class="clients-head-actions">
                 <!-- §12 R13: reveal archived records (with Restore) — parity with `tt … ls --archived`. -->
                 <button id="show-archived" type="button" class="small ghost" aria-pressed="false">Show archived</button>
-                <button id="add-client-btn" type="button" class="small primary"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add client</button>
+                <!-- design.html D11: the Clients view's STANDING primary, handed to whichever
+                     inline field is open (a rename's Save, a client/project/tag add's Add). -->
+                <button id="add-client-btn" type="button" class="small primary" data-standing-primary><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add client</button>
               </span>
             </div>
             <div id="clients-list" class="clients-list"></div>
@@ -296,7 +314,7 @@
             <div class="tags-head vhead">
               <h2 class="clients-title vtitle">Tags</h2>
               <!-- design.html D11: Add tag is NEUTRAL (mock clients.html `.btn sm`) — the
-                   Clients view's single accent-solid primary is + Add client. -->
+                   Clients view's one accent-solid primary is its standing + Add client. -->
               <button id="add-tag" type="button" class="small"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add tag</button>
             </div>
             <div id="tags-list" class="tags-list"></div>
@@ -306,7 +324,10 @@
           <section class="view reports-view" data-view="reports" hidden>
             <div class="reports-head vhead">
               <h2 class="reports-title vtitle">Saved reports</h2>
-              <button type="button" id="rep-new" class="primary"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>New report</button>
+              <!-- design.html D11: the Reports view's STANDING primary. Opening the builder is the
+                   most-likely action at rest, but it only OPENS a form — so once the builder is up
+                   the accent moves to #rep-save, which commits, and this reverts to secondary. -->
+              <button type="button" id="rep-new" class="primary" data-standing-primary><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>New report</button>
             </div>
 
             <div class="defs" id="rep-defs"></div>
@@ -393,7 +414,10 @@
               <div class="builder-foot">
                 <button type="button" id="rep-cancel" class="report-export-btn">Cancel</button>
                 <button type="button" id="rep-delete" class="report-export-btn" hidden>Delete</button>
-                <button type="submit" id="rep-save" class="report-apply">Save</button>
+                <!-- design.html D11: Save is the builder's commit, so it carries the Reports view's
+                     one accent-solid fill while the builder is open — the accent used to sit on the
+                     button that merely opened this form while the commit read as neutral chrome. -->
+                <button type="submit" id="rep-save" class="primary">Save</button>
               </div>
             </form>
 

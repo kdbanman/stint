@@ -179,7 +179,12 @@
 
       <div class="vhead">
         <h2 class="vtitle">Saved reports</h2>
-        <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg> New report</button>
+        <!-- design.html D11 — at most ONE accent-filled primary per view, and this page draws the
+             builder OPEN. New report is the view's standing primary at rest; while the builder is
+             up the most-likely action is its Save definition, so New report hands the accent over
+             and reads as the secondary (paper + border). Two filled buttons here would put the
+             accent on the control that merely opens a form beside the one that commits it. -->
+        <button class="btn"><svg class="ic"><use href="#i-plus"/></svg> New report</button>
       </div>
 
       <div class="defs card">

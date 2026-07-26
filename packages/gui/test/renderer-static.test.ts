@@ -61,6 +61,51 @@ describe('renderer static contract', () => {
     expect(dupes, `duplicate element ids in index.html: ${dupes.join(', ')}`).toEqual([]);
   });
 
+  it('every view marks exactly one standing primary, and one observer-backed rule reads that marker (design.html D11, issue 150)', () => {
+    // The structural half of the accent handoff. The runtime OUTCOME — exactly one accent-solid
+    // fill in each state — is the PRIMARY_HANDOFF judge scene's job; what it cannot see is a view
+    // whose primary is never marked (so the handoff silently skips it) or a marker nobody reads,
+    // both of which pass every driven scene until someone thinks to drive the new state. Those are
+    // decidable from the markup alone, and this is where they are decided.
+    // Comments out: the markup's own explanation of the marker names it, and a prose mention is
+    // not a marked control.
+    const html = read('index.html').replace(/<!--[\s\S]*?-->/g, '');
+    // A view section is a `<section>` whose class list STARTS with `view` (`view clients`,
+    // `view reports-view`); its attribute order varies, and the timer view nests plain
+    // `<section>`s of its own, so the split is on the opening tag rather than a closing one.
+    const views = html.split(/<section\b(?=[^>]*\bclass="view\b)/).slice(1);
+    expect(views.length, 'index.html view sections').toBe(5);
+    const perView = views.map((v) => ({
+      view: /data-view="([^"]+)"/.exec(v)?.[1] ?? '(unnamed)',
+      marks: [...v.matchAll(/data-standing-primary/g)].length,
+      marked: [...v.matchAll(/<button[^>]*data-standing-primary[^>]*>/g)].map((m) => m[0]),
+    }));
+    // Every view with a most-likely action names it. The Timer view names TWO — Start and Stop,
+    // the idle and running faces of one standing action, only ever one of them on screen (§12 R05)
+    // — so this is "at least one", not "exactly one"; that no two are LIT at once is the judge's
+    // per-state count. Settings names none: its only primary, the update download, exists solely
+    // while an update waits.
+    expect(perView.filter((v) => v.marks === 0).map((v) => v.view)).toEqual(['settings']);
+    for (const v of perView) {
+      // A marker must sit on a `.primary` button: it is the handoff's target, and marking anything
+      // else opts a control into a handoff for an accent it never carried.
+      for (const btn of v.marked) {
+        expect(btn, `${v.view}: standing primary is not a .primary button`).toMatch(/class="[^"]*\bprimary\b/);
+      }
+      expect(v.marked.length, `${v.view}: data-standing-primary on a non-button`).toBe(v.marks);
+    }
+    // …and exactly one place still consumes the marker, watching the DOM for it. Deleting either
+    // half leaves every marker inert and every form-open state back at two accent fills, which no
+    // driven scene would notice for a form nobody thought to open.
+    const app = read('app.js');
+    expect(app).toMatch(/function syncStandingPrimary\(\)/);
+    expect(app).toMatch(/new MutationObserver\(syncStandingPrimary\)/);
+    expect(
+      [...app.matchAll(/querySelectorAll\('\[data-standing-primary\]'\)/g)].length,
+      'the marker is read in exactly one place',
+    ).toBe(1);
+  });
+
   it('the renderer never imports Node or touches the DB directly (parity via IPC)', () => {
     // The CLASSIC scripts can reach neither Node nor core. The bundled SU entry (su.ts) is
     // the one sanctioned core importer — its output staying node-free is asserted

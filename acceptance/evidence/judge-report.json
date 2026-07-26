@@ -78,13 +78,19 @@
     {
       "item": "ACCENT_SOLID_BUDGET",
       "pass": true,
-      "justification": "≤1 accent-solid fill per view (D11): timer=[#timer-stop]; entries=[none]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; running Timer view carries exactly its Stop primary=true (count 1)",
+      "justification": "exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): timer=[#timer-stop]; entries=[#add-toggle]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; every standing-primary view spends it=true; running Timer view carries exactly its Stop primary=true (count 1)",
       "screenshot": "main-running.png"
+    },
+    {
+      "item": "PRIMARY_HANDOFF",
+      "pass": true,
+      "justification": "exactly one visible --accent-solid fill in every state (D11): timer · idle at rest=[#toggle]; timer · Details expanded=[#start-go]; timer · pin-as-favourite field=[button.small primary]; entries · at rest=[#add-toggle]; entries · add form open=[#add-go]; clients · at rest=[#add-client-btn]; clients · inline rename open=[button.small primary]; clients · add-client field open=[button.small primary]; reports · at rest=[#rep-new]; reports · builder open=[#rep-save]; timer · running at rest=[#timer-stop]; timer · running + pin-as-favourite field=[button.small primary]; entries · merge-conflict modal up=[button.small primary mc-merge]; states measured=13/13 offending states=[none]",
+      "screenshot": "primary-handoff-timer.png"
     },
     {
       "item": "CLICKABILITY",
       "pass": null,
-      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent family=[none], accent-solid-filled primary action(s)=1 (Entries 0 + Timer 1; expect ≥1, reserved for the primary action)",
+      "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent family=[none], accent-solid-filled primary action(s)=2 (Entries 1 + Timer 1; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
@@ -234,7 +240,7 @@
     {
       "item": "CALENDAR_ACCENT_BUDGET",
       "pass": true,
-      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":51,\"dayColumns\":25,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":0}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
+      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":51,\"dayColumns\":25,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
       "screenshot": "calendar-accent-budget.png"
     },
     {
