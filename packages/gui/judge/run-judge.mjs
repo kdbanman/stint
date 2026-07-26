@@ -1364,13 +1364,6 @@ async function sceneClickability(browser) {
   });
 }
 
-// §12 R10: the flags-in-context scene is retired — the entries list is gone, so flags no longer
-// live on a row. Overlap + slept now render as MARKERS on the readonly calendar (the `.ov` warn
-// band w/ amount + the `.zz` hatch w/ the moon marker — asserted by CALENDAR_LAYOUT) and their
-// DETAIL + the reversible subtract/restore control live in the unified editor (the overlap
-// detail + Subtract/Restore + struck raw-vs-trimmed billable — asserted by UNIFIED_FORM). No
-// main-flags.png; the successor evidence is main-calendar.png + main-edit.png.
-
 // START_ATTRIBUTES — the main window's Start offers an optional inline form
 // (description/client/project/tags/billable); the primary Start stays one-tap and the
 // submitted payload carries every attribute over the start IPC (§05/§12 R1).
@@ -2316,11 +2309,6 @@ async function sceneMultilineDesc(browser) {
   });
 }
 
-// §12 R06: the consolidated modal editor (the old INLINE_EDITOR / kebab scene) is retired —
-// editing is the UNIFIED_FORM inline edit-mode form above (every tt-editable field in one
-// place, no modal), and the merge selection stays the corner-checkbox path exercised by the
-// MERGE_CONFLICT / MERGE_NOCONFLICT scenes. No kebab, no modal-editor scene here.
-
 // OVERLAP_BANNER — a write that creates an overlap surfaces a non-blocking inline
 // banner AT THE MOMENT of the edit, not only the per-row flag (§06 R4, §12). Drive the
 // closed row's inline Edit and Save; the overlap-returning write mock makes the renderer
@@ -3228,7 +3216,7 @@ async function sceneRestoreArchived(browser) {
 
 // TAG_CHIPS — an entry's tags show in-context as monochrome chips on its calendar event, and the
 // running entry's tags show on the summary line (§07, §12). There is NO per-row Edit-tags control
-// (DELETED, §Z) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
+// (DELETED, #43) — tags are edited in the UNIFIED FORM's chip editor (§12 R06/G6). This scene
 // asserts both: (a) the display — the fixture's open event carries 2 tags and its closed event 1,
 // so the events paint exactly 3 chips, plus the 2 on the running summary, each tag's text visible;
 // and (b) the capability — open the closed entry's unified form, REMOVE a tag chip and ADD a new

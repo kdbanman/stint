@@ -15,7 +15,7 @@ Feature: Parity for favorites & saved reports (§17 R14)
   # twin). A scenario that passes on both surfaces IS the parity proof for that entity's
   # lifecycle. The companion STATIC claim — that the GUI window actually wires each new IPC
   # channel to a `tt` path — is the GOLD parity-matrix: the `pinFavorite`/`listFavorites`/
-  # `renameFavorite`/`unpinFavorite`/`resumeFavorite` and `saveReport`/`listReports`/
+  # `renameFavorite`/`unpinFavorite`/`startFavorite` and `saveReport`/`listReports`/
   # `showReport`/`editReport`/`removeReport`/`runReport` rows are authored by §05 R09/R10 and
   # §09 R08/R09 (this feature consumes them, it does not edit parity-matrix.json).
   #
@@ -34,8 +34,8 @@ Feature: Parity for favorites & saved reports (§17 R14)
 
   Scenario: Favorite full lifecycle by hand — pin, list, rename, unpin
     # §05 R09 — the whole pinned-template lifecycle, reachable on both surfaces. GUI: the
-    # Timer view's favorites rail → addFavorite / listFavorites / renameFavorite /
-    # removeFavorite IPC; tt: `tt fav add` / `tt fav ls` / `tt fav rename` / `tt fav rm`.
+    # Timer view's favorites rail → pinFavorite / listFavorites / renameFavorite /
+    # unpinFavorite IPC; tt: `tt fav add` / `tt fav ls` / `tt fav rename` / `tt fav rm`.
     # Passing on BOTH worlds proves a favorite can be created, listed, renamed, and unpinned
     # identically from the GUI and from tt — it would fail if the favorite were reachable on
     # only one surface or its captured template differed across them.
@@ -57,7 +57,7 @@ Feature: Parity for favorites & saved reports (§17 R14)
   Scenario: Resume from a favorite by hand — the open entry inherits the template
     # §05 R10 — one action starts a FRESH timer from a favorite's template; the open entry
     # must carry the favorite's description / client / project / billable identically on both
-    # surfaces. GUI: the rail's one-click Resume → resumeFavorite IPC; tt: `tt fav start
+    # surfaces. GUI: the rail's one-click Resume → startFavorite IPC; tt: `tt fav start
     # <name>` (and the second route `tt start --fav <name>`). It would fail if resume were
     # reachable on only one surface or the inherited attributes differed across them.
     When I pin a favorite "API deep work" for "Acme" / "API" tagged "deep,focus"
