@@ -4758,6 +4758,18 @@ async function sceneHotkeyNoTrap(browser) {
     // The Backups group renders on its own async pass; wait for the last of the four stranded
     // controls so the walk below cannot pass for want of a control that had not painted yet.
     await page.waitForSelector('.backup-restore');
+    // The A04 ring signature, in one place. An outline with style `none` paints nothing, and
+    // Chromium versions disagree on the width they report alongside it (0px on one stack, 3px
+    // on another) — so a raw `outlineWidth` read makes this scene's justification vary by host,
+    // which the R08 judge-report drift gate rightly fails. Fold a none-style outline to 0px:
+    // the signature then means the same thing everywhere and stays byte-reproducible.
+    await page.evaluate(() => {
+      window.__ringSig = (el) => {
+        const cs = getComputedStyle(el);
+        const w = cs.outlineStyle === 'none' ? '0px' : cs.outlineWidth;
+        return `${cs.outlineStyle}|${w}|${cs.outlineColor}|${cs.boxShadow}`;
+      };
+    });
     // Tag the four controls stranded by issue 135 so the walk identifies them per-element,
     // and record the field's UNFOCUSED outline/box-shadow signature for the A04 delta.
     const setup = await page.evaluate(() => {
@@ -4773,12 +4785,10 @@ async function sceneHotkeyNoTrap(browser) {
         if (el) el.setAttribute('data-trap-probe', name);
         present[name] = !!el;
       }
-      const hk = document.querySelector('#settings-panel .set-hotkey');
-      const cs = getComputedStyle(hk);
       return {
         present,
         allPresent: Object.values(present).every(Boolean),
-        restSig: `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}`,
+        restSig: window.__ringSig(document.querySelector('#settings-panel .set-hotkey')),
       };
     });
 
@@ -4786,13 +4796,13 @@ async function sceneHotkeyNoTrap(browser) {
     const probe = () =>
       page.evaluate(() => {
         const el = document.activeElement;
-        const cs = el && el !== document.body ? getComputedStyle(el) : null;
+        const onBody = !el || el === document.body || el === document.documentElement;
         return {
           onHotkey: !!el && el.classList && el.classList.contains('set-hotkey'),
-          onBody: !el || el === document.body || el === document.documentElement,
+          onBody,
           probe: el && el.getAttribute ? el.getAttribute('data-trap-probe') : null,
-          label: !el || el === document.body ? '(body)' : el.id || `${el.tagName.toLowerCase()}.${el.className || ''}`,
-          sig: cs ? `${cs.outlineStyle}|${cs.outlineWidth}|${cs.outlineColor}|${cs.boxShadow}` : null,
+          label: onBody ? '(body)' : el.id || `${el.tagName.toLowerCase()}.${el.className || ''}`,
+          sig: onBody ? null : window.__ringSig(el),
           wrote: window.__SET_SETTING__ ?? null,
         };
       });
