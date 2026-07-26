@@ -252,7 +252,7 @@
     {
       "item": "CALENDAR_ENTRY_BLOCK",
       "pass": true,
-      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 677->677 (delta 0px), block 672->672 (delta 0px)",
+      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 722->722 (delta 0px), block 717->717 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
@@ -308,6 +308,12 @@
       "pass": true,
       "justification": "window.stint exposes 45/45 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
+    },
+    {
+      "item": "FIELD_LABELS",
+      "pass": true,
+      "justification": "D13 sweep over 34 visible controls, 29 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=8): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "screenshot": "field-labels-timer.png"
     },
     {
       "item": "TARGET_SIZE",

@@ -472,7 +472,18 @@ s {
 .toolbar { display: flex; gap: 12px; align-items: center; padding: 4px 0 12px; flex-wrap: wrap; }
 .toolbar[hidden] { display: none; }
 
-/* The toolbar search box — a restrained warm field, pushed to the right. Never the accent. */
+/* The toolbar search box — a restrained warm field, pushed to the right. Never the accent.
+   design.html D13 (issue 136): the label wrapper carries the visible name and the trailing
+   margin that pushes the pair right; the inner .search span stays the field chrome it always
+   was, so the box itself is unchanged. */
+.search-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+}
 .search {
   font-family: var(--sans);
   font-size: 12.5px;
@@ -481,7 +492,6 @@ s {
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
   padding: 8px 12px;
-  margin-left: auto;
   min-width: 200px;
 }
 
@@ -542,8 +552,19 @@ s {
 }
 .start-form[hidden] { display: none; }
 .start-form .start-row { display: flex; gap: 12px; }
+/* design.html D13 (issue 136): the stacked visible label over each attribute field — the same
+   idiom the live-edit strip's .le-field uses one card above, and the mockups' `.lab`. The label
+   is the flex item in the Client/Project row, so the field below it fills the half it owns. */
+.start-form .sp-field {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.start-form .start-row .sp-field { flex: 1; min-width: 0; }
+.start-form .sp-field > span { display: block; margin-bottom: 4px; }
 .start-form input[type="text"] {
-  flex: 1;
+  display: block;
+  width: 100%;
   font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
@@ -606,6 +627,9 @@ s {
   color: var(--muted);
 }
 .unified-form .uf-field > span { white-space: nowrap; }
+/* design.html D13 (issue 136): the description row's label sits at the TOP of its 3-line
+   textarea rather than centred against it — the .uf-tags treatment, for the same reason. */
+.unified-form .uf-desc { align-items: flex-start; }
 .unified-form .uf-select,
 .unified-form .uf-time {
   flex: 1;
@@ -1468,10 +1492,14 @@ button.danger:hover { background: var(--danger-weak); }
   box-shadow: var(--sh-card);
 }
 .builder[hidden] { display: none; }
-.builder-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
+.builder-head { display: flex; align-items: flex-end; gap: 16px; margin-bottom: 16px; }
 .builder-title { font-size: 14px; margin: 0; font-weight: 640; flex: none; }
+/* design.html D13 (issue 136): the visible label stacked over the name field, as reports.html's
+   own `.en` block draws it; the wrapper takes the flex the field used to carry. */
+.builder-name-field { flex: 1; display: block; font-size: 12px; color: var(--muted); }
+.builder-name-field > span { display: block; margin-bottom: 4px; }
 .builder-name {
-  flex: 1;
+  width: 100%;
   font-family: inherit;
   font-size: 14px;
   border: 1px solid var(--rule-strong);

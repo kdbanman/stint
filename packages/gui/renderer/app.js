@@ -1305,8 +1305,12 @@ async function openEntryForm(row, e) {
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
     // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
     // only the OUTER whitespace and preserves every interior newline, so the stored record stays
-    // verbatim.
-    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
+    // verbatim. design.html D13 (issue 136): it carries the same visible `.uf-field` label its
+    // Client / Project / Tags siblings below do — edit mode had the add form's exact defect, the
+    // one unlabelled field in an otherwise labelled column. The placeholder stays: "(no
+    // description)" describes the EMPTY state, it does not repeat the label.
+    `<label class="uf-field uf-desc"><span>Description</span>` +
+    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea></label>` +
     `<label class="uf-field"><span>Client</span>` +
     `<select class="edit-client uf-select"></select></label>` +
     // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
