@@ -165,10 +165,12 @@ header.mast {
 }
 /* The running count-up is one of the two sanctioned accent uses on this card. */
 .timer-card.running .clock { color: var(--accent); }
-/* The running/idle word is redundant — the green dot + the clay running clock already say it —
-   so it is hidden (kept in the DOM for assistive tech + the harness probe). */
+/* design.html D05/A05 — this line is what keeps the card off colour-alone signalling. It was
+   display:none on the reasoning that "the green dot + the clay clock already say it", but the
+   card carried no dot: the recoloured count-up WAS the whole signal (issue 142). Worded and
+   dotted now — the treatment .timer-strip already carried and this card never did. */
 .timer-card .state {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
@@ -178,8 +180,19 @@ header.mast {
   color: var(--muted);
   margin-top: 8px;
 }
-/* The running-state indicator is the other sanctioned accent use on this card. */
-.timer-card.running .state { color: var(--accent); }
+/* The dot is the other sanctioned accent use on this card, and it is a non-text mark on the A02
+   floor — which is why the accent sits here and not on the word beside it. At 11px the word
+   would be accent-as-text below A01's ≥24px large-text branch, the same breach issue 141 closed
+   on the strip clock; the word inks instead, and the accent signals in a shape A01 permits. */
+.timer-card .tc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.timer-card.running .state { color: var(--ink); }
+.timer-card.running .tc-dot { background: var(--accent); }
 .timer-card .ctx { flex: 1; min-width: 0; }
 .timer-card .ctx .desc { font-size: 15px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
 .timer-card.idle .ctx .desc { color: var(--muted); font-weight: 450; }
