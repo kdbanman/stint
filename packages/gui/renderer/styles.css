@@ -1950,10 +1950,10 @@ button.danger:hover { background: var(--danger-weak); }
 /* ---- popover (tray, §12 R01) — context/mockups/tray-popover.html -------- */
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
    block, an action row, and a foot — NOT a full-viewport flex fill. The popover BrowserWindow
-   is the surface itself, so the mockup's gradient backdrop + notch are demo-only (not added);
-   what shows around the floating card is the window, which is `paper` like every other Stint
-   window — the mockup's `canvas` body is the DESKTOP behind that window, and this file ships no
-   desktop (issue #158). */
+   is the surface itself, so the mockup's gradient backdrop + notch are demo-only (not added):
+   what shows around the floating card is Stint's own window, and a Stint window is `paper`.
+   `canvas` is §03's backdrop behind a PICTURED window — a thing this file never draws, and the
+   mockup draws with a simulated desktop of its own (issue #158). */
 body.popover { background: var(--paper); margin: 0; }
 .pop {
   width: 332px;
