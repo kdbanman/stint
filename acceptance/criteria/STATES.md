@@ -18,8 +18,8 @@ waiver with a reason; a new view or state added without a row here is a coverage
 
 | State | What it looks like | Evidence | Notes/Waiver |
 |---|---|---|---|
-| **Ideal** — idle card | 00:00:00 clock, Start primary, idle-only start panel visible | JUDGE `START_FORM`, `RUNNING_SINGLE_ACTION` (idle snapshot) — `main-start-form.png` | |
-| **Ideal** — running card | Live count-up, description, client/project, accented Stop, no Switch | JUDGE `TIMER_VIEW`, `IN_WINDOW_TIMER` — `timer-view.png`, `timer-view-full.png` | |
+| **Ideal** — idle card | 00:00:00 clock, the worded state (`idle`) with a faint dot beside it, Start primary, idle-only start panel visible | JUDGE `START_FORM`, `RUNNING_SINGLE_ACTION` (idle snapshot) — `main-start-form.png` | |
+| **Ideal** — running card | Live count-up, the worded state (`running`) with an accent run dot beside it, description, client/project, accented Stop, no Switch | JUDGE `TIMER_VIEW`, `IN_WINDOW_TIMER` — `timer-view.png`, `timer-view-full.png` | The word + dot are the D05/A05 pairing that keeps the state off colour alone — hidden until issue #142 |
 | **Error** — refused Stop (`#timer-warning`) | Announced region names the refusal — the reason alone, no IPC wrapper / exception class / CLI flag (issue 138); strip/Stop stay live, no wedge | JUDGE `WRITE_REJECTION_FEEDBACK` (site d), `FUTURE_START_GUARD` — `main-edit-reject.png`, `timer-future-start-reject.png` | |
 | **Edge** — live-edit strip (running only) | Raw text `#le-start`, no `#le-end`, count-up keeps advancing while edited | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — inline start-only picker disclosure | Opens in flow under the field, start grip only, future-fade mask | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
@@ -64,6 +64,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — the chosen option's paint | Chosen option is a raised paper chip with an ink radio dot; peers recess to wash and stay flat (D12) | JUDGE `MERGE_CHOICE_LIFT` (issue 144) — `merge-choice-lift.png` | |
 | **Edge** — the Entries view behind the backdrop | That view's standing primary reverts to secondary, so the modal's Merge is the only accent fill on screen (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) | |
 | **Edge** — agreeing merge (no prompt) | Merge fires directly, no `.editor.conflict-prompt` | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png`; BDD "Merge concatenates descriptions and keeps the first entry's client" | |
+| **Edge** — dismissed by Escape | Prompt and backdrop unmount, the Entries view returns untouched and nothing merges (craft checklist §4) | JUDGE `MERGE_CONFLICT` (issue 147 sub-fact) — `main-merge-conflict.png` | |
 | **Error** — non-contiguous merge without acknowledgement | Refused, originals survive unmerged | BDD `overlap_and_editing.feature` "Merging a non-contiguous selection without acknowledgement is refused (the originals survive)" | Core-level refusal; same `confirmInline` gate as `MERGE_GAP`, no separate GUI screenshot |
 | **Empty** — N/A | Modal only renders on a ≥2-entry conflicting selection | — | Waived — no zero-data variant exists for a conditionally-mounted modal |
 

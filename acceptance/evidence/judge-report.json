@@ -18,7 +18,7 @@
     {
       "item": "KEYBOARD_FOCUS",
       "pass": true,
-      "justification": "Tab-walk reached 20/20 controls (empty) and 22/22 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "justification": "Tab-walk reached 20/20 controls (empty) and 21/21 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
@@ -54,7 +54,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -162,7 +162,7 @@
     {
       "item": "MERGE_CONFLICT",
       "pass": true,
-      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
+      "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}; Escape cancels the prompt — dismissed with nothing merged (true): {\"promptShown\":false,\"backdropShown\":false,\"merged\":null}",
       "screenshot": "main-merge-conflict.png"
     },
     {
@@ -262,6 +262,12 @@
       "screenshot": "main-calendar-short.png"
     },
     {
+      "item": "CALENDAR_KEYBOARD",
+      "pass": true,
+      "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 71 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
+      "screenshot": "calendar-keyboard-focus.png"
+    },
+    {
       "item": "LIVE_FILTER",
       "pass": true,
       "justification": "live filter: list 7→2→7 rows, report total 5.00h→3.50h→5.00h (week-bounded idle, range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
@@ -324,13 +330,13 @@
     {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 105 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
+      "justification": "A03 sweep over 106 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
       "screenshot": "main-target-size.png"
     },
     {
       "item": "COLOUR_PAIRING",
       "pass": true,
-      "justification": "D05/A05 pairing: run-dot beside 'running' (strip={\"dotPresent\":true,\"stateWord\":\"running\"}, card state='running'); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
+      "justification": "D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip={\"dotVisible\":true,\"wordVisible\":false,\"stateWord\":\"running\"}, card={\"stateWord\":\"running\",\"wordVisible\":true,\"dotVisible\":true}); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
       "screenshot": "main-colour-pairing.png"
     },
     {

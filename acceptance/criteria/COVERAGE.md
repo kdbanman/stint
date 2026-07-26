@@ -345,7 +345,12 @@ prompt is now **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
 `openMergeConflict` — the merge-bar path routes through it; `editor.js` and its
 toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
 `MERGE_NOCONFLICT` (`packages/gui/judge/`, asserting the
-`.editor.conflict-prompt` modal + `main-merge-conflict.png`) +
+`.editor.conflict-prompt` modal + `main-merge-conflict.png`; `MERGE_CONFLICT`
+also scores the modal's KEYBOARD EXIT — issue 147, where the app's one modal
+ignored Escape and left a keyboard user mid-merge with no way out: Escape now
+dismisses the prompt as a CANCEL, scored on the OUTCOME (prompt and backdrop
+gone AND no `merge` payload sent), because an Escape that silently confirmed
+would empty the DOM just the same) +
 `MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — how the prompt PAINTS
 a choice: each chosen `.mc-opt` is the raised paper chip (`--paper` + a non-none
 shadow) while its unchosen peers recess to `--wash` and stay flat, no option or
@@ -990,8 +995,10 @@ actions)): the renderer paints the FULL card from the `UiState` running entry
 primary action while running (the start panel is idle-only, issue #51; the
 atomic stop-then-start stays core's `start` contract, §05 R01, with no dedicated
 Switch control), `gui/renderer/index.html` hosts `#timer-card` (with
-`#timer-clock` /`#timer-state`/`#timer-desc`/`#timer-meta`/`#timer-flags` + the
-Stop button, and NO `#timer-switch` ) INSIDE the `data-view="timer"` section and
+`#timer-clock` /`#timer-state` — the state LINE, an accent `.tc-dot` beside the
+`#timer-state-word` word (issue #142) — /`#timer-desc`/`#timer-meta`/`#timer-flags`
++ the Stop button, and NO `#timer-switch` ) INSIDE the `data-view="timer"` section
+and
 a compact `#timer-strip` (with `#strip-clock` /`#strip-state`/`#strip-desc`, no
 Stop, no flags grid) in the `data-view="entries"` section, +
 `gui/renderer/app.js` (`renderTimerCard()` paints the full running/idle face —
@@ -1017,7 +1024,24 @@ font-size from the rendered element, and GOLD
 `gui/test/design-guard.test.ts` censuses every `color:` declaration on every
 surface: the tokens painted as text must be exactly those design.html gives a
 text role, and each accent-as-text site must resolve to ≥24px at D06's 680.
-**The card stays fresh across views (issue #50):** JUDGE
+**The running state is worded, not only coloured (design.html D05/A05, issue
+#142):** the card's state line ships VISIBLE — `running` /`idle` in
+`#timer-state-word` with a `.tc-dot` beside it, `--faint` when idle and
+`--accent` when running — after shipping `display:none` , which left the
+recoloured count-up as the whole running signal on the one surface whose entire
+purpose is the timer (the Entries strip already carried its dot; the mast
+`.summary` stays hidden as the deliberate one-indicator-not-two call). The word
+takes `--ink` , not the accent: at 11px an accent word would be the same sub-24px
+accent-as-text breach A01 forbids and issue #141 closed on the strip clock, so
+the accent sits on the dot, a non-text mark on the A02 floor and the run-dot
+pairing exemption design.html §07 records. JUDGE `TIMER_VIEW` scores the OUTCOME
+— the word inside the card's rendered `innerText` , the state line laid out
+carrying that word, and the dot visible at the resolved `--accent` — replacing
+the presence-only `#timer-state.textContent` probe that the shipped bug
+satisfied. JUDGE `COLOUR_PAIRING` , the A05 scene, was fooled by the same
+presence-only read and now scores each running surface as RENDERED: the strip
+pairs by its visible dot (D05 takes a word OR an icon), the card by a visible
+word AND a visible dot. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
 Entries-toolbar control is touched (the Today preset latches the renderer's
 entries query), routing to the Timer view and clicking Start flips the card to
@@ -1494,7 +1518,12 @@ asserts its own **fixture realism**: the three sub-75-minute blocks must
 genuinely lay out more content than they have height for, so reseeding the
 scene with comfortable entries reddens it rather than quietly greening it — the
 audit's retracted first kill of this finding was taken on a 132px block, very
-nearly the longest plausible entry. **R17 Exact time entry (NEW, `core` — the
+nearly the longest plausible entry. **How the block is REACHED from the
+keyboard** — one tab stop per entry, its four hover-revealed controls on a
+roving ← / → focus, and none of them focusable while invisible — is JUDGE
+`CALENDAR_KEYBOARD` (`calendar-keyboard-focus.png` over the same three-week
+`denseCalendarState` , issue 140); the model and its guard are detailed in the
+§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry (NEW, `core` — the
 overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
 expander** — raw start/stop **text** fields beneath the inline interval picker
 (§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT
@@ -1659,9 +1688,12 @@ that rule and this is the whole of it. Beside it, the tabular half of D06: no
 surface writes `font-variant-numeric` to anything but `tabular-nums` , and
 every site the renderer paints a `backupLabel()` timestamp into resolves to
 the `--num` face with tabular figures (`.backup-meta` printed a proportional
-timestamp — the app's one time string without the idiom). The entry-row action
-buttons stay native `<button>` s (Enter/Space-activatable, tab-reachable for
-free), `index.html` /`popover.html` give `#toggle` an `aria-label` +
+timestamp — the app's one time string without the idiom). The calendar entry's
+action
+buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
+are `tabindex="-1"` and reached from the block that holds them rather than being
+top-level stops of their own (issue 140, the roving focus below),
+`index.html` /`popover.html` give `#toggle` an `aria-label` +
 `aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
 keep `aria-pressed` /`aria-label` current on every render so the running/idle
 state is announced, with each dynamic action button carrying a discernible
@@ -1681,7 +1713,46 @@ the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). JUDGE `FIELD_LABELS`
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). The same blind spot covers
+the app's one MODAL, which mounts on `<body>` outside every view:
+`MERGE_CONFLICT` now scores its Escape dismissal too (issue 147), so "Esc
+cancels the innermost thing" is proven at both places the renderer swallows or
+ignores keys. `KEYBOARD_FOCUS` also walks the
+default view at ONE entry of data, a blind spot of a different kind: it scores
+the ring on every stop but never asks what the stops COST, so the Entries
+calendar shipped four hover-revealed controls per entry as four top-level tab
+stops — ~200 of them over three weeks of work, fifty of which were the merge
+checkbox (`.ev .ck`), carrying `:hover` / `:checked` / `.on` opacity clauses and
+no focus clause at all; `opacity` takes the outline with it, so a focused
+checkbox painted neither the 16×16 control nor its ring (issue 140, A04's "never
+fully obscured"). The repaired model is a ROVING FOCUS
+in `gui/renderer/app.js` (`calEvent` / `blockKeys`): the block is one tab stop —
+a focusable `role="group"` labelled with the entry it stands for — its four
+controls are `tabindex="-1"` and are reached with ← / → from it, Escape returns
+to the block, Enter opens the unified editor (the keyboard twin of the
+click-anywhere-on-the-body affordance), and `styles.css` extends the
+`.ev:focus-within` opacity clause `.op-btn` already had to `.ck`, so a focused
+control is never at zero opacity and arriving at an entry is also how a keyboard
+user learns the controls are there. Focus follows the two inline gates rather
+than being stranded when the button that opened them is replaced —
+`confirmInline` hands it to CANCEL, not the destructive confirm (Enter fires a
+button on keydown, so focusing the confirm would let one held Enter arm and then
+commit on its own auto-repeat), `openSplitForm` hands it to the instant field,
+and either Cancel hands it back. JUDGE `CALENDAR_KEYBOARD`
+(`packages/gui/judge/`, `calendar-keyboard-focus.png`) is the density guard
+`KEYBOARD_FOCUS` cannot be: over the three-week `denseCalendarState` (51 blocks
+holding 202 controls — asserted, so reseeding it comfortable reddens the scene
+rather than greening it) one Tab cycle walks the whole window in 71 stops, 51 of
+them in the calendar and every one of those a block; every stop of that cycle
+holds a non-zero EFFECTIVE opacity (its own multiplied up its ancestor chain)
+and a non-`none` outline while focused; and real ← / → presses walk a sample
+block's four controls in DOM order, Escape lands back on the block, and Tab
+leaves for the next block. Both halves were verified to fail without the fix
+rather than taken on trust: against `origin/main` 's renderer the same walk
+reports 202 calendar stops, none of them blocks, and 50 stops focused at zero
+opacity — all of them the checkbox; with only the CSS clause reverted, the
+roving probe reads the focused checkbox at `opacity: 0`.
+JUDGE `FIELD_LABELS`
 (`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
 design.html **D13** — every field carries a VISIBLE label, which is also the
 §07 field-border exemption A01 is conditioned on. The app had been labelling
