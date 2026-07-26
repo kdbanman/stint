@@ -38,7 +38,7 @@
   /* shell + sidebar */
   .shell{display:flex;min-height:560px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
-  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:450}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
   /* D12/V7: selection ≠ accent — the active nav item lifts as a raised paper chip;
@@ -68,18 +68,18 @@
   .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
   .cap{font-size:12px;color:var(--muted)}
   /* entries list */
-  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13.5px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
-  .day-h .dsum{font-weight:400;color:var(--muted);font-size:12px}
+  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
+  .day-h .dsum{font-weight:450;color:var(--muted);font-size:12px}
   .row{display:grid;grid-template-columns:18px 130px 1fr auto;align-items:center;gap:16px;padding:12px 4px;border-bottom:1px solid var(--rule)}
   .row.sel{background:var(--wash);box-shadow:var(--sh-chip)}
   /* design.html D12 (issue #144): the checked box is a tick, not a colour — paper fill, neutral
      edge, chip lift, ink mark. The accent is never spent on a selection. */
   .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
   .row .ck .ic{width:12px;height:12px;color:var(--ink)}
-  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
+  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
   .row .what{display:flex;align-items:center;gap:8px;min-width:0}
   .row .what .where{color:var(--muted)}
-  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12.5px;justify-self:end}
+  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12px;justify-self:end}
   /* the gap between the two selected rows, drawn as a quiet marker so the non-contiguity reads */
   .gap-mark{display:flex;align-items:center;gap:8px;padding:8px 4px 8px 32px;color:var(--flag);background:repeating-linear-gradient(135deg,transparent 0 7px,color-mix(in srgb, var(--ink) 2%, transparent) 7px 14px);border-bottom:1px dashed var(--flag-line);font-size:12px}
   .gap-mark .lbl{font-weight:590}
@@ -93,7 +93,7 @@
   .confirm .q{font-weight:590;color:var(--ink);max-width:520px}
   .confirm .q b{color:var(--danger)}
   /* caption note under the bar, explaining the gate (design intent) */
-  .note{margin:2px 2px 16px;padding:12px 16px;border-left:3px solid var(--flag-line);background:var(--flag-bg);border-radius:0 var(--r1) var(--r1) 0;color:var(--flag);font-size:12.5px}
+  .note{margin:2px 2px 16px;padding:12px 16px;border-left:3px solid var(--flag-line);background:var(--flag-bg);border-radius:0 var(--r1) var(--r1) 0;color:var(--flag);font-size:12px}
   .note b{color:var(--ink)}
 </style>
 </head>
