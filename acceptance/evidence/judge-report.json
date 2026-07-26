@@ -54,7 +54,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"state\":\"running\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -318,7 +318,7 @@
     {
       "item": "COLOUR_PAIRING",
       "pass": true,
-      "justification": "D05/A05 pairing: run-dot beside 'running' (strip={\"dotPresent\":true,\"stateWord\":\"running\"}, card state='running'); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
+      "justification": "D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip={\"dotVisible\":true,\"wordVisible\":false,\"stateWord\":\"running\"}, card={\"stateWord\":\"running\",\"wordVisible\":true,\"dotVisible\":true}); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
       "screenshot": "main-colour-pairing.png"
     },
     {

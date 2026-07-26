@@ -18,8 +18,8 @@ waiver with a reason; a new view or state added without a row here is a coverage
 
 | State | What it looks like | Evidence | Notes/Waiver |
 |---|---|---|---|
-| **Ideal** — idle card | 00:00:00 clock, Start primary, idle-only start panel visible | JUDGE `START_FORM`, `RUNNING_SINGLE_ACTION` (idle snapshot) — `main-start-form.png` | |
-| **Ideal** — running card | Live count-up, description, client/project, accented Stop, no Switch | JUDGE `TIMER_VIEW`, `IN_WINDOW_TIMER` — `timer-view.png`, `timer-view-full.png` | |
+| **Ideal** — idle card | 00:00:00 clock, the worded state (`idle`) with a faint dot beside it, Start primary, idle-only start panel visible | JUDGE `START_FORM`, `RUNNING_SINGLE_ACTION` (idle snapshot) — `main-start-form.png` | |
+| **Ideal** — running card | Live count-up, the worded state (`running`) with an accent run dot beside it, description, client/project, accented Stop, no Switch | JUDGE `TIMER_VIEW`, `IN_WINDOW_TIMER` — `timer-view.png`, `timer-view-full.png` | The word + dot are the D05/A05 pairing that keeps the state off colour alone — hidden until issue #142 |
 | **Error** — refused Stop (`#timer-warning`) | Announced region names the refusal — the reason alone, no IPC wrapper / exception class / CLI flag (issue 138); strip/Stop stay live, no wedge | JUDGE `WRITE_REJECTION_FEEDBACK` (site d), `FUTURE_START_GUARD` — `main-edit-reject.png`, `timer-future-start-reject.png` | |
 | **Edge** — live-edit strip (running only) | Raw text `#le-start`, no `#le-end`, count-up keeps advancing while edited | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — inline start-only picker disclosure | Opens in flow under the field, start grip only, future-fade mask | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |

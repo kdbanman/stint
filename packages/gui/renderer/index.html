@@ -68,7 +68,11 @@
             <section class="timer-card idle" id="timer-card">
               <div class="tc-clock-block">
                 <div class="clock tnum" id="timer-clock">00:00:00</div>
-                <div class="state" id="timer-state">idle</div>
+                <!-- design.html D05/A05: the running state is said in a word AND marked with a
+                     dot, so it never rides on the recoloured count-up alone (issue #142). The
+                     dot is decorative to assistive tech — #timer-state-word carries the state
+                     in text, and #timer-state's own textContent is that word. -->
+                <div class="state" id="timer-state"><span class="tc-dot" aria-hidden="true"></span><span id="timer-state-word">idle</span></div>
               </div>
               <div class="ctx">
                 <div class="desc" id="timer-desc">nothing running</div>
