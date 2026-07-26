@@ -6609,6 +6609,203 @@ async function sceneFieldLabels(browser) {
   );
 }
 
+/**
+ * The in-page field-chrome sweep (FIELD_CHROME). Reads, per visible field in the currently-
+ * routed view, the four facts design.html D13 states about what a field looks like — the
+ * border, the radius, the padding grid D07 puts under it, and (for the one field asked to
+ * hold focus) the focus idiom.
+ *
+ * `field` is the same population FIELD_LABELS scores: the bordered-box controls D13's rule
+ * describes (text inputs, selects, textareas), never the checkboxes.
+ *
+ * Every fact is read off the COMPUTED style, which is the whole point. A field inherits a
+ * complete set of these declarations from the UA stylesheet whether the app writes them or
+ * not, so "what does styles.css say" and "what does the field look like" are different
+ * questions — and a static scan of the source can only answer the first one.
+ *
+ * This is NOT a px/hex pin on named selectors (process.html §02 forbids those — they fight
+ * every restyle and prove nothing about how the app looks). Every value compared here is
+ * resolved from the token layer at probe time (`--rule-strong`, `--r1`), so a restyle that
+ * moves a token moves the expectation with it; the one literal, the 4px grid, is D07 itself.
+ * Border WIDTH is deliberately not pinned to a number — it is scored for uniformity, which
+ * is what "one border" means and what a leaked UA border breaks.
+ */
+function sweepFieldChrome() {
+  const { visible, cssVar, rgbOf } = window.__probe;
+  const onGrid = (v) => {
+    const n = parseFloat(v);
+    return n === 0 || n === 2 || n % 4 === 0;
+  };
+  const ruleStrong = rgbOf('--rule-strong');
+  const radius = cssVar('--r1');
+  const view = document.querySelector('.views .view:not([hidden])');
+  const fields = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+    .filter((el) => !['hidden', 'checkbox', 'radio'].includes(el.type))
+    .filter(visible);
+  return fields.map((el) => {
+    const cs = getComputedStyle(el);
+    const sides = ['Top', 'Right', 'Bottom', 'Left'];
+    const widths = sides.map((s) => cs[`border${s}Width`]);
+    const styles = sides.map((s) => cs[`border${s}Style`]);
+    const colours = sides.map((s) => cs[`border${s}Color`]);
+    const pads = sides.map((s) => cs[`padding${s}`]);
+    const radii = ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft'].map((c) => cs[`border${c}Radius`]);
+    return {
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      // ONE border: a single hairline, same on all four sides, drawn solid in --rule-strong.
+      // The UA's own text-control border is `2px inset rgb(118, 118, 118)` — it fails the
+      // style and the colour clause, and its width is compared against the app's own below.
+      oneBorder:
+        parseFloat(widths[0]) > 0 &&
+        widths.every((w) => w === widths[0]) &&
+        styles.every((s) => s === 'solid') &&
+        colours.every((c) => c === ruleStrong),
+      width: widths[0],
+      border: `${widths[0]} ${styles[0]} ${colours[0]}`,
+      // ONE radius: 8px on all four corners (the UA leaves a text control square).
+      oneRadius: radii.every((r) => r === radius),
+      radius: radii[0],
+      // D07's grid, over the COMPUTED padding — where an unreset UA `padding: 1px 2px` shows up.
+      onGrid: pads.every(onGrid),
+      padding: pads.join(' '),
+    };
+  });
+}
+
+// FIELD_CHROME — design.html D13 ("One border (rule-strong), one radius (8px), one focus
+// idiom: accent border + the 3px ring") + D07's grid under its padding, machine-scored over
+// the DRIVEN DOM. Issue 149: the toolbar search box painted TWO nested fields. The border,
+// radius and padding sat on the `.search` <span> WRAPPING the input, and nothing reset the
+// input itself — so Chromium's UA chrome (a `2px inset` border, square corners, an off-grid
+// `padding: 1px 2px`) rendered a second, smaller field inside the designed one, and D13's
+// focus idiom landed on that inner box: a square accent rectangle floating inside a rounded
+// grey one. `#search`'s 1px paddings were the only off-grid values in the running app.
+//
+// Nothing could catch it. GOLD `design-guard.test.ts` scores the 4px grid over the AUTHORED
+// values in styles.css, and every authored value was on-grid — these came from the UA
+// stylesheet, which a static scan of the source cannot see. That is the limit of the static
+// half rather than a bug in it: this case belongs to the driven-DOM half of design.html §08's
+// split, which is where this scene puts it. FIELD_LABELS drives the same five views for the
+// same field population and asks how each is NAMED; this one asks what each LOOKS LIKE.
+//
+// Two facts. (a) The SWEEP — every visible field in all five views, each routed into the state
+// that holds its fields, resolves to one solid --rule-strong border of one width on all four
+// sides (and the same width as every other field in the app — "one border" across the window,
+// scored as agreement so a restyle that thickens them all stays legal), an --r1 radius on all
+// four corners, and computed padding on the 4px grid. No exemptions: the app
+// really does paint every one of its fields the same, so a field that differs is news. (b) The
+// FOCUS IDIOM lands on the field itself — Tab to #search and the accent border and 3px ring
+// resolve on the element that holds focus, which still carries D13's 8px radius. Fact (b) is
+// what a wrapper-styled field can never satisfy, and is why the fix moves the chrome onto the
+// input rather than resetting the input's border and leaving the wrapper as the box.
+async function sceneFieldChrome(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState())));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+  // D10 gives border-colour a 120ms fade; with the clock pinned, a probe taken mid-transition
+  // reads an arbitrary intermediate colour instead of the cascade. Same reason ACCENT_DISCIPLINE
+  // switches motion off.
+  await noMotion(page);
+
+  const surfaces = [];
+  const sweep = async (surface) => surfaces.push({ surface, fields: await page.evaluate(sweepFieldChrome) });
+
+  // Timer — the start-details disclosure (idle-only, §12 R05) holds this view's four fields.
+  await page.click('.nav-item[data-view="timer"]');
+  await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+  await page.click('#start-toggle');
+  await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+  await sweep('timer (start details)');
+
+  // Entries — the toolbar search (the issue's field), the unified add form, the Custom range.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.click('#el-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('entries (add form + custom range)');
+
+  // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
+  await page.click('.nav-item[data-view="clients"]');
+  await sweep('clients');
+
+  // Reports — the builder's name field and its Custom range.
+  await page.click('.nav-item[data-view="reports"]');
+  await page.click('#rep-new');
+  await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+  await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('reports (builder + custom range)');
+
+  // Settings — every §14 control, plus the Backups group's retention picker.
+  await page.click('.nav-item[data-view="settings"]');
+  await page.waitForSelector('#settings-panel .set-row', { state: 'attached' });
+  await sweep('settings');
+
+  // Fact (b): KEYBOARD focus on the issue's own field. Tab to it rather than calling .focus(),
+  // so the :focus-visible the D13 idiom hangs off is the one a keyboard user gets.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.waitForSelector('#search', { state: 'attached' });
+  // The toolbar control immediately before the search label — one Tab lands on the field.
+  await page.evaluate(() => document.querySelector('#report-btn').focus());
+  await page.keyboard.press('Tab');
+  const focus = await page.evaluate(() => {
+    const el = document.querySelector('#search');
+    const cs = getComputedStyle(el);
+    const accent = window.__probe.rgbOf('--accent');
+    return {
+      onField: document.activeElement === el,
+      accentBorder: [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor]
+        .every((c) => c === accent),
+      ring: cs.boxShadow !== 'none' && cs.boxShadow !== '',
+      radius: cs.borderTopLeftRadius,
+      // The ring must be the FIELD's; a wrapper that still painted a box would leave the
+      // element the user sees bordered undressed.
+      wrapperBare: (() => {
+        const w = el.parentElement;
+        const ws = getComputedStyle(w);
+        return parseFloat(ws.borderTopWidth) === 0 && ws.boxShadow === 'none';
+      })(),
+    };
+  });
+  await page.screenshot({
+    path: join(EVIDENCE, 'field-chrome-search-focus.png'),
+    clip: await page.evaluate(() => {
+      const r = document.querySelector('.search-field').getBoundingClientRect();
+      return { x: r.left - 16, y: r.top - 14, width: r.width + 32, height: r.height + 28 };
+    }),
+  });
+  await page.close();
+
+  const all = surfaces.flatMap((s) => s.fields.map((f) => ({ surface: s.surface, ...f })));
+  const offenders = all
+    .filter((f) => !f.oneBorder || !f.oneRadius || !f.onGrid)
+    .map((f) => `${f.surface}:${f.label} border=${f.border} radius=${f.radius} padding=${f.padding}`);
+  // "One border" across the app, not just within each field: every field draws its hairline at
+  // the SAME width as every other. Scored as agreement rather than against a pinned px value,
+  // so a restyle that thickens every field's border stays legal and one field that disagrees
+  // does not (which is what a leaked UA border is).
+  const widths = [...new Set(all.map((f) => f.width))];
+  const focusOk = focus.onField && focus.accentBorder && focus.ring && focus.wrapperBare;
+  // Guard-the-guard: the five views hold well over 20 visible fields in these states, so a
+  // sweep that has gone blind fails instead of passing on an empty set.
+  const ok = all.length >= 20 && offenders.length === 0 && widths.length === 1 && focusOk;
+  record(
+    'FIELD_CHROME',
+    ok,
+    `D13/D07 sweep over ${all.length} visible fields ` +
+      `(${surfaces.map((s) => `${s.surface}=${s.fields.length}`).join(', ')}): ` +
+      `not one solid --rule-strong border + --r1 radius + on-grid padding=[${offenders.join('; ') || 'none'}]; ` +
+      `border widths in use across every field=[${widths.join(', ')}]; ` +
+      `#search under keyboard focus: on the field=${focus.onField}, accent border on all four sides=` +
+      `${focus.accentBorder}, 3px ring=${focus.ring}, radius=${focus.radius}, wrapper paints nothing=${focus.wrapperBare}`,
+    'field-chrome-search-focus.png',
+  );
+}
+
 // TARGET_SIZE — design.html A03: every interactive target measures at least 24×24 CSS px, or
 // stands at least 24px clear of its nearest interactive neighbour. A machine sweep collects
 // every VISIBLE interactive control (button / a[href] / input / select / textarea / tabbable /
@@ -6963,6 +7160,7 @@ const SCENES = {
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
   FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
+  FIELD_CHROME: { items: ['FIELD_CHROME'], run: sceneFieldChrome },
   TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
