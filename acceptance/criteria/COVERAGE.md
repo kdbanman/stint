@@ -407,9 +407,11 @@ project rename/archive scenarios, each run TWICE over core + tt),
 reference-data half of the `tt` machine contract). **R1 GUI Clients view** (a
 Clients nav view lists active clients with their projects nested, offering
 create/rename/archive in place; archived items drop out of the active list but
-keep history): JUDGE `CLIENTS_VIEW` (`packages/gui/judge/`, `main-clients.png`),
-parity `renameClient`→`tt client rename`, `archiveClient`→`tt client archive`,
-`renameProject`→`tt project rename`, `archiveProject`→`tt project archive`,
+keep history): JUDGE `CLIENTS_VIEW` (`packages/gui/judge/`, `main-clients.png` —
+which also carries this view's design.html **A04 focus-order** fact, see §12 R14
+below), parity `renameClient`→`tt client rename`,
+`archiveClient`→`tt client archive`, `renameProject`→`tt project rename`,
+`archiveProject`→`tt project archive`,
 `listProjects`→`tt project ls` (`parity-matrix.json`). The create/rename/archive
 behaviour itself is the surface-neutral BDD above; the Clients view is the GUI
 discoverability surface over it. **R2 GUI tag display/editing** (tags show
@@ -1517,7 +1519,10 @@ content than block. The block **clips** (design.html D09) so a short entry
 truncates deliberately (description first, dropping client/project then the
 time) instead of painting into the hour rows beneath, which belong to other
 entries; and the hover ops chip is a pure **overlay** reserving no flow space,
-so there is **no layout shift on hover** (design.html §4). Containment is
+so there is **no layout shift on hover** (design.html §4) — measured against the
+calendar strip's own scroll content, since the driver's hover scrolls its target
+into view when it must and a viewport reading books that scroll as a shift (the
+issue-161 measuring error again, one scene over). Containment is
 asserted by **hit-testing**, not by comparing layout rects — `overflow: hidden`
 clips paint, not layout, and the defect lived in the clip chain (the first
 non-visible-overflow ancestor was `.cstrip` , three levels up). The scene also
@@ -1748,6 +1753,18 @@ rather than taken on trust: against `origin/main` 's renderer the same walk
 reports 202 calendar stops, none of them blocks, and 50 stops focused at zero
 opacity — all of them the checkbox; with only the CSS clause reverted, the
 roving probe reads the focused checkbox at `opacity: 0`.
+A04's other half — focus order FOLLOWS THE VISUAL ORDER — is scored by JUDGE
+`CLIENTS_VIEW` on the one view the design audit reported it broken (issue 161):
+a Tab-walk with "show archived" ON (archived clients and archived tags are
+appended in a SECOND pass after every active row, the view's only ordering
+hazard) advances in reading order at every step. Each stop is measured against
+the `#clients` section's own box rather than the viewport, which is the finding
+itself: the audit read viewport-relative positions, and Tabbing to a control
+below the fold SCROLLS it into view, so the next stop's viewport y is smaller
+though it sits lower on the page — the same two adjacent, correctly ordered rows
+read `398 → 210` viewport-relative and `398 → 444` page-relative. The DOM order
+was never wrong; the measurement was, and a page-relative reading cannot be
+faked by a scroll in either direction.
 JUDGE `FIELD_LABELS`
 (`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
 design.html **D13** — every field carries a VISIBLE label, which is also the
