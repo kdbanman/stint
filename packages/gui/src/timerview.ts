@@ -6,31 +6,13 @@
  * form, and the pinned favorites rail. ALL behaviour lives in @stint/core (store.start /
  * store.edit / store.*Favorite); this module owns only the four pure projections the renderer
  * (app.js) and the IPC handlers wrap, so the count-up and the no-stop edit-patch rule are
- * proven once here rather than smeared across the page:
- *
- *   1. deriveRunningModel — the running-state display model (live count-up seconds, state,
- *      description + client/project label, tags) from a UiState snapshot. Display-only: the
- *      count-up is now − startUtc − excludedSeconds, never stored, never money (GOLD/PROP own
- *      the billable math). It reads the SAME startUtc core opened the row at.
- *   2. liveEditPatch — the live-edit-running patch the existing `edit` IPC carries. It builds
- *      ONLY the changed fields and, crucially, NEVER an endUtc: editing the open entry must not
- *      close it (PRD §05 R6), so a startUtc / attribute change keeps the row open and the timer
- *      running. The endUtc field is structurally absent from the returned patch.
- *   2b. liveEditStripPatch — the strip's SEED-VS-FIELD diff (issue #68), the step that decides
- *      which of the strip's three inline fields (description / start / billable) the user actually
- *      touched before liveEditPatch assembles the patch. The start-time gate is a BYTE-comparison
- *      of the current field string vs its seeded string — never a reparse-and-compare — so an
- *      untouched field yields no key; this lives HERE (not only in the untestable renderer mirror)
- *      so GOLD pins it, and it removes a DST-ambiguous reparse misfire (see the function comment).
- *   3. favoriteRows — project FavoriteView[] into the rail's row models (name + a one-line
- *      client/project/billable meta + the resume handle = the favorite's name), so the rail and
- *      `tt fav ls` show the same template set.
- *   4. (the Start payload is start.ts's StartPayload, re-exported so the Timer view has one
- *      import for its core-entry surface.)
+ * proven once here rather than smeared across the page.
  */
 import type { UiState, FavoriteView } from './ipc.js';
 import type { EditPatch } from '@stint/core';
 import { parseLocalInput } from './localtime.js';
+
+/** start.ts's StartPayload, re-exported so the Timer view has one import for its core-entry surface. */
 export type { StartPayload } from './start.js';
 
 /** The running-state display model the Timer-view clock panel paints. */
@@ -41,7 +23,8 @@ export interface RunningModel {
   entryId: number | null;
   /**
    * The live count-up in whole seconds: now − startUtc − excludedSeconds, floored at 0.
-   * Display-only (never stored); the renderer formats it HH:MM:SS and advances it per tick.
+   * Display-only (never stored, never money — GOLD/PROP own the billable math); the renderer
+   * formats it HH:MM:SS and advances it per tick.
    * 0 when idle.
    */
   elapsedSeconds: number;
@@ -137,7 +120,6 @@ export function liveEditPatch(input: LiveEditInput): EditPatch {
   if (input.projectId !== undefined) patch.projectId = input.projectId;
   if (input.addTags && input.addTags.length) patch.addTags = input.addTags;
   if (input.removeTags && input.removeTags.length) patch.removeTags = input.removeTags;
-  // Intentionally NO endUtc — see the doc comment. The open row stays open.
   return patch;
 }
 
@@ -178,7 +160,6 @@ export interface LiveEditStripInput {
  * inverse of the format the field was seeded in, which reads either separator (issue #159) — and
  * an unparseable half-typed instant contributes nothing (the NaN guard), while a change resolving
  * to the SAME stored instant is dropped by the double-guard.
- * As with liveEditPatch, the patch NEVER carries endUtc: editing the open row keeps it open (§05 R6).
  */
 export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
   const changed: LiveEditInput = {};
@@ -197,7 +178,6 @@ export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
       if (nextIso !== new Date(input.startUtc).toISOString()) changed.startUtc = nextIso;
     }
   }
-  // Billable: a direct boolean seed-vs-current.
   if (input.billable !== input.seedBillable) changed.billable = input.billable;
   return liveEditPatch(changed);
 }
