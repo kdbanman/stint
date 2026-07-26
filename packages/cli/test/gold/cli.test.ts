@@ -419,6 +419,22 @@ describe('GOLD: config set validates (§14)', () => {
     expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerAroundHours).toBe(8);
   });
 
+  // #169 — a rejected setting exits 2 with a bare message, not 1 with an `error: ` prefix.
+  // core rejects a bad value with a plain `Error` (settings.ts), which bin.ts's default arm
+  // maps to `error: <msg>` / exit 1; applySetting normalises it to the usage-level 2 that the
+  // sibling rejections above (unknown key, unparseable value) already use. Deleting that
+  // normalisation — the sole reason it survived #169's cull of the no-op re-wraps — moves a
+  // user-visible exit code and prefix, and this case is what says so.
+  it('a value core rejects exits exactly 2 with a bare message (one rejection contract)', () => {
+    const r = tt(['config', 'set', 'rounding_increment_min', '7']);
+    expect(r.code).toBe(2);
+    expect(r.err).not.toMatch(/^error: /);
+    // …and it reads the same as a rejection tt itself catches before core is reached.
+    const unknownKey = tt(['config', 'set', 'no_such_setting', '1']);
+    expect(unknownKey.code).toBe(2);
+    expect(unknownKey.err).not.toMatch(/^error: /);
+  });
+
   it('round-trips picker_window_mode through config set / ls --json', () => {
     const set = tt(['config', 'set', 'picker_window_mode', 'around_now']);
     expect(set.code).toBe(0);
@@ -1184,6 +1200,21 @@ describe('GOLD: tt backup ls / now / restore (§20 R04/R05, §17 R12)', () => {
     const r = tt(['backup', 'restore', 'tt.sqlite.bak-20000101T000000Z', '--force']);
     expect(r.code).not.toBe(0);
     expect(r.err).toMatch(/no backup named/);
+  });
+
+  // #169 — the contract `backup restore`'s surviving error remap exists to hold: every way a
+  // restore can fail reads the same, exit 2 with a bare message, never bin.ts's `error: ` /
+  // exit 1. The remap's RecoveryError arm is not reachable from a fixed input (store re-checks
+  // the name first; see the comment at the remap), so this pins the shared contract rather
+  // than that branch — it fails if the refusal or the unknown-name rejection ever moves.
+  it('a refused and a rejected restore both exit exactly 2 with a bare message', () => {
+    seed();
+    const refused = tt(['backup', 'restore', 'tt.sqlite.bak-20000101T000000Z']);
+    expect(refused.code).toBe(2);
+    expect(refused.err).not.toMatch(/^error: /);
+    const rejected = tt(['backup', 'restore', 'tt.sqlite.bak-20000101T000000Z', '--force']);
+    expect(rejected.code).toBe(2);
+    expect(rejected.err).not.toMatch(/^error: /);
   });
 });
 
