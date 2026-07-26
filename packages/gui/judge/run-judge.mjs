@@ -3771,6 +3771,65 @@ async function sceneClientsView(browser) {
       },
       { emptyRefData: true },
     );
+
+    // FOCUS ORDER FOLLOWS THE VISUAL ORDER (design.html A04, the craft checklist's §4 keyboard
+    // clause) — the Clients view is the one surface where the design audit reported it broken
+    // (issue 161: "the tag rows are visited bottom-first", 976,763 → 938,623). The DOM order was
+    // never wrong; the MEASUREMENT was. The audit read each focus stop's VIEWPORT-relative y,
+    // and Tabbing to a control below the fold scrolls it into view, so the next stop's viewport y
+    // is SMALLER than the previous one's even though it sits lower on the page. Reproduced on this
+    // branch: at a viewport short enough to scroll, the Clients walk reads 398 → 210 viewport-
+    // relative and 398 → 444 page-relative, from the same two adjacent, correctly ordered rows.
+    // So this is the guard the finding was really asking for, written so it cannot repeat the
+    // mistake: each stop is measured RELATIVE TO the #clients section's own box in the same frame,
+    // which a scroll moves together with the control, and asserted to advance in READING order —
+    // down the page, and left-to-right within a row. Walked with "show archived" ON, the view's
+    // one real ordering hazard: archived clients and archived tags are appended in a SECOND pass
+    // after every active row, so a regression that painted them anywhere but last would break the
+    // order here first.
+    const focusOrder = await withPage(browser, clientsState(), 'index.html', async (fp) => {
+      await fp.click('.nav-item[data-view="clients"]');
+      await fp.waitForSelector('#clients:not([hidden]) .client .project', { state: 'attached' });
+      await fp.click('#show-archived');
+      await fp.waitForSelector('#clients .client.archived[data-id="3"]', { state: 'attached' });
+      await fp.waitForSelector('#tags-list .tag-row.archived[data-id="3"]', { state: 'attached' });
+      // Enter the view at its first control and Tab until focus leaves it again.
+      await fp.focus('#show-archived');
+      const stops = [];
+      for (let i = 0; i < 200; i++) {
+        const stop = await fp.evaluate(() => {
+          const el = document.activeElement;
+          const view = document.querySelector('#clients');
+          if (!el || !view || !view.contains(el)) return null;
+          const r = el.getBoundingClientRect();
+          const v = view.getBoundingClientRect();
+          const name = (el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim();
+          return {
+            x: Math.round(r.left - v.left + r.width / 2),
+            y: Math.round(r.top - v.top + r.height / 2),
+            name: `${el.dataset.act || el.id || (typeof el.className === 'string' ? el.className : el.tagName.toLowerCase())}[${name.slice(0, 20)}]`,
+          };
+        });
+        if (!stop) break;
+        stops.push(stop);
+        await fp.keyboard.press('Tab');
+      }
+      // Two stops share a visual ROW when their centres sit within 8px — comfortably under the
+      // ~47px pitch between rows, and comfortably over the few px by which controls of different
+      // heights miscentre against each other. A row's controls must then run left-to-right; any
+      // other pair must run down the page.
+      const SAME_ROW = 8;
+      const backwards = [];
+      for (let i = 1; i < stops.length; i++) {
+        const [a, b] = [stops[i - 1], stops[i]];
+        const sameRow = Math.abs(b.y - a.y) <= SAME_ROW;
+        if (sameRow ? b.x < a.x : b.y < a.y) {
+          backwards.push(`${a.name}@(${a.x},${a.y}) → ${b.name}@(${b.x},${b.y})`);
+        }
+      }
+      return { stopCount: stops.length, backwards, firstStop: stops[0]?.name ?? null, lastStop: stops.at(-1)?.name ?? null };
+    });
+
     const ok =
       probe.visible &&
       probe.names.includes('Acme') &&
@@ -3817,7 +3876,13 @@ async function sceneClientsView(browser) {
       /No clients yet/.test(refEmpty.clientsText) &&
       /tt client add/.test(refEmpty.clientsText) &&
       /No tags yet/.test(refEmpty.tagsText) &&
-      /tt tag add/.test(refEmpty.tagsText);
+      /tt tag add/.test(refEmpty.tagsText) &&
+      // …and the FOCUS-ORDER fact (issue 161): the Tab-walk over the archived-inclusive view
+      // advances in reading order at every step. The stop floor guards the guard — a walk that
+      // has gone blind (a selector rename, a view that never routed) finds nothing to disorder
+      // and would otherwise pass vacuously.
+      focusOrder.stopCount >= 15 &&
+      focusOrder.backwards.length === 0;
     // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
     // when their item is active) is judged visually against the mock, not gated on a
     // computed-style scan (issue #25) — the offender list is kept in the justification as
@@ -3829,7 +3894,9 @@ async function sceneClientsView(browser) {
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
         `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}; ` +
-        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}`,
+        `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}; ` +
+        `the Tab-walk over the archived-inclusive view advances in reading order, measured against ` +
+        `the view's own box so a scroll cannot fake a backwards step (issue 161): ${JSON.stringify(focusOrder)}`,
       'main-clients.png',
     );
   });
@@ -5258,11 +5325,20 @@ async function sceneCalendarEntryBlock(browser) {
 
   // The hover half (#151). The 180-minute control block has room for every line, so a shift would
   // be a pure hover artefact, not a truncation side effect: measure its title, hover, measure again.
+  // Measured against the calendar strip's own SCROLL CONTENT rather than the viewport, because
+  // Playwright's hover scrolls its target into view when it has to and a viewport reading books
+  // that scroll as a layout shift — the same viewport-vs-page measuring error issue 161 turned out
+  // to be. It surfaced here the moment the Entries toolbar above the calendar grew 2px, which
+  // moved the block 2px past the fold and gave the hover a scroll to do. The claim under test is
+  // that hovering moves the block nothing RELATIVE TO THE PAGE, so measure it that way: subtract
+  // the strip's own box (which scrolls with its contents) and add back its scrollTop.
   const titleTop = () =>
     page.evaluate(() => {
-      const bd = document.querySelector('.dcol .ev[data-id="204"] .bd');
       const ev = document.querySelector('.dcol .ev[data-id="204"]');
-      return { title: bd.getBoundingClientRect().top, block: ev.getBoundingClientRect().top };
+      const strip = document.querySelector('.cstrip');
+      const s = strip.getBoundingClientRect();
+      const at = (el) => Math.round(el.getBoundingClientRect().top - s.top + strip.scrollTop);
+      return { title: at(ev.querySelector('.bd')), block: at(ev) };
     });
   const atRest = await titleTop();
   await page.hover('.dcol .ev[data-id="204"]');
