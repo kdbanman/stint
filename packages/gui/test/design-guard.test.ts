@@ -1,6 +1,6 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D13, D14, A01/A02,
- * A04, A06; transition PR #132, issues #137, #141, #152, #153 and #154).
+ * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154 and #157).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -9,11 +9,10 @@
  *      from the emitter itself (scripts/gen-tokens.mjs), not a regex over the generator source,
  *      so a generator refactor cannot fool the guard and a hand-edit inside the markers cannot
  *      survive it.
- *   2. D01 no-raw-palette-hex — a palette value written as a hex literal outside the markers is
- *      a copy that will silently rot when the tokens change. styles.css is additionally held to
- *      a full no-hex rule (semantic tokens only). The hex scan is deliberately blind to rgb()/
- *      hsl() re-encodings of a palette value — a copyist writes what the tokens file shows
- *      (hex); chasing colour-space conversions would buy noise, not protection.
+ *   2. D01 no-raw-hex — a value written as a hex literal outside the markers is a copy that will
+ *      silently rot when the tokens change. styles.css is held to a full no-hex rule (semantic
+ *      tokens only) plus a ban on the percent-escaped spelling, and no surface may declare a
+ *      custom property outside the markers. Which colours those literals may BE is (11).
  *   3. A01/A02 contrast floors — recomputed with the WCAG 2.2 relative-luminance formula from
  *      the tokens file (never trusted from a table), over the permitted token pairs design.html
  *      §03 names, plus the prohibited pairs that must stay unusable.
@@ -50,6 +49,13 @@
  *      D13 focus ring, a hairline drawn as an inset, a keycap's bottom edge) sits on a literal
  *      value→sites table. Four hand-rolled shadows had accumulated outside the ladder, two of them
  *      accent-tinted at 35% and 30% — one effect at two strengths (issue #154).
+ *  11. D01 the colour census — the same census over every colour-accepting property, from both
+ *      stylesheets and inline `style=`: every colour a surface NAMES is a semantic token or a
+ *      literal on a closed, reasoned list. This is (2) at the strength D01 actually states.
+ *      The old scan filtered mockup hits to Radix values only, so every non-palette colour was
+ *      invisible; it was also keyword-blind (`color: white`) and encoding-blind (`stroke='%23fff'`
+ *      inside a data URI). The tokenizer inverts the direction that made those holes possible —
+ *      it lists the words that are NOT colours and reads everything else as one (issue #157).
  *
  * Deliberately out of scope: D14's SECOND clause — that a pill's colour is semantic (run / flag /
  * accent), never decorative. Which colours read as decorative on which pill is a rendered
@@ -153,24 +159,7 @@ describe('design token parity (design.html D02)', () => {
   });
 });
 
-describe('no raw palette hex outside the generated block (design.html D01)', () => {
-  it('no surface writes a primitive scale value as a literal', () => {
-    for (const f of mockupNames) {
-      const text = readFileSync(join(repoRoot, 'context/mockups', f), 'utf8');
-      // design-system.html's BODY is the palette's own documentation — its swatch chart names
-      // every value beside its token, so only its <style> half (the part that could USE a value
-      // instead of naming it) is scanned. Every other mockup is scanned whole.
-      const scanned =
-        f === 'design-system.html' ? text.slice(0, text.indexOf('</style>')) : text;
-      const parts = splitOnMarkers(scanned);
-      expect(parts, `context/mockups/${f}: STINT-TOKENS markers missing`).not.toBeNull();
-      const hits = (parts?.outside.match(HEX_RE) ?? [])
-        .map(normalizeHex)
-        .filter((h) => paletteHexes.has(h));
-      expect(hits, `context/mockups/${f}: raw palette hex outside the token block`).toEqual([]);
-    }
-  });
-
+describe('no raw hex outside the generated block (design.html D01)', () => {
   it('styles.css uses semantic tokens only — no hex literal at all outside the markers', () => {
     const parts = splitOnMarkers(stylesCss);
     expect(parts).not.toBeNull();
@@ -179,14 +168,36 @@ describe('no raw palette hex outside the generated block (design.html D01)', () 
     // and which reads `#137` — is character-for-character a 3-digit hex, so a total ban that
     // reaches into comments outlaws the citation rather than a colour. The split keeps both
     // protections: the total ban ("no hex AT ALL") covers every line that actually paints, and
-    // the mockups' palette ban covers the comments, so a copied scale value still cannot hide
-    // in one.
+    // the palette ban below covers the comments, so a copied scale value still cannot hide in one.
     const declarations = outside.replace(/\/\*[^]*?\*\//g, '');
     expect(declarations.match(HEX_RE) ?? []).toEqual([]);
     const inComments = (outside.match(/\/\*[^]*?\*\//g)?.join('\n').match(HEX_RE) ?? [])
       .map(normalizeHex)
       .filter((h) => paletteHexes.has(h));
     expect(inComments, 'a raw palette value quoted in a styles.css comment').toEqual([]);
+    // Encoding-blindness (issue #157): `stroke='%23fff'` inside a data URI is a hex literal with
+    // its `#` percent-escaped, so it sailed straight past the ban above — which is how a coloured
+    // tick shipped inside `.ev .ck`'s checked state. The escape is banned outright, comments and
+    // all: a URI has no reason to name a colour when the mask idiom paints with a token.
+    expect(outside.match(/%23[0-9a-fA-F]{3,8}/g) ?? []).toEqual([]);
+  });
+
+  it('no surface declares a custom property outside the markers', () => {
+    // The generated block is where tokens are DECLARED, and the D02 parity test above owns its
+    // contents. A `--x: #abc` written anywhere else would be a token nobody generated, holding a
+    // literal in the one place the colour census below skips (it reads token USES, not the
+    // declarations they resolve to). None exists; this keeps it that way.
+    for (const [name, text] of [
+      ...mockupNames.map((f): [string, string] => [
+        `context/mockups/${f}`,
+        readFileSync(join(repoRoot, 'context/mockups', f), 'utf8'),
+      ]),
+      ['packages/gui/renderer/styles.css', stylesCss] as [string, string],
+    ]) {
+      const outside = (splitOnMarkers(text)?.outside ?? '').replace(/\/\*[^]*?\*\//g, '');
+      const declared = [...outside.matchAll(/(?:^|[;{])\s*(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]!);
+      expect(declared, `${name}: custom property declared outside the token block`).toEqual([]);
+    }
   });
 
   it('the app carries no reference to a retired custom property', () => {
@@ -1150,5 +1161,359 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
         `${rung} is on the ladder but the generator emits no such property`,
       ).toContain(`  ${rung.slice(4, -1)}:`);
     }
+  });
+});
+
+// ---- the colour census: D01 at the strength D01 states (issue #157) ---------------------------
+// D01 reads "Surfaces reference SEMANTIC TOKENS ONLY; a raw scale step or hex literal in a mockup
+// or the app is a defect" — two clauses. Until this section landed the guard enforced roughly one
+// of them: mockup hits were filtered to `paletteHexes.has(h)`, so a value that was not a Radix
+// step rode straight through, and the styles.css half was hex-only and therefore blind to a colour
+// spelled any other way. Three blindnesses, all demonstrated in the tree:
+//
+//   • PALETTE-blind — a simulated macOS titlebar and traffic lights in nine mockups, an entire
+//     invented desktop in tray-popover.html, and hand-rolled scrim/fade values.
+//   • KEYWORD-blind — `color: white` on the primary button; `black` inside a color-mix.
+//   • ENCODING-blind — `stroke='%23fff'` inside a data URI, past the `#` regex entirely.
+//
+// The check that reported green over all of that is the check this section replaces, which is why
+// the widening is stated rather than slipped in: a filter that narrows a rule is invisible, and a
+// LICENCE that widens it is a line someone has to write and a reviewer can read.
+//
+// Direction, as with every census above: read what the CSS SAYS and hold ALL of it to the rule.
+// The fail-closed move is in `colourTerms` — instead of listing the colours (a list that can never
+// be complete, which is exactly how `white` got through a hex regex), it lists the words that are
+// NOT colours, and reads every OTHER bare identifier in a colour-accepting value as one. A new
+// keyword arrives as an unlicensed term and fails, instead of passing by omission.
+//
+// The lists below are LITERAL and matched EXACTLY against the rule's selector — the shape #153 and
+// #154 settled on — and the mirror test at the bottom keeps them earned.
+
+describe('the colour census (design.html D01 — issue #157)', () => {
+  /** Properties whose value paints a colour. `box-shadow` is deliberately absent: the elevation
+   *  ladder above already holds every shadow layer to a named rung, so a literal cannot survive
+   *  there, and scanning it twice would report one defect under two rules. `filter` IS here —
+   *  a `drop-shadow()` is where a colour hides from BOTH checks otherwise. */
+  const COLOUR_PROP =
+    /^(?:color|background|background-color|background-image|border|border-color|border-(?:top|right|bottom|left)(?:-color)?|outline|outline-color|fill|stroke|caret-color|text-decoration|text-decoration-color|text-emphasis-color|column-rule|column-rule-color|accent-color|-webkit-text-fill-color|text-shadow|filter|backdrop-filter|mask|mask-image|-webkit-mask|-webkit-mask-image)$/;
+
+  /** Functions that ARE a colour. Everything else with parentheses is a wrapper the scan descends
+   *  into (`linear-gradient`, `color-mix`, `drop-shadow`) so a literal cannot hide one level down. */
+  const COLOUR_FN = /^(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)$/;
+
+  /** The words that appear in a colour-accepting value and are NOT colours: keywords with no hue,
+   *  border styles, gradient and mask grammar, background positioning. The list is the whole
+   *  fail-closed design — anything not on it is read as a colour and must be a token or licensed. */
+  const NOT_A_COLOUR = new Set([
+    'none', 'transparent', 'currentcolor', 'inherit', 'initial', 'unset', 'revert', 'auto', 'normal',
+    'solid', 'dashed', 'dotted', 'double', 'groove', 'ridge', 'inset', 'outset', 'hidden',
+    'thin', 'medium', 'thick',
+    'to', 'top', 'bottom', 'left', 'right', 'center', 'at', 'in', 'from', 'srgb',
+    'circle', 'ellipse', 'closest-side', 'closest-corner', 'farthest-side', 'farthest-corner',
+    'shorter', 'longer', 'increasing', 'decreasing', 'hue',
+    'no-repeat', 'repeat', 'repeat-x', 'repeat-y', 'space', 'round', 'cover', 'contain',
+    'fixed', 'scroll', 'local',
+    'border-box', 'padding-box', 'content-box', 'fill-box', 'stroke-box', 'view-box',
+    'alpha', 'luminance', 'add', 'subtract', 'intersect', 'exclude', 'match-source',
+    'underline', 'overline', 'line-through', 'wavy', 'blink', 'evenodd', 'nonzero',
+  ]);
+
+  /** Colours inside a `url()`. A data URI is markup, not a CSS value, so descending into it as one
+   *  would read half the SVG grammar as colour names — but it is also where issue #157's
+   *  ENCODING-blind hole lived, so the two shapes a colour can take there are pulled out by name:
+   *  a percent-escaped hex, and an SVG paint attribute. */
+  const uriColours = (uri: string): string[] => [
+    ...[...uri.matchAll(/%23[0-9a-fA-F]{3,8}|#[0-9a-fA-F]{3,8}(?![0-9a-zA-Z-])/g)].map((m) => m[0]),
+    ...[...uri.matchAll(/(?:fill|stroke|stop-color|flood-color|lighting-color)=['"]?([^'"\s>/]+)/g)]
+      .map((m) => m[1]!)
+      .filter((v) => !NOT_A_COLOUR.has(v.toLowerCase()) && !/^[#%]/.test(v)),
+  ];
+
+  /** Every colour a declaration value names — token references included, spelled `var(--x)`, so
+   *  the census counts the LEGAL uses too and a scan that stopped matching shows up as a collapsed
+   *  total rather than as an empty offender list. */
+  const colourTerms = (value: string): string[] => {
+    const terms: string[] = [];
+    let rest = '';
+    for (let i = 0; i < value.length; ) {
+      const call = /^([a-zA-Z-]+)\(/.exec(value.slice(i));
+      if (!call) {
+        rest += value[i];
+        i++;
+        continue;
+      }
+      let depth = 1;
+      let j = i + call[0].length;
+      while (j < value.length && depth > 0) {
+        if (value[j] === '(') depth++;
+        else if (value[j] === ')') depth--;
+        j++;
+      }
+      // group 1 is non-optional in the pattern, so a match guarantees it
+      const name = call[1]!.toLowerCase();
+      const inner = value.slice(i + call[0].length, j - 1);
+      if (COLOUR_FN.test(name)) terms.push(`${name}(${inner.replace(/\s+/g, '')})`);
+      else if (name === 'url') terms.push(...uriColours(inner));
+      else if (name === 'var') terms.push(`var(${inner.split(',')[0]!.trim()})`);
+      else terms.push(...colourTerms(inner));
+      i = j;
+    }
+    for (const hex of rest.matchAll(/#[0-9a-fA-F]{3,8}(?![0-9a-zA-Z-])|%23[0-9a-fA-F]{3,8}/g)) {
+      terms.push(hex[0]);
+    }
+    // Numbers carry their unit as letters (`1px`, `160deg`, `88%`), so they are struck before the
+    // bare-word pass — otherwise every length in the tree would arrive as an unlicensed colour.
+    const bare = rest
+      .replace(/#[0-9a-fA-F]{3,8}|%23[0-9a-fA-F]{3,8}/g, ' ')
+      .replace(/-?(?:\d+\.?\d*|\.\d+)[a-zA-Z%]*/g, ' ');
+    for (const word of bare.matchAll(/[a-zA-Z][a-zA-Z-]*/g)) {
+      if (!NOT_A_COLOUR.has(word[0].toLowerCase())) terms.push(word[0]);
+    }
+    return terms;
+  };
+
+  interface ColourHit {
+    readonly surface: string;
+    readonly site: string;
+    readonly property: string;
+    readonly term: string;
+  }
+
+  const colourCensus = (): ColourHit[] =>
+    styledSites().flatMap((s) =>
+      s.declarations.split(';').flatMap((declaration): ColourHit[] => {
+        const parsed = /^\s*(-?[a-zA-Z-]+)\s*:([^]*)$/.exec(declaration);
+        // group 1 is the property, group 2 the value; a match guarantees both
+        if (!parsed) return [];
+        const property = parsed[1]!.trim();
+        // Custom properties are token DECLARATIONS, which the D01 test above bans outside the
+        // markers and the D02 parity test owns inside them.
+        if (property.startsWith('--') || !COLOUR_PROP.test(property)) return [];
+        return colourTerms(parsed[2]!).map((term) => ({
+          surface: s.surface,
+          site: s.site,
+          property,
+          term,
+        }));
+      }),
+    );
+
+  /** A mask paints ALPHA, not colour: the SVG or gradient inside it is a stencil, and `black` /
+   *  `white` / `rgba(0,0,0,α)` there name "opaque" and "half" rather than a hue. This is a
+   *  PREDICATE, not a site list, because it cannot rot into permission — a hex or a hue in the
+   *  same place still fails, which is the whole of what the `%23fff` tick was. */
+  const MASK_PROP = /^(?:-webkit-)?mask(?:-image)?$/;
+  const ALPHA_ONLY = /^(?:black|white|rgba?\(0,0,0(?:,[\d.]+)?\))$/;
+
+  /** Literals that are not Stint's to tokenize, each paired with the selectors that may write it. */
+  const LICENSED: ReadonlyArray<
+    readonly [reason: string, term: string, sites: ReadonlySet<string>]
+  > = [
+    // HOST CHROME — a picture of someone else's software. The mockups draw a macOS window frame,
+    // and tray-popover.html a desktop and menu bar, to establish where a Stint window sits; those
+    // colours are the OS's and have no semantic token because they are not Stint's surfaces. The
+    // radius trio already reasons this way about the same elements ("D08 governs Stint's own
+    // controls, cards and windows — not a picture of someone else's"); this is that reasoning
+    // applied to D01.
+    ['host titlebar', '#F1EBE0', new Set(['.bar'])],
+    ['host traffic light', '#e8795f', new Set(['.lights .r'])],
+    ['host traffic light', '#e7b34e', new Set(['.lights .y'])],
+    ['host traffic light', '#7fae6a', new Set(['.lights .g'])],
+    ['host desktop', '#cdbfa8', new Set(['body'])],
+    ['host desktop', '#9f9788', new Set(['body'])],
+    ['host desktop', '#7d7565', new Set(['body'])],
+    ['host menu bar', 'rgba(247,242,234,.86)', new Set(['.menubar'])],
+    ['host menu bar', 'rgba(0,0,0,.06)', new Set(['.menubar'])],
+    ['host menu bar ink', '#4a443b', new Set(['.menubar', '.menubar .clk'])],
+
+    // BLOCKED ON #164 — the label on a SOLID fill. D04 documents `accent-solid` as carrying a
+    // white label and design.tokens.json has no token for it, so the keyword is currently FORCED
+    // by the token system: there is no `on-accent` to reference. Substituting a near token
+    // (`--paper` is #fdfdfc, not white) would ship a visual change disguised as a lint fix, so
+    // these sites are licensed by name and by issue until #164's requirements session decides the
+    // token. `.btn.danger` is the identical unresolved question one fill over — a white label on
+    // a solid `--danger`, which has no `on-danger` either.
+    // REMOVE THESE TWO ROWS WHEN #164 LANDS.
+    [
+      '#164: label on a solid fill',
+      'white',
+      new Set(['button.primary', 'button.primary .ic, button.primary:hover .ic']),
+    ],
+    [
+      '#164: label on a solid fill',
+      '#fff',
+      new Set(['.btn.primary', '.btn.primary .ic', '.btn.danger', '.btn.danger .ic']),
+    ],
+
+    // A SHADE OPERAND, not a colour of record. `color-mix(in srgb, var(--accent-solid) 88%, black)`
+    // is the hover darkening: the colour is the token, and `black` is the direction it moves. The
+    // sites are listed rather than the pattern waved through, so a NEW rule reaching for the same
+    // trick is a line someone writes.
+    [
+      'color-mix shade operand',
+      'black',
+      new Set(['button.primary:hover', '.btn.primary:hover', '.btn.danger:hover']),
+    ],
+  ];
+
+  const licensed = (h: ColourHit): boolean =>
+    LICENSED.some(([, term, sites]) => term === h.term && sites.has(h.site));
+
+  /** design-system.html's swatch chart is the palette's own DOCUMENTATION — every chip names its
+   *  value beside its token, which is the page's whole job. Licensed as a family rather than as
+   *  twenty rows, and held to a rule of its own below: a chip may only show a value that IS in the
+   *  palette, so the sheet can document the tokens and cannot invent a colour. */
+  const swatch = (h: ColourHit): boolean =>
+    h.surface === 'context/mockups/design-system.html' &&
+    /^style="background:#[0-9a-fA-F]{3,8}"$/.test(h.site);
+
+  it('every colour any surface names is a semantic token or a licensed literal', () => {
+    const hits = colourCensus();
+    // Guard-the-guard: 1509 colour terms stand today across the eleven mockups, styles.css and the
+    // two renderer documents — the great majority of them legal `var(--token)` uses, which is why
+    // they are censused at all. The assertion below is an emptiness check, so a tokenizer that
+    // stopped matching would report no offenders and read green.
+    expect(
+      hits.length,
+      'the colour census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(1200);
+    expect(
+      hits.some((h) => h.surface === 'packages/gui/renderer/styles.css'),
+      'the SHIPPED renderer contributed no colour — only the mockups were scanned',
+    ).toBe(true);
+    expect(
+      hits.some((h) => h.surface.startsWith('context/mockups/')),
+      'no mockup contributed a colour — only the shipped renderer was scanned',
+    ).toBe(true);
+    expect(
+      hits.some((h) => h.site.startsWith('style="')),
+      'the inline-attribute half of the census found nothing — the swatch chart is written there',
+    ).toBe(true);
+
+    const offenders = hits
+      .filter((h) => !h.term.startsWith('var(--'))
+      .filter((h) => !(MASK_PROP.test(h.property) && ALPHA_ONLY.test(h.term)))
+      .filter((h) => !licensed(h) && !swatch(h))
+      .map((h) => `${h.surface}: ${h.site} → ${h.property}: ${h.term}`);
+    expect(
+      offenders,
+      'D01: surfaces reference semantic tokens only — a raw literal is a copy that rots',
+    ).toEqual([]);
+  });
+
+  it('every token the census reads is one the generator actually emits', () => {
+    // The other direction, and the cheap half: a `var(--typo)` or a retired token resolves to
+    // nothing at runtime and paints an inherited colour, which no contrast table would ever score.
+    const emitted = new Set(generatedBlock.match(/--[a-z0-9-]+(?=:)/g) ?? []);
+    const strays = [
+      ...new Set(
+        colourCensus()
+          .filter((h) => h.term.startsWith('var(--'))
+          .map((h) => h.term.slice(4, -1))
+          .filter((t) => !emitted.has(t)),
+      ),
+    ];
+    expect(strays, 'a colour names a custom property design.tokens.json does not define').toEqual(
+      [],
+    );
+  });
+
+  it('the swatch chart documents the palette and never invents a colour', () => {
+    const chips = colourCensus().filter(swatch);
+    // Guard-the-guard: twenty chips stand today. The carve-out above is the one place a hex is
+    // allowed without a named licence, so it needs its own floor — a sheet that stopped writing
+    // them would leave the exemption standing over nothing.
+    expect(
+      chips.length,
+      'the swatch census found fewer than the known chips',
+    ).toBeGreaterThanOrEqual(16);
+    const invented = chips
+      .filter((h) => !paletteHexes.has(normalizeHex(h.term)))
+      .map((h) => `${h.site} → ${h.term}`);
+    expect(invented, 'a design-system swatch shows a value that is not in the palette').toEqual([]);
+  });
+
+  it('every hex a mockup writes is one the census can see (reach)', () => {
+    // The census reads DECLARATIONS. A hex in an SVG `fill=` attribute, a script string or a stray
+    // inline handler would be a colour it never scores, so the raw text is counted too and the two
+    // totals must agree. This is the reach half of the check; the licensing is above.
+    const hits = colourCensus();
+    for (const f of mockupNames) {
+      const text = readFileSync(join(repoRoot, 'context/mockups', f), 'utf8');
+      // design-system.html's BODY names every palette value in PROSE beside its token — that is
+      // the page's job, and prose is not paint. Its <style> half is scanned whole, and its body's
+      // actual paint (the inline chips) is scored by the swatch rule above.
+      const scanned = f === 'design-system.html' ? text.slice(0, text.indexOf('</style>')) : text;
+      const parts = splitOnMarkers(scanned);
+      expect(parts, `context/mockups/${f}: STINT-TOKENS markers missing`).not.toBeNull();
+      const outside = parts?.outside ?? '';
+      // The same split styles.css gets, and for the same reason: an issue citation reads
+      // `#145`, which is character-for-character a 3-digit hex, so counting comments here would
+      // outlaw the citation the comment convention requires rather than a colour. Comments are
+      // held to the palette ban instead — a copied scale value still cannot hide in one.
+      const COMMENT = /\/\*[^]*?\*\/|<!--[^]*?-->/g;
+      const raw = (outside.replace(COMMENT, ' ').match(HEX_RE) ?? []).length;
+      const seen = hits.filter(
+        (h) => h.surface === `context/mockups/${f}` && h.term.startsWith('#'),
+      ).length;
+      expect(
+        raw,
+        `context/mockups/${f}: ${raw} hex literals outside the markers, but only ${seen} sit in a declaration the colour census scores`,
+      ).toBeLessThanOrEqual(seen);
+      const quoted = (outside.match(COMMENT)?.join('\n').match(HEX_RE) ?? [])
+        .map(normalizeHex)
+        .filter((h) => paletteHexes.has(h));
+      expect(quoted, `context/mockups/${f}: a raw palette value quoted in a comment`).toEqual([]);
+    }
+  });
+
+  it('every listed licence still spends itself (the lists stay earned)', () => {
+    // The mirror of the census, and the reason the table cannot rot into a permissive blob: a row
+    // whose selector has stopped writing the literal it is licensed for is a licence nobody is
+    // using, sitting there ready to legalise whatever reclaims the name. It is also how the #164
+    // rows announce themselves as finished — when that transition replaces `white` with a token,
+    // these rows go dead and this test says so.
+    const spent = new Map<string, Set<string>>();
+    for (const h of colourCensus()) {
+      const written = spent.get(h.site) ?? new Set<string>();
+      written.add(h.term);
+      spent.set(h.site, written);
+    }
+    const dead = LICENSED.flatMap(([reason, term, sites]) =>
+      [...sites]
+        .filter((site) => !spent.get(site)?.has(term))
+        .map((site) => `${site} → ${term} (${reason})`),
+    );
+    expect(dead, 'a colour literal is licensed for a selector that no longer writes it').toEqual(
+      [],
+    );
+  });
+
+  it('the tokenizer is not blind the three ways the old scan was (guard-the-guard)', () => {
+    // Each line is one of issue #157's three holes, pinned on a value no surface writes so a
+    // refactor that reopened one fails here rather than in a census that has quietly gone empty.
+    expect(colourTerms('1px solid var(--rule)'), 'a token reference').toEqual(['var(--rule)']);
+    expect(
+      colourTerms('color-mix(in srgb, var(--accent) 35%, transparent)'),
+      'the scan does not descend into color-mix',
+    ).toEqual(['var(--accent)']);
+    expect(
+      colourTerms('linear-gradient(to bottom, #abc 0, var(--paper) 88%)').sort(),
+      'PALETTE-blind: a literal one level down inside a gradient',
+    ).toEqual(['#abc', 'var(--paper)']);
+    expect(colourTerms('rebeccapurple'), 'KEYWORD-blind: a colour with no hex in it').toEqual([
+      'rebeccapurple',
+    ]);
+    expect(
+      colourTerms(`url("data:image/svg+xml,%3Csvg fill='none' stroke='%23fff'%3E%3C/svg%3E")`),
+      'ENCODING-blind: a hex with its # percent-escaped inside a data URI',
+    ).toEqual(['%23fff']);
+    expect(
+      colourTerms('drop-shadow(0 -2px 1px rgba(60,42,18,.05))'),
+      'a colour inside a filter function, which no other census reads',
+    ).toEqual(['rgba(60,42,18,.05)']);
+    // And the other way: a length must never arrive as a colour, or the census drowns in noise and
+    // gets "fixed" by loosening it.
+    expect(colourTerms('0 0 0 3px var(--ring)'), 'lengths are not colours').toEqual(['var(--ring)']);
   });
 });

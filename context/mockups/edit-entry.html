@@ -45,7 +45,7 @@
   .toggle{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
   .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:var(--sh-chip);transition:left .12s}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);box-shadow:var(--sh-chip);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
@@ -92,7 +92,7 @@
   .grid .d{text-align:center;padding:4px 0;font-size:12px;border-radius:var(--r1);cursor:pointer;color:var(--ink)}
   .grid .d.mut{color:var(--faint)}
   .grid .d:hover{background:var(--wash)}
-  .grid .d.sel{background:var(--accent);color:#fff;font-weight:640}
+  .grid .d.sel{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
 
   /* start/stop disclosure — collapsed to a tabular echo; expands to raw text fields
      that accept any timestamp, so a stop on a later date makes an overnight span */
@@ -118,7 +118,7 @@
   .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
   .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
   /* a running entry has a start and no stop yet: the block dissolves into the future */
-  .block.me.open{cursor:default;-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
+  .block.me.open{cursor:default;-webkit-mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* time labels & grips live at track level (not inside the block) so they always sit
      above the block's own stacking context and the overlap band — nothing hides them.
      V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time

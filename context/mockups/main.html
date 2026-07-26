@@ -72,7 +72,7 @@
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
   .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:var(--sh-chip);transition:left .12s}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);box-shadow:var(--sh-chip);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
@@ -122,7 +122,7 @@
   .selbar .cap{flex:1}
   /* calendar */
   .calwrap{position:relative;margin:12px -28px 0;padding:0 28px}
-  .calwrap::after{content:"";position:absolute;left:28px;right:28px;bottom:14px;height:36px;background:linear-gradient(to bottom,rgba(253,253,252,0),var(--paper) 88%);pointer-events:none}
+  .calwrap::after{content:"";position:absolute;left:28px;right:28px;bottom:14px;height:36px;background:linear-gradient(to bottom,transparent,var(--paper) 88%);pointer-events:none}
   .cstrip{position:relative;z-index:0;overflow-x:auto;padding-bottom:8px}
   .cgrid{display:flex;min-width:max-content}
   /* issue #145: the strip's labels STICK to the scrollport rather than scrolling out of it — the

@@ -113,32 +113,46 @@ export const MARK_START =
 export const MARK_END = '<!-- STINT-MARK end -->';
 
 /**
- * Re-embed the rendered mark into the component sheet, between the STINT-MARK markers —
- * the same contract gen-tokens.mjs holds for the CSS token block, and for the same reason:
- * a sheet that illustrates the mark by hand drifts from it silently.
+ * Re-embed a rendered mark into a mockup, between its STINT-MARK markers — the same contract
+ * gen-tokens.mjs holds for the CSS token block, and for the same reason: a mockup that
+ * illustrates the mark by hand drifts from it silently.
  *
  * Data URIs because a mockup is standalone and dependency-free (CLAUDE.md), and because the
- * embedded bytes ARE the shipped render, so the sheet cannot disagree with what the OS shows.
+ * embedded bytes ARE the shipped render, so the mockup cannot disagree with what the OS shows.
  * A file WITHOUT the markers is an error, not a seeding opportunity — where the block sits is
  * a reviewed decision the generator does not guess.
  */
-function embedInSheet(renders) {
-  const sheet = join(ROOT, 'context', 'mockups', 'design-system.html');
-  const html = readFileSync(sheet, 'utf8');
+function embedMark(mockup, block) {
+  const target = join(ROOT, 'context', 'mockups', mockup);
+  const html = readFileSync(target, 'utf8');
   const start = html.indexOf(MARK_START);
   const end = html.indexOf(MARK_END);
-  if (start === -1 || end === -1) throw new Error(`STINT-MARK markers missing in ${sheet}`);
+  if (start === -1 || end === -1) throw new Error(`STINT-MARK markers missing in ${target}`);
+  writeFileSync(target, `${html.slice(0, start)}${MARK_START}\n    ${block}\n    ${html.slice(end)}`);
+  console.log(`embedded the mark → /context/mockups/${mockup}`);
+}
 
+function embedAll(renders) {
   const uri = (name) => `data:image/png;base64,${renders.get(name).toString('base64')}`;
-  const block = [
-    '<div class="icons">',
-    `<div class="i"><img src="${uri('icon-128.png')}" width="72" height="72" alt="The Stint app mark"><span>app icon</span></div>`,
-    `<div class="i"><img src="${uri('tray-idle-panel.png')}" width="24" height="24" alt="The idle tray glyph"><span>tray · idle</span></div>`,
-    `<div class="i"><img src="${uri('tray-running-panel.png')}" width="24" height="24" alt="The running tray glyph"><span>tray · running</span></div>`,
-    '</div>',
-  ].join('\n    ');
-  writeFileSync(sheet, `${html.slice(0, start)}${MARK_START}\n    ${block}\n    ${html.slice(end)}`);
-  console.log(`embedded the mark → /context/mockups/design-system.html`);
+  embedMark(
+    'design-system.html',
+    [
+      '<div class="icons">',
+      `<div class="i"><img src="${uri('icon-128.png')}" width="72" height="72" alt="The Stint app mark"><span>app icon</span></div>`,
+      `<div class="i"><img src="${uri('tray-idle-panel.png')}" width="24" height="24" alt="The idle tray glyph"><span>tray · idle</span></div>`,
+      `<div class="i"><img src="${uri('tray-running-panel.png')}" width="24" height="24" alt="The running tray glyph"><span>tray · running</span></div>`,
+      '</div>',
+    ].join('\n    '),
+  );
+  // The menu-bar extra the popover hangs from. It carries the TEMPLATE render — the alpha-only
+  // black macOS actually draws (D19) — at the 16pt the menu bar gives it, from the @2x file so
+  // the mockup is crisp on a HiDPI screen. Embedding the real bytes is the whole point: the
+  // mockup used to draw an invented tomato pill reading `1:24:07`, an appearance the tray cannot
+  // produce, and that invention is what let issue #162 go unnoticed (issue #157).
+  embedMark(
+    'tray-popover.html',
+    `<img class="glyph" src="${uri('trayRunningTemplate@2x.png')}" width="16" height="16" alt="The running tray glyph">`,
+  );
 }
 
 async function main() {
@@ -159,7 +173,7 @@ async function main() {
     console.log(`${src} · ${palette} · ${size}px → ${out.slice(ROOT.length)}`);
   }
   await browser.close();
-  embedInSheet(renders);
+  embedAll(renders);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) await main();
