@@ -366,6 +366,40 @@ describe('SU.escapeHtml / SU.errMessage — the shared text primitives (issue #1
     expect(SU.errMessage('save failed')).toBe('save failed');
     expect(SU.errMessage(undefined)).toBe('undefined');
   });
+
+  /**
+   * Issue 138 — the transport's words are not copy. Electron's `ipcRenderer.invoke` rejects
+   * with its OWN sentence wrapped around the reason, and the app painted the whole thing:
+   * users met "Error invoking remote method 'edit': StoreError: start time is in the future"
+   * in an error region. These pin the exact production strings captured from the running app
+   * (the design-audit sweep's DOM capture), so a leak has to break a test to ship again.
+   */
+  it('errMessage strips the IPC wrapper and the exception class — the production strings', () => {
+    expect(
+      SU.errMessage(
+        new Error("Error invoking remote method 'edit': StoreError: start time is in the future"),
+      ),
+    ).toBe('start time is in the future');
+    expect(
+      SU.errMessage(
+        new Error("Error invoking remote method 'toggle': StoreError: entry end must be after its start"),
+      ),
+    ).toBe('entry end must be after its start');
+    // A rejection that crossed the boundary as a plain string, and a doubled prefix.
+    expect(SU.errMessage("Error invoking remote method 'add': StoreError: stop time must be after start time"))
+      .toBe('stop time must be after start time');
+    expect(SU.errMessage(new Error('Error: TimeParseError: unreadable time'))).toBe(
+      'unreadable time',
+    );
+  });
+
+  it('errMessage leaves a message with nothing to strip exactly as it is', () => {
+    // The kernel is already the copy — stripping must not nibble at an ordinary sentence.
+    expect(SU.errMessage(new Error('no favorite "weekly"'))).toBe('no favorite "weekly"');
+    expect(SU.errMessage(new Error('Errors are fine mid-sentence'))).toBe(
+      'Errors are fine mid-sentence',
+    );
+  });
 });
 
 /**

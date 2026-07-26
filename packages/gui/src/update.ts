@@ -41,6 +41,11 @@ import { platform as osPlatform } from 'node:os';
 // Re-exported for callers of this module; defined in ipc.ts alongside the other renderer-safe
 // view shapes (the main process pushes it over the `update-progress` broadcast).
 export type { UpdateProgress } from './ipc.js';
+// The failure COPY lives in ipc.ts beside the shapes that carry it (renderer-facing values,
+// electron-free module) and is re-exported here so callers of this module reach it in one
+// place — updateFailureMessage below is the only thing that applies it (issue 138).
+export { UPDATE_CHECK_FAILED, UPDATE_DOWNLOAD_FAILED } from './ipc.js';
+import { UPDATE_CHECK_FAILED } from './ipc.js';
 
 /** The public GitHub repo whose Releases back distribution (decision G4). */
 const RELEASES_API = 'https://api.github.com/repos/kdbanman/stint/releases';
@@ -96,6 +101,30 @@ export function parseVersion(tag: string): number[] | null {
   const cleaned = tag.trim().replace(/^v/, '');
   if (!/^\d{4}\.\d{1,2}\.\d{1,2}(\.\d+)?$/.test(cleaned)) return null;
   return cleaned.split('.').map((p) => Number(p));
+}
+
+/**
+ * The update surface's own failure copy, and the marker that separates copy from diagnostic
+ * (issue 138). Settings renders whatever these paths return, so a forwarded `err.message`
+ * puts the transport's words on screen — the Check-now button once reported
+ * `net::ERR_NAME_NOT_RESOLVED`, a Chromium error code naming nothing the user can act on.
+ *
+ * The rule: only text this module AUTHORED for a reader ever reaches the renderer. An
+ * authored failure throws an `UpdateError`; everything else — a Chromium net code, a Node
+ * stack, an HTTP status from the Releases API — is a diagnostic, and the reader gets the
+ * module's own sentence instead. Same shape as the renderer's `SU.errMessage` boundary: one
+ * place decides what a failure reads like, so no call site can leak by forgetting.
+ */
+export class UpdateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UpdateError';
+  }
+}
+
+/** The message to show for a failed update operation: the authored one, else `fallback`. */
+export function updateFailureMessage(err: unknown, fallback: string): string {
+  return err instanceof UpdateError ? err.message : fallback;
 }
 
 /**
@@ -190,10 +219,12 @@ export async function checkForUpdates(
   try {
     releases = await fetchReleases();
   } catch (err) {
+    // Issue 138: never the fetcher's own words — a DNS failure reads `net::ERR_NAME_NOT_RESOLVED`
+    // and an API refusal reads an HTTP status, and Settings paints whatever lands here.
     return {
       status: 'error',
       currentVersion: current,
-      message: err instanceof Error ? err.message : 'Could not reach GitHub Releases.',
+      message: updateFailureMessage(err, UPDATE_CHECK_FAILED),
     };
   }
   const latest = latestPublishedRelease(releases);
@@ -379,11 +410,11 @@ export async function downloadUpdate(
 ): Promise<string> {
   const platform = opts.platform ?? normalizePlatform(osPlatform());
   if (!platform) {
-    throw new Error('Unsupported platform for in-app update (macOS + Linux only).');
+    throw new UpdateError('Unsupported platform for in-app update (macOS + Linux only).');
   }
   const asset = selectArtifact(release, platform);
   if (!asset) {
-    throw new Error('This release has no installer artifact for your platform.');
+    throw new UpdateError('This release has no installer artifact for your platform.');
   }
   const deps = { ...defaultDownloadDeps(), ...opts.deps };
   const destPath = artifactTempPath(asset.name, deps.tempDir());
@@ -393,7 +424,7 @@ export async function downloadUpdate(
   // Verify the downloaded byte count against the asset's declared size (defence against a
   // truncated download). A zero declared size (rare) skips the check rather than false-failing.
   if (asset.size > 0 && written !== asset.size) {
-    throw new Error(
+    throw new UpdateError(
       `Downloaded ${written} bytes but expected ${asset.size}; the download may be corrupt.`,
     );
   }

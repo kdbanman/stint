@@ -159,8 +159,8 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       // exactly — the two local datetime strings convert to UTC, client/project names resolve
       // through core's single rule, tags/billable ride along. A backfill can overlap an existing
       // entry — warned, not blocked (§06 R4) — so we return the uniform WriteAck carrying the
-      // overlap warning. Core validation errors (`--to must be after --from`) propagate as the
-      // IPC rejection.
+      // overlap warning. Core validation errors (`stop time must be after start time`) propagate
+      // as the IPC rejection, which the renderer unwraps to its kernel (SU.errMessage, issue 138).
       const { clientId, projectId } = store.resolveClientProjectByName({
         client: payload.client,
         project: payload.project,
