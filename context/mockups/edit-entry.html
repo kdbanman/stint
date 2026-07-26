@@ -44,7 +44,7 @@
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
-  .sw{width:36px;height:24px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
@@ -108,7 +108,7 @@
   .daywrap{position:relative}
   .dayview{height:330px;overflow-y:auto;overscroll-behavior:contain}
   .dayview::-webkit-scrollbar{width:6px}
-  .dayview::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:3px}
+  .dayview::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:var(--r1)}
   .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
   .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
   .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
@@ -124,11 +124,11 @@
      V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time
      label reads ink — accent-ink text on an accent-weak chip fails contrast. */
   .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
-  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
+  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
   .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 var(--r1) var(--r1);z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
   .overlap .otag{font-size:11px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:2px 8px}
   .phint{margin-top:8px;display:flex;justify-content:flex-end}
-  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;color:var(--muted)}
+  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:2px 8px;color:var(--muted)}
 
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
      surfaced here at the point of action; the card stays open and unchanged. --danger block. */
