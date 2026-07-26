@@ -301,34 +301,98 @@ describe('SU.rangeLabel — the header names the inclusive last day (§09 R1)', 
 });
 
 /**
- * §12 R15/R17 (G1) — the ONE local-time seed format shared by the raw Start/Stop fields, the
- * split instant, and the inline picker's write-backs. Load-bearing: timerview.ts's
- * liveEditStripPatch BYTE-compares a field against its seed, and timerview.test.ts hardcodes
- * that seed as a literal — so without these assertions a format drift silently stops the byte
- * gate matching and re-emits `startUtc` on every untouched start (the issue #68 regression)
- * while timerview.test.ts stays green.
+ * §12 R15/R17 (G1) — the ONE local-time field format shared by the raw Start/Stop fields, the
+ * split instant, and the inline picker's write-backs, plus its ONE inverse parse. Load-bearing:
+ * timerview.ts's liveEditStripPatch BYTE-compares a field against its seed, and
+ * timerview.test.ts hardcodes that seed as a literal — so without these assertions a format
+ * drift silently stops the byte gate matching and re-emits `startUtc` on every untouched start
+ * (the issue #68 regression) while timerview.test.ts stays green.
+ *
+ * The pinned strings CHANGED with issue #159, deliberately and in one move: `2026-06-24T09:07`
+ * became `2026-06-24 09:07:00`. This value is not wire — it is the text a user selects and
+ * retypes to adjust a start — so the `T` separator went, and seconds are now ALWAYS rendered
+ * rather than only when non-zero. Both halves of that were needed to make the field's own
+ * placeholder (`YYYY-MM-DD HH:mm:ss`) true: it had promised `YYYY-MM-DDTHH:mm` while the seed
+ * appended seconds behind its back. The byte gate is unaffected in kind — seed and field are
+ * still compared as bytes — but the literal it compares moved, so timerview.test.ts's
+ * SEED_START moved with it in the same commit.
  */
 describe('SU.localInputValue — the local-time seed the byte gate compares against (§12 R15)', () => {
-  it('a whole-minute instant renders without seconds', () => {
-    expect(SU.localInputValue(new Date(2026, 5, 24, 9, 7, 0))).toBe('2026-06-24T09:07');
-    expect(SU.localInputValue(new Date(2026, 5, 24, 0, 0, 0))).toBe('2026-06-24T00:00');
+  it('renders space-separated with seconds ALWAYS, never the `T` wire separator (#159)', () => {
+    expect(SU.localInputValue(new Date(2026, 5, 24, 9, 7, 0))).toBe('2026-06-24 09:07:00');
+    expect(SU.localInputValue(new Date(2026, 5, 24, 0, 0, 0))).toBe('2026-06-24 00:00:00');
+    // The placeholder every one of those fields carries — the promise this format must keep.
+    expect(SU.localInputValue(new Date(2026, 5, 24, 9, 7, 0))).toMatch(
+      /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/,
+    );
   });
 
   it('a non-zero seconds instant keeps its seconds', () => {
     // This exact string is timerview.test.ts's SEED_START literal: if it stops matching,
     // that suite's byte-gate scenarios are testing a seed the renderer never produces.
-    expect(SU.localInputValue(new Date(2026, 5, 24, 9, 7, 33))).toBe('2026-06-24T09:07:33');
+    expect(SU.localInputValue(new Date(2026, 5, 24, 9, 7, 33))).toBe('2026-06-24 09:07:33');
   });
 
   it('every field is zero-padded to two digits', () => {
-    expect(SU.localInputValue(new Date(2026, 0, 5, 3, 4, 5))).toBe('2026-01-05T03:04:05');
+    expect(SU.localInputValue(new Date(2026, 0, 5, 3, 4, 5))).toBe('2026-01-05 03:04:05');
   });
 
-  it('the seed round-trips through `new Date(value)` to the same instant, to the second', () => {
+  it('the seed round-trips through SU.parseLocalInput to the same instant, to the second', () => {
     // No timezone suffix: the string is local wall-clock, and the parse must return the very
     // instant it was rendered from — the contract the strip's reparse-on-edit path relies on.
     const stored = new Date(2026, 5, 24, 9, 7, 33);
-    expect(new Date(SU.localInputValue(stored)).getTime()).toBe(stored.getTime());
+    expect(SU.parseLocalInput(SU.localInputValue(stored)).getTime()).toBe(stored.getTime());
+  });
+});
+
+/**
+ * §12 R14/R15 (issue #159) — the parse half. The field advertises one spelling but must keep
+ * accepting the other: a user who learned `2026-06-24T09:07` (or pasted one from `tt`) types it
+ * and it still lands. These pin that tolerance, and pin the failure shape every call site
+ * depends on — an INVALID Date, not null and not a throw, so the existing NaN guards and the
+ * §12 R21 RangeError path behave exactly as they did before the parser was introduced.
+ */
+describe('SU.parseLocalInput — the one inverse of the field format (§12 R14/R15)', () => {
+  const local = (y: number, mo: number, d: number, h: number, mi: number, s = 0) =>
+    new Date(y, mo - 1, d, h, mi, s).getTime();
+
+  it('reads the space spelling the field renders', () => {
+    expect(SU.parseLocalInput('2026-06-24 09:07:33').getTime()).toBe(local(2026, 6, 24, 9, 7, 33));
+  });
+
+  it('still reads the `T` spelling a user may have learned to type', () => {
+    expect(SU.parseLocalInput('2026-06-24T09:07:33').getTime()).toBe(local(2026, 6, 24, 9, 7, 33));
+    // Both spellings of the same wall clock are the SAME instant — nothing typed before #159 moves.
+    expect(SU.parseLocalInput('2026-06-24T09:07').getTime()).toBe(
+      SU.parseLocalInput('2026-06-24 09:07').getTime(),
+    );
+  });
+
+  it('seconds stay optional on input even though they are always rendered', () => {
+    expect(SU.parseLocalInput('2026-06-24 09:07').getTime()).toBe(local(2026, 6, 24, 9, 7));
+  });
+
+  it('reads the local wall clock, not UTC — the field carries no zone', () => {
+    const d = SU.parseLocalInput('2026-06-24 09:07:33');
+    expect([d.getFullYear(), d.getMonth(), d.getDate()]).toEqual([2026, 5, 24]);
+    expect([d.getHours(), d.getMinutes(), d.getSeconds()]).toEqual([9, 7, 33]);
+  });
+
+  it('a half-typed or empty value is an INVALID Date, so every NaN guard still fires', () => {
+    // '2026-06-24 08:' is the trap the separator change opened: the ENGINE's legacy parser reads
+    // it as 08:00 (where the old '2026-06-24T08:' was Invalid), so a bare `new Date(text)` would
+    // have made every mid-keystroke value a committable instant. It must stay unreadable.
+    for (const bad of ['2026-06-24 08:', '2026-06-24 ', '2026-06-24', '', '   ', 'not a time']) {
+      expect(Number.isNaN(SU.parseLocalInput(bad).getTime()), bad).toBe(true);
+    }
+  });
+
+  it('a zone-bearing instant still resolves to the instant it names', () => {
+    // The engine fallback: someone pasting a full ISO string gets what it says, not a re-read
+    // of its digits as local time.
+    expect(SU.parseLocalInput('2026-06-24T09:07:33Z').getTime()).toBe(
+      Date.parse('2026-06-24T09:07:33Z'),
+    );
   });
 });
 

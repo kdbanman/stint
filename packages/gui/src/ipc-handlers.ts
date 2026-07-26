@@ -42,6 +42,7 @@ import {
 } from './reportview.js';
 import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from './favorites.js';
 import { listBackupViews } from './backupview.js';
+import { parseLocalInput } from './localtime.js';
 
 /** The OS-bound seam main.ts supplies; everything else the handlers need is imported above. */
 export interface IpcHandlerDeps {
@@ -167,8 +168,12 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       });
       const res = store.add({
         description: payload.description ?? null,
-        fromUtc: toUtc(new Date(payload.fromLocal)),
-        toUtc: toUtc(new Date(payload.toLocal)),
+        // The two strings are the add form's raw Start/Stop fields, so they are read back by
+        // the ONE inverse of the format those fields render (localtime.ts, issue #159) — either
+        // separator accepted, never an engine-locale guess. An unreadable value stays an Invalid
+        // Date, so toUtc throws exactly as before and the renderer surfaces it (§12 R21).
+        fromUtc: toUtc(parseLocalInput(payload.fromLocal)),
+        toUtc: toUtc(parseLocalInput(payload.toLocal)),
         clientId,
         projectId,
         tags: payload.tags ?? [],

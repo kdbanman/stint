@@ -1251,12 +1251,25 @@ interval (full 24h track, never clipped); overnight (stop on a later day) is
 handled only via the collapsed Start/Stop expander (§12 R17, the exact/overnight
 path). It adds **ZERO capabilities** — it only writes `localInputValue`
 -formatted strings back into the EXISTING authoritative text inputs and fires
-`input` /`change` (that ONE seed format — `YYYY-MM-DDTHH:mm[:ss]` local, seconds
-only when non-zero, round-tripping through `new Date(value)` to the same instant
-— is pinned directly by GOLD `gui/test/renderer-bundle.test.ts` , so a format
-drift fails there instead of silently un-matching the byte gate
-`timerview.test.ts` exercises against a literal seed, the issue #68 regression),
-so the unchanged add/edit IPC paths stay the single source of truth (**no new
+`input` /`change`. That ONE field format is `YYYY-MM-DD HH:mm:ss` in local time:
+space-separated (this value is the string a user selects and RETYPES, not a wire
+serialization) with the seconds ALWAYS rendered, so the field's own placeholder
+describes the shape it shows and a stored 09:07:33 still round-trips to the
+second (issue #159 corrected both halves of the old lie — a `T` separator and a
+placeholder promising `HH:mm` over a value that appended seconds behind its
+back). Its ONE inverse, `parseLocalInput`, accepts BOTH spellings, so nothing a
+user learned to type breaks; it is regex-driven with no bare `new Date(text)`
+fallback, because the engine's legacy parser reads the half-typed
+`2026-06-24 08:` as 08:00 where the old `T` spelling was Invalid — a fallback
+would have made every mid-keystroke value committable. Both live in
+`gui/src/localtime.ts` (one home, reached by the renderer through `window.SU`,
+by `timerview.ts` 's byte gate, and by the `add` IPC handler) and the pair is
+pinned directly by GOLD `gui/test/renderer-bundle.test.ts` — format, both-spelling
+parse, and the invalid-on-partial rule — so a format drift fails there instead of
+silently un-matching the byte gate `timerview.test.ts` exercises against a literal
+seed (the issue #68 regression), and JUDGE `TIMER_VIEW` asserts the rendered
+`#le-start` matches no `T`-separated pattern and matches its own placeholder.
+The unchanged add/edit IPC paths stay the single source of truth (**no new
 IPC channel, no parity-matrix row**; `parity.test.ts` is per-channel and none is
 added). `gui/renderer/index.html` loads `timepicker.js` BEFORE `app.js` ;
 `app.js` mounts the picker IN FLOW on EVERY R15 surface through ONE shared

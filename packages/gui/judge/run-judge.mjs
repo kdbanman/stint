@@ -824,6 +824,9 @@ async function sceneTimerView(browser) {
         fade: /gradient/.test(mask),
         others: host.querySelectorAll('.stp-block.other').length,
         startBefore: document.querySelector('#le-start')?.value ?? null,
+        // issue #159: the field the user reads and RETYPES carries no `T` wire separator, and
+        // its placeholder describes the very shape it renders — the two agreed on nothing before.
+        startPlaceholder: document.querySelector('#le-start')?.placeholder ?? null,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
@@ -879,8 +882,14 @@ async function sceneTimerView(browser) {
       disc.others >= 1 &&
       // §12 R15 (issue #49): the strip renders the stored start EXACTLY, to the second — the
       // fixture's open row started 5047s (01:24:07) before the 23:00:00Z pinned clock = 21:35:53.
-      disc.startBefore === '2026-06-24T21:35:53' &&
-      dragged.startLive === '2026-06-24T20:35' &&
+      disc.startBefore === '2026-06-24 21:35:53' &&
+      // issue #159: the rendered value matches NO `T`-separated pattern — it is the string the
+      // user selects and retypes, not a serialization — and the placeholder promises exactly it.
+      !/\d{4}-\d{2}-\d{2}T/.test(disc.startBefore) &&
+      disc.startPlaceholder === 'YYYY-MM-DD HH:mm:ss' &&
+      new RegExp(`^${disc.startPlaceholder.replace(/[A-Za-z]/g, '\\d')}$`).test(disc.startBefore) &&
+      dragged.startLive === '2026-06-24 20:35:00' &&
+      !/\d{4}-\d{2}-\d{2}T/.test(dragged.startLive) &&
       dragged.stillNoEndChrome &&
       dragged.noBackdrop &&
       !!edited &&
@@ -923,6 +932,8 @@ async function sceneFutureStartGuard(browser) {
     await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
     // Type a FUTURE instant (the next calendar day, unambiguously after the pinned now) into the
     // running Start field and let the debounced live-edit commit (scheduleLiveEdit, 500ms) fire.
+    // Typed in the OLD `T` spelling on purpose (issue #159): the field renders space-separated
+    // now, but everything a user already knows how to type must still parse and reach core.
     await page.fill('#le-start', '2026-06-25T10:00');
     await page.clock.fastForward(600);
     await page.waitForSelector('#timer-warning', { state: 'visible' });
@@ -1851,6 +1862,9 @@ async function sceneUnifiedFormExpander(browser) {
 
     // (c) TYPE an overnight span into the raw fields → the shared interval updates so the picker
     // column reflects the typed start and the collapsed echo reflects the cross-midnight span.
+    // Deliberately typed in the `T` spelling the fields no longer RENDER (issue #159): both
+    // spellings parse, the picker leaves an untouched field verbatim, and Save sends what was
+    // typed — so the format change costs nothing a user already had in muscle memory.
     await page.fill('#add-from', '2026-06-24T22:00');
     await page.fill('#add-to', '2026-06-25T02:00');
     await page.waitForFunction(
@@ -2206,7 +2220,7 @@ async function sceneUnifiedForm(browser) {
     const minuteMod5 = (v) => Number(v.slice(14, 16)) % 5;
     const exactShown =
       /:33$/.test(exactSeed.from) && // the start renders its stored seconds (…09:07:33)
-      exactSeed.to.length === 16 && // the stop (…11:03:00) needs no seconds suffix…
+      exactSeed.to.length === 19 && // the stop (…11:03:00) shows its :00 seconds (issue #159)…
       minuteMod5(exactSeed.to) !== 0; // …but sits OFF the 5-min grid — shown unsnapped
     const noDragRoundTrip =
       !!noDragSave &&
@@ -2216,7 +2230,7 @@ async function sceneUnifiedForm(browser) {
       !('endUtc' in noDragSave.patch);
     const dragSnaps =
       snapDrag.from === exactSeed.from && // the untouched start keeps its exact seconds
-      snapDrag.to.length === 16 && // the dragged stop is a whole minute…
+      snapDrag.to.length === 19 && // the dragged stop is a whole minute (…:00 shown)…
       minuteMod5(snapDrag.to) === 0 && // …on the :05 grid
       snapDrag.to !== exactSeed.to;
     const exactTimesOk = exactShown && noDragRoundTrip && dragSnaps;
