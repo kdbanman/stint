@@ -3,7 +3,10 @@
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
 // loaded first; the tooling decision is recorded in context/architecture.html §08).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView } = window.SU;
+const {
+  fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView,
+  errMessage, escapeHtml, localMinuteOfDay,
+} = window.SU;
 
 // Element lookup. Typed `any` (not HTMLElement) under checkJs: the call sites use
 // page-specific form-element properties (.value/.checked/…) the id alone can't prove.
@@ -114,18 +117,11 @@ function clearOverlapBanner() {
   }
 }
 
-// §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
-// `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
-// (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
-// human string the message region shows, stripping the "Error:" prefix the add-form catch drops.
-function errMessage(err) {
-  return String((err && err.message) || err).replace(/^Error:\s*/, '');
-}
-
 // §12 R21: paint a refused write into an INLINE message region at the point of action (the add
 // form's #add-warning is the seed pattern). The region is announced (role=status/aria-live) and
 // stays until the next input on that form clears it. `showFormError`/`clearFormError` are the
-// shared primitives the edit form, split confirm, inline rename and report builder all use.
+// shared primitives the edit form, split confirm and inline rename all use; the report builder
+// and the popover own their own regions but read the message through the same SU.errMessage.
 function showFormError(el, err) {
   if (!el) return;
   el.textContent = errMessage(err);
@@ -222,11 +218,6 @@ const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter 
 const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
 const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// An entry's local minutes-of-day (0–1440). Display only — the stored instant is UTC ISO.
-function localMinOf(iso) {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
 // An instant's LOCAL day as a 'YYYY-MM-DD' token — the same local-day vocabulary core's localDay
 // gives the snapshot's day keys (localTodayDay does this for `now`), so the two compare directly.
 // Used to detect a cross-midnight span (§12 R16 / issue #71): a closed entry whose local end day
@@ -285,10 +276,10 @@ function calEnumerateDays(minDay, maxDay) {
 // own column even at a local-day boundary. topMin/botMin are local minutes-of-day; a null botMin
 // marks the open block, whose foot calEvent computes (future-fade cap).
 function calEntrySegments(e, startDay) {
-  const startMin = localMinOf(e.startUtc);
+  const startMin = localMinuteOfDay(e.startUtc);
   if (e.endUtc === null) return [{ day: startDay, topMin: startMin, botMin: null, part: 'open' }];
   const endDay = calLocalDayOf(e.endUtc);
-  const endMin = localMinOf(e.endUtc);
+  const endMin = localMinuteOfDay(e.endUtc);
   // Same local day (the common case): one block start→end, with the legibility floor applied by
   // calEvent. `endDay <= startDay` also folds any degenerate end-before-start into the same-day
   // path rather than emitting a backwards fan-out.
@@ -464,7 +455,7 @@ function calColumn(d, isEnd) {
 function calOverlapBand(e) {
   const band = document.createElement('div');
   band.className = 'ov';
-  band.style.top = localMinOf(e.startUtc) * CAL_PX_PER_MIN + 'px';
+  band.style.top = localMinuteOfDay(e.startUtc) * CAL_PX_PER_MIN + 'px';
   const mins = e.overlapMinutes || 15;
   band.style.height = Math.max(mins * CAL_PX_PER_MIN, 8) + 'px';
   band.innerHTML = `<span class="otag">overlap ${mins}m</span>`;
@@ -723,14 +714,14 @@ function calEvent(e, seg) {
   // NEVER the single (endMin − startMin) sliver that collapsed to the 18px floor when the stop
   // was on a later local day; each segment stays within one day column's 0–1440 track.
   const part = seg ? seg.part : running ? 'open' : 'full';
-  const topMin = seg ? seg.topMin : localMinOf(e.startUtc);
+  const topMin = seg ? seg.topMin : localMinuteOfDay(e.startUtc);
   // The open block extends a fixed span into the future and fades out (no bottom edge, G8); a
   // closed segment runs top→bottom (the min height keeps a very short span legible/clickable).
   const botMin = running
     ? Math.min(topMin + 180, 1440)
     : seg
       ? seg.botMin
-      : Math.max(localMinOf(e.endUtc), topMin + 5);
+      : Math.max(localMinuteOfDay(e.endUtc), topMin + 5);
   const el = document.createElement('div');
   el.className =
     'ev entry' +
@@ -1638,10 +1629,6 @@ function weekTotal() {
     .reduce((s, e) => s + e.billableSeconds, 0);
 }
 
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-}
-
 // Live count-up on the running entry (display tick, independent of data changes). It
 // advances the compact summary glance line, the Timer-view Active-Timer card clock and the
 // Entries-view compact strip clock (§12 R04), and the running entry's row duration — all
@@ -2284,8 +2271,7 @@ async function submitAddForm() {
     // Validation rejection from core (e.g. "--to must be after --from"): show it in
     // the form rather than throwing, so the user can correct the times. This is a
     // BLOCK (the entry did not save), distinct from the overlap WARNING above.
-    warn.textContent = String((err && err.message) || err).replace(/^Error:\s*/, '');
-    warn.hidden = false;
+    showFormError(warn, err);
   }
 }
 
