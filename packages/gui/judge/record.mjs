@@ -214,7 +214,6 @@ const VISIBLE_CURSOR_INIT = `
 // page.mouse.* calls a recipe makes (the picker drags) already move the real pointer, so the
 // cursor follows them natively; this only adds the travel+pause around the high-level helpers.
 function decoratePage(page) {
-  const STEP_MS = 18;
   const STEPS = 14;
   const PRE_MS = 380;
   const POST_MS = 360;
@@ -2454,9 +2453,17 @@ const RECIPES = {
       }, atNow());
       const deepWork = page.locator('.fav-card', { hasText: 'Deep work' });
       await deepWork.locator('[data-act="fav-resume"]').click();
-      // The resume handler repaints the rail; drive the same load() the real `changed` broadcast
-      // would so the Active-Timer card repaints to the resumed fresh template.
-      await page.evaluate(() => (typeof load === 'function' ? load() : null));
+      // The resume handler repaints the rail; fire the mock's changed-broadcast so the
+      // Active-Timer card repaints to the resumed fresh template. Drive it through
+      // __FIRE_CHANGED__ — the channel fixtures.mjs deliberately exposes to the harness —
+      // rather than calling app.js's top-level `load()` as an accidental global: that
+      // reached into the renderer's leaked scope (which #183 exists to remove), and the
+      // `typeof load === 'function' ? … : null` guard it needed meant a missing entry point
+      // degraded to a silent no-op — a recording that stops driving the repaint still
+      // produces a GIF, just the wrong one. This path has no guard and throws if it breaks,
+      // and it repaints the way production does: app.js's onChange runs load() AND
+      // renderFavorites() on the Timer view.
+      await page.evaluate(() => window.stint.__FIRE_CHANGED__());
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'focus block',
       );
@@ -2759,7 +2766,7 @@ const RECIPES = {
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
       await page.waitForSelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]');
       await page.evaluate(() => {
-        window.__recCaption && window.__recCaption('Settings → Timeline: working hours + picker window (§14)');
+        window.__recCaption?.('Settings → Timeline: working hours + picker window (§14)');
         document
           .querySelector('#settings-panel input.set-hhmm[data-key="workingHoursStart"]')
           ?.scrollIntoView({ block: 'center' });
