@@ -655,16 +655,21 @@ function renderTimerStrip(running) {
   }
 }
 
-// The card's attribute row: the billable/non-billable badge plus a slept flag when the
-// running entry's machine slept. Monochrome --flag tokens only (the accent is reserved
-// for the running clock/state and the primary Stop button, §15); the billable badge reads
-// as a quiet label, not an accent fill.
+// The card's attribute row: the billable/non-billable ATTRIBUTE plus a slept FLAG when the
+// running entry's machine slept — two different kinds of thing, so two different palettes
+// (design.html D04/D14, issue #160). Billability is the entry's normal state, said quietly in
+// `.attr`/--muted; `slept` is the advisory, and the only one of the row the --flag warn palette
+// is for. Emitting all three through one `.flag` class painted every running card amber, which
+// is how the default case came to wear the colour reserved for "look at this" — the guard this
+// function's comment carried (a quiet label, not an accent fill) watched the accent and never
+// noticed it had reached for warn instead. Neither palette is the accent: that stays on the
+// running clock/state and the primary Stop button (§15).
 function cardFlagsHtml(e) {
   const flags = [];
   flags.push(
     e.billable
-      ? '<span class="flag" title="billable time">billable</span>'
-      : '<span class="flag" title="non-billable time">non-billable</span>',
+      ? '<span class="attr" title="billable time">billable</span>'
+      : '<span class="attr" title="non-billable time">non-billable</span>',
   );
   if (e.sleptThrough) flags.push('<span class="flag" title="machine slept during this entry">slept</span>');
   return flags.join('');
