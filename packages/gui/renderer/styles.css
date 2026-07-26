@@ -673,6 +673,11 @@ s {
 }
 .range-pick-btn:hover { background: var(--hover); color: var(--ink); }
 
+/* design.html D15: the add form's one message region carries BOTH message kinds, so it carries
+   BOTH palettes. Its BASE chrome is the warn advisory (--flag) — allowed-but-flagged, the write
+   saved; a REFUSED write flips it to the --danger block via the .error state class showFormError
+   sets, exactly the .banner.error idiom below. Without the modifier a hard block painted in the
+   advisory palette, which is the inversion D15's two-palette split exists to prevent (issue 139). */
 .add-warning {
   font-size: 12px;
   color: var(--flag);
@@ -681,12 +686,18 @@ s {
   border-radius: var(--r1);
   padding: 8px 12px;
 }
+.add-warning.error {
+  color: var(--danger);
+  background: var(--danger-weak);
+  border-color: var(--danger);
+}
 .add-warning[hidden] { display: none; }
 
 /* §12 R21: the inline error-message component — a refused core write surfaced at the point of
    action (unified editor Save, split confirm, inline rename, the report builder, the popover
    toggle). It reads as a BLOCK, so it uses the --danger notice palette (distinct from the warn
-   --flag overlap advisory the .add-warning / .banner chrome uses). Announced via role=status. */
+   --flag overlap advisory the .add-warning / .banner base chrome carries — those two regions
+   serve both kinds, so they take --danger through their .error state). Announced via role=status. */
 .form-error {
   display: block;
   font-size: 12px;

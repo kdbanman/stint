@@ -1529,8 +1529,8 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
   return `
     window.__STATE__ = ${stateJson};
     // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
-    // (the strict-listEntries precedent, issue #55): edit/split/toggle/rename each reject with a
-    // StoreError-shaped message, so the scene can drive a real refused write and assert the
+    // (the strict-listEntries precedent, issue #55): add/edit/split/toggle/rename each reject with
+    // a StoreError-shaped message, so the scene can drive a real refused write and assert the
     // renderer SURFACES it (an announced message region, the form staying open) instead of
     // swallowing it. Off by default → every other scene's writes resolve as before.
     window.__REJECT_WRITES__ = ${rejectWrites ? 'true' : 'false'};
@@ -1775,7 +1775,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // WriteAck (window.__ACK__) so a backfill that lands on an overlap (overlap scene)
       // carries the warning the renderer raises into the non-blocking inline banner — the
       // entry still saved (§06 R4) — and otherwise an empty-warnings ack so the form closes.
-      add: (p) => { window.__ADDED__ = p; return Promise.resolve(window.__ACK__); },
+      // §12 R21 / design.html D15: under __REJECT_WRITES__ the backfill rejects like core refusing
+      // an inverted span (store.add's 'stop time must be after start time'), so the
+      // ADD_REFUSAL_PALETTE scene can drive a real refused Save and score what the region paints.
+      add: (p) => {
+        if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('add', 'stop time must be after start time');
+        window.__ADDED__ = p;
+        return Promise.resolve(window.__ACK__);
+      },
       // §07: the reference-data reads/mutators the Clients view drives. listClients /
       // listProjects return the canned active clients/projects (archived excluded by
       // default); the mutators record their payload so the CLIENTS_VIEW scene can assert
