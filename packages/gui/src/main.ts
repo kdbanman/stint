@@ -60,6 +60,15 @@ const RENDERER = join(__dirname, '..', 'renderer');
 // they must sit in electron-builder.yml's `files:` glob — `buildResources: build` feeds the
 // packager only and ships nothing into the bundle (the why is recorded there).
 const ASSETS = join(__dirname, '..', 'assets');
+// The popover's width, in px. ONE constant because `togglePopover` centres the window on the
+// tray icon by subtracting half of it: a width changed in only one of the two places slides
+// the popover off the icon, with nothing to fail (#174).
+const POPOVER_WIDTH = 280;
+// Coalescing window for the DB file-watcher, in ms. One `tt` write fires several fs events
+// (WAL + the -shm/-journal siblings), so the watcher must coalesce or a single command
+// repaints both surfaces repeatedly. It is a CEILING on refresh latency, so it stays well
+// under the 1 s display tick: "near-instantly" (§04, §17 R1) has to still read as instant.
+const WATCH_COALESCE_MS = 150;
 
 let store: Store;
 let tray: Tray | null = null;
@@ -256,7 +265,11 @@ function togglePopover(): void {
     popover.hide();
   } else {
     const bounds = tray?.getBounds();
-    if (bounds) popover.setPosition(Math.round(bounds.x - 140 + bounds.width / 2), Math.round(bounds.y + bounds.height));
+    if (bounds)
+      popover.setPosition(
+        Math.round(bounds.x + bounds.width / 2 - POPOVER_WIDTH / 2),
+        Math.round(bounds.y + bounds.height),
+      );
     popover.show();
   }
 }
@@ -288,7 +301,7 @@ function showMainWindow(): void {
 
 function createPopover(): void {
   popover = new BrowserWindow({
-    width: 280,
+    width: POPOVER_WIDTH,
     height: 200,
     show: false,
     frame: false,
@@ -530,7 +543,7 @@ function init(): void {
   try {
     watcher = watch(dbPath, { persistent: false }, () => {
       const now = Date.now();
-      if (now - lastTick > 150) {
+      if (now - lastTick > WATCH_COALESCE_MS) {
         lastTick = now;
         broadcast();
         updateTray();
