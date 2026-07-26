@@ -452,10 +452,6 @@ s {
 .nav-item .ic { color: var(--muted); }
 .nav-item .nav-label { flex: 1; }
 .nav-item:hover:not(.active) { background: var(--hover); color: var(--ink); }
-.nav-item:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
 /* design.html D12: the active item is a raised paper chip — surface lift + the chip-lift
    shadow (--sh-chip, the ladder's sub-card selection rung), ink label. Only its icon (below)
    takes the accent; the chip and label never do (accent-ink on accent-weak is a prohibited
@@ -671,10 +667,6 @@ s {
   cursor: pointer;
 }
 .range-pick-btn:hover { background: var(--hover); color: var(--ink); }
-/* §15 accent discipline: the picker trigger is a secondary ghost field-trigger, not a primary
-   action — it carries the NEUTRAL keyboard ring (only button.primary and the nav rail items
-   take the accent ring). Matches the input/select :focus-visible ring. */
-.range-pick-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 
 .add-warning {
   font-size: 12px;
@@ -788,37 +780,33 @@ button[hidden] { display: none; }
 .fav-card .resume:hover,
 .fav-kebab:hover { background: var(--hover); }
 
-/* §12 R14: the keyboard-operability focus pass. Every control is reachable by Tab AND shows
-   a visible focus ring under keyboard focus. The ring is scoped to :focus-visible so a mouse
-   click paints no ring (quiet feel). Ordinary controls take a NEUTRAL --rule-strong ring; the
-   primary action — already sanctioned for the accent — may take the accent ring. */
-button:focus-visible {
-  outline: 2px solid var(--rule-strong);
-  outline-offset: 2px;
-}
-button.primary:focus-visible {
+/* §12 R14 + design.html D13/A04 — THE focus idiom, in one place, for the whole window.
+   Every focus indicator the app paints is full-strength `--accent` (3.80:1 on paper, 3.67:1 on
+   sidebar, 3.40:1 on wash — all above A02's 3:1 floor). No other token may colour one.
+
+   Issue #137: the app used to paint three. `--rule-strong` rang most controls at 1.89:1; two
+   controls rang accent; and D13's own `--ring` sat behind `:focus:not(:focus-visible)`, which
+   Chromium can never satisfy for the text controls it targeted (a mouse click on an input still
+   matches `:focus-visible`), so the specified idiom never painted at all.
+
+   The boundary is an OUTLINE, on one bare `:focus-visible` rule that covers whatever the browser
+   focuses — button, field, link, the tabindex'd hotkey <span>. Outline, not border, because
+   `outline` is the one property no component rule in this file ever sets, so nothing can outrank
+   it; a border-based indicator loses the cascade to any per-component field chrome that spells
+   its selector more specifically (`.start-form input[type="text"]` beats `input:focus-visible`),
+   which is how the accent border D13 asks for silently failed to paint even where it was written.
+   A FIELD then adds D13's 3px `--ring` halo inside that boundary, and turns its own border accent
+   wherever the cascade allows — dressing on top of an indicator that already clears A02 alone. */
+:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-
-/* §12 R14 carries to the text/select controls too. Their `:focus` rules paint only a quiet
-   accent border + ring (no outline) on mouse/typing; a Tab-walk lands a VISIBLE neutral ring. */
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--rule-strong);
-  outline-offset: 2px;
   border-color: var(--accent);
+  box-shadow: var(--ring);
 }
-
-/* On mouse/typing focus (not a Tab-walk) every text/datetime/select/textarea field paints the
-   one quiet accent border + ring — no outline. One rule for the whole window so every field
-   shares the identical signal (the saved-report name field is the lone, deliberate exception,
-   keeping a muted border further below). */
-input[type="text"]:focus:not(:focus-visible),
-input[type="search"]:focus:not(:focus-visible),
-select:focus:not(:focus-visible),
-textarea:focus:not(:focus-visible) { outline: none; border-color: var(--accent); box-shadow: var(--ring); }
 
 /* design.html D13: placeholder text reads muted, never faint — one rule for every field. */
 ::placeholder { color: var(--muted); }
@@ -1494,7 +1482,6 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   color: var(--ink);
 }
-.builder-name:focus:not(:focus-visible) { outline: none; border-color: var(--muted); }
 .builder-note { font-size: 11.5px; color: var(--muted); flex: none; }
 .builder-foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 
@@ -1960,7 +1947,6 @@ body.popover { background: var(--canvas); margin: 0; }
 }
 .set-toggle.on { background: var(--ink); }
 .set-toggle.on i { left: 18px; }
-.set-toggle:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 .set-toggle-lbl { font-size: 13px; color: var(--muted); min-width: 22px; }
 .set-hotkey {
   font-family: var(--num);
@@ -1973,7 +1959,6 @@ body.popover { background: var(--canvas); margin: 0; }
   box-shadow: 0 1px 0 var(--rule-strong);
   cursor: pointer;
 }
-.set-hotkey:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 /* §19 R03/R06 — Software Update. The version string is mono/soft; the Check-now button is a
    plain neutral button (never the accent). The update pill + result line use the --flag tokens
    (the same warn-not-block palette the overlap flag uses). */
@@ -1986,7 +1971,6 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 8px 12px;
 }
 .set-update-btn:disabled { color: var(--muted); cursor: default; background: var(--wash); }
-.set-update-btn:focus-visible { outline: 2px solid var(--rule-strong); outline-offset: 2px; }
 .pill.new,
 .update-result.new {
   color: var(--flag);

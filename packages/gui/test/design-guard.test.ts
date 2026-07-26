@@ -1,6 +1,6 @@
 /**
- * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A06;
- * transition PR #132).
+ * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A04, A06;
+ * transition PR #132, issue #137).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -23,6 +23,11 @@
  *      static scans over styles.css and every mockup's <style> blocks: every padding/margin/gap
  *      px value sits on the 4px grid (2px as the half-step), no font-size declares below 11px,
  *      and styles.css carries the one ::placeholder rule colouring var(--muted).
+ *   6. D13/A04 one focus idiom — a DECLARATION CENSUS (bottom of this file) rather than another
+ *      allowlist: every token any focus rule names as a boundary is read off the source and must
+ *      be the single one design.html sanctions, so an off-table pairing fails instead of passing
+ *      by omission. Paired with the A02 floors above, which now score the accent boundary against
+ *      every surface a focus stop sits on. The census helper is the reusable half.
  *
  * Deliberately out of scope: D08 radii — their AC is JUDGE, and the two recorded off-trio radii
  * (the progress track, the calendar checkbox) are a pending design.html exemption question, not
@@ -146,9 +151,19 @@ describe('no raw palette hex outside the generated block (design.html D01)', () 
   it('styles.css uses semantic tokens only — no hex literal at all outside the markers', () => {
     const parts = splitOnMarkers(stylesCss);
     expect(parts).not.toBeNull();
-    const hexes = parts?.outside.match(HEX_RE) ?? [];
-    // No exceptions — every colour in the app resolves through a semantic token.
-    expect(hexes).toEqual([]);
+    const outside = parts?.outside ?? '';
+    // Comments are prose, not paint. An issue citation — which the comment convention requires,
+    // and which reads `#137` — is character-for-character a 3-digit hex, so a total ban that
+    // reaches into comments outlaws the citation rather than a colour. The split keeps both
+    // protections: the total ban ("no hex AT ALL") covers every line that actually paints, and
+    // the mockups' palette ban covers the comments, so a copied scale value still cannot hide
+    // in one.
+    const declarations = outside.replace(/\/\*[^]*?\*\//g, '');
+    expect(declarations.match(HEX_RE) ?? []).toEqual([]);
+    const inComments = (outside.match(/\/\*[^]*?\*\//g)?.join('\n').match(HEX_RE) ?? [])
+      .map(normalizeHex)
+      .filter((h) => paletteHexes.has(h));
+    expect(inComments, 'a raw palette value quoted in a styles.css comment').toEqual([]);
   });
 
   it('the app carries no reference to a retired custom property', () => {
@@ -177,10 +192,15 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     ['flag', 'paper', TEXT_FLOOR],
     ['flag', 'flag-bg', TEXT_FLOOR],
     // Non-text signal: icons, running marks, focus. A02's 3:1 floor is carried by the
-    // FULL-STRENGTH accent — the D13 focus BORDER (and icon ink) — which is the pair computed
-    // here; the focus HALO (--ring) paints only a 35% mix and is a redundant echo around that
-    // passing border, not the focus indicator of record.
+    // FULL-STRENGTH accent — the D13 focus boundary (a field's accent border, an outline
+    // everywhere else) and icon ink. The focus HALO (--ring) paints only a 35% mix and is a
+    // redundant echo around that boundary, never the indicator of record.
+    // Scored against all three surfaces a focus stop actually sits on (issue #137); --canvas is
+    // absent deliberately — it backs only the window/popover behind an opaque paper card, so no
+    // focus stop is ever drawn against it.
     ['accent', 'paper', NON_TEXT_FLOOR],
+    ['accent', 'sidebar', NON_TEXT_FLOOR],
+    ['accent', 'wash', NON_TEXT_FLOOR],
   ];
   // pairs the spec prohibits BECAUSE they fail the text floor; if a token change ever lifted
   // one above 4.5 the prohibition (and this table) would need a deliberate revisit
@@ -292,5 +312,111 @@ describe('reduced motion honored (design.html D10/A06)', () => {
     const media = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[^]*?\n\}/.exec(stylesCss);
     expect(media, 'no prefers-reduced-motion block in styles.css').not.toBeNull();
     expect(media?.[0]).toMatch(/transition-duration:\s*0\.01ms\s*!important|transition:\s*none/);
+  });
+});
+
+// ---- the declaration census: score what the CSS SAYS, not a hand-kept list ----------------
+// The contrast block above scores an ALLOWLIST of token pairs. That shape catches a SANCTIONED
+// pair drifting below its floor, and nothing else: a pairing nobody thought to list is invisible
+// to it. That hole is how a 1.89:1 focus ring shipped green (issue #137) — `rule-strong`-as-ring
+// simply was not on the table.
+//
+// The census inverts the direction of the check. Instead of asking "do the pairs I listed still
+// pass?", it reads the tokens a ROLE's declarations actually name out of every surface, then
+// requires that set to be exactly the set design.html sanctions for the role. A token the guard
+// has never heard of arrives as an extra census member and fails, instead of passing by omission.
+//
+// A role-specific check is then three moves: census the declarations that express the role,
+// assert the token set, and — where the role carries a contrast floor — add the resulting pairs
+// to the permitted table above so the floor is recomputed from the tokens file too.
+
+interface CensusHit {
+  readonly surface: string;
+  readonly selector: string;
+  readonly token: string;
+}
+
+/**
+ * Every `var(--token)` named by a matching property, inside the rules whose selector matches,
+ * across every surface. Both regexes must be NON-global: a /g regex carries `lastIndex` between
+ * `.test()` calls and would silently skip every other rule.
+ */
+const censusTokens = (selector: RegExp, property: RegExp): CensusHit[] => {
+  const hits: CensusHit[] = [];
+  for (const [surface, css] of surfaceCss()) {
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      const sel = rule[1]!.trim().replace(/\s+/g, ' ');
+      if (!selector.test(sel)) continue;
+      for (const declaration of rule[2]!.split(';')) {
+        const parsed = /^\s*([a-z-]+)\s*:([^]*)$/.exec(declaration);
+        // group 1 is the property, group 2 the value; a match guarantees both
+        if (!parsed || !property.test(parsed[1]!)) continue;
+        for (const use of parsed[2]!.matchAll(/var\(\s*(--[a-z0-9-]+)/g)) {
+          hits.push({ surface, selector: sel, token: use[1]! });
+        }
+      }
+    }
+  }
+  return hits;
+};
+
+describe('one focus idiom, reachable (design.html D13/A04, A02 — issue #137)', () => {
+  // Rules that style a FOCUSED ELEMENT: `:focus` and `:focus-visible`. `:focus-within` is
+  // excluded on purpose — it styles a CONTAINER around whatever is focused (an entry row
+  // revealing its ops bar), so its colours are ordinary chrome, not a focus indicator.
+  const FOCUS_RULE = /:focus(?:-visible)?\b(?!-)/;
+  // Every declaration that can draw the boundary. `outline`/`border` cover the shorthands.
+  const BOUNDARY = /^(?:outline|outline-color|border|border-color)$/;
+
+  it('every focus boundary, on every surface, is the one accent token', () => {
+    const hits = censusTokens(FOCUS_RULE, BOUNDARY);
+    // Guard-the-guard: an empty census satisfies the emptiness assertion below vacuously, so a
+    // selector regex that stopped matching would read as green. Ten hits stand today (the two
+    // styles.css rules plus each mockup's `.field:focus`); the floor is set below that so
+    // ordinary consolidation does not trip it, but a census that has gone blind does.
+    expect(hits.length, 'the focus census found (almost) nothing — it has gone blind').toBeGreaterThanOrEqual(8);
+    expect(
+      hits.some((h) => h.surface === 'packages/gui/renderer/styles.css'),
+      'the SHIPPED renderer contributed no focus boundary — only the mockups were scanned',
+    ).toBe(true);
+
+    const offenders = hits
+      .filter((h) => h.token !== '--accent')
+      .map((h) => `${h.surface}: ${h.selector} → ${h.token}`);
+    // D13 names one idiom, and A02 puts a 3:1 floor under it. Only the full-strength accent
+    // clears that floor on paper/sidebar/wash (scored in the contrast block above); every other
+    // candidate the app has reached for — `rule-strong` at 1.89:1 — cannot.
+    expect(offenders, 'D13 names ONE focus idiom: the accent boundary + the 3px ring').toEqual([]);
+  });
+
+  it('styles.css declares outline only on the focus rule, so nothing can outrank the boundary', () => {
+    const css = stylesCss.replace(/\/\*[^]*?\*\//g, '');
+    const strays: string[] = [];
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      const sel = rule[1]!.trim().replace(/\s+/g, ' ');
+      if (FOCUS_RULE.test(sel)) continue;
+      if (/(?:^|[;{])\s*outline\s*:/.test(rule[2]!)) strays.push(sel);
+    }
+    // A02 rests on this. An outline cannot be outranked by a more specific component rule the
+    // way a border can — `.start-form input[type="text"]` beats `input:focus-visible`, which is
+    // how the accent border D13 asks for silently lost the cascade and never painted (#137). A
+    // component rule reaching for `outline` would put the boundary back in play.
+    expect(strays, 'outline declared outside the focus rule').toEqual([]);
+  });
+
+  it('the D13 ring is reachable — it paints under :focus-visible', () => {
+    const rings = censusTokens(/:focus-visible\b/, /^box-shadow$/);
+    expect(
+      rings.some((h) => h.token === '--ring' && h.surface === 'packages/gui/renderer/styles.css'),
+      'the shipped app never paints --ring under a selector a browser can match',
+    ).toBe(true);
+    // Issue #137 treatment C: `--ring` hung off `:focus:not(:focus-visible)`. Chromium matches
+    // `:focus-visible` on a text control for a MOUSE click too, so the negation never held for
+    // the controls it targeted and the specified idiom never painted at all. The selector is
+    // banned outright rather than merely unused — it reads as a focus rule and is dead code.
+    // Scanned comment-free: the doctrine comment at the fix site names the dead selector.
+    expect(stylesCss.replace(/\/\*[^]*?\*\//g, '')).not.toMatch(/:focus:not\(:focus-visible\)/);
   });
 });
