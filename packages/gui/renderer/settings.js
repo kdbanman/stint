@@ -380,9 +380,11 @@
     return `${(kb / 1024).toFixed(1)} MB`;
   }
 
-  // A local date+time stamp honouring the live date-format mode (ISO 24h vs system locale) —
-  // the same mode the §14 date-format control drives, so backups read consistently with the app.
-  function backupStamp(iso) {
+  // A human, local date+time label honouring the live date-format mode (ISO 24h vs system locale)
+  // — the same mode the §14 date-format control drives, so backups read consistently with the app.
+  // Display only, and deliberately NOT core's `backupStamp`, which is the filename-safe UTC token
+  // a backup file is named by: one name, one representation.
+  function backupLabel(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '—';
     if (dateFormatMode === 'iso') {
@@ -416,7 +418,7 @@
     const retention = settings.backupRetention || 5;
     const last = state && state.lastBackupUtc;
     const lastLine = last
-      ? `<span class="ver">${esc(backupStamp(last))}</span>` +
+      ? `<span class="ver">${esc(backupLabel(last))}</span>` +
         `<span class="ok" role="status"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg>verified</span>`
       : `<span class="set-empty">No backups yet — Stint backs up automatically on launch.</span>`;
     const retSelect =
@@ -434,7 +436,7 @@
             (b) =>
               `<div class="backup-item" data-name="${esc(b.name)}">` +
               `<span class="backup-id"><span class="backup-name">${esc(b.name)}</span>` +
-              `<span class="backup-meta">${esc(backupStamp(b.createdUtc))} · ${esc(fmtBytes(b.sizeBytes))}</span></span>` +
+              `<span class="backup-meta">${esc(backupLabel(b.createdUtc))} · ${esc(fmtBytes(b.sizeBytes))}</span></span>` +
               `<button type="button" class="set-update-btn backup-restore" data-name="${esc(b.name)}">` +
               `<svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore…</button>` +
               `</div>`,
