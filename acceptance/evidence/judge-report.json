@@ -54,7 +54,7 @@
     {
       "item": "TIMER_VIEW",
       "pass": true,
-      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false)",
+      "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false); attribute-vs-advisory paint {\"attrShown\":true,\"flagShown\":true,\"attrText\":\"billable\",\"flagText\":\"slept\",\"attrColor\":\"rgb(99, 99, 94)\",\"attrBg\":\"rgba(0, 0, 0, 0)\",\"attrBorderWidth\":\"0px\",\"attrRadius\":\"0px\",\"flagPaint\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"flagRadius\":\"999px\",\"flagTriple\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"muted\":\"rgb(99, 99, 94)\",\"accent\":\"rgb(229, 77, 46)\",\"accentSolid\":\"rgb(209, 52, 21)\",\"accentWeak\":\"rgb(254, 235, 231)\"}",
       "screenshot": "timer-view-full.png"
     },
     {
@@ -148,6 +148,12 @@
       "screenshot": "main-split.png"
     },
     {
+      "item": "INLINE_GATE_CONTAINMENT",
+      "pass": true,
+      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/124\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/124\"}",
+      "screenshot": "main-inline-gate.png"
+    },
+    {
       "item": "WRITE_REJECTION_FEEDBACK",
       "pass": true,
       "justification": "edit-save={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"entry end must be after its start\",\"notWritten\":true} split={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"split point must be strictly inside the entry span\",\"notWritten\":true} rename={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"a client named that already exists\",\"notWritten\":true} toggle={\"timerShown\":true,\"timerAnnounced\":true,\"message\":\"stop time is before the entry started\",\"bannerMirrors\":true} copy-reads-clean=true",
@@ -204,7 +210,7 @@
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
-      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[],\"unnamedIconButtons\":[]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}; rename/archive writes render each record exactly once (issue #66, no duplicate data-id): {\"clientCount\":2,\"projectCount\":3,\"tagCount\":2,\"clientNames\":[\"Acme Corp\",\"Initech\"],\"tagNames\":[\"deep\",\"billing\"],\"dupClientIds\":[],\"dupProjectIds\":[],\"dupTagIds\":[]}; empty reference data instructs (No clients yet / No tags yet): {\"clientsText\":\"No clients yetAdd a client, or run tt client add.\",\"tagsText\":\"No tags yetAdd a tag, or run tt tag add.\",\"clientRows\":0,\"tagRows\":0}",
+      "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[],\"unnamedIconButtons\":[]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}; rename/archive writes render each record exactly once (issue #66, no duplicate data-id): {\"clientCount\":2,\"projectCount\":3,\"tagCount\":2,\"clientNames\":[\"Acme Corp\",\"Initech\"],\"tagNames\":[\"deep\",\"billing\"],\"dupClientIds\":[],\"dupProjectIds\":[],\"dupTagIds\":[]}; empty reference data instructs (No clients yet / No tags yet): {\"clientsText\":\"No clients yetAdd a client, or run tt client add.\",\"tagsText\":\"No tags yetAdd a tag, or run tt tag add.\",\"clientRows\":0,\"tagRows\":0}; the Tab-walk over the archived-inclusive view advances in reading order, measured against the view's own box so a scroll cannot fake a backwards step (issue 161): {\"stopCount\":24,\"backwards\":[],\"firstStop\":\"show-archived[Hide archived]\",\"lastStop\":\"restore-tag[Restore]\"}",
       "screenshot": "main-clients.png"
     },
     {
@@ -258,7 +264,7 @@
     {
       "item": "CALENDAR_ENTRY_BLOCK",
       "pass": true,
-      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":null},{\"dy\":12,\"intoEntry\":false,\"tag\":null}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 772->772 (delta 0px), block 767->767 (delta 0px)",
+      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 629->629 (delta 0px), block 624->624 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
@@ -328,9 +334,15 @@
       "screenshot": "field-labels-timer.png"
     },
     {
+      "item": "FIELD_CHROME",
+      "pass": true,
+      "justification": "D13/D07 sweep over 29 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=8): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
+      "screenshot": "field-chrome-search-focus.png"
+    },
+    {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 322 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=12, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=35, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[#search 185x21 (25px clear); #search 185x21 (38.4px clear); button.ef-times-toggle 171.9x14 (53px clear)]",
+      "justification": "A03 sweep over 322 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=12, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=35, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[button.ef-times-toggle 171.9x14 (53px clear)]",
       "screenshot": "main-target-size.png"
     },
     {
