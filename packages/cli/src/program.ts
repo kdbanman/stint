@@ -229,13 +229,9 @@ export function buildProgram(deps: Deps): Command {
           if (attrs.billable !== undefined) overrides.billable = attrs.billable;
           if (opts.tag && opts.tag.length) overrides.tags = attrs.tags;
           if (opts.at) overrides.atUtc = parseTime(opts.at, now());
-          try {
-            const res = store.startFromFavorite(opts.fav, overrides);
-            printWarnings(io, res.warnings);
-            io.out(statusLine(res.value));
-          } catch (err) {
-            throw new CliError((err as Error).message);
-          }
+          const res = store.startFromFavorite(opts.fav, overrides);
+          printWarnings(io, res.warnings);
+          io.out(statusLine(res.value));
           return;
         }
         const attrs = resolveAttributes(store, opts);
@@ -614,12 +610,8 @@ export function buildProgram(deps: Deps): Command {
     .action((name: string, opts) => {
       withStore((store) => {
         const input = buildSavedReportInput(store, name, opts, now());
-        try {
-          const def = store.saveReport(input);
-          io.out(`saved report "${def.name}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        const def = store.saveReport(input);
+        io.out(`saved report "${def.name}"`);
       });
     });
   report
@@ -686,12 +678,8 @@ export function buildProgram(deps: Deps): Command {
         const existing = store.getReport(name);
         if (!existing) throw new CliError(`no saved report named "${name}"`);
         const patch = buildSavedReportPatch(store, opts, now());
-        try {
-          store.editReport(name, patch);
-          io.out(`edited report "${name}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        store.editReport(name, patch);
+        io.out(`edited report "${name}"`);
       });
     });
   report
@@ -701,12 +689,8 @@ export function buildProgram(deps: Deps): Command {
     .argument('<newName>', 'new name')
     .action((name: string, newName: string) =>
       withStore((store) => {
-        try {
-          store.renameReport(name, newName);
-          io.out(`renamed report to "${newName}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        store.renameReport(name, newName);
+        io.out(`renamed report to "${newName}"`);
       }),
     );
   report
@@ -715,12 +699,8 @@ export function buildProgram(deps: Deps): Command {
     .argument('<name>', 'saved report name')
     .action((name: string) =>
       withStore((store) => {
-        try {
-          store.removeReport(name);
-          io.out(`deleted report "${name}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        store.removeReport(name);
+        io.out(`deleted report "${name}"`);
       }),
     );
   report
@@ -989,12 +969,8 @@ export function buildProgram(deps: Deps): Command {
           template.tags = attrs.tags;
           if (attrs.billable !== undefined) template.billable = attrs.billable;
         }
-        try {
-          const created = store.pinFavorite(template);
-          io.out(`pinned favorite "${created.name}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        const created = store.pinFavorite(template);
+        io.out(`pinned favorite "${created.name}"`);
       });
     });
   fav
@@ -1006,13 +982,9 @@ export function buildProgram(deps: Deps): Command {
         // §05 R10 — resume from a favorite: a FRESH entry from the template (core delegates to
         // start, so it atomically closes any open entry and inherits the overlap warning). The
         // favorite is never mutated. Parity with the GUI rail's Resume + `tt start --fav`.
-        try {
-          const res = store.startFromFavorite(name);
-          printWarnings(io, res.warnings);
-          io.out(statusLine(res.value));
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        const res = store.startFromFavorite(name);
+        printWarnings(io, res.warnings);
+        io.out(statusLine(res.value));
       });
     });
   fav
@@ -1055,12 +1027,8 @@ export function buildProgram(deps: Deps): Command {
     .argument('<name>', 'new name')
     .action((ref: string, name: string) =>
       withStore((store) => {
-        try {
-          store.renameFavorite(/^\d+$/.test(ref) ? Number(ref) : ref, name);
-          io.out(`renamed favorite to "${name}"`);
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        store.renameFavorite(/^\d+$/.test(ref) ? Number(ref) : ref, name);
+        io.out(`renamed favorite to "${name}"`);
       }),
     );
   fav
@@ -1069,12 +1037,8 @@ export function buildProgram(deps: Deps): Command {
     .argument('<ref>', 'favorite name or id')
     .action((ref: string) =>
       withStore((store) => {
-        try {
-          store.unpinFavorite(/^\d+$/.test(ref) ? Number(ref) : ref);
-          io.out('unpinned');
-        } catch (err) {
-          throw new CliError((err as Error).message);
-        }
+        store.unpinFavorite(/^\d+$/.test(ref) ? Number(ref) : ref);
+        io.out('unpinned');
       }),
     );
 
@@ -1133,6 +1097,17 @@ export function buildProgram(deps: Deps): Command {
           const r = store.restoreFromBackup(name);
           io.out(`restored from ${r.recoveredFrom}; previous file set aside at ${r.quarantinedTo}`);
         } catch (err) {
+          // #169 — one of only two remaining mid-stack remaps (engineering.html §04 maps at
+          // bin.ts). It earns its place by normalising a type bin.ts does not know: alongside
+          // StoreError this path throws RecoveryError (core/src/backup.ts), which would fall
+          // to bin.ts's default arm — exit 1 with an `error: ` prefix — splitting one
+          // user-facing failure ("that restore did not happen") across two contracts. Store
+          // re-checks the name before closing the handle, so RecoveryError surfaces only when
+          // a concurrent retention prune removes the file between that check and backup.ts's
+          // own lookup; that window is why the remap stays, and it is also why no fixed input
+          // reaches the arm (the GOLD case beside it pins the contract, not this branch).
+          // `as Error`: every throw reaching here is an Error subclass — StoreError,
+          // RecoveryError, or a node fs Error from the rename/copy.
           throw new CliError((err as Error).message);
         }
       }),
@@ -1398,6 +1373,11 @@ function applySetting(store: Store, key: string, value: string): void {
     // positive minutes, week-start domain).
     store.setSetting(d.key, parsed as never);
   } catch (err) {
+    // #169 — the other of the two remaining mid-stack remaps (engineering.html §04 maps at
+    // bin.ts). writeSetting rejects a bad value with a BARE `Error` (core/src/settings.ts),
+    // which bin.ts would map to exit 1 with an `error: ` prefix; a rejected setting is a
+    // usage error like the two rejections above it, so it is normalised to the same exit 2.
+    // `as Error`: settings.ts's descriptor validation throws only `Error`s.
     throw new CliError((err as Error).message);
   }
 }
