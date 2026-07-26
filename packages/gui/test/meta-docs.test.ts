@@ -9,11 +9,15 @@
  * bind-two-homes pattern (parity.test.ts / build-matrix.test.ts / cli.test.ts) to the
  * CHECKABLE half of that meta-layer, by static inspection of the two docs (no build/network):
  *
- *   1. context/prd.html contains NO status-marker markup — the §81 badge deletion holds, so a
+ *   1. context/prd.html contains NO status-marker markup — the #81 badge deletion holds, so a
  *      re-introduced `<span class="st …">implemented|partial|todo</span>` (or its CSS/legend)
  *      FAILS CI instead of quietly returning as spec-looking status.
  *   2. Every STRUCTURED file path COVERAGE.md cites exists in the tree — a dangling proof-map
  *      reference (a renamed or deleted test) FAILS CI.
+ *   3. The MANUAL runbook holds exactly the process.html §05 live residue, and every mirror it
+ *      names is real (issue #129 — the runbook narrated 1,678 lines of procedure CI already
+ *      covers). Each procedure declares the §05 row it serves, both directions; every file path
+ *      and JUDGE scene id the runbook cites resolves.
  *
  * It only pins the mechanical facts. The "gap" vs "covered" judgment, and the prose that still
  * narrates implementation status, stay human — the requirements↔implementation sync assessment
@@ -28,9 +32,10 @@ const repoRoot = fileURLToPath(new URL('../../../', import.meta.url));
 const read = (rel: string): string => readFileSync(join(repoRoot, rel), 'utf8');
 
 const prd = read('context/prd.html');
+const process_ = read('context/process.html');
 const coverage = read('acceptance/criteria/COVERAGE.md');
 
-describe('GOLD — prd.html carries no implementation-status markers (§81)', () => {
+describe('GOLD — prd.html carries no implementation-status markers (#81)', () => {
   it('has no status-marker span markup', () => {
     // The deleted badge shape was `<span class="st st-done">implemented</span>` (also
     // st-partial / st-todo, and the bare "done" text). Any survivor or re-introduction:
@@ -90,19 +95,24 @@ const PATH_EXT = /\.(?:ts|tsx|js|jsx|mjs|cjs|feature|json|md|sh|html|yml|yaml)$/
  * The `VAR = path` assignment form (e.g. "CLI_REL = packages/cli/dist/bin.js") is unwrapped
  * to its path first.
  */
-const citations = new Set<string>();
-for (const raw of coverage.match(/`[^`]+`/g) ?? []) {
-  let t = raw.slice(1, -1).trim();
-  const assigned = /^[A-Za-z_]\w*\s*=\s*(\S+)$/.exec(t);
-  if (assigned) t = assigned[1] ?? t;
-  if (!PATH_EXT.test(t)) continue;
-  if (!t.includes('/')) continue;
-  if (t.includes('*')) continue;
-  if (t.includes('/dist/') || t.includes('/dist-pack/')) continue;
-  citations.add(t);
-}
+const pathCitations = (md: string): Set<string> => {
+  const found = new Set<string>();
+  for (const raw of md.match(/`[^`]+`/g) ?? []) {
+    let t = raw.slice(1, -1).trim();
+    const assigned = /^[A-Za-z_]\w*\s*=\s*(\S+)$/.exec(t);
+    if (assigned) t = assigned[1] ?? t;
+    if (!PATH_EXT.test(t)) continue;
+    if (!t.includes('/')) continue;
+    if (t.includes('*')) continue;
+    if (t.includes('/dist/') || t.includes('/dist-pack/')) continue;
+    found.add(t);
+  }
+  return found;
+};
 
-describe('GOLD — every file path COVERAGE.md cites exists in the tree (§81)', () => {
+const citations = pathCitations(coverage);
+
+describe('GOLD — every file path COVERAGE.md cites exists in the tree (#81)', () => {
   it('has no dangling proof-map references', () => {
     const dangling = [...citations].filter((c) => !existsInTree(c)).sort();
     expect(dangling).toEqual([]);
@@ -111,6 +121,101 @@ describe('GOLD — every file path COVERAGE.md cites exists in the tree (§81)',
   it('extracted a meaningful set of citations (the extractor is not silently empty)', () => {
     // Guards the guard: a regex that stopped matching would make the check above vacuous.
     expect(citations.size).toBeGreaterThan(50);
+  });
+});
+
+/**
+ * GOLD — the MANUAL runbook holds exactly the §05 live residue, and its mirrors are real
+ * (issue #129).
+ *
+ * process.html §05's boundary rule: a check is manual ONLY where headless CI physically cannot
+ * reach. The runbook drifted to 1,683 lines by narrating procedures whose JUDGE/GOLD/BDD mirrors
+ * already run on the PR path — a second home for a fact CI owns (§04), and a document long enough
+ * that a manual pass skims it, which is the manual layer's false green. Three binds, all static:
+ *
+ *   1. Every procedure declares one `**§05 residue row —** <row>` naming a row that exists
+ *      VERBATIM in process.html's "Manual — the live residue" table, and every row in that
+ *      table is claimed by at least one procedure. Both directions, so neither a re-introduced
+ *      off-residue procedure nor a newly-added §05 row without a procedure can pass.
+ *   2. Every JUDGE scene id the runbook cites exists in the rubric — the retired-procedure table
+ *      points at scenes by id, and a renamed scene would dangle the pointer that replaced a
+ *      deleted procedure (the exact way this fix could rot into the false green it removed).
+ *   3. Every structured file path it cites exists, the same check COVERAGE.md gets above.
+ */
+const runbook = read('acceptance/criteria/manual/runbook.md');
+const rubric = read('acceptance/criteria/judge-rubric.md');
+
+/** The `<td data-l="check">…</td>` cells of process.html's "Manual — the live residue" table. */
+const residueRows = ((): string[] => {
+  const table = /Manual — the live residue[\s\S]*?<\/table>/.exec(process_)?.[0] ?? '';
+  return [...table.matchAll(/<td data-l="check">([\s\S]*?)<\/td>/g)].map((m) =>
+    (m[1] ?? '').replace(/<[^>]+>/g, '').trim(),
+  );
+})();
+
+/** Each `## CHECK …` procedure paired with the §05 row it declares (null when it declares none). */
+const procedures = ((): { heading: string; row: string | null }[] => {
+  const out: { heading: string; row: string | null }[] = [];
+  // Split on the procedure headings; the retired-procedure table lives under an `##` of its own
+  // and declares no row, so it is excluded by the `CHECK ` prefix.
+  const parts = runbook.split(/^## /m).slice(1);
+  for (const part of parts) {
+    const heading = (part.split('\n', 1)[0] ?? '').trim();
+    if (!heading.startsWith('CHECK ')) continue;
+    const declared = /^\*\*§05 residue row —\*\* (.+)$/m.exec(part);
+    out.push({ heading, row: declared?.[1]?.trim() ?? null });
+  }
+  return out;
+})();
+
+const rubricIds = new Set(
+  [...rubric.matchAll(/^\| `([A-Z][A-Z0-9_]*)`/gm)].map((m) => m[1] as string),
+);
+
+describe('GOLD — the MANUAL runbook holds exactly the §05 live residue (#129)', () => {
+  it('read both sides (neither the §05 table nor the procedure list is silently empty)', () => {
+    expect(residueRows.length).toBeGreaterThan(0);
+    expect(procedures.length).toBeGreaterThan(0);
+    expect(rubricIds.size).toBeGreaterThan(20);
+  });
+
+  it('every procedure declares a §05 residue row', () => {
+    const undeclared = procedures.filter((p) => p.row === null).map((p) => p.heading);
+    expect(undeclared).toEqual([]);
+  });
+
+  it('every declared row is a real row of the §05 residue table', () => {
+    const known = new Set(residueRows);
+    const unknown = procedures
+      .filter((p) => p.row !== null && !known.has(p.row))
+      .map((p) => `${p.heading} → ${p.row ?? ''}`);
+    expect(unknown).toEqual([]);
+  });
+
+  it('every §05 residue row has a procedure', () => {
+    const claimed = new Set(procedures.map((p) => p.row));
+    expect(residueRows.filter((r) => !claimed.has(r))).toEqual([]);
+  });
+
+  it('every JUDGE scene id the runbook cites exists in the rubric', () => {
+    // Backticked SHOUT_CASE tokens are scene ids, save the two source identifiers the install
+    // procedure names. Kept as an explicit exception (the NOT_SKILLS pattern below) so a THIRD
+    // such token has to be added deliberately — the moment to check it isn't a dangling scene.
+    const NOT_SCENES = new Set(['APP_VERSION', 'CLI_REL']);
+    const cited = new Set(
+      [...runbook.matchAll(/`([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+)`/g)]
+        .map((m) => m[1] as string)
+        .filter((c) => !NOT_SCENES.has(c)),
+    );
+    expect(cited.size).toBeGreaterThan(10);
+    expect([...cited].filter((c) => !rubricIds.has(c)).sort()).toEqual([]);
+  });
+
+  it('every file path the runbook cites exists in the tree', () => {
+    // `…/stint/tt-launcher.sh` and friends are elided install locations, not repo paths.
+    const cites = [...pathCitations(runbook)].filter((c) => !c.includes('…'));
+    expect(cites.length).toBeGreaterThan(20);
+    expect(cites.filter((c) => !existsInTree(c)).sort()).toEqual([]);
   });
 });
 
@@ -238,7 +343,6 @@ const skillDirs = readdirSync(join(repoRoot, SKILLS_DIR), { withFileTypes: true 
   .filter((e) => e.isDirectory())
   .map((e) => e.name)
   .sort();
-const process_ = read('context/process.html');
 
 describe('GOLD — .claude/skills and process.html name the same skills (#133)', () => {
   it('found the skill set (the reader is not silently empty)', () => {

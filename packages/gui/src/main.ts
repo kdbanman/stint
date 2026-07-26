@@ -28,7 +28,6 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
-  SchemaTooNewError,
   resolveDbPath,
   toUtc,
   formatDuration,
@@ -41,6 +40,7 @@ import { CHANNELS, type UpdateProgress } from './ipc.js';
 import { createIpcHandlers } from './ipc-handlers.js';
 import { toggleTimer } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
+import { schemaSkewRefusal } from './schemaskew.js';
 import {
   currentVersion,
   checkForUpdates,
@@ -479,12 +479,13 @@ function init(): void {
     store = Store.open({ path: dbPath });
   } catch (err) {
     // §20 R09 — a database stamped by a NEWER Stint is refused before any write (nothing
-    // beyond the database header is read);
-    // surface the actionable message (both versions + "run the newer binary") and exit
-    // non-zero. ONLY this error is caught: every other open failure (DbOpenError,
-    // RecoveryError, …) must stay exactly as loud as before.
-    if (err instanceof SchemaTooNewError) {
-      dialog.showErrorBox('Database is newer than this version of Stint', err.message);
+    // beyond the database header is read); surface the actionable message (both versions +
+    // "run the newer binary" + the refused path) and exit non-zero. schemaSkewRefusal returns
+    // null for every other open failure (DbOpenError, RecoveryError, …), which then stays
+    // exactly as loud as before.
+    const refusal = schemaSkewRefusal(err);
+    if (refusal) {
+      dialog.showErrorBox(refusal.title, refusal.detail);
       app.exit(1);
       return;
     }

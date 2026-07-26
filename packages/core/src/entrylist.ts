@@ -9,14 +9,7 @@
  * resolved fields, and bucketing the surviving entries by the chosen grouping.
  */
 import type { EntryView } from './types.js';
-import { groupInto, sortedGroups, localDay } from './report.js';
-
-/**
- * How the Entries view buckets its rows. The same four groupings the report's
- * Group-by control offers (§09 R2), reusing the report's GroupBy vocabulary: 'day'
- * (the renderer's default, newest-first), and client / project / tag.
- */
-export type EntryGroupBy = 'day' | 'client' | 'project' | 'tag';
+import { groupInto, sortedGroups, groupKeysOf, type GroupBy } from './report.js';
 
 /** One grouped bucket: the group key and the entries that fall under it. */
 export interface EntryGroup {
@@ -43,38 +36,16 @@ export function matchesQuery(e: EntryView, query: string): boolean {
   return haystacks.some((h) => h != null && h.toLowerCase().includes(q));
 }
 
-/** The group key(s) an entry falls under for a given grouping (tags fan out). */
-function keysOf(e: EntryView, by: EntryGroupBy): string[] {
-  switch (by) {
-    case 'day':
-      return [localDay(e.startUtc)];
-    case 'client':
-      return [e.clientName ?? '(no client)'];
-    case 'project':
-      return [e.projectName ?? '(no project)'];
-    case 'tag':
-      // An entry with multiple tags lands in each of its tag groups (and untagged once),
-      // exactly like the report's by-tag grouping.
-      return e.tags.length > 0 ? e.tags : ['(untagged)'];
-    default:
-      // Issue #55: a missing/unknown grouping is a caller bug (`by` is required on every
-      // list query). Fail loudly with a clear message instead of falling through to
-      // undefined — which used to surface as an opaque "keysOf … is not iterable"
-      // TypeError deep inside groupInto.
-      throw new Error(
-        `unknown entry grouping '${String(by)}' — expected 'day', 'client', 'project' or 'tag'`,
-      );
-  }
-}
-
 /**
  * Bucket entries by the chosen grouping. Day groups sort DESC (newest day first,
  * matching the current renderer's day-grouped list); client / project / tag sort ASC
  * (locale-aware), reusing the report's sorted-group helper so the ordering rule lives
- * in one place. Tag grouping puts an entry under each of its tags (and '(untagged)').
+ * in one place. Keys come from the report's one `groupKeysOf` derivation, so the Entries
+ * view and the Reports view can never disagree on a bucket's name (issue #170) — tag
+ * grouping puts an entry under each of its tags, and untagged ones under `UNTAGGED`.
  */
-export function groupEntries(entries: EntryView[], by: EntryGroupBy): EntryGroup[] {
-  const sorted = sortedGroups(groupInto(entries, (e) => keysOf(e, by)));
+export function groupEntries(entries: EntryView[], by: GroupBy): EntryGroup[] {
+  const sorted = sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by)));
   if (by === 'day') sorted.reverse(); // newest day first
   return sorted.map(([key, es]) => ({ key, entries: es }));
 }
@@ -87,7 +58,7 @@ export function groupEntries(entries: EntryView[], by: EntryGroupBy): EntryGroup
  */
 export function buildEntryList(
   entries: EntryView[],
-  opts: { by: EntryGroupBy; query?: string },
+  opts: { by: GroupBy; query?: string },
 ): EntryList {
   const matched = opts.query ? entries.filter((e) => matchesQuery(e, opts.query!)) : entries;
   return {

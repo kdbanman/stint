@@ -10,8 +10,26 @@ import type { EntryView } from './types.js';
 import type { WeekStart } from './settings.js';
 import { toUtc } from './time.js';
 
+/**
+ * The ONE grouping vocabulary (PRD §09 R2), shared by the report, the Entries-view list
+ * (entrylist.ts), saved reports, `tt report --by` and the GUI's list query. One canonical
+ * term, no synonyms (glossary.html) — a second declaration of the same four groupings under
+ * a second name is what issue #170 removed: adding a fifth grouping used to compile clean
+ * and leave the Entries view unable to express it. It is now a compile error everywhere.
+ */
 export type GroupBy = 'client' | 'project' | 'day' | 'tag';
 export type BillableFilter = 'billable' | 'all' | 'non-billable';
+
+// The placeholder bucket labels for entries a grouping cannot key: no client, no project, no
+// tags. Exported constants with ONE definition each, because both grouping surfaces paint the
+// same buckets and a magic string re-typed per file lets the Reports view and the Entries view
+// disagree on a bucket's name with nothing red (issue #170).
+/** The bucket an entry with no client falls under. */
+export const NO_CLIENT = '(no client)';
+/** The bucket an entry with no project falls under. */
+export const NO_PROJECT = '(no project)';
+/** The bucket an entry with no tags falls under. */
+export const UNTAGGED = '(untagged)';
 
 export interface ReportOptions {
   by: GroupBy;
@@ -182,21 +200,11 @@ export function buildReport(
   const overlapped = detectOverlaps(allInRange, now);
   const entries = filterByBillable(allInRange, opts.billableFilter);
 
-  let lines: ReportLine[];
-  switch (opts.by) {
-    case 'client':
-      lines = groupByClientProject(entries, opts);
-      break;
-    case 'project':
-      lines = groupBy(entries, opts, (e) => e.projectName ?? '(no project)');
-      break;
-    case 'day':
-      lines = groupBy(entries, opts, (e) => localDay(e.startUtc));
-      break;
-    case 'tag':
-      lines = groupByTag(entries, opts);
-      break;
-  }
+  // 'client' is the only NESTED grouping (client → project children); every other grouping is
+  // flat and keyed by the one `groupKeysOf` derivation, so there is no second switch over the
+  // vocabulary to keep in step with it (issue #170).
+  const lines =
+    opts.by === 'client' ? groupByClientProject(entries, opts) : groupByKeys(entries, opts, opts.by);
 
   const grandTotalSeconds = entries.reduce((s, e) => s + e.billableSeconds, 0);
   const grandRoundedSeconds = lines.reduce((s, l) => s + l.roundedSeconds, 0);
@@ -257,25 +265,44 @@ export function sortedGroups<T>(map: Map<string, T[]>): [string, T[]][] {
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0]));
 }
 
-/** A grouped map's entries, ordered by key (stable, locale-aware). */
-function sortedEntries<T>(map: Map<string, T[]>): [string, T[]][] {
-  return sortedGroups(map);
+/**
+ * The group key(s) an entry falls under for a grouping — the ONE key derivation behind every
+ * grouped surface (the report's lines below, and the Entries view's buckets in entrylist.ts).
+ * Tags FAN OUT: an entry with multiple tags lands in each of its tag groups, and an untagged
+ * one lands in `UNTAGGED` exactly once.
+ */
+export function groupKeysOf(e: EntryView, by: GroupBy): string[] {
+  switch (by) {
+    case 'day':
+      return [localDay(e.startUtc)];
+    case 'client':
+      return [e.clientName ?? NO_CLIENT];
+    case 'project':
+      return [e.projectName ?? NO_PROJECT];
+    case 'tag':
+      return e.tags.length > 0 ? e.tags : [UNTAGGED];
+    default:
+      // Issue #55: a missing/unknown grouping is a caller bug (`by` is required on every
+      // list query). Fail loudly with a clear message instead of falling through to
+      // undefined — which used to surface as an opaque "keysOf … is not iterable"
+      // TypeError deep inside groupInto.
+      throw new Error(
+        `unknown entry grouping '${String(by)}' — expected 'day', 'client', 'project' or 'tag'`,
+      );
+  }
 }
 
-function groupBy(
-  entries: EntryView[],
-  opts: ReportOptions,
-  keyOf: (e: EntryView) => string,
-): ReportLine[] {
-  return sortedEntries(groupInto(entries, (e) => [keyOf(e)])).map(([k, es]) =>
+/** One flat line per group key, ordered by key — the report shape of `groupKeysOf`. */
+function groupByKeys(entries: EntryView[], opts: ReportOptions, by: GroupBy): ReportLine[] {
+  return sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by))).map(([k, es]) =>
     makeLine(k, es, opts),
   );
 }
 
 function groupByClientProject(entries: EntryView[], opts: ReportOptions): ReportLine[] {
-  return sortedEntries(groupInto(entries, (e) => [e.clientName ?? '(no client)']))
+  return sortedGroups(groupInto(entries, (e) => groupKeysOf(e, 'client')))
     .map(([clientName, clientEntries]) => {
-      const children = groupBy(clientEntries, opts, (e) => e.projectName ?? '(no project)');
+      const children = groupByKeys(clientEntries, opts, 'project');
       // The client line's rounded total is the sum of its rounded project lines, so
       // rounding is applied to the billable line consistently at the leaf level.
       const roundedSeconds = children.reduce((s, c) => s + c.roundedSeconds, 0);
@@ -288,13 +315,6 @@ function groupByClientProject(entries: EntryView[], opts: ReportOptions): Report
         roundedSeconds,
       };
     });
-}
-
-function groupByTag(entries: EntryView[], opts: ReportOptions): ReportLine[] {
-  // An entry with multiple tags lands in each of its tag groups (and untagged once).
-  return sortedEntries(groupInto(entries, (e) => (e.tags.length > 0 ? e.tags : ['(untagged)']))).map(
-    ([k, es]) => makeLine(k, es, opts),
-  );
 }
 
 /** Resolve a named preset or explicit range to UTC bounds. */

@@ -438,7 +438,7 @@ CLICKABILITY     Every clickable text affordance carries the neutral button back
   <section id="s10">
     <div class="eyebrow"><span class="n">10</span> Sample — Manual / supervised checklist</div>
     <h2><span class="mc">MANUAL</span> the physical &amp; OS-level guarantees</h2>
-    <p>Real sleep/wake, the no-network promise, a real install/update, and a real corrupt-DB recovery can't be faked in CI. Setup is scripted as far as possible; an operator (human or agent with shell + GUI access on macOS or Linux) confirms each step and attaches evidence.</p>
+    <p>Real sleep/wake, a real desktop session, a real install/update, and live network traffic can't be faked in CI — and nothing else is manual (process.html §05 owns the inventory; <code>runbook.md</code> carries exactly it). Setup is scripted as far as possible; an operator (human or agent with shell + GUI access on macOS or Linux) confirms each step and attaches evidence.</p>
     <pre><span class="k">CHECK SLEEP-SPAN — second-accurate spans + working subtract</span>   <span class="c">(§10a, §17 R5)</span>
   1. tt start "deep work" --client "Client A"
   2. Record start. Sleep the machine:  systemctl suspend  (Linux) / pmset sleepnow (macOS)
@@ -447,13 +447,14 @@ CLICKABILITY     Every clickable text affordance carries the neutral button back
     (resume − suspend) matches the powerMonitor delta within 1s.
   ✓ `tt sleep subtract &lt;id&gt;` moves those seconds into excluded_seconds; reversible.
 
-<span class="k">CHECK BACKUP-ON-LAUNCH + CORRUPTION RECOVERY</span>                  <span class="c">(§17 R12, §20 R03–R05)</span>
-  1. Make a change, then relaunch.
-  ✓ A timestamped backup is written beside the DB; retention keeps the last 5.
-  2. Quit. Overwrite the DB file with garbage bytes (planted corruption). Relaunch.
-  ✓ The integrity check on open FAILS; the app does NOT write to the corrupt file.
-  ✓ The corrupt file is quarantined as `.corrupted`; the latest good backup is restored;
-    the user is informed. No entries are lost vs. the pre-corruption state.
+<span class="k">CHECK TRAY + GLOBAL HOTKEY</span>                                   <span class="c">(§12 R01/R02, §10b)</span>
+  1. Start and stop a timer; watch the tray/menu-bar glyph.
+  ✓ Idle shows two stacked bars, running a single fused block — visible without hovering.
+  2. Press the global hotkey from another application.
+  ✓ The timer toggles and the glyph flips with it; a single left-click on the tray opens
+    the compact popover only (no dropdown), a right-click at most a Quit-only OS menu.
+  3. Under a compressed cadence, wait for a check-in.
+  ✓ A real OS notification appears offering Stop / Keep going / the interval choices.
 
 <span class="k">CHECK INSTALL + IN-APP UPDATE</span>                               <span class="c">(§17 R13, §19 R02–R04)</span>
   1. Run the single installer (macOS .pkg / Linux install script) on a clean machine.
@@ -463,11 +464,13 @@ CLICKABILITY     Every clickable text affordance carries the neutral button back
   ✓ A newer GitHub release is detected; download + guided install completes (one-time
     Gatekeeper approval on macOS); the database is untouched; the running timer survives.
 
-<span class="k">CHECK NO NETWORK</span>                                             <span class="c">(§17 R9)</span>
-  1. Run the app + tt through a full session under a network monitor (lsof -i / ss).
-  ✓ Zero outbound connections EXCEPT the explicit, user-initiated update check
-    (Settings → Software Update); no telemetry/analytics path exists.</pre>
-    <p>The no-network check keeps a cheap <span class="mc">GOLD</span> backstop in CI — scanning the build's dependency tree and source for any networking import or outbound-request code path outside the single, user-initiated update-check module — so a regression is caught fast even though live-traffic confirmation stays manual.</p>
+<span class="k">CHECK SOFTWARE UPDATE — CHECK FOR UPDATES</span>                    <span class="c">(§19 R03, §17 R9)</span>
+  1. Settings → Software Update → Check now, with the network present.
+  ✓ The live GitHub Releases query reports up-to-date or update-available + a link;
+    the database mtime is unchanged (the check writes nothing).
+  2. Run the app + tt through the rest of the session under a network monitor (lsof -i / ss).
+  ✓ That check was the ONLY outbound connection; no telemetry/analytics path exists.</pre>
+    <p>The no-network check keeps a cheap <span class="mc">GOLD</span> backstop in CI — scanning the build's dependency tree and source for any networking import or outbound-request code path outside the single, user-initiated update-check module, and pinning Electron's <code>net</code> to that one call site — so a regression is caught fast even though live-traffic confirmation stays manual.</p>
   </section>
 
   <section id="s11">
