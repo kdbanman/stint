@@ -1960,6 +1960,10 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 8px 12px;
   min-width: 160px;
 }
+/* A disabled settings field greys ITSELF — muted on wash, the same treatment the unified form's
+   disabled select carries. A disabled control is design.html §07's recorded A01 exemption, so a
+   dim is legal here and only here; nothing around the field may borrow it. */
+.set-field:disabled { color: var(--muted); background: var(--wash); }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
    row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM") and
    tabular so the two times line up; they reuse the .set-field chrome via the shared class. */
@@ -1972,9 +1976,12 @@ body.popover { background: var(--canvas); margin: 0; }
 }
 .set-hhmm-sep { color: var(--muted); font-size: 13px; }
 /* §14 — a row whose control is inapplicable under the current mode (the Around span while the
-   picker window is working_hours) dims and stops interacting; the control itself also carries
-   `disabled`, this is the visual half. The dim never hides the row — it stays legible. */
-.set-row.off { opacity: 0.5; }
+   picker window is working_hours) marks the state on the row and stops its control interacting,
+   but the DIM rides on the `disabled` control alone (the .set-field:disabled rule above) — never
+   on the row. Dimming the row applied the control's exemption to everything beside it: `.set-k`
+   is ordinary readable text, and at the row's opacity 0.5 it composited to 3.19:1 against A01's
+   4.5:1 floor while the comment here claimed it "stays legible" (issue 155). The label keeps its
+   full --ink; the greyed select is what says the row is off. */
 .set-row.off .set-ctrl { pointer-events: none; }
 /* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }

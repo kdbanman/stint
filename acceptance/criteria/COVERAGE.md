@@ -1933,13 +1933,18 @@ timeline defaults, and the rejection scenarios (`working_hours_end 06:00`,
 (`timeline-window.png`, `acceptance/evidence/judge-report.json` ) proves the
 Settings → Timeline group renders/persists all four keys over the existing
 `setSetting` channel (Around disabled while the mode is `working_hours` ; the
-mode flip enables it) and that `SU.timelineWindow` — the ONE viewport derivation
-§12 R15/R16 consume (G16) — returns the exact windows for both modes under the
-pinned clock, and GOLD `gui/test/renderer-bundle.test.ts` pins the branches
-those two happy paths do not reach: the PER-FIELD HH:MM fallback (a stale `7:00`
-start defaults alone, the readable `15:00` end survives), an inverted or equal
-pair resetting BOTH edges to 07:00–18:00, the `picker_around_hours`
-integer-and-1–24 guard falling back to 8 (0 / 25 / 2.5 / absent), the day-edge
+mode flip enables it), that the disabled row's DIM sits on the control alone —
+its `.set-k` label measured as rendered, composited through the whole ancestor
+opacity chain, clears A01's 4.5:1 with no dimmed ancestor above it (issue 155;
+the row's old `opacity: 0.5` composited that label to 3.19:1, which no token
+check could see because no token was wrong) — and that `SU.timelineWindow` —
+the ONE viewport derivation §12 R15/R16 consume (G16) — returns the exact
+windows for both modes under the pinned clock, and GOLD
+`gui/test/renderer-bundle.test.ts` pins the branches those two happy paths do
+not reach: the PER-FIELD HH:MM fallback (a stale `7:00` start defaults alone,
+the readable `15:00` end survives), an inverted or equal pair resetting BOTH
+edges to 07:00–18:00, the `picker_around_hours` integer-and-1–24 guard falling
+back to 8 (0 / 25 / 2.5 / absent), the day-edge
 clamp (an around-now window at 00:30 or 23:30 meets 0 / 1440 instead of leaving
 the track), and an edited interval re-centering the window while KEEPING the
 mode's span (a running interval, `endUtc: null` , centering on its start) —

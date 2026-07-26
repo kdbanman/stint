@@ -5557,6 +5557,40 @@ async function sceneTimelineWindow(browser) {
       const end = panel.querySelector('input.set-hhmm[data-key="workingHoursEnd"]');
       const around = panel.querySelector('select[data-key="pickerAroundHours"]');
       const aroundRow = around ? around.closest('.set-row') : null;
+      // Issue 155 — the off row's LABEL, measured as rendered. The select is genuinely
+      // `disabled`, which is design.html §07's recorded A01 exemption; `.set-k` beside it is
+      // ordinary readable text and has no exemption to claim. The row used to carry the dim
+      // (`.set-row.off { opacity: 0.5 }`), which composited the label to 3.19:1 — a defect no
+      // token check could see, because no token was wrong: --ink on --paper is 16:1 and the
+      // ancestor was what darkened it. So this reads the label the way the audit did — its own
+      // colour composited through the WHOLE ancestor opacity chain, against the first opaque
+      // surface under it — and holds the result to A01's 4.5:1. Re-dimming the row anywhere up
+      // that chain reddens the row, and design-guard's token pairing keeps scoring the rest.
+      const label = aroundRow ? aroundRow.querySelector('.set-k') : null;
+      const dimmedBy = [];
+      let effOpacity = 1;
+      for (let n = label; n && n !== document.documentElement; n = n.parentElement) {
+        const o = parseFloat(getComputedStyle(n).opacity);
+        effOpacity *= o;
+        if (o !== 1) dimmedBy.push(`${n.className || n.tagName}@${o}`);
+      }
+      const rgb = (s) => s.match(/[\d.]+/g).slice(0, 3).map(Number);
+      let surface = [255, 255, 255];
+      for (let n = label; n; n = n.parentElement) {
+        const bg = getComputedStyle(n).backgroundColor;
+        if (bg && !/^rgba\(0, 0, 0, 0\)$|transparent/.test(bg)) {
+          surface = rgb(bg);
+          break;
+        }
+      }
+      const lum = (c) =>
+        c
+          .map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+          .reduce((a, ch, i) => a + [0.2126, 0.7152, 0.0722][i] * ch, 0);
+      const shown = label
+        ? rgb(getComputedStyle(label).color).map((c, i) => c * effOpacity + surface[i] * (1 - effOpacity))
+        : surface;
+      const [hi, lo] = [lum(shown), lum(surface)].sort((a, b) => b - a);
       return {
         allFour: ['workingHoursStart', 'workingHoursEnd', 'pickerWindowMode', 'pickerAroundHours'].every(
           (k) => keys.includes(k),
@@ -5565,6 +5599,8 @@ async function sceneTimelineWindow(browser) {
         endValue: end ? end.value : null,
         aroundDisabled: !!(around && around.disabled),
         aroundRowOff: !!(aroundRow && aroundRow.classList.contains('off')),
+        labelDimmedBy: dimmedBy,
+        labelContrast: label ? Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100 : 0,
       };
     });
 
@@ -5638,6 +5674,8 @@ async function sceneTimelineWindow(browser) {
       probe.endValue === '15:00' &&
       probe.aroundDisabled &&
       probe.aroundRowOff &&
+      probe.labelDimmedBy.length === 0 &&
+      probe.labelContrast >= 4.5 &&
       !!set &&
       set.key === 'pickerWindowMode' &&
       set.value === 'around_now' &&
@@ -5652,7 +5690,9 @@ async function sceneTimelineWindow(browser) {
       ok,
       `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
         `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
-        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}); mode flip fired ` +
+        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}) with its LABEL ` +
+        `undimmed (dimmed ancestors=[${probe.labelDimmedBy.join(', ') || 'none'}], as-rendered ` +
+        `contrast ${probe.labelContrast}:1 ≥ 4.5); mode flip fired ` +
         `setSetting=${JSON.stringify(set)} and enabled Around (${afterFlip.aroundEnabled}); ` +
         `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
         `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
