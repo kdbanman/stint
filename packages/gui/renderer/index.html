@@ -93,12 +93,13 @@
                 <label class="le-field le-start">Start
                   <span class="range-field">
                     <!-- §05 R06 / §12 R14 (G1): a RAW text field (localInputValue format,
-                         YYYY-MM-DDTHH:mm) — no native datetime-local popover. The calendar
+                         YYYY-MM-DD HH:mm:ss — the value the user retypes, so no `T` wire
+                         separator, issue 159) — no native datetime-local popover. The calendar
                          affordance is a DISCLOSURE toggle over the in-flow start-only picker
                          host below (no modal, no backdrop); editing the open row can never
                          write an end. -->
                     <input id="le-start" type="text" autocomplete="off" spellcheck="false"
-                           placeholder="YYYY-MM-DDTHH:mm" aria-label="Running timer start time" />
+                           placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Running timer start time" />
                     <button id="le-start-pick" type="button" class="range-pick-btn"
                             aria-expanded="false" aria-controls="le-start-disc"
                             aria-label="Adjust start on the day timeline"><svg class="ic" aria-hidden="true"><use href="#i-cal" /></svg></button>
@@ -210,9 +211,9 @@
                     <button type="button" id="add-times-toggle" class="ef-times-toggle" aria-expanded="false" aria-controls="add-times-body">Start / Stop (exact times)</button>
                     <div id="add-times-body" class="ef-times-body" hidden>
                       <label class="uf-field"><span>Start</span>
-                        <input id="add-from" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>
+                        <input id="add-from" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry start time" /></label>
                       <label class="uf-field"><span>Stop</span>
-                        <input id="add-to" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>
+                        <input id="add-to" class="uf-time" type="text" autocomplete="off" spellcheck="false" placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry stop time" /></label>
                     </div>
                   </div>
                 </div>
