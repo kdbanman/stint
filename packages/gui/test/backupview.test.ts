@@ -3,7 +3,7 @@
  * restore list + "Last backup" status all delegate to @stint/core (store.listBackups /
  * restoreFromBackup over the file-level backup module); this drives the Electron-free helpers
  * (the units main.ts's listBackups / restoreBackup IPC handlers wrap) against a FILE-BACKED
- * Store (backups live on disk beside the DB — `:memory:` has none) and proves: listBackups is a
+ * Store (backups live on disk beside the DB — `:memory:` has none) and proves: listBackupViews is a
  * faithful newest-first projection of the core BackupInfo, the size formatter is display-only,
  * and the restore selection resolves a chosen name or "latest" to the name core restores by — so
  * the rail reaches nothing `tt backup ls|restore` cannot.
@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { Store } from '@stint/core';
 import {
   backupToView,
-  listBackups,
+  listBackupViews,
   formatBackupSize,
   resolveRestoreSelection,
 } from '../src/backupview.js';
@@ -48,10 +48,10 @@ function seededWithBackup(now: Date): Store {
   return store;
 }
 
-describe('listBackups — newest-first renderer projection (§20 R04)', () => {
+describe('listBackupViews — newest-first renderer projection (§20 R04)', () => {
   it('projects the core BackupInfo to the renderer-safe view shape', () => {
     const store = seededWithBackup(new Date('2026-06-24T18:00:00Z'));
-    const views = listBackups(store);
+    const views = listBackupViews(store);
     expect(views.length).toBeGreaterThanOrEqual(1);
     const v = views[0]!;
     // The view mirrors core's BackupInfo exactly (no core import in the page).
@@ -86,14 +86,14 @@ describe('formatBackupSize — display-only humanizer (§20 R04)', () => {
 describe('resolveRestoreSelection — pick the name core restores by (§20 R05)', () => {
   it('resolves "latest" to the newest backup name', () => {
     const store = seededWithBackup(new Date('2026-06-24T18:00:00Z'));
-    const views = listBackups(store);
+    const views = listBackupViews(store);
     expect(resolveRestoreSelection(views, 'latest')).toBe(views[0]!.name);
     store.close();
   });
 
   it('resolves a chosen name to itself, and an unknown name to null', () => {
     const store = seededWithBackup(new Date('2026-06-24T18:00:00Z'));
-    const views = listBackups(store);
+    const views = listBackupViews(store);
     expect(resolveRestoreSelection(views, views[0]!.name)).toBe(views[0]!.name);
     expect(resolveRestoreSelection(views, 'no-such-backup')).toBeNull();
     store.close();
