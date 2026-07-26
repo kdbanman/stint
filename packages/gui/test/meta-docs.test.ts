@@ -115,6 +115,47 @@ describe('GOLD — every file path COVERAGE.md cites exists in the tree (§81)',
 });
 
 /**
+ * GOLD — the criteria docs stay line-diffable (issue #128).
+ *
+ * COVERAGE.md reached 177 KB in 97 physical lines, its longest line 53,141 characters, because
+ * every row was a table cell that grew without bound. A hand-maintained criteria document whose
+ * whole value is human review cannot be reviewed in that shape: a PR diff shows one changed
+ * line, a terminal shows a wall, and grep returns 50 KB. COVERAGE.md is now hard-wrapped prose;
+ * this pins the shape, so a re-flattened row FAILS CI instead of quietly returning.
+ *
+ * The cap is deliberately loose — a legitimate table row runs long, and this is a diffability
+ * floor, not a style rule. `judge-rubric.md` is the same table-of-multi-KB-cells shape and is
+ * NOT restructured here (#128 is scoped to COVERAGE.md); rather than exempt it, it carries a
+ * budget at today's longest line, so it can only get shorter.
+ */
+const CRITERIA_DIR = 'acceptance/criteria';
+const LINE_LIMIT = 500;
+const BUDGETS = new Map([['judge-rubric.md', 5640]]);
+
+describe('GOLD — acceptance/criteria/*.md stay line-diffable (#128)', () => {
+  const docs = readdirSync(join(repoRoot, CRITERIA_DIR), { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.md'))
+    .map((e) => e.name)
+    .sort();
+
+  it('found the criteria docs (the reader is not silently empty)', () => {
+    expect(docs).toContain('COVERAGE.md');
+    expect(docs.length).toBeGreaterThan(1);
+  });
+
+  it('no doc carries a line past its budget', () => {
+    const over = docs
+      .map((name) => {
+        const longest = Math.max(...read(`${CRITERIA_DIR}/${name}`).split('\n').map((l) => l.length));
+        return { name, longest, budget: BUDGETS.get(name) ?? LINE_LIMIT };
+      })
+      .filter((d) => d.longest > d.budget)
+      .map((d) => `${d.name}: longest line ${d.longest} > ${d.budget}`);
+    expect(over).toEqual([]);
+  });
+});
+
+/**
  * GOLD — the skill set and process.html name the same skills (issue #133).
  *
  * process.html §03/§06 specify the agentic process by naming its skills; the skills live in
