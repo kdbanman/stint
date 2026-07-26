@@ -7,7 +7,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { Store } from '@stint/core';
-import { nextTimerAction } from '../src/toggle.js';
+import { nextTimerAction, toggleTimer } from '../src/toggle.js';
 
 const NOW = '2026-06-24T18:00:00Z';
 const mem = () => Store.openMemory(() => new Date(NOW));
@@ -27,14 +27,10 @@ describe('nextTimerAction — the one toggle decision', () => {
   });
 });
 
-describe('the decision drives the real store the way the tray/hotkey would', () => {
-  /** Mirror main.ts toggleTimer against the core surface — no Electron needed. */
-  function toggle(store: Store): void {
-    const action = nextTimerAction(!!store.openEntry(), store.listEntries().length > 0);
-    if (action === 'stop') store.stop({});
-    else if (action === 'resume') store.resume();
-    else store.start({});
-  }
+describe('the decision drives the real store the way the hotkey/button would', () => {
+  // The shipping toggle itself (issue #165 — no local mirror of it here): its one Electron
+  // seam is the repaint, and a no-op repaint changes nothing it writes.
+  const toggle = (store: Store): void => void toggleTimer(store, () => {});
 
   it('first toggle on an empty database starts a timer', () => {
     const store = mem();

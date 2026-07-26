@@ -1,14 +1,16 @@
 /**
- * The shipping renderer↔main IPC handler map (PRD §12, §15) — extracted from main.ts so it
- * is pure, dependency-injected, and Electron-free, exactly like the QA-driver port it mirrors
- * (qa/driver.mjs `createHandlers`). Two things fall out of that shape (issue #87):
+ * The ONE renderer↔main IPC handler map (PRD §12, §15) — extracted from main.ts so it is
+ * pure, dependency-injected, and Electron-free. Three things fall out of that shape
+ * (issues #87, #165):
  *
  *   1. The map is typed `IpcHandlers` (ipc.ts) against the per-channel IpcContract, so a
  *      reshaped payload or a CHANNELS entry without a handler stops compiling — no more
  *      `Record<string, unknown>`, per-handler `as` casts, or non-null bind.
  *   2. It is importable without a running main process, so test/ipc-handlers.test.ts binds
- *      its key set to CHANNELS both directions — the guard the port already had, now on the
- *      original the port ports.
+ *      its key set to CHANNELS both directions.
+ *   3. The QA discovery driver (qa/driver.mjs) bridges its Chromium page with THIS map
+ *      rather than a hand-written port of it (#165), so a sweep can only ever repro against
+ *      the logic the app runs. Keep every handler Electron-free for that reason.
  *
  * Only the three genuinely OS-bound bits are injected (`deps`): the window refresh, the
  * native Save dialog, and the live global-hotkey rebind. Everything else — the shared core
@@ -25,8 +27,9 @@ import {
   type Store,
   type EntryGroupBy,
 } from '@stint/core';
-import type { IpcHandlers, ListEntriesQuery, EntryListView, WriteAck } from './ipc.js';
+import type { IpcHandlers, ListEntriesQuery, EntryListView } from './ipc.js';
 import { buildUiState } from './uistate.js';
+import { toggleTimer } from './toggle.js';
 import { startWithAttributes } from './start.js';
 import {
   buildReportView,
@@ -51,8 +54,6 @@ export interface IpcHandlerDeps {
   store: Store;
   /** Repaint every open window after a write (main.ts: updateTray + broadcast('changed')). */
   refreshAll: () => void;
-  /** The tray/hotkey timer toggle (PRD §12 R2); shared with main.ts's OS wiring, injected once. */
-  toggleTimer: () => WriteAck;
   /**
    * §09 R6 — show the native Save dialog for an export and return the chosen path (undefined if
    * canceled). The dialog + its parent window are Electron; the range resolution, byte rendering,
@@ -152,7 +153,9 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // A write IPC channel returns a WriteAck carrying the core write's warnings (PRD §06 R4:
     // overlap is allowed but flagged) so the renderer can surface an inline banner at the moment
     // of the edit. getState/report/list-style channels stay value-returning.
-    toggle: () => deps.toggleTimer(),
+    // PRD §12 R2 — the same toggle the tray click and the global hotkey fire (toggle.ts owns
+    // the decision and the write); main.ts binds those two to it directly.
+    toggle: () => toggleTimer(store, refreshAll),
     start: (payload) => {
       // The renderer's Start form supplies optional attributes (description, client, project,
       // tags, billable); resolve and forward them all (PRD §05 R1, §12 R1). A start can land on an

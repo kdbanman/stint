@@ -208,12 +208,11 @@
       </tbody>
     </table>
     <p>This is the humble-object discipline that keeps §03's quadrants clean: what can't run under vitest is kept too thin to hide a decision.</p>
-    <h3>Adding an IPC channel — the five-file ritual</h3>
-    <p>One channel touches five files, and three bind tests catch a missed step (<code>ipc-handlers.test.ts</code>, <code>qa-driver.test.ts</code>, <code>parity.test.ts</code>). Do it in order rather than learning it from CI:</p>
+    <h3>Adding an IPC channel — the four-file ritual</h3>
+    <p>One channel touches four files, and three bind tests catch a missed step (<code>ipc-handlers.test.ts</code>, <code>qa-driver.test.ts</code>, <code>parity.test.ts</code>). Do it in order rather than learning it from CI:</p>
     <ul class="d">
       <li><code>gui/src/ipc.ts</code> — the channel name in <code>CHANNELS</code> (this generates the preload bridge).</li>
-      <li><code>gui/src/ipc-handlers.ts</code> — the handler, delegating to core.</li>
-      <li><code>gui/qa/driver.mjs</code> — the QA driver's port of the handler.</li>
+      <li><code>gui/src/ipc-handlers.ts</code> — the handler, delegating to core. There is no fifth file: the QA driver (<code>gui/qa/driver.mjs</code>) <em>imports</em> this map rather than porting it, so a new channel reaches a sweep with no second edit (issue #165).</li>
       <li><code>acceptance/criteria/parity-matrix.json</code> — the capability row.</li>
       <li><code>cli/src/program.ts</code> — the <code>tt</code> twin (parity is a requirement, not a hope).</li>
     </ul>

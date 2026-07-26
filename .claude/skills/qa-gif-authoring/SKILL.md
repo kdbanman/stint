@@ -101,7 +101,8 @@ shows the change.
 The overlay is engine-agnostic, but its home is the committed QA discovery driver
 (`packages/gui/qa/driver.mjs` — see `context/process.html`, QA discovery): the **real
 renderer** (`packages/gui/renderer`) in headless Chromium over a **real `@stint/core`
-SQLite store**, bridged by a guarded port of `main.ts`'s IPC map. Run it with
+SQLite store**, bridged by `main.ts`'s own IPC handler map (imported, not copied
+— guarded by `packages/gui/test/qa-driver.test.ts`). Run it with
 `node packages/gui/qa/driver.mjs` (after `npm run build`; `STINT_QA_DIR` overrides the
 work dir, default `<tmpdir>/stint-qa`). It watches `<qa-dir>/commands/` for `NNN.mjs`
 recipes (each `export default async (ctx) => {}` with `ctx.record`, `ctx.page`,
