@@ -16,7 +16,9 @@ Run it all: `npm run build && npm test && npm run judge && npm run evidence`.
 | **PROP** | Invariants over generated inputs (the money-affecting laws) | `packages/core/test/prop/` |
 | **GOLD** | The CLI/JSON/CSV contract & data shapes (artefact is the criterion) | `packages/core/test/gold/`, `packages/cli/test/gold/`, `acceptance/criteria/schemas/` |
 | **JUDGE** | Deterministic renderer facts (machine-scored) + subjective look-and-feel (human/LLM over the captured screenshots) | `packages/gui/judge/`, `acceptance/criteria/judge-rubric.md`, `acceptance/evidence/screenshots/` |
-| **MANUAL** | Physical/OS reality (real sleep, wall-clock cadence, no-network, tray/hotkey) | `acceptance/criteria/manual/runbook.md` |
+| **MANUAL** | The live residue only — real sleep/wake, a real desktop session
+(tray, hotkey, notification), the live update check, OS
+install/replacement/Gatekeeper, publish-on-merge firing (process.html §05) | `acceptance/criteria/manual/runbook.md` |
 
 ## PRD section → proof
 
@@ -183,8 +185,8 @@ description/client/project/tags/billable ride the single `add` IPC, the
 overlapping backfill still saves and raises the non-blocking overlap banner, §12
 R7/§12 R15/§06 R4 — the GUI face of the now-`core` §12 R7), parity
 `add`→`tt add` and `edit`→`tt edit` (`parity-matrix.json`); the running-entry
-start edit is covered under **R06** below (JUDGE `TIMER_VIEW` + the
-`CHECK RUNNING START-ONLY PICKER` runbook procedure). **R06 Running entry
+start edit is covered under **R06** below (JUDGE `TIMER_VIEW` + BDD `features/tracking.feature` "Editing the running entry
+start never closes it and never synthesizes an end"). **R06 Running entry
 editable; end empty until stop** — the open entry is editable like any other
 (even its `start`); its end does not exist until it is stopped — every surface
 renders the end empty, never a synthetic "now". Cross-surface anchor: BDD
@@ -205,10 +207,10 @@ incapable of producing an end), and every drag 5-min-snaps and writes the raw
 patch that **never carries `endUtc`** — pinned by JUDGE **`TIMER_VIEW`**
 (`timer-view-full.png` — in-flow disclosure with zero modal chrome, grip-only +
 computed fade, live snapped write 21:35→20:35, committed patch `startUtc` with
-no `endUtc` key); on a real desktop by the **`CHECK RUNNING START-ONLY PICKER`**
-runbook procedure (real drags snap + write live, the block dissolves toward the
-future with no end affordance, the count-up never stops,
-`tt status`/`tt list --json` show the amended start with the end still empty).
+no `endUtc` key); and cross-surface by BDD `features/tracking.feature` "Editing the running
+entry start never closes it and never synthesizes an end" (run over core AND
+`tt`: the amended start persists, the entry stays open, `tt list --json` shows
+its end still empty).
 **R06 future-start guard (issue #61)** — the running start is editable but NOT
 to a future instant: a start after `now` freezes the derived count-up and would
 brick Stop, so core `store.edit` refuses it (rejected rather than stored,
@@ -322,8 +324,7 @@ surface-specific evidence of the gate is retained: GOLD `tt rm` refusal
 (`cli/test/gold/cli.test.ts`), JUDGE `DELETE_CONFIRM` for the GUI two-step
 confirm (§12 R13). **R1 GUI inline edit/delete** (any field editable in-context;
 two-step delete): JUDGE `UNIFIED_FORM` + `DELETE_CONFIRM` (`main-edit.png` — the
-unified entry form's edit mode + footer two-step Delete), MANUAL
-`CHECK UNIFIED ENTRY FORM — EDIT, SPLIT & DELETE (GUI)`, parity `edit`→`tt edit`
+unified entry form's edit mode + footer two-step Delete), BDD `features/reachable_by_hand.feature` (edit / split by hand), parity `edit`→`tt edit`
 and `remove`→`tt rm` (`parity-matrix.json`). **R2 GUI split affordance** (a
 closed entry exposes a Split control; the open/running entry does not): JUDGE
 `SPLIT_AFFORDANCE` (`main-split.png`), parity `split`→`tt split`
@@ -346,8 +347,8 @@ toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
 `.editor.conflict-prompt` modal + `main-merge-conflict.png`) + `MERGE_GAP` (the
 gapped selection swaps Merge into a `.confirm-gap` span/duration confirm before
 any fold, then commits with `allowGap` on the explicit confirm —
-`main-merge-gap.png`), MANUAL `CHECK MERGE VIA CALENDAR CHECKBOXES (GUI)` +
-`CHECK MERGE (GUI)`, and the §W recording recipe `§06 R03` (`record.mjs`),
+`main-merge-gap.png`), BDD `features/reachable_by_hand.feature` "Merge a contiguous selection by hand
+(the calendar corner-checkbox merge)", and the §W recording recipe `§06 R03` (`record.mjs`),
 parity `merge`→`tt merge` (`parity-matrix.json`). The contiguity gate is proven
 surface-neutrally by `features/overlap_and_editing.feature` ("Merging a
 non-contiguous selection without acknowledgement is refused (the originals
@@ -378,8 +379,7 @@ fails if shared time were dropped, asymmetric, or over-counted). The GUI
 surfaces it as an **at-write-time inline banner** (`gui/renderer/`: write IPC
 handlers return a `WriteAck` carrying core's overlap `Warning` instead of
 dropping it, `app.js` `showOverlapBanner`/`applyAck`), JUDGE-covered by
-`OVERLAP_BANNER` (`packages/gui/judge/`, `main-overlap-banner.png`), MANUAL
-`CHECK OVERLAP BANNER (GUI)`. The durable per-row overlap flag stays the
+`OVERLAP_BANNER` (`packages/gui/judge/`, `main-overlap-banner.png`). The durable per-row overlap flag stays the
 report-time signal; the banner is the transient write-time one
 
 ### PRD §07
@@ -466,9 +466,9 @@ billable-only) that rides in the SAVED report definition
 (`saveReport`/`editReport`), and the run-output paints the core Report
 `runReport` returns with the chosen `billableFilter` honoured by core. JUDGE
 `REPORTS_VIEW` (`packages/gui/judge/`, `reports-list.png` — the builder exposes
-the billable segment, run paints the totals); MANUAL
-`CHECK REPORT BILLABLE TOGGLE (GUI)` (cross-surface parity with
-`tt report --all`/`--non-billable`)
+the billable segment, run paints the totals); BDD `features/reporting.feature` "The billable filter includes, totals all, or
+isolates non-billable time" (run over core AND `tt` — the cross-surface parity
+with `tt report --all`/`--non-billable`)
 
 ### PRD §09
 `gold/contracts.test.ts` , `cli/test/gold/cli.test.ts` , `schemas/*` . **R1
@@ -532,9 +532,10 @@ whose `rangeSpec` is exactly
 `{kind:'absolute', fromDate:'2026-06-01', toDate:'2026-06-07'}` , the card
 summary printing the pair) and `ENTRIES_CALENDAR` (`entries-calendar.png` —
 plain date fields, no Apply, filling the pair drives a real `listEntries`
-carrying `{fromDate, toDate}` that narrows the calendar live); MANUAL
-`CHECK REPORT RANGE PICKER (GUI)` (cross-surface agreement with
-`tt report --<preset>` / `--range` over the resolved local-midnight bounds, R8);
+carrying `{fromDate, toDate}` that narrows the calendar live); BDD `features/reports.feature` + `features/reporting.feature` "A custom range
+is a pair of plain dates covering both boundary days" (cross-surface agreement
+with `tt report --<preset>` / `--range` over the resolved local-midnight bounds,
+R8);
 parity `report` →`tt [report, export]` (the preset/date pair travel inside
 existing payloads — no new channel/parity row). The GUI picker is thus fully
 covered (no longer a gap). **R2 group-by control** (the report's
@@ -640,9 +641,11 @@ and `buildReportView` is a faithful preset-resolving pass-through; JUDGE
 `REPORTS_VIEW` (`packages/gui/judge/`, `reports-run.png` — grouped summary with
 per-line + grand totals, both flags on their affected rows (none outside the
 table), both export buttons present + non-accented, each driving a real
-`exportEntries` call); MANUAL `CHECK REPORT EXPORT (GUI)` (the OS save dialog
-has no Playwright host — confirms the written file is byte-identical to
-`tt export --week --csv/--json` on a real session). New parity row
+`exportEntries` call); GOLD `gui/test/reportview.test.ts` (`exportPayload` and both
+`resolveExportDefinition` scopes byte-identical to `tt report run --csv/--json`
+and `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (the
+`exportEntries` write path — each scope's bytes landing at the path the save
+dialog returned, cancel writing nothing). New parity row
 `exportEntries` →`tt export` (`parity-matrix.json`; the `report` row now maps to
 `tt report` alone). The GUI summary + export is thus fully covered (no longer a
 gap). **R7 free-text search** (a query narrows the entry list to those whose
@@ -672,9 +675,9 @@ flagged entry flags the whole grouped line it landed in, both conditions read
 nothing), and clearing it falls back to `getState` ; `load()` /`onChange`
 re-apply the live query so a tt write keeps the list narrowed. New parity row
 `search` →`tt [list, report]` (`parity-matrix.json`, asserted by
-`gui/test/parity.test.ts` ). MANUAL `CHECK GUI-SEARCH (§09 R7)` covers the
-renderer wiring (live narrowing, client/project/tag hits, case-insensitivity,
-clear-restores) not asserted in headless CI. **R08 saved report definition** (a
+`gui/test/parity.test.ts` ). JUDGE `LIVE_FILTER` covers the renderer wiring (live narrowing,
+client/project/tag hits, case-insensitivity, clear-restores) over BDD
+`features/search.feature`'s surface-neutral filter contract. **R08 saved report definition** (a
 named, persistent preset of {range-spec, group-by, filters, rounding}, stored in
 the new `report` table of §13 at `SCHEMA_VERSION` 3): the entity + CRUD live in
 `@stint/core` (`savedreport.ts` defines `SavedReport`
@@ -811,19 +814,21 @@ next-gap-only-then-reverts math is PROP-proven in `prop/checkin.test.ts` ("a
 custom dropdown pick applies to the next gap only, then reverts"). The pure
 picker logic (action layout + index→choice map) lives Electron-free in
 `gui/src/checkin-actions.ts` and is GOLD-unit-tested by
-`gui/test/checkin-notify.test.ts`; MANUAL `CHECK CHECK-IN CADENCE + RELAUNCH`
-confirms the real OS-notification firing/reschedule under the compressed test
-cadence
+`gui/test/checkin-notify.test.ts`; the notification actually arriving on a real desktop is MANUAL `CHECK TRAY +
+GLOBAL HOTKEY` step 4 — the only part of §10b headless CI cannot reach
 
 ### PRD §11
 `cli/test/gold/cli.test.ts` , `schemas/*` . **Every `tt … --json` read shape has
-a published schema** — the five `serialize.ts` snake_case shapes (status,
-list/export-entry, report, report-def(+list), favorite(+list), backup(+list))
-plus the `emitList` reference-data/sleep families
-(`client`/`project`/`tag`/`sleep`) and the raw camelCase `settings` object
-`config ls` dumps — so GOLD's artefact-is-criterion claim covers the whole
-`--json` surface with no shape left to an implicit "whatever the core type is"
-contract. **`tt list` description cell + no `--by` (issue #43, §05
+a published schema** — the nine `serialize.ts` snake_case shapes (status,
+report, report-def(+list), favorite(+list), backup(+list), and the `emitList`
+reference-data/sleep families `client`/`project`/`tag`/`sleep`), core's own
+`toJsonEntries` export shape behind `tt list` / `tt export`
+(`list`/`export-entry`), and the raw camelCase `settings` object `config ls`
+dumps — so GOLD's artefact-is-criterion claim covers the whole `--json` surface
+with no shape left to an implicit "whatever the core type is" contract. The
+split between those homes is itself the rule (issue #171): core owns the shapes
+core exports, `serialize.ts` owns every snake_case shape `tt` invents for
+`--json`. **`tt list` description cell + no `--by` (issue #43, §05
 R10/§11/G11)**: the `tt list` HUMAN table renders a description's FIRST line
 only, capped at 60 chars, with a trailing `…` whenever content was dropped (a
 first line past 60 chars OR a multiline description → line 1 + `…` ) — the
@@ -1124,11 +1129,10 @@ open/running entry omits End so the patch never carries `endUtc` (§05 R6). JUDG
 affordance opens the unified form INLINE, no modal, every tt-editable field
 seeded, the footer Split + a two-step Delete, and a changed-fields-only Save
 patch) joins the existing `MERGE_CONFLICT` + `MERGE_NOCONFLICT`
-(`main-merge-conflict.png`, see §06 R3); MANUAL
-`CHECK UNIFIED ENTRY FORM — EDIT, SPLIT & DELETE (GUI)` confirms each field
-persists, the footer Split tiles the span, and the two-step Delete removes — all
-cross-checked against `tt list` /`tt edit`/`tt split`/`tt rm` on a real
-desktop/DB the headless host cannot drive. The edit/split/merge *arithmetic* is
+(`main-merge-conflict.png`, see §06 R3); BDD `features/reachable_by_hand.feature` (edit / split by hand) +
+`features/overlap_and_editing.feature` (amend without disturbing the open state,
+delete, delete-without-confirmation refused) prove each field persists, the
+Split tiles the span, and the two-step Delete removes — over core AND `tt`. The edit/split/merge *arithmetic* is
 the §06 BDD/GOLD coverage above. The §12 R06 unified-form edit mode is thus
 covered by JUDGE `UNIFIED_FORM` + MANUAL (the readonly entries calendar that
 hosts the hover-Edit / click-to-open is §12 R16; add mode is §12 R07). **Flags
@@ -1138,8 +1142,8 @@ the durable flags — which, now the entries list is gone, render as MARKERS on
 the readonly calendar + DETAIL in the unified editor per §12 R10): JUDGE
 `OVERLAP_BANNER` (`main-overlap-banner.png`) for the at-write-time advisory +
 `CALENDAR_LAYOUT` (`main-calendar.png`, the `.ov` warn band + `.zz` slept hatch)
-+ `UNIFIED_FORM` (`main-edit.png`, the editor's overlap detail + reversible
-subtract), MANUAL `CHECK OVERLAP BANNER (GUI)` — see §06 R4. **R9 flags detail**
++ `UNIFIED_FORM` (`main-edit.png`, the editor's overlap detail + reversible subtract) — see §06
+R4. **R9 flags detail**
 (the durable signals spell out the money impact — surfaced in the unified editor
 now the entries list is gone, §12 R10): the overlapped entry's editor carries a
 **detailed overlap detail** — the worst-neighbour overlap minutes + the
@@ -1204,11 +1208,10 @@ state LIVE** (span preserved on a body drag) before any Save (G7); and **Save
 entry is the sole commit** — `window.__ADDED__` carries the picked (post-drag)
 `fromLocal` /`toLocal` + description/client/project/tags/billable over the
 single `add` IPC, the overlapping backfill still saves (form closes) and raises
-the non-blocking overlap banner (§06 R4). MANUAL `CHECK MANUAL ADD FORM (GUI)`
-walks a human through the same flow with the terminal closed (drag the picker to
-set the span, watch the Start/Stop values update live, Save as the only commit,
-the completed entry appears on the entries calendar, an overlapping span warned
-but saved). The `add` →`tt add` parity row (`parity-matrix.json`, asserted by
+the non-blocking overlap banner (§06 R4). BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
+hand (the Manual-add form)" + `features/overlap_and_editing.feature`
+"Attribute-bearing backfill that overlaps is warned, not blocked" prove the same
+flow surface-neutrally over core AND `tt`. The `add` →`tt add` parity row (`parity-matrix.json`, asserted by
 `gui/test/parity.test.ts` ) is unchanged — the unified form adds no capability
 and no new IPC channel (the inline picker only writes back into the existing
 text fields; the picker component itself is the §12 R15 addition, R07 only
@@ -1282,8 +1285,8 @@ field is the identity on start/end, to the second" (second-granular fast-check
 spans; an empty patch plus an unrelated-field patch leave start/end
 byte-identical) pin the surface-neutral half of the same contract: stored truth
 is never rewritten by an edit that did not touch it (glossary "Stored truth").
-MANUAL `CHECK INLINE INTERVAL PICKER (GUI) (§12 R15)` walks a real build of the
-add / edit-closed / edit-running-start surfaces — body-drag moves the whole
+JUDGE `UNIFIED_FORM` + `UNIFIED_FORM_ADD` + `TIMER_VIEW` drive the add /
+edit-closed / edit-running-start surfaces through the real renderer — body-drag moves the whole
 interval, the bottom grip resizes only the stop (both 5-min snap), others gray,
 overlap yellow warn-only, the form fields update live on every drag with Save
 entry the only commit, and the running entry shows a start grip only + future
@@ -1327,10 +1330,10 @@ proving the GUI `exportPayload` matches `toCsv` /`toJsonEntries` byte-for-byte,
 and GOLD `gui/test/renderer-bundle.test.ts` pinning the resolved-range header's
 own rule (`window.SU.rangeLabel` names the INCLUSIVE last day of the half-open
 window — a Mon–Sun week ends on the Sunday, a whole month ends inside that
-month, a single-day range reads as one day on both sides). MANUAL
-`CHECK REPORT BILLABLE TOGGLE (GUI)` + `CHECK REPORT RANGE PICKER (GUI)` +
-`CHECK REPORT EXPORT (GUI)` cross-check the GUI against `tt report` /`tt export`
-on a real session (the OS save dialog has no headless host). Parity: the
+month, a single-day range reads as one day on both sides). JUDGE `REPORTS_VIEW` drives the billable segment, the range presets + plain-date
+custom pair, the rounding toggle and both export scopes through the real
+renderer, each byte-bound to `tt report` /`tt export` by
+`gui/test/reportview.test.ts` and `gui/test/ipc-handlers.test.ts`. Parity: the
 presets/grouping/filters/rounding ride inside the existing `report` payload (no
 new row), and the export adds `exportEntries` →`tt export`
 (`parity-matrix.json`). The §12 R8 report builder & export is thus fully
@@ -1413,9 +1416,8 @@ end edge; the `.ov` overlap band + `.zz` slept hatch; and checking two `.ck`
 boxes reveals `#merge-bar` . The per-day + range **billable totals** the
 calendar's headers/chip present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
-— including an empty day"), and the never-clip / fixed-width /
-working-hours-default / empty-column behaviour on a real desktop is MANUAL
-`CHECK ENTRIES CALENDAR` . **R17 Exact time entry (NEW, `core` — the
+— including an empty day"), and the never-clip / fixed-width / working-hours-default / empty-column
+behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **R17 Exact time entry (NEW, `core` — the
 overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
 expander** — raw start/stop **text** fields beneath the inline interval picker
 (§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT
@@ -1445,11 +1447,9 @@ typing an overnight span (start `2026-06-24T22:00` , stop `2026-06-25T02:00` )
 updates the shared interval so the echo reads `22:00 – 02:00` and the
 `.stp-block.me` block sits at minute 1320 (22:00) while `#add-to` keeps the
 next-day value; Save sends those exact overnight `fromLocal` /`toLocal` over the
-single `add` IPC (`window.__ADDED__`). **MANUAL**
-`CHECK EXACT/OVERNIGHT ENTRY VIA EXPANDER` (expand the add form's Start/Stop
-expander, type an overnight span, confirm the inline picker + collapsed echo
-reflect the typed values, Save, then `tt list --json` shows one entry with the
-exact typed start/stop crossing midnight). Recording `§12 R17` (`record.mjs`)
+single `add` IPC (`window.__ADDED__`). **BDD** `features/tracking.feature` "Backfill creates a completed overnight
+entry" (a 22:00 → 02:00-next-day span → one closed entry, zero open, 240
+billable minutes, run over core AND `tt`). Recording `§12 R17` (`record.mjs`)
 drives the add form, expands the expander, types the overnight span, and Saves
 the persisted overnight backfill. **R10 Reference-data management** (the Clients
 view creates / renames / archives clients & projects, and creates / renames /
@@ -1536,11 +1536,10 @@ Clients management view (§12 R10) offers: `armArchiveClient` /
 Delete click surfaces the confirm gate and the instrumented
 `window.stint.remove` (`fixtures.mjs` records
 `window.__REMOVE_CALLS__` ) is NOT called by that first click, then the explicit
-confirm fires `remove` exactly once carrying the entry id); MANUAL
-`CHECK CONFIRM DESTRUCTIVE (GUI)` (Delete shows a confirm, Cancel preserves the
-entry, Delete+confirm removes it — cross-checked against `tt list` ; the
-archive-when-referenced confirm is not walked by hand, JUDGE `CONFIRM_ARCHIVE`
-holds it). No new IPC channel is added for the gate (`remove` /
+confirm fires `remove` exactly once carrying the entry id); JUDGE `CONFIRM_DELETE` + `CONFIRM_ARCHIVE` hold it headlessly (Delete shows a
+confirm, Cancel preserves the entry, Delete+confirm removes it exactly once),
+over the surface-neutral BDD `features/overlap_and_editing.feature` "Deleting an
+entry without confirmation is refused". No new IPC channel is added for the gate (`remove` /
 `archiveClient` / `archiveProject` already exist), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are intentionally unchanged.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
@@ -1578,9 +1577,9 @@ are five stops, not collapsed by a shared class) in reading order, with the
 active element never STUCK on `<body>` /null — a single body focus is the
 browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
-non-default focus ring); MANUAL `CHECK KEYBOARD & FOCUS (GUI)` confirms the
-real-OS focus ring + assistive-technology announcements + the popover, which
-headless Chromium cannot render/drive. No new IPC channel (pure renderer), so
+non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
+(acceptance.html §07) — so `KEYBOARD_FOCUS` + `TARGET_SIZE` + GOLD
+`gui/test/design-guard.test.ts` are the whole net. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
@@ -1632,11 +1631,9 @@ WEEK-BOUNDED 5.00h (issue #55 Part B), a `refactor` keystroke narrows the
 visible rows to the two IN-WEEK matches (range + search compose) and moves
 `#week-total` 5.00h → 3.50h with no `getState` during the keystroke and zero
 `listEntries` rejections (the mock is strict about the required `by` , like
-core), both returning to the full set on clear). **MANUAL**
-`CHECK DESTRUCTIVE CONFIRM + LIVE FILTER (§17 R11)` (`manual/runbook.md`)
-confirms the real-OS confirm gate before a destroy and the live list+total
-updates on search/group/billable, cross-checked against
-`tt report` . No new IPC channel (the live view derives off the existing
+core), both returning to the full set on clear). BDD `features/overlap_and_editing.feature` "Deleting an entry without
+confirmation is refused" pins the refusal surface-neutrally beside those two
+scenes. No new IPC channel (the live view derives off the existing
 `getState` snapshot; confirm gates the existing `remove` client-side), so
 `parity-matrix.json` is intentionally untouched. **R21 write-rejection
 feedback** — a refused core write is surfaced where it was attempted (editor
@@ -1652,8 +1649,8 @@ view, not only mirrored to the off-view banner) + the `REPORTS_VIEW` refusal
 sub-facts (an incomplete custom range → zero `saveReport` , the missing field
 focused; a duplicate name whose message persists past the tick), and the
 duplicate-name contract in BDD `features/saved_reports.feature` (run TWICE over
-core + `tt` ); MANUAL is the edit-mode Stop-before-Start twin + the tightened
-split-outside-span step in `CHECK UNIFIED ENTRY FORM`
+core + `tt` ); JUDGE `WRITE_REJECTION_FEEDBACK` is the edit-mode Stop-before-Start twin + the
+split-outside-span refusal
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×
@@ -1748,7 +1745,14 @@ clamp (an around-now window at 00:30 or 23:30 meets 0 / 1440 instead of leaving
 the track), and an edited interval re-centering the window while KEEPING the
 mode's span (a running interval, `endUtc: null` , centering on its start) —
 reached through the same bundle-eval harness the equivalence facts use, because
-`su.ts` is a classic-script entry with no named exports. The one branch left
+`su.ts` is a classic-script entry with no named exports. That suite also pins
+WHERE 07:00–18:00 comes from — the fallback window must equal core's
+`DEFAULT_SETTINGS.workingHoursStart` / `workingHoursEnd`, not a renderer copy of
+them (#168: the pair was re-hardcoded as `7 * 60` / `18 * 60` in `su.ts` and
+twice more in `timepicker.js`, so a user who moved their working hours got the
+right window from `timelineWindow` and the wrong one from every fallback path;
+`timepicker.js` now calls `SU.timelineWindow` unguarded, like every other SU
+call, since the bundled SU entry loads first). The one branch left
 unpinned is the degenerate-after-clamp fallback (`su.ts` "should not happen off
 validated settings"): it is unreachable, since the window's span is always ≥ 60
 minutes and its center always inside [0, 1440], so no input produces
@@ -1807,20 +1811,20 @@ parity-matrix row
 ### PRD §16
 
 `features/*`, `features/backup_recovery.feature`,
-`features/integrity_check.feature`, `prop/invariants.test.ts`, and the §16
-decided-behavior table's three edge-case MANUAL lenses in `manual/runbook.md`:
-**CHECK UPDATE-MID-TIMER (§16, §19 R04)** — a running entry survives an in-app
+`features/integrity_check.feature`, `prop/invariants.test.ts`, and the §16 decided-behavior table's three edge cases: **update-mid-timer (§16,
+§19 R04)** — a running entry survives an in-app
 update untouched (same id/`startUtc`, elapsed continues, the live
 `timetracker.sqlite` is byte-identical to its pre-update capture, so the update
 touched no data); its headless-drivable core is **executed** by
 `npm run evidence` (`acceptance/evidence/cli-transcript.md` → "§16 / §19 R04 —
 in-app update never touches the database (simulated app-replacement)") and the
-Software Update chrome by **JUDGE** item `SOFTWARE_UPDATE`, the live OS-level
-swap remaining the MANUAL recording; **CHECK BACKUP-ON-LAUNCH (§16, §20 R04)** —
-a launch after a DB change writes one valid recoverable timestamped backup
+Software Update chrome by **JUDGE** item `SOFTWARE_UPDATE`, the live OS-level swap remaining MANUAL `CHECK INSTALL & UPDATE (§17 R13)` part
+(d); **backup-on-launch (§16, §20 R04)**, proven by BDD
+`features/backup_recovery.feature` — a launch after a DB change writes one valid recoverable timestamped backup
 beside the DB containing the latest data, retention caps at N=5 (oldest pruned),
-and an unchanged-since-last-backup launch writes none; **CHECK
-CORRUPTION-RECOVERY (§16, §20 R03/R05)** — a corrupted `timetracker.sqlite` is
+and an unchanged-since-last-backup launch writes none; **corruption-recovery (§16, §20 R03/R05)**, proven by BDD
+`features/integrity_check.feature` + `features/backup_recovery.feature` — a
+corrupted `timetracker.sqlite` is
 detected on open, never written to, quarantined to a `.corrupted` sibling,
 restored from the latest good backup, the user informed, and the pre-corruption
 data is intact afterward (zero data loss). The **entry-spans-local-midnight**
@@ -1862,10 +1866,11 @@ checked-in config (no build/network) it asserts `electron-builder.yml` declares
 **no `windows-latest`** runner (and none in `ci.yml`), keying off active YAML
 directives not the explanatory comments — so adding a Windows target to
 `electron-builder.yml` or a `windows-latest` matrix entry **fails CI** rather
-than silently regressing. The live two-platform-artifact build + launch is
-**MANUAL** `manual/runbook.md` **CHECK BUILD MATRIX — macOS + Linux only, no
-Windows (§19 R01)**, which fails if any Windows target appears or either
-platform artifact is missing. Because that full artifact build only runs
+than silently regressing. The live two-platform-artifact build is exercised by the `pack-smoke` /
+`pack-smoke-mac` CI jobs (a real Linux and a real macOS pack on every PR); the
+artifacts launching on a real desktop is MANUAL `CHECK INSTALL (§19 R02)`, and
+the published no-Windows pair is MANUAL `CHECK PUBLISH-ON-MERGE (§19 R05)` step
+3. Because that full artifact build only runs
 **post-merge** (`release.yml`), a broken packaging toolchain (e.g.
 electron-builder's native `app-builder-bin` helper missing — the
 `spawn … app-builder ENOENT` that reddened every release pack) could reach
@@ -2019,9 +2024,8 @@ SIMULATED app-replacement (the app bundle is swapped, the data directory left
 alone) and the live `tt.sqlite` is confirmed **byte-identical** (sha256 + size)
 with the **same entry still open** (unchanged id/start) on **both** surfaces
 (`tt` + the core Store the GUI is a surface over) and the derived elapsed
-continuing to grow. **MANUAL** `manual/runbook.md` part **(c)** of **CHECK
-INSTALL & UPDATE (§17 R13)** — and **CHECK UPDATE-MID-TIMER (§16, §19 R04)** —
-walk the real GitHub artifact download, the guided replace-the-app +
+continuing to grow. **MANUAL** `manual/runbook.md` parts **(c)** and **(d)** of **CHECK INSTALL &
+UPDATE (§17 R13)** walk the real GitHub artifact download, the guided replace-the-app +
 one-time-Gatekeeper steps, the relaunch on the new version, and the
 **byte-identical DB / still-open timer** across the swap on a real install (the
 no-network backstop forbids a headless test reaching GitHub and there is no
@@ -2104,10 +2108,11 @@ the default output matches the date pattern OR the dev sentinel but never
 `isReleaseVersion` accepts `2026.6.27`/`2026.6.27.2` and rejects `1.0.0`/the
 sentinel, and `APP_VERSION` equals the `STINT_VERSION` override when set, else a
 release version or the sentinel — proving the one shared constant both surfaces
-read is the release version, not a placeholder). **MANUAL** `manual/runbook.md`
-**CHECK SOFTWARE UPDATE — VERSION DISPLAYED (§19 R06)** confirms the GUI
-Settings version and `tt --version` show the **same** `YYYY.M.D[.N]` string on a
-real install (the two equal surfaces report one version). `appVersion` rides on
+read is the release version, not a placeholder). JUDGE `SOFTWARE_UPDATE` reads the stamped version off the Current-version row,
+and MANUAL `manual/runbook.md` **CHECK INSTALL & UPDATE (§17 R13)** part (a)
+confirms the GUI Settings version and `tt --version` show the **same**
+`YYYY.M.D[.N]` string on a real install (the two equal surfaces report one
+version). `appVersion` rides on
 the existing `getState` snapshot — no new IPC channel, so no parity-matrix row.
 **The app mark (design.html §09)** rides R01/R02: `electron-builder.yml`
 declares `icon: build/icon.png` (the one 1024px source it derives the `.icns`
@@ -2127,8 +2132,7 @@ Chromium versions, process.html R08). The rendered result on a real desktop is
 ### PRD §20
 
 `features/integrity_check.feature` (R03, core + tt),
-`features/backup_recovery.feature` (R04/R05, core + tt), `manual/runbook.md`
-(CHECK INTEGRITY-ON-OPEN, CHECK BACKUP & RECOVERY), `cli/test/gold/cli.test.ts` +
+`features/backup_recovery.feature` (R04/R05, core + tt), `cli/test/gold/cli.test.ts` +
 `schemas/backup.schema.json` (`tt backup ls --json`); backups are `@stint/core`
 `backup.ts`
 (`backupDb`/`checkIntegrity`/`quarantineAndRecover`/`restoreFromBackup`), wired
@@ -2143,11 +2147,9 @@ write" corrupts a backup-LESS database and asserts the open is REFUSED (core:
 `openDb` throws `RecoveryError`; tt: `tt status` exits non-zero with an
 integrity error on stderr) AND the corrupt file's bytes are UNCHANGED after the
 refused open (`wrote === false`) — it would fail if `openDb` migrated/wrote over
-a corrupt file or swallowed the corruption and continued. **MANUAL**
-`CHECK INTEGRITY-ON-OPEN (§20 R03)` confirms on a real install that corrupting
-the on-disk DB is detected at open, the corrupt file's size/mtime are unchanged
-(no write), and the corruption is surfaced rather than proceeding — handing off
-to CHECK BACKUP & RECOVERY for the restore half. The full
+a corrupt file or swallowed the corruption and continued. **JUDGE** `RECOVERY_NOTICE` proves the GUI surfaces the recovery rather than
+proceeding silently, naming both the backup it restored from and the quarantined
+file. The full
 detect→quarantine→restore round-trip (R03 feeding R05) is additionally proven by
 `features/backup_recovery.feature`. **R01 DB-open invariants** — `openDb` SETS
 then VERIFIES the durability pragmas on every open (busy_timeout →
@@ -2243,8 +2245,9 @@ file-byte identity AND an unchanged directory listing — no
 future-stamped DB with the same typed error and writes no launch backup (§20
 R09)"; GOLD `cli/test/gold/cli.test.ts` "tt status on a future-stamped DB exits
 1 with both versions and the remedy on stderr, leaving the directory unchanged";
-MANUAL `CHECK VERSION-SKEW REFUSAL (§20 R09)` in `manual/runbook.md` (GUI native
-dialog + no-write exit on a real install). CLI = stderr + exit 1 via `bin.ts`'s
+GOLD `gui/test/schemaskew.test.ts` (a real future-stamped DB's refusal becomes
+an error box naming both versions, the remedy and the refused file; no other
+open failure is claimed; main performs the box then exits non-zero). CLI = stderr + exit 1 via `bin.ts`'s
 catch, GUI = native error dialog + exit 1 catching ONLY this error
 (`gui/src/main.ts`), R01/R03 refusals untouched.
 
@@ -2333,8 +2336,7 @@ per view (`packages/gui/judge/`: `main-start-form`/`main-start-form-running`,
 `main-add-form`, `main-editor`/`main-merge-conflict`/`main-split`,
 `reports-*`/`report-*`, `main-clients`/`main-tags`, `main-settings`, plus
 `main-nav`) is the by-hand reachability evidence for a non-terminal user — each
-view reachable from the nav and rendering its controls. **MANUAL**
-`CHECK ALL CAPABILITIES REACHABLE BY HAND (GUI)` walks the whole workflow
+view reachable from the nav and rendering its controls. **BDD** `features/reachable_by_hand.feature` walks the whole workflow
 (start-with-attrs → backfill → edit/split/merge/delete → entries
 grouping/filter/search → report builder + CSV/JSON export → client/project/tag
 create/rename/archive → every §14 setting) **with the terminal closed**,
@@ -2364,10 +2366,9 @@ retention-pruned launch backup; `checkIntegrity` `quick_check`;
 `Store.open`/`Store.lastRecovery`/`Store.listBackups`/`Store.restoreFromBackup`.
 **GOLD** `cli/test/gold/cli.test.ts` pins `tt backup ls --json` against
 `schemas/backup.schema.json` (newest-first, real `.bak-` files) plus the `now`
-no-op and `restore` confirm-gate / unknown-name exit contracts. **MANUAL**
-`CHECK BACKUP & RECOVERY` confirms the launch backup on disk, the Settings →
-Backups "Last backup" status, retention pruning, the on-open corruption dialog,
-and the cross-surface restore round-trip on a real install. **JUDGE** now gates
+no-op and `restore` confirm-gate / unknown-name exit contracts. **BDD** `features/backup_recovery.feature` proves the launch backup, the
+detect→quarantine→restore round-trip, and the explicit named restore over core
+AND `tt`. **JUDGE** now gates
 the GUI renderer surface deterministically — `BACKUPS_SECTION` (the Settings →
 Backups group renders the "Last backup" status + verified pill, the restore list
 painted from `window.stint.listBackups()`, and the retention picker, and a
@@ -2391,11 +2392,10 @@ Applications/the launcher **and** `tt` on `PATH`, §19 R02) on **one** stamped
 release (§19 R03) and completes a **download + guided install** (§19 R04) that
 **never touches the database** (§16). Each part is proven in its own check —
 `manual/runbook.md` **CHECK INSTALL** (§19 R02: single artifact → GUI + `tt` on
-PATH, uninstall reverses both), **CHECK SOFTWARE UPDATE — VERSION DISPLAYED**
-(§19 R06: GUI Settings version ≡ `tt --version`), **CHECK SOFTWARE UPDATE —
-CHECK FOR UPDATES** (§19 R03: live GitHub verdict, DB-mtime unchanged, graceful
-offline), and **CHECK UPDATE-MID-TIMER** (§16/§19 R04: an open entry + the live
-DB byte-identical across the swap) — and the headless backstops are GOLD
+PATH, uninstall reverses both), and **CHECK SOFTWARE UPDATE — CHECK FOR UPDATES** (§19 R03: live GitHub verdict,
+DB-mtime unchanged, graceful offline) — with the version equality (§19 R06) and
+the mid-timer no-DB-touch (§16/§19 R04) walked as parts (a) and (d) of the
+umbrella itself — and the headless backstops are GOLD
 `packages/gui/test/update.test.ts` (the `YYYY.M.D[.N]` ordering + the
 up-to-date/available/error verdicts with an injected fetcher, no network),
 `cli/test/gold/cli.test.ts` + `core/test/gold/contracts.test.ts` (the one shared
@@ -2479,7 +2479,22 @@ filesystem / network)
 covered — the no-Node/no-core/no-network source walk in
 `gui/test/renderer-static.test.ts`; the isolation posture itself (context
 isolation on, no node integration, preload bridge, renderer speaks only
-`ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35)
+`ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35). The same
+static file walk also pins the renderer's ONE-HOME rule (#168): `su.ts` is the
+sole definition of a helper more than one page needs — no other renderer file
+may define `escapeHtml`, `errMessage`, `localMinuteOfDay` or
+`exactMinuteOfDay`, and the minutes-of-day arithmetic
+(`getHours() * 60 + getMinutes()`) appears exactly once across
+`gui/renderer/`. Static-only by construction: a duplicated helper renders fine
+on a driven page right up until the copies diverge, which they had —
+`escapeHtml` existed in two dialects escaping different character sets (the
+`app.js` one spared `'` across 20 call sites) and `popover.js` escaped nothing,
+while `errMessage` was re-typed at four sites, one dropping the `.message`
+unwrap. `popover.html` is a second document that can reach nothing `app.js`
+defines, so `su.ts` is the only home serving every page. The behavior of the
+hoisted helpers (the single-quote escape, the unwrap-then-strip message rule,
+the exact minute's seconds fraction) is GOLD
+`gui/test/renderer-bundle.test.ts`, run through the bundle the pages load.
 
 ### §05
 
@@ -2544,8 +2559,9 @@ future-stamped DB with the same typed error and writes no launch backup (§20
 R09)" (no §20 R04 launch backup or other write precedes the gate at the Store
 level); GOLD `cli/test/gold/cli.test.ts` "tt status on a future-stamped DB exits
 1 with both versions and the remedy on stderr, leaving the directory unchanged".
-MANUAL `CHECK VERSION-SKEW REFUSAL (§20 R09)` in `manual/runbook.md` confirms
-the GUI's native dialog + no-write exit on a real install. The CLI surfaces it
+GOLD `gui/test/schemaskew.test.ts` confirms the GUI's error box names both
+versions, the remedy and the refused file, that no other open failure is
+claimed, and that main exits non-zero. The CLI surfaces it
 as stderr + exit 1 through `bin.ts`'s existing catch (no CLI surface added); the
 GUI catches only this error in `init()` for a native error dialog + exit 1
 (`gui/src/main.ts`), leaving the §20 R01/R03 failure classes as loud as before

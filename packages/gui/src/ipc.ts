@@ -438,8 +438,10 @@ export interface RestoreResult {
 /**
  * The per-channel payload/result contract — one entry per CHANNELS name. `payload` is what
  * the renderer sends (`void` for the parameterless reads/toggles); `result` is what main
- * returns. Write channels return WriteAck (PRD §06 R4 overlap warnings); reads return the
- * renderer-safe views defined above (or the core shapes that already cross the seam).
+ * returns. Span-writing channels return WriteAck (PRD §06 R4 overlap warnings); the other
+ * mutators return `void`, or the renderer-safe view of the record they wrote where the renderer
+ * cannot re-derive it; reads return the renderer-safe views defined above (or the core shapes
+ * that already cross the seam).
  */
 export interface IpcContract {
   getState: { payload: void; result: UiState };

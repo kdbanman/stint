@@ -40,5 +40,5 @@ export function toggleTimer(store: Store, refreshAll: () => void): WriteAck {
       break;
   }
   refreshAll();
-  return { warnings: res?.warnings ?? [] };
+  return { warnings: res.warnings };
 }
