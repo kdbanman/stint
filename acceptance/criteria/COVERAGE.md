@@ -163,8 +163,9 @@ inverted OR zero-width span is rejected rather than stored, prd.html §05 R05) �
 previously code-only and asserted by zero tests — is now pinned by GOLD
 `core/test/gold/contracts.test.ts` "range-ordering contracts (§05 R5, §09
 R01/R08)" (`add()` rejects both an inverted span and a zero-length `to == from`
-span with `--to must be after --from`); this is the deliberate strict-**<** twin
-of §09 R01's **≤**-for-report-ranges rule (a same-day report range is valid, a
+span with `stop time must be after start time` — SURFACE-NEUTRAL wording, pinned
+alongside a sweep asserting no core refusal names a CLI flag, issue 138); this is
+the deliberate strict-**<** twin of §09 R01's **≤**-for-report-ranges rule (a same-day report range is valid, a
 zero-length entry is not). In the GUI the manual-add from/to are set on the
 unified form's inline interval picker (§12 R15, `#add-picker` via
 `window.STP.openInline`) over the collapsed Start/Stop expander (§12 R17, the
@@ -1193,7 +1194,9 @@ form (`gui/renderer/index.html` `#add-form` with `#add-from` /`#add-to` +
 converting each local datetime to UTC and returning the uniform `WriteAck` so an
 overlapping backfill raises the SAME non-blocking inline `#overlap-banner` the
 edit/start paths use — the entry still saves, §06 R4; a core validation reject
-(`--to must be after --from`) shows in `#add-warning` as a block). The
+(`stop time must be after start time`) shows in `#add-warning` as a block, read
+through the one `SU.errMessage` mapping site that strips Electron's IPC wrapper
+and the exception class — issue 138). The
 warned-not-blocked behaviour is proven surface-neutral on core AND tt by
 `features/overlap_and_editing.feature` ("Backfill that overlaps an existing
 entry is warned, not blocked" + the attribute-bearing "Attribute-bearing
@@ -1667,7 +1670,19 @@ sub-facts (an incomplete custom range → zero `saveReport` , the missing field
 focused; a duplicate name whose message persists past the tick), and the
 duplicate-name contract in BDD `features/saved_reports.feature` (run TWICE over
 core + `tt` ); JUDGE `WRITE_REJECTION_FEEDBACK` is the edit-mode Stop-before-Start twin + the
-split-outside-span refusal
+split-outside-span refusal. **What the surfaced
+message READS (issue 138)** — the app painted Electron's whole
+`ipcRenderer.invoke` rejection: "Error invoking remote method 'edit':
+StoreError: start time is in the future", and in the add form core's own
+`--to must be after --from` named `tt` flags that exist nowhere in the GUI.
+One mapping site strips the transport (`SU.errMessage` in
+`packages/gui/renderer/su.ts` — the invoke wrapper plus the thrown class name),
+and core's messages are surface-neutral. Guarded on both halves: GOLD
+`packages/gui/test/renderer-bundle.test.ts` pins the strip against the exact
+production strings and `packages/core/test/gold/contracts.test.ts` sweeps core's
+refusals for CLI flags; JUDGE `WRITE_REJECTION_FEEDBACK` / `FUTURE_START_GUARD`
+/ `POPOVER_REJECT` / `REPORTS_VIEW` now reject through mocks in Electron's REAL
+wrapped shape and score each region's rendered text as the reason ALONE.
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×
@@ -1993,7 +2008,14 @@ SOFTWARE UPDATE — CHECK FOR UPDATES (§19 R03)** confirms the live GitHub quer
 the on-screen verdict, the release link, the **DB-mtime-unchanged** no-write
 invariant, and the graceful-offline-error behaviour on a real install (the
 no-network backstop forbids a headless test reaching GitHub, so the live query
-is confirmed manually). The download + guided install is R04. **R04 in-app
+is confirmed manually). **A FAILED check reads as copy (issue 138)**: the check
+returned whatever the transport threw, so Settings reported Chromium's
+`net::ERR_NAME_NOT_RESOLVED`. Only text the module authored for a reader now
+reaches the renderer — `UPDATE_CHECK_FAILED` in `packages/gui/src/ipc.ts`,
+applied by `updateFailureMessage` — pinned by GOLD `update.test.ts` (a thrown
+`net::` code renders the sentence) and by the JUDGE `SOFTWARE_UPDATE`
+failed-check page, which reads the SHIPPING constant rather than re-typing it
+(`main-software-update-check-error.png`). The download + guided install is R04. **R04 in-app
 update download + guided install** (AC=**MANUAL**/GOLD, decision G3): once R03
 reports an update, GUI **Settings → Software Update** offers a **Download &
 install `<version>`** action that downloads the newer release's **platform

@@ -50,6 +50,8 @@ import {
   planGuidedInstall,
   downloadUpdate,
   revealInstaller,
+  updateFailureMessage,
+  UPDATE_DOWNLOAD_FAILED,
   type GithubRelease,
 } from './update.js';
 import { platform as osPlatform } from 'node:os';
@@ -441,7 +443,9 @@ function registerUpdateIpc(): void {
           version,
           steps,
           artifactPath: null,
-          message: err instanceof Error ? err.message : 'The update download failed.',
+          // Issue 138: the frame carries copy, not a diagnostic — an authored UpdateError's own
+          // words, else update.ts's sentence. A transport failure here is a Chromium net code.
+          message: updateFailureMessage(err, UPDATE_DOWNLOAD_FAILED),
         });
       }
     })();

@@ -39,16 +39,32 @@ function elapsed(startUtc: string, excludedSeconds = 0): number {
   return countUpSeconds(startUtc, new Date(), excludedSeconds);
 }
 
+// Electron's `ipcRenderer.invoke` rejection format — the transport's own words wrapped around
+// the reason: "Error invoking remote method 'edit': StoreError: start time is in the future".
+const IPC_WRAPPER = /^Error invoking remote method '[^']*':\s*/;
+// The thrown class name a serialized rejection carries in front of its message: "StoreError: ",
+// "TimeParseError: ", "RangeError: ", plain "Error: ". Applied repeatedly because the wrapper
+// and the throw each contribute one.
+const THROWN_CLASS = /^[A-Za-z]*Error:\s*/;
+
 // §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
 // `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
 // (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
-// human string the message region shows, stripping the "Error:" prefix. EVERY rejection
-// surface reads through this one function (the entry forms, the split confirm, the inline
-// rename, the report builder, the exports, the popover's toggle), so "how a refused write
-// reads to the user" has a single definition: unwrap `.message`, then strip the prefix. The
-// report builder's own version skipped the unwrap and rendered `[object Object]` (issue #168).
+// human string the message region shows. EVERY rejection surface reads through this one
+// function (the entry forms, the split confirm, the inline rename, the report builder, the
+// exports, the popover's toggle), so "how a refused write reads to the user" has a single
+// definition: unwrap `.message`, then strip everything the transport added.
+//
+// The strip is the point (issue 138). What crossed the IPC boundary is the WHOLE Electron
+// string, and the app used to paint it: users met "Error invoking remote method 'edit':
+// StoreError: start time is in the future" in the Timer view. The kernel of the message is
+// what they can act on; the invoke wrapper and the exception class name a transport and a
+// class they cannot. Both come off here, at the one boundary, so no surface can forget.
+// The report builder's own version skipped the unwrap and rendered `[object Object]` (#168).
 function errMessage(err: unknown): string {
-  return String((err as { message?: unknown })?.message || err).replace(/^Error:\s*/, '');
+  let message = String((err as { message?: unknown })?.message || err).replace(IPC_WRAPPER, '');
+  while (THROWN_CLASS.test(message)) message = message.replace(THROWN_CLASS, '');
+  return message;
 }
 
 // The ONE HTML escape for renderer text interpolated into innerHTML. FIVE characters,

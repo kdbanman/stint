@@ -20,7 +20,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 |---|---|---|---|
 | **Ideal** — idle card | 00:00:00 clock, Start primary, idle-only start panel visible | JUDGE `START_FORM`, `RUNNING_SINGLE_ACTION` (idle snapshot) — `main-start-form.png` | |
 | **Ideal** — running card | Live count-up, description, client/project, accented Stop, no Switch | JUDGE `TIMER_VIEW`, `IN_WINDOW_TIMER` — `timer-view.png`, `timer-view-full.png` | |
-| **Error** — refused Stop (`#timer-warning`) | Announced region names the refusal; strip/Stop stay live, no wedge | JUDGE `WRITE_REJECTION_FEEDBACK` (site d), `FUTURE_START_GUARD` — `main-edit-reject.png`, `timer-future-start-reject.png` | |
+| **Error** — refused Stop (`#timer-warning`) | Announced region names the refusal — the reason alone, no IPC wrapper / exception class / CLI flag (issue 138); strip/Stop stay live, no wedge | JUDGE `WRITE_REJECTION_FEEDBACK` (site d), `FUTURE_START_GUARD` — `main-edit-reject.png`, `timer-future-start-reject.png` | |
 | **Edge** — live-edit strip (running only) | Raw text `#le-start`, no `#le-end`, count-up keeps advancing while edited | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — inline start-only picker disclosure | Opens in flow under the field, start grip only, future-fade mask | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — start panel hidden while running | `#start-panel`/`#toggle` hidden; exactly one Description field (`#le-desc`) | JUDGE `RUNNING_SINGLE_ACTION` — `timer-running-single-action.png` | |
@@ -100,6 +100,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — update-available pill | "Update available · vX" + `.pill.new` link | JUDGE `SOFTWARE_UPDATE` — `main-software-update.png` | |
 | **Edge** — guided download/downloading phase | Live progress bar, numbered steps incl. Gatekeeper beat | JUDGE `SOFTWARE_UPDATE` — `main-software-update.png` | |
 | **Error** — guided panel error phase | Download failure flips panel to an error phase (the `bridge.download()` catch in `settings.js`) | JUDGE `SOFTWARE_UPDATE` (rejecting-download page) — `main-software-update-error.png` | |
+| **Error** — failed update check | Result line reads the authored `UPDATE_CHECK_FAILED` sentence, never the transport's `net::ERR_*` code; Check now still enabled | JUDGE `SOFTWARE_UPDATE` (failed-check page, issue 138) — `main-software-update-check-error.png` | |
 | **Ideal** — Backups: verified pill + Last-backup status | "Last backup …" line with a "verified" pill | JUDGE `BACKUPS_SECTION` — `main-backups.png` | |
 | **Empty** — Backups: no-backups-yet copy | "No backups yet…" / "No backups to restore from yet." (`settings.js:421,445`) | JUDGE `BACKUPS_SECTION` (never-backed-up page) — `main-backups-empty.png` | |
 | **Edge** — restore list + per-item confirm | One row per backup, Restore… arms then confirms exactly once | JUDGE `BACKUPS_SECTION` — `main-backups.png` | |
