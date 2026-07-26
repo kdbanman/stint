@@ -1664,14 +1664,30 @@ browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
 (acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
-GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+`FIELD_LABELS` + GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
 out of the tab order and unwalked — the blind spot issue 135 fell through, where
 the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). No new IPC channel (pure renderer), so
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). JUDGE `FIELD_LABELS`
+(`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
+design.html **D13** — every field carries a VISIBLE label, which is also the
+§07 field-border exemption A01 is conditioned on. The app had been labelling
+fields with placeholder text, so the name vanished on the first keystroke; the
+start form's four attribute fields had no accessible name at all, and
+`#add-desc` / `#search` / `#rep-name` carried a placeholder plus an INVISIBLE
+`aria-label`. The scene drives all five views into the states that hold fields
+(the Timer start-details disclosure, the Entries add form + Custom range, the
+Reports builder + Custom range, Settings) and sweeps every visible
+`input`/`select`/`textarea` for two facts: a programmatic name that is not its
+placeholder, and a persistent VISIBLE element supplying it — through a
+`<label>`, `aria-labelledby`, or the row-heading idiom the control bars and
+settings rows use (`.report-lab` / `.set-k`), whose members are named in the
+justification so the population stays reviewable. Nothing caught this before
+because `design-guard.test.ts` scores tokens, contrast and spacing; label
+presence is a structural fact about the DRIVEN DOM. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the

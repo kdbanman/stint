@@ -5918,6 +5918,161 @@ async function sceneParityReach(browser) {
   });
 }
 
+/**
+ * The in-page field-label sweep (FIELD_LABELS). Collects every VISIBLE form control inside the
+ * currently-routed view and records, per control, HOW it is named — which is the whole question
+ * design.html D13 asks. Three naming idioms count, and they are the three the app actually uses:
+ *
+ *   label       — a wrapping `<label>` or a `label[for=id]` carrying visible text (the D13 idiom);
+ *   labelledby  — `aria-labelledby` resolving to a VISIBLE element;
+ *   row-heading — the control-bar / settings-row idiom, where the visible name is the row's
+ *                 heading (`.report-lab` before a `.report-row`, `.set-k` inside a `.set-row`)
+ *                 and `aria-label` carries the programmatic half.
+ *
+ * `placeholder` is deliberately NOT an idiom: a placeholder disappears on the first keystroke,
+ * which is the defect (issue 136). `aria-label` alone is not one either — it names the control for
+ * a screen reader and for nobody else, and D13 asks for a visible label.
+ *
+ * `field` marks the population D13's visible-label rule governs: the bordered-box controls the
+ * rule describes ("one border, one radius, one focus idiom") — text inputs, selects, textareas.
+ * A checkbox is not one of those: it is named by the word beside it, and the calendar's corner
+ * select box is an ICON-ONLY affordance, which design.html D16 / A02 govern instead — those owe
+ * an accessible name, not a visible label. So the sweep asks BOTH populations for a name and only
+ * the fields for a visible one.
+ *
+ * Scope: form controls (`input` / `select` / `textarea`). The Settings global-hotkey CAPTURE
+ * control is a `[tabindex]` span rather than a field, and is covered by HOTKEY_NO_TRAP.
+ */
+function sweepFieldLabels() {
+  const { visible } = window.__probe;
+  const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const view = document.querySelector('.views .view:not([hidden])');
+  const controls = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+    .filter((el) => el.type !== 'hidden')
+    .filter(visible);
+  const fields = controls.map((el) => {
+    const own = el.closest('label') ?? (el.id ? document.querySelector(`label[for="${el.id}"]`) : null);
+    // A wrapping label's text includes the control's own; a `<select>` contributes its option
+    // list, so strip every descendant control's text before reading the label's own words.
+    const labelText = (() => {
+      if (!own || !visible(own)) return '';
+      const clone = own.cloneNode(true);
+      for (const c of clone.querySelectorAll('input, select, textarea')) c.remove();
+      return text(clone);
+    })();
+    const byText = (el.getAttribute('aria-labelledby') ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((id) => document.getElementById(id))
+      .filter((t) => t && visible(t))
+      .map(text)
+      .join(' ')
+      .trim();
+    const headEl = el.closest('.set-row')?.querySelector('.set-k')
+      ?? (el.closest('.report-row')?.previousElementSibling?.classList?.contains('report-lab')
+        ? el.closest('.report-row').previousElementSibling
+        : null);
+    const headText = headEl && visible(headEl) ? text(headEl) : '';
+    const idiom = labelText ? 'label' : byText ? 'labelledby' : headText ? 'row-heading' : 'none';
+    return {
+      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      idiom,
+      name: labelText || byText || headText,
+      field: !(el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')),
+      // The programmatic name, ignoring `placeholder` and `title` — the four start-* fields had
+      // none at all, which is the "no accessible name" half of the issue.
+      named: !!(el.getAttribute('aria-label')?.trim() || labelText || byText),
+      // A persistent, on-screen element names it — the "no visible label" half.
+      visiblyNamed: !!(labelText || byText || headText),
+    };
+  });
+  return { total: fields.length, fields };
+}
+
+// FIELD_LABELS — design.html D13 (and A01, whose field-border exemption is CONDITIONED on the
+// label being there): every field carries a VISIBLE label. Issue 136 measured four fields with no
+// accessible name AT ALL (the start form's description / client / project / tags) and three more
+// named only by a placeholder + an invisible `aria-label` (#add-desc, #search, #rep-name) — so the
+// name either vanished on the first keystroke or never existed. Nothing could catch it: the GOLD
+// design guard scores tokens, contrast and spacing, and label presence is a structural fact about
+// the DRIVEN DOM. This scene drives the real renderer through all five views and, in each, sweeps
+// every visible form control for TWO facts: EVERY control has a programmatic name that is not its
+// placeholder (D13's floor, and D16/A02's for the icon-shaped ones), and every FIELD — the bordered
+// controls D13's rule describes, so not the checkboxes — has a persistent VISIBLE element supplying
+// that name. The views are driven into the states that
+// hold fields — the Timer start-details disclosure, the Entries add form + Custom range, the
+// Reports builder + Custom range, and Settings; the Clients view carries no field at rest (its
+// create/rename micro-forms are transient surfaces of their own and are not swept here).
+// Every row-heading-idiom control is NAMED in the justification, so that population stays
+// reviewable the way TARGET_SIZE's spacing exceptions do.
+async function sceneFieldLabels(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState())));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+
+  const surfaces = [];
+  const sweep = async (surface) => surfaces.push({ surface, ...(await page.evaluate(sweepFieldLabels)) });
+
+  // Timer — the start-details disclosure holds the four fields the issue found nameless. It is
+  // idle-only (§12 R05), and this snapshot is idle.
+  await page.click('.nav-item[data-view="timer"]');
+  await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+  await page.click('#start-toggle');
+  await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+  await sweep('timer (start details)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-timer.png') });
+
+  // Entries — the toolbar search, the unified add form, and the Custom range's date pair.
+  await page.click('.nav-item[data-view="entries"]');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.click('#el-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('entries (add form + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
+
+  // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
+  await page.click('.nav-item[data-view="clients"]');
+  await sweep('clients');
+
+  // Reports — the builder's name field and its Custom range.
+  await page.click('.nav-item[data-view="reports"]');
+  await page.click('#rep-new');
+  await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+  await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+  await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
+  await sweep('reports (builder + custom range)');
+  await page.screenshot({ path: join(EVIDENCE, 'field-labels-reports.png') });
+
+  // Settings — every §14 control, plus the Backups group's retention picker.
+  await page.click('.nav-item[data-view="settings"]');
+  await page.waitForSelector('#settings-panel .set-row', { state: 'attached' });
+  await sweep('settings');
+  await page.close();
+
+  const all = surfaces.flatMap((s) => s.fields.map((f) => ({ surface: s.surface, ...f })));
+  const fields = all.filter((f) => f.field);
+  const unnamed = all.filter((f) => !f.named).map((f) => `${f.surface}:${f.label}`);
+  const placeholderOnly = fields.filter((f) => !f.visiblyNamed).map((f) => `${f.surface}:${f.label}`);
+  const rowIdiom = fields.filter((f) => f.idiom === 'row-heading').map((f) => `${f.label} → '${f.name}'`);
+  // Guard-the-guard: an empty sweep satisfies both emptiness assertions vacuously. The five views
+  // hold well over 20 visible fields across these states, so a sweep that has gone blind fails.
+  const ok = fields.length >= 20 && unnamed.length === 0 && placeholderOnly.length === 0;
+  record(
+    'FIELD_LABELS',
+    ok,
+    `D13 sweep over ${all.length} visible controls, ${fields.length} of them fields ` +
+      `(${surfaces.map((s) => `${s.surface}=${s.total}`).join(', ')}): ` +
+      `no accessible name at all (every control, D13 + D16)=[${unnamed.join('; ') || 'none'}]; ` +
+      `field named but not by a visible element (placeholder / aria-label only)=[${placeholderOnly.join('; ') || 'none'}]; ` +
+      `row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[${rowIdiom.join('; ') || 'none'}]`,
+    'field-labels-timer.png',
+  );
+}
+
 // TARGET_SIZE — design.html A03 (WCAG 2.2 SC 2.5.8): every interactive target measures at
 // least 24×24 CSS px, or falls under a WCAG-sanctioned exception. A machine sweep over the
 // running main window routes through all five views and, in each, collects every VISIBLE
@@ -6194,6 +6349,7 @@ const SCENES = {
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
   PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
+  FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
   TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
