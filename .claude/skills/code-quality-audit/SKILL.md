@@ -48,8 +48,11 @@ Weight attention by change frequency (`git log` hot spots) — depth problems
 only cost where change happens, so a finding in cold code must argue why it
 matters anyway. Each subagent returns candidates with file:line evidence and
 quantification where cheap (callers, line counts, commit counts). The operator
-verifies every candidate by reading the code before it survives — subagent
-findings are leads, not verdicts — and drops any the evidence refutes.
+verifies everything a subagent returns before it survives — **findings and
+clearances alike are leads, not verdicts** — and drops what the evidence
+refutes. A clearance is worth exactly what the test behind it is worth, so
+prefer executing to inspecting: run the real gates rather than reason about
+what they would say.
 
 ## Phase 2 — grill the owner
 
@@ -71,3 +74,9 @@ sentence (the handle), evidence (file:line, both sites for consistency
 findings, numbers where they exist), why it costs (what drifts, what a future
 change pays, what a reader mislearns), severity and confidence, honestly.
 Over-delivery findings name the deletion, not a redesign.
+
+**Never publish a clearance list.** Dimensions that produced nothing produce
+nothing: no reader re-tests a negative, so an inventory of what "came back
+clean" only reads as settled ground and suppresses the next run's re-check
+(#184, #185). A lead handed to the run may be reported refuted, naming the
+test that refuted it — that answers a question, it does not clear a surface.

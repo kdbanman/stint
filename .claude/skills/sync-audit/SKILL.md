@@ -82,7 +82,9 @@ demonstrably exercises, not by its filename or header comment.
 
 The operator holds this phase — dedupe across readers, then verify before
 filing: re-check every absence claim ("no test covers X", "nothing runs Y")
-independently, and require file:line evidence on both sides of every finding.
+and every agrees verdict independently — a clearance is worth exactly what
+the check behind it is worth — and require file:line evidence on both sides
+of every finding.
 Every finding carries the same two labels — **Agentic Discovery** (the family
 label every discovery instrument applies) plus **Agentic Sync Audit** (the
 provenance label, this instrument's alone) — regardless of which of the two
