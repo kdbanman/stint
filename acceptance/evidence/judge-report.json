@@ -154,6 +154,12 @@
       "screenshot": "main-edit-reject.png"
     },
     {
+      "item": "ADD_REFUSAL_PALETTE",
+      "pass": true,
+      "justification": "refused save={\"erred\":true,\"color\":\"rgb(206, 44, 49)\",\"background\":\"rgb(254, 235, 236)\",\"border\":\"rgb(206, 44, 49)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"stop time must be after start time\",\"notWritten\":true} (danger=true); reopened={\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag base intact=true); overlap advisory={\"shown\":true,\"written\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag=true); palettes differ=true",
+      "screenshot": "add-refusal-palette.png"
+    },
+    {
       "item": "MERGE_CONFLICT",
       "pass": true,
       "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}",
