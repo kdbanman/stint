@@ -271,10 +271,13 @@ header.mast {
   margin-top: 12px;
   flex-wrap: wrap;
 }
+/* The label is the target — clicking the word toggles the box — so the A03 floor is the LABEL's
+   to clear, not the 13px native checkbox's (issue 148). Same for every Billable/Round label. */
 .liveedit .le-bill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px;
   font-size: 13px;
   color: var(--ink);
 }
@@ -615,6 +618,7 @@ s {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px; /* the label is the target (A03, issue 148) */
   font-size: 13px;
   color: var(--ink);
 }
@@ -698,6 +702,7 @@ s {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-height: 24px; /* the label is the target (A03, issue 148) */
   font-size: 13px;
   color: var(--ink);
 }
@@ -963,9 +968,27 @@ textarea:focus-visible {
   align-items: center;
 }
 /* The removable × is a SUB-affordance INSIDE the already-bordered chip — the one sanctioned
-   in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
-.chip .chip-x { color: var(--muted); cursor: pointer; font-weight: 400; }
+   in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance.
+   It is a real button carrying the i-x sprite glyph (issue 148): it used to be a <b> with a
+   click listener, which no keyboard could reach (A04), carried no role (D16), and measured
+   10x17 against A03's 24x24 floor. The negative margins keep the CHIP the size it always was —
+   the button is a 24x24 hit area wrapped around an 11px glyph, so only the target grew. */
+.chip .chip-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: -4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+.chip .chip-x .ic { width: 11px; height: 11px; }
 .chip .chip-x:hover { color: var(--ink); }
+.chip .chip-x:hover .ic { color: var(--ink); }
 
 .flags { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; }
 /* A flag is a worded warn pill (inclusivity — colour is never the only signal). */
@@ -1353,7 +1376,8 @@ button.danger:hover { background: var(--danger-weak); }
   font-variant-numeric: tabular-nums;
 }
 
-.report-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); }
+/* the label is the target (A03, issue 148) — see .le-bill */
+.report-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--ink); }
 .report-field {
   font-family: var(--sans);
   font-size: 13px;
@@ -1745,7 +1769,11 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-nav button .ic { width: 14px; height: 14px; }
 .stp-nav button:hover { background: var(--hover); color: var(--ink); }
-.stp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+/* design.html A03 (issue 148): the day cells are 2px apart, so no spacing exception is open to
+   them — the floor has to be in the track itself. The minmax makes the 24px floor the grid's
+   own rule, so a calendar column narrow enough to shave a cell under it overflows visibly
+   instead of quietly measuring 23.9. */
+.stp-grid { display: grid; grid-template-columns: repeat(7, minmax(24px, 1fr)); gap: 2px; }
 .stp-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; }
 .stp-d {
   text-align: center; padding: 8px 0; font-size: 12.5px; border-radius: var(--r1);
@@ -1793,9 +1821,14 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-block.me .stp-lab-top { top: 4px; }
 .stp-block.me .stp-lab-bot { bottom: 4px; }
+/* design.html A03 (issue 148): a 12px-tall grab band is under the target floor. The band is 24px
+   now, and it grew DOWNWARD — the 11px it reaches into the block is exactly what it reached
+   before, so the block's own drag area is untouched (short blocks included) and the other 13px
+   sit below the block edge, where nothing else is a target. The bar itself does not move:
+   flex-start + a 4px pad puts it back on the same pixels centring gave it at 12px tall. */
 .stp-block.me .stp-resize {
-  position: absolute; left: 0; right: 0; bottom: -1px; height: 12px;
-  cursor: ns-resize; display: flex; align-items: center; justify-content: center; touch-action: none;
+  position: absolute; left: 0; right: 0; bottom: -13px; height: 24px; padding-top: 4px;
+  cursor: ns-resize; display: flex; align-items: flex-start; justify-content: center; touch-action: none;
 }
 /* the resize grip bar — accent-coloured like the start grip's outline (the block's fill is
    the weak accent, so the drag affordances carry the full-strength accent signal); pill
@@ -1845,7 +1878,10 @@ button.danger:hover { background: var(--danger-weak); }
    Reuses the popover's .stp-cal / .stp-track / .stp-block visuals; the .stp-dayview is the
    scroll window (G16: a scroll window over the full 24h track, never a clipped one). */
 .stp-range { max-width: none; padding: 12px 16px 12px; }
-.stp-range .stp-body { display: grid; grid-template-columns: 196px 1fr; gap: 0; }
+/* 204px, not 196px: the calendar column has to hold seven 24px day cells plus their six 2px
+   gutters plus its own 16px right padding and 1px rule (issue 148 — at 196px each cell came out
+   23.84px, missing A03's floor by the kind of rounding error only a measurement finds). */
+.stp-range .stp-body { display: grid; grid-template-columns: 204px 1fr; gap: 0; }
 .stp-range .stp-cal { border-right: 1px solid var(--rule); padding: 4px 16px 4px 0; }
 .stp-range .stp-day { padding: 0 0 0 16px; }
 .stp-range .stp-dayview {
@@ -1985,6 +2021,10 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 8px 12px;
   min-width: 160px;
 }
+/* A disabled settings field greys ITSELF — muted on wash, the same treatment the unified form's
+   disabled select carries. A disabled control is design.html §07's recorded A01 exemption, so a
+   dim is legal here and only here; nothing around the field may borrow it. */
+.set-field:disabled { color: var(--muted); background: var(--wash); }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
    row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM") and
    tabular so the two times line up; they reuse the .set-field chrome via the shared class. */
@@ -1997,9 +2037,12 @@ body.popover { background: var(--canvas); margin: 0; }
 }
 .set-hhmm-sep { color: var(--muted); font-size: 13px; }
 /* §14 — a row whose control is inapplicable under the current mode (the Around span while the
-   picker window is working_hours) dims and stops interacting; the control itself also carries
-   `disabled`, this is the visual half. The dim never hides the row — it stays legible. */
-.set-row.off { opacity: 0.5; }
+   picker window is working_hours) marks the state on the row and stops its control interacting,
+   but the DIM rides on the `disabled` control alone (the .set-field:disabled rule above) — never
+   on the row. Dimming the row applied the control's exemption to everything beside it: `.set-k`
+   is ordinary readable text, and at the row's opacity 0.5 it composited to 3.19:1 against A01's
+   4.5:1 floor while the comment here claimed it "stays legible" (issue 155). The label keeps its
+   full --ink; the greyed select is what says the row is off. */
 .set-row.off .set-ctrl { pointer-events: none; }
 /* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }
@@ -2007,7 +2050,9 @@ body.popover { background: var(--canvas); margin: 0; }
    state is inked (--ink), NOT accented, so the accent stays on the primary action only. */
 .set-toggle {
   width: 38px;
-  height: 22px;
+  /* 24px, the design.html A03 floor (issue 148) — the track used to be 22px tall, which left it
+     depending on the 25px of clearance around it rather than clearing the floor outright. */
+  height: 24px;
   border-radius: 999px;
   background: var(--rule-strong);
   border: none;
@@ -2017,9 +2062,10 @@ body.popover { background: var(--canvas); margin: 0; }
   flex: none;
   transition: background 0.12s;
 }
+/* The knob keeps its 18px; 3px of top offset is what centres it in the 24px track. */
 .set-toggle i {
   position: absolute;
-  top: 2px;
+  top: 3px;
   left: 2px;
   width: 18px;
   height: 18px;
@@ -2426,19 +2472,30 @@ body.popover { background: var(--canvas); margin: 0; }
    and stays lit once selected. Styled from an <input> so `.check()`/`.sel` still resolve. */
 .ev .ck {
   position: absolute;
-  top: 5px;
-  left: 5px;
+  /* 1px, not the 5px it reads as: the 4px transparent ring below puts the PAINTED box back on
+     the same 5px corner offset it always had. */
+  top: 1px;
+  left: 1px;
   z-index: 6;
-  width: 16px;
-  height: 16px;
+  /* design.html A03 (issue 148): the TARGET is 24x24 — it measured 16x16 five pixels from the
+     ops chip, too crowded to claim any spacing exception. What grew is the hit area alone: a
+     4px TRANSPARENT border rings the paint, the paper fill is clipped to the padding box, and
+     the 1.5px neutral edge is an inset shadow (inset shadows start at the padding box), so
+     every painted pixel lands exactly where it did before. The ops chip keeps its clearance —
+     the box now spans 1px..25px and the chip starts at 26px. */
+  width: 24px;
+  height: 24px;
   margin: 0;
   appearance: none;
   -webkit-appearance: none;
-  /* 4px — the recorded design.html D08 exemption: 8px on a 16px checkbox is
-     half the box — it would read as a radio/circle, not a checkbox (mock main.html agrees). */
-  border-radius: 4px;
-  border: 1.5px solid var(--rule-strong);
+  /* The ring's radius, not the checkbox's: minus the 4px border it leaves the PAINTED corner at
+     4px — the recorded design.html D08 exemption, because 8px on a 16px checkbox is half the
+     box and would read as a radio/circle, not a checkbox (mock main.html agrees). */
+  border-radius: var(--r1);
+  border: 4px solid transparent;
   background: var(--paper);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1.5px var(--rule-strong);
   cursor: pointer;
   opacity: 0;
   transition: opacity 0.12s ease;
@@ -2464,9 +2521,10 @@ body.popover { background: var(--canvas); margin: 0; }
    stays a semantic token (D01/D04); the SVG inside the mask is pure alpha, `white` naming
    "opaque", not a palette value. */
 .ev .ck:checked {
-  border-color: var(--rule-strong);
   background: var(--paper);
-  box-shadow: var(--sh-chip);
+  /* The neutral edge rides along with the chip rung — the resting inset shadow IS the box's
+     1.5px border (see above), so the lift adds to it rather than replacing it. */
+  box-shadow: inset 0 0 0 1.5px var(--rule-strong), var(--sh-chip);
 }
 .ev .ck:checked::after {
   content: '';
@@ -2484,8 +2542,9 @@ body.popover { background: var(--canvas); margin: 0; }
    meet the 24×24 target size outright). The chip carries the affordance (paper bg, 1px line
    border, raise shadow) on hover; the buttons stay in the DOM and clickable via opacity at rest
    so every `data-act` selector is intact. DOM order matches the mockup, so no row-reverse.
-   Icon-only + a fixed 24px width keeps the chip compact (~84px) so it clears the top-left
-   corner checkbox even in a narrow day column — no occlusion.
+   Icon-only + a fixed 24px width keeps the chip compact (78px) so it clears the top-left
+   corner checkbox — whose own target is 24px wide now — even in a narrow day column: 78 + 24
+   of the block's 109px inner width leaves the two 2px apart. No occlusion.
    design.html §4 — "no layout shift on hover/selection": the chip is a pure OVERLAY. It reserves
    no flow space at rest and claims none on hover, so the text under the pointer never moves
    (issue 151). The checklist's parenthetical remedy — reserve the space at rest — is refused
@@ -2498,7 +2557,11 @@ body.popover { background: var(--canvas); margin: 0; }
   z-index: 5;
   display: flex;
   gap: 2px;
-  padding: 2px;
+  /* No padding of its own (issue 148): the corner checkbox's target grew from 16px to the 24px
+     A03 floor, and a 111px-wide block only holds both if the chip gives back its 4px. The
+     buttons are 24×24 around a 13px glyph, so the chip still reads as padded — the breathing
+     room is inside the buttons. */
+  padding: 0;
   margin: 0;
   float: none;
   border-radius: var(--r1);
