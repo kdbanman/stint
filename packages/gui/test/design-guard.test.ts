@@ -939,21 +939,28 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
     ).toEqual([]);
   });
 
-  it('every listed exception is still in use (the lists stay earned)', () => {
+  it('every listed exception still spends its licence (the lists stay earned)', () => {
     // The mirror of the test above, and the reason the lists cannot rot into a permissive blob: an
-    // entry whose selector no longer declares a radius is a licence nobody is using, sitting there
-    // ready to legalise whatever reclaims the name.
-    const declaring = new Set(
-      styledSites()
-        .filter((s) => RADIUS_DECL.test(s.declarations))
-        .map((s) => s.site),
+    // entry whose selector has stopped writing the value it is licensed for is a licence nobody is
+    // using, sitting there ready to legalise whatever reclaims the name. Checking merely that the
+    // selector still declares SOME radius is not enough — `.ok` moving from 999px to the control
+    // radius would leave the pill licence standing unspent.
+    const spent = new Map<string, Set<string>>();
+    for (const d of radiusDeclarations()) {
+      const parts = spent.get(d.site) ?? new Set<string>();
+      for (const p of d.value.split(/[\s/]+/).filter(Boolean)) parts.add(p);
+      spent.set(d.site, parts);
+    }
+    const licences: Array<[Set<string>, string]> = [
+      [EXEMPT_4PX, '4px'],
+      [ENTAILED_CIRCLES, '50%'],
+      [PILLS_AND_TAGS, '999px'],
+    ];
+    const dead = licences.flatMap(([list, value]) =>
+      [...list].filter((site) => !spent.get(site)?.has(value)).map((site) => `${site} → ${value}`),
     );
-    const dead = [...EXEMPT_4PX, ...ENTAILED_CIRCLES, ...PILLS_AND_TAGS].filter(
-      (s) => !declaring.has(s),
+    expect(dead, 'an off-trio radius is licensed for a selector that no longer writes it').toEqual(
+      [],
     );
-    expect(
-      dead,
-      'an off-trio radius is licensed for a selector that no longer declares one',
-    ).toEqual([]);
   });
 });
