@@ -217,7 +217,7 @@ window.STP = (function () {
     box.className = 'stp stp-inline stp-start-only';
     box.innerHTML =
       `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
-      `<div class="stp-snaphint"><span class="stp-pill">snap · 5 min</span>` +
+      `<div class="stp-snaphint"><span class="stp-snap">snap · 5 min</span>` +
       `<span>Drag the grip to adjust the start — the running entry has no end until you stop it</span></div>`;
     host.appendChild(box);
     const viewport = box.querySelector('.stp-dayview');
@@ -371,7 +371,7 @@ window.STP = (function () {
       `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
       `</div>` +
       `</div>` +
-      `<div class="stp-snaphint"><span class="stp-pill">snap · 5 min</span>` +
+      `<div class="stp-snaphint"><span class="stp-snap">snap · 5 min</span>` +
       `<span>Drag the span to set start &amp; stop — or type exact times below</span></div>`;
     host.appendChild(box);
     const track = box.querySelector('.stp-track');
