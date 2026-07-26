@@ -1740,7 +1740,19 @@ that rule and this is the whole of it. Beside it, the tabular half of D06: no
 surface writes `font-variant-numeric` to anything but `tabular-nums` , and
 every site the renderer paints a `backupLabel()` timestamp into resolves to
 the `--num` face with tabular figures (`.backup-meta` printed a proportional
-timestamp — the app's one time string without the idiom). The calendar entry's
+timestamp — the app's one time string without the idiom). The same shape now
+covers D08/D14 as well (issue #153): every authored `border-radius` on every
+surface is the trio recomputed from `design.tokens.json` (8px controls, 12px
+cards, 16px window & overlays), or it sits on one of three LITERAL exception
+lists — the two 4px marks D08 records, the circles something else already
+entails (dots, radios, the switch knob), and D14's pill-and-tag population —
+matched exactly by selector, so a sixth radius and a new selector reaching for
+an old licence both fail. A mirror test requires every listed exception to
+still declare a radius, so the closed list cannot rot into a permissive blob.
+The audit counted 504 pill-shaped elements that were neither pill nor tag,
+including the six-button date-range control sitting beside an 8px segment doing
+the same job. D14's second clause — that a pill's colour is semantic, never
+decorative — stays a rendered JUDGE call. The calendar entry's
 action
 buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
