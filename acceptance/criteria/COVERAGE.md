@@ -817,13 +817,16 @@ cadence
 
 ### PRD §11
 `cli/test/gold/cli.test.ts` , `schemas/*` . **Every `tt … --json` read shape has
-a published schema** — the five `serialize.ts` snake_case shapes (status,
-list/export-entry, report, report-def(+list), favorite(+list), backup(+list))
-plus the `emitList` reference-data/sleep families
-(`client`/`project`/`tag`/`sleep`) and the raw camelCase `settings` object
-`config ls` dumps — so GOLD's artefact-is-criterion claim covers the whole
-`--json` surface with no shape left to an implicit "whatever the core type is"
-contract. **`tt list` description cell + no `--by` (issue #43, §05
+a published schema** — the nine `serialize.ts` snake_case shapes (status,
+report, report-def(+list), favorite(+list), backup(+list), and the `emitList`
+reference-data/sleep families `client`/`project`/`tag`/`sleep`), core's own
+`toJsonEntries` export shape behind `tt list` / `tt export`
+(`list`/`export-entry`), and the raw camelCase `settings` object `config ls`
+dumps — so GOLD's artefact-is-criterion claim covers the whole `--json` surface
+with no shape left to an implicit "whatever the core type is" contract. The
+split between those homes is itself the rule (issue #171): core owns the shapes
+core exports, `serialize.ts` owns every snake_case shape `tt` invents for
+`--json`. **`tt list` description cell + no `--by` (issue #43, §05
 R10/§11/G11)**: the `tt list` HUMAN table renders a description's FIRST line
 only, capped at 60 chars, with a trailing `…` whenever content was dropped (a
 first line past 60 chars OR a multiline description → line 1 + `…` ) — the
