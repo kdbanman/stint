@@ -165,10 +165,12 @@ header.mast {
 }
 /* The running count-up is one of the two sanctioned accent uses on this card. */
 .timer-card.running .clock { color: var(--accent); }
-/* The running/idle word is redundant — the green dot + the clay running clock already say it —
-   so it is hidden (kept in the DOM for assistive tech + the harness probe). */
+/* design.html D05/A05 — this line is what keeps the card off colour-alone signalling. It was
+   display:none on the reasoning that "the green dot + the clay clock already say it", but the
+   card carried no dot: the recoloured count-up WAS the whole signal (issue 142). Worded and
+   dotted now — the treatment .timer-strip already carried and this card never did. */
 .timer-card .state {
-  display: none;
+  display: flex;
   align-items: center;
   gap: 8px;
   font-size: 11px;
@@ -178,8 +180,19 @@ header.mast {
   color: var(--muted);
   margin-top: 8px;
 }
-/* The running-state indicator is the other sanctioned accent use on this card. */
-.timer-card.running .state { color: var(--accent); }
+/* The dot is the other sanctioned accent use on this card, and it is a non-text mark on the A02
+   floor — which is why the accent sits here and not on the word beside it. At 11px the word
+   would be accent-as-text below A01's ≥24px large-text branch, the same breach issue 141 closed
+   on the strip clock; the word inks instead, and the accent signals in a shape A01 permits. */
+.timer-card .tc-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex: none;
+}
+.timer-card.running .state { color: var(--ink); }
+.timer-card.running .tc-dot { background: var(--accent); }
 .timer-card .ctx { flex: 1; min-width: 0; }
 .timer-card .ctx .desc { font-size: 17px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
 .timer-card.idle .ctx .desc { color: var(--muted); font-weight: 450; }
@@ -2309,8 +2322,14 @@ body.popover { background: var(--canvas); margin: 0; }
    gate exists to offer, so the block opens up for exactly as long as the gate is up. */
 .dt .ev:has(.confirm, .split-at) { overflow: visible; }
 /* Hover is a LIFT, not a tint (D09): the block climbs the ladder chip → raise and comes forward.
-   It keeps its paper fill and neutral edge — the accent stays spent on the running state. */
-.dt .ev:hover { box-shadow: var(--sh-raise); z-index: 3; }
+   It keeps its paper fill and neutral edge — the accent stays spent on the running state.
+   `:focus-within` is the keyboard's hover (issue 140): the block is one tab stop and its controls
+   hang off it, so the block holding focus — itself or through one of those controls — is the same
+   "this is the current entry" state the pointer produces, and takes the same rung. It also has to
+   come FORWARD: the A04 focus outline is drawn 2px outside the block, and a neighbouring block
+   later in the column's DOM order would otherwise paint over it. */
+.dt .ev:hover,
+.dt .ev:focus-within { box-shadow: var(--sh-raise); z-index: 3; }
 /* The CONTINUING forms carry no resting lift: a closed shadow would redraw the very edge they
    mean to leave open — the running block's future fade (G8) and each cross-midnight segment's
    boundary edge (issue #71). Hover still lifts them; there the shadow is a pointer affordance. */
@@ -2375,7 +2394,16 @@ body.popover { background: var(--canvas); margin: 0; }
   transition: opacity 0.12s ease;
 }
 .ev.wck { padding-left: 28px; }
+/* design.html A04 — "focus visible on every interactive element, NEVER FULLY OBSCURED" (issue
+   140). The checkbox was the one hover-revealed control with no focus clause: Tab landed on a
+   16×16 box still at zero opacity, and since `opacity` takes the outline with it, the focus ring
+   did not paint either — the focused control and its indicator invisible together, which is A04
+   failed as completely as it can be failed. `:focus-within` on the BLOCK is the
+   same clause `.op-btn` already carries below, and the block is now the tab stop that reaches
+   both — so arriving at an entry opens its whole set of affordances at once, which is also how a
+   keyboard user learns the controls are there at all. */
 .ev:hover .ck,
+.ev:focus-within .ck,
 .ev .ck:checked,
 .ev.on .ck { opacity: 1; }
 /* D12 on the MECHANISM: the control that makes the choice may not spend the accent either. It

@@ -504,7 +504,9 @@ function renderTimerCard(running) {
       }
     }
   }
-  $('timer-state').textContent = running ? 'running' : 'idle';
+  // The word goes into the inner span, not the whole .state line — the line also holds the
+  // D05 dot, and writing textContent on the line would delete it (issue #142).
+  $('timer-state-word').textContent = running ? 'running' : 'idle';
   if (running) {
     $('timer-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
     $('timer-desc').textContent = running.description ?? 'your timer';
@@ -723,6 +725,9 @@ function emptyEntries() {
 // corner checkbox (`.ck`) + the ops toolbar (Delete / Split / Edit); a click on the inert body
 // opens the unified editor. The running/open entry gets the future-fade `.run` treatment, a
 // start-only block with no end (§05 R06), and no merge checkbox (only bounded spans merge).
+//
+// §12 R14 · design.html A04 (issue 140): the block is ONE tab stop and its controls hang off it
+// (blockKeys below), not four top-level stops apiece — see the tabIndex/role comment inline.
 function calEvent(e, seg) {
   const running = e.endUtc === null;
   // §12 R16 (issue #71): the block's vertical bounds come from the SEGMENT (calEntrySegments) —
@@ -750,6 +755,19 @@ function calEvent(e, seg) {
   el.dataset.id = String(e.id);
   el.style.top = topMin * CAL_PX_PER_MIN + 'px';
   el.style.height = Math.max((botMin - topMin) * CAL_PX_PER_MIN, 18) + 'px';
+  // §12 R14 · design.html A04 (issue 140): the block is the calendar's TAB STOP. Its four
+  // affordances — the merge checkbox and the three ops buttons — used to be four top-level stops
+  // each, so a three-week calendar put ~200 of them between the keyboard and the rest of the view,
+  // every one of them at zero opacity until the pointer arrived. One stop per block cuts that to
+  // one per entry, and the controls are reached FROM the focused block (blockKeys in wire()).
+  // `role="group"` is what makes a focusable container legitimate — and what makes `aria-label`
+  // exposed on it at all; the label names the entry the stop stands for, so the announcement is
+  // "quick call, Acme / API, 08:00–08:10", not fifty unlabelled groups. The block is not a
+  // `role="button"` even though a click opens the editor: a button may not contain interactive
+  // descendants, and this one contains four. The semantic path to the editor is the Edit button
+  // inside it; Enter on the block is the keyboard twin of the click-anywhere affordance.
+  el.tabIndex = 0;
+  el.setAttribute('role', 'group');
 
   // Every segment of one entry carries the SAME full start–end label, so both blocks of a
   // cross-midnight span read as the one entry they share an id with.
@@ -757,11 +775,19 @@ function calEvent(e, seg) {
     ? `${localTime(e.startUtc)} –`
     : `${localTime(e.startUtc)}–${localTime(e.endUtc)}`;
   const runDot = running ? '<span class="run-dot" aria-hidden="true"></span>' : '';
+  // The focusable group's accessible name (see the tabIndex comment): the same three facts the
+  // block paints, in the same order — description, client/project, span.
+  el.setAttribute(
+    'aria-label',
+    [e.description ?? '(no description)', e.clientLabel, timeLabel].filter(Boolean).join(', '),
+  );
 
   let html = '';
   // §06 R3: the hover-corner checkbox marks a CLOSED span for the multi-select merge; the open
   // row has no end, so it is not offered. It doubles as the legacy `.sel` selection hook.
-  if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" aria-label="Select entry" />';
+  // `tabindex="-1"` (issue 140): still focusable, no longer a top-level stop — the block owns the
+  // stop and hands focus here on ArrowLeft/ArrowRight. Every `.check()` / `.sel` hook is intact.
+  if (!running) html += '<input type="checkbox" class="ck sel" data-act="select" tabindex="-1" aria-label="Select entry" />';
   // Hover ops: Delete / Split / Edit, the same `data-act` controls the row affordances and the
   // JUDGE scenes drive; a click opens the unified editor (wire()), where tags are edited too.
   html += `<span class="ops">${actionButtons(e)}</span>`;
@@ -853,19 +879,24 @@ function editorFlagsInnerHtml(e) {
 // that form, §07/G6), Split (closed only, §06 R2), Delete (two-step, §06 R1). Sleep subtract/
 // restore is NOT a calendar-hover op — it is the reversible control inside the unified editor
 // (§12 R10), reached by opening the entry.
+//
+// Each button carries `tabindex="-1"` (issue 140): it stays a native <button> — Enter/Space
+// activatable, click-dispatching, screen-reader-announced — but it is not a TOP-LEVEL tab stop.
+// Focus reaches it from the block that contains it (wire() → blockKeys), so a calendar of fifty
+// entries costs fifty stops instead of two hundred.
 function actionButtons(e) {
   const actions = [];
   // §06 R1: Delete opens the two-step confirm gate (armDelete); the x icon reads as remove.
-  actions.push('<button class="op-btn" type="button" data-act="delete" title="Delete" aria-label="Delete entry"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>');
+  actions.push('<button class="op-btn" type="button" tabindex="-1" data-act="delete" title="Delete" aria-label="Delete entry"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>');
   // §06 R2: Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
   // bounded span). The open/running entry has no end, so it exposes no Split.
-  if (e.endUtc !== null) actions.push('<button class="op-btn" type="button" data-act="split" title="Split" aria-label="Split entry"><svg class="ic" aria-hidden="true"><use href="#i-split" /></svg></button>');
+  if (e.endUtc !== null) actions.push('<button class="op-btn" type="button" tabindex="-1" data-act="split" title="Split" aria-label="Split entry"><svg class="ic" aria-hidden="true"><use href="#i-split" /></svg></button>');
   // §12 R06: Edit opens the UNIFIED ENTRY FORM in edit mode (openEntryForm) inline in the Entries
   // view — one form surfacing EVERY tt-editable field plus the footer Split + two-step Delete, the
   // GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere on the entry opens the
   // same form (wired below); tags edit inside it (§12 R06/G6), so no separate per-row Edit-tags
   // control or modal is needed (there is no consolidated modal editor; the unified form owns editing).
-  actions.push('<button class="op-btn" type="button" data-act="edit" title="Edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>');
+  actions.push('<button class="op-btn" type="button" tabindex="-1" data-act="edit" title="Edit" aria-label="Edit entry fields"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>');
   return actions.join('');
 }
 
@@ -889,6 +920,51 @@ function wire(row, e) {
     if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at')) return;
     if (row.classList.contains('editing')) return; // already the form
     void openEntryForm(row, e);
+  });
+  blockKeys(row, e);
+}
+
+// The block's four affordances in DOM order — merge checkbox, then Delete / Split / Edit — which
+// is also their left-to-right order on screen (the checkbox holds the top-left corner, the ops
+// chip the top-right). Read live on every keypress, because a mounted gate replaces the button it
+// grew from: while the delete confirm or the split picker is up, that op-btn is simply not here.
+const blockControls = (row) => [...row.querySelectorAll('.ck, .op-btn')];
+
+// §12 R14 · design.html A04 (issue 140) — the block's ROVING FOCUS. Tab spends one stop per entry
+// (calEvent's tabIndex); these keys are how the four controls are reached once a block holds it:
+//
+//   ← / →    step through the block's controls, wrapping; from the block itself the first press
+//            enters at the near end (→ the checkbox, ← the Edit button).
+//   Escape   from a control back to the block, so leaving is a keystroke rather than a Tab walk.
+//   Enter    on the block: open the unified editor — the keyboard twin of the click-anywhere-on-
+//   / Space  the-body affordance above. On a control, the browser's own button/checkbox
+//            activation already handles both keys, so this never sees them.
+//
+// Tab out of a control needs no code: the controls are `tabindex="-1"`, so the next tab stop is
+// the next block, exactly as if focus had never left this one.
+//
+// A MOUNTED GATE OWNS ITS OWN KEYS. The two-step delete confirm and the split picker mount real
+// controls — including a text input — inside the block, and they are transient chrome, not the
+// entry's affordances. Intercepting ← / → there would eat the caret keys inside the split field,
+// so every key originating in a gate passes straight through to it.
+function blockKeys(row, e) {
+  row.addEventListener('keydown', (ev) => {
+    if (ev.target.closest('.confirm, .split-at')) return;
+    if (ev.key === 'ArrowRight' || ev.key === 'ArrowLeft') {
+      const controls = blockControls(row);
+      if (!controls.length) return;
+      const step = ev.key === 'ArrowRight' ? 1 : -1;
+      const at = controls.indexOf(document.activeElement);
+      const next = at === -1 ? (step === 1 ? 0 : controls.length - 1) : (at + step + controls.length) % controls.length;
+      ev.preventDefault();
+      controls[next].focus();
+    } else if (ev.key === 'Escape' && document.activeElement !== row) {
+      ev.preventDefault();
+      row.focus();
+    } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === row) {
+      ev.preventDefault(); // Space on a focusable div scrolls the track otherwise
+      if (!row.classList.contains('editing')) void openEntryForm(row, e);
+    }
   });
 }
 
@@ -988,10 +1064,21 @@ async function mergeSelected(acknowledgedGap = false) {
   );
 }
 
+// The Escape listener belonging to the prompt currently up, held at module scope so
+// closeMergeConflict detaches it wherever the modal ends. Null whenever no prompt is open.
+let mergeConflictEscape = null;
+
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
 // helper so app.js owns the modal's lifecycle end to end
 // — the two share the `.editor-backdrop` chrome but not the code path.
+// Every dismissal route (Cancel, the header ×, the backdrop, Escape, and the commit itself)
+// funnels through here, so detaching the key listener once here is what keeps it from
+// outliving the modal it belongs to.
 function closeMergeConflict() {
+  if (mergeConflictEscape) {
+    document.removeEventListener('keydown', mergeConflictEscape);
+    mergeConflictEscape = null;
+  }
   document.querySelector('.editor-backdrop')?.remove();
 }
 
@@ -1101,6 +1188,16 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   backdrop.addEventListener('click', (ev) => {
     if (ev.target === backdrop) closeMergeConflict();
   });
+  // Craft checklist §4 — Esc cancels the innermost thing, which while this is up is the modal
+  // itself (issue 147: the app's ONE modal ignored Escape, so a keyboard user mid-merge had no
+  // way out). It is a CANCEL, not a confirm: it calls exactly what .mc-cancel calls, so no field
+  // resolution is applied and no merge is written — one dismissal behaviour, not two.
+  // The listener is on `document`, not the dialog: the prompt mounts on <body> and takes no
+  // focus when it opens, so a dialog-scoped keydown would never see the press.
+  mergeConflictEscape = (ev) => {
+    if (ev.key === 'Escape') closeMergeConflict();
+  };
+  document.addEventListener('keydown', mergeConflictEscape);
   return dialog;
 }
 
@@ -1119,6 +1216,12 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
 // the same gate is reused for the future archive-when-referenced confirm (R10), even
 // though only Delete wires it today.
 function confirmInline(btn, { kind, question, confirmLabel, onConfirm }) {
+  // A04 / issue 140: arming must not strand focus. The armed button is REMOVED from the document,
+  // which drops focus to <body> — a keyboard user would have to Tab back from the top of the view
+  // to reach the gate they just raised. So focus follows the gate whenever it was on the button.
+  // It lands on CANCEL, not the destructive confirm: Enter fires a button on keydown, so focusing
+  // the confirm would let one held Enter arm and then commit on its own auto-repeat.
+  const hadFocus = document.activeElement === btn;
   const wrap = document.createElement('span');
   wrap.className = `confirm confirm-${kind}`;
   wrap.innerHTML =
@@ -1126,6 +1229,7 @@ function confirmInline(btn, { kind, question, confirmLabel, onConfirm }) {
     `<button class="small danger" type="button" data-act="confirm-${kind}">${escapeHtml(confirmLabel)}</button>` +
     `<button class="small ghost confirm-cancel" type="button" data-act="cancel-${kind}">Cancel</button>`;
   btn.replaceWith(wrap);
+  if (hadFocus) wrap.querySelector(`[data-act="cancel-${kind}"]`).focus();
   // Re-wire the freshly-created controls (they were not present at row build time). Only
   // the explicit confirm runs the destructive callback — the first (arming) click did not.
   wrap.querySelector(`[data-act="confirm-${kind}"]`).addEventListener('click', async (ev) => {
@@ -1138,7 +1242,9 @@ function confirmInline(btn, { kind, question, confirmLabel, onConfirm }) {
   });
   wrap.querySelector(`[data-act="cancel-${kind}"]`).addEventListener('click', (ev) => {
     ev.stopPropagation();
+    const inGate = wrap.contains(document.activeElement);
     wrap.replaceWith(btn); // restore the original button untouched — nothing destroyed
+    if (inGate) btn.focus(); // …and hand focus back to it, closing the loop the arming opened
   });
 }
 
@@ -1215,9 +1321,13 @@ function openSplitForm(btn, e) {
     // §12 R21: a refused split (a point NOT strictly inside the span, or unparseable text) is
     // surfaced here at the point of action; the picker stays open with the message announced.
     `<span class="split-warning form-error" role="status" aria-live="polite" hidden></span>`;
+  const hadFocus = document.activeElement === btn;
   btn.replaceWith(wrap);
   wrap.querySelector('.split-input').value = localInputValue(midpoint);
   const warn = wrap.querySelector('.split-warning');
+  // A04 / issue 140, as in confirmInline: the button that opened the picker is gone, so focus
+  // follows into it — here onto the instant field, which is the thing the picker exists to fill.
+  if (hadFocus) wrap.querySelector('.split-input').focus();
 
   wrap.querySelector('[data-act="confirm-split"]').addEventListener('click', async (ev) => {
     ev.stopPropagation();
@@ -1243,7 +1353,9 @@ function openSplitForm(btn, e) {
   wrap.querySelector('.split-input').addEventListener('input', () => clearFormError(warn));
   wrap.querySelector('.split-cancel').addEventListener('click', (ev) => {
     ev.stopPropagation();
+    const inPicker = wrap.contains(document.activeElement);
     wrap.replaceWith(btn);
+    if (inPicker) btn.focus();
   });
 }
 

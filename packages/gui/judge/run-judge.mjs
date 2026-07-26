@@ -322,6 +322,11 @@ async function sceneKeyboardFocus(browser) {
       let n = 0;
       for (const el of document.querySelectorAll(sel)) {
         if (el.hidden || el.disabled) continue;
+        // A `tabindex="-1"` element is focusable but NOT in the tab order, and `button` / `input`
+        // match the selector above on their own — so the negation has to be re-applied per element
+        // or the calendar's block-scoped controls (issue 140) would be counted as stops Tab can
+        // never reach, and the walk would fail for finding exactly what it asked for.
+        if (el.getAttribute('tabindex') === '-1') continue;
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') continue;
         // Hidden ancestors (a collapsed form / a routed-away view) take their controls out too.
@@ -800,6 +805,9 @@ async function sceneCrossViewFreshness(browser) {
 // Timer view renders the live clock reading the derived count-up (advances +3s across the
 // pinned-clock step, not reset) with the live-edit-running strip present (no End input); the
 // clock computes the D06 full Clock role — 38px, tabular numerals, the --num stack.
+// The card also SAYS it is running (design.html D05/A05, issue #142): the word is in the
+// card's rendered innerText, painted by the state line, with an accent-filled dot beside it —
+// so the state does not ride on the recoloured count-up alone, as it did until that issue.
 // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
 // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
 // container computes position: static — showing the running block with a START drag grip
@@ -828,6 +836,10 @@ async function sceneTimerView(browser) {
       // quote/space-normalized because computed fontFamily re-serializes the stack).
       const clockCs = getComputedStyle(document.querySelector('#timer-clock'));
       const famList = (s) => s.split(',').map((f) => f.trim().replace(/^["']|["']$/g, '')).join('|');
+      // Absent rather than thrown: a missing dot or state line is the regression this scene
+      // scores, so it must arrive as a false in the record, not an exception that kills the run.
+      const dot = document.querySelector('#timer-card .tc-dot');
+      const stateEl = document.querySelector('#timer-state');
       return {
         stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
         noEnd: !document.querySelector('#live-edit #le-end'),
@@ -835,7 +847,21 @@ async function sceneTimerView(browser) {
         startIsText: document.querySelector('#le-start')?.type === 'text',
         hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
         noSwitch: !document.querySelector('#timer-switch'),
-        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        // design.html D05/A05 (issue #142): the card must SAY it is running, not merely hold a
+        // #timer-state node that says so. The probe here used to read that node's textContent,
+        // which a display:none state line satisfied for as long as the bug shipped — so the
+        // OUTCOME is scored instead: the rendered card text (innerText skips display:none
+        // subtrees, which is exactly what hid the word), and the word coming from the state
+        // line rather than from elsewhere on the card (the IDLE description reads "nothing
+        // running", so an unanchored text match would pass on a card that had lost the line).
+        // innerText on the ELEMENT could not settle this — the HTML spec falls it back to
+        // textContent when the element is not rendered, i.e. exactly in the failing case.
+        cardText: document.querySelector('#timer-card').innerText.toLowerCase(),
+        statePainted: window.__probe.visible(stateEl) && stateEl.textContent.trim() === 'running',
+        // Beside the word, the dot: laid out, and carrying the accent that the count-up carries.
+        dotVisible: window.__probe.visible(dot),
+        dotFill: dot ? getComputedStyle(dot).backgroundColor : null,
+        accentRgb: window.__probe.rgbOf('--accent'),
         clockPx: clockCs.fontSize,
         clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
         clockNumStack: famList(clockCs.fontFamily) === famList(window.__probe.cssVar('--num')),
@@ -912,7 +938,13 @@ async function sceneTimerView(browser) {
       before.startIsText &&
       before.hasStop &&
       before.noSwitch &&
-      before.state === 'running' &&
+      // D05/A05 (issue #142) — the word reaches the rendered card, it comes from the state
+      // line, and the dot beside it is laid out and accent-filled. Colour alone no longer
+      // carries the app's most important state.
+      before.cardText.includes('running') &&
+      before.statePainted &&
+      before.dotVisible &&
+      before.dotFill === before.accentRgb &&
       before.clockPx === '38px' &&
       before.clockTnum &&
       before.clockNumStack &&
@@ -2916,6 +2948,12 @@ async function sceneAddRefusalPalette(browser) {
 // chosen billable go to the main process, which resolves the names. (The selection surface
 // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
 // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
+//
+// The scene closes on the modal's KEYBOARD EXIT (issue 147): the app's only modal ignored
+// Escape, so a keyboard user mid-merge had no way out of it — craft checklist §4, "Esc
+// closes/cancels the innermost thing". The guard lives here rather than in a scene of its own
+// because it is the same prompt on the same fixture, and it is scored on the OUTCOME (gone AND
+// unmerged), which is what separates a cancel from a silent confirm.
 async function sceneMergeConflict(browser) {
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
@@ -2965,6 +3003,19 @@ async function sceneMergeConflict(browser) {
         merged: window.__MERGED__,
       };
     });
+    // Escape dismisses the prompt as a CANCEL (issue 147). Asserted on the OUTCOME, not just
+    // the dismissal: the element must leave the DOM AND __MERGED__ must still be undefined —
+    // an Escape that silently confirmed the merge would clear the DOM just the same and pass a
+    // "prompt is gone" check on its way to writing the fold nobody asked for.
+    await page.keyboard.press('Escape');
+    const afterEscape = await page.evaluate(() => ({
+      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      backdropShown: !!document.querySelector('.editor-backdrop'),
+      // `?? null` so the recorded justification SHOWS the unmerged fact — JSON.stringify drops
+      // an undefined value, and "no merge was written" is the half of this that matters.
+      merged: window.__MERGED__ ?? null,
+    }));
+    const escapeCancels = !afterEscape.promptShown && !afterEscape.backdropShown && !afterEscape.merged;
     const ok =
       barHiddenInitially &&
       barHiddenWithOne &&
@@ -2975,11 +3026,13 @@ async function sceneMergeConflict(browser) {
       probe.clientChoiceCount === 2 &&
       probe.offersBillable &&
       // The prompt appeared BEFORE any merge committed (no payload sent yet).
-      !probe.merged;
+      !probe.merged &&
+      escapeCancels;
     record(
       'MERGE_CONFLICT',
       ok,
-      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}`,
+      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}; ` +
+        `Escape cancels the prompt — dismissed with nothing merged (${escapeCancels}): ${JSON.stringify(afterEscape)}`,
       'main-merge-conflict.png',
     );
   });
@@ -4961,6 +5014,161 @@ async function sceneCalendarEntryBlock(browser) {
   );
 }
 
+// CALENDAR_KEYBOARD — §12 R14 · design.html A04, machine-scored over the dense fixture (issue 140).
+// "Focus visible on every interactive element, NEVER FULLY OBSCURED." The calendar broke it twice
+// over. Each entry block hid four controls behind hover — the merge checkbox and Delete / Split /
+// Edit — and all four were top-level tab stops, so on the design audit's three-week seed the Tab
+// key walked ~200 of them before reaching anything else in the view. Fifty of those stops were the
+// merge checkbox, at `opacity: 0` (`.ck` had `:hover` / `:checked` / `.on` clauses and no focus
+// clause at all, while `.op-btn` beside it already took its opacity from `.ev:focus-within`) —
+// and `opacity` takes the outline with it, so the focus ring did not paint either: the focused
+// control and its indicator invisible together. Hence the effective-opacity probe below.
+//
+// The fix is a roving focus: the BLOCK is the one tab stop, its controls are `tabindex="-1"` and
+// are reached with ← / → from the focused block, and `.ev:focus-within` opens the whole set — so
+// arriving at an entry is also how a keyboard user learns the controls are there.
+//
+// Driven over `denseCalendarState` (three weeks, 51 blocks, the last one open) at the app's
+// 1040×800 default window, pinned to UTC. Density is the whole guard, per the issue-#55 lesson the
+// triage cites: at one day of data the traversal cost is invisible and any stop model looks fine.
+// Motion is off (noMotion) so an opacity probe reads the cascade, not a frame of the 0.12s fade.
+// Deterministic sub-facts:
+//   • FIXTURE REAL — ≥50 blocks carrying ≥150 hover-revealed controls between them, i.e. the
+//     ~200-stop calendar the audit measured. Reseeding this scene with one comfortable day
+//     reddens this rather than quietly greening the rest;
+//   • ONE STOP PER BLOCK — a Tab-walk from the top of the window stops inside the calendar exactly
+//     `blocks` times, and EVERY one of those stops is an `.ev` block itself, never a control
+//     inside one. Restoring the old model puts the count back at ~200 and fails with the number;
+//   • TRAVERSABLE — one Tab cycle from the top of the window walks the WHOLE window and wraps back
+//     to `<body>`, spending well under half the stops the blocks' controls would cost. The
+//     calendar is the tail of the Entries tab order, so escaping it means reaching that wrap —
+//     which the audit's 70-press walk never managed;
+//   • NOTHING FOCUSED IS INVISIBLE — every stop of the whole walk has a non-zero EFFECTIVE opacity
+//     (its own, multiplied up its ancestors) at the moment it holds focus, and paints a non-`none`
+//     outline. `outline` is declared nowhere in styles.css but the one focus rule (GOLD
+//     design-guard.test.ts pins that), so a non-none outline under focus IS the D13/A04 ring;
+//   • CONTROLS REACHED FROM THE BLOCK — on a sample block, ← / → walk its four controls in DOM
+//     order with real key presses, each one inside that block, each at non-zero effective opacity
+//     while focused; Escape returns focus to the block; and Tab from a control lands on the NEXT
+//     block, not on a control — the stop model holds from inside as well as outside.
+// Captures calendar-keyboard-focus.png (a block holding focus, its four controls open).
+async function sceneCalendarKeyboard(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+  await noMotion(page);
+
+  // The in-page reader every probe below shares: what the active element IS, whether it is in the
+  // calendar strip, and — the A04 question — whether it can actually be SEEN while it holds focus.
+  const ACTIVE = () => {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement) return { body: true };
+    // Effective opacity: a control at opacity 1 inside a container at 0 is still invisible, so the
+    // whole ancestor chain multiplies in. This is exactly what the old .ck failed.
+    let opacity = 1;
+    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      opacity *= parseFloat(getComputedStyle(n).opacity);
+    }
+    const cs = getComputedStyle(el);
+    const block = el.closest('.dcol .ev');
+    return {
+      body: false,
+      label: el.dataset && el.dataset.act ? el.dataset.act : String(el.className || '') || el.tagName,
+      inCalendar: !!el.closest('.cstrip'),
+      isBlock: block === el,
+      blockId: block ? block.dataset.id : null,
+      opacity,
+      ring: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0,
+    };
+  };
+
+  const fixture = await page.evaluate(() => ({
+    blocks: document.querySelectorAll('.dcol .ev').length,
+    controls: document.querySelectorAll('.dcol .ev .ck, .dcol .ev .op-btn').length,
+  }));
+
+  // The walk: one full Tab cycle from the top of the window, ending where the browser wraps back
+  // to <body>. The calendar is the tail of the Entries tab order, so "escaping" it means reaching
+  // that wrap — what the audit's 70-press walk never managed. The budget is set past the OLD stop
+  // count so a regression still terminates and gets MEASURED: the justification then carries the
+  // real number rather than an exhausted budget.
+  await page.evaluate(() => document.body.focus());
+  const walk = [];
+  const budget = fixture.controls + 60;
+  let wrapped = false;
+  for (let i = 0; i < budget; i++) {
+    await page.keyboard.press('Tab');
+    const step = await page.evaluate(ACTIVE);
+    if (step.body) {
+      wrapped = true; // the tab order came back around — the whole window has been walked
+      break;
+    }
+    walk.push(step);
+  }
+
+  // The roving half, driven with REAL key presses on a block early enough to sit in frame.
+  const sampleId = await page.evaluate(() => document.querySelectorAll('.dcol .ev')[3].dataset.id);
+  await page.focus(`.dcol .ev[data-id="${sampleId}"]`);
+  const expected = await page.evaluate(
+    (id) => [...document.querySelectorAll(`.dcol .ev[data-id="${id}"] .ck, .dcol .ev[data-id="${id}"] .op-btn`)]
+      .map((el) => el.dataset.act),
+    sampleId,
+  );
+  const roving = [];
+  for (let i = 0; i < expected.length; i++) {
+    await page.keyboard.press('ArrowRight');
+    roving.push(await page.evaluate(ACTIVE));
+  }
+  await page.screenshot({ path: join(EVIDENCE, 'calendar-keyboard-focus.png') });
+  // ← steps back to the control before the last one reached, and Escape leaves the set entirely.
+  await page.keyboard.press('ArrowLeft');
+  const stepBack = await page.evaluate(ACTIVE);
+  await page.keyboard.press('Escape');
+  const afterEscape = await page.evaluate(ACTIVE);
+  // …and Tab from inside the block leaves it for the NEXT block, never for a control.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Tab');
+  const afterTab = await page.evaluate(ACTIVE);
+  await page.close();
+
+  const calStops = walk.filter((s) => s.inCalendar);
+  const fixtureReal = fixture.blocks >= 50 && fixture.controls >= 150;
+  const oneStopPerBlock = calStops.length === fixture.blocks && calStops.every((s) => s.isBlock);
+  // The traversal cost, stated as the ratio the fix changed: the calendar spends one stop per
+  // ENTRY, not one per control, so walking past it costs well under half of what its controls
+  // would — and the cycle closes rather than running out the budget inside the strip.
+  const traversable = wrapped && calStops.length > 0 && calStops.length * 3 <= fixture.controls;
+  const invisibleStops = walk.filter((s) => s.opacity <= 0 || !s.ring).map((s) => s.label);
+  const rovingOrder = roving.map((s) => s.label);
+  const rovingOk =
+    rovingOrder.join(',') === expected.join(',') &&
+    roving.every((s) => s.blockId === sampleId && !s.isBlock && s.opacity > 0 && s.ring);
+  const escapeOk =
+    stepBack.blockId === sampleId &&
+    !stepBack.isBlock &&
+    stepBack.label === expected[expected.length - 2] &&
+    afterEscape.isBlock &&
+    afterEscape.blockId === sampleId;
+  const tabLeavesOk = afterTab.isBlock && afterTab.blockId !== sampleId;
+  record(
+    'CALENDAR_KEYBOARD',
+    fixtureReal && oneStopPerBlock && traversable && invisibleStops.length === 0 && rovingOk && escapeOk && tabLeavesOk,
+    `dense calendar: ${fixture.blocks} blocks holding ${fixture.controls} hover-revealed controls; ` +
+      `one Tab cycle = ${walk.length} stops (wrapped back to body: ${wrapped}), ${calStops.length} ` +
+      `of them in the calendar, all of them blocks: ${calStops.every((s) => s.isBlock)}; ` +
+      `stops focused at zero opacity or with no ring: [${invisibleStops.join(', ') || 'none'}]; ` +
+      `roving on block ${sampleId} reached [${rovingOrder.join(', ')}] (expected [${expected.join(', ')}]), ` +
+      `ArrowLeft -> ${JSON.stringify(stepBack.label)}, Escape -> block=${afterEscape.isBlock}, ` +
+      `Tab out -> block ${afterTab.blockId}; fixture-real=${fixtureReal} one-stop-per-block=` +
+      `${oneStopPerBlock} traversable=${traversable} roving=${rovingOk} escape=${escapeOk} ` +
+      `tab-leaves=${tabLeavesOk}`,
+    'calendar-keyboard-focus.png',
+  );
+}
+
 // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
 // visible list AND the report total, with no getState reload during the keystroke. Hardened
 // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
@@ -6168,8 +6376,13 @@ async function sceneTargetSize(browser) {
 // every semantic colour carries a word or icon beside it. Machine facts, one per pairing
 // the design names (the recorded exemption "run-dot when paired with its label" is exactly
 // what fact (a) proves holds):
-//   (a) the run-dot sits BESIDE the literal word 'running' — the Entries strip's dot +
-//       'running' state word, and the Timer card's 'running' state word;
+//   (a) the run-dot sits BESIDE the literal word 'running', and — the part this scene used to
+//       miss — BOTH are read as RENDERED, not merely present. Reading textContent alone passed
+//       a Timer card whose state word and dot were `display: none` for as long as issue #142
+//       shipped: the card signalled running by a recoloured clock and nothing else, which is
+//       the one thing D05 forbids. The pairing is now scored per running surface — the Entries
+//       strip carries a visible dot (its word stays hidden; D05 asks word OR icon), and the
+//       Timer card, the surface whose whole purpose is the timer, carries BOTH;
 //   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
 //       the literal 'billable' / 'non-billable' badge;
 //   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
@@ -6182,12 +6395,15 @@ async function sceneColourPairing(browser) {
   // (a)+(b): the running window — strip pairing on Entries, card pairing + badge on Timer.
   const pairing = await withPage(browser, runningState(), 'index.html', async (page) => {
     const strip = await page.evaluate(() => ({
-      dotPresent: !!document.querySelector('#timer-strip.running .strip-dot'),
+      dotVisible: window.__probe.visible(document.querySelector('#timer-strip.running .strip-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('#timer-strip.running .state')),
       stateWord: document.querySelector('#timer-strip.running .state')?.textContent.trim() ?? '',
     }));
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('.timer-card.running', { state: 'attached' });
     const card = await page.evaluate(() => ({
+      dotVisible: window.__probe.visible(document.querySelector('.timer-card.running .tc-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('.timer-card.running .state')),
       stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
       billableWord:
         [...document.querySelectorAll('.timer-card .flag')]
@@ -6253,8 +6469,15 @@ async function sceneColourPairing(browser) {
     { rejectWrites: true },
   );
   const ok =
-    pairing.strip.dotPresent &&
+    // The strip pairs by its dot — D05 takes a word OR an icon, and the strip's word is the
+    // deliberately hidden one (one running indicator per surface, not two).
+    pairing.strip.dotVisible &&
     pairing.strip.stateWord === 'running' &&
+    // The card must carry BOTH (issue #142): the word is what a screen reader and a colour-
+    // blind user get, the dot is the mark beside it. Presence is not enough — it had both in
+    // the DOM, display:none, the whole time the bug shipped.
+    pairing.card.wordVisible &&
+    pairing.card.dotVisible &&
     pairing.card.stateWord === 'running' &&
     /^(non-)?billable$/.test(pairing.card.billableWord) &&
     /overlap\s*\d+m/.test(calendar.otag) &&
@@ -6269,7 +6492,7 @@ async function sceneColourPairing(browser) {
   record(
     'COLOUR_PAIRING',
     ok,
-    `D05/A05 pairing: run-dot beside 'running' (strip=${JSON.stringify(pairing.strip)}, card state='${pairing.card.stateWord}'); ` +
+    `D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip=${JSON.stringify(pairing.strip)}, card=${JSON.stringify({ stateWord: pairing.card.stateWord, wordVisible: pairing.card.wordVisible, dotVisible: pairing.card.dotVisible })}); ` +
       `billable worded ('${pairing.card.billableWord}'); overlap band worded ('${calendar.otag}') + slept hatch carries #i-moon (${calendar.moon}); ` +
       `warn advisory worded on flag palette=${JSON.stringify(warn)}; err block worded on danger palette=${JSON.stringify(err)}`,
     'main-colour-pairing.png',
@@ -6338,8 +6561,8 @@ const SCENES = {
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
-
   CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], run: sceneCalendarEntryBlock },
+  CALENDAR_KEYBOARD: { items: ['CALENDAR_KEYBOARD'], run: sceneCalendarKeyboard },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
   HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], run: sceneHotkeyNoTrap },
