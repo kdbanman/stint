@@ -1562,8 +1562,17 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--wash);
 }
 /* §06 R3 / §12 R6: the in-dialog merge conflict resolver (context/mockups/merge-conflict.html).
-   Field-by-field accent radios (the accent here is the field-resolution signal, matching the
-   mockup) + auto-kept "agree" rows; reuses the .ed-head / .ed-body / .ed-foot chrome above. */
+   Field-by-field radios + auto-kept "agree" rows; reuses the .ed-head / .ed-body / .ed-foot
+   chrome above.
+   design.html D12 (issue 144, unhashed — see the calendar-event comment for why): the chosen
+   option LIFTS, it does not turn accent. It used to take an accent border, an inset accent
+   hairline and an `--accent-weak` fill against a plain-paper sibling, which is precisely the
+   case D12 was written for. This is the segmented idiom (`.seg-btn.on`) at dialog scale: the
+   dialog body is paper, so an unchosen option has to SINK for the chosen one to read as raised —
+   the peers recess to the sunken `--wash` and stay flat, and the
+   chosen option is the raised paper chip (`--paper`, the same `--rule-strong` control border,
+   `--sh-chip`). The radio keeps its neutral ring in both states and fills its dot with ink, so
+   the filled-vs-empty SHAPE, not a colour, is what says "chosen" (A05/D05). */
 .editor.conflict-prompt .conf { padding: 0; }
 .editor.conflict-prompt .mc-q {
   font-size: 11px;
@@ -1582,11 +1591,12 @@ button.danger:hover { background: var(--danger-weak); }
   border-radius: var(--r1);
   padding: 8px 12px;
   cursor: pointer;
-  background: var(--paper);
+  background: var(--wash);
+  box-shadow: none;
   font-size: 13px;
   color: var(--ink);
 }
-.editor.conflict-prompt .mc-opt:hover { background: var(--hover); }
+.editor.conflict-prompt .mc-opt:hover:not(.on) { background: var(--hover); }
 .editor.conflict-prompt .mc-opt input { position: absolute; opacity: 0; width: 0; height: 0; margin: 0; }
 .editor.conflict-prompt .mc-opt .rad {
   width: 16px;
@@ -1598,17 +1608,15 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .editor.conflict-prompt .mc-opt .ot b { font-weight: 590; font-size: 12.5px; }
 .editor.conflict-prompt .mc-opt.on {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
-  background: var(--accent-weak);
+  background: var(--paper);
+  box-shadow: var(--sh-chip);
 }
-.editor.conflict-prompt .mc-opt.on .rad { border-color: var(--accent); }
 .editor.conflict-prompt .mc-opt.on .rad::after {
   content: '';
   position: absolute;
   inset: 3px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--ink);
 }
 .editor.conflict-prompt .agree {
   display: flex;
@@ -2253,7 +2261,23 @@ body.popover { background: var(--canvas); margin: 0; }
 .dt .ev.seg { box-shadow: none; }
 .dt .ev.run:hover,
 .dt .ev.seg:hover { box-shadow: var(--sh-raise); }
-.dt .ev.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* design.html D12 — a chosen block LIFTS; it does not turn accent (issue 144, unhashed: the D01
+   scan over this file reads a hashed three-digit number as a colour literal). Selection used to
+   paint an accent border plus an inset accent hairline, so every block the pointer had ticked
+   wore the colour rationed for the one thing that matters. Depth, not tint: the block is already
+   paper on the ladder's lowest rung at rest (`--sh-chip`) and climbs to `--sh-raise` under the
+   pointer, so the chosen one takes the next rung up, `--sh-pop`, and comes forward — it reads
+   apart from its fifty neighbours AND from the one being hovered, with no colour spent and no
+   token used outside its role (D04: a border is `rule`/`rule-strong`, never ink or accent).
+   `.editing` — the block whose entry is open in the unified form — is the same choice reached
+   another way, so it is the same lift. The `:hover` pair below carries the same specificity as
+   `.dt .ev.run:hover`, so a selected block stays lifted under the pointer instead of dropping
+   back a rung. Colour is never the sole cue either way: `.on` also holds its corner checkbox
+   open (below), and `.editing` has the form itself on screen naming the entry (A05/D05). */
+.dt .ev.on,
+.dt .ev.editing,
+.dt .ev.on:hover,
+.dt .ev.editing:hover { box-shadow: var(--sh-pop); z-index: 3; }
 .ev .bd { display: block; font-size: 12px; font-weight: 590; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ev .bd .run-dot { margin-right: 4px; }
 .ev .bc { display: block; font-size: 11px; color: var(--muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -2297,10 +2321,26 @@ body.popover { background: var(--canvas); margin: 0; }
 .ev:hover .ck,
 .ev .ck:checked,
 .ev.on .ck { opacity: 1; }
+/* D12 on the MECHANISM: the control that makes the choice may not spend the accent either. It
+   used to fill `--accent` behind a white tick, so a two-block selection put two accent chips on
+   the calendar and the tick itself sat at 3.8:1. Checked is the tick, not the colour — the box
+   keeps its paper fill and neutral edge, takes the chip rung of the ladder, and the mark is drawn
+   in ink at 16:1. The glyph is painted as a MASK rather than a coloured data URI so its colour
+   stays a semantic token (D01/D04); the SVG inside the mask is pure alpha, `white` naming
+   "opaque", not a palette value. */
 .ev .ck:checked {
-  border-color: var(--accent);
-  background: var(--accent)
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
+  border-color: var(--rule-strong);
+  background: var(--paper);
+  box-shadow: var(--sh-chip);
+}
+.ev .ck:checked::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--ink);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
+    center / 11px no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.2 4.2L19 7'/%3E%3C/svg%3E")
     center / 11px no-repeat;
 }
 /* §12 R16 (mockup main.html): the hover ops chip — a raised paper chip holding three icon-only
@@ -2415,10 +2455,9 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 0 8px;
   white-space: nowrap;
 }
-/* §12 R06: the event being edited carries a subtle selection state on the calendar (the unified
-   form itself opens in the view-level #entry-form-host, not inside the event). Matches the merge
-   selection lift (.ev.on) — the rationed clay accent as a hairline ring, nothing more. */
-.dt .ev.editing { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+/* §12 R06: the event being edited carries a selection state on the calendar (the unified form
+   itself opens in the view-level #entry-form-host, not inside the event). It is styled with the
+   merge selection lift, beside `.ev.on` above — one selection idiom for the calendar, D12's. */
 
 /* design.html D10/A06 — under prefers-reduced-motion every transition collapses to instant.
    A near-zero duration (not `none`) keeps transitionend firing for any listener while removing
