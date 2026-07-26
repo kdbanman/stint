@@ -42,12 +42,8 @@ import {
   savedReportInputFromView,
   savedReportPatchFromView,
 } from './reportview.js';
-import {
-  pinFavorite as pinFavoriteHelper,
-  listFavorites as listFavoritesHelper,
-  favoriteToView,
-} from './favorites.js';
-import { listBackups as listBackupsHelper } from './backupview.js';
+import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from './favorites.js';
+import { listBackupViews } from './backupview.js';
 
 /** The OS-bound seam main.ts supplies; everything else the handlers need is imported above. */
 export interface IpcHandlerDeps {
@@ -272,11 +268,11 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // `tt fav add|ls|rename|rm`. The mutators refresh all windows so an open Timer view repaints its
     // favorites rail; listFavorites is a read, no refresh.
     pinFavorite: (payload) => {
-      const view = pinFavoriteHelper(store, payload);
+      const view = pinFavoriteFromView(store, payload);
       refreshAll();
       return view;
     },
-    listFavorites: () => listFavoritesHelper(store),
+    listFavorites: () => listFavoriteViews(store),
     renameFavorite: (payload) => {
       const fav = store.renameFavorite(payload.ref, payload.name);
       refreshAll();
@@ -386,7 +382,7 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. Each
     // delegates straight to @stint/core at parity with `tt backup ls|restore`. listBackups is a
     // read; restoreBackup quarantines the current file, re-points the store, and refreshes windows.
-    listBackups: () => listBackupsHelper(store),
+    listBackups: () => listBackupViews(store),
     restoreBackup: (payload) => {
       const r = store.restoreFromBackup(payload.name);
       refreshAll();

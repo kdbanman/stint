@@ -29,7 +29,7 @@ export function favoriteToView(fav: Favorite): FavoriteView {
  * (one resolution per surface, exactly like the Start form), so neither surface drops an
  * attribute. Returns the renderer-safe view of the created favorite.
  */
-export function pinFavorite(store: Store, p: FavoriteInputView): FavoriteView {
+export function pinFavoriteFromView(store: Store, p: FavoriteInputView): FavoriteView {
   const template: FavoriteTemplate = { name: p.name };
   if (p.fromEntryId !== undefined) {
     template.fromEntryId = p.fromEntryId;
@@ -50,6 +50,6 @@ export function pinFavorite(store: Store, p: FavoriteInputView): FavoriteView {
 }
 
 /** List favorites in the renderer-safe shape (PRD §05 R09). A read — no refresh. */
-export function listFavorites(store: Store): FavoriteView[] {
+export function listFavoriteViews(store: Store): FavoriteView[] {
   return store.listFavorites().map(favoriteToView);
 }
