@@ -227,6 +227,58 @@ export function flaggedState() {
 }
 
 /**
+ * Issue #146 — the INLINE_GATE_CONTAINMENT fixture. Two CLOSED entries pinned to the two
+ * EDGE columns of the rendered week: id=40 on Monday 2026-06-22 (the calendar's FIRST day
+ * column) and id=41 on Sunday 2026-06-28 (its LAST). Both dates sit in one Mon–Sun week, so
+ * calendarModel pads to exactly those seven columns and the two entries land hard against
+ * the calendar's left and right edges.
+ *
+ * The edges are the whole point. A gate armed on a MIDDLE column overflows its 124px day
+ * column but still lands inside the calendar, so it cannot tell a positioned, clamped layer
+ * from the in-flow run that shipped — the escape only becomes visible where there is no
+ * neighbouring column left to spill into. Two entries, not one, so a clamp that only pulls
+ * the left edge in (or only the right) fails on the other.
+ *
+ * Entry 42 OVERLAPS 40 in the first column so the gate opens with a neighbouring block's own
+ * chrome across it. That chrome is not incidental: a block at rest sets no z-index, so its
+ * corner checkbox competes at z-6 in the strip's stacking context — above the ops chip (z-5)
+ * the gate is mounted in. Without the neighbour the layer would only ever be probed over empty
+ * track, and nothing would hold the gate's rank against the chrome it actually has to cover.
+ */
+export function edgeColumnState() {
+  const entry = (id, day, description, fromHour = 10, toHour = 12) => ({
+    id,
+    description,
+    clientLabel: 'Acme / API',
+    startUtc: `${day}T${String(fromHour).padStart(2, '0')}:00:00Z`,
+    endUtc: `${day}T${String(toHour).padStart(2, '0')}:00:00Z`,
+    billableSeconds: (toHour - fromHour) * 3600,
+    billable: true,
+    overlapped: false,
+    sleptThrough: false,
+    excludedSeconds: 0,
+  });
+  return {
+    status: { running: false, entry: null },
+    days: [
+      {
+        day: '2026-06-22',
+        entries: [
+          entry(40, '2026-06-22', 'first column'),
+          // Starts 50 minutes into 40's span — far enough down that 40's own top line (its ops
+          // chip and the strip the scene hovers) stays clear, close enough that the neighbour's
+          // block and its z-6 corner checkbox land inside the ~50px band the gate opens across.
+          { ...entry(42, '2026-06-22', 'overlapping neighbour', 10, 13), startUtc: '2026-06-22T10:50:00Z' },
+        ],
+      },
+      { day: '2026-06-28', entries: [entry(41, '2026-06-28', 'last column')] },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * A day holding both a CLOSED entry (id=30) and the running/open entry (id=31), so the
  * SPLIT_AFFORDANCE scene can assert in one snapshot that the closed row exposes a Split
  * control and the open row does not (§06 R2: only a bounded span can be split).
@@ -1184,6 +1236,21 @@ export function timerViewRunningState() {
     { id: 2, description: 'morning sync', clientLabel: 'Client A / API', startUtc: '2026-06-24T19:00:00Z', endUtc: '2026-06-24T20:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
     { id: 3, description: 'inbox triage', clientLabel: null, startUtc: '2026-06-24T20:30:00Z', endUtc: '2026-06-24T21:00:00Z', billableSeconds: 0, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: [] },
   );
+  return s;
+}
+
+/**
+ * design.html D04/D14 (issue #160) — the TIMER_VIEW attribute-vs-flag fixture. The canonical
+ * running entry, still `billable`, but with its machine having slept mid-entry: so the running
+ * card's attribute row paints BOTH kinds of thing side by side in one row — the `billable`
+ * ATTRIBUTE (the entry's normal state) and the `slept` FLAG (the advisory). The scene reads the
+ * computed colours off both at once, which is the only way to score the distinction rather than
+ * one colour in isolation: `slept` must be the --flag warn triple and `billable` must not be.
+ */
+export function timerViewSleptRunningState() {
+  const s = timerViewRunningState();
+  s.status.entry.sleptThrough = true;
+  s.days[0].entries.find((e) => e.id === 1).sleptThrough = true;
   return s;
 }
 

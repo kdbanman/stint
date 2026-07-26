@@ -329,7 +329,9 @@ unified entry form's edit mode + footer two-step Delete), BDD `features/reachabl
 and `remove`→`tt rm` (`parity-matrix.json`). **R2 GUI split affordance** (a
 closed entry exposes a Split control; the open/running entry does not): JUDGE
 `SPLIT_AFFORDANCE` (`main-split.png`), parity `split`→`tt split`
-(`parity-matrix.json`). Split is thus proven on all three surfaces — BDD core+tt
+(`parity-matrix.json`); where that picker RENDERS is JUDGE
+`INLINE_GATE_CONTAINMENT` (`main-inline-gate.png`, detailed in the §12 R13 row).
+Split is thus proven on all three surfaces — BDD core+tt
 round-trip (split-then-merge restores the original span) and JUDGE for the
 renderer affordance. **R3 GUI merge** (multi-select closed entries → a Merge
 action; disagreeing client/project/billable raises a conflict prompt that picks
@@ -407,9 +409,11 @@ project rename/archive scenarios, each run TWICE over core + tt),
 reference-data half of the `tt` machine contract). **R1 GUI Clients view** (a
 Clients nav view lists active clients with their projects nested, offering
 create/rename/archive in place; archived items drop out of the active list but
-keep history): JUDGE `CLIENTS_VIEW` (`packages/gui/judge/`, `main-clients.png`),
-parity `renameClient`→`tt client rename`, `archiveClient`→`tt client archive`,
-`renameProject`→`tt project rename`, `archiveProject`→`tt project archive`,
+keep history): JUDGE `CLIENTS_VIEW` (`packages/gui/judge/`, `main-clients.png` —
+which also carries this view's design.html **A04 focus-order** fact, see §12 R14
+below), parity `renameClient`→`tt client rename`,
+`archiveClient`→`tt client archive`, `renameProject`→`tt project rename`,
+`archiveProject`→`tt project archive`,
 `listProjects`→`tt project ls` (`parity-matrix.json`). The create/rename/archive
 behaviour itself is the surface-neutral BDD above; the Clients view is the GUI
 discoverability surface over it. **R2 GUI tag display/editing** (tags show
@@ -1041,7 +1045,24 @@ the presence-only `#timer-state.textContent` probe that the shipped bug
 satisfied. JUDGE `COLOUR_PAIRING` , the A05 scene, was fooled by the same
 presence-only read and now scores each running surface as RENDERED: the strip
 pairs by its visible dot (D05 takes a word OR an icon), the card by a visible
-word AND a visible dot. **The card stays fresh across views (issue #50):** JUDGE
+word AND a visible dot. **An attribute is not an advisory (design.html D04/D14,
+issue #160):** the card's attribute row carries two different kinds of thing, so
+it paints them in two palettes — `slept` is the advisory and keeps the `--flag`
+warn pill, while `billable` /`non-billable` is the entry's normal state and reads
+as the quiet `.attr` /`--muted` label the entry row already gives billability
+(`.entry .nonbill`). Shipping all three through one `.flag` class painted the
+default state of every running entry in the colour reserved for "look at this",
+so amber stopped meaning anything — and the function's own comment guarded
+against these reading as an accent fill without ever noticing it had reached for
+warn instead. JUDGE `TIMER_VIEW` scores the DISTINCTION rather than one colour:
+a second page over an open entry that is billable AND slept through reads both
+labels at once — `slept` on the whole `--flag` triple (text, fill, rule) plus
+the pill radius, `billable` on `--muted` with a transparent fill, no rule, no
+radius and no part of that triple, neither of them the accent. Scored as a pair
+because the bug painted BOTH amber, and read on its own an amber `billable` is a
+perfectly good warn pill. `COLOUR_PAIRING` keeps the other half — that
+billability is SAID at all — and reads the attribute row by position, so a
+palette move can never mute the word. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
 Entries-toolbar control is touched (the Today preset latches the renderer's
 entries query), routing to the Timer view and clicking Start flips the card to
@@ -1517,7 +1538,10 @@ content than block. The block **clips** (design.html D09) so a short entry
 truncates deliberately (description first, dropping client/project then the
 time) instead of painting into the hour rows beneath, which belong to other
 entries; and the hover ops chip is a pure **overlay** reserving no flow space,
-so there is **no layout shift on hover** (design.html §4). Containment is
+so there is **no layout shift on hover** (design.html §4) — measured against the
+calendar strip's own scroll content, since the driver's hover scrolls its target
+into view when it must and a viewport reading books that scroll as a shift (the
+issue-161 measuring error again, one scene over). Containment is
 asserted by **hit-testing**, not by comparing layout rects — `overflow: hidden`
 clips paint, not layout, and the defect lived in the clip chain (the first
 non-visible-overflow ancestor was `.cstrip` , three levels up). The scene also
@@ -1658,6 +1682,27 @@ over the surface-neutral BDD `features/overlap_and_editing.feature` "Deleting an
 entry without confirmation is refused". No new IPC channel is added for the gate (`remove` /
 `archiveClient` / `archiveProject` already exist), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are intentionally unchanged.
+WHERE the gate renders is proven too (issue #146, design.html D09): a gate armed
+from a CALENDAR event — the delete confirm or the §06 R2 split picker — is a
+LAYER over the calendar, not content of the ~124px day column its button sat in.
+Laid out in flow both escaped that column with no surface at all (the split
+picker measured 348px against a 124px column and ran 16px off the WINDOW's left
+edge, transparent, 0px radius, no shadow), so `placeInlineGate`
+(`gui/renderer/app.js`) promotes a calendar-armed gate to the popover-rung
+`.cal-gate` layer and clamps its box inside the calendar's visible region, while
+gates armed elsewhere (the unified form footer, the Clients rows, the Reports
+builder) stay in flow inside surfaces that already fit them. JUDGE
+`INLINE_GATE_CONTAINMENT` (`main-inline-gate.png`) arms both gates through the
+real hover affordance on the week's FIRST and LAST day columns — the only places
+the escape is visible — and scores each one inside the calendar's visible box
+with an opaque `--paper` fill, a radius and a shadow. Landing inside the
+scrollport stopped being enough once §12 R16's two axes were PINNED inside it
+(issue #145): the sticky day-header band and hour gutter are opaque and outrank
+the ops chip the gate mounts in, so the clamp region subtracts both bands and the
+scene additionally scores each gate as un-occluded — clear of both bands' rects,
+hit-testing as itself across its face, every control inside it reachable — over a
+fixture whose first column carries an OVERLAPPING neighbour, so the gate's rank
+is held against real chrome rather than empty track.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — light/dark, system type and accent-on-primary already shipped, the
@@ -1713,7 +1758,8 @@ browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
 (acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
-`FIELD_LABELS` + GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+`FIELD_LABELS` + `FIELD_CHROME` + GOLD `gui/test/design-guard.test.ts` are the
+whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
 out of the tab order and unwalked — the blind spot issue 135 fell through, where
 the Settings global-hotkey field swallowed Tab as a chord and stranded the four
@@ -1759,6 +1805,18 @@ rather than taken on trust: against `origin/main` 's renderer the same walk
 reports 202 calendar stops, none of them blocks, and 50 stops focused at zero
 opacity — all of them the checkbox; with only the CSS clause reverted, the
 roving probe reads the focused checkbox at `opacity: 0`.
+A04's other half — focus order FOLLOWS THE VISUAL ORDER — is scored by JUDGE
+`CLIENTS_VIEW` on the one view the design audit reported it broken (issue 161):
+a Tab-walk with "show archived" ON (archived clients and archived tags are
+appended in a SECOND pass after every active row, the view's only ordering
+hazard) advances in reading order at every step. Each stop is measured against
+the `#clients` section's own box rather than the viewport, which is the finding
+itself: the audit read viewport-relative positions, and Tabbing to a control
+below the fold SCROLLS it into view, so the next stop's viewport y is smaller
+though it sits lower on the page — the same two adjacent, correctly ordered rows
+read `398 → 210` viewport-relative and `398 → 444` page-relative. The DOM order
+was never wrong; the measurement was, and a page-relative reading cannot be
+faked by a scroll in either direction.
 JUDGE `FIELD_LABELS`
 (`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
 design.html **D13** — every field carries a VISIBLE label, which is also the
@@ -1775,22 +1833,47 @@ placeholder, and a persistent VISIBLE element supplying it — through a
 settings rows use (`.report-lab` / `.set-k`), whose members are named in the
 justification so the population stays reviewable. Nothing caught this before
 because `design-guard.test.ts` scores tokens, contrast and spacing; label
-presence is a structural fact about the DRIVEN DOM. JUDGE `TARGET_SIZE`
-(`main-target-size.png` / `target-size-add-form.png`, issue 148) carries
-design.html **A03** — every interactive target is ≥24×24 CSS px or stands ≥24px
-clear of its nearest neighbour. Eight targets sat under the floor, three of them
-(the calendar's 16×16 corner select checkbox, the tag remover at 10×17, the
-picker's 31 day cells at 23.84px) with 0–2px of spacing to fall back on, and the
-sweep passed anyway for three reasons it now closes: it ROUNDED each box before
-comparing (23.84 read as 24), the remover was a `<b>` with a click listener and
-so matched no interactive selector at all, and the undersized controls live on
+presence is a structural fact about the DRIVEN DOM. JUDGE `FIELD_CHROME`
+(`field-chrome-search-focus.png`, issue 149) carries the REST of **D13** — one
+border (`rule-strong`), one radius (8px), one focus idiom — with the **D07**
+grid under a field's padding, read off the DRIVEN DOM. The toolbar search box
+painted TWO nested fields: the chrome sat on the `.search` `<span>` WRAPPING
+the input and nothing reset the input, so Chromium's UA border, square corners
+and off-grid `padding: 1px 2px` rendered a second field inside the designed one
+— and D13's focus idiom landed on that inner box, a square accent rectangle
+floating inside a rounded grey one. `#search`'s 1px paddings were the only
+off-grid padding values in the running app. The static half could not see it:
+`design-guard.test.ts` scores the 4px grid over the AUTHORED values in
+`styles.css`, and every authored value was on-grid; these came from the UA
+stylesheet. That is the limit of a source scan rather than a bug in it, and the
+case belongs to the driven-DOM half of design.html §08's split. The scene
+drives the same five views `FIELD_LABELS` does, over the same field population,
+and asks what each field LOOKS LIKE: one solid `--rule-strong` border of one
+width on all four sides, the same width every other field draws (agreement, not
+a pinned px literal — every compared value is resolved from the token layer at
+probe time, so this is a computed check of the rule rather than the CSS pin
+process.html §02 forbids), an `--r1` radius on all four corners, computed
+padding on the 4px grid — no exemptions, because the app really does paint
+every field the same — and then Tabs onto `#search` to prove the accent border
+and the 3px ring resolve on the element that HOLDS focus, its wrapper painting
+nothing. That second fact is what a wrapper-styled field can never satisfy, and
+is why the fix moved the chrome onto the input rather than resetting the input
+and leaving the wrapper as the box. JUDGE `TARGET_SIZE` (`main-target-size.png`
+/ `target-size-add-form.png`, issue 148) carries design.html **A03** — every
+interactive target is ≥24×24 CSS px or stands ≥24px clear of its nearest
+neighbour. Eight targets sat under the floor, three of them (the calendar's
+16×16 corner select checkbox, the tag remover at 10×17, the picker's 31 day
+cells at 23.84px) with 0–2px of spacing to fall back on, and the sweep passed
+anyway for three reasons it now closes: it ROUNDED each box before comparing
+(23.84 read as 24), the remover was a `<b>` with a click listener and so
+matched no interactive selector at all, and the undersized controls live on
 transient surfaces the five-views-at-rest route never opened. The scene drives
 nine surfaces (the five views, the add form, the unified editor, the Timer
-start-details disclosure, the Reports builder, the popover), compares raw CSS px,
-measures a `<label>`-wrapped checkbox as its LABEL — the whole label is what a
-pointer aims at — and asserts the three named elements are PRESENT in the swept
-set, so a remover that regresses to bare prose fails here as well as at the
-keyboard. No new IPC channel (pure renderer), so
+start-details disclosure, the Reports builder, the popover), compares raw CSS
+px, measures a `<label>`-wrapped checkbox as its LABEL — the whole label is
+what a pointer aims at — and asserts the three named elements are PRESENT in
+the swept set, so a remover that regresses to bare prose fails here as well as
+at the keyboard. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the

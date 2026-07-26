@@ -655,16 +655,21 @@ function renderTimerStrip(running) {
   }
 }
 
-// The card's attribute row: the billable/non-billable badge plus a slept flag when the
-// running entry's machine slept. Monochrome --flag tokens only (the accent is reserved
-// for the running clock/state and the primary Stop button, §15); the billable badge reads
-// as a quiet label, not an accent fill.
+// The card's attribute row: the billable/non-billable ATTRIBUTE plus a slept FLAG when the
+// running entry's machine slept — two different kinds of thing, so two different palettes
+// (design.html D04/D14, issue #160). Billability is the entry's normal state, said quietly in
+// `.attr`/--muted; `slept` is the advisory, and the only one of the row the --flag warn palette
+// is for. Emitting all three through one `.flag` class painted every running card amber, which
+// is how the default case came to wear the colour reserved for "look at this" — the guard this
+// function's comment carried (a quiet label, not an accent fill) watched the accent and never
+// noticed it had reached for warn instead. Neither palette is the accent: that stays on the
+// running clock/state and the primary Stop button (§15).
 function cardFlagsHtml(e) {
   const flags = [];
   flags.push(
     e.billable
-      ? '<span class="flag" title="billable time">billable</span>'
-      : '<span class="flag" title="non-billable time">non-billable</span>',
+      ? '<span class="attr" title="billable time">billable</span>'
+      : '<span class="attr" title="non-billable time">non-billable</span>',
   );
   if (e.sleptThrough) flags.push('<span class="flag" title="machine slept during this entry">slept</span>');
   return flags.join('');
@@ -1221,6 +1226,73 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   return dialog;
 }
 
+// Breathing room, in px, between a calendar-armed inline gate and the calendar viewport's own
+// edges — the gate is clamped to sit this far inside, so it never grazes the scroller's rim.
+const CAL_GATE_INSET = 6;
+
+// design.html D09 (issue #146): position a transient inline gate — the two-step delete confirm
+// (confirmInline) or the split picker (openSplitForm) — that was armed from a CALENDAR EVENT.
+// Both gates are ~2–3× wider than the 124px day column their button lives in, so laid out IN FLOW
+// they ran straight out of the column and, in the leftmost column, 16px off the left edge of the
+// WINDOW; and neither carried a surface of its own, so a region raised above the calendar read as
+// loose text floating over it. Both halves are the same mistake — the gate is a LAYER over the
+// calendar, not content of a day column — so both are fixed the same way: `.cal-gate` lifts it
+// onto the elevation ladder's popover rung (the CSS) and this clamps its box inside the calendar
+// viewport (the geometry). Anchored at the event (left/top 0 of the block that armed it) and
+// nudged by the smallest offset that pulls it wholly inside `.cstrip`'s visible box, so a gate
+// armed in the first or last column stays whole and on screen.
+//
+// Gates armed OUTSIDE the calendar — the unified form's footer, the Clients rows, the Reports
+// builder — are already in-flow content of a full-width surface that fits them, so they get
+// neither the layer chrome nor the clamp: no `.cstrip` ancestor, nothing to do.
+//
+// Idempotent: it resets its own offsets before measuring, so it can be re-run when the gate's
+// content grows (the split picker's refusal message wraps in a second row, §12 R21).
+function placeInlineGate(wrap) {
+  const strip = wrap.closest('.cstrip');
+  if (!strip) return;
+  wrap.classList.add('cal-gate');
+  wrap.style.left = '0px';
+  wrap.style.top = '0px';
+  // The region the gate must land in: the scroller's VISIBLE box — its border box less the
+  // scrollbar gutters (clientWidth/Height) — INTERSECTED with the window, since the calendar's
+  // own viewport can itself hang below the fold. Only the intersection is both inside the
+  // calendar (the box the gate belongs to) and actually on screen.
+  const box = strip.getBoundingClientRect();
+  const view = {
+    left: Math.max(box.left, 0),
+    top: Math.max(box.top, 0),
+    right: Math.min(box.left + strip.clientWidth, document.documentElement.clientWidth),
+    bottom: Math.min(box.top + strip.clientHeight, document.documentElement.clientHeight),
+  };
+  // …less the two STICKY axes pinned inside that box (issue #145): the day-header band holds the
+  // scrollport's top edge and the hour gutter its left, both on opaque paper. They are chrome the
+  // calendar keeps legible while it scrolls, so the gate is placed in the CLEAR region rather than
+  // over them. Measured off the live elements, not the 52/48px constants, so a band that changes
+  // size takes the clamp with it. Their pinned edges are the SCROLLPORT's own (box.left/top), which
+  // is not `view`'s when the strip hangs off the window — hence the max() rather than an offset.
+  const gutter = strip.querySelector('.gut');
+  const header = strip.querySelector('.dh');
+  if (gutter) view.left = Math.max(view.left, box.left + gutter.offsetWidth);
+  if (header) view.top = Math.max(view.top, box.top + header.offsetHeight);
+  const r = wrap.getBoundingClientRect();
+  // Pull the overflowing edge in first, then re-check the opposite edge — so a gate wider than the
+  // viewport lands flush against its start edge rather than being pushed off the other side.
+  let dx = Math.min(0, view.right - CAL_GATE_INSET - r.right);
+  if (r.left + dx < view.left + CAL_GATE_INSET) dx = view.left + CAL_GATE_INSET - r.left;
+  let dy = Math.min(0, view.bottom - CAL_GATE_INSET - r.bottom);
+  if (r.top + dy < view.top + CAL_GATE_INSET) dy = view.top + CAL_GATE_INSET - r.top;
+  wrap.style.left = `${Math.round(dx)}px`;
+  wrap.style.top = `${Math.round(dy)}px`;
+}
+
+// Swap an armed gate in for the control that armed it, then place it (above). The single mount
+// point for both gates, so neither can acquire the containment fix without the other.
+function mountInlineGate(btn, wrap) {
+  btn.replaceWith(wrap);
+  placeInlineGate(wrap);
+}
+
 // §12 R13: the generic in-window confirm gate for a destructive action. A destructive
 // control (today only Delete; archive-when-referenced lands with the Clients view, R10)
 // must never act on a single stray click — the first click swaps the button into an
@@ -1248,7 +1320,7 @@ function confirmInline(btn, { kind, question, confirmLabel, onConfirm }) {
     `<span class="confirm-q">${escapeHtml(question)}</span>` +
     `<button class="small danger" type="button" data-act="confirm-${kind}">${escapeHtml(confirmLabel)}</button>` +
     `<button class="small ghost confirm-cancel" type="button" data-act="cancel-${kind}">Cancel</button>`;
-  btn.replaceWith(wrap);
+  mountInlineGate(btn, wrap);
   if (hadFocus) wrap.querySelector(`[data-act="cancel-${kind}"]`).focus();
   // Re-wire the freshly-created controls (they were not present at row build time). Only
   // the explicit confirm runs the destructive callback — the first (arming) click did not.
@@ -1342,7 +1414,7 @@ function openSplitForm(btn, e) {
     // surfaced here at the point of action; the picker stays open with the message announced.
     `<span class="split-warning form-error" role="status" aria-live="polite" hidden></span>`;
   const hadFocus = document.activeElement === btn;
-  btn.replaceWith(wrap);
+  mountInlineGate(btn, wrap);
   wrap.querySelector('.split-input').value = localInputValue(midpoint);
   const warn = wrap.querySelector('.split-warning');
   // A04 / issue 140, as in confirmInline: the button that opened the picker is gone, so focus
@@ -1367,10 +1439,16 @@ function openSplitForm(btn, e) {
       applyAck(ack);
     } catch (err) {
       showFormError(warn, err);
+      // The refusal wraps onto a second row inside the gate, so a gate already sitting against the
+      // calendar's bottom or right edge has just grown past it — re-clamp (issue #146).
+      placeInlineGate(wrap);
     }
   });
   // The message persists until the next input on the split field (add-form pattern).
-  wrap.querySelector('.split-input').addEventListener('input', () => clearFormError(warn));
+  wrap.querySelector('.split-input').addEventListener('input', () => {
+    clearFormError(warn);
+    placeInlineGate(wrap);
+  });
   wrap.querySelector('.split-cancel').addEventListener('click', (ev) => {
     ev.stopPropagation();
     const inPicker = wrap.contains(document.activeElement);
