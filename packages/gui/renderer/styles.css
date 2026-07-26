@@ -732,9 +732,10 @@ button {
   transition: background 0.12s, box-shadow 0.12s, border-color 0.12s;
 }
 button:hover { background: var(--hover); }
-/* Exactly one filled primary per view — the brightest thing in the view, so the eye lands.
-   The fill is --accent-solid (tomato·11), never --accent: a white label reads 4.98:1 on the
-   solid but fails the A01 floor on tomato·9 (design.html D04/D11 — why accent-solid exists). */
+/* Exactly one filled primary per view — the brightest thing in the view, so the eye lands (which
+   one that is, state by state, is the accent-handoff rule below). The fill is --accent-solid
+   (tomato·11), never --accent: a white label reads 4.98:1 on the solid but fails the A01 floor on
+   tomato·9 (design.html D04/D11 — why accent-solid exists). */
 button.primary {
   background: var(--accent-solid);
   border-color: var(--accent-solid);
@@ -743,6 +744,17 @@ button.primary {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 button.primary:hover { background: color-mix(in srgb, var(--accent-solid) 88%, black); }
+
+/* THE ACCENT HANDOFF — design.html D11's "at most one" per surface. Which button is lit is not a
+   static fact: a view's STANDING primary (the most-likely action with nothing open, marked
+   `data-standing-primary`) gives the `primary` class up while an inline form is open, because the
+   open form's commit IS the most-likely action then. Three states used to light both at once, and on
+   the Timer view the two accent-filled buttons even read the same word (issue 150, unhashed — the
+   D01 scan over this file reads a hashed three-digit number as a colour literal). A demoted standing
+   primary is simply a button without `.primary`, so it lands on the base `button` paint above — the
+   D11 secondary, paper + border — and this file states no second paint for it. app.js's
+   syncStandingPrimary owns the class; see the note there for why the rule lives in script and not in
+   a `:has()` selector here. */
 /* A ghost button (Edit / Delete / Cancel / the kebab) is clickable TEXT — it carries the
    neutral button background, staying quieter than .primary only via muted ink / .small sizing. */
 button.ghost { color: var(--muted); }
@@ -750,8 +762,8 @@ button.ghost:hover { color: var(--ink); }
 button.small { font-size: 12px; padding: 8px 12px; }
 /* The .small.primary cascade made explicit — keeps the .small sizing while .primary's accent
    fill still applies (Clients view #add-client-btn; #add-tag is neutral per D11 — one
-   accent-solid primary per view). No visual change, just one rule instead of tracking
-   button / button.primary / button.small together. */
+   accent-solid primary per view, and this one is that view's standing primary). No visual change,
+   just one rule instead of tracking button / button.primary / button.small together. */
 button.small.primary { font-size: 12px; padding: 8px 12px; }
 /* An icon inside a .btn sizes down per the system. */
 .btn .ic { width: 15px; height: 15px; }
@@ -762,7 +774,6 @@ button[hidden] { display: none; }
    border + control radius + hover, so the convention can never drift between views; each control's own
    rule below keeps only its distinctive padding / font / ink. */
 .report-export-btn,
-.report-apply,
 .def .def-run,
 .def .def-edit,
 .def .def-kebab,
@@ -776,7 +787,6 @@ button[hidden] { display: none; }
   cursor: pointer;
 }
 .report-export-btn:hover,
-.report-apply:hover,
 .def .def-run:hover,
 .def .def-edit:hover,
 .def .def-kebab:hover,
@@ -970,8 +980,9 @@ button.danger:hover { background: var(--danger-weak); }
 /* §06 R3 (design.html D11 / V5): the merge SELECTION BAR — a quiet sunken bar ABOVE the
    calendar once 2+ entries are selected: the raised-chip count pill ("N selected"), a flex
    spacer, and a NEUTRAL small Merge button. Merge never takes the accent — the Entries
-   view's single accent-solid primary stays the add form's Save entry (mock main.html
-   .selbar, adopted verbatim). */
+   view's one accent-solid primary is its standing Add entry, handed to the form's Save entry
+   (or the conflict prompt's Merge) while one is open (mock main.html .selbar, adopted
+   verbatim). */
 .merge-bar {
   display: flex;
   align-items: center;
@@ -1258,13 +1269,6 @@ button.danger:hover { background: var(--danger-weak); }
 .custom-range { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; grid-column: 1 / -1; }
 .custom-range[hidden] { display: none; }
 .custom-range .report-lab { text-align: left; }
-.report-apply {
-  font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 590;
-  color: var(--ink);
-  padding: 8px 16px;
-}
 
 /* The resolved window the report covers, painted under the head from core's bounds. */
 .report-range {
@@ -1386,20 +1390,9 @@ button.danger:hover { background: var(--danger-weak); }
   border-bottom: 1px solid var(--rule);
 }
 .reports-title { font-size: 18px; margin: 0; font-weight: 640; letter-spacing: -0.01em; }
-/* The single accent primary action of the view. */
-#rep-new {
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 590;
-  border-radius: var(--r1);
-  padding: 8px 16px;
-  border: 1px solid var(--accent-solid);
-  background: var(--accent-solid);
-  color: white;
-  cursor: pointer;
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 35%, transparent);
-}
-#rep-new:hover { background: color-mix(in srgb, var(--accent-solid) 88%, black); }
+/* + New report — the view's standing primary — needs no rule of its own: `button` + `button.primary`
+   already paint it, and re-stating that paint under an ID overrode the accent handoff, so the button
+   stayed accent-filled while the builder's Save took the accent too (issue 150). */
 
 /* §09 R08: the saved-definition list — one warm-paper card per saved report (name + spec
    summary + Run / Edit / kebab; all neutral-bg, no accent). */

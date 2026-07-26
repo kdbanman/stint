@@ -581,7 +581,9 @@
   // ----------------------------------------------------------------- wiring
 
   function wire() {
-    // The single accent primary action of the view: open the inline builder for a New report.
+    // The view's STANDING primary (design.html D11): the most-likely action at rest is opening
+    // the inline builder. It only OPENS a form, so once the builder is up the accent hands off to
+    // the builder's own commit (#rep-save) — see syncStandingPrimary in app.js.
     $('rep-new').addEventListener('click', () => void openBuilder(null));
 
     // The saved-definition cards: Run / Edit / kebab (Rename / Delete). One delegated handler.

@@ -180,7 +180,8 @@ function render() {
 
   const toggle = $('toggle');
   toggle.textContent = running ? 'Stop' : 'Start';
-  toggle.classList.toggle('primary', true);
+  // The `primary` class is NOT re-asserted here: syncStandingPrimary owns it (design.html D11 —
+  // the accent handoff), and re-lighting it on every repaint would fight that.
   // §12 R14: announce the toggle's running/idle state to the accessibility tree (the JUDGE
   // harness reads the a11y tree) — aria-pressed reflects "running", and the label spells out
   // the action so the icon-or-ambiguous button is discernible under a screen reader.
@@ -2971,6 +2972,48 @@ async function pinAsFavorite(name) {
   await renderFavorites();
 }
 
+// design.html D11 — THE ACCENT HANDOFF, in one rule. "At most one accent-filled (accent-solid)
+// primary action per view — the single most-likely action." Which button that is changes with the
+// state: each view marks its STANDING primary (the most-likely action with nothing open) with
+// `data-standing-primary`, and while an inline form is open its COMMIT is the most-likely action, so
+// the standing one gives the `primary` class up and reverts to the neutral button paint. Three states
+// used to light both at once — and on the Timer view the two accent-filled buttons carried the same
+// word, "Start" (issue 150).
+//
+// One rule, applied structurally rather than at each of the ~9 open/close seams: a form (or the split
+// picker, or the modal) that opens without remembering to demote anything is the defect itself, so
+// the condition is read off the DOM instead of maintained by every caller. An OPEN COMMIT SURFACE is
+// a `<form>` that is not closed away plus a `.primary` inside it, the split picker (`.split-at` — the
+// one commit surface that is not a form), or the app's single modal, which mounts on `<body>` outside
+// the views. Only the ACTIVE view is consulted, so a form left open on a view the user navigated away
+// from cannot demote the primary of the view now on screen.
+//
+// Why script and not a `:has()` selector: the CSS form of this rule — `.view:has(form:not([hidden])
+// button.primary) [data-standing-primary]` — matches correctly under `Element.matches` but Chromium
+// does not always RE-RESOLVE the style when the `hidden` attribute that makes it true is toggled, so
+// opening the Reports builder left "+ New report" still accent-filled until some unrelated recalc
+// happened to repaint it. A MutationObserver has no such gap. It is also cheap: the callback is
+// batched per task by the platform, and the work is four `classList.toggle` calls over a two-selector
+// query, so even the calendar's 51-block repaints cost one pass.
+const COMMIT_SURFACE = ':is(form:not([hidden]), .split-at) button.primary';
+function syncStandingPrimary() {
+  const view = document.querySelector('.view:not([hidden])');
+  const claimed =
+    !!document.querySelector('.editor-backdrop button.primary') ||
+    !!view?.querySelector(COMMIT_SURFACE);
+  for (const el of document.querySelectorAll('[data-standing-primary]')) {
+    el.classList.toggle('primary', !claimed);
+  }
+}
+// `hidden` is the only attribute the condition reads, so the observer watches it and the DOM shape;
+// the class it writes is deliberately outside attributeFilter, so the write cannot re-trigger it.
+new MutationObserver(syncStandingPrimary).observe(document.body, {
+  subtree: true,
+  childList: true,
+  attributes: true,
+  attributeFilter: ['hidden'],
+});
+
 // §07/§12: an external change (a tt write) repaints whichever view is active.
 window.stint.onChange(() => {
   if (activeView === 'clients') void renderClients();
@@ -2991,4 +3034,5 @@ setInterval(tick, 1000);
 // §12 R3: open on the Entries view (the default active route) so the nav highlight and the
 // shown section are consistent from the first paint, then load its data.
 route('entries');
+syncStandingPrimary();
 load();

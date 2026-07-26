@@ -1350,8 +1350,11 @@ Run paints the grouped run-output with per-line + grand totals and the
 overlap/unreviewed-sleep flags surfaced in context on the affected rows, plus
 the resolved-range header; and Export CSV / Export JSON each drive a real
 `exportEntries` call carrying the saved report's ref, byte-identical to
-`tt report run <name> --csv|--json` ; only the single + New report primary
-action carries the accent, §15 / G10). Supporting BDD/GOLD all surface-neutral
+`tt report run <name> --csv|--json` ; at rest only the standing + New report
+primary carries the accent, and once the builder is open it hands off to the
+builder's own Save — the commit, not the control that merely opened the form,
+which `PRIMARY_HANDOFF` gates, §15 / G10 / D11).
+Supporting BDD/GOLD all surface-neutral
 and shared with tt: `features/reports.feature` + `features/reporting.feature` +
 `features/search.feature` (range presets/custom, grouping by
 client/project/day/tag with the grand total grouping-invariant, the
@@ -1871,15 +1874,30 @@ three-week `denseCalendarState` fixture, 51 blocks: no closed entry block paints
 an accent-family colour as fill / gradient / border / shadow, every one computes
 the `--paper` fill plus a non-none box-shadow (D09 depth, not tint), exactly one
 block — the RUNNING one — keeps the accent, and the whole view holds ≤1
-`--accent-solid` fill) and the two D12 selection guards `SELECTION_LIFT`
+`--accent-solid` fill), the two D12 selection guards `SELECTION_LIFT`
 (`selection-lift.png`, issue 144 — the calendar's chosen blocks and their
 checkboxes) and `MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — the
-merge-conflict modal's chosen option) as the deterministic guards on the
-discipline; the subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
-screenshots). The mockups (`context/mockups/main.html` L43, `reports.html` L39,
-`timer.html` L40) carry the convention in comments as the design-intent
-reference. GUI-only presentation — no core / schema / CLI / IPC channel, so no
-parity-matrix row
+merge-conflict modal's chosen option), and the two D11 budget guards
+`ACCENT_SOLID_BUDGET` (`main-running.png` — each view AT REST holds ≤1
+`--accent-solid` fill, and every view that marks a standing primary holds exactly
+one, so a view drawing its obvious primary as a `.ghost` fails the floor the way
+Entries did) and `PRIMARY_HANDOFF` (`primary-handoff-timer.png` /
+`primary-handoff-reports.png`, issue 150 — the same count held across THIRTEEN
+states: each view at rest, each with every inline form it can open, the running
+Timer view, and the merge-conflict modal. The open form's commit owns the accent
+and the view's standing primary hands it over, so no state paints two — three
+did, and on the Timer view both read "Start") as the deterministic guards on the
+discipline. The structural half is GOLD `gui/test/renderer-static.test.ts`: every
+view with a most-likely action marks it (`data-standing-primary`, on a `.primary`
+button; the Timer marks the idle and running faces of one action), and exactly
+one place consumes the marker — `syncStandingPrimary` in `app.js`, over a
+MutationObserver, because Chromium does not reliably re-resolve the `:has()` form
+of the rule when the `hidden` attribute that decides it is toggled. The
+subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
+screenshots). The mockups (`context/mockups/main.html`,
+`context/mockups/reports.html`, `context/mockups/timer.html`) carry the
+convention in comments as the design-intent reference. GUI-only presentation —
+no core / schema / CLI / IPC channel, so no parity-matrix row
 
 ### PRD §16
 

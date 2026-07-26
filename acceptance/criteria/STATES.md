@@ -24,6 +24,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — live-edit strip (running only) | Raw text `#le-start`, no `#le-end`, count-up keeps advancing while edited | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — inline start-only picker disclosure | Opens in flow under the field, start grip only, future-fade mask | JUDGE `TIMER_VIEW` — `timer-view-full.png` | |
 | **Edge** — start panel hidden while running | `#start-panel`/`#toggle` hidden; exactly one Description field (`#le-desc`) | JUDGE `RUNNING_SINGLE_ACTION` — `timer-running-single-action.png` | |
+| **Edge** — accent handoff with a form open (Details / pin-as-favourite) | The standing Start — or Stop, while running — reverts to secondary (paper + border); the open form's commit is the view's one accent fill, never two buttons reading "Start" (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) — `primary-handoff-timer.png` | |
 | **Ideal** — favorites rail populated | One row per favorite, Resume + kebab, monochrome chrome | JUDGE `FAVORITES_RAIL` — `timer-favorites.png` | |
 | **Edge** — pin-as-favorite form | Pin affordance present, fires `pinFavorite` on submit | JUDGE `FAVORITES_RAIL` (inline pin driven to completion: the typed name committed on Enter fires `pinFavorite` and the chip lands in the rail) — `timer-favorites.png` | |
 | **Edge** — favorites kebab (rename/unpin) | Kebab exposes rename/unpin per row | JUDGE `FAVORITES_RAIL` (kebab rename and unpin each driven to completion: `renameFavorite` renames the chip in place; `unpinFavorite` fires exactly once and the chip leaves the rail) — `timer-favorites.png`; GOLD `parity.test.ts` (channels callable) | |
@@ -46,6 +47,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — readonly calendar (cross-midnight, `.ov` overlap band, `.zz` sleep hatch, hover ops chip) | Two segments sharing an id; yellow warn band; hatched excluded span; Delete/Split/Edit + `.ck` on hover | JUDGE `CALENDAR_LAYOUT` (issue #71 sub-fact) — `main-calendar.png` | |
 | **Edge** — multi-select + merge bar (contiguous, agreeing) | Two `.ck` checks reveal `#merge-bar`; direct merge, no prompt | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png` | |
 | **Edge** — selected / editing blocks on the calendar | Chosen blocks lift a rung off the flat ones, ink-ticked checkbox, no accent anywhere (D12) | JUDGE `SELECTION_LIFT` (issue 144) — `selection-lift.png`, `selection-lift-editing.png` | |
+| **Edge** — accent handoff with the unified form open | The standing Add entry reverts to secondary; Save entry is the view's one accent fill (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) | |
 | **Edge** — inline gap confirm (non-contiguous, agreeing) | Merge swaps to `.confirm-gap` naming span + fabricated gap | JUDGE `MERGE_GAP` — `main-merge-gap.png` | |
 | **Edge** — inline split form | Hover Split opens instant picker defaulting to midpoint | JUDGE `SPLIT_AFFORDANCE` — `main-split.png`; BDD `reachable_by_hand.feature` "Split an entry by hand" | |
 | **Edge** — two-step delete gate | Arm click shows confirm, no `remove` call; explicit confirm removes once | JUDGE `CONFIRM_DELETE`, `DELETE_CONFIRM` — `main-confirm-delete.png`, `main-confirm.png`; BDD "Deleting an entry without confirmation is refused" | |
@@ -58,6 +60,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 |---|---|---|---|
 | **Ideal** — conflicting merge prompt | Distinct client/project choices + a billable choice before commit | JUDGE `MERGE_CONFLICT` — `main-merge-conflict.png`; BDD "Merge resolving to a chosen client overrides the first-entry default" | |
 | **Ideal** — the chosen option's paint | Chosen option is a raised paper chip with an ink radio dot; peers recess to wash and stay flat (D12) | JUDGE `MERGE_CHOICE_LIFT` (issue 144) — `merge-choice-lift.png` | |
+| **Edge** — the Entries view behind the backdrop | That view's standing primary reverts to secondary, so the modal's Merge is the only accent fill on screen (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) | |
 | **Edge** — agreeing merge (no prompt) | Merge fires directly, no `.editor.conflict-prompt` | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png`; BDD "Merge concatenates descriptions and keeps the first entry's client" | |
 | **Error** — non-contiguous merge without acknowledgement | Refused, originals survive unmerged | BDD `overlap_and_editing.feature` "Merging a non-contiguous selection without acknowledgement is refused (the originals survive)" | Core-level refusal; same `confirmInline` gate as `MERGE_GAP`, no separate GUI screenshot |
 | **Empty** — N/A | Modal only renders on a ≥2-entry conflicting selection | — | Waived — no zero-data variant exists for a conditionally-mounted modal |
@@ -69,6 +72,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — client cards, active list | Clients with nested projects, create/rename/archive in place | JUDGE `CLIENTS_VIEW` — `main-clients.png`; BDD `reachable_by_hand.feature` "Create reference data by hand" | |
 | **Edge** — inline rename (client/project) | Row swaps to a rename input, commits over `renameClient`/`renameProject` | BDD `reachable_by_hand.feature` "Rename and archive reference data by hand" | Not separately machine-driven by JUDGE (only Add is driven, issue #48 guard) |
 | **Edge** — inline add (client/project/tag) | "+ Add …" opens an input, commits, lands in the active list | JUDGE `CLIENTS_VIEW` (issue #48 driven-not-present guard) — `main-clients-created.png` | |
+| **Edge** — accent handoff with an inline field open | + Add client reverts to secondary; the rename/add commit is the view's one accent fill (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) | |
 | **Error** — archive-referenced confirm gate | Archive click arms `.confirm-archive`, no call until explicit confirm | JUDGE `CONFIRM_ARCHIVE` — `main-confirm-archive.png` | |
 | **Ideal** — unreferenced archive (direct) | Archive commits with no confirm step | JUDGE `CLIENTS_VIEW` (Globex path) — `main-clients.png` | |
 | **Edge** — archived restore list | "Show archived" toggle reveals archived rows with `.pill` + Restore | JUDGE `RESTORE_ARCHIVED` — `main-clients-archived.png` | |
@@ -84,6 +88,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Empty** — `#rep-defs-empty` | "No saved reports yet." (`index.html` `#rep-defs-empty`) | JUDGE `REPORTS_VIEW` (zero-saved-defs page) — `reports-empty.png` | |
 | **Edge** — card kebab (rename/delete) | Swaps in place to Rename/Delete, Delete behind the confirm gate | JUDGE `REPORTS_VIEW` (Edit/Delete sub-fact); BDD `saved_reports.feature` "Renaming then deleting a saved report removes it from the list" | |
 | **Ideal** — builder (new/edit) | Range presets + Custom date pair, group-by, filters, rounding | JUDGE `REPORTS_VIEW` — `reports-list.png`, `reports-run.png` | |
+| **Edge** — accent handoff with the builder open | + New report reverts to secondary; the builder's Save — the commit, not the control that opened the form — is the view's one accent fill (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) — `primary-handoff-reports.png` | |
 | **Error** — `#rep-warning`, incomplete custom range | No-op save, builder stays open, missing field takes focus | JUDGE `REPORTS_VIEW` (§12 R21 sub-facts) | |
 | **Error** — `#rep-warning`, duplicate name | Refused, message persists past the tick, no third card | JUDGE `REPORTS_VIEW` (§12 R21 sub-facts); BDD "A duplicate report name is refused and persists nothing" | |
 | **Edge** — inverted / same-day custom range | Inverted rejected & stores nothing; same-day accepted | BDD `saved_reports.feature` "A saved report with an inverted custom range is rejected…", "…same-day … custom range is accepted" | Not separately GUI-machine-scored |
