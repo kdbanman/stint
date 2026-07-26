@@ -2916,6 +2916,12 @@ async function sceneAddRefusalPalette(browser) {
 // chosen billable go to the main process, which resolves the names. (The selection surface
 // moves to the calendar's hover-corner checkboxes when §12 R16's `.ev` events land; until
 // then it is driven from the entry rows' `.sel` checkboxes, which app.js still paints.)
+//
+// The scene closes on the modal's KEYBOARD EXIT (issue 147): the app's only modal ignored
+// Escape, so a keyboard user mid-merge had no way out of it — craft checklist §4, "Esc
+// closes/cancels the innermost thing". The guard lives here rather than in a scene of its own
+// because it is the same prompt on the same fixture, and it is scored on the OUTCOME (gone AND
+// unmerged), which is what separates a cancel from a silent confirm.
 async function sceneMergeConflict(browser) {
   await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
     // The action bar is hidden with nothing (or one entry) selected.
@@ -2965,6 +2971,19 @@ async function sceneMergeConflict(browser) {
         merged: window.__MERGED__,
       };
     });
+    // Escape dismisses the prompt as a CANCEL (issue 147). Asserted on the OUTCOME, not just
+    // the dismissal: the element must leave the DOM AND __MERGED__ must still be undefined —
+    // an Escape that silently confirmed the merge would clear the DOM just the same and pass a
+    // "prompt is gone" check on its way to writing the fold nobody asked for.
+    await page.keyboard.press('Escape');
+    const afterEscape = await page.evaluate(() => ({
+      promptShown: !!document.querySelector('.editor.conflict-prompt'),
+      backdropShown: !!document.querySelector('.editor-backdrop'),
+      // `?? null` so the recorded justification SHOWS the unmerged fact — JSON.stringify drops
+      // an undefined value, and "no merge was written" is the half of this that matters.
+      merged: window.__MERGED__ ?? null,
+    }));
+    const escapeCancels = !afterEscape.promptShown && !afterEscape.backdropShown && !afterEscape.merged;
     const ok =
       barHiddenInitially &&
       barHiddenWithOne &&
@@ -2975,11 +2994,13 @@ async function sceneMergeConflict(browser) {
       probe.clientChoiceCount === 2 &&
       probe.offersBillable &&
       // The prompt appeared BEFORE any merge committed (no payload sent yet).
-      !probe.merged;
+      !probe.merged &&
+      escapeCancels;
     record(
       'MERGE_CONFLICT',
       ok,
-      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}`,
+      `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}; ` +
+        `Escape cancels the prompt — dismissed with nothing merged (${escapeCancels}): ${JSON.stringify(afterEscape)}`,
       'main-merge-conflict.png',
     );
   });
