@@ -845,6 +845,22 @@ function tagsHtml(e) {
   return `<span class="chips">${chips}</span>`;
 }
 
+// §07: the EDITABLE tag chip — the same monochrome chip as above, plus the remover the two
+// in-form tag editors (the add form's and the unified editor's) both paint. The remover is a
+// real button carrying the sprite × (issue 148): it used to be a `<b>` with a click listener,
+// which no keyboard could reach (design.html A04), carried no role for a screen reader to
+// announce (D16), and measured 10x17 against A03's 24x24 target floor — three defects in one
+// element. Its accessible name carries the tag, so "Remove tag" is never ambiguous between
+// chips; `title` stays the short sentence-case tooltip its siblings use.
+function editableChipHtml(t) {
+  const { icon } = window.SU;
+  return (
+    `<span class="chip">${escapeHtml(t)} ` +
+    `<button type="button" class="chip-x" title="Remove tag" ` +
+    `aria-label="Remove tag ${escapeHtml(t)}">${icon('x')}</button></span>`
+  );
+}
+
 // §12 R10: the unified editor's detailed overlap detail ("Overlap: 15m with previous entry").
 // Where the readonly calendar shows only the `.ov` warn band, the editor spells out the
 // overlapping amount (core-owned minutes) and which neighbour (previous / next) it shares with —
@@ -1523,17 +1539,14 @@ async function openEntryForm(row, e) {
   function renderTagChips() {
     chipHost.innerHTML = '';
     for (const t of nextTags) {
-      const chip = document.createElement('span');
-      chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="Remove tag">×</b>`;
-      chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+      chipHost.insertAdjacentHTML('beforeend', editableChipHtml(t));
+      chipHost.lastElementChild.querySelector('.chip-x').addEventListener('click', (ev) => {
         ev.stopPropagation();
         const i = nextTags.indexOf(t);
         if (i >= 0) nextTags.splice(i, 1);
         renderTagChips();
         tagInput.focus();
       });
-      chipHost.appendChild(chip);
     }
     chipHost.appendChild(tagInput);
   }
@@ -2203,17 +2216,14 @@ function renderAddTagChips() {
   if (!host) return;
   host.innerHTML = '';
   for (const t of addFormTags) {
-    const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="Remove tag">×</b>`;
-    chip.querySelector('.chip-x').addEventListener('click', (ev) => {
+    host.insertAdjacentHTML('beforeend', editableChipHtml(t));
+    host.lastElementChild.querySelector('.chip-x').addEventListener('click', (ev) => {
       ev.stopPropagation();
       const i = addFormTags.indexOf(t);
       if (i >= 0) addFormTags.splice(i, 1);
       renderAddTagChips();
       $('add-tag-input')?.focus();
     });
-    host.appendChild(chip);
   }
   const input = document.createElement('input');
   input.type = 'text';
