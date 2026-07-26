@@ -345,7 +345,12 @@ prompt is now **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
 `openMergeConflict` — the merge-bar path routes through it; `editor.js` and its
 toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
 `MERGE_NOCONFLICT` (`packages/gui/judge/`, asserting the
-`.editor.conflict-prompt` modal + `main-merge-conflict.png`) +
+`.editor.conflict-prompt` modal + `main-merge-conflict.png`; `MERGE_CONFLICT`
+also scores the modal's KEYBOARD EXIT — issue 147, where the app's one modal
+ignored Escape and left a keyboard user mid-merge with no way out: Escape now
+dismisses the prompt as a CANCEL, scored on the OUTCOME (prompt and backdrop
+gone AND no `merge` payload sent), because an Escape that silently confirmed
+would empty the DOM just the same) +
 `MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — how the prompt PAINTS
 a choice: each chosen `.mc-opt` is the raised paper chip (`--paper` + a non-none
 shadow) while its unchosen peers recess to `--wash` and stay flat, no option or
@@ -1671,7 +1676,11 @@ the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). JUDGE `FIELD_LABELS`
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). The same blind spot covers
+the app's one MODAL, which mounts on `<body>` outside every view:
+`MERGE_CONFLICT` now scores its Escape dismissal too (issue 147), so "Esc
+cancels the innermost thing" is proven at both places the renderer swallows or
+ignores keys. JUDGE `FIELD_LABELS`
 (`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
 design.html **D13** — every field carries a VISIBLE label, which is also the
 §07 field-border exemption A01 is conditioned on. The app had been labelling
