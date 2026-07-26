@@ -5,12 +5,12 @@
  * Computes the release version `YYYY.M.D` from the current UTC date (month and day NOT
  * zero-padded, per the spec example `2026.6.27`), with an optional same-day build suffix
  * `.N` supplied by CI via `STINT_BUILD_N` (an integer ≥ 2; absent or 1 ⇒ no suffix). It
- * rewrites the committed dev-placeholder literal in `packages/core/src/version.ts` so the
+ * rewrites the committed dev-placeholder fallback in `packages/core/src/version.ts` so the
  * built `dist` carries the real version, then echoes the version to stdout (CI captures
  * it for the Git tag / GitHub Release name — the §19 R05 linkage).
  *
  * Pure date math + one file rewrite; NO network, no other side effects. Idempotent: it
- * re-targets the `APP_VERSION` literal regardless of its current value, so a second run
+ * re-targets the `APP_VERSION` fallback regardless of its current value, so a second run
  * (or a run over an already-stamped tree) simply re-stamps today's version.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -30,17 +30,23 @@ const VERSION_FILE = fileURLToPath(
   new URL('../packages/core/src/version.ts', import.meta.url),
 );
 
-// The literal `APP_VERSION` is assigned via `process.env.STINT_VERSION ?? '<literal>'`;
-// rewrite only that fallback string so the env override and the rest of the file stand.
+// `APP_VERSION` is assigned `process.env.STINT_VERSION ?? <fallback>`; rewrite only that
+// fallback so the env override and the rest of the file stand.
+//
+// The fallback is matched in EITHER committed form — the exported `DEV_VERSION` constant or
+// an already-stamped quoted literal. Literal-only matching made substituting the constant
+// (the obvious cleanup, sitting nineteen lines above an identical string) a silent break of
+// the release stamp (#174). Both forms are replaced by a QUOTED version string, so
+// `DEV_VERSION`'s own declaration keeps its sentinel value and never becomes a release.
 const ASSIGN_RE =
-  /(export const APP_VERSION: string = process\.env\.STINT_VERSION \?\? ')([^']*)(';)/;
+  /(export const APP_VERSION: string = process\.env\.STINT_VERSION \?\? )('[^']*'|DEV_VERSION)(;)/;
 
 export function stampFile(version, file = VERSION_FILE) {
   const src = readFileSync(file, 'utf8');
   if (!ASSIGN_RE.test(src)) {
-    throw new Error(`stamp-version: APP_VERSION literal not found in ${file}`);
+    throw new Error(`stamp-version: APP_VERSION fallback not found in ${file}`);
   }
-  writeFileSync(file, src.replace(ASSIGN_RE, `$1${version}$3`));
+  writeFileSync(file, src.replace(ASSIGN_RE, `$1'${version}'$3`));
   return version;
 }
 

@@ -37,6 +37,9 @@ import { app, net, shell } from 'electron';
 import { createWriteStream } from 'node:fs';
 import { join } from 'node:path';
 import { platform as osPlatform } from 'node:os';
+// The dev sentinel is core's export (§19 R06) — one home, so it cannot drift from the value
+// the stamp script and both surfaces agree on (#174).
+import { DEV_VERSION } from '@stint/core';
 
 // Re-exported for callers of this module; defined in ipc.ts alongside the other renderer-safe
 // view shapes (the main process pushes it over the `update-progress` broadcast).
@@ -44,9 +47,6 @@ export type { UpdateProgress } from './ipc.js';
 
 /** The public GitHub repo whose Releases back distribution (decision G4). */
 const RELEASES_API = 'https://api.github.com/repos/kdbanman/stint/releases';
-
-/** A non-release sentinel (the unstamped dev build) — never "newer" than a real release. */
-const DEV_VERSION = '0.0.0-dev';
 
 /** The shape of one GitHub release asset the download needs (a subset of the API payload). */
 export interface GithubAsset {

@@ -5,10 +5,11 @@
  *
  * The release version is `YYYY.M.D` (month/day NOT zero-padded, e.g. `2026.6.27`) with
  * an optional numeric build suffix `.N` (N ≥ 2) for multiple same-day releases
- * (`2026.6.27.2`). The committed literal below is a deterministic, offline, non-release
- * SENTINEL (`0.0.0-dev`) so an unstamped local/dev build still runs; CI rewrites it via
- * `scripts/stamp-version.mjs` before `npm run build`, and `process.env.STINT_VERSION`
- * overrides at runtime (the test/stamp hook). No network, no clock read at import.
+ * (`2026.6.27.2`). The committed fallback below is a deterministic, offline, non-release
+ * SENTINEL (`DEV_VERSION` = `0.0.0-dev`) so an unstamped local/dev build still runs; CI
+ * replaces that fallback via `scripts/stamp-version.mjs` before `npm run build`, and
+ * `process.env.STINT_VERSION` overrides at runtime (the test/stamp hook). No network, no
+ * clock read at import.
  */
 
 /** The dev placeholder a freshly checked-out, unstamped build carries. */
@@ -28,7 +29,15 @@ export function isReleaseVersion(s: string): boolean {
 
 /**
  * The app version both surfaces report. `STINT_VERSION` in the environment wins (the CI
- * stamp / test hook); otherwise the stamped literal — `DEV_VERSION` until a build stamps
+ * stamp / test hook); otherwise the stamped fallback — `DEV_VERSION` until a build stamps
  * it to a real `YYYY.M.D[.N]`.
+ *
+ * CONSTRAINT (#174): the assignment's TEXT is load-bearing outside the type system.
+ * `scripts/stamp-version.mjs` rewrites the `??` fallback in place by regex and throws when
+ * it cannot match, so this must stay one line of the form
+ * `export const APP_VERSION: string = process.env.STINT_VERSION ?? <DEV_VERSION | '…'>;`.
+ * Those two fallback forms are all the script accepts — routing the fallback through a
+ * helper, a ternary, or a second statement breaks the release stamp. Pinned by GOLD
+ * `core/test/gold/stamp-version.test.ts`.
  */
-export const APP_VERSION: string = process.env.STINT_VERSION ?? '0.0.0-dev';
+export const APP_VERSION: string = process.env.STINT_VERSION ?? DEV_VERSION;

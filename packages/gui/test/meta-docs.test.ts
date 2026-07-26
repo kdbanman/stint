@@ -132,6 +132,7 @@ const NOT_JUDGE_ITEMS = new Set([
   // Code/config identifiers COVERAGE.md cites in the same SCREAMING_SNAKE backtick shape.
   'APP_VERSION',
   'DB_FILENAME',
+  'DEV_VERSION',
   'GH_TOKEN',
   'SCHEMA_VERSION',
   'SETTING_DESCRIPTORS',
