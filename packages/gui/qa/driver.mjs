@@ -2,19 +2,20 @@
 /**
  * QA discovery driver (process.html — QA discovery). Runs the REAL renderer
  * (packages/gui/renderer) in headless Chromium over a REAL @stint/core SQLite store,
- * bridged by a port of main.ts's IPC handler map — so a discovery sweep exercises the
- * shipped GUI code and the shipped write/validation logic with only Electron's OS
- * chrome (tray, native dialogs, global hotkey, update network) out of frame.
+ * bridged by main.ts's OWN IPC handler map (src/ipc-handlers.ts, imported from ../dist —
+ * issue #165 ended the hand-copy) — so a discovery sweep exercises the shipped GUI code and
+ * the shipped write/validation logic with only Electron's OS chrome (tray, native dialogs,
+ * global hotkey, update network) out of frame.
  *
  * This is apparatus, not a gate: it produces findings (issues + repro evidence), never
- * green. The port is the part that can rot, so it is guarded — test/qa-driver.test.ts
- * asserts createHandlers() covers the IPC CHANNELS exactly; a new channel fails the
- * build until the driver learns it.
+ * green. The bridge is the part that can rot, so it is guarded — test/qa-driver.test.ts
+ * asserts createHandlers() serves every IPC channel with the shipping map's own handler,
+ * so neither a missing channel nor a re-typed body can reach a sweep.
  *
  * The two halves:
- *   createHandlers(store, deps) — the handler-map port, pure and dependency-injected
- *     (no dist/ imports at module scope) so the parity test can read its keys without
- *     a build or a database.
+ *   createHandlers(store, deps) — the window.stint bridge: the shipping handler map built
+ *     over the sweep's answers to Electron's three OS-bound seams, plus the GUI-only
+ *     update:* stubs.
  *   main() — the interactive sweep loop: opens the store, launches Chromium, installs
  *     the window.stint bridge + the cine overlay (./cine.mjs), then watches
  *     <qa-dir>/commands/ for NNN.mjs recipes (export default async (ctx) => {}) and
@@ -30,163 +31,41 @@ import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
+import { Store } from '@stint/core';
+// The shipping handler map — the whole point of the bridge below (issue #165). It is the
+// BUILT module, so the driver (and test/qa-driver.test.ts with it) needs `npm run build`
+// first, the same precondition the sweep already had.
+import { createIpcHandlers } from '../dist/ipc-handlers.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
 
-// --------------------------------------------------------------- handler port
+// -------------------------------------------------------------------- bridge
 /**
- * The port of main.ts registerIpc's handler map (plus the §12 R9 listEntries query and
- * the toggle rule). Keys MUST cover ipc.ts CHANNELS exactly — that is the guarded
- * invariant. `deps` carries everything the bodies call:
- *   { buildUiState, nextTimerAction, startWithAttributes, reportview, favorites,
- *     listBackups, core: { toUtc, resolveRange, buildEntryList, describeOverlaps,
- *     joinClientProject }, refresh, exportsDir }
- * Bodies only run inside a sweep, so the parity test may pass empty deps.
+ * The Chromium page's window.stint bridge. The channel handlers are NOT ported here — they
+ * ARE the shipping map (src/ipc-handlers.ts `createIpcHandlers`, built to ../dist), so a sweep
+ * can only ever repro against the logic the app runs. Until issue #165 this file re-typed that
+ * map by hand and two behaviours had silently drifted (the Entries row lost the client/project
+ * names §09 R7's live search reads, and `merge` dropped `allowGap`), so the copy is gone and
+ * test/qa-driver.test.ts binds what is left.
+ *
+ * Only Electron's three OS-bound seams are answered differently, and each answers the way the
+ * app would after the OS step: `refreshAll` broadcasts to the open pages, `showSaveDialog`
+ * accepts into <qa-dir>/exports (no native dialog host), and the global-hotkey rebind is a
+ * no-op (no OS shortcut to rebind).
+ *
+ * `deps` carries the sweep's context: { exportsDir, refresh }.
  */
 export function createHandlers(store, deps = {}) {
-  const { core = {}, reportview: rv = {}, favorites: fav = {} } = deps;
-  const refresh = () => deps.refresh && deps.refresh();
-
-  // §12 R9 — the Entries-view query, ported verbatim from main.ts listEntries().
-  const listEntries = (q) => {
-    const now = new Date();
-    const range = q.preset
-      ? core.resolveRange(q.preset, store.settings().weekStart, now)
-      : rv.resolveDateRange(q.fromDate, q.toDate);
-    const filter = { fromUtc: range.fromUtc, toUtc: range.toUtc, billable: q.billable ?? 'all' };
-    if (q.clientId !== undefined) filter.clientId = q.clientId;
-    if (q.projectId !== undefined) filter.projectId = q.projectId;
-    if (q.tag !== undefined && q.tag !== '') filter.tag = q.tag;
-    if (q.search !== undefined && q.search !== '') filter.search = q.search;
-    const entries = store.listEntries(filter);
-    const overlaps = core.describeOverlaps(entries, now);
-    const byId = new Map(entries.map((e) => [e.id, e]));
-    // Issue #55 (verbatim with main.ts): `by` is required but the renderer is plain JS —
-    // default defensively to the calendar's day grouping so a dropped key cannot reject.
-    const { groups } = core.buildEntryList(entries, { by: q.by ?? 'day' });
-    return {
-      groups: groups.map((g) => ({
-        key: g.key,
-        billableSeconds: g.entries.reduce((s, e) => s + e.billableSeconds, 0),
-        entries: g.entries.map((e) => {
-          const full = byId.get(e.id);
-          const overlap = overlaps.get(full.id);
-          return {
-            id: full.id,
-            description: full.description,
-            clientLabel: core.joinClientProject(full.clientName, full.projectName),
-            startUtc: full.startUtc,
-            endUtc: full.endUtc,
-            billableSeconds: full.billableSeconds,
-            billable: full.billable,
-            overlapped: overlap !== undefined,
-            overlapMinutes: overlap ? Math.round(overlap.overlapSeconds / 60) : 0,
-            overlapRelation: overlap ? overlap.relation : null,
-            sleptThrough: full.sleptThrough,
-            excludedSeconds: full.excludedSeconds,
-            rawSeconds: full.rawSeconds,
-            tags: full.tags,
-          };
-        }),
-      })),
-      rangeFromUtc: range.fromUtc,
-      rangeToUtc: range.toUtc,
-    };
-  };
-
-  // main.ts toggleTimer(): stop if running, else resume-or-start (PRD §12 R2).
-  const toggleTimer = () => {
-    const hasResumable = store.listEntries().length > 0;
-    let res = null;
-    switch (deps.nextTimerAction(!!store.openEntry(), hasResumable)) {
-      case 'stop': res = store.stop({}); break;
-      case 'resume': res = store.resume(); break;
-      case 'start': res = store.start({}); break;
-    }
-    refresh();
-    return { warnings: res?.warnings ?? [] };
-  };
-
-  const handlers = {
-    getState: () => deps.buildUiState(store),
-    search: (p) => deps.buildUiState(store, { search: p?.query }),
-    listEntries: (p) => listEntries(p),
-    toggle: () => toggleTimer(),
-    start: (p) => { const res = deps.startWithAttributes(store, p ?? {}); refresh(); return { warnings: res.warnings ?? [] }; },
-    stop: () => { const res = store.stop({}); refresh(); return { warnings: res.warnings ?? [] }; },
-    resume: () => { const res = store.resume(); refresh(); return { warnings: res.warnings ?? [] }; },
-    add: (p) => {
-      const { clientId, projectId } = store.resolveClientProjectByName({ client: p.client, project: p.project });
-      const res = store.add({
-        description: p.description ?? null,
-        fromUtc: core.toUtc(new Date(p.fromLocal)),
-        toUtc: core.toUtc(new Date(p.toLocal)),
-        clientId, projectId,
-        tags: p.tags ?? [],
-        ...(p.billable !== undefined ? { billable: p.billable } : {}),
-      });
-      refresh();
-      return { warnings: res.warnings ?? [] };
-    },
-    edit: (p) => { const res = store.edit(p.id, p.patch); refresh(); return { warnings: res.warnings ?? [] }; },
-    split: (p) => { store.split(p.id, p.atUtc); refresh(); return { warnings: [] }; },
-    merge: (p) => {
-      const opts = {};
-      if (p.winnerId !== undefined) {
-        const winner = store.getEntry(p.winnerId);
-        if (winner) { opts.clientId = winner.clientId; opts.projectId = winner.projectId; }
-      }
-      if (p.billable !== undefined) opts.billable = p.billable;
-      const res = store.merge(p.ids, opts);
-      refresh();
-      return { warnings: res.warnings ?? [] };
-    },
-    remove: (p) => { store.remove(p.id); refresh(); },
-    subtractSleep: (p) => { store.subtractSleep(p.id); refresh(); },
-    report: (p) => rv.buildReportView(store, p, new Date()),
-    saveReport: (p) => { const def = store.saveReport(rv.savedReportInputFromView(p)); refresh(); return rv.savedReportToView(def); },
-    listReports: () => store.listReports().map(rv.savedReportToView),
-    showReport: (p) => { const def = store.getReport(p.name); return def ? rv.savedReportToView(def) : null; },
-    renameReport: (p) => { const def = store.renameReport(p.name, p.newName); refresh(); return rv.savedReportToView(def); },
-    editReport: (p) => { const def = store.editReport(p.name, rv.savedReportPatchFromView(p.patch)); refresh(); return rv.savedReportToView(def); },
-    removeReport: (p) => { store.removeReport(p.name); refresh(); },
-    runReport: (p) => rv.buildSavedReportView(store, p.ref, new Date()),
-    exportEntries: (p) => {
-      // The native save dialog has no host here: write to <qa-dir>/exports and return
-      // the path — exactly main.ts's behavior after a confirmed dialog.
-      const now = new Date();
-      const { range, entries } = rv.resolveExportDefinition(p, store, now);
-      const payload = rv.exportPayload(entries, p.format, now);
+  const handlers = createIpcHandlers({
+    store,
+    refreshAll: () => deps.refresh && deps.refresh(),
+    showSaveDialog: (_format, defaultPath) => {
       mkdirSync(deps.exportsDir, { recursive: true });
-      const path = join(deps.exportsDir, rv.exportFileName(range.fromUtc, p.format));
-      writeFileSync(path, payload);
-      return { written: entries.length, path };
+      return join(deps.exportsDir, defaultPath);
     },
-    pinFavorite: (p) => { const view = fav.pinFavorite(store, p); refresh(); return view; },
-    listFavorites: () => fav.listFavorites(store),
-    renameFavorite: (p) => { const f = store.renameFavorite(p.ref, p.name); refresh(); return fav.favoriteToView(f); },
-    unpinFavorite: (p) => { store.unpinFavorite(p.ref); refresh(); },
-    startFavorite: (p) => { const res = store.startFromFavorite(p.name); refresh(); return { warnings: res.warnings ?? [] }; },
-    addClient: (p) => store.addClient(p.name),
-    addProject: (p) => store.addProject(p.name, p.clientId),
-    listClients: (p) => store.listClients(p?.includeArchived),
-    renameClient: (p) => { store.renameClient(p.id, p.name); refresh(); },
-    archiveClient: (p) => { store.archiveClient(p.id); refresh(); },
-    restoreClient: (p) => { store.restoreClient(p.id); refresh(); },
-    renameProject: (p) => { store.renameProject(p.id, p.name); refresh(); },
-    archiveProject: (p) => { store.archiveProject(p.id); refresh(); },
-    restoreProject: (p) => { store.restoreProject(p.id); refresh(); },
-    listProjects: (p) => store.listProjects(p?.clientId, p?.includeArchived),
-    listTags: (p) => store.listTags(p?.includeArchived),
-    addTag: (p) => { const t = store.addTag(p.name); refresh(); return t; },
-    renameTag: (p) => { store.renameTag(p.id, p.name); refresh(); },
-    archiveTag: (p) => { store.archiveTag(p.id); refresh(); },
-    restoreTag: (p) => { store.restoreTag(p.id); refresh(); },
-    setSetting: (p) => { store.setSetting(p.key, p.value); refresh(); },
-    listBackups: () => deps.listBackups(store),
-    restoreBackup: (p) => { const r = store.restoreFromBackup(p.name); refresh(); return { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo }; },
-  };
+    rebindGlobalHotkey: () => {},
+  });
 
   // window.stint.update — GUI-only, off the parity-asserted channel set (main.ts
   // registers these outside the CHANNELS loop for the same reason). No network host
@@ -203,18 +82,11 @@ export function createHandlers(store, deps = {}) {
 
 // ------------------------------------------------------------------ sweep loop
 async function main() {
+  // Dynamic: this block reaches playwright-core and the Chromium launcher, and
+  // qa-driver.test.ts must build the bridge without a browser.
   const { chromium } = await import('playwright-core');
-  // Dynamic, like every import in this block: the module pulls in playwright-core, and
-  // qa-driver.test.ts must read createHandlers' keys without a browser or a build.
   const { resolveChromium } = await import('../../../scripts/resolve-chromium.mjs');
   const { installOverlay, makeCine } = await import('./cine.mjs');
-  const core = await import('@stint/core');
-  const { buildUiState } = await import('../dist/uistate.js');
-  const { nextTimerAction } = await import('../dist/toggle.js');
-  const { startWithAttributes } = await import('../dist/start.js');
-  const reportview = await import('../dist/reportview.js');
-  const favorites = await import('../dist/favorites.js');
-  const { listBackups } = await import('../dist/backupview.js');
 
   const QA = process.env.STINT_QA_DIR || join(tmpdir(), 'stint-qa');
   const dirs = Object.fromEntries(
@@ -222,14 +94,9 @@ async function main() {
   );
   for (const d of Object.values(dirs)) mkdirSync(d, { recursive: true });
 
-  const store = core.Store.open({ path: join(dirs.home, 'stint.db') });
+  const store = Store.open({ path: join(dirs.home, 'stint.db') });
   const pages = new Set();
   const { handlers, updateHandlers } = createHandlers(store, {
-    buildUiState, nextTimerAction, startWithAttributes, reportview, favorites, listBackups,
-    core: {
-      toUtc: core.toUtc, resolveRange: core.resolveRange, buildEntryList: core.buildEntryList,
-      describeOverlaps: core.describeOverlaps, joinClientProject: core.joinClientProject,
-    },
     exportsDir: dirs.exports,
     // main.ts refreshAll → broadcast('changed') to every window.
     refresh: () => { for (const p of pages) p.evaluate(() => window.__emitChanged && window.__emitChanged()).catch(() => {}); },

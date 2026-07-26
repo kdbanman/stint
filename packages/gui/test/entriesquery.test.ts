@@ -7,86 +7,62 @@
  * one entry matched. The rejection then propagated through the renderer's `load()`, which
  * starved `render()` and froze the Timer view's Active-Timer card on stale idle data.
  *
- * Driven through the QA driver's `createHandlers` port — the same handler body main.ts
- * runs, held at parity by qa-driver.test.ts — over a real in-memory core store, so the fix
- * (grouping defaults to 'day') is proven against the shipped query logic, not a stub.
+ * Driven through the SHIPPING handler map (src/ipc-handlers.ts) over a real in-memory core
+ * store, so reverting the fix fails here. It used to drive the QA driver's copy of that
+ * handler, which carried its own `?? 'day'` default — the copy was guarded, the original
+ * was not (issue #87's defect class, re-found as #165).
  */
 import { describe, it, expect } from 'vitest';
-import {
-  Store,
-  toUtc,
-  resolveRange,
-  buildEntryList,
-  describeOverlaps,
-  joinClientProject,
-} from '@stint/core';
-import { resolveDateRange } from '../src/reportview.js';
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — plain-JS apparatus module, no type declarations on purpose.
-import { createHandlers } from '../qa/driver.mjs';
+import { Store } from '@stint/core';
+import { createIpcHandlers, type IpcHandlerDeps } from '../src/ipc-handlers.js';
 
-// The entry's local day, the key core's day grouping produces (localDay is not exported;
-// this mirrors its local-calendar-day rule for the assertion).
-function localDayOf(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// The handler under test reads and groups; the OS-bound seams are never reached.
+function handlersOver(store: Store): ReturnType<typeof createIpcHandlers> {
+  const deps: IpcHandlerDeps = {
+    store,
+    refreshAll: () => {},
+    showSaveDialog: () => undefined,
+    rebindGlobalHotkey: () => {},
+  };
+  return createIpcHandlers(deps);
 }
+
+// A fixed LOCAL wall-clock afternoon — local, so the day the entry falls on is 2026-03-05
+// in every runner timezone, and fixed, so the assertion never rides the system clock.
+const FROM = new Date(2026, 2, 5, 13, 0, 0).toISOString();
+const TO = new Date(2026, 2, 5, 14, 0, 0).toISOString();
 
 describe('listEntries grouping default (issue #50)', () => {
   it('a toolbar query with NO `by` returns day-laid groups instead of rejecting', () => {
     const store = Store.openMemory();
-    // One closed entry ending an hour ago — the pre-fix throw only fired once at least one
-    // entry matched the query, so an empty window would not exercise the regression.
-    const now = Date.now();
-    const startUtc = new Date(now - 2 * 3600_000).toISOString();
-    store.add({
-      description: 'seeded work',
-      fromUtc: startUtc,
-      toUtc: new Date(now - 1 * 3600_000).toISOString(),
-      tags: [],
-    });
+    // One closed entry — the pre-fix throw only fired once at least one entry matched the
+    // query, so an empty window would not exercise the regression.
+    store.add({ description: 'seeded work', fromUtc: FROM, toUtc: TO, tags: [] });
 
-    const { handlers } = createHandlers(store, {
-      reportview: { resolveDateRange },
-      core: { toUtc, resolveRange, buildEntryList, describeOverlaps, joinClientProject },
-    });
-
-    // The exact query shape app.js's Entries toolbar sends — range + billable, no `by`
-    // (a custom plain-date pair spanning yesterday..tomorrow, so the seeded entry is in
-    // range in every runner timezone).
-    const view = handlers.listEntries({
-      fromDate: localDayOf(new Date(now - 24 * 3600_000).toISOString()),
-      toDate: localDayOf(new Date(now + 24 * 3600_000).toISOString()),
+    // The exact query shape app.js's Entries toolbar sends — range + billable, no `by`.
+    const view = handlersOver(store).listEntries({
+      fromDate: '2026-03-04',
+      toDate: '2026-03-06',
       billable: 'all',
     });
 
     // Day-laid groups: one group, keyed by the entry's local day, carrying the entry.
     expect(view.groups).toHaveLength(1);
-    expect(view.groups[0].key).toBe(localDayOf(startUtc));
-    expect(view.groups[0].entries.map((e: { description: string | null }) => e.description)).toEqual([
-      'seeded work',
-    ]);
+    expect(view.groups[0]!.key).toBe('2026-03-05');
+    expect(view.groups[0]!.entries.map((e) => e.description)).toEqual(['seeded work']);
   });
 
   it('an explicit `by` still wins over the default', () => {
     const store = Store.openMemory();
-    const now = Date.now();
-    store.add({
-      description: 'client work',
-      fromUtc: new Date(now - 2 * 3600_000).toISOString(),
-      toUtc: new Date(now - 1 * 3600_000).toISOString(),
-      tags: [],
-    });
-    const { handlers } = createHandlers(store, {
-      reportview: { resolveDateRange },
-      core: { toUtc, resolveRange, buildEntryList, describeOverlaps, joinClientProject },
-    });
-    const view = handlers.listEntries({
-      fromDate: localDayOf(new Date(now - 24 * 3600_000).toISOString()),
-      toDate: localDayOf(new Date(now + 24 * 3600_000).toISOString()),
+    store.add({ description: 'client work', fromUtc: FROM, toUtc: TO, tags: [] });
+
+    const view = handlersOver(store).listEntries({
+      fromDate: '2026-03-04',
+      toDate: '2026-03-06',
       billable: 'all',
       by: 'client',
     });
-    expect(view.groups.map((g: { key: string }) => g.key)).toEqual(['(no client)']);
+
+    expect(view.groups.map((g) => g.key)).toEqual(['(no client)']);
   });
 });
