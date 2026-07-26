@@ -288,7 +288,7 @@
     {
       "item": "TIMELINE_WINDOW",
       "pass": true,
-      "justification": "Timeline group renders all four keys (allFour=true) with stored 09:00–15:00 (09:00–15:00); Around disabled while working_hours (disabled=true, row off=true); mode flip fired setSetting={\"key\":\"pickerWindowMode\",\"value\":\"around_now\"} and enabled Around (true); SU.timelineWindow working={\"startMin\":540,\"endMin\":900} (exact 540–900: true), around_now/8={\"startMin\":1140,\"endMin\":1440} vs expected {\"startMin\":1140,\"endMin\":1440} (true), calendar-forced-working-hours ok=true; consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)",
+      "justification": "Timeline group renders all four keys (allFour=true) with stored 09:00–15:00 (09:00–15:00); Around disabled while working_hours (disabled=true, row off=true) with its LABEL undimmed (dimmed ancestors=[none], as-rendered contrast 16.02:1 ≥ 4.5); mode flip fired setSetting={\"key\":\"pickerWindowMode\",\"value\":\"around_now\"} and enabled Around (true); SU.timelineWindow working={\"startMin\":540,\"endMin\":900} (exact 540–900: true), around_now/8={\"startMin\":1140,\"endMin\":1440} vs expected {\"startMin\":1140,\"endMin\":1440} (true), calendar-forced-working-hours ok=true; consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)",
       "screenshot": "timeline-window.png"
     },
     {
