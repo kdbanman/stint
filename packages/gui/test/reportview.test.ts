@@ -26,6 +26,14 @@ import {
 const NOW = new Date('2026-06-24T18:00:00Z'); // a Wednesday
 const mem = () => Store.openMemory(() => NOW);
 
+/**
+ * Local midnight on a LITERAL calendar date, as the UTC instant a range bound carries.
+ * A range bound is a local-midnight instant, so a hard-coded `Z` string would only be right
+ * in one timezone; naming the day this way pins the exact boundary in any of them.
+ */
+const localMidnight = (year: number, monthIndex: number, day: number) =>
+  new Date(year, monthIndex, day).toISOString();
+
 /** Seed one billable Acme entry this week so a report/export over the week is non-empty. */
 function seed(store: Store): void {
   // Resolve names to ids the same way the surfaces do (AddOptions takes ids, not names).
@@ -48,12 +56,24 @@ function seed(store: Store): void {
   });
 }
 
+// Which ARM of resolveExportRange wins — preset, explicit custom, or the This-week default
+// — is the behavior under test here; the preset windows themselves are pinned in core by
+// GOLD `core/test/gold/contracts.test.ts` "resolveRange preset windows". Expected windows
+// are literal calendar dates rather than a call of resolveRange: resolveExportRange's preset
+// arm IS `return resolveRange(preset, weekStart, now)`, so comparing the two would assert
+// nothing at all.
 describe('resolveExportRange — preset/custom range resolution', () => {
+  // Local-parts construction, so the clock's local calendar day (and weekday) is the same
+  // in whatever timezone the suite runs, and so is local midnight on the named day.
+  const WEDNESDAY = new Date(2026, 5, 24, 18, 0, 0); // 2026-06-24 18:00 local — a Wednesday
+
   it('resolves a named preset through core (no renderer date math)', () => {
     const store = mem();
-    const ws = store.settings().weekStart;
-    expect(resolveExportRange({ preset: 'week' }, ws, NOW)).toEqual(resolveRange('week', ws, NOW));
-    expect(resolveExportRange({ preset: 'today' }, ws, NOW)).toEqual(resolveRange('today', ws, NOW));
+    const ws = store.settings().weekStart; // monday
+    expect(resolveExportRange({ preset: 'week' }, ws, WEDNESDAY)).toEqual({
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
+    });
     store.close();
   });
 
@@ -61,7 +81,7 @@ describe('resolveExportRange — preset/custom range resolution', () => {
     const r = resolveExportRange(
       { fromUtc: '2026-06-10T00:00:00Z', toUtc: '2026-06-13T00:00:00Z' },
       'monday',
-      NOW,
+      WEDNESDAY,
     );
     expect(r).toEqual({ fromUtc: '2026-06-10T00:00:00Z', toUtc: '2026-06-13T00:00:00Z' });
   });
@@ -70,14 +90,21 @@ describe('resolveExportRange — preset/custom range resolution', () => {
     const r = resolveExportRange(
       { preset: 'today', fromUtc: '2026-01-01T00:00:00Z', toUtc: '2026-01-02T00:00:00Z' },
       'monday',
-      NOW,
+      WEDNESDAY,
     );
-    expect(r).toEqual(resolveRange('today', 'monday', NOW));
+    // The January custom pair is ignored: the window is the preset's day, not those bounds.
+    expect(r).toEqual({
+      fromUtc: localMidnight(2026, 5, 24), // 2026-06-24
+      toUtc: localMidnight(2026, 5, 25), // 2026-06-25
+    });
   });
 
   it('defaults to This week when neither preset nor custom range is given', () => {
-    const r = resolveExportRange({}, 'monday', NOW);
-    expect(r).toEqual(resolveRange('week', 'monday', NOW));
+    const r = resolveExportRange({}, 'monday', WEDNESDAY);
+    expect(r).toEqual({
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
+      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
+    });
   });
 });
 
@@ -404,9 +431,9 @@ describe('buildSavedReportView — run a saved report through core (§09 R09)', 
     // admin entry dropping out — proving the stored range-spec re-resolves at run time.
     expect(view.lines.map((l) => l.key)).toEqual(['Acme']);
     expect(view.grandTotalSeconds).toBe(3 * 3600);
-    const week = resolveRange('week', store.settings().weekStart, NOW);
-    expect(view.rangeFromUtc).toBe(week.fromUtc);
-    expect(view.rangeToUtc).toBe(week.toUtc);
+    // …over the literal week NOW (Wed 2026-06-24) falls in, under the default monday start.
+    expect(view.rangeFromUtc).toBe(localMidnight(2026, 5, 22)); // Mon 2026-06-22
+    expect(view.rangeToUtc).toBe(localMidnight(2026, 5, 29)); // Mon 2026-06-29
     store.close();
   });
 
