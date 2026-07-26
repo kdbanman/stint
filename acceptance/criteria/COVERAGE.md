@@ -57,7 +57,16 @@ duration** (R06) facts are pinned by GOLD `core/test/gold/contracts.test.ts`
 ("single-file WAL + UTC-storage contract (§04 R02, R06)" — a file-backed open
 reports `journal_mode = wal` with `foreign_keys = ON`, and a written span
 stores/round-trips its UTC instants byte-for-byte with timezone-independent
-duration). The durability/integrity guarantees the badge labels are **hardened
+duration), and by **PROP** `core/test/prop/invariants.test.ts` "PROP: duration
+is UTC math, zone-/DST-safe (§04, §16)" — two spans straddling a real 2026 US
+transition, each rendered across five named zones: the 2026-03-08 spring-forward
+span `06:00Z → 08:00Z` is 7200 real seconds though the New York wall clock
+advances 01:00 → 04:00 (02:00 never happened that day), and the 2026-11-01
+fall-back span `05:00Z → 06:00Z` is 3600 real seconds though BOTH ends read
+`01:00` in New York. The expected seconds and every per-zone wall clock are
+calendar literals, so the timezone arbitrary drives live assertions and the
+duration is never recomputed the way `secondsBetween` computes it. The
+durability/integrity guarantees the badge labels are **hardened
 in §20** — open-time pragmas (§20 R01, now asserted-and-verified on every open:
 GOLD `core/test/gold/contracts.test.ts` "DB open durability pragmas (§20 R01)" +
 PROP `core/test/prop/open-invariants.test.ts`, which add `synchronous=FULL` and
@@ -470,7 +479,21 @@ surface-neutral on core AND tt by `features/reports.feature` (This-week includes
 only this-week entries, Last-week excludes this week, grouping by client sums
 correctly — run TWICE via the World `report` capability: CoreWorld
 `resolveRange` +`store.report`, CliWorld
-`tt report --week/--last-week/--range … --by … --json` ), and the plain-date
+`tt report --week/--last-week/--range … --by … --json` ), with every preset
+BOUNDARY pinned to a **literal calendar date** by GOLD
+`core/test/gold/contracts.test.ts` "GOLD: resolveRange preset windows (§09 R01)"
+— the five presets across fourteen cases, each under a clock built from local
+parts (so the pinned day holds in any host timezone): this-week/last-week under
+BOTH `weekStart` settings, the two cases that tell the two week rules apart (a
+Sunday `now` belongs to the week that started the previous Monday; a Monday
+`now` to the week that started the previous Sunday), a week spanning the year
+boundary (Mon 2026-12-28 … Mon 2027-01-04) and one spanning the 2026-03-08 DST
+transition, this-month/last-month including the January → previous-December
+rollback and the 31st-of-March case (no day-of-month leaks into a bound; last
+month lands on a short February), and today including a DST-transition day whose
+end bound is the true next local midnight rather than `+24h`. None of those
+expected values is a second call of `resolveRange` , so flipping the week-start
+offset or the month arithmetic reddens them. The plain-date
 pair → window rule lives GUI-side in exactly ONE place: `gui/src/reportview.ts`
 `resolveDateRange(fromDate, toDate)` resolves the two `YYYY-MM-DD` field strings
 to the half-open LOCAL window [from-day 00:00, day-after-to-day 00:00) — the
@@ -793,9 +816,8 @@ confirms the real OS-notification firing/reschedule under the compressed test
 cadence
 
 ### PRD §11
-
-`cli/test/gold/cli.test.ts`, `schemas/*`. **Every `tt … --json` read shape has a
-published schema** — the five `serialize.ts` snake_case shapes (status,
+`cli/test/gold/cli.test.ts` , `schemas/*` . **Every `tt … --json` read shape has
+a published schema** — the five `serialize.ts` snake_case shapes (status,
 list/export-entry, report, report-def(+list), favorite(+list), backup(+list))
 plus the `emitList` reference-data/sleep families
 (`client`/`project`/`tag`/`sleep`) and the raw camelCase `settings` object
@@ -804,26 +826,26 @@ plus the `emitList` reference-data/sleep families
 contract. **`tt list` description cell + no `--by` (issue #43, §05
 R10/§11/G11)**: the `tt list` HUMAN table renders a description's FIRST line
 only, capped at 60 chars, with a trailing `…` whenever content was dropped (a
-first line past 60 chars OR a multiline description → line 1 + `…`) — the single
-rendering primitive `descriptionCell(description)` in `cli/src/format.ts` (pure,
-monochrome, golden-stable); `--json` stays FULL fidelity (untruncated, interior
-newlines verbatim; unchanged `list.schema.json` — `description` is still
-`string|null`). The `--by <grouping>` option and its grouped-table branch are
-REMOVED from the `list` command — grouped breakdowns live only in
+first line past 60 chars OR a multiline description → line 1 + `…` ) — the
+single rendering primitive `descriptionCell(description)` in `cli/src/format.ts`
+(pure, monochrome, golden-stable); `--json` stays FULL fidelity (untruncated,
+interior newlines verbatim; unchanged `list.schema.json` — `description` is
+still `string|null` ). The `--by <grouping>` option and its grouped-table branch
+are REMOVED from the `list` command — grouped breakdowns live only in
 `tt report --by` (G11). GOLD `GOLD: tt list description cell (§11, §05 R10)`
 (`cli/test/gold/cli.test.ts`: `descriptionCell` null/empty→'', short line
 verbatim, multiline→line1+`…`, >60→60+`…`, exactly-60 unchanged; `tt list` human
 prints 60+`…` for a long line and line1+`…` for a multiline, never the dropped
 content; `tt list --json` carries the full untruncated strings and validates
-against `list.schema.json`) and
+against `list.schema.json` ) and
 `GOLD: tt list has no --by grouping flag (§11, §12 R9)` (`tt list --by client`
 exits non-zero — unknown option). BDD `features/entry_list.feature` (reworked to
 the FLAT, ungrouped contract: range + client/project/tag filter + free-text
 search return the SAME flat set on both surfaces — `@stint/core`
-store.listEntries and `tt list … --json` — no `--by`, no grouping; a multi-tag
+store.listEntries and `tt list … --json` — no `--by` , no grouping; a multi-tag
 entry lists ONCE, not fanned out; §17 R8). **`tt report --search`** wires §09
 R7's core query onto the `report` command (the flag travels into
-`report({ search })` → `listEntries({ search })`; matching stays in core, the
+`report({ search })` → `listEntries({ search })` ; matching stays in core, the
 CLI only forwards the flag and threads it through the `--csv` re-fetch so
 JSON/table/CSV narrow identically): GOLD `GOLD: tt report --search (§09, §11)`
 (`cli/test/gold/cli.test.ts` — totals only matching entries, case-insensitive,
@@ -831,51 +853,69 @@ secondary match on client/project/tag name, no-match → 0 not everything,
 `--json` still satisfies `report.schema.json` (no output-shape change), `--csv`
 emits only matching rows). Cross-noted with §09 R7's search coverage above.
 **`core` badges on the §11 table** (the §C relabel marked the four core-entry /
-data-out subcommands — `tt start`, `tt stop`, `tt add`, `tt export` — `core`):
-the artefact-is-criterion doc-contract GOLD
+data-out subcommands — `tt start` , `tt stop` , `tt add` , `tt export` — `core`
+): the artefact-is-criterion doc-contract GOLD
 `GOLD: §11 CLI table core badges (§11, §C)` (`cli/test/gold/cli.test.ts`) parses
 prd.html's `<section id="s11">` table, asserting each of those four rows carries
 `<span class="core">core</span>` in its Does cell while every other §11 row
 (status, resume, edit, split, merge, rm, list, report + report save/ls/show/run,
 fav, client, project, sleep, config) does NOT — report-save/ls/show/run and fav
-stay `new`-only. The test fails iff a badge is dropped or wrongly added;
-cross-referenced with §C's "existing requirements relabeled core" list.
-**`tt report save|ls|show|rm|run` (saved reports — §11 parity for §09
-R08–R09)**: the CLI verbs are thin shells over core's
+stay `new` -only. The test fails iff a badge is dropped or wrongly added;
+cross-referenced with §C's "existing requirements relabeled core" list. **`tt
+report save|ls|show|rm|run` (saved reports — §11 parity for §09 R08–R09)**: the
+CLI verbs are thin shells over core's
 `store.saveReport/listReports/getReport/runReport/exportSavedReport/removeReport`
 (logic + the `report` table/migration live in §09 R08–R09 core, NOT the CLI),
-serialized through `serialize.ts` `reportDefJson`/`reportDefListJson`. GOLD
+serialized through `serialize.ts` `reportDefJson` /`reportDefListJson`. GOLD
 `GOLD: tt report save / show / ls / run (§09 R08–R09)`
 (`cli/test/gold/cli.test.ts`): `save` then `show --json` validates against
 `schemas/report-def.schema.json` and round-trips the def (preset/absolute range,
 group_by, filters, rounding); `ls --json` validates against
-`schemas/report-def-list.schema.json`; `ls` on a fresh DB prints
+`schemas/report-def-list.schema.json` ; `ls` on a fresh DB prints
 `no saved reports` (human) and `[]` (valid empty list); `save --by bogus` exits
 non-zero with `unknown --by grouping` and writes no def; `run --json` validates
 against `report.schema.json` and re-resolves the relative range to the same
-window/totals as the equivalent ad-hoc `tt report --week …`; `run --csv` is
-byte-identical to `tt export` over the resolved range; `rm` then `ls`/`run` is a
-clean unknown-name round trip; the ad-hoc `tt report …` query form still works
-alongside the saved verbs. Cross-noted with §09 R08–R09 above.
-**`tt fav add|ls|rm|rename|start` + `tt start --fav` (favorites — §11 parity for
-§05 R09–R10)**: the CLI verbs are thin shells over core's
+window/totals as the equivalent ad-hoc `tt report --week …` ; `run --csv` is
+byte-identical to `tt export` over the resolved range; `rm` then `ls` /`run` is
+a clean unknown-name round trip; the ad-hoc `tt report …` query form still works
+alongside the saved verbs. Cross-noted with §09 R08–R09 above. **`tt fav
+add|ls|rm|rename|start` + `tt start --fav` (favorites — §11 parity for §05
+R09–R10)**: the CLI verbs are thin shells over core's
 `store.pinFavorite/listFavorites/renameFavorite/unpinFavorite/startFromFavorite`
-(the `favorite`/`favorite_tag` tables + logic live in §05 R09–R10 core, NOT the
-CLI), serialized through `serialize.ts` `favoriteJson`/`favoriteListJson`. GOLD
+(the `favorite` /`favorite_tag` tables + logic live in §05 R09–R10 core, NOT the
+CLI), serialized through `serialize.ts` `favoriteJson` /`favoriteListJson`. GOLD
 `GOLD: tt fav add / ls / rename / rm (§05 R09)` (`cli/test/gold/cli.test.ts`:
-`--running`/`--from-entry`/explicit-attrs create + exit 0, `fav ls --json`
-validates against `schemas/favorite.schema.json`, `ls` on a fresh DB prints
+`--running` /`--from-entry`/explicit-attrs create + exit 0, `fav ls --json`
+validates against `schemas/favorite.schema.json` , `ls` on a fresh DB prints
 `no favorites` (human) / `[]` (valid empty list), fixed rename/rm stdout,
-case-insensitive duplicate-name non-zero) and
-**`GOLD: tt fav start / tt start --fav (§05 R10, §11)`**
-(`cli/test/gold/cli.test.ts`: the resume slice — `fav start` opens a running
-entry whose statusLine + `status --json` carry the template's
-description/client/project/tags/billable; `tt start --fav` is at parity and
-explicit flags layer over the template (tags replace, `--no-bill` flips
-billable); an unknown favorite on either route exits non-zero with
+case-insensitive duplicate-name non-zero) and **`GOLD: tt fav start / tt start
+--fav (§05 R10, §11)`** (`cli/test/gold/cli.test.ts`: the resume slice —
+`fav start` opens a running entry whose statusLine + `status --json` carry the
+template's description/client/project/tags/billable; `tt start --fav` is at
+parity and explicit flags layer over the template (tags replace, `--no-bill`
+flips billable); an unknown favorite on either route exits non-zero with
 `no favorite "…"` and leaves nothing running). Cross-noted with §05 R09–R10
-above
-
+above. **Exit codes come from ONE mapper (#169, engineering.html §04)**:
+`bin.ts` is the single place an error becomes user copy and an exit code —
+`CommanderError` → its own code, `CliError` → its `exitCode` (default 2),
+`StoreError` /`TimeParseError` → 2, anything else → `error: <msg>` / 1. The CLI
+no longer re-wraps core errors mid-stack to reach that mapping: the nine
+`catch (err) { throw new CliError(…) }` blocks over `saveReport`
+/`editReport`/`renameReport`/`removeReport`/`pinFavorite`/`renameFavorite`/`unpinFavorite`/`startFromFavorite`
+were provable no-ops (`StoreError` already maps to 2 with the same message) and
+are deleted, leaving core’s error TYPE intact all the way to `bin.ts` . Two
+remaps survive because they normalise a type `bin.ts` does not know —
+`backup restore` (`RecoveryError` from `core/src/backup.ts` ) and `applySetting`
+(the bare `Error` s `core/src/settings.ts` throws for a rejected value) — each
+carrying the §04 proof comment for its `as Error` ; `merge` ’s `--allow-gap`
+catch is type-preserving enrichment, not a remap. GOLD pins the exit codes the
+deletion must not move (`cli/test/gold/cli.test.ts`):
+`a value core rejects exits exactly 2 with a bare message` (a core-rejected
+`config set` reads identically to one tt rejects itself — exit 2, no `error: `
+prefix) and
+`a refused and a rejected restore both exit exactly 2 with a bare message` ; the
+rest of the GOLD suite passing unchanged is the proof for the nine. Cross-noted
+with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below
 ### PRD §12
 `judge/` (renderer facts + screenshots), `gui/test/toggle.test.ts` (toggle
 decision), `gui/test/tray.test.ts` (tray click + menu), `judge-rubric.md` ,
@@ -1106,9 +1146,12 @@ now the entries list is gone, §12 R10): the overlapped entry's editor carries a
 previous/next relation from core's `describeOverlaps`
 (`packages/core/src/report.ts`, built on the one `spansOverlap` rule so the
 detail amount can never drift from the report flag; `detectOverlaps` is now
-`new Set(describeOverlaps(...).keys())` ), surfaced through `gui/src/uistate.ts`
-(`overlapMinutes`/`overlapRelation`/`rawSeconds` on the entry, `gui/src/ipc.ts`
-`EntryRowView` ) and painted by `gui/renderer/app.js` `overlapBannerHtml`
+`new Set(describeOverlaps(...).keys())` ), projected onto the row by the ONE
+builder `gui/src/entryrow.ts` `toEntryRowView`
+(`overlapMinutes`/`overlapRelation`/`rawSeconds` on the entry, shape declared in
+`gui/src/ipc.ts` `EntryRowView` ) for BOTH listing paths — the day-grouped
+`gui/src/uistate.ts` snapshot and the `gui/src/ipc-handlers.ts` Entries query
+(issue #166) — and painted by `gui/renderer/app.js` `overlapBannerHtml`
 ("Overlap: Nm with previous/next entry") inside the editor's `.ef-flags` region;
 a **trimmed slept entry** shows its raw duration **struck through** beside the
 live trimmed billable (`app.js` `durHtml` → `<s class="struck">` , `styles.css`
@@ -1768,7 +1811,10 @@ entry, grouped and totalled under its start day only, matching
 `tt report --by day`) is pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
 22:30→06:15 cross-midnight fixture: two `.ev` segments sharing a `data-id`, the
 start-day header counting the span, the end day showing the segment without
-counting it). The wall-clock-skew row (`now < start` never yields
+counting it). The **DST** row is the PROP pair in `prop/invariants.test.ts`
+described under §04 above (the 2026 spring-forward and fall-back spans, each
+rendered across five named zones, with the real elapsed seconds and every wall
+clock taken from the calendar). The wall-clock-skew row (`now < start` never yields
 negative/garbage elapsed, §20 R06) is the PROP monotonic-time guard. The
 **user-types-a-future-start-on-the-running-entry** row and the
 **Start-backdated-before-the-running-entry** row (issue #61 — both rejected
