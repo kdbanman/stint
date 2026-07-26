@@ -258,7 +258,7 @@
     {
       "item": "CALENDAR_ENTRY_BLOCK",
       "pass": true,
-      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":null},{\"dy\":12,\"intoEntry\":false,\"tag\":null}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 774->774 (delta 0px), block 769->769 (delta 0px)",
+      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 723->723 (delta 0px), block 718->718 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
@@ -328,9 +328,15 @@
       "screenshot": "field-labels-timer.png"
     },
     {
+      "item": "FIELD_CHROME",
+      "pass": true,
+      "justification": "D13/D07 sweep over 29 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=8): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
+      "screenshot": "field-chrome-search-focus.png"
+    },
+    {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 106 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[entries:#search 185x21; timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
+      "justification": "A03 sweep over 106 visible targets (five views + popover): unsanctioned undersized=[none]; spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[timer:#le-bill 13x13; settings:button.set-toggle 38x22]",
       "screenshot": "main-target-size.png"
     },
     {
