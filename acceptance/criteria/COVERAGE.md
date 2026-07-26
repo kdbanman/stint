@@ -1542,8 +1542,11 @@ parity-preserving, §17 R8). The renderer honours the mode through the pure
 are inked/monochrome so the §15 `ACCENT_DISCIPLINE` scan stays green. JUDGE
 `SETTINGS_VIEW` (`packages/gui/judge/`, `main-settings.png` — opening the
 Settings nav renders a control for every §14 setting, changing the date-format
-select fires `setSetting` , and the panel stays accent-disciplined). The §12 R11
-Settings view is thus fully covered. **R13 Confirm destructive actions** (now
+select fires `setSetting` , and the panel stays accent-disciplined), plus
+`HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
+field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
+(issue 135). The §12 R11 Settings view is thus fully covered.
+**R13 Confirm destructive actions** (now
 **`core`** — the in-window destructive-action confirmation is a §03
 loss-protection affordance, so it carries the `core` badge; the classification
 is the only change, the gate behaviour is unchanged) (deleting an entry, or
@@ -1611,8 +1614,15 @@ active element never STUCK on `<body>` /null — a single body focus is the
 browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
-(acceptance.html §07) — so `KEYBOARD_FOCUS` + `TARGET_SIZE` + GOLD
-`gui/test/design-guard.test.ts` are the whole net. No new IPC channel (pure renderer), so
+(acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
+GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
+out of the tab order and unwalked — the blind spot issue 135 fell through, where
+the Settings global-hotkey field swallowed Tab as a chord and stranded the four
+controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
+focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
+nothing, a walk from it reaches all four stranded controls, and a real chord
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
