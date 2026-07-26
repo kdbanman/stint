@@ -80,6 +80,17 @@ async function withPage(browser, state, name, fn, initOpts = {}) {
 const TRANSPORT_LEAK = /Error invoking remote method|StoreError|(^|\s)--[a-z]/;
 const readsClean = (message) => typeof message === 'string' && message.length > 0 && !TRANSPORT_LEAK.test(message);
 
+// Switch the 120ms paint transitions off for a scene that asserts COLOUR (design.html D10 gives
+// every control a background / border-colour / shadow fade). These pages pin the clock, which
+// freezes a fade wherever it started, and an in-flight transition's animated value OVERRIDES the
+// cascade — so a computed-style probe, or a screenshot, taken after an interaction reads an
+// arbitrary intermediate colour instead of the paint the rules declare, at whatever progress the
+// frame happened to catch. With motion off, every paint assertion reads the cascade directly and
+// the same interaction gives the same colour every run. Only motion is suppressed: that it exists,
+// and collapses under prefers-reduced-motion, is A06's own static check.
+const noMotion = (page) =>
+  page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+
 const results = [];
 // `pass` is true/false for the deterministic, gating facts; null marks an item that
 // is captured-but-not-machine-scored (the subjective rubric line), so it never
@@ -1213,7 +1224,19 @@ async function sceneAccentDiscipline(browser) {
     // ≤1, and the running Timer view's count is exactly 1 (its Stop primary) — so the rule
     // "one filled primary per view, and the most-likely action carries it" is a gate, not
     // prose. (A second accent-solid fill sneaking into any view flips this false.)
+    //
+    // The budget has a FLOOR too (issue 150): a view whose most-likely action exists must spend
+    // it, or the rationed colour rations nothing. Every view that marks a standing primary —
+    // Timer, Entries, Clients, Reports — counts exactly 1 here; Settings marks none (its one
+    // primary, the update download, appears only when an update is waiting) and counts 0. Entries
+    // used to count zero at rest with its obvious primary drawn as a `.ghost`, and Reports spent
+    // its one fill on the button that merely opened the builder; PRIMARY_HANDOFF gates the
+    // form-open states this at-rest count cannot see.
     const budget = [];
+    // Routing moves the handoff (the view left behind may have held the non-standing primary), so
+    // the standing primaries re-paint as the loop walks the views — count the cascade, not a fade.
+    // Injected after main-running.png above, so the evidence frame is the untouched surface.
+    await noMotion(page);
     for (const view of ['timer', 'entries', 'clients', 'reports', 'settings']) {
       await page.click(`.nav-item[data-view="${view}"]`);
       const count = await page.evaluate(() => {
@@ -1232,17 +1255,152 @@ async function sceneAccentDiscipline(browser) {
     }
     const everyViewWithinBudget = budget.every((b) => b.filled.length <= 1);
     const timerFillCount = budget.find((b) => b.view === 'timer')?.filled.length ?? 0;
-    const budgetOk = everyViewWithinBudget && timerFillCount === 1;
+    // The floor (issue 150): every view that marks a standing primary spends its one fill.
+    const standingViews = budget.filter((b) => b.view !== 'settings');
+    const everyStandingViewSpendsIt = standingViews.every((b) => b.filled.length === 1);
+    const budgetOk = everyViewWithinBudget && timerFillCount === 1 && everyStandingViewSpendsIt;
     record(
       'ACCENT_SOLID_BUDGET',
       budgetOk,
-      `≤1 accent-solid fill per view (D11): ` +
+      `exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): ` +
         budget.map((b) => `${b.view}=[${b.filled.join(', ') || 'none'}]`).join('; ') +
         `; every view within budget=${everyViewWithinBudget}; ` +
+        `every standing-primary view spends it=${everyStandingViewSpendsIt}; ` +
         `running Timer view carries exactly its Stop primary=${timerFillCount === 1} (count ${timerFillCount})`,
       'main-running.png',
     );
   });
+}
+
+// PRIMARY_HANDOFF — design.html D11, machine-scored across STATES (issue 150). ACCENT_SOLID_BUDGET
+// above counts the accent-solid fills of each view AT REST; that is where the budget was already
+// respected. The break was in the states a view reaches when a form opens: every inline form lit
+// its own commit `.primary` while nothing demoted the view's standing primary, so three states
+// showed two accent fills at once — and on the Timer view the two identically-sized, identically
+// coloured buttons carried the same word, "Start". Because the cause is structural (inline forms
+// inherit `.primary`; nothing gave up the standing one), the guard is too: it walks each view that
+// HAS a standing primary through rest and through every inline form it can open, and asserts the
+// count is EXACTLY ONE every time. The count, never a named selector — pinning "#toggle is the lit
+// one" would fight the next restyle (process.html §02) and would not have caught this bug anyway,
+// since both buttons matched their own selector. The states are the audit's own reproduction list
+// (Timer idle + Details expanded, Timer + pin-as-favourite, Clients + inline rename), extended to
+// the rest of the surfaces the same structure reaches: the Entries add form, the Clients add
+// fields, the Reports builder, the RUNNING Timer view (whose standing primary is the other face of
+// the same standing action, Stop), and the app's one modal — the merge-conflict prompt, which mounts
+// outside the views and would otherwise leave the Entries primary lit behind its backdrop.
+// Captures primary-handoff-timer.png (the sharp case) and primary-handoff-reports.png.
+async function scenePrimaryHandoff(browser) {
+  // The one measurement, taken at every stop: visible elements whose computed background is
+  // --accent-solid, named so a failure points at the two competing buttons rather than a number.
+  const litFills = (page) =>
+    page.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const accentSolidRgb = rgbOf('--accent-solid');
+      const lit = [];
+      for (const el of document.querySelectorAll('*')) {
+        if (!visible(el)) continue;
+        if (getComputedStyle(el).backgroundColor === accentSolidRgb) {
+          lit.push(el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${el.className || ''}`);
+        }
+      }
+      return lit;
+    });
+  const states = [];
+  const at = async (page, state) => states.push({ state, lit: await litFills(page) });
+
+  await withPage(browser, emptyState(), 'index.html', async (page) => {
+    await noMotion(page);
+    // TIMER — idle at rest (#toggle Start), then the two forms the audit reproduced.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #toggle');
+    await at(page, 'timer · idle at rest');
+    await page.click('#start-toggle');
+    await page.waitForSelector('#start-form:not([hidden])');
+    // The sharp frame: idle Timer with Details expanded — the state that used to paint two
+    // 71×33 accent-solid buttons, both labelled "Start".
+    await page.screenshot({ path: join(EVIDENCE, 'primary-handoff-timer.png') });
+    await at(page, 'timer · Details expanded');
+    await page.click('#start-toggle');
+    await page.waitForFunction(() => !!document.querySelector('#start-form')?.hidden);
+    await page.click('#fav-pin');
+    await page.waitForSelector('.fav-pin-form .rename-input');
+    await at(page, 'timer · pin-as-favourite field');
+    await page.click('.fav-pin-form .rename-cancel');
+    await page.waitForSelector('#fav-pin');
+
+    // ENTRIES — at rest the standing Add entry carries it; the unified form's Save entry takes it.
+    await page.click('.nav-item[data-view="entries"]');
+    await page.waitForSelector('[data-view="entries"]:not([hidden]) #add-toggle');
+    await at(page, 'entries · at rest');
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-form:not([hidden])');
+    await at(page, 'entries · add form open');
+    await page.click('#add-cancel');
+    await page.waitForFunction(() => !!document.querySelector('#add-form')?.hidden);
+
+    // CLIENTS — at rest, with a client rename open (the audit's third state), and with the
+    // inline add-client field open.
+    await page.click('.nav-item[data-view="clients"]');
+    await page.waitForSelector('#clients:not([hidden]) .client[data-id]');
+    await at(page, 'clients · at rest');
+    await page.click('#clients .client[data-id] [data-act="rename-client"]');
+    await page.waitForSelector('#clients .rename-form .rename-input');
+    await at(page, 'clients · inline rename open');
+    await page.click('#clients .rename-form .rename-cancel');
+    await page.waitForSelector('#clients .client[data-id] .client-name');
+    await page.click('#add-client-btn');
+    await page.waitForSelector('#clients .client-add .client-add-input');
+    await at(page, 'clients · add-client field open');
+    await page.click('#clients .client-add .client-add-cancel');
+    await page.waitForFunction(() => !document.querySelector('#clients .client-add'));
+
+    // REPORTS — the accent moves off the button that merely OPENS the builder onto the Save
+    // that commits it.
+    await page.click('.nav-item[data-view="reports"]');
+    await page.waitForSelector('.reports-view:not([hidden]) #rep-new');
+    await at(page, 'reports · at rest');
+    await page.click('#rep-new');
+    await page.waitForSelector('#rep-builder:not([hidden])');
+    await page.screenshot({ path: join(EVIDENCE, 'primary-handoff-reports.png') });
+    await at(page, 'reports · builder open');
+  });
+
+  // The RUNNING Timer view, on its own fixture: the same view's standing primary is Stop while a
+  // timer runs (the start panel is idle-only, §12 R05), and the favourites rail is reachable in
+  // both run states — so Stop and an open pin field are the running twin of the audit's second
+  // state, and the handoff has to reach both faces of the standing action.
+  await withPage(browser, runningState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-stop:not([hidden])');
+    await at(page, 'timer · running at rest');
+    await page.click('#fav-pin');
+    await page.waitForSelector('.fav-pin-form .rename-input');
+    await at(page, 'timer · running + pin-as-favourite field');
+  });
+
+  // The app's one MODAL, on its own fixture: the merge-conflict prompt mounts on <body>, outside
+  // the views, so the Entries standing primary sits lit behind its backdrop unless the same rule
+  // reaches it. Its Merge is the surface's primary while it is up.
+  await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.check('.entry[data-id="40"] .sel');
+    await page.check('.entry[data-id="41"] .sel');
+    await page.click('#merge-go');
+    await page.waitForSelector('.editor.conflict-prompt .mc-merge');
+    await at(page, 'entries · merge-conflict modal up');
+  });
+
+  const offenders = states.filter((s) => s.lit.length !== 1);
+  record(
+    'PRIMARY_HANDOFF',
+    offenders.length === 0 && states.length === 13,
+    `exactly one visible --accent-solid fill in every state (D11): ` +
+      states.map((s) => `${s.state}=[${s.lit.join(', ') || 'none'}]`).join('; ') +
+      `; states measured=${states.length}/13 offending states=` +
+      `[${offenders.map((s) => `${s.state}:${s.lit.length}`).join(', ') || 'none'}]`,
+    'primary-handoff-timer.png',
+  );
 }
 
 // CLICKABILITY — §15 R-clickability / G10: ONE clickability convention across the window.
@@ -3487,11 +3645,15 @@ async function sceneReportsView(browser) {
       const nav = document.querySelector('.shell .nav');
       const r = nav ? nav.getBoundingClientRect() : { width: 0 };
       const active = [...document.querySelectorAll('.nav-item.active')].map((b) => b.dataset.view);
-      // Accent discipline (design.html D11 / V6): the view's single accent affordance is the
-      // + New report primary, FILLED with --accent-solid (tomato·11 — a raw --accent fill
-      // under a white label is the prohibited 3.87:1 pair, D04). Anything else in the view
-      // painting EITHER family colour (--accent or --accent-solid, fill or text) is a break.
-      const { rgbOf } = window.__probe;
+      // Accent discipline (design.html D11 / V6): AT REST — the state probed here, with the
+      // builder closed — the view's single accent affordance is the + New report primary, FILLED
+      // with --accent-solid (tomato·11 — a raw --accent fill under a white label is the prohibited
+      // 3.87:1 pair, D04). Anything else VISIBLE in the view painting EITHER family colour
+      // (--accent or --accent-solid, fill or text) is a break. Visibility is part of the claim:
+      // the closed builder's own commit (#rep-save) is the accent-solid primary of the
+      // builder-open state (PRIMARY_HANDOFF), and getComputedStyle reports its fill even inside a
+      // display:none subtree — a control nobody can see paints nothing.
+      const { rgbOf, visible } = window.__probe;
       const accentRgb = rgbOf('--accent');
       const accentSolidRgb = rgbOf('--accent-solid');
       const inFamily = (el) => {
@@ -3504,7 +3666,7 @@ async function sceneReportsView(browser) {
       };
       const newBtn = document.querySelector('#rep-new');
       const otherAccented = [...document.querySelectorAll('.reports-view *')]
-        .filter((el) => el !== newBtn && !el.closest('#rep-new'))
+        .filter((el) => el !== newBtn && !el.closest('#rep-new') && visible(el))
         .some((el) => inFamily(el));
       return {
         cards,
@@ -3746,8 +3908,9 @@ async function sceneReportsView(browser) {
       // The spec summary reads the stored range + group-by (a recognisable saved-report card).
       list.cards.some((c) => /This week/.test(c.spec) && /project/.test(c.spec));
     const sidebarOk = list.railVisible && list.activeNav.length === 1 && list.activeNav[0] === 'reports';
-    // design.html D11 / V6: + New report is the view's single accent-solid-filled primary;
-    // nothing else in the view paints either accent-family colour.
+    // design.html D11 / V6: at rest, + New report is the view's single accent-solid-filled
+    // primary and nothing else VISIBLE in the view paints either accent-family colour. Once the
+    // builder opens the accent hands off to its commit — PRIMARY_HANDOFF gates that state.
     const accentOk = list.newSolidFilled && !list.otherAccented;
     const builderOk =
       builder.name && builder.range && builder.custom && builder.by && builder.client &&
@@ -5719,6 +5882,7 @@ const SCENES = {
   FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], run: sceneFutureStartGuard },
   FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], run: sceneFavoritesRail },
   ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE', 'ACCENT_SOLID_BUDGET'], run: sceneAccentDiscipline },
+  PRIMARY_HANDOFF: { items: ['PRIMARY_HANDOFF'], run: scenePrimaryHandoff },
   CLICKABILITY: { items: ['CLICKABILITY'], run: sceneClickability },
   START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], run: sceneStartAttributes },
   START_FORM: { items: ['START_FORM'], run: sceneStartForm },
