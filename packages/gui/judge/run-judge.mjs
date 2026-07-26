@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -819,6 +819,11 @@ async function sceneCrossViewFreshness(browser) {
 // IPC (window.__EDITED__) that carries startUtc but has NO endUtc key — the open row stays
 // open, its end never synthesized. The page is pinned to timezoneId 'UTC' so the seeded UTC
 // instants land on a deterministic local day/track geometry.
+// A second page over the same card scores the ATTRIBUTE-VS-ADVISORY split (design.html D04/D14,
+// issue #160): with an open entry that is billable AND slept through, the card's attribute row
+// carries both roles at once, and `slept` must take the whole --flag warn triple while `billable`
+// — the normal state of nearly every entry — stays the quiet --muted label, with no pill chrome
+// and no part of that triple. Scored as one pair, because the bug guarded painted BOTH amber.
 async function sceneTimerView(browser) {
   {
     const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
@@ -975,15 +980,84 @@ async function sceneTimerView(browser) {
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
       edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
+    await page.close();
+
+    // design.html D04/D14 (issue #160) — AN ATTRIBUTE IS NOT AN ADVISORY. The same running card,
+    // over a fixture whose open entry is billable AND slept through, so both kinds of thing paint
+    // in the one attribute row and the distinction itself is what gets measured. `slept` is the
+    // advisory and takes the whole --flag warn triple; `billable` — the normal, overwhelmingly
+    // common state of a tracked entry — is the quiet neutral --muted label, with no pill chrome
+    // and none of the flag triple. Both are worded (D05: colour is never the only signal), and
+    // neither is the accent, which stays on the running clock/state and Stop (§15). Scored as one
+    // pair on purpose: the shipped bug painted BOTH labels amber, and every check that reads one
+    // colour in isolation passes on exactly that — amber `billable` is a perfectly good warn pill.
+    const palettePage = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    await palettePage.clock.install({ time: new Date(JUDGE_NOW) });
+    await palettePage.clock.pauseAt(new Date(JUDGE_NOW));
+    await palettePage.addInitScript(initScript(JSON.stringify(timerViewSleptRunningState()), {}));
+    await palettePage.goto(fileUrl('index.html'));
+    await palettePage.click('.nav-item[data-view="timer"]');
+    await palettePage.waitForSelector('[data-view="timer"]:not([hidden]) #timer-flags .flag', { state: 'attached' });
+    await noMotion(palettePage); // a paint assertion reads the cascade, never a mid-transition frame
+    await palettePage.screenshot({ path: join(EVIDENCE, 'timer-card-attr-vs-flag.png'), fullPage: true });
+    const paint = await palettePage.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const row = document.querySelector('#timer-flags');
+      // Selected by ROLE, not by position: the bug was the two roles sharing one class, so a
+      // probe that read "the first label in the row" could not have told them apart at all.
+      const attr = row?.querySelector('.attr') ?? null;
+      const flag = row?.querySelector('.flag') ?? null;
+      const csA = attr ? getComputedStyle(attr) : null;
+      const csF = flag ? getComputedStyle(flag) : null;
+      return {
+        attrShown: visible(attr),
+        flagShown: visible(flag),
+        attrText: attr ? attr.textContent.trim() : '',
+        flagText: flag ? flag.textContent.trim() : '',
+        attrColor: csA ? csA.color : null,
+        attrBg: csA ? csA.backgroundColor : null,
+        attrBorderWidth: csA ? csA.borderTopWidth : null,
+        attrRadius: csA ? csA.borderTopLeftRadius : null,
+        flagPaint: csF ? [csF.color, csF.backgroundColor, csF.borderTopColor] : null,
+        flagRadius: csF ? csF.borderTopLeftRadius : null,
+        flagTriple: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+        muted: rgbOf('--muted'),
+        accent: rgbOf('--accent'),
+        accentSolid: rgbOf('--accent-solid'),
+        accentWeak: rgbOf('--accent-weak'),
+      };
+    });
+    await palettePage.close();
+    const paletteOk =
+      // Both roles reach the rendered card, each said in a word.
+      paint.attrShown &&
+      paint.flagShown &&
+      paint.attrText === 'billable' &&
+      paint.flagText === 'slept' &&
+      // The ADVISORY keeps the warn palette whole — text, fill and rule — and its pill shape.
+      !!paint.flagPaint &&
+      paint.flagPaint.every((v, i) => v === paint.flagTriple[i]) &&
+      paint.flagRadius === '999px' &&
+      // The ATTRIBUTE is the neutral text role, and carries NO part of the warn chrome: not its
+      // text colour, not its fill (transparent, so not --flag-bg), not a rule, not a pill.
+      paint.attrColor === paint.muted &&
+      paint.attrColor !== paint.flagTriple[0] &&
+      paint.attrBg === 'rgba(0, 0, 0, 0)' &&
+      paint.attrBorderWidth === '0px' &&
+      paint.attrRadius === '0px' &&
+      // …nor is it the accent fill the function's own comment was already watching for (§15).
+      paint.attrColor !== paint.accent &&
+      paint.attrColor !== paint.accentSolid &&
+      paint.attrBg !== paint.accentWeak;
     record(
       'TIMER_VIEW',
-      ok,
+      ok && paletteOk,
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
         `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
-        `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'})`,
+        `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'}); ` +
+        `attribute-vs-advisory paint ${JSON.stringify(paint)}`,
       'timer-view-full.png',
     );
-    await page.close();
   }
 }
 
@@ -6894,7 +6968,9 @@ async function sceneTargetSize(browser) {
 //       strip carries a visible dot (its word stays hidden; D05 asks word OR icon), and the
 //       Timer card, the surface whose whole purpose is the timer, carries BOTH;
 //   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
-//       the literal 'billable' / 'non-billable' badge;
+//       the literal 'billable' / 'non-billable' label (a quiet `.attr`, not the warn `.flag`
+//       pill it wore until issue #160 — the wording is this scene's claim, the palette split
+//       is TIMER_VIEW's);
 //   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
 //       hatch carries the #i-moon icon marker — the yellow band / hatch never stand alone;
 //   (d) the WARN advisory is worded on the flag palette (the overlap banner's sentence over
@@ -6915,8 +6991,12 @@ async function sceneColourPairing(browser) {
       dotVisible: window.__probe.visible(document.querySelector('.timer-card.running .tc-dot')),
       wordVisible: window.__probe.visible(document.querySelector('.timer-card.running .state')),
       stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
+      // The whole attribute row, whatever class each label carries: this scene's claim is that
+      // billable-ness is SAID, and D04/D14 (issue #160) moved the saying of it off the warn
+      // `.flag` pill onto the quiet `.attr` label. Which palette each role takes is TIMER_VIEW's
+      // assertion; here the row is read by position so a palette move can never mute the word.
       billableWord:
-        [...document.querySelectorAll('.timer-card .flag')]
+        [...document.querySelectorAll('.timer-card .flags > *')]
           .map((f) => f.textContent.trim())
           .find((t) => /billable/.test(t)) ?? '',
     }));

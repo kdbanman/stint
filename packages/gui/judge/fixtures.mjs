@@ -1239,6 +1239,21 @@ export function timerViewRunningState() {
   return s;
 }
 
+/**
+ * design.html D04/D14 (issue #160) — the TIMER_VIEW attribute-vs-flag fixture. The canonical
+ * running entry, still `billable`, but with its machine having slept mid-entry: so the running
+ * card's attribute row paints BOTH kinds of thing side by side in one row — the `billable`
+ * ATTRIBUTE (the entry's normal state) and the `slept` FLAG (the advisory). The scene reads the
+ * computed colours off both at once, which is the only way to score the distinction rather than
+ * one colour in isolation: `slept` must be the --flag warn triple and `billable` must not be.
+ */
+export function timerViewSleptRunningState() {
+  const s = timerViewRunningState();
+  s.status.entry.sleptThrough = true;
+  s.days[0].entries.find((e) => e.id === 1).sleptThrough = true;
+  return s;
+}
+
 /** §05 R09 — three seeded favorites for the FAVORITES_RAIL scene (name + client/project/billable
  * meta + a one-click Resume), so the rail paints one row per FavoriteView deterministically. */
 export const FAVORITES = [
