@@ -800,6 +800,9 @@ async function sceneCrossViewFreshness(browser) {
 // Timer view renders the live clock reading the derived count-up (advances +3s across the
 // pinned-clock step, not reset) with the live-edit-running strip present (no End input); the
 // clock computes the D06 full Clock role — 38px, tabular numerals, the --num stack.
+// The card also SAYS it is running (design.html D05/A05, issue #142): the word is in the
+// card's rendered innerText, painted by the state line, with an accent-filled dot beside it —
+// so the state does not ride on the recoloured count-up alone, as it did until that issue.
 // Clicking the Start field's calendar affordance opens the inline START-ONLY picker
 // disclosure IN FLOW below the field — zero .stp-backdrop / modal chrome anywhere, the
 // container computes position: static — showing the running block with a START drag grip
@@ -828,6 +831,10 @@ async function sceneTimerView(browser) {
       // quote/space-normalized because computed fontFamily re-serializes the stack).
       const clockCs = getComputedStyle(document.querySelector('#timer-clock'));
       const famList = (s) => s.split(',').map((f) => f.trim().replace(/^["']|["']$/g, '')).join('|');
+      // Absent rather than thrown: a missing dot or state line is the regression this scene
+      // scores, so it must arrive as a false in the record, not an exception that kills the run.
+      const dot = document.querySelector('#timer-card .tc-dot');
+      const stateEl = document.querySelector('#timer-state');
       return {
         stripPresent: !!document.querySelector('#live-edit') && !document.querySelector('#live-edit').hidden,
         noEnd: !document.querySelector('#live-edit #le-end'),
@@ -835,7 +842,21 @@ async function sceneTimerView(browser) {
         startIsText: document.querySelector('#le-start')?.type === 'text',
         hasStop: !!document.querySelector('#timer-stop') && !document.querySelector('#timer-stop').hidden,
         noSwitch: !document.querySelector('#timer-switch'),
-        state: document.querySelector('#timer-state')?.textContent?.trim() ?? null,
+        // design.html D05/A05 (issue #142): the card must SAY it is running, not merely hold a
+        // #timer-state node that says so. The probe here used to read that node's textContent,
+        // which a display:none state line satisfied for as long as the bug shipped — so the
+        // OUTCOME is scored instead: the rendered card text (innerText skips display:none
+        // subtrees, which is exactly what hid the word), and the word coming from the state
+        // line rather than from elsewhere on the card (the IDLE description reads "nothing
+        // running", so an unanchored text match would pass on a card that had lost the line).
+        // innerText on the ELEMENT could not settle this — the HTML spec falls it back to
+        // textContent when the element is not rendered, i.e. exactly in the failing case.
+        cardText: document.querySelector('#timer-card').innerText.toLowerCase(),
+        statePainted: window.__probe.visible(stateEl) && stateEl.textContent.trim() === 'running',
+        // Beside the word, the dot: laid out, and carrying the accent that the count-up carries.
+        dotVisible: window.__probe.visible(dot),
+        dotFill: dot ? getComputedStyle(dot).backgroundColor : null,
+        accentRgb: window.__probe.rgbOf('--accent'),
         clockPx: clockCs.fontSize,
         clockTnum: clockCs.fontVariantNumeric === 'tabular-nums',
         clockNumStack: famList(clockCs.fontFamily) === famList(window.__probe.cssVar('--num')),
@@ -912,7 +933,13 @@ async function sceneTimerView(browser) {
       before.startIsText &&
       before.hasStop &&
       before.noSwitch &&
-      before.state === 'running' &&
+      // D05/A05 (issue #142) — the word reaches the rendered card, it comes from the state
+      // line, and the dot beside it is laid out and accent-filled. Colour alone no longer
+      // carries the app's most important state.
+      before.cardText.includes('running') &&
+      before.statePainted &&
+      before.dotVisible &&
+      before.dotFill === before.accentRgb &&
       before.clockPx === '38px' &&
       before.clockTnum &&
       before.clockNumStack &&
@@ -6189,8 +6216,13 @@ async function sceneTargetSize(browser) {
 // every semantic colour carries a word or icon beside it. Machine facts, one per pairing
 // the design names (the recorded exemption "run-dot when paired with its label" is exactly
 // what fact (a) proves holds):
-//   (a) the run-dot sits BESIDE the literal word 'running' — the Entries strip's dot +
-//       'running' state word, and the Timer card's 'running' state word;
+//   (a) the run-dot sits BESIDE the literal word 'running', and — the part this scene used to
+//       miss — BOTH are read as RENDERED, not merely present. Reading textContent alone passed
+//       a Timer card whose state word and dot were `display: none` for as long as issue #142
+//       shipped: the card signalled running by a recoloured clock and nothing else, which is
+//       the one thing D05 forbids. The pairing is now scored per running surface — the Entries
+//       strip carries a visible dot (its word stays hidden; D05 asks word OR icon), and the
+//       Timer card, the surface whose whole purpose is the timer, carries BOTH;
 //   (b) billable-ness is WORDED, not colour-only — the running card's attribute row carries
 //       the literal 'billable' / 'non-billable' badge;
 //   (c) the calendar's overlap band carries the worded .otag ('overlap Nm') and the slept
@@ -6203,12 +6235,15 @@ async function sceneColourPairing(browser) {
   // (a)+(b): the running window — strip pairing on Entries, card pairing + badge on Timer.
   const pairing = await withPage(browser, runningState(), 'index.html', async (page) => {
     const strip = await page.evaluate(() => ({
-      dotPresent: !!document.querySelector('#timer-strip.running .strip-dot'),
+      dotVisible: window.__probe.visible(document.querySelector('#timer-strip.running .strip-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('#timer-strip.running .state')),
       stateWord: document.querySelector('#timer-strip.running .state')?.textContent.trim() ?? '',
     }));
     await page.click('.nav-item[data-view="timer"]');
     await page.waitForSelector('.timer-card.running', { state: 'attached' });
     const card = await page.evaluate(() => ({
+      dotVisible: window.__probe.visible(document.querySelector('.timer-card.running .tc-dot')),
+      wordVisible: window.__probe.visible(document.querySelector('.timer-card.running .state')),
       stateWord: document.querySelector('.timer-card.running .state')?.textContent.trim() ?? '',
       billableWord:
         [...document.querySelectorAll('.timer-card .flag')]
@@ -6274,8 +6309,15 @@ async function sceneColourPairing(browser) {
     { rejectWrites: true },
   );
   const ok =
-    pairing.strip.dotPresent &&
+    // The strip pairs by its dot — D05 takes a word OR an icon, and the strip's word is the
+    // deliberately hidden one (one running indicator per surface, not two).
+    pairing.strip.dotVisible &&
     pairing.strip.stateWord === 'running' &&
+    // The card must carry BOTH (issue #142): the word is what a screen reader and a colour-
+    // blind user get, the dot is the mark beside it. Presence is not enough — it had both in
+    // the DOM, display:none, the whole time the bug shipped.
+    pairing.card.wordVisible &&
+    pairing.card.dotVisible &&
     pairing.card.stateWord === 'running' &&
     /^(non-)?billable$/.test(pairing.card.billableWord) &&
     /overlap\s*\d+m/.test(calendar.otag) &&
@@ -6290,7 +6332,7 @@ async function sceneColourPairing(browser) {
   record(
     'COLOUR_PAIRING',
     ok,
-    `D05/A05 pairing: run-dot beside 'running' (strip=${JSON.stringify(pairing.strip)}, card state='${pairing.card.stateWord}'); ` +
+    `D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip=${JSON.stringify(pairing.strip)}, card=${JSON.stringify({ stateWord: pairing.card.stateWord, wordVisible: pairing.card.wordVisible, dotVisible: pairing.card.dotVisible })}); ` +
       `billable worded ('${pairing.card.billableWord}'); overlap band worded ('${calendar.otag}') + slept hatch carries #i-moon (${calendar.moon}); ` +
       `warn advisory worded on flag palette=${JSON.stringify(warn)}; err block worded on danger palette=${JSON.stringify(err)}`,
     'main-colour-pairing.png',

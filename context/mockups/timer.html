@@ -205,7 +205,12 @@
         <div class="r-top">
           <div>
             <div class="clock run tnum">01:23:45</div>
-            <div class="r-state"><span class="dot run"></span> since 09:00</div>
+            <!-- design.html D05/A05: the state line is dotted AND worded — the mark and the
+                 word together, so the running state never rides on the recoloured count-up
+                 alone. The shipped card drew neither until issue #142; it now renders this
+                 line as `running`, with the since-time reachable in the live-edit Start
+                 field below. -->
+            <div class="r-state"><span class="dot run"></span> running · since 09:00</div>
           </div>
           <div class="r-desc">
             <div class="d">Drafting proposals</div>

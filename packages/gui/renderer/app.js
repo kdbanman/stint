@@ -504,7 +504,9 @@ function renderTimerCard(running) {
       }
     }
   }
-  $('timer-state').textContent = running ? 'running' : 'idle';
+  // The word goes into the inner span, not the whole .state line — the line also holds the
+  // D05 dot, and writing textContent on the line would delete it (issue #142).
+  $('timer-state-word').textContent = running ? 'running' : 'idle';
   if (running) {
     $('timer-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
     $('timer-desc').textContent = running.description ?? 'your timer';
