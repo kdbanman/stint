@@ -74,8 +74,9 @@
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
+  .sw{width:36px;height:24px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
@@ -88,7 +89,10 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
-  .tag b{color:var(--muted);cursor:pointer;font-weight:400}
+  /* A03: the removable × is a real button around a 24×24 target — the negative margins keep
+     the chip the size it always was, so only the hit area is bigger than the 11px glyph. */
+  .tag .tag-x{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin:-4px;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
+  .tag .tag-x .ic{width:11px;height:11px}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
@@ -248,7 +252,7 @@
           </div>
           <div class="r-row2">
             <span class="toggle"><span class="sw on"><i></i></span> Billable</span>
-            <div class="tagchips"><span class="tag">admin <b>×</b></span><span class="tag">proposal <b>×</b></span><input placeholder="add a tag…"></div>
+            <div class="tagchips"><span class="tag">admin <button class="tag-x" type="button" aria-label="Remove tag admin"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><span class="tag">proposal <button class="tag-x" type="button" aria-label="Remove tag proposal"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><input placeholder="add a tag…"></div>
           </div>
         </div>
       </div>
