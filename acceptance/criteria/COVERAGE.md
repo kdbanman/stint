@@ -1477,8 +1477,15 @@ equal fixed-width columns that never stretch + horizontal scroll (`.cstrip`
 scrollWidth > clientWidth); a full 24h `.dt` track whose default scroll lands on
 working hours with the off-hours (pre-07:00 / post-18:00) entries present and
 reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
-Wed 1.00h) + the `#week-total` range chip (17.00h); an empty present-but-empty
-`.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
+Wed 1.00h) + the `#week-total` range chip (17.00h), read ON SCREEN at the
+post-render scroll position rather than merely present in the DOM — all seven
+`.dh` measured inside the `.cstrip` scrollport, the totals visible with the hour
+labels beside them, and both bands still there once the strip is scrolled fully
+right — because the `.dh` band and the `.gut` gutter are sticky, so the scroll
+on either axis moves the CONTENT past the labels instead of carrying the labels
+off with it (issue #145: the header band was painted and then scrolled away by
+the same render, and the presence-only assertion here passed straight through
+it); an empty present-but-empty `.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
 `.ev` segments sharing its `data-id` — a `.seg-start` reaching the track foot at
 a true height (never the 18px sliver) and a `.seg-end` from the track head —
 with its 7.75h counted ONLY on its start day (Mon reads 12.00h = 4.25h same-day
