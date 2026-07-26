@@ -322,6 +322,11 @@ async function sceneKeyboardFocus(browser) {
       let n = 0;
       for (const el of document.querySelectorAll(sel)) {
         if (el.hidden || el.disabled) continue;
+        // A `tabindex="-1"` element is focusable but NOT in the tab order, and `button` / `input`
+        // match the selector above on their own — so the negation has to be re-applied per element
+        // or the calendar's block-scoped controls (issue 140) would be counted as stops Tab can
+        // never reach, and the walk would fail for finding exactly what it asked for.
+        if (el.getAttribute('tabindex') === '-1') continue;
         const cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') continue;
         // Hidden ancestors (a collapsed form / a routed-away view) take their controls out too.
@@ -4838,6 +4843,161 @@ async function sceneCalendarEntryBlock(browser) {
   );
 }
 
+// CALENDAR_KEYBOARD — §12 R14 · design.html A04, machine-scored over the dense fixture (issue 140).
+// "Focus visible on every interactive element, NEVER FULLY OBSCURED." The calendar broke it twice
+// over. Each entry block hid four controls behind hover — the merge checkbox and Delete / Split /
+// Edit — and all four were top-level tab stops, so on the design audit's three-week seed the Tab
+// key walked ~200 of them before reaching anything else in the view. Fifty of those stops were the
+// merge checkbox, at `opacity: 0` (`.ck` had `:hover` / `:checked` / `.on` clauses and no focus
+// clause at all, while `.op-btn` beside it already took its opacity from `.ev:focus-within`) —
+// and `opacity` takes the outline with it, so the focus ring did not paint either: the focused
+// control and its indicator invisible together. Hence the effective-opacity probe below.
+//
+// The fix is a roving focus: the BLOCK is the one tab stop, its controls are `tabindex="-1"` and
+// are reached with ← / → from the focused block, and `.ev:focus-within` opens the whole set — so
+// arriving at an entry is also how a keyboard user learns the controls are there.
+//
+// Driven over `denseCalendarState` (three weeks, 51 blocks, the last one open) at the app's
+// 1040×800 default window, pinned to UTC. Density is the whole guard, per the issue-#55 lesson the
+// triage cites: at one day of data the traversal cost is invisible and any stop model looks fine.
+// Motion is off (noMotion) so an opacity probe reads the cascade, not a frame of the 0.12s fade.
+// Deterministic sub-facts:
+//   • FIXTURE REAL — ≥50 blocks carrying ≥150 hover-revealed controls between them, i.e. the
+//     ~200-stop calendar the audit measured. Reseeding this scene with one comfortable day
+//     reddens this rather than quietly greening the rest;
+//   • ONE STOP PER BLOCK — a Tab-walk from the top of the window stops inside the calendar exactly
+//     `blocks` times, and EVERY one of those stops is an `.ev` block itself, never a control
+//     inside one. Restoring the old model puts the count back at ~200 and fails with the number;
+//   • TRAVERSABLE — one Tab cycle from the top of the window walks the WHOLE window and wraps back
+//     to `<body>`, spending well under half the stops the blocks' controls would cost. The
+//     calendar is the tail of the Entries tab order, so escaping it means reaching that wrap —
+//     which the audit's 70-press walk never managed;
+//   • NOTHING FOCUSED IS INVISIBLE — every stop of the whole walk has a non-zero EFFECTIVE opacity
+//     (its own, multiplied up its ancestors) at the moment it holds focus, and paints a non-`none`
+//     outline. `outline` is declared nowhere in styles.css but the one focus rule (GOLD
+//     design-guard.test.ts pins that), so a non-none outline under focus IS the D13/A04 ring;
+//   • CONTROLS REACHED FROM THE BLOCK — on a sample block, ← / → walk its four controls in DOM
+//     order with real key presses, each one inside that block, each at non-zero effective opacity
+//     while focused; Escape returns focus to the block; and Tab from a control lands on the NEXT
+//     block, not on a control — the stop model holds from inside as well as outside.
+// Captures calendar-keyboard-focus.png (a block holding focus, its four controls open).
+async function sceneCalendarKeyboard(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+  await noMotion(page);
+
+  // The in-page reader every probe below shares: what the active element IS, whether it is in the
+  // calendar strip, and — the A04 question — whether it can actually be SEEN while it holds focus.
+  const ACTIVE = () => {
+    const el = document.activeElement;
+    if (!el || el === document.body || el === document.documentElement) return { body: true };
+    // Effective opacity: a control at opacity 1 inside a container at 0 is still invisible, so the
+    // whole ancestor chain multiplies in. This is exactly what the old .ck failed.
+    let opacity = 1;
+    for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      opacity *= parseFloat(getComputedStyle(n).opacity);
+    }
+    const cs = getComputedStyle(el);
+    const block = el.closest('.dcol .ev');
+    return {
+      body: false,
+      label: el.dataset && el.dataset.act ? el.dataset.act : String(el.className || '') || el.tagName,
+      inCalendar: !!el.closest('.cstrip'),
+      isBlock: block === el,
+      blockId: block ? block.dataset.id : null,
+      opacity,
+      ring: cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0,
+    };
+  };
+
+  const fixture = await page.evaluate(() => ({
+    blocks: document.querySelectorAll('.dcol .ev').length,
+    controls: document.querySelectorAll('.dcol .ev .ck, .dcol .ev .op-btn').length,
+  }));
+
+  // The walk: one full Tab cycle from the top of the window, ending where the browser wraps back
+  // to <body>. The calendar is the tail of the Entries tab order, so "escaping" it means reaching
+  // that wrap — what the audit's 70-press walk never managed. The budget is set past the OLD stop
+  // count so a regression still terminates and gets MEASURED: the justification then carries the
+  // real number rather than an exhausted budget.
+  await page.evaluate(() => document.body.focus());
+  const walk = [];
+  const budget = fixture.controls + 60;
+  let wrapped = false;
+  for (let i = 0; i < budget; i++) {
+    await page.keyboard.press('Tab');
+    const step = await page.evaluate(ACTIVE);
+    if (step.body) {
+      wrapped = true; // the tab order came back around — the whole window has been walked
+      break;
+    }
+    walk.push(step);
+  }
+
+  // The roving half, driven with REAL key presses on a block early enough to sit in frame.
+  const sampleId = await page.evaluate(() => document.querySelectorAll('.dcol .ev')[3].dataset.id);
+  await page.focus(`.dcol .ev[data-id="${sampleId}"]`);
+  const expected = await page.evaluate(
+    (id) => [...document.querySelectorAll(`.dcol .ev[data-id="${id}"] .ck, .dcol .ev[data-id="${id}"] .op-btn`)]
+      .map((el) => el.dataset.act),
+    sampleId,
+  );
+  const roving = [];
+  for (let i = 0; i < expected.length; i++) {
+    await page.keyboard.press('ArrowRight');
+    roving.push(await page.evaluate(ACTIVE));
+  }
+  await page.screenshot({ path: join(EVIDENCE, 'calendar-keyboard-focus.png') });
+  // ← steps back to the control before the last one reached, and Escape leaves the set entirely.
+  await page.keyboard.press('ArrowLeft');
+  const stepBack = await page.evaluate(ACTIVE);
+  await page.keyboard.press('Escape');
+  const afterEscape = await page.evaluate(ACTIVE);
+  // …and Tab from inside the block leaves it for the NEXT block, never for a control.
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('Tab');
+  const afterTab = await page.evaluate(ACTIVE);
+  await page.close();
+
+  const calStops = walk.filter((s) => s.inCalendar);
+  const fixtureReal = fixture.blocks >= 50 && fixture.controls >= 150;
+  const oneStopPerBlock = calStops.length === fixture.blocks && calStops.every((s) => s.isBlock);
+  // The traversal cost, stated as the ratio the fix changed: the calendar spends one stop per
+  // ENTRY, not one per control, so walking past it costs well under half of what its controls
+  // would — and the cycle closes rather than running out the budget inside the strip.
+  const traversable = wrapped && calStops.length > 0 && calStops.length * 3 <= fixture.controls;
+  const invisibleStops = walk.filter((s) => s.opacity <= 0 || !s.ring).map((s) => s.label);
+  const rovingOrder = roving.map((s) => s.label);
+  const rovingOk =
+    rovingOrder.join(',') === expected.join(',') &&
+    roving.every((s) => s.blockId === sampleId && !s.isBlock && s.opacity > 0 && s.ring);
+  const escapeOk =
+    stepBack.blockId === sampleId &&
+    !stepBack.isBlock &&
+    stepBack.label === expected[expected.length - 2] &&
+    afterEscape.isBlock &&
+    afterEscape.blockId === sampleId;
+  const tabLeavesOk = afterTab.isBlock && afterTab.blockId !== sampleId;
+  record(
+    'CALENDAR_KEYBOARD',
+    fixtureReal && oneStopPerBlock && traversable && invisibleStops.length === 0 && rovingOk && escapeOk && tabLeavesOk,
+    `dense calendar: ${fixture.blocks} blocks holding ${fixture.controls} hover-revealed controls; ` +
+      `one Tab cycle = ${walk.length} stops (wrapped back to body: ${wrapped}), ${calStops.length} ` +
+      `of them in the calendar, all of them blocks: ${calStops.every((s) => s.isBlock)}; ` +
+      `stops focused at zero opacity or with no ring: [${invisibleStops.join(', ') || 'none'}]; ` +
+      `roving on block ${sampleId} reached [${rovingOrder.join(', ')}] (expected [${expected.join(', ')}]), ` +
+      `ArrowLeft -> ${JSON.stringify(stepBack.label)}, Escape -> block=${afterEscape.isBlock}, ` +
+      `Tab out -> block ${afterTab.blockId}; fixture-real=${fixtureReal} one-stop-per-block=` +
+      `${oneStopPerBlock} traversable=${traversable} roving=${rovingOk} escape=${escapeOk} ` +
+      `tab-leaves=${tabLeavesOk}`,
+    'calendar-keyboard-focus.png',
+  );
+}
+
 // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
 // visible list AND the report total, with no getState reload during the keystroke. Hardened
 // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
@@ -6059,8 +6219,8 @@ const SCENES = {
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
-
   CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], run: sceneCalendarEntryBlock },
+  CALENDAR_KEYBOARD: { items: ['CALENDAR_KEYBOARD'], run: sceneCalendarKeyboard },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
   HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], run: sceneHotkeyNoTrap },
