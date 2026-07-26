@@ -47,15 +47,23 @@
   .dot{width:8px;height:8px;border-radius:50%;flex:none;display:inline-block}.dot.run{background:var(--run-dot)}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
-  /* desktop backdrop with a thin menu bar — the popover hangs from a tray icon */
+  /* HOST CHROME — a picture of macOS, not a Stint surface: the desktop wallpaper and the menu
+     bar the popover hangs from. Its colours are the OS's own and have no semantic token
+     (design.html D01 governs Stint's surfaces; the guard licenses these by name, issue #157). */
   body{min-height:560px;background:linear-gradient(160deg,#cdbfa8,#9f9788 60%,#7d7565)}
   .menubar{height:26px;background:rgba(247,242,234,.86);backdrop-filter:saturate(140%) blur(8px);border-bottom:1px solid rgba(0,0,0,.06);display:flex;align-items:center;justify-content:flex-end;gap:16px;padding:0 16px;font-size:12px;color:#4a443b;font-weight:590}
-  .menubar .tray{display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.06);border-radius:var(--r1);padding:2px 8px;color:var(--accent-ink);font-weight:640}
-  .menubar .tray .dot{width:7px;height:7px;background:var(--run-dot)}
   .menubar .clk{color:#4a443b;font-weight:590}
+  /* THE MENU-BAR EXTRA (design.html §09 D20). Stint's own pixels here, and the one thing on this
+     page the OS draws from a file we ship: the running TEMPLATE glyph, embedded between the
+     STINT-MARK markers by scripts/gen-icons.mjs, with the macOS-only count-up title beside it
+     (packages/gui/src/main.ts `tray.setTitle`). Monochrome by construction — macOS discards a
+     template image's colour — which is why this rule declares no colour at all. It used to draw
+     an invented tomato pill, an appearance the tray cannot produce (issue #157). */
+  .menubar .tray{display:inline-flex;align-items:center;gap:4px;font-weight:590}
+  .menubar .tray .glyph{display:block;width:16px;height:16px}
   /* popover */
   .pop-wrap{display:flex;justify-content:flex-end;padding:0 64px}
-  .notch{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:9px solid var(--paper);margin:8px 24px 0 0;filter:drop-shadow(0 -2px 1px rgba(60,42,18,.05))}
+  .notch{width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;border-bottom:9px solid var(--paper);margin:8px 24px 0 0}
   .pop{width:332px;margin-right:-8px;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r3);box-shadow:var(--sh-pop);overflow:hidden}
   .pop-top{padding:16px 16px 16px}
   .pop-state{display:flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--run);font-weight:640}
@@ -91,7 +99,12 @@
 </defs></svg>
 
 <div class="menubar">
-  <span class="tray"><span class="dot run"></span> 1:24:07</span>
+  <span class="tray">
+    <!-- STINT-MARK start — generated from context/mark/ by scripts/gen-icons.mjs; do not edit by hand -->
+    <img class="glyph" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAkElEQVR4nOyWsQ2DMBRELxFSMkK6ZJqMwRowAqxBxQxMgztGAAkJjg6EJVPwMcU96TW2Zb/G0k8QmQSRUcAtA5a1lP7pB+fQ0YZWdFxvPDyHC5rBhpLmCAS09AsbHP0hENDTF2wY6BuBgAm2bN7UN1SAAhSgAAUo4OlZc7DDHQmoYcfubt9AEn0ovRT9AgXMAAAA//8SUFFmAAAABklEQVQDAJIcEn3iV2UHAAAAAElFTkSuQmCC" width="16" height="16" alt="The running tray glyph">
+    <!-- STINT-MARK end -->
+    <span class="tnum">1:24:07</span>
+  </span>
   <span>Wi-Fi</span><span>100%</span><span class="clk">9:41 AM</span>
 </div>
 
