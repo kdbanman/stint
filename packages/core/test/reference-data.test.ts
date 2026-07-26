@@ -9,12 +9,12 @@
  * computation and the restore edge (a project under a still-archived client cannot be restored).
  */
 import { describe, it, expect } from 'vitest';
-import { Store, StoreError } from '../src/index.js';
+import { Store, StoreError } from '@stint/core';
 
-const FIXED_NOW = new Date('2026-06-24T10:00:00Z');
+const NOW = new Date('2026-06-24T10:00:00Z');
 
 function seeded() {
-  const store = Store.openMemory(() => FIXED_NOW);
+  const store = Store.openMemory(() => NOW);
   const acme = store.addClient('Acme'); // referenced (has an entry below)
   const globex = store.addClient('Globex'); // unreferenced (no entries)
   const api = store.addProject('API', acme.id); // referenced

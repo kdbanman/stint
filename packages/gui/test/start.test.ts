@@ -11,8 +11,11 @@ import { describe, it, expect } from 'vitest';
 import { Store } from '@stint/core';
 import { startWithAttributes } from '../src/start.js';
 
-const NOW = '2026-06-24T18:00:00Z';
-const mem = () => Store.openMemory(() => new Date(NOW));
+// The pinned clock. NOW_UTC is the same instant in core's stored form, for the assertions
+// that read a written `startUtc` back.
+const NOW_UTC = '2026-06-24T18:00:00Z';
+const NOW = new Date(NOW_UTC);
+const mem = () => Store.openMemory(() => NOW);
 
 describe('startWithAttributes — the GUI attributed start', () => {
   it('a bare payload starts an entry with null attributes (clientless ⇒ non-billable default)', () => {
@@ -24,7 +27,7 @@ describe('startWithAttributes — the GUI attributed start', () => {
     expect(value.projectId).toBeNull();
     expect(value.tags).toEqual([]);
     expect(value.billable).toBe(false); // no client ⇒ default non-billable
-    expect(value.startUtc).toBe(NOW);
+    expect(value.startUtc).toBe(NOW_UTC);
     store.close();
   });
 

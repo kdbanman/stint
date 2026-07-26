@@ -9,9 +9,12 @@ import { describe, it, expect } from 'vitest';
 import { test, fc } from '@fast-check/vitest';
 import { Store } from '@stint/core';
 
-const NOW = '2026-05-10T12:00:00Z';
+// The pinned clock. NOW_UTC is the same instant in core's stored form, for the calls that
+// pass "now" across the API as a timestamp.
+const NOW_UTC = '2026-05-10T12:00:00Z';
+const NOW = new Date(NOW_UTC);
 function memStore() {
-  return Store.openMemory(() => new Date(NOW));
+  return Store.openMemory(() => NOW);
 }
 
 describe('PROP: subtract is exact and reversible (§17 R5)', () => {
@@ -78,7 +81,7 @@ describe('sleep scenarios', () => {
     const store = memStore();
     const { value: e } = store.start({ atUtc: '2026-05-10T10:00:00Z' });
     // App last saw the world at 11:00; now is 12:00 — a 1h gap while closed.
-    const span = store.reconcileGap('2026-05-10T11:00:00Z', NOW);
+    const span = store.reconcileGap('2026-05-10T11:00:00Z', NOW_UTC);
     expect(span).not.toBeNull();
     expect(span!.source).toBe('gap');
     const v = store.getEntry(e.id)!;
@@ -91,10 +94,10 @@ describe('sleep scenarios', () => {
   it('does not reconcile a small gap or when nothing is running', () => {
     const store = memStore();
     // Nothing running.
-    expect(store.reconcileGap('2026-05-10T11:00:00Z', NOW)).toBeNull();
+    expect(store.reconcileGap('2026-05-10T11:00:00Z', NOW_UTC)).toBeNull();
     store.start({ atUtc: '2026-05-10T11:59:00Z' });
     // 30 s gap < 90 s threshold.
-    expect(store.reconcileGap('2026-05-10T11:59:30Z', NOW)).toBeNull();
+    expect(store.reconcileGap('2026-05-10T11:59:30Z', NOW_UTC)).toBeNull();
     store.close();
   });
 

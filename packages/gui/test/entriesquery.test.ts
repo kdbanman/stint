@@ -28,13 +28,16 @@ function handlersOver(store: Store): ReturnType<typeof createIpcHandlers> {
 }
 
 // A fixed LOCAL wall-clock afternoon — local, so the day the entry falls on is 2026-03-05
-// in every runner timezone, and fixed, so the assertion never rides the system clock.
+// in every runner timezone, and fixed, so the assertion never rides the system clock. NOW
+// pins the store's clock to the same local day: a date-grouping test left on the system
+// clock is a latent flake, not just an inconsistency (issue #172).
+const NOW = new Date(2026, 2, 5, 18, 0, 0);
 const FROM = new Date(2026, 2, 5, 13, 0, 0).toISOString();
 const TO = new Date(2026, 2, 5, 14, 0, 0).toISOString();
 
 describe('listEntries grouping default (issue #50)', () => {
   it('a toolbar query with NO `by` returns day-laid groups instead of rejecting', () => {
-    const store = Store.openMemory();
+    const store = Store.openMemory(() => NOW);
     // One closed entry — the pre-fix throw only fired once at least one entry matched the
     // query, so an empty window would not exercise the regression.
     store.add({ description: 'seeded work', fromUtc: FROM, toUtc: TO, tags: [] });
@@ -53,7 +56,7 @@ describe('listEntries grouping default (issue #50)', () => {
   });
 
   it('an explicit `by` still wins over the default', () => {
-    const store = Store.openMemory();
+    const store = Store.openMemory(() => NOW);
     store.add({ description: 'client work', fromUtc: FROM, toUtc: TO, tags: [] });
 
     const view = handlersOver(store).listEntries({

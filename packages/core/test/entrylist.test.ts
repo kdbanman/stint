@@ -10,8 +10,8 @@
  * Golden over fixed EntryView fixtures so the grouping/matching rule cannot drift.
  */
 import { describe, it, expect } from 'vitest';
-import { matchesQuery, groupEntries, buildEntryList } from '../src/entrylist.js';
-import type { EntryView } from '../src/types.js';
+import { matchesQuery, groupEntries, buildEntryList } from '@stint/core';
+import type { EntryView } from '@stint/core';
 
 /** A minimal EntryView fixture — only the fields the list model reads vary per test. */
 function entry(o: Partial<EntryView> & { id: number }): EntryView {

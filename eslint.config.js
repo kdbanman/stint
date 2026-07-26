@@ -25,6 +25,23 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
       '@typescript-eslint/no-explicit-any': 'off',
       'no-empty': ['error', { allowEmptyCatch: true }],
+      // engineering.html §04's directive rule, made a gate (issue #172): @ts-ignore/@ts-nocheck
+      // never, @ts-expect-error with a reason. Pinned here rather than inherited from
+      // tseslint's recommended set so the rule states the intent and survives an upstream
+      // change. The reason is required because the one legitimate suppression — a test
+      // importing a plain-JS apparatus module with no type declarations on purpose
+      // (qa-driver.test.ts, mark.test.ts, design-guard.test.ts, the gold script guards) —
+      // has to say so.
+      '@typescript-eslint/ban-ts-comment': [
+        'error',
+        {
+          'ts-expect-error': 'allow-with-description',
+          'ts-ignore': true,
+          'ts-nocheck': true,
+          'ts-check': false,
+          minimumDescriptionLength: 10,
+        },
+      ],
     },
   },
   {

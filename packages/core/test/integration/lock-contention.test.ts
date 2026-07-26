@@ -41,8 +41,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store } from '@stint/core';
 
-const FIXED_NOW = '2026-06-24T12:00:00Z';
-const clock = () => new Date(FIXED_NOW);
+const NOW = new Date('2026-06-24T12:00:00Z');
+const clock = () => NOW;
 
 /** SQLITE_BUSY primary result code — what a past-timeout lock wait resolves to. */
 const SQLITE_BUSY = 5;

@@ -19,14 +19,8 @@ import {
   roundSeconds,
   secondsBetween,
   renderLocal,
-  type Clock,
 } from '@stint/core';
-
-/** A clock whose "now" can be advanced, for deterministic op sequences. */
-function mutableClock(startMs: number): { clock: Clock; advance: (ms: number) => void } {
-  let nowMs = startMs;
-  return { clock: () => new Date(nowMs), advance: (ms) => (nowMs += ms) };
-}
+import { mutableClock } from '../support/clock.js';
 
 const BASE = Date.parse('2026-01-01T00:00:00Z');
 

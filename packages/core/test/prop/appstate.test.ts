@@ -26,14 +26,9 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Store, openDb, toUtc, type Clock, type CheckinState } from '@stint/core';
+import { mutableClock } from '../support/clock.js';
 
 const BASE = Date.parse('2026-04-01T09:00:00Z');
-
-/** A clock whose "now" can be repointed, so a generated op-sequence advances time. */
-function settableClock(startMs: number): { clock: Clock; set: (ms: number) => void } {
-  let nowMs = startMs;
-  return { clock: () => new Date(nowMs), set: (ms) => (nowMs = ms) };
-}
 
 /**
  * Run `fn` against a throwaway, FILE-backed Store on its own temp dir (a `:memory:` store
@@ -129,7 +124,7 @@ describe('PROP: app_state stays consistent with the entry table after every comm
     // slower box — raise the budget so the property never flakes on machine speed. The
     // assertions are unchanged; only the time allowance is widened.
     (ops) => {
-      const { clock, set } = settableClock(BASE);
+      const { clock, set } = mutableClock(BASE);
       withFreshStore(clock, (store, path) => {
         let nowMs = BASE;
         for (const op of ops) {
@@ -184,7 +179,7 @@ describe('PROP: a transition that fails mid-tx leaves app_state byte-identical (
   test.prop([fc.boolean()])(
     'add(to<=from) and stop-when-idle roll back the schedule write with the entry write',
     (startFirst) => {
-      const { clock, set } = settableClock(BASE);
+      const { clock, set } = mutableClock(BASE);
       withFreshStore(clock, (store, path) => {
         if (startFirst) {
           // Establish an open entry + its atomically-seeded schedule.
@@ -223,7 +218,7 @@ describe('PROP: a reopened Store yields the committed checkinState (§20 R07 dur
     'start then relaunch sees the same schedule anchor that was committed',
     (offsetMs) => {
       const startMs = BASE + offsetMs;
-      const { clock } = settableClock(startMs);
+      const { clock } = mutableClock(startMs);
       withFreshStore(clock, (store, path) => {
         const view = store.start().value;
         const sched = store.checkinState();
