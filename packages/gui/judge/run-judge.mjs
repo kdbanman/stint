@@ -4457,6 +4457,9 @@ async function sceneEntriesCalendar(browser) {
 //     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
 //   • each `.dh .ds` day header shows that day's billable total (Mon 4.25h, Wed 1.00h) and the
 //     toolbar range chip (#week-total) shows the week total (9.25h);
+//   • issue #145 — those headers are ON SCREEN at the default paint, not merely in the DOM: the
+//     `.dh` band and the `.gut` hour labels STICK to the scrollport, so the working-hours scroll
+//     and the horizontal column scroll move the content past them instead of taking them away;
 //   • an EMPTY day renders as a present `.dcol` with an empty `.dt`;
 //   • §12 R16 (issue #71): a CROSS-MIDNIGHT span (id 8, 22:30→06:15 next day) renders as TWO
 //     `.ev` segments sharing its data-id — a start-day segment (22:30 → the track bottom, a true
@@ -4470,7 +4473,8 @@ async function sceneEntriesCalendar(browser) {
 //   • checking two `.ck` boxes reveals the #merge-bar selection bar above the calendar —
 //     "2 selected" count pill + a NEUTRAL Merge button (design.html D11 / V5).
 // Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
-// regresses, or the hover/click/merge wiring breaks. Captures main-calendar.png.
+// regresses, the header band or hour gutter scrolls off screen, or the hover/click/merge wiring
+// breaks. Captures main-calendar.png.
 async function sceneCalendarLayout(browser) {
   {
     const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
@@ -4516,6 +4520,29 @@ async function sceneCalendarLayout(browser) {
         const runEv = document.querySelector('.dcol .ev.run');
         const runBg = runEv ? getComputedStyle(runEv).backgroundImage : '';
         const runBt = runEv ? runEv.querySelector('.bt')?.textContent?.trim() ?? '' : '';
+        // §12 R16 / G13, issue #145: the day headers must be ON SCREEN at the post-render scroll
+        // position, not merely present in the DOM. This scene used to read the per-day totals out
+        // of the markup, which is a CONTROL-level fact — and it passed while the render scrolled
+        // the whole 52px header band out of the viewport, leaving seven unlabelled columns with
+        // zero visible totals. Measured against the scrollport rect instead: `.dh` is vertically
+        // inside `.cstrip`'s box (the axis the working-hours scroll moves), and the header band's
+        // own visible height is its full 52px, so a partly-clipped band fails too.
+        const stripRect = strip.getBoundingClientRect();
+        const gut = document.querySelector('.gut');
+        const dhs = [...document.querySelectorAll('.dcol .dh')];
+        const vInside = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.height > 0 && r.top >= stripRect.top - 0.5 && r.bottom <= stripRect.bottom + 0.5;
+        };
+        // Fully on screen on BOTH axes — the strictest reading of "a reader can see this label".
+        // The rightmost columns sit past the horizontal scroll by design (the strip scrolls), so
+        // this is a floor, not an equality.
+        const fullyVisible = (el) => {
+          const r = el.getBoundingClientRect();
+          return (
+            vInside(el) && r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5
+          );
+        };
         return {
           colCount: cols.length,
           colWidths,
@@ -4547,11 +4574,44 @@ async function sceneCalendarLayout(browser) {
           trackBottomPx: 44 * 24,
           // The running/open block shows only a START time — no end (no full HH:MM–HH:MM range).
           runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
+          // issue #145 — the header band and hour gutter AT THE DEFAULT PAINT.
+          headerCount: dhs.length,
+          headersOnScreen: dhs.filter(vInside).length,
+          dayTotalsOnScreen: [...document.querySelectorAll('.dcol .dh .ds')].filter(fullyVisible)
+            .length,
+          // The mechanism, named so a regression says WHICH half broke: the labels stick to the
+          // scrollport instead of riding the scroll.
+          dhPosition: dhs[0] ? getComputedStyle(dhs[0]).position : '',
+          gutPosition: gut ? getComputedStyle(gut).position : '',
+          hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
         };
       },
       { workStartPx, workEndPx },
     );
     await page.screenshot({ path: join(EVIDENCE, 'main-calendar.png') });
+
+    // issue #145, the other axis: the hour gutter labels the time for EVERY column, so it has to
+    // survive the horizontal scroll the fixed-width columns force — the same defect as the header
+    // band, ninety degrees round. Scroll the strip fully right, then read the gutter's left edge
+    // against the scrollport's (sticky pins the two together) and confirm the header band is still
+    // on screen at the same time, so the two axes are proven to compose rather than one at a time.
+    const axes = await page.evaluate(() => {
+      const strip = document.querySelector('.cstrip');
+      strip.scrollLeft = strip.scrollWidth;
+      const s = strip.getBoundingClientRect();
+      const vInside = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.height > 0 && r.top >= s.top - 0.5 && r.bottom <= s.bottom + 0.5;
+      };
+      const out = {
+        scrolledRight: Math.round(strip.scrollLeft) > 0,
+        gutOffset: Math.round(document.querySelector('.gut').getBoundingClientRect().left - s.left),
+        headersOnScreen: [...document.querySelectorAll('.dcol .dh')].filter(vInside).length,
+        hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
+      };
+      strip.scrollLeft = 0; // back to the at-rest position the remaining sub-facts read.
+      return out;
+    });
 
     // Hover an event → the ops (Delete / Split / Edit) + the corner checkbox reveal.
     await page.hover('.entry[data-id="7"]');
@@ -4654,13 +4714,32 @@ async function sceneCalendarLayout(browser) {
       structure.sleptMoon;
     const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
     const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
+    // §12 R16 / G13, issue #145: the labels the calendar paints are VISIBLE at the default paint
+    // and stay visible through the scroll on either axis. `totalsOk` above reads the totals out of
+    // the DOM; this reads them off the screen — the outcome the requirement is actually about.
+    // The header COUNT is exact on the vertical axis (all seven, the axis the defect was on); the
+    // per-day totals are a floor on the horizontal one, because the strip is deliberately narrower
+    // than the week (columnsOk asserts that scroll): at this scene's 820px viewport the ~573px
+    // scrollport holds the 48px gutter plus four 124px columns, and the rest are a scroll away.
+    // The pre-fix defect measured ZERO totals on screen and ZERO headers vertically.
+    const labelsOnScreenOk =
+      structure.dhPosition === 'sticky' &&
+      structure.gutPosition === 'sticky' &&
+      structure.headersOnScreen === structure.colCount &&
+      structure.dayTotalsOnScreen >= 4 &&
+      structure.hourLabelsOnScreen > 0 &&
+      axes.scrolledRight &&
+      Math.abs(axes.gutOffset) <= 1 &&
+      axes.headersOnScreen === structure.colCount &&
+      axes.hourLabelsOnScreen > 0;
     const ok =
       columnsOk && neverClipOk && totalsOk && emptyOk && flagsOk && runOk && hoverOk &&
-      crossMidnightOk && editorOpen && mergeHiddenBefore && mergeShown;
+      labelsOnScreenOk && crossMidnightOk && editorOpen && mergeHiddenBefore && mergeShown;
     record(
       'CALENDAR_LAYOUT',
       ok,
       `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
+        `labelsOnScreen=${labelsOnScreenOk} axes=${JSON.stringify(axes)}; ` +
         `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
         `selection bar hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
       'main-calendar.png',
@@ -5557,6 +5636,40 @@ async function sceneTimelineWindow(browser) {
       const end = panel.querySelector('input.set-hhmm[data-key="workingHoursEnd"]');
       const around = panel.querySelector('select[data-key="pickerAroundHours"]');
       const aroundRow = around ? around.closest('.set-row') : null;
+      // Issue 155 — the off row's LABEL, measured as rendered. The select is genuinely
+      // `disabled`, which is design.html §07's recorded A01 exemption; `.set-k` beside it is
+      // ordinary readable text and has no exemption to claim. The row used to carry the dim
+      // (`.set-row.off { opacity: 0.5 }`), which composited the label to 3.19:1 — a defect no
+      // token check could see, because no token was wrong: --ink on --paper is 16:1 and the
+      // ancestor was what darkened it. So this reads the label the way the audit did — its own
+      // colour composited through the WHOLE ancestor opacity chain, against the first opaque
+      // surface under it — and holds the result to A01's 4.5:1. Re-dimming the row anywhere up
+      // that chain reddens the row, and design-guard's token pairing keeps scoring the rest.
+      const label = aroundRow ? aroundRow.querySelector('.set-k') : null;
+      const dimmedBy = [];
+      let effOpacity = 1;
+      for (let n = label; n && n !== document.documentElement; n = n.parentElement) {
+        const o = parseFloat(getComputedStyle(n).opacity);
+        effOpacity *= o;
+        if (o !== 1) dimmedBy.push(`${n.className || n.tagName}@${o}`);
+      }
+      const rgb = (s) => s.match(/[\d.]+/g).slice(0, 3).map(Number);
+      let surface = [255, 255, 255];
+      for (let n = label; n; n = n.parentElement) {
+        const bg = getComputedStyle(n).backgroundColor;
+        if (bg && !/^rgba\(0, 0, 0, 0\)$|transparent/.test(bg)) {
+          surface = rgb(bg);
+          break;
+        }
+      }
+      const lum = (c) =>
+        c
+          .map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+          .reduce((a, ch, i) => a + [0.2126, 0.7152, 0.0722][i] * ch, 0);
+      const shown = label
+        ? rgb(getComputedStyle(label).color).map((c, i) => c * effOpacity + surface[i] * (1 - effOpacity))
+        : surface;
+      const [hi, lo] = [lum(shown), lum(surface)].sort((a, b) => b - a);
       return {
         allFour: ['workingHoursStart', 'workingHoursEnd', 'pickerWindowMode', 'pickerAroundHours'].every(
           (k) => keys.includes(k),
@@ -5565,6 +5678,8 @@ async function sceneTimelineWindow(browser) {
         endValue: end ? end.value : null,
         aroundDisabled: !!(around && around.disabled),
         aroundRowOff: !!(aroundRow && aroundRow.classList.contains('off')),
+        labelDimmedBy: dimmedBy,
+        labelContrast: label ? Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100 : 0,
       };
     });
 
@@ -5638,6 +5753,8 @@ async function sceneTimelineWindow(browser) {
       probe.endValue === '15:00' &&
       probe.aroundDisabled &&
       probe.aroundRowOff &&
+      probe.labelDimmedBy.length === 0 &&
+      probe.labelContrast >= 4.5 &&
       !!set &&
       set.key === 'pickerWindowMode' &&
       set.value === 'around_now' &&
@@ -5652,7 +5769,9 @@ async function sceneTimelineWindow(browser) {
       ok,
       `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
         `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
-        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}); mode flip fired ` +
+        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}) with its LABEL ` +
+        `undimmed (dimmed ancestors=[${probe.labelDimmedBy.join(', ') || 'none'}], as-rendered ` +
+        `contrast ${probe.labelContrast}:1 ≥ 4.5); mode flip fired ` +
         `setSetting=${JSON.stringify(set)} and enabled Around (${afterFlip.aroundEnabled}); ` +
         `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
         `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
