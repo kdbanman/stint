@@ -1206,7 +1206,18 @@ overlapping backfill raises the SAME non-blocking inline `#overlap-banner` the
 edit/start paths use — the entry still saves, §06 R4; a core validation reject
 (`stop time must be after start time`) shows in `#add-warning` as a block, read
 through the one `SU.errMessage` mapping site that strips Electron's IPC wrapper
-and the exception class — issue 138). The
+and the exception class — issue 138 — and **painted as one**: `#add-warning` is
+the region that serves BOTH message kinds, so `showFormError` sets the `error`
+state class that flips its `--flag` advisory base chrome to the `--danger` block
+palette (design.html D15). Until issue 139 it had no such state and a refusal
+wore the amber advisory chrome — colour saying "saved with a caveat" over a
+sentence saying "nothing was written", D15 exactly inverted; JUDGE
+`ADD_REFUSAL_PALETTE` (`add-refusal-palette.png`) now scores both states of the
+one region on COMPUTED colour — a refused Save is the `--danger` triple with the
+form open and `__ADDED__` null, Cancel-and-reopen returns the region to the
+`--flag` triple, and the same form's committing overlapping backfill raises its
+"allowed, but flagged" banner in `--flag` — plus that the two triples differ, so
+a token collapse cannot pass the split vacuously). The
 warned-not-blocked behaviour is proven surface-neutral on core AND tt by
 `features/overlap_and_editing.feature` ("Backfill that overlaps an existing
 entry is warned, not blocked" + the attribute-bearing "Attribute-bearing
@@ -1663,14 +1674,30 @@ browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
 (acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
-GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+`FIELD_LABELS` + GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
 out of the tab order and unwalked — the blind spot issue 135 fell through, where
 the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). No new IPC channel (pure renderer), so
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). JUDGE `FIELD_LABELS`
+(`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
+design.html **D13** — every field carries a VISIBLE label, which is also the
+§07 field-border exemption A01 is conditioned on. The app had been labelling
+fields with placeholder text, so the name vanished on the first keystroke; the
+start form's four attribute fields had no accessible name at all, and
+`#add-desc` / `#search` / `#rep-name` carried a placeholder plus an INVISIBLE
+`aria-label`. The scene drives all five views into the states that hold fields
+(the Timer start-details disclosure, the Entries add form + Custom range, the
+Reports builder + Custom range, Settings) and sweeps every visible
+`input`/`select`/`textarea` for two facts: a programmatic name that is not its
+placeholder, and a persistent VISIBLE element supplying it — through a
+`<label>`, `aria-labelledby`, or the row-heading idiom the control bars and
+settings rows use (`.report-lab` / `.set-k`), whose members are named in the
+justification so the population stays reviewable. Nothing caught this before
+because `design-guard.test.ts` scores tokens, contrast and spacing; label
+presence is a structural fact about the DRIVEN DOM. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
@@ -1741,7 +1768,16 @@ sub-facts (an incomplete custom range → zero `saveReport` , the missing field
 focused; a duplicate name whose message persists past the tick), and the
 duplicate-name contract in BDD `features/saved_reports.feature` (run TWICE over
 core + `tt` ); JUDGE `WRITE_REJECTION_FEEDBACK` is the edit-mode Stop-before-Start twin + the
-split-outside-span refusal. **What the surfaced
+split-outside-span refusal. **What the surfaced message is PAINTED in
+(design.html D15, issue 139)** — the dedicated `.form-error` regions are the
+`--danger` block palette by construction, but the two regions that serve BOTH
+message kinds (the add form's `#add-warning`, the Entries `#overlap-banner`)
+take danger from an `error` state class instead, so their `--flag` advisory base
+chrome stays available to the allowed-but-flagged writes it is for.
+`showFormError` /`clearFormError` set and clear it (the class cannot outlive its
+message), the same modifier `showWriteError` already put on the banner; JUDGE
+`ADD_REFUSAL_PALETTE` scores the add form's two states apart on computed
+colour. **What the surfaced
 message READS (issue 138)** — the app painted Electron's whole
 `ipcRenderer.invoke` rejection: "Error invoking remote method 'edit':
 StoreError: start time is in the future", and in the add form core's own
