@@ -70,8 +70,9 @@
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
-  .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
+  /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
+  .sw{width:36px;height:24px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
@@ -85,7 +86,10 @@
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
-  .tag b{color:var(--muted);cursor:pointer;font-weight:450}
+  /* A03: the removable × is a real button around a 24×24 target — the negative margins keep
+     the chip the size it always was, so only the hit area is bigger than the 11px glyph. */
+  .tag .tag-x{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin:-4px;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
+  .tag .tag-x .ic{width:11px;height:11px}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
   .pill.run{color:var(--run);background:var(--run-weak);border-color:color-mix(in srgb, var(--run) 30%, transparent)}
   .pill.warn{color:var(--flag);background:var(--flag-bg);border-color:var(--flag-line)}
@@ -154,10 +158,15 @@
      ink tick, chip lift, no accent. */
   .ev.on{box-shadow:var(--sh-pop);z-index:3}
   .ev.wck{padding-left:28px}
-  .ev .ck{position:absolute;top:5px;left:5px;z-index:6;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);display:flex;align-items:center;justify-content:center}
-  .ev .ck.on{box-shadow:var(--sh-chip)}
+  /* A03: a 24×24 target painted as the 16px box it always was — the 4px border is transparent,
+     the paper fill is clipped to the padding box, and the neutral edge is an inset shadow, so
+     the painted corner keeps the recorded D08 4px exemption (8px ring − 4px border). */
+  .ev .ck{position:absolute;top:1px;left:1px;z-index:6;width:24px;height:24px;border-radius:var(--r1);border:4px solid transparent;background:var(--paper);background-clip:padding-box;box-shadow:inset 0 0 0 1.5px var(--rule-strong);display:flex;align-items:center;justify-content:center}
+  .ev .ck.on{box-shadow:inset 0 0 0 1.5px var(--rule-strong),var(--sh-chip)}
   .ev .ck .ic{width:11px;height:11px;color:var(--ink)}
-  .ev .ops{position:absolute;top:4px;right:4px;z-index:5;display:flex;gap:2px;padding:2px;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r1);box-shadow:var(--sh-raise)}
+  /* no padding of its own: the 24px corner-checkbox target and this chip both have to fit the
+     block's width, and the buttons' own 24×24 boxes are the breathing room */
+  .ev .ops{position:absolute;top:4px;right:4px;z-index:5;display:flex;gap:2px;padding:0;background:var(--paper);border:1px solid var(--rule);border-radius:var(--r1);box-shadow:var(--sh-raise)}
   .ev .ops button{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border:0;border-radius:var(--r1);background:none;color:var(--muted);cursor:pointer}
   .ev .ops button:hover{background:var(--hover);color:var(--ink)}
   .ev .ops .ic{width:13px;height:13px}
@@ -363,7 +372,7 @@
               <div class="dh"><span class="dw">Tue</span><b class="dd">23</b><span class="ds tnum">6.00h</span></div>
               <div class="dt">
                 <div class="ev wck on" style="top:88px;height:143px"><span class="ck on"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">Client call: Project Alpha</span><span class="bc">Globex Corp</span><span class="bt">09:00 – 12:15</span></div>
-                <div class="ev wck on" style="top:220px;height:121px;padding-top:24px"><span class="ck on" style="top:14px"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">Market research</span><span class="bc">Initech</span><span class="bt">12:00 – 14:45</span></div>
+                <div class="ev wck on" style="top:220px;height:121px;padding-top:24px"><span class="ck on" style="top:10px"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">Market research</span><span class="bc">Initech</span><span class="bt">12:00 – 14:45</span></div>
                 <div class="ov" style="top:220px;height:11px"><span class="otag">overlap 15m</span></div>
               </div>
             </div>
