@@ -487,8 +487,16 @@ s {
 
 /* The toolbar search box — a restrained warm field, pushed to the right. Never the accent.
    design.html D13 (issue 136): the label wrapper carries the visible name and the trailing
-   margin that pushes the pair right; the inner .search span stays the field chrome it always
-   was, so the box itself is unchanged. */
+   margin that pushes the pair right.
+
+   D13 again (issue 149): the FIELD CHROME lives on the input, not on a wrapper around it.
+   The .search span used to carry the border, radius and padding while nothing reset the
+   real <input>, so Chromium's UA chrome — a 2px inset border, square corners, an off-grid
+   1px 2px padding — painted a second field inside the designed one, and the D13 focus
+   idiom (accent border + 3px ring) landed on that inner 185x21 box rather than on the
+   rounded outline the user sees. Styling the element that actually takes focus overrides
+   the UA declarations in the one place they can be overridden, and gives the ring the box
+   it belongs to. The wrapper is now only a positioning host for the magnifier. */
 .search-field {
   display: inline-flex;
   align-items: center;
@@ -498,14 +506,31 @@ s {
   color: var(--muted);
 }
 .search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+/* The magnifier is a mark INSIDE the field, so it is taken out of flow (it must not push
+   the input's text box around) and made inert to the pointer — a click anywhere over the
+   box lands on the input, which is the whole affordance. The input reserves its lane with
+   padding-left instead. */
+.search .ic {
+  position: absolute;
+  left: 12px;
+  pointer-events: none;
+}
+/* Class-scoped, NOT `#search`: an id selector would outrank the one `input:focus-visible`
+   rule below and silently take D13's focus border back off the field (the cascade trap the
+   focus doctrine header records). At this weight the later focus rule wins, as it must. */
+.search input {
   font-family: var(--sans);
   font-size: 12.5px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
-  padding: 8px 12px;
-  min-width: 200px;
+  padding: 8px 12px 8px 36px;
+  min-width: 220px;
 }
 
 /* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets, the
