@@ -234,7 +234,7 @@
     <h3>Recorded traps</h3>
     <ul class="d">
       <li><code>gui/tsconfig.main.json</code> uses an explicit file list — a new <code>gui/src</code> module is invisible to the build until added there.</li>
-      <li><code>gui/judge/</code> and <code>gui/qa/</code> are ESLint-exempt apparatus — nothing lints them, so read twice before trusting.</li>
+      <li><code>gui/judge/</code> and <code>gui/qa/</code> were ESLint-exempt apparatus until issue #184 — the exemption was one <code>languageOptions</code> block away from unnecessary, and turning the linter on found five real defects. They now lint under browser+node globals like the renderer; the trap it left behind is that three separate findings (#165, #176, and #184's own) hid in that gap first.</li>
     </ul>
   </section>
 
