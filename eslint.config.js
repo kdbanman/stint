@@ -12,10 +12,6 @@ export default tseslint.config(
       '**/dist/**',
       '**/node_modules/**',
       'coverage/**',
-      'packages/gui/judge/**',
-      // The QA discovery driver — like the judge, a Playwright harness whose page-context
-      // snippets need browser globals; excluded on the same grounds.
-      'packages/gui/qa/**',
       '.claude/**',
     ],
   },
@@ -48,6 +44,27 @@ export default tseslint.config(
     languageOptions: {
       globals: { ...globals.browser },
       parserOptions: { ecmaVersion: 2023, sourceType: 'script' },
+    },
+    rules: {
+      // tseslint's recommended set already applies its no-unused-vars here; keep the one
+      // configured rule and silence the base duplicate.
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrorsIgnorePattern: '^_' },
+      ],
+      'no-empty': ['error', { allowEmptyCatch: true }],
+    },
+  },
+  {
+    // The judge and QA Playwright harnesses (issue #184). These were exempt on the grounds
+    // that their page-context snippets need browser globals — the same problem issue #83
+    // already solved for the renderer above, one languageOptions block away. Node globals
+    // for the harness half, browser globals for the strings it evaluates in the page.
+    files: ['packages/gui/judge/**/*.mjs', 'packages/gui/qa/**/*.mjs'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+      parserOptions: { ecmaVersion: 2023, sourceType: 'module' },
     },
     rules: {
       // tseslint's recommended set already applies its no-unused-vars here; keep the one
