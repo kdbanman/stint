@@ -63,22 +63,45 @@ describe('GOLD — every declared mark render is committed (design.html D19)', (
   });
 });
 
-describe('GOLD — the component sheet renders the real mark (design.html D19)', () => {
-  const sheet = read('../../../context/mockups/design-system.html');
+describe('GOLD — the mockups render the real mark (design.html D19)', () => {
+  // Two mockups carry a generated block now: the component sheet (the mark's own documentation)
+  // and the tray popover, whose menu-bar extra used to be an invented tomato pill the tray
+  // cannot produce — the invention that let #162 go unnoticed (issue #157).
+  const marked: ReadonlyArray<readonly [file: string, renders: number]> = [
+    ['design-system.html', 3],
+    ['tray-popover.html', 1],
+  ];
 
-  it('keeps the STINT-MARK markers the generator writes between', () => {
-    // Same contract as the STINT-TOKENS block: the markers ARE the seam. A sheet without
+  it.each(marked.map(([f]) => f))('%s keeps the STINT-MARK markers the generator writes between', (f) => {
+    // Same contract as the STINT-TOKENS block: the markers ARE the seam. A mockup without
     // them is an error the generator refuses to guess its way past, so losing them here
-    // would silently stop the sheet from ever updating again.
-    expect(sheet).toMatch(/STINT-MARK start/);
-    expect(sheet).toMatch(/STINT-MARK end/);
+    // would silently stop that mockup from ever updating again.
+    const html = read(`../../../context/mockups/${f}`);
+    expect(html).toMatch(/STINT-MARK start/);
+    expect(html).toMatch(/STINT-MARK end/);
   });
 
-  it('embeds the mark itself, not a hand-drawn stand-in', () => {
-    const block = sheet.slice(sheet.indexOf('STINT-MARK start'), sheet.indexOf('STINT-MARK end'));
-    // Three data-URI renders — the app icon plus both tray states — so the sheet cannot
-    // illustrate a mark the OS does not actually show.
-    expect(block.match(/data:image\/png;base64,/g) ?? []).toHaveLength(3);
+  it.each(marked.map(([f, n]): [string, number] => [f, n]))(
+    '%s embeds the mark itself, not a hand-drawn stand-in',
+    (f, renders) => {
+      const html = read(`../../../context/mockups/${f}`);
+      const block = html.slice(html.indexOf('STINT-MARK start'), html.indexOf('STINT-MARK end'));
+      // The sheet carries three renders — the app icon plus both tray states; the popover
+      // carries the one the menu bar actually shows. Either way the mockup cannot illustrate
+      // a mark the OS does not draw.
+      expect(block.match(/data:image\/png;base64,/g) ?? []).toHaveLength(renders);
+    },
+  );
+
+  it('the popover shows the TEMPLATE glyph — the monochrome one macOS draws (D19/D20)', () => {
+    // The alpha-only render, not the panel one: a menu-bar extra is a template image whose
+    // colour macOS discards. Embedding the panel (tomato) render here would put a colour in
+    // the menu bar that no user can ever see, which is the shape of the original defect.
+    const popover = read('../../../context/mockups/tray-popover.html');
+    const template = readFileSync(
+      fileURLToPath(new URL('../assets/trayRunningTemplate@2x.png', import.meta.url)),
+    ).toString('base64');
+    expect(popover).toContain(template);
   });
 });
 
