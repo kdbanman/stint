@@ -152,7 +152,6 @@ export function taggedState() {
 // (10↔11, 30m) and a SLEPT entry (12, raw 4h trimmed to 3h). On the readonly calendar the pair
 // paints `.ov` warn bands and the slept entry the `.zz` hatch; opening each in the unified editor
 // shows the overlap detail and the reversible subtract/restore control (struck raw-vs-trimmed).
-// (No longer a JUDGE-scene fixture — the FLAG_IN_CONTEXT scene is retired; kept for the recording.)
 export function flaggedState() {
   return {
     status: { running: false, entry: null },
@@ -603,8 +602,8 @@ export function mergeGapState() {
 /**
  * A single closed entry the OVERLAP_BANNER scene edits to create an overlap. The state
  * itself carries no overlap flag yet — the banner is the AT-WRITE-TIME signal, raised by
- * the WriteAck the mock returns when the edit fires (see initScript's `overlapAck`),
- * which is independent of the durable per-row flag (§06 R4).
+ * the WriteAck the mock returns when the edit fires (initScript's `overlap` option, which
+ * fills `window.__ACK__`), which is independent of the durable per-row flag (§06 R4).
  */
 export function overlapWriteState() {
   return {

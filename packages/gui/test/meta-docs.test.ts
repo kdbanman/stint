@@ -9,7 +9,7 @@
  * bind-two-homes pattern (parity.test.ts / build-matrix.test.ts / cli.test.ts) to the
  * CHECKABLE half of that meta-layer, by static inspection of the two docs (no build/network):
  *
- *   1. context/prd.html contains NO status-marker markup — the §81 badge deletion holds, so a
+ *   1. context/prd.html contains NO status-marker markup — the #81 badge deletion holds, so a
  *      re-introduced `<span class="st …">implemented|partial|todo</span>` (or its CSS/legend)
  *      FAILS CI instead of quietly returning as spec-looking status.
  *   2. Every STRUCTURED file path COVERAGE.md cites exists in the tree — a dangling proof-map
@@ -30,7 +30,7 @@ const read = (rel: string): string => readFileSync(join(repoRoot, rel), 'utf8');
 const prd = read('context/prd.html');
 const coverage = read('acceptance/criteria/COVERAGE.md');
 
-describe('GOLD — prd.html carries no implementation-status markers (§81)', () => {
+describe('GOLD — prd.html carries no implementation-status markers (#81)', () => {
   it('has no status-marker span markup', () => {
     // The deleted badge shape was `<span class="st st-done">implemented</span>` (also
     // st-partial / st-todo, and the bare "done" text). Any survivor or re-introduction:
@@ -102,7 +102,7 @@ for (const raw of coverage.match(/`[^`]+`/g) ?? []) {
   citations.add(t);
 }
 
-describe('GOLD — every file path COVERAGE.md cites exists in the tree (§81)', () => {
+describe('GOLD — every file path COVERAGE.md cites exists in the tree (#81)', () => {
   it('has no dangling proof-map references', () => {
     const dangling = [...citations].filter((c) => !existsInTree(c)).sort();
     expect(dangling).toEqual([]);
