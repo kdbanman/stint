@@ -122,14 +122,22 @@ function clearOverlapBanner() {
 // stays until the next input on that form clears it. `showFormError`/`clearFormError` are the
 // shared primitives the edit form, split confirm and inline rename all use; the report builder
 // and the popover own their own regions but read the message through the same SU.errMessage.
+//
+// design.html D15: a refusal is a BLOCK, so the region it lands in must read in the --danger
+// palette — never the --flag advisory one. The dedicated `.form-error` regions are danger by
+// construction; a region that serves BOTH kinds (the add form's #add-warning, whose base chrome is
+// the warn advisory) takes danger from the `error` state class these two set and clear, the same
+// modifier showWriteError puts on #overlap-banner. Setting it on an always-danger region is inert.
 function showFormError(el, err) {
   if (!el) return;
   el.textContent = errMessage(err);
+  el.classList.add('error');
   el.hidden = false;
 }
 function clearFormError(el) {
   if (!el) return;
   el.textContent = '';
+  el.classList.remove('error');
   el.hidden = true;
 }
 
@@ -496,7 +504,9 @@ function renderTimerCard(running) {
       }
     }
   }
-  $('timer-state').textContent = running ? 'running' : 'idle';
+  // The word goes into the inner span, not the whole .state line — the line also holds the
+  // D05 dot, and writing textContent on the line would delete it (issue #142).
+  $('timer-state-word').textContent = running ? 'running' : 'idle';
   if (running) {
     $('timer-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
     $('timer-desc').textContent = running.description ?? 'your timer';
@@ -1054,10 +1064,21 @@ async function mergeSelected(acknowledgedGap = false) {
   );
 }
 
+// The Escape listener belonging to the prompt currently up, held at module scope so
+// closeMergeConflict detaches it wherever the modal ends. Null whenever no prompt is open.
+let mergeConflictEscape = null;
+
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
 // helper so app.js owns the modal's lifecycle end to end
 // — the two share the `.editor-backdrop` chrome but not the code path.
+// Every dismissal route (Cancel, the header ×, the backdrop, Escape, and the commit itself)
+// funnels through here, so detaching the key listener once here is what keeps it from
+// outliving the modal it belongs to.
 function closeMergeConflict() {
+  if (mergeConflictEscape) {
+    document.removeEventListener('keydown', mergeConflictEscape);
+    mergeConflictEscape = null;
+  }
   document.querySelector('.editor-backdrop')?.remove();
 }
 
@@ -1167,6 +1188,16 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   backdrop.addEventListener('click', (ev) => {
     if (ev.target === backdrop) closeMergeConflict();
   });
+  // Craft checklist §4 — Esc cancels the innermost thing, which while this is up is the modal
+  // itself (issue 147: the app's ONE modal ignored Escape, so a keyboard user mid-merge had no
+  // way out). It is a CANCEL, not a confirm: it calls exactly what .mc-cancel calls, so no field
+  // resolution is applied and no merge is written — one dismissal behaviour, not two.
+  // The listener is on `document`, not the dialog: the prompt mounts on <body> and takes no
+  // focus when it opens, so a dialog-scoped keydown would never see the press.
+  mergeConflictEscape = (ev) => {
+    if (ev.key === 'Escape') closeMergeConflict();
+  };
+  document.addEventListener('keydown', mergeConflictEscape);
   return dialog;
 }
 
@@ -1394,8 +1425,12 @@ async function openEntryForm(row, e) {
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
     // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
     // only the OUTER whitespace and preserves every interior newline, so the stored record stays
-    // verbatim.
-    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
+    // verbatim. design.html D13 (issue 136): it carries the same visible `.uf-field` label its
+    // Client / Project / Tags siblings below do — edit mode had the add form's exact defect, the
+    // one unlabelled field in an otherwise labelled column. The placeholder stays: "(no
+    // description)" describes the EMPTY state, it does not repeat the label.
+    `<label class="uf-field uf-desc"><span>Description</span>` +
+    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea></label>` +
     `<label class="uf-field"><span>Client</span>` +
     `<select class="edit-client uf-select"></select></label>` +
     // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
@@ -2287,9 +2322,9 @@ async function openAddForm() {
   const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
   $('add-from').value = localInputValue(hourAgo);
   $('add-to').value = localInputValue(now);
-  const warn = $('add-warning');
-  warn.hidden = true;
-  warn.textContent = '';
+  // Through the shared primitive, so a refusal's `error` state class cannot outlive the message
+  // and leave the next OVERLAP ADVISORY wearing the block palette (design.html D15, issue 139).
+  clearFormError($('add-warning'));
   // Collapse the Start/Stop expander — the inline picker is the primary picking surface (G2).
   const timesBody = $('add-times-body');
   if (timesBody) timesBody.hidden = true;
@@ -2316,9 +2351,7 @@ function closeAddForm() {
   const timesBody = $('add-times-body');
   if (timesBody) timesBody.hidden = true;
   $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
-  const warn = $('add-warning');
-  warn.hidden = true;
-  warn.textContent = '';
+  clearFormError($('add-warning'));
 }
 
 async function submitAddForm() {
@@ -2366,7 +2399,8 @@ async function submitAddForm() {
   } catch (err) {
     // Validation rejection from core (e.g. "stop time must be after start time"): show it in
     // the form rather than throwing, so the user can correct the times. This is a
-    // BLOCK (the entry did not save), distinct from the overlap WARNING above.
+    // BLOCK (the entry did not save), distinct from the overlap WARNING above — so
+    // showFormError flips the region to the --danger block palette (design.html D15).
     showFormError(warn, err);
   }
 }
