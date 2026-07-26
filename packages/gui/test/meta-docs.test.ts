@@ -113,3 +113,53 @@ describe('GOLD — every file path COVERAGE.md cites exists in the tree (§81)',
     expect(citations.size).toBeGreaterThan(50);
   });
 });
+
+/**
+ * GOLD — the skill set and process.html name the same skills (issue #133).
+ *
+ * process.html §03/§06 specify the agentic process by naming its skills; the skills live in
+ * `.claude/skills/*`. Two hand-maintained homes for one fact, and the rename that motivated
+ * this check (the `*-review` → `*-audit` sweep, the two triage skills merged into
+ * `triage-discoveries`) is exactly the drift it catches: a skill dir renamed without the doc
+ * following leaves the doc naming a skill that no longer exists, which reads as current
+ * specification. Both directions, per the repo's bind-two-homes-or-fail-loud pattern.
+ *
+ * Scope is deliberately the NAMES only — that a skill dir exists and the doc mentions it. What
+ * each skill does, and whether the doc describes it correctly, stays the sync audit's judgment
+ * call (§06); no static check can decide it.
+ */
+const SKILLS_DIR = '.claude/skills';
+const skillDirs = readdirSync(join(repoRoot, SKILLS_DIR), { withFileTypes: true })
+  .filter((e) => e.isDirectory())
+  .map((e) => e.name)
+  .sort();
+const process_ = read('context/process.html');
+
+describe('GOLD — .claude/skills and process.html name the same skills (#133)', () => {
+  it('found the skill set (the reader is not silently empty)', () => {
+    expect(skillDirs.length).toBeGreaterThan(5);
+  });
+
+  it('every skill dir is named in process.html', () => {
+    const unnamed = skillDirs.filter((s) => !process_.includes(`<code>${s}</code>`));
+    expect(unnamed).toEqual([]);
+  });
+
+  it('every skill process.html names exists as a dir', () => {
+    // Only `<code>` spans that look like a skill name (kebab-case, no dot, no slash) —
+    // process.html cites files and commands in the same markup.
+    const cited = new Set<string>();
+    for (const m of process_.matchAll(/<code>([a-z][a-z0-9]*(?:-[a-z0-9]+)+)<\/code>/g)) {
+      const name = m[1];
+      if (name !== undefined && !name.includes('.')) cited.add(name);
+    }
+    const known = new Set(skillDirs);
+    // The only kebab-case `<code>` spans process.html uses for something that is NOT a skill:
+    // the orphan evidence branch and the CI job. Kept as an explicit two-name exception rather
+    // than a looser pattern, so a THIRD such name has to be added deliberately here — which is
+    // the moment to check it isn't actually a skill the doc invented.
+    const NOT_SKILLS = new Set(['qa-evidence', 'pack-smoke']);
+    const dangling = [...cited].filter((c) => !known.has(c) && !NOT_SKILLS.has(c)).sort();
+    expect(dangling).toEqual([]);
+  });
+});

@@ -5,11 +5,11 @@ description: Run a recurring adversarial design audit — judge the running GUI 
 
 # Adversarial design audit
 
-One session, three phases in order — the design sibling of `arch-review`. The
+One session, three phases in order — the design sibling of `arch-audit`. The
 charter: **judge how the product looks, reads, and feels** against
 `context/design.html` (the binding rules), the platform grammar, and the craft
 corpus in `references/` — never against private taste. Functional defects are
-`qa-sweep`'s job; requirements critique is `arch-review`'s; this session is
+`qa-audit`'s job; requirements critique is `arch-audit`'s; this session is
 about the surface: hierarchy, alignment, colour, type, states, motion,
 interaction feel.
 
@@ -17,8 +17,8 @@ Two kinds of output, routed differently:
 
 - **Defects** — the spec or a checklist rule is violated (a token bypassed, a
   floor missed, a state unhandled, a misalignment): one GitHub issue per
-  confirmed problem, labeled **Agentic Design Review Discovery**, triaged by
-  the `triage-arch-findings` skill (its scope covers both discovery labels).
+  confirmed problem, labeled **Agentic Discovery** + **Agentic Design Audit**,
+  triaged by the `triage-discoveries` skill.
 - **Opportunities** — the spec is satisfied but the design could be better (a
   new idiom, a palette evolution, dark mode): appended to the standing
   **Design opportunities** issue, one-line handle each. Never filed as defects.
@@ -74,7 +74,8 @@ opportunities, not defects.
 
 ## Phase 3 — file
 
-- One issue per confirmed problem, labeled **Agentic Design Review Discovery**:
+- One issue per confirmed problem, labeled **Agentic Discovery** + **Agentic
+  Design Audit**:
   the problem in one sentence (name the idea); the violated rule id or
   checklist item; evidence (screenshot, measurement, file:line); severity and
   confidence, honestly. Problem capture only — no solution sections.
