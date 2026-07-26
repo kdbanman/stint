@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -69,6 +69,16 @@ async function withPage(browser, state, name, fn, initOpts = {}) {
   await page.close();
   return result;
 }
+
+// Issue 138 — what a refused write must never read like. Three internals leaked at once into
+// the app's error regions: Electron's `ipcRenderer.invoke` wrapper ("Error invoking remote
+// method 'edit': …"), the thrown class name ("StoreError: "), and — from core's own message —
+// `tt`'s flag names ("--to must be after --from"), naming controls that exist nowhere in the
+// GUI. The mocks now reject in Electron's real wrapped shape (fixtures.mjs __IPC_REJECT__), so
+// this predicate is a genuine question about what the USER READS, not about the fixture:
+// a non-empty message with none of the three in it. Every rejection scene folds it in.
+const TRANSPORT_LEAK = /Error invoking remote method|StoreError|(^|\s)--[a-z]/;
+const readsClean = (message) => typeof message === 'string' && message.length > 0 && !TRANSPORT_LEAK.test(message);
 
 const results = [];
 // `pass` is true/false for the deterministic, gating facts; null marks an item that
@@ -504,7 +514,11 @@ async function scenePopoverReject(browser) {
     const ok =
       refused.shown &&
       refused.announced &&
-      /stop time is before the entry started/.test(refused.message) &&
+      // Issue 138: the popover reads the same one mapping site (SU.errMessage), so the
+      // Electron-wrapped rejection must land here as the reason ALONE — the tray surface is
+      // the smallest region in the app and had the least room for a transport sentence.
+      refused.message === 'stop time is before the entry started' &&
+      readsClean(refused.message) &&
       refused.toggleLive &&
       refused.stillRunning &&
       refused.openPresent &&
@@ -954,6 +968,10 @@ async function sceneFutureStartGuard(browser) {
 
     const ok =
       refused.shown && refused.announced && refused.notWritten && refused.stillRunning && refused.stopStillThere &&
+      // Issue 138 — the exact string the design-audit sweep captured from this region was
+      // "Error invoking remote method 'edit': StoreError: start time is in the future". The
+      // mock rejects in that same wrapped shape now, so the region must read the reason alone.
+      refused.message === 'start time is in the future' && readsClean(refused.message) &&
       corrected.warningCleared && corrected.editedStart === '2026-06-24T22:00:00.000Z' && corrected.noEnd &&
       stopped.idle;
     record(
@@ -2531,15 +2549,27 @@ async function sceneWriteRejectionFeedback(browser) {
       });
     }, { rejectWrites: true });
 
+    // (e) issue 138 — WHAT THE USER READS. Each mock rejects in Electron's real wrapped shape,
+    // so every one of these four regions is a chance to paint "Error invoking remote method
+    // 'edit': StoreError: …" (which the app did). Each must read as the reason alone: the four
+    // kernels exactly, with no invoke wrapper, no exception class, no `tt` flag name.
+    const copyOk =
+      editReject.message === 'entry end must be after its start' &&
+      splitReject.message === 'split point must be strictly inside the entry span' &&
+      renameReject.message === 'a client named that already exists' &&
+      toggleReject.message === 'stop time is before the entry started' &&
+      [editReject, splitReject, renameReject, toggleReject].every((r) => readsClean(r.message));
+
     const ok =
       editReject.formOpen && editReject.shown && editReject.announced && editReject.notWritten &&
       splitReject.formOpen && splitReject.shown && splitReject.announced && splitReject.notWritten &&
       renameReject.formOpen && renameReject.shown && renameReject.announced && renameReject.notWritten &&
-      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors;
+      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors &&
+      copyOk;
     record(
       'WRITE_REJECTION_FEEDBACK',
       ok,
-      `edit-save=${JSON.stringify(editReject)} split=${JSON.stringify(splitReject)} rename=${JSON.stringify(renameReject)} toggle=${JSON.stringify(toggleReject)}`,
+      `edit-save=${JSON.stringify(editReject)} split=${JSON.stringify(splitReject)} rename=${JSON.stringify(renameReject)} toggle=${JSON.stringify(toggleReject)} copy-reads-clean=${copyOk}`,
       'main-edit-reject.png',
     );
   }
@@ -3782,6 +3812,11 @@ async function sceneReportsView(browser) {
       refuseInverted.builderOpen &&
       refuseInverted.warnPersists &&
       /before/i.test(refuseInverted.message) &&
+      // Issue 138: the builder's #rep-warning reads through the same SU.errMessage, so the
+      // Electron-wrapped rejection arrives as the reason alone — the report builder is where
+      // the `[object Object]` fork lived (#168) and it must not grow a transport fork either.
+      refuseInverted.message === 'report range end must not be before its start' &&
+      readsClean(refuseInverted.message) &&
       refuseInverted.cardCount === 2;
     // (h) STATES.md Reports × empty: the zero-defs page shows the visible instructive state.
     const emptyOk =
@@ -4980,6 +5015,38 @@ async function sceneSoftwareUpdate(browser) {
         { update: { ...UPDATE_FIXTURE, downloadError: true } },
       );
 
+      // FAILED CHECK (STATES.md Settings × error; issue 138) — a third page whose Check now
+      // resolves the ERROR verdict. This is the surface that reported
+      // `net::ERR_NAME_NOT_RESOLVED` to a user: the check forwarded whatever Electron's `net`
+      // threw, and Chromium throws error CODES. The result line must read the SHIPPING
+      // sentence (imported, not re-typed) and name no transport at all, with Check now back
+      // in place — a failed check is worded and retryable, never a dead button.
+      const checkFailure = await withPage(
+        browser,
+        softwareUpdateState(),
+        'index.html',
+        async (cp) => {
+          await cp.click('.nav-item[data-view="settings"]');
+          await cp.waitForSelector('#software-update .ver', { state: 'attached' });
+          await cp.click('#update-check');
+          await cp.waitForSelector('#software-update .update-result.err', { state: 'attached' });
+          await cp.screenshot({ path: join(EVIDENCE, 'main-software-update-check-error.png'), fullPage: true });
+          return cp.evaluate(() => {
+            const err = document.querySelector('#software-update .update-result.err');
+            const retry = document.querySelector('#update-check');
+            return {
+              checked: window.__CHECKED__ === true,
+              shown: !!err && err.textContent.trim().length > 0,
+              announced: err?.getAttribute('role') === 'status',
+              message: err?.textContent?.trim() ?? '',
+              retryPresent: !!retry && !retry.disabled,
+              noDownload: !document.querySelector('#update-download'),
+            };
+          });
+        },
+        { update: { ...UPDATE_FIXTURE, checkFails: true } },
+      );
+
       const versionOk = versionShown === UPDATE_FIXTURE.version;
       const checkOk =
         afterCheck.checked &&
@@ -5010,12 +5077,22 @@ async function sceneSoftwareUpdate(browser) {
         errorPhase.errMessage === 'The update download failed.' &&
         errorPhase.retryPresent &&
         errorPhase.noReveal;
+      // Issue 138 — a failed CHECK reads as copy, not as a Chromium error code.
+      const checkFailureOk =
+        checkFailure.checked &&
+        checkFailure.shown &&
+        checkFailure.announced &&
+        checkFailure.message === UPDATE_CHECK_FAILED &&
+        !/net::|ERR_[A-Z_]+/.test(checkFailure.message) &&
+        checkFailure.retryPresent &&
+        checkFailure.noDownload;
       record(
         'SOFTWARE_UPDATE',
-        versionOk && checkOk && downloadOk && errorOk,
+        versionOk && checkOk && downloadOk && errorOk && checkFailureOk,
         `version row=${JSON.stringify(versionShown)} (R06); Check now → ${JSON.stringify(afterCheck)} (R03); ` +
           `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04); ` +
-          `rejected download → error phase ${JSON.stringify(errorPhase)}`,
+          `rejected download → error phase ${JSON.stringify(errorPhase)}; ` +
+          `failed check → ${JSON.stringify(checkFailure)} (issue 138)`,
         'main-software-update.png',
       );
     },

@@ -2273,7 +2273,7 @@ async function submitAddForm() {
     await load();
     applyAck(ack);
   } catch (err) {
-    // Validation rejection from core (e.g. "--to must be after --from"): show it in
+    // Validation rejection from core (e.g. "stop time must be after start time"): show it in
     // the form rather than throwing, so the user can correct the times. This is a
     // BLOCK (the entry did not save), distinct from the overlap WARNING above.
     showFormError(warn, err);

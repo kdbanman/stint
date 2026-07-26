@@ -151,6 +151,8 @@ Start a **socket monitor** before step 1 and leave it running for the whole chec
    GitHub API) and click **Check now** again.
    - [ ] The app does **not** crash or hang; it shows a **graceful error** message (e.g. it could
          not reach GitHub Releases), and the rest of Settings stays usable.
+   - [ ] The message is a **sentence for a person**, not the transport's words: no
+         `net::ERR_*` code, no stack, no HTTP status (issue 138).
 5. **The offline promise, live (§17 R09).** Re-enable the network, exercise every other feature of
    the app and `tt` for the rest of the session, then read the monitor.
    - [ ] The **only** outbound connection made by the app or `tt` for the whole session is the
