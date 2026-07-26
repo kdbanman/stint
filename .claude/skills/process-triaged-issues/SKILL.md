@@ -44,6 +44,11 @@ Collect the open issues labeled `Triaged` (or the set the user names) — plain
 **plus** the triage comment. Decisions recorded there are settled: do not
 re-ask them.
 
+Then read the batch's **handoff issue** — one per batch, labeled
+`Triaged Orchestration`, filed by `triage-discoveries`: the batch's sequencing,
+batching and dependency, which no per-issue comment carries. If none exists,
+work it out yourself before partitioning rather than proceeding without it.
+
 ## Step 2 — One batched requirements interview
 
 For the issues labeled `needs new requirement or AC`, run the
@@ -79,7 +84,8 @@ reviewable — when in doubt, split. A unit's PR names every issue it closes.
 
 Then sequence and batch deliberately — the backlog varies more in shape than
 a product-bugfix list (triaged arch issues especially), so don't just launch
-everything at once:
+everything at once. **The handoff issue is the starting partition.** Depart from
+it where the tree has moved since, and say so:
 
 - **Gate-strengthening first.** A unit that adds or tightens a deterministic
   gate (a schema, a binding test, a drift comparison) lands before units
@@ -155,6 +161,8 @@ Merging is not this skill's job.
 ## Definition-of-done checklist
 
 - [ ] All open `Triaged` issues gathered; bodies and triage comments read.
+- [ ] The batch's `Triaged Orchestration` handoff read (or worked out), and
+      carried into Step 3.
 - [ ] One batched grill held for every `needs new requirement or AC` issue;
       written synthesis signed off before any delegation.
 - [ ] Units partitioned; any multi-issue unit justified by a shared
