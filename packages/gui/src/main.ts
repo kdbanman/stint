@@ -36,11 +36,10 @@ import {
   evaluateCheckin,
   LAST_SEEN_KEY,
   type EntryView,
-  type WriteResult,
 } from '@stint/core';
-import { CHANNELS, type WriteAck, type UpdateProgress } from './ipc.js';
+import { CHANNELS, type UpdateProgress } from './ipc.js';
 import { createIpcHandlers } from './ipc-handlers.js';
-import { nextTimerAction } from './toggle.js';
+import { toggleTimer } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
 import {
   currentVersion,
@@ -106,27 +105,12 @@ function trayImage(running: boolean): Electron.NativeImage {
 // ---------------------------------------------------------------- transitions
 
 /**
- * Toggle the timer — stop if running, else resume the last entry (PRD §12 R2). It
- * returns the underlying write's warnings (a resume/start can land on an instant that
- * overlaps another entry, PRD §06 R4) so the renderer can surface them inline.
+ * The OS-bound caller of the timer toggle (PRD §12 R2): the global hotkey fires toggle.ts's
+ * {@link toggleTimer} — the same function the `toggle` IPC channel serves — so the hotkey
+ * and the popover's button can never drift apart. The accelerator binding wants a
+ * void-returning listener; the warnings only have a surface to land on over IPC.
  */
-function toggleTimer(): WriteAck {
-  const hasResumable = store.listEntries().length > 0;
-  let res: WriteResult<EntryView> | null = null;
-  switch (nextTimerAction(!!store.openEntry(), hasResumable)) {
-    case 'stop':
-      res = store.stop({});
-      break;
-    case 'resume':
-      res = store.resume();
-      break;
-    case 'start':
-      res = store.start({});
-      break;
-  }
-  refreshAll();
-  return { warnings: res?.warnings ?? [] };
-}
+const toggle = (): void => void toggleTimer(store, refreshAll);
 
 function broadcast(): void {
   for (const w of [popover, mainWindow]) {
@@ -331,7 +315,6 @@ function registerIpc(): void {
   const handlers = createIpcHandlers({
     store,
     refreshAll,
-    toggleTimer,
     showSaveDialog: (format, defaultPath) => {
       const options: Electron.SaveDialogSyncOptions = {
         title: format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
@@ -349,7 +332,7 @@ function registerIpc(): void {
     rebindGlobalHotkey: (previous, next) => {
       globalShortcut.unregister(previous);
       try {
-        globalShortcut.register(next, () => toggleTimer());
+        globalShortcut.register(next, toggle);
       } catch {
         // A malformed/occupied accelerator must not crash the app; the setting is still saved
         // (and provable on both surfaces), it just may not bind until corrected.
@@ -528,7 +511,7 @@ function init(): void {
   updateTray();
 
   // Global hotkey (PRD §12 R2, §14).
-  globalShortcut.register(store.settings().globalHotkey, () => toggleTimer());
+  globalShortcut.register(store.settings().globalHotkey, toggle);
 
   // Sleep flagging via powerMonitor (PRD §10a).
   powerMonitor.on('suspend', () => {
