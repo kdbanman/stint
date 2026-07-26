@@ -183,7 +183,12 @@ it just can't be fire-and-forget.
    update replaces the whole set, so include the originals (`Agentic Discovery`
    and the provenance label). Be frugal elsewhere: one comment per issue, no
    thread noise.
-5. **Report and route.** Summarize: issue → category → route table, the owner
+5. **File the handoff.** One issue per batch, labeled `Triaged Orchestration`:
+   a copy-pasteable prompt giving the batch's **sequencing, batching and
+   dependency** — what lands first, which issues share a load-bearing file,
+   what is blocked on what. Only what the per-issue comments cannot carry, never
+   a restated category or fix direction (§04).
+6. **Report and route.** Summarize: issue → category → route table, the owner
    decisions made, which issues are now `Triaged` backlog and which go where
    instead. **Do not open PRs or fix anything.**
 
@@ -205,4 +210,6 @@ it just can't be fire-and-forget.
 - [ ] Gate-modifying fixes carry the self-reference flag.
 - [ ] One comment per issue, house style; labels applied with originals
       preserved.
+- [ ] A `Triaged Orchestration` handoff issue filed: sequencing, batching,
+      dependency.
 - [ ] Final report tables the routing; no code touched, no PR opened.
