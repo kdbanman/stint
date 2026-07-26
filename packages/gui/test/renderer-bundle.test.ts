@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types needed.
 import { buildRendererBundle } from '../../../scripts/build-renderer.mjs';
-import { formatDuration, formatHours } from '@stint/core';
+import { DEFAULT_SETTINGS, formatDuration, formatHours } from '@stint/core';
 import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
 import { countUpSeconds } from '../src/timerview.js';
@@ -131,6 +131,17 @@ describe('SU.timelineWindow — the default scroll viewport, in local minutes-of
   it('a missing settings snapshot falls back to the documented 07:00–18:00 default', () => {
     expect(SU.timelineWindow(null, NOON)).toEqual({ startMin: 420, endMin: 1080 });
     expect(SU.timelineWindow({}, NOON)).toEqual({ startMin: 420, endMin: 1080 });
+  });
+
+  it("the fallback IS core's working-hours default, not a renderer copy of it (issue #168)", () => {
+    // 420/1080 above pin the documented numbers; this pins WHERE they come from. The default
+    // was re-hardcoded as 7*60/18*60 in su.ts and twice more in timepicker.js, so moving core's
+    // default moved the real window and left every fallback path answering 07:00–18:00.
+    const min = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+    expect(SU.timelineWindow(null, NOON)).toEqual({
+      startMin: min(DEFAULT_SETTINGS.workingHoursStart),
+      endMin: min(DEFAULT_SETTINGS.workingHoursEnd),
+    });
   });
 
   it('a malformed HH:MM falls back PER FIELD — the readable half of the pair survives', () => {
@@ -318,6 +329,63 @@ describe('SU.localInputValue — the local-time seed the byte gate compares agai
     // instant it was rendered from — the contract the strip's reparse-on-edit path relies on.
     const stored = new Date(2026, 5, 24, 9, 7, 33);
     expect(new Date(SU.localInputValue(stored)).getTime()).toBe(stored.getTime());
+  });
+});
+
+/**
+ * Issue #168 — the helpers hoisted into su.ts because a second renderer document (popover.html)
+ * can reach nothing app.js defines. Each had diverged in the copy, so the assertions pin the
+ * divergence dead rather than restating the obvious: the single quote escapeHtml's 4-character
+ * dialect spared, and the `.message` unwrap the report builder's copy dropped.
+ */
+describe('SU.escapeHtml / SU.errMessage — the shared text primitives (issue #168)', () => {
+  it('escapeHtml escapes the single quote — the character the 4-char dialect let through', () => {
+    // The hazard the divergence created: `title='${escapeHtml(x)}'` is a real call shape, and
+    // the app.js dialect would have closed the attribute on a tag or client name containing '.
+    expect(SU.escapeHtml(`a'b`)).toBe('a&#39;b');
+    expect(SU.escapeHtml(`<img src=x onerror=y>`)).toBe('&lt;img src=x onerror=y&gt;');
+    expect(SU.escapeHtml(`&<>"'`)).toBe('&amp;&lt;&gt;&quot;&#39;');
+  });
+
+  it('escapeHtml leaves ordinary text alone and coerces a non-string', () => {
+    expect(SU.escapeHtml('deep work')).toBe('deep work');
+    expect(SU.escapeHtml(null)).toBe('null');
+  });
+
+  it('errMessage unwraps the Error and strips the prefix — never `[object Object]`', () => {
+    // The report builder's copy stripped the prefix but skipped the unwrap, so a rejection
+    // carrying an Error object rendered as `[object Object]` where every other surface read.
+    expect(SU.errMessage(new Error('entry end must be after its start'))).toBe(
+      'entry end must be after its start',
+    );
+    expect(SU.errMessage('Error: report name already exists')).toBe('report name already exists');
+    expect(SU.errMessage({ message: 'Error: forwarded over IPC' })).toBe('forwarded over IPC');
+  });
+
+  it('errMessage still says something when the throw carried no message', () => {
+    expect(SU.errMessage('save failed')).toBe('save failed');
+    expect(SU.errMessage(undefined)).toBe('undefined');
+  });
+});
+
+/**
+ * §12 R15 (issue #49 / #168) — the ONE minutes-of-day derivation every timeline surface
+ * positions against. The exact form's seconds fraction is load-bearing: the picker seeds and
+ * reseeds with it, and dateAtMinute inverts the fraction back to seconds, so a stored 09:07:33
+ * survives a round trip through the painted block.
+ */
+describe('SU.localMinuteOfDay / SU.exactMinuteOfDay — local minutes-of-day (§12 R15)', () => {
+  it('whole minutes drop the seconds; the exact form rides them as a fraction', () => {
+    const d = new Date(2026, 5, 24, 9, 7, 33);
+    expect(SU.localMinuteOfDay(d)).toBe(547);
+    expect(SU.exactMinuteOfDay(d)).toBeCloseTo(547 + 33 / 60, 10);
+  });
+
+  it('an ISO instant and its Date read the same local minute — both call shapes exist', () => {
+    const d = new Date(2026, 5, 24, 23, 59, 0);
+    expect(SU.localMinuteOfDay(d.toISOString())).toBe(SU.localMinuteOfDay(d));
+    expect(SU.localMinuteOfDay(d)).toBe(1439);
+    expect(SU.localMinuteOfDay(new Date(2026, 5, 24, 0, 0, 0))).toBe(0);
   });
 });
 

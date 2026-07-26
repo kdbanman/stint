@@ -3,7 +3,10 @@
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
 // loaded first; the tooling decision is recorded in context/architecture.html §08).
-const { fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView } = window.SU;
+const {
+  fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView,
+  errMessage, escapeHtml, localMinuteOfDay,
+} = window.SU;
 
 // Element lookup. Typed `any` (not HTMLElement) under checkJs: the call sites use
 // page-specific form-element properties (.value/.checked/…) the id alone can't prove.
@@ -114,18 +117,11 @@ function clearOverlapBanner() {
   }
 }
 
-// §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
-// `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
-// (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
-// human string the message region shows, stripping the "Error:" prefix the add-form catch drops.
-function errMessage(err) {
-  return String((err && err.message) || err).replace(/^Error:\s*/, '');
-}
-
 // §12 R21: paint a refused write into an INLINE message region at the point of action (the add
 // form's #add-warning is the seed pattern). The region is announced (role=status/aria-live) and
 // stays until the next input on that form clears it. `showFormError`/`clearFormError` are the
-// shared primitives the edit form, split confirm, inline rename and report builder all use.
+// shared primitives the edit form, split confirm and inline rename all use; the report builder
+// and the popover own their own regions but read the message through the same SU.errMessage.
 function showFormError(el, err) {
   if (!el) return;
   el.textContent = errMessage(err);
@@ -222,11 +218,6 @@ const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter 
 const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
 const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// An entry's local minutes-of-day (0–1440). Display only — the stored instant is UTC ISO.
-function localMinOf(iso) {
-  const d = new Date(iso);
-  return d.getHours() * 60 + d.getMinutes();
-}
 // An instant's LOCAL day as a 'YYYY-MM-DD' token — the same local-day vocabulary core's localDay
 // gives the snapshot's day keys (localTodayDay does this for `now`), so the two compare directly.
 // Used to detect a cross-midnight span (§12 R16 / issue #71): a closed entry whose local end day
@@ -285,10 +276,10 @@ function calEnumerateDays(minDay, maxDay) {
 // own column even at a local-day boundary. topMin/botMin are local minutes-of-day; a null botMin
 // marks the open block, whose foot calEvent computes (future-fade cap).
 function calEntrySegments(e, startDay) {
-  const startMin = localMinOf(e.startUtc);
+  const startMin = localMinuteOfDay(e.startUtc);
   if (e.endUtc === null) return [{ day: startDay, topMin: startMin, botMin: null, part: 'open' }];
   const endDay = calLocalDayOf(e.endUtc);
-  const endMin = localMinOf(e.endUtc);
+  const endMin = localMinuteOfDay(e.endUtc);
   // Same local day (the common case): one block start→end, with the legibility floor applied by
   // calEvent. `endDay <= startDay` also folds any degenerate end-before-start into the same-day
   // path rather than emitting a backwards fan-out.
@@ -361,8 +352,8 @@ function calendarModel() {
 // short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
 function renderEntries() {
   // Repainting the calendar closes any open edit form (its host is view-level, so it would
-  // otherwise outlive the events it edited) — matching the old in-event form, which a re-render
-  // wiped. Save/Delete/Split reloads and external refreshes all funnel through here.
+  // otherwise outlive the events it edited). Save/Delete/Split reloads and external refreshes all
+  // funnel through here.
   closeEntryForm();
   const host = $('entries');
   host.innerHTML = '';
@@ -464,7 +455,7 @@ function calColumn(d, isEnd) {
 function calOverlapBand(e) {
   const band = document.createElement('div');
   band.className = 'ov';
-  band.style.top = localMinOf(e.startUtc) * CAL_PX_PER_MIN + 'px';
+  band.style.top = localMinuteOfDay(e.startUtc) * CAL_PX_PER_MIN + 'px';
   const mins = e.overlapMinutes || 15;
   band.style.height = Math.max(mins * CAL_PX_PER_MIN, 8) + 'px';
   band.innerHTML = `<span class="otag">overlap ${mins}m</span>`;
@@ -691,10 +682,6 @@ function emptyState() {
   return div;
 }
 
-// (The §12 R09 day-list builders `dayBlock`/`groupBlock` were folded into the readonly entries
-// calendar — §12 R16's calColumn/calEvent above. Grouping left the Entries view entirely; grouped
-// breakdowns live in Reports, G11.)
-
 // §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
 // filter / search excludes everything). Distinct from the never-tracked empty state —
 // here there IS history, just nothing in the current view — so it instructs widening.
@@ -723,14 +710,14 @@ function calEvent(e, seg) {
   // NEVER the single (endMin − startMin) sliver that collapsed to the 18px floor when the stop
   // was on a later local day; each segment stays within one day column's 0–1440 track.
   const part = seg ? seg.part : running ? 'open' : 'full';
-  const topMin = seg ? seg.topMin : localMinOf(e.startUtc);
+  const topMin = seg ? seg.topMin : localMinuteOfDay(e.startUtc);
   // The open block extends a fixed span into the future and fades out (no bottom edge, G8); a
   // closed segment runs top→bottom (the min height keeps a very short span legible/clickable).
   const botMin = running
     ? Math.min(topMin + 180, 1440)
     : seg
       ? seg.botMin
-      : Math.max(localMinOf(e.endUtc), topMin + 5);
+      : Math.max(localMinuteOfDay(e.endUtc), topMin + 5);
   const el = document.createElement('div');
   el.className =
     'ev entry' +
@@ -967,10 +954,9 @@ async function mergeSelected(acknowledgedGap = false) {
     applyAck(ack);
     return;
   }
-  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, now
-  // hosted here in app.js (§12 modal
-  // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
-  // overlap ack the fold raised against a third entry (§06 R4).
+  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, hosted here
+  // in app.js (§12 modal-editor row / #43). The prompt commits the merge itself; onDone reloads
+  // + surfaces any overlap ack the fold raised against a third entry (§06 R4).
   openMergeConflict(
     entries,
     async (ack) => {
@@ -988,9 +974,9 @@ function closeMergeConflict() {
   document.querySelector('.editor-backdrop')?.remove();
 }
 
-// The merge-conflict prompt (§06 R3, §12 R6) is hosted here so the modal
-// editor can be deleted (§12 modal-editor row / §Z) while the calendar multi-select merge
-// path keeps its resolver. Styled to context/mockups/merge-conflict.html: a modal one rung
+// The merge-conflict prompt (§06 R3, §12 R6) is hosted here rather than in a modal editor
+// (§12 modal-editor row / #43) so the calendar multi-select merge path keeps its resolver.
+// Styled to context/mockups/merge-conflict.html: a modal one rung
 // above content (.editor.conflict-prompt over .editor-backdrop) resolving the disagreeing
 // attributes field-by-field with accent radios, then listing the unconditionally-kept
 // fields (description, tags, span) as auto-kept "agree" rows so the user sees exactly what
@@ -1244,8 +1230,8 @@ function openSplitForm(btn, e) {
 // (not inside the calendar event), so closing it means removing the mounted form and dropping the
 // .editing selection state from whichever calendar event carried it. Called on Cancel, whenever the
 // calendar repaints (renderEntries — a Save/Delete/Split reload, or an external refresh, replaces
-// the form the same way the old in-event mount was wiped by a re-render), and before opening a new
-// form so only one unified form (add or edit) is ever on screen. Idempotent when nothing is open.
+// the form), and before opening a new form so only one unified form (add or edit) is ever on
+// screen. Idempotent when nothing is open.
 function closeEntryForm() {
   const host = $('entry-form-host');
   const form = host?.querySelector('.entry-form');
@@ -1266,8 +1252,7 @@ function closeEntryForm() {
 // → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
 // merge stays the corner-checkbox multi-select path (§06 R3). Editing the RUNNING entry must NOT
 // stop it: the open row's form omits End (start-only), so the patch never carries endUtc and the
-// row stays open (§05 R6). Successor to the row-inline edit form, the per-row Edit-tags control,
-// and the modal editor (the §12 R06 / DELETED rows).
+// row stays open (§05 R6).
 async function openEntryForm(row, e) {
   const running = e.endUtc === null;
   // The current client / project (the two halves of "Client / Project") so the selects can
@@ -1315,8 +1300,7 @@ async function openEntryForm(row, e) {
     // and pre-selected to the entry's project. Disabled until a client is chosen.
     `<label class="uf-field"><span>Project</span>` +
     `<select class="edit-project uf-select" disabled></select></label>` +
-    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input — the same
-    // chip UI the retired per-row Edit-tags control used, folded into the one editor.
+    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input.
     `<label class="uf-field uf-tags"><span>Tags</span>` +
     `<span class="chips uf-tag-chips ef-tag-chips"></span></label>` +
     `<label class="uf-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
@@ -1636,10 +1620,6 @@ function weekTotal() {
     .flatMap((d) => d.entries)
     .filter((e) => e.billable)
     .reduce((s, e) => s + e.billableSeconds, 0);
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 }
 
 // Live count-up on the running entry (display tick, independent of data changes). It
@@ -2284,8 +2264,7 @@ async function submitAddForm() {
     // Validation rejection from core (e.g. "--to must be after --from"): show it in
     // the form rather than throwing, so the user can correct the times. This is a
     // BLOCK (the entry did not save), distinct from the overlap WARNING above.
-    warn.textContent = String((err && err.message) || err).replace(/^Error:\s*/, '');
-    warn.hidden = false;
+    showFormError(warn, err);
   }
 }
 

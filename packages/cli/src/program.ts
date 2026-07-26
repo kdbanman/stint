@@ -47,6 +47,10 @@ import {
   reportDefListJson,
   favoriteListJson,
   backupListJson,
+  clientListJson,
+  projectListJson,
+  tagListJson,
+  sleepListJson,
 } from './serialize.js';
 
 export interface Io {
@@ -809,8 +813,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listClients(!!opts.archived),
-          // §07 — the client scripting shape, validated against acceptance/criteria/schemas/client.schema.json.
-          toJson: (cs) => cs.map((c) => ({ id: c.id, name: c.name, archived: c.archived })),
+          toJson: clientListJson,
           empty: 'no clients',
           headers: ['ID', 'NAME', 'ARCHIVED'],
           toRow: (c) => [String(c.id), c.name, c.archived ? 'yes' : ''],
@@ -870,9 +873,7 @@ export function buildProgram(deps: Deps): Command {
         const clientId = opts.client ? s.findClientByName(opts.client)?.id : undefined;
         emitList(io, opts.json, {
           items: s.listProjects(clientId, !!opts.archived),
-          // §07 — the project scripting shape, validated against acceptance/criteria/schemas/project.schema.json.
-          toJson: (ps) =>
-            ps.map((p) => ({ id: p.id, client_id: p.clientId, name: p.name, archived: p.archived })),
+          toJson: projectListJson,
           empty: 'no projects',
           headers: ['ID', 'NAME', 'CLIENT_ID', 'ARCHIVED'],
           toRow: (p) => [String(p.id), p.name, String(p.clientId), p.archived ? 'yes' : ''],
@@ -926,8 +927,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listTags(!!opts.archived),
-          // §07 — the tag scripting shape, validated against acceptance/criteria/schemas/tag.schema.json.
-          toJson: (ts) => ts.map((t) => ({ id: t.id, name: t.name, archived: t.archived })),
+          toJson: tagListJson,
           empty: 'no tags',
           headers: ['ID', 'NAME', 'ARCHIVED'],
           toRow: (t) => [String(t.id), t.name, t.archived ? 'yes' : ''],
@@ -1122,18 +1122,7 @@ export function buildProgram(deps: Deps): Command {
       withStore((s) =>
         emitList(io, opts.json, {
           items: s.listSleepFlagged(),
-          // §10a — the sleep-flagged-entry scripting shape, validated against acceptance/criteria/schemas/sleep.schema.json.
-          toJson: (es) =>
-            es.map((e) => ({
-              id: e.id,
-              description: e.description,
-              excluded_s: e.excludedSeconds,
-              spans: e.sleepSpans.map((sp) => ({
-                sleep_utc: sp.sleepUtc,
-                wake_utc: sp.wakeUtc,
-                source: sp.source,
-              })),
-            })),
+          toJson: sleepListJson,
           empty: 'no sleep-flagged entries',
           headers: ['ID', 'DESCRIPTION', 'SPANS', 'EXCLUDED', 'SOURCES'],
           toRow: (e) => [
