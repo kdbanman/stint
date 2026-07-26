@@ -9,8 +9,8 @@ import { describe, it, expect } from 'vitest';
 import { Store } from '@stint/core';
 import { toggleTimer } from '../src/toggle.js';
 
-const NOW = '2026-06-24T18:00:00Z';
-const mem = () => Store.openMemory(() => new Date(NOW));
+const NOW = new Date('2026-06-24T18:00:00Z');
+const mem = () => Store.openMemory(() => NOW);
 
 describe('the decision drives the real store the way the hotkey/button would', () => {
   // The shipping toggle itself (issue #165 — no local mirror of it here): its one Electron

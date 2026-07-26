@@ -552,15 +552,20 @@ export interface World {
 
 const label = joinClientProject;
 
-/** A fixed clock so derived elapsed is deterministic. */
-const FIXED_NOW = '2026-06-24T23:59:00Z';
+/**
+ * A fixed clock so derived elapsed is deterministic. NOW_UTC is the same instant in core's
+ * stored form — the CLI world hands it to the `tt` subprocess as `TT_NOW`, which is a string
+ * on the environment.
+ */
+const NOW_UTC = '2026-06-24T23:59:00Z';
+const NOW = new Date(NOW_UTC);
 
 // ----------------------------------------------------------------- CoreWorld
 
 export class CoreWorld implements World {
   readonly name = 'core';
   private store!: Store;
-  private clock: Clock = () => new Date(FIXED_NOW);
+  private clock: Clock = () => NOW;
   // §20 R04 — CoreWorld is FILE-backed (a temp dir + file), not in-memory, so the backup +
   // recovery scenarios exercise the real on-disk path (Store.open's launch backup + integrity
   // gate). Every other scenario is unaffected — the Store API is identical to the memory store.
@@ -1360,7 +1365,7 @@ export class CliWorld implements World {
   private tt(args: string[]): { out: string; err: string; code: number } {
     const res = spawnSync('node', [BIN, ...args], {
       encoding: 'utf8',
-      env: { ...process.env, TT_DB: this.db, TT_NOW: FIXED_NOW, NODE_NO_WARNINGS: '1' },
+      env: { ...process.env, TT_DB: this.db, TT_NOW: NOW_UTC, NODE_NO_WARNINGS: '1' },
     });
     return { out: res.stdout ?? '', err: res.stderr ?? '', code: res.status ?? 0 };
   }
@@ -1497,7 +1502,7 @@ export class CliWorld implements World {
     // item 7, "Detection residency") — so seed it by opening a transient Store on the same db
     // file — the same direct-db access the backup helpers use — then close it before the next
     // `tt` process runs (tt is process-per-command).
-    const store = Store.open({ path: this.db, clock: () => new Date(FIXED_NOW) });
+    const store = Store.open({ path: this.db, clock: () => NOW });
     try {
       store.recordSleepSpan(id, o.sleepFrom, o.sleepTo, 'gap');
     } finally {
@@ -1979,7 +1984,7 @@ export class CliWorld implements World {
     if (backups.length === 0) return 0;
     const res = spawnSync('node', [BIN, 'list', '--all', '--json'], {
       encoding: 'utf8',
-      env: { ...process.env, TT_DB: backups[0]!.path, TT_NOW: FIXED_NOW, NODE_NO_WARNINGS: '1' },
+      env: { ...process.env, TT_DB: backups[0]!.path, TT_NOW: NOW_UTC, NODE_NO_WARNINGS: '1' },
     });
     return (JSON.parse(res.stdout || '[]') as unknown[]).length;
   }

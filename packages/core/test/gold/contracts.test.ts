@@ -48,9 +48,10 @@ const schema = (name: string) =>
     ),
   );
 
-const FIXED_NOW = '2026-06-24T12:00:00Z';
+// The pinned clock (Wed 2026-06-24, noon UTC).
+const NOW = new Date('2026-06-24T12:00:00Z');
 function fixtureStore() {
-  const store = Store.openMemory(() => new Date(FIXED_NOW));
+  const store = Store.openMemory(() => NOW);
   const ca = store.addClient('Client A');
   const api = store.addProject('API', ca.id);
   store.add({
@@ -183,7 +184,7 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
   };
 
   it('add() rejects a backfill whose to is not strictly after its from (entries: strict <)', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     // Inverted: to before from.
     expect(() =>
       store.add({ description: 'x', fromUtc: '2026-06-24T10:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
@@ -202,7 +203,7 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
    * over every message core can throw, so the next one cannot reintroduce the leak.
    */
   it('no core refusal names a CLI flag — the words work on both surfaces', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const entry = store.add({
       description: 'seed',
       fromUtc: '2026-06-24T09:00:00Z',
@@ -241,7 +242,7 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
   });
 
   it('saveReport rejects an inverted absolute range but ACCEPTS same-day from == to (reports: ≤)', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     // Inverted from > to → rejected, nothing stored.
     expect(() =>
       store.saveReport({
@@ -262,7 +263,7 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
   });
 
   it('editReport rejects amending a stored report into an inverted absolute range, leaving it untouched', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.saveReport({ name: 'Weekly', rangeSpec: { kind: 'preset', preset: 'week' }, ...REPORT_BASE });
     expect(() =>
       store.editReport('Weekly', {
@@ -424,7 +425,7 @@ describe('GOLD: single-file WAL + UTC-storage contract (§04 R02, R06)', () => {
   it('stores timestamps as UTC and round-trips them unchanged (§04 R06)', () => {
     const dir = mkdtempSync(join(tmpdir(), 'stint-gold-utc-'));
     try {
-      const store = Store.open({ path: join(dir, 'stint.db'), clock: () => new Date(FIXED_NOW) });
+      const store = Store.open({ path: join(dir, 'stint.db'), clock: () => NOW });
       // Write a span whose local rendering would differ by zone; storage stays UTC.
       const fromUtc = '2026-06-24T09:00:00Z';
       const toUtc = '2026-06-24T10:30:00Z';
@@ -499,7 +500,7 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
 
   it('a fixed fixture renders the expected row', () => {
     const store = fixtureStore();
-    const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
+    const csv = toCsv(store.listEntries(), NOW);
     expect(csv).toMatchInlineSnapshot(`
       "client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped
       Client A,API,deep;meeting,auth refactor,2026-06-24T09:00:00Z,2026-06-24T10:30:00Z,5400,0,true,false
@@ -509,13 +510,13 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
   });
 
   it('quotes cells containing commas, quotes, or newlines', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.add({
       description: 'wrote "the, report"',
       fromUtc: '2026-06-24T09:00:00Z',
       toUtc: '2026-06-24T09:30:00Z',
     });
-    const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
+    const csv = toCsv(store.listEntries(), NOW);
     expect(csv.split('\n')[1]).toContain('"wrote ""the, report"""');
     store.close();
   });
@@ -525,14 +526,14 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
     // must round-trip them: the embedded newline forces RFC-4180 quoting so the field survives
     // whole, and parsing the emitted cell back yields the original byte-for-byte. This fails if
     // csvCell stops quoting \n, or any surface flattens the stored text.
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const original = 'line one\nline two';
     store.add({
       description: original,
       fromUtc: '2026-06-24T09:00:00Z',
       toUtc: '2026-06-24T09:30:00Z',
     });
-    const csv = toCsv(store.listEntries(), new Date(FIXED_NOW));
+    const csv = toCsv(store.listEntries(), NOW);
     // The interior newline is preserved inside a single quoted field — not split across rows.
     expect(csv).toContain('"line one\nline two"');
     // Parse the quoted description cell back out (unescaping doubled quotes) and prove it is
@@ -558,7 +559,7 @@ describe('GOLD: CSV export contract (§09 R06)', () => {
 
 describe('GOLD: free-text search query contract (§09 R7)', () => {
   function searchStore() {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     const billing = store.addProject('Billing', acme.id);
     const globex = store.addClient('Globex');
@@ -822,12 +823,11 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
   // over the same window can never diverge), and an ABSOLUTE spec round-trips its exact
   // bounds. Fails if the preset/absolute discrimination or the resolution drifts.
   //
-  // The re-resolved window is pinned to the literal week FIXED_NOW falls in, not to a call
+  // The re-resolved window is pinned to the literal week NOW falls in, not to a call
   // of resolveRange — comparing the two functions would pass just as happily if both were
   // wrong together, which is the whole failure mode a saved report can't afford.
   it('a stored this-week preset re-resolves to the literal week now falls in', () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     store.saveReport({
       name: 'Weekly',
       rangeSpec: { kind: 'preset', preset: 'week' },
@@ -838,8 +838,8 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     });
     const def = store.getReport('Weekly')!;
     expect(def.rangeSpec).toEqual({ kind: 'preset', preset: 'week' });
-    const resolved = resolveSavedRange(def.rangeSpec, store.settings().weekStart, now);
-    // FIXED_NOW is Wed 2026-06-24; the default weekStart is monday.
+    const resolved = resolveSavedRange(def.rangeSpec, store.settings().weekStart, NOW);
+    // NOW is Wed 2026-06-24; the default weekStart is monday.
     expect(resolved).toEqual({
       fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
       toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
@@ -848,8 +848,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
   });
 
   it('an absolute-range definition round-trips its exact bounds', () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const fromUtc = '2026-06-01T00:00:00.000Z';
     const toUtc = '2026-06-08T00:00:00.000Z';
     store.saveReport({
@@ -862,7 +861,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     });
     const def = store.getReport('June first week')!;
     expect(def.rangeSpec).toEqual({ kind: 'absolute', fromUtc, toUtc });
-    expect(resolveSavedRange(def.rangeSpec, store.settings().weekStart, now)).toEqual({
+    expect(resolveSavedRange(def.rangeSpec, store.settings().weekStart, NOW)).toEqual({
       fromUtc,
       toUtc,
     });
@@ -875,8 +874,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
   });
 
   it('runReport resolves a stored this-week spec to the same totals as an ad-hoc report', () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     store.add({
       description: 'review',
@@ -893,7 +891,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       rounding: false,
       roundingIncrementMin: 15,
     });
-    // The ad-hoc arm is driven from the literal week FIXED_NOW (Wed 2026-06-24) falls in,
+    // The ad-hoc arm is driven from the literal week NOW (Wed 2026-06-24) falls in,
     // so "saved agrees with ad-hoc" is anchored to a known window rather than to whatever
     // resolveRange happens to return on both sides.
     const adhoc = store.report({
@@ -904,7 +902,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       rounding: false,
       roundingIncrementMin: 15,
     });
-    const run = store.runReport('Weekly', now);
+    const run = store.runReport('Weekly', NOW);
     expect(run.grandTotalSeconds).toBe(adhoc.grandTotalSeconds);
     expect(run.grandTotalSeconds).toBe(3600);
     expect(run.rangeFromUtc).toBe(localMidnight(2026, 5, 22));
@@ -916,8 +914,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     // §09 R09 — the def's RangeSpec re-resolves through the same resolveRange the ad-hoc path
     // uses, and its grouping / billable filter / rounding / narrowing fold alongside, so the
     // resolved request IS what store.report consumes. Fails if the fold drops or alters a field.
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     store.saveReport({
       name: 'Filtered',
@@ -930,9 +927,9 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     });
     const def = store.getReport('Filtered')!;
     const ws = store.settings().weekStart;
-    const resolved = resolveReportDef(def, ws, now);
+    const resolved = resolveReportDef(def, ws, NOW);
     expect(resolved).toEqual({
-      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22 — the week FIXED_NOW falls in
+      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22 — the week NOW falls in
       toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
       by: 'project',
       billableFilter: 'all',
@@ -941,14 +938,13 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       clientId: acme.id,
     });
     // …and store.report over that resolved request equals what runReport(name) returns.
-    expect(store.runReport('Filtered', now)).toEqual(store.report(resolved));
+    expect(store.runReport('Filtered', NOW)).toEqual(store.report(resolved));
     store.close();
   });
 
   it('runReport resolves by id ref to the same Report as by name', () => {
     // §09 R09 — runReport(ref) accepts a name OR a numeric id; both reach the same definition.
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     store.add({
       description: 'review',
@@ -965,7 +961,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       rounding: false,
       roundingIncrementMin: 15,
     });
-    expect(store.runReport(def.id, now)).toEqual(store.runReport('Weekly', now));
+    expect(store.runReport(def.id, NOW)).toEqual(store.runReport('Weekly', NOW));
     store.close();
   });
 
@@ -975,8 +971,7 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
     // identical to `tt report run <name> --csv|--json` and the GUI report's Export. The def's
     // billable-only filter DOES narrow the file, so the non-billable "admin" is dropped. The
     // RAW, whole-range escape hatch is a separate scope (`tt export` / "Export All Data").
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     store.add({
       description: 'review',
@@ -1000,29 +995,29 @@ describe('GOLD: saved report range round-trip (§09 R08–R09)', () => {
       roundingIncrementMin: 15,
     });
     // The filtered export == the report's rows (billable-only): "review" alone, no "admin".
-    const filtered = store.reportFilteredEntries('Weekly', now);
+    const filtered = store.reportFilteredEntries('Weekly', NOW);
     expect(filtered.map((e) => e.description)).toEqual(['review']);
-    expect(store.exportSavedReport('Weekly', 'csv', now)).toBe(toCsv(filtered, now));
-    expect(store.exportSavedReport('Weekly', 'json', now)).toEqual(toJsonEntries(filtered, now));
-    expect(store.exportSavedReport('Weekly', 'json', now)).toHaveLength(1);
+    expect(store.exportSavedReport('Weekly', 'csv', NOW)).toBe(toCsv(filtered, NOW));
+    expect(store.exportSavedReport('Weekly', 'json', NOW)).toEqual(toJsonEntries(filtered, NOW));
+    expect(store.exportSavedReport('Weekly', 'json', NOW)).toHaveLength(1);
     // …while the ALL-DATA scope over the SAME resolved range still carries BOTH entries (the
     // non-billable "admin" too) — the raw file `tt export --range …` / "Export All Data" writes.
-    const range = store.resolveReportRange('Weekly', now);
+    const range = store.resolveReportRange('Weekly', NOW);
     const raw = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
     expect(raw).toHaveLength(2);
-    expect(store.exportSavedReport('Weekly', 'json', now)).not.toEqual(toJsonEntries(raw, now));
+    expect(store.exportSavedReport('Weekly', 'json', NOW)).not.toEqual(toJsonEntries(raw, NOW));
     store.close();
   });
 
   it('runReport / exportSavedReport throw a clear error for an unknown name', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     expect(() => store.runReport('Nope')).toThrow(/no saved report named "Nope"/);
     expect(() => store.exportSavedReport('Nope', 'csv')).toThrow(/no saved report named "Nope"/);
     store.close();
   });
 
   it('rejects a duplicate name (case-insensitive)', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const def = {
       rangeSpec: { kind: 'preset', preset: 'week' } as const,
       by: 'client' as const,
@@ -1061,8 +1056,7 @@ describe('GOLD: favorite table + pinFavorite capture (§05 R09)', () => {
   });
 
   it('pinFavorite from an entry captures the entry template, listFavorites returns it', () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     const api = store.addProject('API', acme.id);
     const { value: entry } = store.add({
@@ -1090,8 +1084,7 @@ describe('GOLD: favorite table + pinFavorite capture (§05 R09)', () => {
   });
 
   it("pinFavorite from the running entry ('open') captures the open entry's template", () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     store.start({ description: 'standup', clientId: acme.id, billable: true, tags: ['daily'] });
     const created = store.pinFavorite({ name: 'Standup', fromEntryId: 'open' });
@@ -1107,7 +1100,7 @@ describe('GOLD: favorite table + pinFavorite capture (§05 R09)', () => {
   });
 
   it('rejects a duplicate favorite name (case-insensitive) and an unknown rename/unpin ref', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.pinFavorite({ name: 'Deep', billable: false, tags: ['focus'] });
     expect(() => store.pinFavorite({ name: 'deep', billable: false })).toThrow(/already exists/);
     expect(() => store.renameFavorite('Nope', 'X')).toThrow(/no favorite named "Nope"/);
@@ -1116,8 +1109,7 @@ describe('GOLD: favorite table + pinFavorite capture (§05 R09)', () => {
   });
 
   it('the serialized fav-ls payload validates against favorite.schema.json', () => {
-    const now = new Date(FIXED_NOW);
-    const store = Store.openMemory(() => now);
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     const api = store.addProject('API', acme.id);
     store.pinFavorite({
@@ -1150,12 +1142,12 @@ describe('GOLD: resume closes the open entry at now, with no end-of-day clamp (�
   // 23:59, so a close-at-now and a (wrong) clamp-to-day-end produce the SAME instant there and
   // cannot tell them apart. These guards pin the close to `now` on a NON-boundary clock (noon),
   // where the two behaviours diverge: the stopped entry must end at exactly 12:00, never 23:59.
-  // Stored ends are core's `toUtc` form (Z, no milliseconds), matching FIXED_NOW exactly.
+  // Stored ends are core's `toUtc` form (Z, no milliseconds), matching NOW exactly.
   const DAY_END = '2026-06-24T23:59:00Z'; // the boundary a clamp would (wrongly) produce
-  const NOON = '2026-06-24T12:00:00Z'; // === FIXED_NOW — the real `now`
+  const NOON = '2026-06-24T12:00:00Z'; // === NOW — the real `now`
 
   it('resume-from-favorite closes the previously open entry at now (not the day boundary)', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     // An entry opened earlier in the day; `now` is noon, well before any day boundary.
     store.start({ description: 'earlier work', atUtc: '2026-06-24T09:00:00Z' });
     store.pinFavorite({ name: 'Deep', billable: false, tags: ['focus'] });
@@ -1170,7 +1162,7 @@ describe('GOLD: resume closes the open entry at now, with no end-of-day clamp (�
   });
 
   it('a plain start (Switch) and resume() likewise close the open entry at now', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.start({ description: 'first', atUtc: '2026-06-24T08:00:00Z' });
     // Switch: a bare start closes the open entry at now and opens a new one.
     store.start({ description: 'second' });
@@ -1221,7 +1213,7 @@ describe('GOLD: date/build version constant (§19 R06)', () => {
 describe('GOLD: JSON export shape (§09 R06)', () => {
   it('validates against the published JSON Schema', () => {
     const store = fixtureStore();
-    const json = toJsonEntries(store.listEntries(), new Date(FIXED_NOW));
+    const json = toJsonEntries(store.listEntries(), NOW);
     const validate = ajv.compile(schema('export-entry.schema.json'));
     const ok = validate(json);
     expect(validate.errors ?? []).toEqual([]);
@@ -1250,7 +1242,7 @@ describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
   // on-the-fly tagging path keeps its case-insensitive REUSE (resolution, not an error).
 
   it('rejects a duplicate CLIENT name (case-insensitive) on add and rename', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.addClient('Acme Corp');
     // add: a case-variant duplicate is refused, so no second row can split Acme's billing.
     expect(() => store.addClient('acme corp')).toThrow(/already exists/i);
@@ -1264,7 +1256,7 @@ describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
   });
 
   it('scopes PROJECT uniqueness per client: dup under same client rejected, same name under another client allowed', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme');
     const globex = store.addClient('Globex');
     store.addProject('Platform', acme.id);
@@ -1279,7 +1271,7 @@ describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
   });
 
   it('rejects a duplicate TAG name (case-insensitive) on explicit add and on rename', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     store.addTag('billing');
     // The tag table's own UNIQUE is binary-collated; the app-level guard is what catches a case
     // variant on the explicit manage-first path.
@@ -1291,7 +1283,7 @@ describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
   });
 
   it('the ON-THE-FLY tagging path REUSES a case-variant tag (no new row, no error)', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const { value: e } = store.add({
       description: 'a',
       billable: false,
@@ -1306,7 +1298,7 @@ describe('GOLD: reference-data name uniqueness (§07 R03, #64)', () => {
   });
 
   it('uniqueness spans ARCHIVED records and the message steers to Restore', () => {
-    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const store = Store.openMemory(() => NOW);
     const acme = store.addClient('Acme Corp');
     store.archiveClient(acme.id);
     // An archived record still holds its name: a fresh add of a case variant is rejected, and
