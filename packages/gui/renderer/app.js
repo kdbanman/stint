@@ -988,10 +988,21 @@ async function mergeSelected(acknowledgedGap = false) {
   );
 }
 
+// The Escape listener belonging to the prompt currently up, held at module scope so
+// closeMergeConflict detaches it wherever the modal ends. Null whenever no prompt is open.
+let mergeConflictEscape = null;
+
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
 // helper so app.js owns the modal's lifecycle end to end
 // — the two share the `.editor-backdrop` chrome but not the code path.
+// Every dismissal route (Cancel, the header ×, the backdrop, Escape, and the commit itself)
+// funnels through here, so detaching the key listener once here is what keeps it from
+// outliving the modal it belongs to.
 function closeMergeConflict() {
+  if (mergeConflictEscape) {
+    document.removeEventListener('keydown', mergeConflictEscape);
+    mergeConflictEscape = null;
+  }
   document.querySelector('.editor-backdrop')?.remove();
 }
 
@@ -1101,6 +1112,16 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   backdrop.addEventListener('click', (ev) => {
     if (ev.target === backdrop) closeMergeConflict();
   });
+  // Craft checklist §4 — Esc cancels the innermost thing, which while this is up is the modal
+  // itself (issue 147: the app's ONE modal ignored Escape, so a keyboard user mid-merge had no
+  // way out). It is a CANCEL, not a confirm: it calls exactly what .mc-cancel calls, so no field
+  // resolution is applied and no merge is written — one dismissal behaviour, not two.
+  // The listener is on `document`, not the dialog: the prompt mounts on <body> and takes no
+  // focus when it opens, so a dialog-scoped keydown would never see the press.
+  mergeConflictEscape = (ev) => {
+    if (ev.key === 'Escape') closeMergeConflict();
+  };
+  document.addEventListener('keydown', mergeConflictEscape);
   return dialog;
 }
 

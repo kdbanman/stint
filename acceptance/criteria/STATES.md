@@ -64,6 +64,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — the chosen option's paint | Chosen option is a raised paper chip with an ink radio dot; peers recess to wash and stay flat (D12) | JUDGE `MERGE_CHOICE_LIFT` (issue 144) — `merge-choice-lift.png` | |
 | **Edge** — the Entries view behind the backdrop | That view's standing primary reverts to secondary, so the modal's Merge is the only accent fill on screen (D11) | JUDGE `PRIMARY_HANDOFF` (issue 150) | |
 | **Edge** — agreeing merge (no prompt) | Merge fires directly, no `.editor.conflict-prompt` | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png`; BDD "Merge concatenates descriptions and keeps the first entry's client" | |
+| **Edge** — dismissed by Escape | Prompt and backdrop unmount, the Entries view returns untouched and nothing merges (craft checklist §4) | JUDGE `MERGE_CONFLICT` (issue 147 sub-fact) — `main-merge-conflict.png` | |
 | **Error** — non-contiguous merge without acknowledgement | Refused, originals survive unmerged | BDD `overlap_and_editing.feature` "Merging a non-contiguous selection without acknowledgement is refused (the originals survive)" | Core-level refusal; same `confirmInline` gate as `MERGE_GAP`, no separate GUI screenshot |
 | **Empty** — N/A | Modal only renders on a ≥2-entry conflicting selection | — | Waived — no zero-data variant exists for a conditionally-mounted modal |
 
