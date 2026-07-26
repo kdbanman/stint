@@ -2782,6 +2782,129 @@ async function sceneWriteRejectionFeedback(browser) {
   }
 }
 
+// ADD_REFUSAL_PALETTE — design.html D15 (issue 139): the add form's ONE message region serves
+// BOTH message kinds, so the palette — not the region — is what tells them apart. A refused Save
+// is a BLOCK (nothing was written, the form is still open) and must read in the --danger notice;
+// an overlap is allowed-but-flagged (the entry SAVED) and must read in the --flag advisory. The
+// app shipped the inversion: the refusal wore flag chrome, so colour said "saved with a caveat"
+// while the sentence said "nothing was written".
+//
+// Both states are driven on the same form and scored on COMPUTED colour, because a palette is
+// exactly the fact a screenshot-only check lets rot: (a) a refused Save paints #add-warning in
+// danger; (b) dismissing the form and reopening it returns the region to its flag base chrome —
+// the refusal's state class does not outlive the message and repaint the next advisory; (c) an
+// overlapping backfill that COMMITS raises its advisory in flag. Fails if a refusal reads flag,
+// if the two states resolve to the same triple, or if the refused write records anything.
+async function sceneAddRefusalPalette(browser) {
+  // Palette probe over one region: the three painted surfaces plus both token triples, so the
+  // justification line shows what was measured against what — not just a boolean.
+  const probeAddWarning = () => {
+    const { rgbOf } = window.__probe;
+    const el = document.querySelector('#add-warning');
+    const cs = getComputedStyle(el);
+    return {
+      erred: el.classList.contains('error'),
+      color: cs.color,
+      background: cs.backgroundColor,
+      border: cs.borderTopColor,
+      danger: [rgbOf('--danger'), rgbOf('--danger-weak'), rgbOf('--danger')],
+      flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+    };
+  };
+  const painted = (p) => [p.color, p.background, p.border];
+  const same = (a, b) => a.every((v, i) => v === b[i]);
+
+  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(addFormState()), { rejectWrites: true }));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForSelector('.entry', { state: 'attached' });
+  await noMotion(page); // a paint assertion reads the cascade, never a frozen mid-transition frame
+
+  // (a) REFUSED SAVE — the `add` IPC rejects like core refusing an inverted span, and the form
+  // holds its ground: open, announced, nothing written, and painted as the BLOCK it is.
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+  await page.fill('#add-desc', 'a backfill core will refuse');
+  await page.click('#add-go');
+  await page.waitForSelector('#add-warning:not([hidden])', { state: 'attached' });
+  await page.screenshot({ path: join(EVIDENCE, 'add-refusal-palette.png'), fullPage: true });
+  const refused = {
+    ...(await page.evaluate(probeAddWarning)),
+    ...(await page.evaluate(() => {
+      const el = document.querySelector('#add-warning');
+      return {
+        formOpen: !document.querySelector('#add-form').hidden,
+        shown: window.__probe.visible(el) && el.textContent.trim().length > 0,
+        announced: el.getAttribute('role') === 'status' && el.hasAttribute('aria-live'),
+        message: el.textContent.trim(),
+        notWritten: window.__ADDED__ == null,
+      };
+    })),
+  };
+
+  // (b) THE REGION'S OTHER STATE — Cancel and reopen: the region is back to its advisory base
+  // chrome. (A refusal that left its state class behind would dress the next overlap warning,
+  // which is on the same region, as a hard block — the same inversion pointing the other way.)
+  await page.click('#add-cancel');
+  await page.click('#add-toggle');
+  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+  const reopened = await page.evaluate(probeAddWarning);
+  await page.close();
+
+  // (c) THE ADVISORY SIBLING — the same form, a backfill that COMMITS onto an overlapping span:
+  // the write landed, so its inline banner is the --flag advisory, never the block palette.
+  const advisory = await withPage(browser, addFormState(), 'index.html', async (p) => {
+    await p.waitForSelector('.entry', { state: 'attached' });
+    await noMotion(p);
+    await p.click('#add-toggle');
+    await p.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+    await p.click('#add-go');
+    await p.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
+    return p.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const el = document.querySelector('#overlap-banner');
+      const cs = getComputedStyle(el);
+      return {
+        shown: visible(el),
+        written: window.__ADDED__ != null,
+        text: el.textContent.trim(),
+        erred: el.classList.contains('error'),
+        color: cs.color,
+        background: cs.backgroundColor,
+        border: cs.borderTopColor,
+        flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+      };
+    });
+  }, { overlap: true });
+
+  const refusalReadsDanger = refused.erred && same(painted(refused), refused.danger);
+  const advisoryChromeIntact = !reopened.erred && same(painted(reopened), reopened.flag);
+  const advisoryReadsFlag =
+    !advisory.erred && same([advisory.color, advisory.background, advisory.border], advisory.flag);
+  // The two palettes are only a split if they DIFFER — pin it here so a token edit that collapsed
+  // danger onto flag could not make every assertion above pass vacuously.
+  const palettesDiffer = !same(refused.danger, refused.flag);
+  const ok =
+    refused.formOpen && refused.shown && refused.announced && refused.notWritten &&
+    refused.message === 'stop time must be after start time' && readsClean(refused.message) &&
+    refusalReadsDanger &&
+    advisoryChromeIntact &&
+    advisory.shown && advisory.written && /allowed, but flagged/i.test(advisory.text) &&
+    advisoryReadsFlag &&
+    palettesDiffer;
+  record(
+    'ADD_REFUSAL_PALETTE',
+    ok,
+    `refused save=${JSON.stringify(refused)} (danger=${refusalReadsDanger}); reopened=${JSON.stringify(reopened)} ` +
+      `(flag base intact=${advisoryChromeIntact}); overlap advisory=${JSON.stringify(advisory)} (flag=${advisoryReadsFlag}); ` +
+      `palettes differ=${palettesDiffer}`,
+    'add-refusal-palette.png',
+  );
+}
+
 // MERGE_CONFLICT — selecting two-plus contiguous CLOSED entries reveals the merge
 // SELECTION BAR (design.html D11 / V5): a quiet bar ABOVE the calendar whose raised-chip
 // count pill reads "N selected" and whose Merge action is a NEUTRAL small button — never
@@ -6043,6 +6166,7 @@ const SCENES = {
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
   WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
+  ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], run: sceneAddRefusalPalette },
   MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
   MERGE_CHOICE_LIFT: { items: ['MERGE_CHOICE_LIFT'], run: sceneMergeChoiceLift },
   MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], run: sceneMergeNoconflict },
