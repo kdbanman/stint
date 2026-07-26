@@ -68,11 +68,14 @@
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:24px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
-  /* toggle */
+  /* toggle — the on-state track is INKED, never accent. design.html §02 principle 1 spends the
+     accent on the primary action and the live running state only, and D04 gives it the non-text
+     signal role (icons, running marks, focus ring); a switch track is none of those. Platform
+     switches do fill their on-state with a system colour — §02 dials that off on purpose. */
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   .sw{width:36px;height:21px;border-radius:999px;background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
   .sw i{position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(74,52,24,.25);transition:left .12s}
-  .sw.on{background:var(--accent)}.sw.on i{left:17px}
+  .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
   .field{font:inherit;width:100%;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;color:var(--ink)}
@@ -301,7 +304,7 @@
       <div class="demos" style="margin-top:12px">
         <a href="#" style="display:inline-flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);background:var(--paper);box-shadow:var(--sh-chip);font-weight:590;color:var(--ink);text-decoration:none"><svg class="ic" style="color:var(--accent)"><use href="#i-clock"/></svg>Timer</a>
       </div>
-      <p class="rule" style="margin-top:16px"><b>Selection ≠ accent.</b> A chosen thing lifts — a raised paper chip with a shadow (the segmented idiom, and the nav rail's active item, shown above) — it never turns accent; only its icon may take the accent colour.</p>
+      <p class="rule" style="margin-top:16px"><b>Selection ≠ accent.</b> A chosen thing lifts — a raised paper chip with a shadow (the segmented idiom, and the nav rail's active item, shown above) — it never turns accent; only its icon may take the accent colour. <b>A toggle's on-state is inked</b>, for the same reason: the accent marks a view's primary action and the live running state, and a switch track is neither.</p>
     </div>
   </div>
   <div class="two" style="margin-top:16px">
