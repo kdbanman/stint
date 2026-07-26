@@ -1,6 +1,6 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D13, A01/A02, A04, A06;
- * transition PR #132, issue #137).
+ * transition PR #132, issues #137 and #141).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -28,6 +28,10 @@
  *      be the single one design.html sanctions, so an off-table pairing fails instead of passing
  *      by omission. Paired with the A02 floors above, which now score the accent boundary against
  *      every surface a focus stop sits on. The census helper is the reusable half.
+ *   7. A01/D04 text colour — the same census over `color` declarations, plus the size and weight
+ *      each site resolves to, because A01 picks its floor from the type. Every token painted as
+ *      text must be one design.html gives a text role, and `accent` — a 3:1 non-text colour the
+ *      running clocks borrow — must clear 24px wherever it is text (issue #141).
  *
  * Deliberately out of scope: D08 radii — their AC is JUDGE, and the two recorded off-trio radii
  * (the progress track, the calendar checkbox) are a pending design.html exemption question, not
@@ -176,6 +180,10 @@ describe('no raw palette hex outside the generated block (design.html D01)', () 
 describe('contrast floors, recomputed from design.tokens.json (design.html A01/A02)', () => {
   const TEXT_FLOOR = 4.5;
   const NON_TEXT_FLOOR = 3;
+  // A01's large-text branch: text at ≥24px, or ≥18.66px BOLD, drops to 3:1. Same number as the
+  // non-text floor, a different claim — this one licenses a token to carry READABLE TEXT, and
+  // only at a size the text-colour census below checks site by site.
+  const LARGE_TEXT_FLOOR = 3;
   // the permitted pairs design.html §03 names, each with the floor its role demands
   const permitted: Array<[fg: string, bg: string, floor: number]> = [
     ['ink', 'paper', TEXT_FLOOR],
@@ -191,6 +199,13 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     ['danger', 'danger-weak', TEXT_FLOOR],
     ['flag', 'paper', TEXT_FLOOR],
     ['flag', 'flag-bg', TEXT_FLOOR],
+    // Inverse text: the completed step marker fills with ink and prints its number in paper.
+    ['paper', 'ink', TEXT_FLOOR],
+    // The running count-up (issue #141). Accent is a NON-TEXT token by role (D04), and the app
+    // paints it as text in exactly one place — the three running clocks, all on a paper card.
+    // That is legal only on A01's large-text branch, so the pairing is scored at that floor here
+    // and every site is held to the ≥24px the branch demands by the text-colour census below.
+    ['accent', 'paper', LARGE_TEXT_FLOOR],
     // Non-text signal: icons, running marks, focus. A02's 3:1 floor is carried by the
     // FULL-STRENGTH accent — the D13 focus boundary (a field's accent border, an outline
     // everywhere else) and icon ink. The focus HALO (--ring) paints only a 35% mix and is a
@@ -418,5 +433,167 @@ describe('one focus idiom, reachable (design.html D13/A04, A02 — issue #137)',
     // banned outright rather than merely unused — it reads as a focus rule and is dead code.
     // Scanned comment-free: the doctrine comment at the fix site names the dead selector.
     expect(stylesCss.replace(/\/\*[^]*?\*\//g, '')).not.toMatch(/:focus:not\(:focus-visible\)/);
+  });
+});
+
+// ---- resolving the typography a text site actually gets --------------------------------------
+// A01 picks its floor from the SIZE and WEIGHT of the text, and CSS rarely declares those beside
+// the colour: `.timer-strip .clock` sets 24px/680 while `.timer-strip.running .clock` sets the
+// colour. So scoring a colour site means finding the rules that also style it.
+//
+// The matcher below is descendant-combinator semantics and nothing more: a rule applies to a site
+// when the rule's compounds are a subsequence of the site's, aligned on the subject (the last
+// compound), and every simple selector in a rule compound also appears in the site compound it
+// lands on. `.timer-strip .clock` therefore styles `.timer-strip.running .clock`, `.pop-clock`
+// styles `.pop.running .pop-clock`, and `.timer-card .clock` styles neither. Later declarations
+// win, which is the cascade's tie-break at equal specificity and the order this codebase writes
+// its overrides in anyway.
+
+/** The simple selectors inside one compound: `.timer-strip.running` → ['.timer-strip', '.running']. */
+const simpleSelectors = (compound: string): string[] =>
+  compound.match(/[.#]?[A-Za-z0-9_-]+|::?[a-z-]+(?:\([^)]*\))?|\[[^\]]*\]/g) ?? [];
+
+/** A selector's compounds, outermost first. Every combinator is read as "descendant" — treating
+ *  `>` as loose can only make the matcher apply MORE rules, never miss one that applies. */
+const compoundSelectors = (selector: string): string[] =>
+  selector.split(/\s*[>+~ ]\s*/).filter(Boolean);
+
+/** Does every simple selector of compound `a` also appear in compound `b`? */
+const compoundCovers = (a: string, b: string): boolean => {
+  const target = simpleSelectors(b);
+  return simpleSelectors(a).every((s) => target.includes(s));
+};
+
+/** Would a rule with this selector style the element the site selector describes? */
+const ruleAppliesAt = (ruleSelector: string, site: string): boolean =>
+  ruleSelector.split(',').some((branch) => {
+    const rule = compoundSelectors(branch.trim());
+    const target = compoundSelectors(site);
+    if (rule.length === 0 || rule.length > target.length) return false;
+    // subject first: a rule only styles the site if it selects the same element
+    if (!compoundCovers(rule[rule.length - 1]!, target[target.length - 1]!)) return false;
+    let t = target.length - 2;
+    for (let r = rule.length - 2; r >= 0; r--) {
+      while (t >= 0 && !compoundCovers(rule[r]!, target[t]!)) t--;
+      if (t < 0) return false;
+      t--;
+    }
+    return true;
+  });
+
+interface Typography {
+  readonly px?: number;
+  readonly weight?: number;
+  readonly display?: string;
+}
+
+/** The font-size, font-weight and display a site resolves to on one surface. `px` is left
+ *  undefined when no rule declares a literal px size — an unreadable site, which callers that
+ *  need a size must treat as a failure rather than a pass. */
+const typographyAt = (css: string, site: string): Typography => {
+  const resolved: { px?: number; weight?: number; display?: string } = {};
+  for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+    const sel = rule[1]!.trim().replace(/\s+/g, ' ');
+    if (!ruleAppliesAt(sel, site)) continue;
+    for (const declaration of rule[2]!.split(';')) {
+      const parsed = /^\s*([a-z-]+)\s*:([^]*)$/.exec(declaration);
+      if (!parsed) continue;
+      const value = parsed[2]!.trim();
+      if (parsed[1] === 'font-size') {
+        const px = /^(\d*\.?\d+)px$/.exec(value);
+        resolved.px = px ? parseFloat(px[1]!) : NaN;
+      } else if (parsed[1] === 'font-weight') {
+        resolved.weight = value === 'bold' ? 700 : value === 'normal' ? 400 : Number(value);
+      } else if (parsed[1] === 'display') {
+        resolved.display = value;
+      }
+    }
+  }
+  return resolved;
+};
+
+describe('text colour: every token painted as text, on the floor it earns (design.html A01/D04 — issue #141)', () => {
+  // Icons paint through `color` too (an inline SVG inherits currentColor), and D04 puts them on
+  // the A02 non-text floor, so the `.ic` class — the one icon idiom design.html §06 gives — is
+  // split out rather than scored as text.
+  const ICON_SITE = /\.ic\b/;
+  // Reach: the census reads TOKEN uses, `var(--x)`, which is what the helper was built for and
+  // what D02 requires a surface to write. The one text colour the app states as a literal is
+  // `white` on the primary button, whose pairing against `accent-solid` is scored in the
+  // permitted table above; D01's hex ban keeps any palette value out of the literals entirely.
+  const textColour = (): CensusHit[] =>
+    censusTokens(/./, /^color$/).filter((h) => !ICON_SITE.test(h.selector));
+
+  // Every token design.html gives a text role, and nothing else. `faint` is the disabled-control
+  // exemption §07 records (where it may appear is the separate allowlist above); `paper` is the
+  // inverse label on an ink-filled marker; `accent` is a NON-text token that the running count-up
+  // borrows, legal only on the large-text branch the next test enforces.
+  const TEXT_TOKENS = [
+    '--accent',
+    '--accent-ink',
+    '--danger',
+    '--faint',
+    '--flag',
+    '--ink',
+    '--muted',
+    '--paper',
+    '--run',
+  ];
+
+  it('every token any surface paints as text is one design.html gives a text role', () => {
+    const hits = textColour();
+    // Guard-the-guard: the assertion below is a set comparison, which an empty census would not
+    // satisfy — but a census reduced to a handful of surfaces would still look plausible. 527
+    // text-colour declarations stand today across the eleven mockups and styles.css.
+    expect(hits.length, 'the text-colour census found almost nothing — it has gone blind').toBeGreaterThanOrEqual(400);
+    expect(
+      hits.some((h) => h.surface === 'packages/gui/renderer/styles.css'),
+      'the SHIPPED renderer contributed no text colour — only the mockups were scanned',
+    ).toBe(true);
+    // An off-table token — the hole issue #141 came through, where nobody had listed accent as a
+    // thing text could be painted with — arrives here as an extra member and fails.
+    expect([...new Set(hits.map((h) => h.token))].sort()).toEqual(TEXT_TOKENS);
+  });
+
+  /** Every VISIBLE accent-as-text site, with the typography it resolves to. Hidden sites are not
+   *  text: both `.state` words are display:none permanently — kept in the DOM for assistive tech,
+   *  which reads them without a contrast ratio (styles.css §12 R04). */
+  const accentTextSites = (): Array<CensusHit & { type: Typography }> => {
+    const surfaces = new Map(surfaceCss());
+    return textColour()
+      .filter((h) => h.token === '--accent')
+      .map((h) => ({ ...h, type: typographyAt(surfaces.get(h.surface) ?? '', h.selector) }))
+      .filter((h) => h.type.display !== 'none');
+  };
+
+  it('every accent-as-text site is ≥24px, the size A01 requires to license a 3:1 colour', () => {
+    const LARGE_PX = 24;
+    const painted = accentTextSites();
+
+    // Guard-the-guard: three running count-ups carry the accent — the Timer-view card clock, the
+    // Entries strip clock, and the tray popover clock. A census that stopped finding them would
+    // otherwise pass this test by having nothing to score.
+    expect(painted.length, 'the accent-as-text census found fewer than the three running clocks').toBeGreaterThanOrEqual(3);
+
+    const offenders = painted
+      // A site whose size cannot be read is a FAILURE, not a skip: the floor is unknowable, so
+      // the guard must say so rather than wave it through.
+      .filter((h) => !(typeof h.type.px === 'number' && h.type.px >= LARGE_PX))
+      .map((h) => `${h.surface}: ${h.selector} → ${h.type.px ?? 'no readable font-size'}px`);
+    // WCAG's other large-text branch — ≥18.66px BOLD — is deliberately not offered. D06 puts every
+    // clock at 680, which is semibold; claiming the bold allowance at 680 would be reading the
+    // spec in the app's favour. Size is the branch this app earns.
+    expect(offenders, 'accent is a 3:1 colour (A02/D04) — as text it is legal only at ≥24px').toEqual([]);
+  });
+
+  it('the running clocks carry the D06 weight of 680 — the semibold the size branch offsets', () => {
+    // The reason the test above cannot offer the bold branch. Pinning the weight keeps that
+    // reasoning true: at 700 the ≥18.66px branch would open and the ≥24px rule would look
+    // arbitrary; at 640 the strip clock drifts back toward the under-weight the audit found.
+    const offenders = accentTextSites()
+      .filter((h) => h.type.weight !== 680)
+      .map((h) => `${h.surface}: ${h.selector} → ${h.type.weight ?? 'no font-weight'}`);
+    expect(offenders, 'D06 puts every clock at 680').toEqual([]);
   });
 });

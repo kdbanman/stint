@@ -42,7 +42,7 @@
     {
       "item": "IN_WINDOW_TIMER",
       "pass": true,
-      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"clockPx\":\"22px\",\"clockTnum\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}; idle strip {\"present\":true,\"idle\":true,\"clock\":\"00:00:00\",\"state\":\"idle\",\"desc\":\"\"}",
+      "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"clockPx\":\"24px\",\"clockTnum\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}; idle strip {\"present\":true,\"idle\":true,\"clock\":\"00:00:00\",\"state\":\"idle\",\"desc\":\"\"}",
       "screenshot": "timer-view.png"
     },
     {
