@@ -57,7 +57,16 @@ duration** (R06) facts are pinned by GOLD `core/test/gold/contracts.test.ts`
 ("single-file WAL + UTC-storage contract (§04 R02, R06)" — a file-backed open
 reports `journal_mode = wal` with `foreign_keys = ON`, and a written span
 stores/round-trips its UTC instants byte-for-byte with timezone-independent
-duration). The durability/integrity guarantees the badge labels are **hardened
+duration), and by **PROP** `core/test/prop/invariants.test.ts` "PROP: duration
+is UTC math, zone-/DST-safe (§04, §16)" — two spans straddling a real 2026 US
+transition, each rendered across five named zones: the 2026-03-08 spring-forward
+span `06:00Z → 08:00Z` is 7200 real seconds though the New York wall clock
+advances 01:00 → 04:00 (02:00 never happened that day), and the 2026-11-01
+fall-back span `05:00Z → 06:00Z` is 3600 real seconds though BOTH ends read
+`01:00` in New York. The expected seconds and every per-zone wall clock are
+calendar literals, so the timezone arbitrary drives live assertions and the
+duration is never recomputed the way `secondsBetween` computes it. The
+durability/integrity guarantees the badge labels are **hardened
 in §20** — open-time pragmas (§20 R01, now asserted-and-verified on every open:
 GOLD `core/test/gold/contracts.test.ts` "DB open durability pragmas (§20 R01)" +
 PROP `core/test/prop/open-invariants.test.ts`, which add `synchronous=FULL` and
@@ -470,7 +479,21 @@ surface-neutral on core AND tt by `features/reports.feature` (This-week includes
 only this-week entries, Last-week excludes this week, grouping by client sums
 correctly — run TWICE via the World `report` capability: CoreWorld
 `resolveRange` +`store.report`, CliWorld
-`tt report --week/--last-week/--range … --by … --json` ), and the plain-date
+`tt report --week/--last-week/--range … --by … --json` ), with every preset
+BOUNDARY pinned to a **literal calendar date** by GOLD
+`core/test/gold/contracts.test.ts` "GOLD: resolveRange preset windows (§09 R01)"
+— the five presets across fourteen cases, each under a clock built from local
+parts (so the pinned day holds in any host timezone): this-week/last-week under
+BOTH `weekStart` settings, the two cases that tell the two week rules apart (a
+Sunday `now` belongs to the week that started the previous Monday; a Monday
+`now` to the week that started the previous Sunday), a week spanning the year
+boundary (Mon 2026-12-28 … Mon 2027-01-04) and one spanning the 2026-03-08 DST
+transition, this-month/last-month including the January → previous-December
+rollback and the 31st-of-March case (no day-of-month leaks into a bound; last
+month lands on a short February), and today including a DST-transition day whose
+end bound is the true next local midnight rather than `+24h`. None of those
+expected values is a second call of `resolveRange` , so flipping the week-start
+offset or the month arithmetic reddens them. The plain-date
 pair → window rule lives GUI-side in exactly ONE place: `gui/src/reportview.ts`
 `resolveDateRange(fromDate, toDate)` resolves the two `YYYY-MM-DD` field strings
 to the half-open LOCAL window [from-day 00:00, day-after-to-day 00:00) — the
@@ -1773,7 +1796,10 @@ entry, grouped and totalled under its start day only, matching
 `tt report --by day`) is pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
 22:30→06:15 cross-midnight fixture: two `.ev` segments sharing a `data-id`, the
 start-day header counting the span, the end day showing the segment without
-counting it). The wall-clock-skew row (`now < start` never yields
+counting it). The **DST** row is the PROP pair in `prop/invariants.test.ts`
+described under §04 above (the 2026 spring-forward and fall-back spans, each
+rendered across five named zones, with the real elapsed seconds and every wall
+clock taken from the calendar). The wall-clock-skew row (`now < start` never yields
 negative/garbage elapsed, §20 R06) is the PROP monotonic-time guard. The
 **user-types-a-future-start-on-the-running-entry** row and the
 **Start-backdated-before-the-running-entry** row (issue #61 — both rejected
