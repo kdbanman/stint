@@ -181,9 +181,9 @@ header.mast {
 /* The running-state indicator is the other sanctioned accent use on this card. */
 .timer-card.running .state { color: var(--accent); }
 .timer-card .ctx { flex: 1; min-width: 0; }
-.timer-card .ctx .desc { font-size: 15px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
+.timer-card .ctx .desc { font-size: 17px; font-weight: 590; color: var(--ink); margin-bottom: 4px; }
 .timer-card.idle .ctx .desc { color: var(--muted); font-weight: 450; }
-.timer-card .ctx .meta { font-size: 12.5px; color: var(--muted); }
+.timer-card .ctx .meta { font-size: 12px; color: var(--muted); }
 .timer-card .ctx .flags { display: flex; gap: 8px; margin-top: 8px; }
 .timer-card .ctx .flags:empty { display: none; }
 .timer-card .btns { display: flex; gap: 8px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
@@ -266,7 +266,7 @@ header.mast {
   color: var(--ink);
 }
 .liveedit .le-note {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
   margin-left: auto;
 }
@@ -332,7 +332,7 @@ header.mast {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 590;
   color: var(--ink);
 }
@@ -375,7 +375,7 @@ header.mast {
 .entry-form .ef-sleep { display: flex; align-items: center; gap: 12px; }
 .entry-form .ef-dur {
   font-family: var(--num);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 590;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
@@ -402,7 +402,7 @@ s {
   border: 1px solid var(--rule-strong);
   color: var(--muted);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 450;
   padding: 8px 12px;
   border-radius: var(--r1);
 }
@@ -450,7 +450,7 @@ s {
   background: var(--sidebar);
   color: var(--ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 450;
   padding: 0 12px;
   border-radius: var(--r1);
 }
@@ -475,7 +475,7 @@ s {
 /* The toolbar search box — a restrained warm field, pushed to the right. Never the accent. */
 .search {
   font-family: var(--sans);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--ink);
   background: var(--paper);
   border: 1px solid var(--rule-strong);
@@ -834,7 +834,7 @@ textarea:focus-visible {
   color: var(--muted);
 }
 .empty .big,
-.view-placeholder .big { font-size: 16px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
+.view-placeholder .big { font-size: 17px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
 .empty code,
 .view-placeholder code {
   font-family: var(--num);
@@ -870,7 +870,7 @@ textarea:focus-visible {
 /* §06 R3: the leading multi-select cell. The select control stays monochrome — no accent. */
 .entry .sel-cell { display: flex; justify-content: center; }
 .entry.selected { background: var(--wash); }
-.entry .time { font-family: var(--num); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.entry .time { font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .entry .desc { color: var(--ink); }
 .entry .desc .where { color: var(--muted); font-size: 12px; margin-left: 8px; }
 .entry .nonbill { color: var(--muted); }
@@ -879,7 +879,7 @@ textarea:focus-visible {
    primary action / running state, so no chip rule references var(--accent). */
 .chips { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; flex-wrap: wrap; }
 .chip {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
   background: var(--wash);
   border: 1px solid var(--rule);
@@ -891,7 +891,7 @@ textarea:focus-visible {
 }
 /* The removable × is a SUB-affordance INSIDE the already-bordered chip — the one sanctioned
    in-chip exception (whitelisted in the CLICKABILITY scan); the parent chip IS the affordance. */
-.chip .chip-x { color: var(--muted); cursor: pointer; font-weight: 400; }
+.chip .chip-x { color: var(--muted); cursor: pointer; font-weight: 450; }
 .chip .chip-x:hover { color: var(--ink); }
 
 .flags { display: inline-flex; gap: 8px; margin-left: 8px; vertical-align: middle; }
@@ -1034,7 +1034,7 @@ button.danger:hover { background: var(--danger-weak); }
   text-align: center;
   color: var(--muted);
 }
-.clients-empty .big { font-size: 16px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
+.clients-empty .big { font-size: 17px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
 .clients-empty code {
   font-family: var(--num);
   background: var(--wash);
@@ -1058,7 +1058,7 @@ button.danger:hover { background: var(--danger-weak); }
   align-items: center;
   gap: 8px;
 }
-.client-name { font-size: 14px; font-weight: 590; color: var(--ink); }
+.client-name { font-size: 13px; font-weight: 590; color: var(--ink); }
 .client-actions, .project-actions { display: inline-flex; gap: 8px; }
 
 .project-list {
@@ -1090,7 +1090,7 @@ button.danger:hover { background: var(--danger-weak); }
   cursor: pointer;
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 450;
   color: var(--muted);
   padding: 8px 0 2px;
 }
@@ -1108,7 +1108,7 @@ button.danger:hover { background: var(--danger-weak); }
 .tag-row.archived .tag-row-name { color: var(--muted); }
 .pill {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 590;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
@@ -1158,7 +1158,7 @@ button.danger:hover { background: var(--danger-weak); }
   text-align: center;
   color: var(--muted);
 }
-.tags-empty .big { font-size: 16px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
+.tags-empty .big { font-size: 17px; color: var(--ink); margin-bottom: 8px; font-weight: 590; }
 .tags-empty code {
   font-family: var(--num);
   background: var(--wash);
@@ -1221,7 +1221,7 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--muted);
   font-family: var(--sans);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 450;
   padding: 4px 12px;
   height: 26px;
   cursor: pointer;
@@ -1247,8 +1247,8 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper);
   color: var(--muted);
   font-family: var(--sans);
-  font-size: 12.5px;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 450;
   padding: 4px 12px;
   height: auto;
   cursor: pointer;
@@ -1273,7 +1273,7 @@ button.danger:hover { background: var(--danger-weak); }
 /* The resolved window the report covers, painted under the head from core's bounds. */
 .report-range {
   padding: 8px 16px;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--muted);
   background: var(--wash);
   border-bottom: 1px solid var(--rule);
@@ -1338,7 +1338,7 @@ button.danger:hover { background: var(--danger-weak); }
 .report-flag {
   display: inline-block;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 450;
   padding: 2px 8px;
   border-radius: 999px;
   vertical-align: middle;
@@ -1421,7 +1421,7 @@ button.danger:hover { background: var(--danger-weak); }
 /* SELECTION != ELEVATION: a selected row is signalled by a sunken fill, not a lift. */
 .def.sel { background: var(--wash); }
 .def .di { flex: 1; min-width: 0; }
-.def .dname { font-size: 13.5px; font-weight: 590; margin-bottom: 4px; }
+.def .dname { font-size: 13px; font-weight: 590; margin-bottom: 4px; }
 .def .dspec { font-size: 12px; color: var(--muted); }
 .def .dspec .k { color: var(--ink); font-weight: 590; }
 .def .dactions { display: flex; gap: 8px; flex: none; align-items: center; }
@@ -1469,18 +1469,18 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .builder[hidden] { display: none; }
 .builder-head { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; }
-.builder-title { font-size: 14px; margin: 0; font-weight: 640; flex: none; }
+.builder-title { font-size: 17px; margin: 0; font-weight: 640; flex: none; }
 .builder-name {
   flex: 1;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 13px;
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
   padding: 8px 12px;
   background: var(--paper);
   color: var(--ink);
 }
-.builder-note { font-size: 11.5px; color: var(--muted); flex: none; }
+.builder-note { font-size: 11px; color: var(--muted); flex: none; }
 .builder-foot { display: flex; justify-content: flex-end; gap: 12px; margin-top: 12px; }
 
 /* §06 R3: the modal chrome for the merge-conflict prompt (app.js openMergeConflict) — a centred
@@ -1522,7 +1522,7 @@ button.danger:hover { background: var(--danger-weak); }
   padding: 16px 24px;
   border-bottom: 1px solid var(--rule);
 }
-.editor .ed-title { font-size: 16px; font-weight: 640; color: var(--ink); }
+.editor .ed-title { font-size: 17px; font-weight: 640; color: var(--ink); }
 /* the close icon button (design-system .iconbtn) */
 .editor .iconbtn,
 .iconbtn {
@@ -1604,7 +1604,7 @@ button.danger:hover { background: var(--danger-weak); }
   flex: none;
   position: relative;
 }
-.editor.conflict-prompt .mc-opt .ot b { font-weight: 590; font-size: 12.5px; }
+.editor.conflict-prompt .mc-opt .ot b { font-weight: 590; font-size: 12px; }
 .editor.conflict-prompt .mc-opt.on {
   background: var(--paper);
   box-shadow: var(--sh-chip);
@@ -1621,7 +1621,7 @@ button.danger:hover { background: var(--danger-weak); }
   align-items: center;
   gap: 12px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 .editor.conflict-prompt .agree .ic { width: 15px; height: 15px; color: var(--run); }
 .editor.conflict-prompt .agree b { color: var(--ink); font-weight: 590; }
@@ -1671,7 +1671,7 @@ button.danger:hover { background: var(--danger-weak); }
 .stp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 .stp-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; }
 .stp-d {
-  text-align: center; padding: 8px 0; font-size: 12.5px; border-radius: var(--r1);
+  text-align: center; padding: 8px 0; font-size: 12px; border-radius: var(--r1);
   cursor: pointer; color: var(--ink); background: var(--paper);
   border: 1px solid transparent;
 }
@@ -1834,9 +1834,9 @@ body.popover { background: var(--canvas); margin: 0; }
 }
 /* only the running state carries the accent — the clock is muted when idle */
 .pop.running .pop-clock { color: var(--accent); }
-.pop-desc { font-weight: 590; font-size: 14px; color: var(--ink); }
+.pop-desc { font-weight: 590; font-size: 13px; color: var(--ink); }
 .pop-desc[hidden] { display: none; }
-.pop-ctx { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.pop-ctx { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .pop-tags { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 .pop-tags[hidden] { display: none; }
 /* action row: Stop/Start (primary) — a single full-width centered button */
@@ -1852,8 +1852,8 @@ body.popover { background: var(--canvas); margin: 0; }
   padding: 0 12px;
   border-radius: var(--r1);
   color: var(--ink);
-  font-weight: 560;
-  font-size: 12.5px;
+  font-weight: 590;
+  font-size: 12px;
   flex: 1;
   background: none;
   border: 0;
@@ -1956,7 +1956,7 @@ body.popover { background: var(--canvas); margin: 0; }
 .set-toggle-lbl { font-size: 13px; color: var(--muted); min-width: 22px; }
 .set-hotkey {
   font-family: var(--num);
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--ink);
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
@@ -1968,7 +1968,7 @@ body.popover { background: var(--canvas); margin: 0; }
 /* §19 R03/R06 — Software Update. The version string is mono/soft; the Check-now button is a
    plain neutral button (never the accent). The update pill + result line use the --flag tokens
    (the same warn-not-block palette the overlap flag uses). */
-.ver { font-family: var(--num); font-size: 12.5px; color: var(--ink); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+.ver { font-family: var(--num); font-size: 12px; color: var(--ink); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
 .set-update-btn {
   font-family: var(--sans);
   font-size: 13px;
@@ -1987,7 +1987,7 @@ body.popover { background: var(--canvas); margin: 0; }
   font-size: 12px;
   text-decoration: none;
 }
-.update-result { font-size: 12.5px; color: var(--muted); }
+.update-result { font-size: 12px; color: var(--muted); }
 /* .update-result.ok must keep its own colour rule: the bare `.ok` verified-pill rule below would
    otherwise paint this line green (specificity 0-1-0 vs 0-2-0). */
 .update-result.ok { color: var(--muted); }
@@ -2018,7 +2018,7 @@ body.popover { background: var(--canvas); margin: 0; }
    text and takes the available width so the action button is pushed to the right edge. */
 .update .uhd-t { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
 .steps { display: flex; flex-direction: column; gap: 8px; }
-.step { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--ink); }
+.step { display: flex; align-items: center; gap: 12px; font-size: 12px; color: var(--ink); }
 .step .n {
   width: 18px;
   height: 18px;
@@ -2027,7 +2027,7 @@ body.popover { background: var(--canvas); margin: 0; }
   border: 1px solid var(--rule-strong);
   color: var(--ink);
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 680;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2041,7 +2041,7 @@ body.popover { background: var(--canvas); margin: 0; }
    monochrome — only the Download primary button carries the accent — so the progress fill is
    inked, not accented. (The mockup uses the accent here; the harness keeps the panel mono.) */
 .step .bar i { display: block; height: 100%; width: 0%; background: var(--ink); transition: width 0.12s ease; }
-.update .restore-note { display: flex; align-items: flex-start; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
+.update .restore-note { display: flex; align-items: flex-start; gap: 8px; font-size: 11px; color: var(--muted); margin-top: 8px; line-height: 1.4; }
 .update .restore-note .ic { color: var(--muted); margin-top: 2px; }
 
 /* §20 R04/R05 — the Settings → Backups group. The "verified" pill uses the calm green run
@@ -2052,7 +2052,7 @@ body.popover { background: var(--canvas); margin: 0; }
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--run);
   background: var(--run-weak);
   border: 1px solid color-mix(in srgb, var(--run) 30%, transparent);
@@ -2083,9 +2083,19 @@ body.popover { background: var(--canvas); margin: 0; }
 }
 .backup-id { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .backup-name { font-family: var(--num); font-size: 12px; color: var(--ink); overflow-wrap: anywhere; }
-.backup-meta { font-size: 11.5px; color: var(--muted); }
+/* The backup's timestamp + size. design.html D06 puts EVERY clock and duration in the numeric
+   face with tabular figures — a backup list re-sorts and re-renders under the reader's eye, and
+   proportional digits make the minute column crawl. This line was the app's one time string
+   rendered without the idiom (issue 152); `.ver` above prints the same backupLabel() value. */
+.backup-meta {
+  font-family: var(--num);
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
 .backup-restore { flex: none; }
-.set-empty { font-size: 12.5px; color: var(--muted); }
+.set-empty { font-size: 12px; color: var(--muted); }
 
 /* §05 R09 — the Timer view's favorites rail. The Pin control + per-favorite kebab/menu are
    NEUTRAL buttons; the accent stays on the view primary action / running state. The chips
@@ -2094,7 +2104,7 @@ body.popover { background: var(--canvas); margin: 0; }
 .fav-head { display: flex; align-items: center; justify-content: space-between; }
 .fav-title { font-weight: 590; color: var(--ink); }
 .fav-pin {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 590;
   color: var(--ink);
   padding: 8px 12px;
@@ -2125,7 +2135,7 @@ body.popover { background: var(--canvas); margin: 0; }
   text-overflow: ellipsis;
 }
 .fav-card .fm {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
