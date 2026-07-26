@@ -148,6 +148,12 @@
       "screenshot": "main-split.png"
     },
     {
+      "item": "INLINE_GATE_CONTAINMENT",
+      "pass": true,
+      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/124\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/124\"}",
+      "screenshot": "main-inline-gate.png"
+    },
+    {
       "item": "WRITE_REJECTION_FEEDBACK",
       "pass": true,
       "justification": "edit-save={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"entry end must be after its start\",\"notWritten\":true} split={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"split point must be strictly inside the entry span\",\"notWritten\":true} rename={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"a client named that already exists\",\"notWritten\":true} toggle={\"timerShown\":true,\"timerAnnounced\":true,\"message\":\"stop time is before the entry started\",\"bannerMirrors\":true} copy-reads-clean=true",

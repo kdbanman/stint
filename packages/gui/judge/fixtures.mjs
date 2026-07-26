@@ -227,6 +227,43 @@ export function flaggedState() {
 }
 
 /**
+ * Issue #146 — the INLINE_GATE_CONTAINMENT fixture. Two CLOSED entries pinned to the two
+ * EDGE columns of the rendered week: id=40 on Monday 2026-06-22 (the calendar's FIRST day
+ * column) and id=41 on Sunday 2026-06-28 (its LAST). Both dates sit in one Mon–Sun week, so
+ * calendarModel pads to exactly those seven columns and the two entries land hard against
+ * the calendar's left and right edges.
+ *
+ * The edges are the whole point. A gate armed on a MIDDLE column overflows its 124px day
+ * column but still lands inside the calendar, so it cannot tell a positioned, clamped layer
+ * from the in-flow run that shipped — the escape only becomes visible where there is no
+ * neighbouring column left to spill into. Two entries, not one, so a clamp that only pulls
+ * the left edge in (or only the right) fails on the other.
+ */
+export function edgeColumnState() {
+  const entry = (id, day, description) => ({
+    id,
+    description,
+    clientLabel: 'Acme / API',
+    startUtc: `${day}T10:00:00Z`,
+    endUtc: `${day}T12:00:00Z`,
+    billableSeconds: 7200,
+    billable: true,
+    overlapped: false,
+    sleptThrough: false,
+    excludedSeconds: 0,
+  });
+  return {
+    status: { running: false, entry: null },
+    days: [
+      { day: '2026-06-22', entries: [entry(40, '2026-06-22', 'first column')] },
+      { day: '2026-06-28', entries: [entry(41, '2026-06-28', 'last column')] },
+    ],
+    sleepFlaggedIds: [],
+    settings: DEFAULT_SETTINGS,
+  };
+}
+
+/**
  * A day holding both a CLOSED entry (id=30) and the running/open entry (id=31), so the
  * SPLIT_AFFORDANCE scene can assert in one snapshot that the closed row exposes a Split
  * control and the open row does not (§06 R2: only a bounded span can be split).
