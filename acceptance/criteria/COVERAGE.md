@@ -1764,7 +1764,22 @@ placeholder, and a persistent VISIBLE element supplying it — through a
 settings rows use (`.report-lab` / `.set-k`), whose members are named in the
 justification so the population stays reviewable. Nothing caught this before
 because `design-guard.test.ts` scores tokens, contrast and spacing; label
-presence is a structural fact about the DRIVEN DOM. No new IPC channel (pure renderer), so
+presence is a structural fact about the DRIVEN DOM. JUDGE `TARGET_SIZE`
+(`main-target-size.png` / `target-size-add-form.png`, issue 148) carries
+design.html **A03** — every interactive target is ≥24×24 CSS px or stands ≥24px
+clear of its nearest neighbour. Eight targets sat under the floor, three of them
+(the calendar's 16×16 corner select checkbox, the tag remover at 10×17, the
+picker's 31 day cells at 23.84px) with 0–2px of spacing to fall back on, and the
+sweep passed anyway for three reasons it now closes: it ROUNDED each box before
+comparing (23.84 read as 24), the remover was a `<b>` with a click listener and
+so matched no interactive selector at all, and the undersized controls live on
+transient surfaces the five-views-at-rest route never opened. The scene drives
+nine surfaces (the five views, the add form, the unified editor, the Timer
+start-details disclosure, the Reports builder, the popover), compares raw CSS px,
+measures a `<label>`-wrapped checkbox as its LABEL — the whole label is what a
+pointer aims at — and asserts the three named elements are PRESENT in the swept
+set, so a remover that regresses to bare prose fails here as well as at the
+keyboard. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
