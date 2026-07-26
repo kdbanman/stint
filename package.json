@@ -27,6 +27,7 @@
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
     "tokens": "node scripts/gen-tokens.mjs",
+    "icons": "node scripts/gen-icons.mjs",
     "metrics": "node scripts/sloc-report.mjs",
     "metrics:check": "node scripts/sloc-report.mjs --check",
     "verify:no-network": "node scripts/check-no-network.mjs",

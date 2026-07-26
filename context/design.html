@@ -87,7 +87,8 @@
       <li><span class="tn">06</span><a href="#s06">Component grammar</a></li>
       <li><span class="tn">07</span><a href="#s07">Accessibility floors</a></li>
       <li><span class="tn">08</span><a href="#s08">How this is verified</a></li>
-      <li><span class="tn">09</span><a href="#s09">Sources</a></li>
+      <li><span class="tn">09</span><a href="#s09">The mark</a></li>
+      <li><span class="tn">10</span><a href="#s10">Sources</a></li>
     </ol>
   </nav>
 
@@ -247,7 +248,8 @@
     <p><strong>Recorded exemptions</strong> (WCAG-sanctioned, listed so they stay deliberate):
     disabled controls (A01 does not apply); the run-dot when paired with its label (D05); field
     borders where the field carries a visible label (D13) — the boundary is not the sole identifier;
-    purely decorative separators (<code>rule</code>).</p>
+    purely decorative separators (<code>rule</code>); the mark's own bars, which are a brand asset
+    rather than text or an affordance (D21).</p>
   </section>
 
   <section id="s08">
@@ -268,7 +270,42 @@
   </section>
 
   <section id="s09">
-    <div class="eyebrow"><span class="n">09</span>Sources</div>
+    <div class="eyebrow"><span class="n">09</span>The mark</div>
+    <h2>The app's face in the OS</h2>
+    <p>Everything above dresses surfaces Stint draws. This section covers the images the
+    <em>operating system</em> draws for it — the launcher icon and the tray glyph — which no
+    stylesheet reaches and no screenshot of the app contains.</p>
+    <p><span class="rid">D18</span><strong>The mark.</strong> Two back-to-back calendar events on
+    a paper field: the elapsed one solid <code>tomato·11</code>, the next one waiting in
+    <code>tomato·5</code>. It is the app's identity wherever the OS asks for one — dock, launcher,
+    Finder, About, the Linux window and notification. It always wears the <strong>idle</strong>
+    composition: an app icon is an identity, not a state readout.</p>
+    <p><span class="rid">D19</span><strong>Generated, never drawn twice.</strong> Three hand-authored
+    sources in <code>context/mark/</code> (<code>mark.svg</code>, <code>glyph-idle.svg</code>,
+    <code>glyph-running.svg</code>) carry <strong>classes and no fill attributes</strong>;
+    <code>scripts/gen-icons.mjs</code> injects the palette from <code>design.tokens.json</code> and
+    rasterizes every size — the D02 contract, applied to assets. Three palettes, because the
+    backdrop differs: <strong>app</strong> paints on paper; <strong>panel</strong> paints on an
+    unknown Linux panel, so it drops the pale tint (invisible on a light panel) for the brighter
+    <code>tomato·9</code> at 38% alpha, which survives light and dark alike; <strong>template</strong>
+    is alpha-only black, since macOS discards a template image's colour and recolours it per menu-bar
+    appearance. The rendered PNGs are committed, not built — rasterizing needs Chromium, which the
+    build path does not have.</p>
+    <p><span class="rid">D20</span><strong>The glyph pair.</strong> The tray drops the field — at
+    16pt the enclosing square costs the bars half their height. <strong>Idle</strong> is the two bars;
+    <strong>running</strong> fuses them into one unbroken block. The two glyphs occupy an
+    <strong>identical bounding box</strong>, so the menu bar never shifts when the timer starts. The
+    state reads as <strong>shape</strong>, which is what lets it survive a template image and satisfy
+    A05 without a word beside it. On macOS the count-up title rides alongside; on Linux the glyph is
+    the whole signal, so the glyph — not the title — is what must carry it.</p>
+    <p><span class="rid">D21</span><strong>Floors that do and don't apply.</strong> The mark is a
+    brand asset, not text and not an icon-only affordance: A01 and A02 do not govern the contrast
+    <em>between its own bars</em> (a recorded exemption below, matching WCAG's logotype carve-out).
+    What does bind is <strong>A05</strong> — and the glyph pair meets it by shape, not by hue.</p>
+  </section>
+
+  <section id="s10">
+    <div class="eyebrow"><span class="n">10</span>Sources</div>
     <h2>Sources</h2>
     <p>One line each; the working corpus and audit checklists live with the
     <code>design-audit</code> skill, loaded only when an audit runs.</p>
