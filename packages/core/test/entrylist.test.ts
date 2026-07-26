@@ -5,7 +5,7 @@
  *     tag), empty-query-matches-all,
  *   - groupEntries: key ordering (day DESC, others ASC), multi-tag membership, the
  *     '(no client)' / '(no project)' / '(untagged)' buckets,
- *   - buildEntryList: applies the query then groups, reporting the matched ids.
+ *   - buildEntryList: groups an already-filtered set, and rejects a missing grouping.
  *
  * Golden over fixed EntryView fixtures so the grouping/matching rule cannot drift.
  */
@@ -140,29 +140,10 @@ describe('buildEntryList (§12 R9)', () => {
     entry({ id: 2, description: 'deploy pipeline', clientName: 'Globex', tags: ['ci'] }),
   ];
 
-  it('with no query, groups every entry and reports all ids', () => {
+  it('groups the entries it is handed, filtering nothing (store.listEntries already did)', () => {
     const list = buildEntryList(entries, { by: 'client' });
-    expect(list.matchedIds).toEqual([1, 2]);
     expect(list.groups.map((g) => g.key)).toEqual(['Acme', 'Globex']);
-  });
-
-  it('applies the query before grouping; matchedIds reflects survivors', () => {
-    const list = buildEntryList(entries, { by: 'client', query: 'refactor' });
-    expect(list.matchedIds).toEqual([1]);
-    expect(list.groups.map((g) => g.key)).toEqual(['Acme']);
-    expect(list.groups[0]!.entries.map((e) => e.id)).toEqual([1]);
-  });
-
-  it('a query matching nothing yields no groups and no matched ids', () => {
-    const list = buildEntryList(entries, { by: 'day', query: 'nonexistent' });
-    expect(list.matchedIds).toEqual([]);
-    expect(list.groups).toEqual([]);
-  });
-
-  it('an empty query matches all (no search active)', () => {
-    const list = buildEntryList(entries, { by: 'tag', query: '   ' });
-    expect(list.matchedIds).toEqual([1, 2]);
-    expect(list.groups.map((g) => g.key)).toEqual(['ci', 'deep']);
+    expect(list.groups.flatMap((g) => g.entries.map((e) => e.id))).toEqual([1, 2]);
   });
 
   it('a missing/unknown grouping fails loudly with a clear error, not an opaque TypeError (issue #55)', () => {

@@ -1088,33 +1088,6 @@ export function pickerState() {
 }
 
 /**
- * §08 R3 / §12 R8 / §09 R1 — the report-builder fixture. The report view paints from the
- * mock's window.stint.report (it does not read the UiState days), so the snapshot itself is
- * the empty-state shape; the report data lives in the keyed REPORTS below. The initScript
- * mock returns a Report keyed first by the date range (preset name, or a custom from/to),
- * then — for the default This-week range — by billableFilter. Three deterministic totals
- * for the §08 R3 billable toggle (billable-only < non-billable < all), and a distinct
- * report per §09 R1 preset (each with its own resolved range + total) so selecting a chip
- * or applying a custom range visibly changes the painted range header and rows.
- */
-export function reportState() {
-  return emptyState();
-}
-
-/**
- * §09 R6 / §12 R8 — the report-SUMMARY fixture. The REPORT_SUMMARY scene drives the
- * on-screen grouped summary with flags surfaced in context and the two Export buttons. The
- * report itself (REPORT_SUMMARY below) is a client→project nested grouping carrying ONE
- * overlap flag and ONE unreviewed-sleep flag on distinct affected sub-rows, so the scene can
- * assert the flags appear ON the affected summary rows (not in a separate list). The mock's
- * exportEntries records the requested format + range and returns a written-shaped result so
- * the scene can assert the Export CSV / Export JSON buttons drive a real export call.
- */
-export function reportSummaryState() {
-  return emptyState();
-}
-
-/**
  * §12 R08 / §09 R08–R09 — the saved-reports fixture. emptyState plus a seeded list of saved
  * report definitions (window.stint.listReports returns SAVED_REPORTS below). The REPORTS_VIEW
  * scene drives the real in-shell Reports view: the saved-definition list paints one card per
@@ -1127,29 +1100,6 @@ export function reportSummaryState() {
  */
 export function savedReportsState() {
   return emptyState();
-}
-
-/**
- * §09 R09 — the saved-report run-output fixture. Same as savedReportsState (the run-output
- * is driven by clicking Run on a card); kept as a named entry point so a scene reads clearly.
- */
-export function savedReportSummaryState() {
-  return emptyState();
-}
-
-/**
- * §09 R4 — the rounding-toggle fixture. Settings carry rounding ON at the default 15-min
- * increment, so the report view loads with the toggle checked and the increment picker
- * enabled; the ROUNDING_TOGGLE scene then drives the toggle off/on and the increment
- * picker (6/10/15/30) and asserts the displayed billable line equals the rounded total
- * when on and the exact total when off. The report itself is keyed by rounding/increment
- * (REPORT_BY_ROUNDING) against a total that is NOT a clean multiple of any increment, so
- * the line visibly moves. Stored time is never touched — only the displayed line rounds.
- */
-export function roundingState() {
-  const s = emptyState();
-  s.settings = { ...DEFAULT_SETTINGS, rounding: true, roundingIncrementMin: 15 };
-  return s;
 }
 
 /**

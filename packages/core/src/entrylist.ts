@@ -3,10 +3,10 @@
  * one match rule, defined once in @stint/core so the GUI Entries view and `tt list`
  * group and search identically (no surface re-derives any of it).
  *
- * Range / billable / client / project / tag filtering is already done upstream by
- * store.listEntries (it is SQL-indexed where it can be, and a post-`toView` pass for
- * tags); this module covers what is left: matching the free-text query against the
- * resolved fields, and bucketing the surviving entries by the chosen grouping.
+ * Every filter — range / billable / client / project / tag, and the free-text search —
+ * is applied upstream by store.listEntries (SQL-indexed where it can be, a post-`toView`
+ * pass for tags, and `matchesQuery` below for the search). What this module owns is that
+ * one match rule and the bucketing of an already-filtered set by the chosen grouping.
  */
 import type { EntryView } from './types.js';
 import { groupInto, sortedGroups, groupKeysOf, type GroupBy } from './report.js';
@@ -17,10 +17,9 @@ export interface EntryGroup {
   entries: EntryView[];
 }
 
-/** The Entries-view list: the grouped buckets and the flat set of matched entry ids. */
+/** The Entries-view list: the grouped buckets. */
 export interface EntryList {
   groups: EntryGroup[];
-  matchedIds: number[];
 }
 
 /**
@@ -51,18 +50,10 @@ export function groupEntries(entries: EntryView[], by: GroupBy): EntryGroup[] {
 }
 
 /**
- * Build the Entries-view list from a pre-filtered set of entries (range / billable /
- * client / project / tag are already applied by store.listEntries). Pure: it applies
- * the free-text query, then groups the survivors. `matchedIds` is the flat set of
- * entries that survived the query, in input order.
+ * Build the Entries-view list from a filtered set of entries: bucket them by the chosen
+ * grouping. Every filter — search included — is already applied by store.listEntries, so
+ * this never re-filters (issue #176: a second query pass here would double-filter).
  */
-export function buildEntryList(
-  entries: EntryView[],
-  opts: { by: GroupBy; query?: string },
-): EntryList {
-  const matched = opts.query ? entries.filter((e) => matchesQuery(e, opts.query!)) : entries;
-  return {
-    groups: groupEntries(matched, opts.by),
-    matchedIds: matched.map((e) => e.id),
-  };
+export function buildEntryList(entries: EntryView[], opts: { by: GroupBy }): EntryList {
+  return { groups: groupEntries(entries, opts.by) };
 }

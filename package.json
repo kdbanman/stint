@@ -45,7 +45,6 @@
     "@eslint/js": "^9.39.4",
     "@fast-check/vitest": "^0.2.4",
     "@types/node": "^22.10.2",
-    "@vitest/coverage-v8": "^4.0.18",
     "ajv": "^8.20.0",
     "ajv-formats": "^3.0.1",
     "esbuild": "^0.28.1",

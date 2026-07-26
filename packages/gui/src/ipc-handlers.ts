@@ -21,6 +21,7 @@ import { writeFileSync } from 'node:fs';
 import {
   toUtc,
   resolveRange,
+  resolveDateRange,
   buildEntryList,
   describeOverlaps,
   type Store,
@@ -32,7 +33,6 @@ import { toggleTimer } from './toggle.js';
 import { startWithAttributes } from './start.js';
 import {
   buildReportView,
-  resolveDateRange,
   resolveExportDefinition,
   exportPayload,
   exportFileName,

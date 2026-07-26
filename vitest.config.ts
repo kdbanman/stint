@@ -15,10 +15,5 @@ export default defineConfig({
     globals: false,
     include: ['packages/**/test/**/*.test.ts'],
     environment: 'node',
-    coverage: {
-      provider: 'v8',
-      include: ['packages/core/src/**', 'packages/cli/src/**'],
-      reporter: ['text', 'json-summary'],
-    },
   },
 });
