@@ -1790,7 +1790,21 @@ mostly stale mockups: a `#fff` switch knob where the app paints `--paper`, a
 hand-rolled scrim and calendar fade, and an `edit-entry.html` selected day
 still filled with `--accent` under a white label — the pairing design.html
 PROHIBITS and this guard already asserts must stay below 4.5:1, three issues
-after the shipped picker moved to D12's raised paper chip. The calendar entry's
+after the shipped picker moved to D12's raised paper chip. Beside the census,
+D04's OTHER clause — one token, one job (issue #158). §03 gives `canvas` the
+backdrop behind a PICTURED window: the desk a doc or a mockup draws under the
+frame it illustrates. The app was painting two shipped surfaces in it — the tray
+popover, its whole periphery presence, and the gutters beside the main window's
+1040px column. Both now take `--paper`, the window-surface token, and no shipped
+surface may name `canvas` at all — a total ban rather than a list, because the
+app ships no docs/mockups layer for the role to serve. It is read off the
+declaration census (which reports the offending selector) and off the renderer
+sources as text, since a script sets inline styles at runtime where a token name
+is only a string. The mirror is the eleven mockup bodies that still paint it: a
+token nothing spends would be one to retire from `design.tokens.json`, not to
+keep a rule about. Same clause the `faint`-is-never-text check enforces, and the
+same reason it cannot be a JUDGE call — a popover in the backdrop colour renders
+entirely plausibly. The calendar entry's
 action
 buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
