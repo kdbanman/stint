@@ -21,7 +21,7 @@ export interface NotificationAction {
 export type CheckinChoice = 'stop' | 'keepDefault' | number;
 
 /** The inline interval choices (minutes) offered as the per-notification "dropdown". */
-export const CHECKIN_INTERVAL_CHOICES: readonly number[] = [15, 30, 60, 120];
+const CHECKIN_INTERVAL_CHOICES: readonly number[] = [15, 30, 60, 120];
 
 /**
  * Build the notification's action buttons and the map from a chosen action index back to

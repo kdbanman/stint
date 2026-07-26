@@ -150,7 +150,7 @@ export interface EntryRowView {
  * core's resolveRange, the same rule the report picker drives) OR an explicit custom
  * range as a PAIR OF PLAIN DATES (§09 R01 / G3: `YYYY-MM-DD`, no time component — the
  * raw values of the toolbar's two date fields). Main resolves the pair to the half-open
- * local window [from 00:00, day-after-to 00:00) via reportview.ts's resolveDateRange —
+ * local window [from 00:00, day-after-to 00:00) via core's resolveDateRange —
  * the renderer derives no window. The grouping + client/project/tag/billable + free-text
  * search mirror what the control bar offers; every narrowing field is optional ("no
  * filter" when omitted).
