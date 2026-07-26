@@ -660,7 +660,7 @@ describe('GOLD: client / project / tag restore — reversible hide (§07, §12 R
 
 describe('GOLD: reference-data / sleep / settings --json shapes (§07, §10a, §14)', () => {
   // The emitList families (client/project/tag ls) and the raw settings object (config ls) each
-  // carry a published JSON Schema beside serialize.ts's five shapes; here each producer's --json
+  // carry a published JSON Schema beside serialize.ts's other shapes; here each producer's --json
   // is validated against its schema, so drift fails the general contract, not just one frozen
   // example. Client/project validation lives beside the rename/archive snapshots above; this
   // block covers the families with no prior gold test (tag, sleep, settings) plus the empty lists.
