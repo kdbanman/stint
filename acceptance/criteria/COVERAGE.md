@@ -1730,7 +1730,18 @@ selector a browser can match, and the A02 floors recomputed from
 design.html's text roles, and each `--accent` site — a 3:1 colour the running
 clocks borrow — scored against the size and weight that site resolves to, so
 A01 picks the right floor instead of the guard scoring only pairs someone
-remembered to list. The calendar entry's action
+remembered to list. The same shape covers the D06 **type ramp** (issue #152):
+every authored `font-size` /`font-weight` on every surface — from stylesheets
+AND inline `style=` attributes, since design-system.html writes the ramp's own
+illustration inline — must be a step the §04 table names (11/12/13px, 17–18px
+Title, 24–38px Clock; weights 450/590/640/680), so a sixth role cannot
+accumulate one 12.5px site at a time; the 11px readable floor is one end of
+that rule and this is the whole of it. Beside it, the tabular half of D06: no
+surface writes `font-variant-numeric` to anything but `tabular-nums` , and
+every site the renderer paints a `backupLabel()` timestamp into resolves to
+the `--num` face with tabular figures (`.backup-meta` printed a proportional
+timestamp — the app's one time string without the idiom). The calendar entry's
+action
 buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
 top-level stops of their own (issue 140, the roving focus below),

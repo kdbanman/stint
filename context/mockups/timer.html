@@ -39,7 +39,7 @@
   /* shell + sidebar */
   .shell{display:flex;min-height:600px}
   .nav{width:168px;flex:none;background:var(--sidebar);border-right:1px solid var(--rule);padding:16px 12px;display:flex;flex-direction:column;gap:2px}
-  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:500}
+  .nav a{display:flex;align-items:center;gap:12px;height:38px;padding:0 12px;border-radius:var(--r1);color:var(--ink);text-decoration:none;font-weight:450}
   .nav a .ic{color:var(--muted)}
   .nav a:hover{background:var(--hover)}
   .nav a.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
@@ -88,7 +88,7 @@
   select.field{width:auto;min-width:150px}
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
-  .tag{font-size:11.5px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
+  .tag{font-size:11px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:8px}
   /* A03: the removable × is a real button around a 24×24 target — the negative margins keep
      the chip the size it always was, so only the hit area is bigger than the 11px glyph. */
   .tag .tag-x{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin:-4px;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
@@ -107,19 +107,19 @@
   .clock.run{color:var(--accent-ink)}
   .r-state{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12px;color:var(--run)}
   .r-desc{flex:1;min-width:0;padding-top:4px}
-  .r-desc .d{font-size:16px;font-weight:600}
-  .r-desc .m{color:var(--muted);font-size:12.5px;margin-top:4px}
+  .r-desc .d{font-size:17px;font-weight:590}
+  .r-desc .m{color:var(--muted);font-size:12px;margin-top:4px}
   .r-act{display:flex;gap:8px;flex:none}
   .r-edit{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:16px;margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
   .timefield{position:relative}
-  .timefield .field{padding-right:32px;font-family:var(--num);font-size:12.5px}
+  .timefield .field{padding-right:32px;font-family:var(--num);font-size:13px}
   .timefield .cal{position:absolute;right:9px;bottom:9px;color:var(--muted);cursor:pointer}
   .timefield .cal .ic{width:15px;height:15px}
   .timefield .cal.on{color:var(--ink);background:var(--wash);box-shadow:inset 0 0 0 1px var(--rule);border-radius:var(--r1);padding:4px;right:6px;bottom:6px}
   .r-row2{display:flex;align-items:center;gap:16px;margin-top:16px;flex-wrap:wrap}
   .tagchips{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px;flex:1;min-width:210px}
-  .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:12.5px;background:none}
-  .ph{font-size:14px;font-weight:640;margin:0 0 12px}
+  .tagchips input{border:0;outline:0;flex:1;min-width:70px;font:inherit;font-size:13px;background:none}
+  .ph{font-size:13px;font-weight:640;margin:0 0 12px}
   /* the favorites rail is the only surface beside the runner while a timer runs — the start
      panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51).
      The rail itself is NOT a card: D09 forbids nesting cards and tinting a sub-region, so the
@@ -130,9 +130,9 @@
   .fav .star{color:var(--muted)}.fav .star .ic{width:15px;height:15px}
   .fav .fi{flex:1;min-width:0}
   .fav .fn{font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .fav .fm{font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+  .fav .fm{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
   .fav .kebab{color:var(--muted);cursor:pointer}.fav .kebab .ic{width:15px;height:15px}
-  .favfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:11.5px;color:var(--muted)}
+  .favfoot{margin-top:16px;padding-top:12px;border-top:1px solid var(--rule);font-size:11px;color:var(--muted)}
   /* start disclosure — the calendar affordance expands the day timeline inline, in flow
      below the Start field: a bordered paper box on the same row width the shipped
      #le-start-disc / .stp-inline pair uses, no popover chrome and no shadow. The viewport
@@ -157,7 +157,7 @@
   /* a running entry has a start and no stop yet: the block dissolves into the future */
   .block.me.open{-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,#000 0,#000 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* the time label & start grip live at track level so nothing hides them */
-  .tlabel{position:absolute;left:6px;font-size:11.5px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
+  .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:999px;background:var(--paper);border:1.5px solid var(--accent);box-shadow:0 1px 2px rgba(74,52,24,.18);cursor:ns-resize;z-index:7}
   .phint{margin-top:12px;display:flex;justify-content:flex-end}
   .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;color:var(--muted)}
