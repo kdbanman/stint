@@ -220,6 +220,69 @@ describe('GOLD — the MANUAL runbook holds exactly the §05 live residue (#129)
 });
 
 /**
+ * GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (issue #167).
+ *
+ * The path check above only guards citations that LOOK like files. A criterion whose proof is a
+ * JUDGE scene is cited by item id (`CONFIRM_DESTRUCTIVE`), and nothing bound those: #167 moved
+ * §17 R11's proof off a deleted unit test onto the scenes that drive the real renderer, which
+ * would have swapped a machine-checked citation for an unchecked one. This closes that: a
+ * COVERAGE.md row naming a judge item that no longer exists FAILS CI, instead of reading as
+ * proof of a criterion nothing proves.
+ *
+ * Rubric rows are the checked home because judge-bind.test.ts (#85) already binds them both ways
+ * to the harness's SCENES table — so COVERAGE.md → rubric → scene resolves end to end, and this
+ * leg needs no build (static, like the rest of this file).
+ */
+const NOT_JUDGE_ITEMS = new Set([
+  // Code/config identifiers COVERAGE.md cites in the same SCREAMING_SNAKE backtick shape.
+  'APP_VERSION',
+  'DB_FILENAME',
+  'GH_TOKEN',
+  'SCHEMA_VERSION',
+  'SETTING_DESCRIPTORS',
+  'STINT_BUILD_N',
+  'STINT_VERSION',
+  'VERSION_RE',
+  // NAV_SHELL's two named sub-facts. They live inside that row's prose, not as rows of their
+  // own, so the harness has no scene to declare for them.
+  'FIXED_WIDTH_ON_RESIZE',
+  'SIDEBAR_EVERY_VIEW',
+]);
+
+describe('GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (#167)', () => {
+  const rubric = read('acceptance/criteria/judge-rubric.md');
+  const rows = new Set([...rubric.matchAll(/^\| `([A-Z_]+)` \|/gm)].map((m) => m[1]!));
+  const cited = new Set<string>();
+  for (const raw of coverage.match(/`[^`]+`/g) ?? []) {
+    const t = raw.slice(1, -1).trim();
+    if (/^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/.test(t) && !NOT_JUDGE_ITEMS.has(t)) cited.add(t);
+  }
+
+  it('found both homes (neither reader is silently empty)', () => {
+    expect(rows.size).toBeGreaterThan(30);
+    expect(cited.size).toBeGreaterThan(20);
+  });
+
+  it('cites no judge item that has no rubric row', () => {
+    // A failure here is either a deleted/renamed scene COVERAGE.md still claims as proof, or a
+    // new non-judge identifier — add it to NOT_JUDGE_ITEMS, which is the moment to check it is
+    // not actually a judge item the doc invented.
+    const dangling = [...cited].filter((c) => !rows.has(c)).sort();
+    expect(dangling, 'COVERAGE.md judge citations with no rubric row').toEqual([]);
+  });
+
+  it('the §17 R11 confirm proof is cited as judge scenes, not a unit mirror (#167)', () => {
+    // The specific regression #167 fixed: the destructive-confirm criterion read as covered by
+    // gui/test/confirm.test.ts, a pure model of the rule that nothing called, so deleting the
+    // renderer's real gate would have left the suite green. Its proof is the real surface now.
+    for (const id of ['CONFIRM_DESTRUCTIVE', 'CONFIRM_DELETE', 'CONFIRM_ARCHIVE']) {
+      expect(cited, `${id} must stay cited as R11/R13 proof`).toContain(id);
+    }
+    expect(coverage).not.toMatch(/confirm\.test\.ts|src\/confirm\.ts/);
+  });
+});
+
+/**
  * GOLD — the criteria docs stay line-diffable (issue #128).
  *
  * COVERAGE.md reached 177 KB in 97 physical lines, its longest line 53,141 characters, because

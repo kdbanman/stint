@@ -2,7 +2,7 @@
  * The pure live-view derivation (PRD §12 R9 / §17 R11) — recompute the Entries view's
  * visible list AND its report totals from the in-memory `UiState` snapshot alone, so a
  * search / filter / group selection reflects LIVE in both the list and the totals
- * without an IPC round-trip. Extracted (like toggle.ts / confirm.ts) so the derivation
+ * without an IPC round-trip. Extracted (like toggle.ts) so the derivation
  * is unit-testable without an Electron host; the renderer (app.js) mirrors it to repaint
  * `#entries` + `#week-total` on every keystroke, and the actual DOM wiring stays MANUAL.
  *
