@@ -1,6 +1,6 @@
 /**
  * GOLD — the release version stamp can still find its target (PRD §19 R06; runbook
- * "CHECK SOFTWARE UPDATE — VERSION DISPLAYED").
+ * "CHECK INSTALL & UPDATE (§17 R13)" part (a) reads the stamped version on a real install).
  *
  * Named defect (#174): `scripts/stamp-version.mjs` rewrites `APP_VERSION`'s `??` fallback in
  * `packages/core/src/version.ts` by regex — a coupling neither file can express in code. It

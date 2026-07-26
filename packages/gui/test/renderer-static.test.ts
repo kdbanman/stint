@@ -36,6 +36,15 @@ describe('renderer static contract', () => {
     expect(html).not.toMatch(
       /[⌀-⏿■-◿☀-➿⬀-⯿←-⇿\u{1F000}-\u{1FAFF}]/u,
     );
+    // The popover is the shell's second document and draws from the same sprite, so the ban
+    // covers it too — this is the one home for the banned-glyph rule (tray.test.ts carried a
+    // narrower copy over the popover source until issue #175 moved it here).
+    expect(read('popover.html')).not.toMatch(
+      /[⌀-⏿■-◿☀-➿⬀-⯿←-⇿\u{1F000}-\u{1FAFF}]/u,
+    );
+    expect(read('popover.js')).not.toMatch(
+      /[⌀-⏿■-◿☀-➿⬀-⯿←-⇿\u{1F000}-\u{1FAFF}]/u,
+    );
   });
 
   it('every element id in index.html is unique — a duplicate dead-ends getElementById wiring (issue #48)', () => {
