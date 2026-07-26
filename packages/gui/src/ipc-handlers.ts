@@ -33,7 +33,6 @@ import { toggleTimer } from './toggle.js';
 import { startWithAttributes } from './start.js';
 import {
   buildReportView,
-  buildSavedReportView,
   resolveDateRange,
   resolveExportDefinition,
   exportPayload,
@@ -264,10 +263,11 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       store.removeReport(payload.name);
       refreshAll();
     },
-    // §09 R09: run a saved report against current data. buildSavedReportView is a thin pass-through
-    // to store.runReport (resolving the stored RangeSpec through core), so the renderer paints the
-    // SAME core Report the ad-hoc `report` channel returns. Accepts a name or id ref.
-    runReport: (payload) => buildSavedReportView(store, payload.ref, new Date()),
+    // §09 R09: run a saved report against current data. Straight to core — store.runReport
+    // resolves the stored RangeSpec through resolveReportDef and reuses the one report() path,
+    // so the renderer paints the SAME core Report the ad-hoc `report` channel returns and
+    // re-derives no range, grouping, rounding, or totals. Accepts a name or id ref.
+    runReport: (payload) => store.runReport(payload.ref, new Date()),
     // §05 R09: pinned timer favorites. Each delegates to @stint/core at parity with
     // `tt fav add|ls|rename|rm`. The mutators refresh all windows so an open Timer view repaints its
     // favorites rail; listFavorites is a read, no refresh.
