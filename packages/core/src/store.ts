@@ -409,7 +409,11 @@ export class Store {
   /** Backfill a completed entry from explicit from/to times (PRD §05 R5). */
   add(opts: AddOptions): WriteResult<EntryView> {
     if (Date.parse(opts.toUtc) <= Date.parse(opts.fromUtc)) {
-      throw new StoreError('--to must be after --from');
+      // SURFACE-NEUTRAL wording: core states the fact, each surface owns its phrasing (issue
+      // 138). This message once named `tt`'s own flags (`--to must be after --from`) and the
+      // GUI showed it verbatim in the add form — naming controls that exist nowhere in the
+      // GUI. Core never names a flag; the CLI layer may (program.ts's "pass --force").
+      throw new StoreError('stop time must be after start time');
     }
     return this.tx(() => {
       const { clientId, projectId } = this.resolveClientProject(opts);

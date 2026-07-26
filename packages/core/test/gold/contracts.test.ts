@@ -182,16 +182,62 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
     roundingIncrementMin: 15,
   };
 
-  it('add() rejects a backfill whose --to is not strictly after --from (entries: strict <)', () => {
+  it('add() rejects a backfill whose to is not strictly after its from (entries: strict <)', () => {
     const store = Store.openMemory(() => new Date(FIXED_NOW));
     // Inverted: to before from.
     expect(() =>
       store.add({ description: 'x', fromUtc: '2026-06-24T10:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
-    ).toThrow(/--to must be after --from/);
+    ).toThrow(/stop time must be after start time/);
     // Zero-length: to == from is ALSO rejected for entries (the rule is strict <, not ≤).
     expect(() =>
       store.add({ description: 'x', fromUtc: '2026-06-24T09:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
-    ).toThrow(/--to must be after --from/);
+    ).toThrow(/stop time must be after start time/);
+  });
+
+  /**
+   * Issue 138 — core's refusals are SURFACE-NEUTRAL. This one named `tt`'s own flags
+   * (`--to must be after --from`) and the GUI painted it verbatim in the add form, telling a
+   * user to fix controls that exist nowhere in the GUI. Core states the fact; each surface
+   * owns its phrasing (the CLI layer, program.ts, is where "pass --force" belongs). Swept
+   * over every message core can throw, so the next one cannot reintroduce the leak.
+   */
+  it('no core refusal names a CLI flag — the words work on both surfaces', () => {
+    const store = Store.openMemory(() => new Date(FIXED_NOW));
+    const entry = store.add({
+      description: 'seed',
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T10:00:00Z',
+    }).value;
+    const refusals: (() => unknown)[] = [
+      // The three the GUI surfaces in its message regions, plus the reference-data and
+      // saved-report refusals — every family of message that can reach a user.
+      () => store.add({ description: 'x', fromUtc: '2026-06-24T10:00:00Z', toUtc: '2026-06-24T09:00:00Z' }),
+      () => store.edit(entry.id, { endUtc: '2026-06-24T08:00:00Z' }),
+      () => store.split(entry.id, '2026-06-24T12:00:00Z'),
+      () => store.stop(),
+      () => store.startFromFavorite('nope'),
+      () => store.merge([entry.id]),
+      () => store.remove(999),
+      () => store.runReport('nope'),
+      () => store.renameReport('nope', 'x'),
+      () => store.unpinFavorite('nope'),
+      () =>
+        store.saveReport({
+          name: 'Backwards',
+          rangeSpec: { kind: 'absolute', fromUtc: '2026-07-15T00:00:00Z', toUtc: '2026-07-01T00:00:00Z' },
+          ...REPORT_BASE,
+        }),
+    ];
+    for (const attempt of refusals) {
+      let message = '';
+      try {
+        attempt();
+      } catch (err) {
+        message = err instanceof Error ? err.message : String(err);
+      }
+      expect(message, 'a refusal that never fired proves nothing').not.toBe('');
+      expect(message, `core refusal names a CLI flag: ${message}`).not.toMatch(/(^|\s)--[a-z]/);
+    }
   });
 
   it('saveReport rejects an inverted absolute range but ACCEPTS same-day from == to (reports: ≤)', () => {

@@ -34,6 +34,8 @@ import {
   downloadUpdate,
   GATEKEEPER_NOTE,
   ARTIFACT_EXTENSIONS,
+  UpdateError,
+  UPDATE_CHECK_FAILED,
   type GithubRelease,
   type GithubAsset,
 } from '../src/update.js';
@@ -152,7 +154,41 @@ describe('checkForUpdates — the §19 R03 verdict (offline, injected fetcher)',
       },
     });
     expect(res.status).toBe('error');
-    if (res.status === 'error') expect(res.message).toMatch(/offline/);
+    if (res.status === 'error') expect(res.message).toBe(UPDATE_CHECK_FAILED);
+  });
+
+  /**
+   * Issue 138 — the Settings "Check now" button reported `net::ERR_NAME_NOT_RESOLVED`, because
+   * the check forwarded whatever the fetcher threw and Chromium's `net` throws error CODES.
+   * The rule this pins: only text this module authored for a reader ever reaches the renderer.
+   */
+  it('never forwards the transport error code — the reader gets the authored sentence', async () => {
+    const res = await checkForUpdates({
+      current: '2026.6.27',
+      fetchReleases: async () => {
+        throw new Error('net::ERR_NAME_NOT_RESOLVED');
+      },
+    });
+    expect(res.status).toBe('error');
+    if (res.status === 'error') {
+      expect(res.message).not.toMatch(/net::/);
+      expect(res.message).toBe(UPDATE_CHECK_FAILED);
+    }
+  });
+
+  it('an UpdateError IS copy — the authored words reach the reader unchanged', async () => {
+    // The separator earns its keep only if the authored side still passes through: the module
+    // distinguishes "text written for a person" from "whatever the transport called it".
+    const res = await checkForUpdates({
+      current: '2026.6.27',
+      fetchReleases: async () => {
+        throw new UpdateError('GitHub is rate-limiting this app; try again in an hour.');
+      },
+    });
+    expect(res.status).toBe('error');
+    if (res.status === 'error') {
+      expect(res.message).toBe('GitHub is rate-limiting this app; try again in an hour.');
+    }
   });
 });
 

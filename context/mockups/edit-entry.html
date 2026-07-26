@@ -219,8 +219,10 @@
 
 <!-- The same form's picker area with the start/stop disclosure expanded: raw text
      fields for exact entry — a stop dated the next day makes an overnight span. The
-     fields carry the stored truth to the second (09:07:33; seconds appear only when
-     non-zero), so the sub-5-min start is visible and preserved verbatim on Save. -->
+     fields carry the stored truth to the second (09:07:33), so the sub-5-min start is
+     visible and preserved verbatim on Save. The format is the one the user reads and
+     retypes — space-separated, seconds ALWAYS shown, no `T` wire separator (issue 159) —
+     and it is exactly what the field's placeholder promises. -->
 <div class="ecard card pickonly">
   <div class="ebody">
     <div class="picker">
@@ -233,7 +235,7 @@
         <button class="xp"><svg class="ic"><use href="#i-down"/></svg><span class="tnum">09:07 – 11:03</span></button>
         <div class="xfields">
           <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-22 09:07:33"></div>
-          <div class="f"><label class="lab">Stop</label><input class="field tnum" value="2026-06-22 11:03"></div>
+          <div class="f"><label class="lab">Stop</label><input class="field tnum" value="2026-06-22 11:03:00"></div>
         </div>
       </div>
       <div class="daycol">
@@ -283,7 +285,7 @@
         </div>
         <button class="xp"><svg class="ic"><use href="#i-down"/></svg><span class="tnum">09:00 –</span></button>
         <div class="xfields">
-          <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-23 09:00"></div>
+          <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-23 09:00:00"></div>
           <div class="f"><label class="lab">Stop</label><input class="field tnum" value=""></div>
         </div>
       </div>

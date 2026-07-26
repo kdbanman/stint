@@ -10,7 +10,7 @@ import { homedir, platform } from 'node:os';
 import { join } from 'node:path';
 
 export const DB_FILENAME = 'timetracker.sqlite';
-export const APP_DIRNAME = 'stint';
+const APP_DIRNAME = 'stint';
 
 /** The per-OS default data directory for Stint (without the filename). macOS + Linux only. */
 export function defaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
