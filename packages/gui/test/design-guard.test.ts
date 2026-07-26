@@ -1,6 +1,6 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D13, D14, A01/A02,
- * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154 and #157).
+ * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157 and #158).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -56,6 +56,10 @@
  *      invisible; it was also keyword-blind (`color: white`) and encoding-blind (`stroke='%23fff'`
  *      inside a data URI). The tokenizer inverts the direction that made those holes possible —
  *      it lists the words that are NOT colours and reads everything else as one (issue #157).
+ *  12. D04 one token, one job — the clause a token reference cannot satisfy by itself. `canvas` is
+ *      §03's "Backdrop behind the window (docs/mockups)", so no SHIPPED surface may name it: the
+ *      app is the window, not a picture of one. A total ban rather than a list, with the mockups'
+ *      continued use as its mirror (issue #158). Item (4) is the same clause over `faint`.
  *
  * Deliberately out of scope: D14's SECOND clause — that a pill's colour is semantic (run / flag /
  * accent), never decorative. Which colours read as decorative on which pill is a rendered
@@ -241,8 +245,8 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     // everywhere else) and icon ink. The focus HALO (--ring) paints only a 35% mix and is a
     // redundant echo around that boundary, never the indicator of record.
     // Scored against all three surfaces a focus stop actually sits on (issue #137); --canvas is
-    // absent deliberately — it backs only the window/popover behind an opaque paper card, so no
-    // focus stop is ever drawn against it.
+    // absent deliberately — no focus stop is drawn against it, and since issue #158 no shipped
+    // surface is painted in it at all (the D04 ban at the bottom of this file).
     ['accent', 'paper', NON_TEXT_FLOOR],
     ['accent', 'sidebar', NON_TEXT_FLOOR],
     ['accent', 'wash', NON_TEXT_FLOOR],
@@ -1515,5 +1519,87 @@ describe('the colour census (design.html D01 — issue #157)', () => {
     // And the other way: a length must never arrive as a colour, or the census drowns in noise and
     // gets "fixed" by loosening it.
     expect(colourTerms('0 0 0 3px var(--ring)'), 'lengths are not colours').toEqual(['var(--ring)']);
+  });
+});
+
+// ---- one token, one job: canvas is a backdrop, never a surface (issue #158) -------------------
+// The census above holds every colour a surface names to being a TOKEN. D04 adds the clause a
+// token reference cannot satisfy by itself — "each semantic token has one job" — and §03's table
+// is where the jobs are written. `canvas` (sand·5) has the narrowest of them: "Backdrop behind the
+// window (docs/mockups)". A doc or a mockup draws a PICTURE of a window, and canvas is the desk
+// that picture sits on. A shipped window has no desk, because it IS the window.
+//
+// Both shipped uses were that confusion. `body.popover` painted the tray popover — the app's whole
+// periphery presence — in the backdrop token, and `html, body` did the same to the gutters beside
+// the main window's 1040px column. Neither looks wrong, which is exactly why this belongs here and
+// not with the JUDGE: a role violation that renders plausibly is invisible to a rendered
+// comparison, and a token serving two jobs is how a token system stops meaning anything.
+//
+// The ban is total rather than a list with exceptions, because the role has no shipped case to
+// except — the app ships no docs/mockups layer for canvas to serve. The mirror below is what keeps
+// a total ban from being a quiet retirement: the mockups must still spend the token on the one job
+// §03 gives it, or the role has gone dead and the ban is standing over nothing.
+
+describe('canvas is a backdrop, never a shipped surface (design.html D04 — issue #158)', () => {
+  /** What the app SHIPS: the renderer directory. The mockups are deliberately outside it — the
+   *  backdrop is their job, and painting it is how they show where a Stint window sits. */
+  const SHIPPED = 'packages/gui/renderer/';
+
+  const canvasSites = (): StyledSite[] =>
+    styledSites().filter((s) => /var\(\s*--canvas\b/.test(s.declarations));
+
+  it('no shipped surface names canvas, on any selector or property', () => {
+    // Guard-the-guard: an emptiness check over a census that had stopped reading the shipped half
+    // would read green. The mirror below is the other half of the floor — it fails if the census
+    // has gone blind altogether, so no magic total is needed here.
+    expect(
+      styledSites().some((s) => s.surface === 'packages/gui/renderer/styles.css'),
+      'the SHIPPED renderer contributed no styled site — only the mockups were scanned',
+    ).toBe(true);
+
+    const offenders = canvasSites()
+      .filter((s) => s.surface.startsWith(SHIPPED))
+      .map((s) => `${s.surface}: ${s.site}`);
+    expect(
+      offenders,
+      '§03 gives canvas ONE job: the backdrop behind a pictured window. A shipped window is paper',
+    ).toEqual([]);
+  });
+
+  it('no renderer source names it outside the token block either (reach)', () => {
+    // The census reads DECLARATIONS — CSS rules and `style=` attributes. A renderer script sets
+    // inline styles at runtime (app.js writes calendar geometry that way), where a token name is
+    // just a string in a template, so the shipped sources are read as text too. styles.css is read
+    // minus its generated block, which is where the token is DECLARED and must stay: the D02
+    // parity test owns those contents, and the mockups resolve the same name.
+    const dir = join(repoRoot, 'packages/gui/renderer');
+    const sources = readdirSync(dir).filter((f) => /\.(?:css|html|js|ts)$/.test(f));
+    // Guard-the-guard: ten sources stand today (the built `dist/` is a directory, so the extension
+    // filter skips it). A directory read that stopped matching would leave the filter below empty.
+    expect(sources.length, 'the renderer source scan found almost nothing').toBeGreaterThanOrEqual(
+      8,
+    );
+    const named = sources.filter((f) => {
+      const text = readFileSync(join(dir, f), 'utf8');
+      return (splitOnMarkers(text)?.outside ?? text).includes('--canvas');
+    });
+    expect(named, 'a shipped renderer source names the backdrop token').toEqual([]);
+  });
+
+  it('every mockup still paints it, so the ban closes a role and does not retire a token', () => {
+    // The mirror the exception lists above all carry, in the one shape a total ban can take: the
+    // ban is only honest while the token still has the job it was banned FROM the app in favour
+    // of. If the mockups stopped painting canvas, `canvas` would be a token nothing spends, and
+    // the right change would be to retire it from design.tokens.json rather than to keep a rule
+    // about it. It is also the blindness floor for the test above — eleven body backdrops, so a
+    // census that had stopped reading declarations shows up here rather than as an empty ban.
+    const painted = new Set(canvasSites().map((s) => s.surface));
+    const silent = mockupNames
+      .map((f) => `context/mockups/${f}`)
+      .filter((name) => !painted.has(name));
+    expect(
+      silent,
+      'a mockup stopped painting the backdrop — canvas is drifting toward a token with no job',
+    ).toEqual([]);
   });
 });
