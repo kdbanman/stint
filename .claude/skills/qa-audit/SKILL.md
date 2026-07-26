@@ -1,14 +1,15 @@
 ---
-name: qa-sweep
-description: Run a QA discovery sweep — drive the running GUI as a user to find defects no requirement covers, using tour/coverage/oracle heuristics to explore diversely rather than click at random. Use when starting or running an agentic QA or exploratory pass over the app.
+name: qa-audit
+description: Run a QA audit — drive the running GUI as a user (the sweep technique) to find defects no requirement covers, using tour/coverage/oracle heuristics to explore diversely rather than click at random. Use when starting or running an agentic QA, exploratory, or sweep pass over the app.
 ---
 
-# QA sweep
+# QA audit
 
-How to run a discovery sweep well. A sweep drives the running GUI *the way a user would* and
-files what it finds (`context/process.html` §06); it gates nothing and produces no green — its
-output is issues. This skill is the *finding* half; `bug-report-authoring` is the *filing* half,
-and `qa-gif-authoring` records the evidence. Don't restate their conventions here.
+How to run a QA audit well. The audit's technique is the **sweep**: drive the running GUI *the
+way a user would* and file what it finds (`context/process.html` §06). Like every discovery
+instrument it gates nothing and produces no green — its output is issues. This skill is the
+*finding* half; `bug-report-authoring` is the *filing* half, and `qa-gif-authoring` records the
+evidence. Don't restate their conventions here.
 
 The trap this skill exists to avoid: clicking around, "looks fine," done. Ad-hoc clicking finds
 only shallow bugs and misses whole classes. Every #37 finding (#48–#52, #55) falls out of one of
@@ -116,6 +117,8 @@ switch tour or oracle and look again.
 
 For each defect: confirm it reproduces through the **real** entry point, then file it with
 `bug-report-authoring` (one standalone issue, root cause, honest confidence) and capture the repro
-with `qa-gif-authoring`. Note in the issue which tour/oracle surfaced it when it sharpens the
-report. Behaviour you exercised and found *correct* is worth a one-line note in the sweep summary
-so coverage is visible — but it is never a filed issue.
+with `qa-gif-authoring`. Label every issue **Agentic Discovery** (the family label every discovery
+instrument applies — `triage-discoveries` intakes on it) plus **Agentic QA Audit** (the provenance
+label, this instrument's alone). Note in the issue which tour/oracle surfaced it when it sharpens
+the report. Behaviour you exercised and found *correct* is worth a one-line note in the audit
+summary so coverage is visible — but it is never a filed issue.

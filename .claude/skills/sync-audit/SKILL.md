@@ -1,9 +1,9 @@
 ---
-name: sync-assessment
-description: Assess requirements↔implementation sync and file drift findings as issues. Use when asked for a sync assessment, a doc-drift check, or whether the docs still tell the truth about the tree.
+name: sync-audit
+description: Run a sync audit — judge requirements↔implementation sync and file drift findings as issues. Use when asked for a sync audit or assessment, a doc-drift check, or whether the docs still tell the truth about the tree.
 ---
 
-# Requirements ↔ implementation sync assessment
+# Requirements ↔ implementation sync audit
 
 One question, asked hard: **do the docs still tell the truth about the tree?**
 A discovery instrument (`context/process.html` §06): it gates nothing, produces
@@ -51,7 +51,7 @@ Every finding states which side is wrong and which way the lie leans:
   behavior no longer does what the requirement says. Not a doc defect at all —
   a product defect wearing one's clothes.
 
-Deciding which side is wrong is the assessment's central judgment call. When
+Deciding which side is wrong is the audit's central judgment call. When
 it is genuinely undecidable — text and tree disagree and either could
 reasonably move — file the disagreement itself and say so; triage owns the
 which-side-moves decision, not you.
@@ -73,7 +73,7 @@ surface; depth per claim is where judgment economizes, not breadth.
 Reading settles most claims; behavior settles the rest. For every
 can't-settle-by-reading verdict and every claim about what a surface *does*,
 get behavioral evidence: run the suites, run the `tt` CLI, drive the real
-renderer through the QA driver (`packages/gui/qa/` — the `qa-sweep` skill has
+renderer through the QA driver (`packages/gui/qa/` — the `qa-audit` skill has
 the driving discipline). A claim settled by observation outranks one settled
 by reading; a coverage-row verdict is only confirmed by what the cited test
 demonstrably exercises, not by its filename or header comment.
@@ -83,17 +83,21 @@ demonstrably exercises, not by its filename or header comment.
 The operator holds this phase — dedupe across readers, then verify before
 filing: re-check every absence claim ("no test covers X", "nothing runs Y")
 independently, and require file:line evidence on both sides of every finding.
-Then file each finding into whichever §06 stream owns it:
+Every finding carries the same two labels — **Agentic Discovery** (the family
+label every discovery instrument applies) plus **Agentic Sync Audit** (the
+provenance label, this instrument's alone) — regardless of which of the two
+shapes below it takes. This instrument is the one that files both shapes, so
+the shape is read from the issue body, never inferred from the label:
 
-- **Behavior drift** → reproduce through the real entry point, then file with
-  `bug-report-authoring`, labeled `Agentic QA Discovery`. Never file a
-  reading-only hunch as a reproduced defect.
-- **Doc drift** (either lean) → an arch-review-style problem issue, labeled
-  `Agentic Arch Review Discovery`: the problem in one sentence, evidence,
-  stakes, severity and confidence, no solution sections.
+- **Behavior drift** → reproduce through the real entry point, then file in the
+  bug-report shape with `bug-report-authoring`. Never file a reading-only hunch
+  as a reproduced defect.
+- **Doc drift** (either lean) → file in the arch-audit problem shape: the
+  problem in one sentence, evidence, stakes, severity and confidence, no
+  solution sections.
 
-Findings then ride the normal triage gates (`triage-qa-findings` /
-`triage-arch-findings`); this skill never triages its own findings and never
+Findings then ride the normal triage gate
+(`triage-discoveries`); this skill never triages its own findings and never
 edits a doc or a line of code to "quickly fix" what it found. Claims checked
 and found *in agreement* are a one-line note in the run summary — visible
 coverage, never an issue. Close with the summary: surface covered, agreement
@@ -109,7 +113,7 @@ what would settle it.
 - [ ] Behavioral claims settled by observation, not inference; behavior-drift
       findings reproduced through the real entry point.
 - [ ] Absence claims independently re-checked before filing.
-- [ ] Findings filed into the correct §06 stream with the stream's label;
-      nothing triaged, nothing fixed, nothing committed.
+- [ ] Findings filed in the correct shape, both labels applied; nothing
+      triaged, nothing fixed, nothing committed.
 - [ ] Run summary delivered: coverage, agreements, findings, unsettled
       residue.
