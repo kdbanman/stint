@@ -1546,12 +1546,25 @@ The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — light/dark, system type and accent-on-primary already shipped, the
 residual was the keyboard/focus dimension): focus/keyboard is a pure renderer
-concern (no IPC), so it lives entirely under `gui/renderer/` — `styles.css` adds
-an explicit `:focus-visible` ring (scoped to keyboard focus so a mouse click
-paints none, keeping the quiet desktop feel), **accent-disciplined**: ordinary
-controls take a NEUTRAL `--rule-strong` ring while only
-`button.primary:focus-visible` carries the `--accent` ring (accent stays
-confined to the primary action / running state, §15); the entry-row action
+concern (no IPC), so it lives entirely under `gui/renderer/` — `styles.css`
+carries the ONE focus idiom design.html D13/A04 name, on a single bare
+`:focus-visible` rule (scoped to keyboard focus so a mouse click paints none,
+keeping the quiet desktop feel): a full-strength `--accent` boundary — the only
+token clearing A02's 3:1 floor on all three surfaces a focus stop sits on (paper
+3.80:1, sidebar 3.67:1, wash 3.40:1) — with a field adding D13's 3px `--ring`
+halo inside it. The boundary is an `outline` rather than a border because no
+component rule in the file sets `outline`, so nothing can outrank it, where a
+border loses the cascade to any more specific field chrome. Focus is the one
+place accent is not confined to the primary action (design.html §03 lists focus
+beside icons and running marks as non-text signal); a neutral `--rule-strong`
+ring is prohibited — it reads 1.89:1 (issue #137). **GOLD**
+`packages/gui/test/design-guard.test.ts` pins the token side deterministically:
+a **declaration census** over every focus rule on every surface (the tokens the
+CSS actually names, read off the source, must be exactly the one design.html
+sanctions — so an off-table pairing fails instead of passing by omission), that
+`outline` is declared nowhere but the focus rule, that `--ring` paints under a
+selector a browser can match, and the A02 floors recomputed from
+`design.tokens.json`; the entry-row action
 buttons stay native `<button>` s (Enter/Space-activatable, tab-reachable for
 free), `index.html` /`popover.html` give `#toggle` an `aria-label` +
 `aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
