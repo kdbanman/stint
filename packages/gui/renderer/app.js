@@ -352,8 +352,8 @@ function calendarModel() {
 // short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
 function renderEntries() {
   // Repainting the calendar closes any open edit form (its host is view-level, so it would
-  // otherwise outlive the events it edited) — matching the old in-event form, which a re-render
-  // wiped. Save/Delete/Split reloads and external refreshes all funnel through here.
+  // otherwise outlive the events it edited). Save/Delete/Split reloads and external refreshes all
+  // funnel through here.
   closeEntryForm();
   const host = $('entries');
   host.innerHTML = '';
@@ -682,10 +682,6 @@ function emptyState() {
   return div;
 }
 
-// (The §12 R09 day-list builders `dayBlock`/`groupBlock` were folded into the readonly entries
-// calendar — §12 R16's calColumn/calEvent above. Grouping left the Entries view entirely; grouped
-// breakdowns live in Reports, G11.)
-
 // §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
 // filter / search excludes everything). Distinct from the never-tracked empty state —
 // here there IS history, just nothing in the current view — so it instructs widening.
@@ -958,10 +954,9 @@ async function mergeSelected(acknowledgedGap = false) {
     applyAck(ack);
     return;
   }
-  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, now
-  // hosted here in app.js (§12 modal
-  // editor row / §Z). The prompt commits the merge itself; onDone reloads + surfaces any
-  // overlap ack the fold raised against a third entry (§06 R4).
+  // The disagreeing selection resolves field-by-field in the merge-conflict prompt, hosted here
+  // in app.js (§12 modal-editor row / #43). The prompt commits the merge itself; onDone reloads
+  // + surfaces any overlap ack the fold raised against a third entry (§06 R4).
   openMergeConflict(
     entries,
     async (ack) => {
@@ -979,9 +974,9 @@ function closeMergeConflict() {
   document.querySelector('.editor-backdrop')?.remove();
 }
 
-// The merge-conflict prompt (§06 R3, §12 R6) is hosted here so the modal
-// editor can be deleted (§12 modal-editor row / §Z) while the calendar multi-select merge
-// path keeps its resolver. Styled to context/mockups/merge-conflict.html: a modal one rung
+// The merge-conflict prompt (§06 R3, §12 R6) is hosted here rather than in a modal editor
+// (§12 modal-editor row / #43) so the calendar multi-select merge path keeps its resolver.
+// Styled to context/mockups/merge-conflict.html: a modal one rung
 // above content (.editor.conflict-prompt over .editor-backdrop) resolving the disagreeing
 // attributes field-by-field with accent radios, then listing the unconditionally-kept
 // fields (description, tags, span) as auto-kept "agree" rows so the user sees exactly what
@@ -1235,8 +1230,8 @@ function openSplitForm(btn, e) {
 // (not inside the calendar event), so closing it means removing the mounted form and dropping the
 // .editing selection state from whichever calendar event carried it. Called on Cancel, whenever the
 // calendar repaints (renderEntries — a Save/Delete/Split reload, or an external refresh, replaces
-// the form the same way the old in-event mount was wiped by a re-render), and before opening a new
-// form so only one unified form (add or edit) is ever on screen. Idempotent when nothing is open.
+// the form), and before opening a new form so only one unified form (add or edit) is ever on
+// screen. Idempotent when nothing is open.
 function closeEntryForm() {
   const host = $('entry-form-host');
   const form = host?.querySelector('.entry-form');
@@ -1257,8 +1252,7 @@ function closeEntryForm() {
 // → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
 // merge stays the corner-checkbox multi-select path (§06 R3). Editing the RUNNING entry must NOT
 // stop it: the open row's form omits End (start-only), so the patch never carries endUtc and the
-// row stays open (§05 R6). Successor to the row-inline edit form, the per-row Edit-tags control,
-// and the modal editor (the §12 R06 / DELETED rows).
+// row stays open (§05 R6).
 async function openEntryForm(row, e) {
   const running = e.endUtc === null;
   // The current client / project (the two halves of "Client / Project") so the selects can
@@ -1306,8 +1300,7 @@ async function openEntryForm(row, e) {
     // and pre-selected to the entry's project. Disabled until a client is chosen.
     `<label class="uf-field"><span>Project</span>` +
     `<select class="edit-project uf-select" disabled></select></label>` +
-    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input — the same
-    // chip UI the retired per-row Edit-tags control used, folded into the one editor.
+    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input.
     `<label class="uf-field uf-tags"><span>Tags</span>` +
     `<span class="chips uf-tag-chips ef-tag-chips"></span></label>` +
     `<label class="uf-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
