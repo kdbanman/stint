@@ -306,3 +306,11 @@ refusing to delete entry 99 without confirmation; pass --force
 ```
 
 Refusal without --force exits non-zero on stderr.
+
+```console
+$ tt add "inverted span" --from 2026-06-24T10:00:00Z --to 2026-06-24T09:00:00Z
+stop time must be after start time
+# exit 2
+```
+
+Core's refusals are SURFACE-NEUTRAL (issue 138): this message once read `--to must be after --from` and the GUI painted it verbatim in the add form, naming flags that exist nowhere in the GUI. Core states the fact; each surface owns its phrasing (the CLI layer is where a flag name like `--force` above belongs). Pinning it here makes the drift gate the guard for the string BOTH surfaces show.

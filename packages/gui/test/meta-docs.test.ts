@@ -243,6 +243,7 @@ const NOT_JUDGE_ITEMS = new Set([
   'SETTING_DESCRIPTORS',
   'STINT_BUILD_N',
   'STINT_VERSION',
+  'UPDATE_CHECK_FAILED',
   'VERSION_RE',
   // NAV_SHELL's two named sub-facts. They live inside that row's prose, not as rows of their
   // own, so the harness has no scene to declare for them.

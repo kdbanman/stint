@@ -122,7 +122,7 @@ export function favoriteListJson(favs: Favorite[]): unknown {
  * mirror of the GUI Settings → Backups list): the file name (the restore handle), its absolute
  * path, the UTC instant it was taken, and its size in bytes.
  */
-export function backupJson(b: BackupInfo): unknown {
+function backupJson(b: BackupInfo): unknown {
   return {
     name: b.name,
     path: b.path,

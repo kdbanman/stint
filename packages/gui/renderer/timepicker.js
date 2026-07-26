@@ -1,5 +1,5 @@
 // §12 R15 (G5/G7) — the inline interval picker (window.STP). A pure renderer affordance that
-// binds a pair of authoritative local-time text inputs (`YYYY-MM-DDTHH:mm`) and lets the user
+// binds a pair of authoritative local-time text inputs (`YYYY-MM-DD HH:mm:ss`) and lets the user
 // DRAG a span on a single-day calendar column instead of typing it. It exposes two INLINE forms
 // (there is NO modal — the picker only ever renders IN FLOW, never over a backdrop):
 //   • STP.openInline — the unified entry form's INLINE start+stop picker (mounted in flow into
@@ -69,11 +69,14 @@ window.STP = (function () {
   }
   // The shared display helpers, off window.SU (dist/su.js loads first in index.html — the
   // picker never reaches core itself). localInputValue is the single local-time seed format
-  // (`YYYY-MM-DDTHH:mm`, no timezone) written back into the bound text inputs, so the picker,
-  // the raw Start/Stop fields, and the split instant agree byte-for-byte; localMinuteOfDay /
-  // exactMinuteOfDay are the ONE minutes-of-day derivation every timeline surface positions
+  // (`YYYY-MM-DD HH:mm:ss`, no timezone) written back into the bound text inputs, and
+  // parseLocalInput is its ONE inverse — the same pair the byte gate and the add IPC use — so the
+  // picker, the raw Start/Stop fields, and the split instant agree byte-for-byte; localMinuteOfDay
+  // / exactMinuteOfDay are the ONE minutes-of-day derivation every timeline surface positions
   // against, so a timezone or DST fix has a single site to find (issue #168).
-  const { localInputValue, localMinuteOfDay, exactMinuteOfDay, timelineWindow } = window.SU;
+  const {
+    localInputValue, parseLocalInput, localMinuteOfDay, exactMinuteOfDay, timelineWindow,
+  } = window.SU;
   function hhmm(minutes) {
     // Floor, not round: an exact seed carries fractional minutes (seconds ride the fraction,
     // issue #49), and 09:07:33 must label as 09:07 — the minute the bound field shows — not 09:08.
@@ -153,10 +156,12 @@ window.STP = (function () {
     }
   }
 
-  // Parse a local YYYY-MM-DDTHH:mm text value into a local Date (null when blank/invalid).
+  // Read a bound field's local text as a Date (null when blank/unreadable) through the ONE
+  // inverse of the seed format — so a user who typed the `T` spelling still re-anchors the
+  // column (issue #159).
   function parseInput(input) {
     if (!input || !input.value) return null;
-    const d = new Date(input.value);
+    const d = parseLocalInput(input.value);
     return isNaN(d.getTime()) ? null : d;
   }
 
@@ -166,7 +171,7 @@ window.STP = (function () {
   // drag never feeds itself back through the reflect path.
   let writingBack = false;
 
-  // Write a Date back into a bound text input as a local YYYY-MM-DDTHH:mm string, and fire an
+  // Write a Date back into a bound text input as a local YYYY-MM-DD HH:mm:ss string, and fire an
   // `input` event so the surrounding form's listeners (e.g. the running live-edit's change /
   // the add form's submit read) see it exactly as if the user typed it. The text stays
   // authoritative — the picker only ever sets `.value` here.

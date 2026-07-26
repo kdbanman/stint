@@ -21,6 +21,7 @@ import { writeFileSync } from 'node:fs';
 import {
   toUtc,
   resolveRange,
+  resolveDateRange,
   buildEntryList,
   describeOverlaps,
   type Store,
@@ -32,7 +33,6 @@ import { toggleTimer } from './toggle.js';
 import { startWithAttributes } from './start.js';
 import {
   buildReportView,
-  resolveDateRange,
   resolveExportDefinition,
   exportPayload,
   exportFileName,
@@ -42,6 +42,7 @@ import {
 } from './reportview.js';
 import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from './favorites.js';
 import { listBackupViews } from './backupview.js';
+import { parseLocalInput } from './localtime.js';
 
 /** The OS-bound seam main.ts supplies; everything else the handlers need is imported above. */
 export interface IpcHandlerDeps {
@@ -159,16 +160,20 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       // exactly — the two local datetime strings convert to UTC, client/project names resolve
       // through core's single rule, tags/billable ride along. A backfill can overlap an existing
       // entry — warned, not blocked (§06 R4) — so we return the uniform WriteAck carrying the
-      // overlap warning. Core validation errors (`--to must be after --from`) propagate as the
-      // IPC rejection.
+      // overlap warning. Core validation errors (`stop time must be after start time`) propagate
+      // as the IPC rejection, which the renderer unwraps to its kernel (SU.errMessage, issue 138).
       const { clientId, projectId } = store.resolveClientProjectByName({
         client: payload.client,
         project: payload.project,
       });
       const res = store.add({
         description: payload.description ?? null,
-        fromUtc: toUtc(new Date(payload.fromLocal)),
-        toUtc: toUtc(new Date(payload.toLocal)),
+        // The two strings are the add form's raw Start/Stop fields, so they are read back by
+        // the ONE inverse of the format those fields render (localtime.ts, issue #159) — either
+        // separator accepted, never an engine-locale guess. An unreadable value stays an Invalid
+        // Date, so toUtc throws exactly as before and the renderer surfaces it (§12 R21).
+        fromUtc: toUtc(parseLocalInput(payload.fromLocal)),
+        toUtc: toUtc(parseLocalInput(payload.toLocal)),
         clientId,
         projectId,
         tags: payload.tags ?? [],

@@ -30,6 +30,7 @@
  */
 import type { UiState, FavoriteView } from './ipc.js';
 import type { EditPatch } from '@stint/core';
+import { parseLocalInput } from './localtime.js';
 export type { StartPayload } from './start.js';
 
 /** The running-state display model the Timer-view clock panel paints. */
@@ -173,8 +174,10 @@ export interface LiveEditStripInput {
  * a DST fall-back-ambiguous wall-clock (e.g. the second 1:30 AM in America/Chicago): reparsing the
  * untouched seed string resolves to the OTHER of the two instants and would emit a spurious startUtc
  * shifted an hour on an otherwise desc-only edit; byte-comparison skips it entirely. Only when the
- * field text genuinely differs is it parsed — an unparseable half-typed instant contributes nothing
- * (the NaN guard), and a change resolving to the SAME stored instant is dropped by the double-guard.
+ * field text genuinely differs is it parsed — through localtime.ts's `parseLocalInput`, the one
+ * inverse of the format the field was seeded in, which reads either separator (issue #159) — and
+ * an unparseable half-typed instant contributes nothing (the NaN guard), while a change resolving
+ * to the SAME stored instant is dropped by the double-guard.
  * As with liveEditPatch, the patch NEVER carries endUtc: editing the open row keeps it open (§05 R6).
  */
 export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
@@ -188,7 +191,7 @@ export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
   // and is skipped WITHOUT parsing, so a DST-ambiguous wall-clock never reparses to the wrong
   // instant. Only a genuinely edited, parseable value resolving to a DIFFERENT stored instant rides.
   if (input.start && input.start !== input.seedStart) {
-    const parsed = new Date(input.start);
+    const parsed = parseLocalInput(input.start);
     if (!isNaN(parsed.getTime())) {
       const nextIso = parsed.toISOString();
       if (nextIso !== new Date(input.startUtc).toISOString()) changed.startUtc = nextIso;

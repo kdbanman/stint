@@ -4,8 +4,8 @@
 // Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
 // loaded first; the tooling decision is recorded in context/architecture.html §08).
 const {
-  fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, tagDiff, deriveView,
-  errMessage, escapeHtml, localMinuteOfDay,
+  fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, parseLocalInput,
+  tagDiff, deriveView, errMessage, escapeHtml, localMinuteOfDay,
 } = window.SU;
 
 // Element lookup. Typed `any` (not HTMLElement) under checkJs: the call sites use
@@ -572,7 +572,7 @@ function liveEditPatch(strip) {
   // field, so a half-typed value can be unparseable — the NaN guard drops it), and the double-guard
   // drops a change resolving to the SAME stored instant.
   if (start && start.value && start.value !== strip.dataset.seedStart) {
-    const parsed = new Date(start.value);
+    const parsed = parseLocalInput(start.value);
     if (!isNaN(parsed.getTime())) {
       const nextIso = parsed.toISOString();
       if (nextIso !== strip.dataset.startUtc) patch.startUtc = nextIso;
@@ -1186,7 +1186,7 @@ function armArchiveProject(btn, p) {
 // Split (PRD §06 R2 / G4): a closed entry can be cut at an instant inside its span into two
 // adjacent entries. The renderer stays a thin shell — it offers a simple PLAIN-TEXT instant
 // field (G1: no native datetime-local anywhere on an entry start/stop surface), seeded in the
-// SAME local `YYYY-MM-DDTHH:mm` format the unified form's raw Start/Stop fields use and parsed
+// SAME local `YYYY-MM-DD HH:mm:ss` format the unified form's raw Start/Stop fields use and parsed
 // identically, defaulting to the span's midpoint; it converts the typed local time to a UTC ISO,
 // and core (over the same `split` IPC tt uses) enforces the strictly-in-span rule and performs
 // the arithmetic. The open/running entry never reaches here (no Split button).
@@ -1200,7 +1200,7 @@ function openSplitForm(btn, e) {
   wrap.innerHTML =
     `<span class="split-q">Split at</span>` +
     `<input type="text" class="split-input" autocomplete="off" spellcheck="false" ` +
-    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Split instant" />` +
+    `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Split instant" />` +
     `<button class="small primary" type="button" data-act="confirm-split">Split</button>` +
     `<button class="small ghost split-cancel" type="button">Cancel</button>` +
     // §12 R21: a refused split (a point NOT strictly inside the span, or unparseable text) is
@@ -1220,7 +1220,7 @@ function openSplitForm(btn, e) {
     try {
       // Convert the picked local instant to a UTC ISO; core rejects anything not strictly
       // inside [startUtc, endUtc], so no clamping or arithmetic happens here.
-      const atUtc = new Date(atLocal).toISOString();
+      const atUtc = parseLocalInput(atLocal).toISOString();
       // Splitting a span in place cannot create a NEW overlap, so the ack carries no
       // warning; routing it through applyAck keeps every write path one uniform shape.
       const ack = await window.stint.split({ id: e.id, atUtc });
@@ -1295,7 +1295,7 @@ async function openEntryForm(row, e) {
     ? ''
     : `<label class="uf-field"><span>Stop</span>` +
       `<input type="text" class="edit-end edit-time uf-time" autocomplete="off" spellcheck="false" ` +
-      `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry stop time" /></label>`;
+      `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry stop time" /></label>`;
   form.innerHTML =
     // §12 R06 (G5): the two-column body — LEFT column = the attribute fields, RIGHT column = the
     // inline interval picker over the collapsed Start/Stop expander. Identical shape to add mode.
@@ -1333,7 +1333,7 @@ async function openEntryForm(row, e) {
     `<div class="ef-times-body" hidden>` +
     `<label class="uf-field"><span>Start</span>` +
     `<input type="text" class="edit-start edit-time uf-time" autocomplete="off" spellcheck="false" ` +
-    `placeholder="YYYY-MM-DDTHH:mm" aria-label="Entry start time" /></label>` +
+    `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry start time" /></label>` +
     endField +
     `</div></div>` +
     `</div>` +
@@ -1357,8 +1357,9 @@ async function openEntryForm(row, e) {
     `</div>`;
   form.querySelector('.edit-desc').value = e.description ?? '';
   // §12 R15 (issue #49): seed the raw Start/Stop fields with the entry's EXACT stored instants —
-  // localInputValue keeps seconds when they are non-zero, so a 09:07:33 start reads 09:07:33, never
-  // a 5-min-snapped 09:05. Keep the seeded strings: the submit handler treats a byte-identical
+  // localInputValue always renders seconds, so a 09:07:33 start reads 09:07:33, never a 5-min-
+  // snapped 09:05 (and never a `T` the user has to edit around, issue #159). Keep the seeded
+  // strings: the submit handler treats a byte-identical
   // field as UNTOUCHED and sends no time patch, so open-then-Save round-trips start/stop unchanged.
   const seededStart = localInputValue(new Date(e.startUtc));
   form.querySelector('.edit-start').value = seededStart;
@@ -1390,7 +1391,7 @@ async function openEntryForm(row, e) {
     for (const t of nextTags) {
       const chip = document.createElement('span');
       chip.className = 'chip';
-      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+      chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="Remove tag">×</b>`;
       chip.querySelector('.chip-x').addEventListener('click', (ev) => {
         ev.stopPropagation();
         const i = nextTags.indexOf(t);
@@ -1500,11 +1501,11 @@ async function openEntryForm(row, e) {
       const nextDesc = desc || null;
       if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
       if (startLocal && startLocal !== seededStart) {
-        const nextStart = new Date(startLocal).toISOString();
+        const nextStart = parseLocalInput(startLocal).toISOString();
         if (nextStart !== new Date(e.startUtc).toISOString()) patch.startUtc = nextStart;
       }
       if (!running && endLocal && endLocal !== seededEnd) {
-        const nextEnd = new Date(endLocal).toISOString();
+        const nextEnd = parseLocalInput(endLocal).toISOString();
         if (nextEnd !== new Date(e.endUtc).toISOString()) patch.endUtc = nextEnd;
       }
       if (billable !== !!e.billable) patch.billable = billable;
@@ -2070,7 +2071,7 @@ function renderAddTagChips() {
   for (const t of addFormTags) {
     const chip = document.createElement('span');
     chip.className = 'chip';
-    chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="remove tag">×</b>`;
+    chip.innerHTML = `${escapeHtml(t)} <b class="chip-x" title="Remove tag">×</b>`;
     chip.querySelector('.chip-x').addEventListener('click', (ev) => {
       ev.stopPropagation();
       const i = addFormTags.indexOf(t);
@@ -2273,7 +2274,7 @@ async function submitAddForm() {
     await load();
     applyAck(ack);
   } catch (err) {
-    // Validation rejection from core (e.g. "--to must be after --from"): show it in
+    // Validation rejection from core (e.g. "stop time must be after start time"): show it in
     // the form rather than throwing, so the user can correct the times. This is a
     // BLOCK (the entry did not save), distinct from the overlap WARNING above.
     showFormError(warn, err);

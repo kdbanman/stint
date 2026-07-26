@@ -12,6 +12,11 @@
  *   - elapsed    → timerview.ts `countUpSeconds` — the ONE live count-up rule (§12 R2).
  *   - deriveView → src/liveview.ts — the asserted, unit-tested §12 R9 / §17 R11 derivation.
  *   - tagDiff    → src/tags.ts — the asserted, unit-tested §07 tag-edit decision.
+ *   - localInputValue / parseLocalInput
+ *                → src/localtime.ts — the exact-times FIELD vocabulary (§12 R14/R15/R17).
+ *                  The format and its inverse parse live together one level deeper because
+ *                  `timerview.ts`'s byte gate and the `add` IPC handler need them too, and a
+ *                  renderer-only home would fork the pair the moment they did (issue #159).
  *
  * Everything below those imports is renderer-only display chrome with no other home.
  * Display only: elapsed is always derived (now − start), never stored.
@@ -25,6 +30,7 @@ import { DEFAULT_SETTINGS, formatDuration, formatHours } from '@stint/core';
 import { countUpSeconds } from '../src/timerview.js';
 import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
+import { localInputValue, parseLocalInput } from '../src/localtime.js';
 
 /** Format a duration in seconds as HH:MM:SS — core's rule verbatim (signed negatives). */
 const fmtDur = formatDuration;
@@ -39,16 +45,32 @@ function elapsed(startUtc: string, excludedSeconds = 0): number {
   return countUpSeconds(startUtc, new Date(), excludedSeconds);
 }
 
+// Electron's `ipcRenderer.invoke` rejection format — the transport's own words wrapped around
+// the reason: "Error invoking remote method 'edit': StoreError: start time is in the future".
+const IPC_WRAPPER = /^Error invoking remote method '[^']*':\s*/;
+// The thrown class name a serialized rejection carries in front of its message: "StoreError: ",
+// "TimeParseError: ", "RangeError: ", plain "Error: ". Applied repeatedly because the wrapper
+// and the throw each contribute one.
+const THROWN_CLASS = /^[A-Za-z]*Error:\s*/;
+
 // §12 R21: a refused core write is surfaced where it was attempted, never silently swallowed.
 // `errMessage` normalizes whatever the write path threw — a StoreError forwarded over IPC
 // (e.g. "entry end must be after its start") or a locally-thrown parse RangeError — to the
-// human string the message region shows, stripping the "Error:" prefix. EVERY rejection
-// surface reads through this one function (the entry forms, the split confirm, the inline
-// rename, the report builder, the exports, the popover's toggle), so "how a refused write
-// reads to the user" has a single definition: unwrap `.message`, then strip the prefix. The
-// report builder's own version skipped the unwrap and rendered `[object Object]` (issue #168).
+// human string the message region shows. EVERY rejection surface reads through this one
+// function (the entry forms, the split confirm, the inline rename, the report builder, the
+// exports, the popover's toggle), so "how a refused write reads to the user" has a single
+// definition: unwrap `.message`, then strip everything the transport added.
+//
+// The strip is the point (issue 138). What crossed the IPC boundary is the WHOLE Electron
+// string, and the app used to paint it: users met "Error invoking remote method 'edit':
+// StoreError: start time is in the future" in the Timer view. The kernel of the message is
+// what they can act on; the invoke wrapper and the exception class name a transport and a
+// class they cannot. Both come off here, at the one boundary, so no surface can forget.
+// The report builder's own version skipped the unwrap and rendered `[object Object]` (#168).
 function errMessage(err: unknown): string {
-  return String((err as { message?: unknown })?.message || err).replace(/^Error:\s*/, '');
+  let message = String((err as { message?: unknown })?.message || err).replace(IPC_WRAPPER, '');
+  while (THROWN_CLASS.test(message)) message = message.replace(THROWN_CLASS, '');
+  return message;
 }
 
 // The ONE HTML escape for renderer text interpolated into innerHTML. FIVE characters,
@@ -136,22 +158,6 @@ function lineFlags(
 
 function friendlyHotkey(accel: string): string {
   return accel.replace('CommandOrControl', 'Ctrl').replace('Command', 'Cmd');
-}
-
-// §12 R15/R17 (G1): the ONE local-time seed format the raw Start/Stop text fields, the split
-// instant, and the inline picker's write-backs all share — `YYYY-MM-DDTHH:mm[:ss]` in *local*
-// time (no timezone suffix), parsed identically by `new Date(value)`. Seconds are emitted only
-// when NON-ZERO, so a stored instant like 09:07:33 renders (and round-trips) exactly to the
-// second (§12 R15 / issue #49 — opening an entry must show its exact stored times), while the
-// common whole-minute instants keep the familiar short form. Hoisted here so app.js and
-// timepicker.js consume a single definition.
-function localInputValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const secs = date.getSeconds();
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
-    `T${pad(date.getHours())}:${pad(date.getMinutes())}${secs ? `:${pad(secs)}` : ''}`
-  );
 }
 
 /** §14's strict zero-padded HH:MM — the shape core validates on write ('07:00', never '7:00'). */
@@ -316,6 +322,7 @@ const SU = {
   lineFlags,
   friendlyHotkey,
   localInputValue,
+  parseLocalInput,
   localMinuteOfDay,
   exactMinuteOfDay,
   timelineWindow,

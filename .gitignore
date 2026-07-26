@@ -2,7 +2,6 @@ node_modules/
 dist/
 dist-pack/
 *.tsbuildinfo
-coverage/
 *.sqlite
 *.sqlite-wal
 *.sqlite-shm
