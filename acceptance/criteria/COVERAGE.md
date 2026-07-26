@@ -2131,8 +2131,21 @@ the default output matches the date pattern OR the dev sentinel but never
 `isReleaseVersion` accepts `2026.6.27`/`2026.6.27.2` and rejects `1.0.0`/the
 sentinel, and `APP_VERSION` equals the `STINT_VERSION` override when set, else a
 release version or the sentinel — proving the one shared constant both surfaces
-read is the release version, not a placeholder). JUDGE `SOFTWARE_UPDATE` reads the stamped version off the Current-version row,
-and MANUAL `manual/runbook.md` **CHECK INSTALL & UPDATE (§17 R13)** part (a)
+read is the release version, not a placeholder). The stamp's *reach* — that the
+script can still find the constant it rewrites — is pinned separately by **GOLD**
+`core/test/gold/stamp-version.test.ts` (`GOLD: the version stamp finds its target`
+— issue #174): `stamp-version.mjs` couples to `packages/core/src/version.ts` by
+regex over the `APP_VERSION` `??` fallback, a constraint neither file can state
+in code, so the test stamps a temp COPY of the committed file and asserts it
+rewrites, that **both** committed fallback forms (the `DEV_VERSION` constant and
+an already-stamped quoted literal) stamp to the same quoted release version, that
+a fallback routed through a helper THROWS rather than shipping an unstamped
+build, and that re-stamping an already-stamped tree is idempotent (the
+`release.yml` `pack` matrix restamps). Literal-only matching made substituting the
+exported `DEV_VERSION` a silent break of the release stamp; this fails in
+`npm test` instead. JUDGE `SOFTWARE_UPDATE` reads the stamped version off the
+Current-version row, and MANUAL `manual/runbook.md`
+**CHECK INSTALL & UPDATE (§17 R13)** part (a)
 confirms the GUI Settings version and `tt --version` show the **same**
 `YYYY.M.D[.N]` string on a real install (the two equal surfaces report one
 version). `appVersion` rides on

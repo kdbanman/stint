@@ -212,6 +212,11 @@ function render() {
 // pixels-per-hour and the event positioning, so an entry's top/height is a pure function of its
 // local minutes-of-day — the SAME window math the picker uses (window.SU.timelineWindow), never
 // re-derived here.
+// 44 is NOT free to change here alone (#174): styles.css `.dt` paints the hour rules with a
+// repeating-linear-gradient hard-coded at 43px/44px — CSS cannot read this constant — so the
+// two must move together or the painted hour lines drift off the positioned events. The value
+// itself is chosen so the 24h track (1056px) overflows `.cstrip`'s 60vh viewport at any ordinary
+// window height, which is what makes the working-hours default a real SCROLL, never a clip (G16).
 const CAL_HOUR_PX = 44;
 const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never clip)
 const CAL_HEADER_PX = 52; // the day-header (.dh) height, matched by the gutter spacer (.sp2)
@@ -579,6 +584,13 @@ function liveEditPatch(strip) {
   return patch;
 }
 
+// Debounce for the §12 R14 live-edit commit, in ms. Every commit is a real core write followed
+// by a full `load()` re-render (and the main process's DB file-watcher fires on top of it), so
+// committing per keystroke would thrash both. 500ms exceeds the gap inside ordinary typing — a
+// burst collapses to ONE write — while staying short enough that the edit has landed before a
+// user who typed and looked away hits Stop. Re-seeding skips a focused field, so a commit that
+// fires mid-edit never clobbers what is still being typed.
+const LIVE_EDIT_DEBOUNCE_MS = 500;
 let liveEditTimer = null;
 async function commitLiveEdit() {
   const strip = $('live-edit');
@@ -602,7 +614,7 @@ async function commitLiveEdit() {
 }
 function scheduleLiveEdit() {
   if (liveEditTimer) clearTimeout(liveEditTimer);
-  liveEditTimer = setTimeout(() => void commitLiveEdit(), 500);
+  liveEditTimer = setTimeout(() => void commitLiveEdit(), LIVE_EDIT_DEBOUNCE_MS);
 }
 
 // §12 R04: the COMPACT STRIP on the Entries view — a one-line mirror of the running timer
