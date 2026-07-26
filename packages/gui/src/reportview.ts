@@ -2,13 +2,7 @@
  * The GUI report/export plumbing (PRD §09, §12 R8) — Electron-free so it is unit-testable
  * without a main process, mirroring uistate.ts/start.ts. The report builder view itself
  * paints the core `Report` (the `report` IPC returns it verbatim, parity with `tt report`);
- * this module owns the two pure pieces the export path and the on-screen summary need:
- *
- *   1. resolveExportRange — turn a preset name (resolved through core's resolveRange) OR an
- *      explicit custom from/to into the absolute UTC bounds `tt export` uses. The renderer
- *      never re-derives date math; the preset rule lives once in core.
- *   2. exportPayload — render a set of entries to the CSV / JSON byte string core's
- *      toCsv/toJsonEntries produce, so the GUI export writes bytes that match the CLI.
+ * this module owns the pure pieces the export path and the on-screen summary need.
  *
  * §09 R06/R09 — export has TWO honest scopes (resolveExportDefinition owns the split):
  * the FILTERED rows a saved report shows (byte-identical to `tt report run <name>
