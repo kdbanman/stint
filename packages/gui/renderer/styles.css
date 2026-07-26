@@ -48,9 +48,13 @@
 /* STINT-TOKENS end */
 
 * { box-sizing: border-box; }
+/* The window surface is `paper` (design.html §03), not `canvas`: canvas is the backdrop a doc or
+   mockup paints BEHIND a pictured window, and a shipped window has nothing behind it. The gutters
+   beside the 1040px-max `.app` are the only place this shows, and they are window, not backdrop
+   (issue #158). */
 html, body {
   margin: 0;
-  background: var(--canvas);
+  background: var(--paper);
   color: var(--ink);
   font-family: var(--sans);
   font-size: 13px;
@@ -1947,8 +1951,10 @@ button.danger:hover { background: var(--danger-weak); }
 /* Warm OPAQUE paper, the elevation ladder's popover rung. The compact surface stacks a top
    block, an action row, and a foot — NOT a full-viewport flex fill. The popover BrowserWindow
    is the surface itself, so the mockup's gradient backdrop + notch are demo-only (not added);
-   warm opaque canvas shows behind the floating popover card. */
-body.popover { background: var(--canvas); margin: 0; }
+   what shows around the floating card is the window, which is `paper` like every other Stint
+   window — the mockup's `canvas` body is the DESKTOP behind that window, and this file ships no
+   desktop (issue #158). */
+body.popover { background: var(--paper); margin: 0; }
 .pop {
   width: 332px;
   background: var(--paper);
