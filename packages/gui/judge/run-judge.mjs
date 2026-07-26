@@ -5769,6 +5769,40 @@ async function sceneTimelineWindow(browser) {
       const end = panel.querySelector('input.set-hhmm[data-key="workingHoursEnd"]');
       const around = panel.querySelector('select[data-key="pickerAroundHours"]');
       const aroundRow = around ? around.closest('.set-row') : null;
+      // Issue 155 — the off row's LABEL, measured as rendered. The select is genuinely
+      // `disabled`, which is design.html §07's recorded A01 exemption; `.set-k` beside it is
+      // ordinary readable text and has no exemption to claim. The row used to carry the dim
+      // (`.set-row.off { opacity: 0.5 }`), which composited the label to 3.19:1 — a defect no
+      // token check could see, because no token was wrong: --ink on --paper is 16:1 and the
+      // ancestor was what darkened it. So this reads the label the way the audit did — its own
+      // colour composited through the WHOLE ancestor opacity chain, against the first opaque
+      // surface under it — and holds the result to A01's 4.5:1. Re-dimming the row anywhere up
+      // that chain reddens the row, and design-guard's token pairing keeps scoring the rest.
+      const label = aroundRow ? aroundRow.querySelector('.set-k') : null;
+      const dimmedBy = [];
+      let effOpacity = 1;
+      for (let n = label; n && n !== document.documentElement; n = n.parentElement) {
+        const o = parseFloat(getComputedStyle(n).opacity);
+        effOpacity *= o;
+        if (o !== 1) dimmedBy.push(`${n.className || n.tagName}@${o}`);
+      }
+      const rgb = (s) => s.match(/[\d.]+/g).slice(0, 3).map(Number);
+      let surface = [255, 255, 255];
+      for (let n = label; n; n = n.parentElement) {
+        const bg = getComputedStyle(n).backgroundColor;
+        if (bg && !/^rgba\(0, 0, 0, 0\)$|transparent/.test(bg)) {
+          surface = rgb(bg);
+          break;
+        }
+      }
+      const lum = (c) =>
+        c
+          .map((v) => (v / 255 <= 0.03928 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+          .reduce((a, ch, i) => a + [0.2126, 0.7152, 0.0722][i] * ch, 0);
+      const shown = label
+        ? rgb(getComputedStyle(label).color).map((c, i) => c * effOpacity + surface[i] * (1 - effOpacity))
+        : surface;
+      const [hi, lo] = [lum(shown), lum(surface)].sort((a, b) => b - a);
       return {
         allFour: ['workingHoursStart', 'workingHoursEnd', 'pickerWindowMode', 'pickerAroundHours'].every(
           (k) => keys.includes(k),
@@ -5777,6 +5811,8 @@ async function sceneTimelineWindow(browser) {
         endValue: end ? end.value : null,
         aroundDisabled: !!(around && around.disabled),
         aroundRowOff: !!(aroundRow && aroundRow.classList.contains('off')),
+        labelDimmedBy: dimmedBy,
+        labelContrast: label ? Math.round(((hi + 0.05) / (lo + 0.05)) * 100) / 100 : 0,
       };
     });
 
@@ -5850,6 +5886,8 @@ async function sceneTimelineWindow(browser) {
       probe.endValue === '15:00' &&
       probe.aroundDisabled &&
       probe.aroundRowOff &&
+      probe.labelDimmedBy.length === 0 &&
+      probe.labelContrast >= 4.5 &&
       !!set &&
       set.key === 'pickerWindowMode' &&
       set.value === 'around_now' &&
@@ -5864,7 +5902,9 @@ async function sceneTimelineWindow(browser) {
       ok,
       `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
         `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
-        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}); mode flip fired ` +
+        `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}) with its LABEL ` +
+        `undimmed (dimmed ancestors=[${probe.labelDimmedBy.join(', ') || 'none'}], as-rendered ` +
+        `contrast ${probe.labelContrast}:1 ≥ 4.5); mode flip fired ` +
         `setSetting=${JSON.stringify(set)} and enabled Around (${afterFlip.aroundEnabled}); ` +
         `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
         `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
@@ -6493,95 +6533,156 @@ async function sceneFieldLabels(browser) {
   );
 }
 
-// TARGET_SIZE — design.html A03 (WCAG 2.2 SC 2.5.8): every interactive target measures at
-// least 24×24 CSS px, or falls under a WCAG-sanctioned exception. A machine sweep over the
-// running main window routes through all five views and, in each, collects every VISIBLE
-// interactive control (button / a[href] / input / select / textarea / tabbable / [data-act]),
-// excluding controls nested inside another target (the parent carries the target). An
-// undersized control passes only via:
-//   • the SPACING exception, tested as the SC's own Understanding doc specifies it — a
-//     24px-DIAMETER CIRCLE centred on the undersized target must not intersect any other
-//     target's bounding box, nor the circle of any other undersized target; or
-//   • the INLINE exception — an inline link inside a line of text.
-// The tray popover (both its actions) is swept too. The gate is ZERO unsanctioned undersized
-// targets; the spacing-sanctioned undersized controls are named in the justification so each
-// stays a deliberate, reviewable exception (e.g. the corner/billable checkboxes and the
-// settings toggle, whose circles clear every neighbour comfortably).
+// TARGET_SIZE — design.html A03: every interactive target measures at least 24×24 CSS px, or
+// stands at least 24px clear of its nearest interactive neighbour. A machine sweep collects
+// every VISIBLE interactive control (button / a[href] / input / select / textarea / tabbable /
+// [data-act]) and measures it, with two rules about WHAT the box is:
+//   • a control nested inside another interactive control is a SUB-AFFORDANCE — the parent is
+//     the target the sweep measures;
+//   • a checkbox/radio wrapped in a <label> is activated by the WHOLE LABEL, so the LABEL's box
+//     is the target — the 13px native glyph is a paint detail, not the thing a pointer aims at.
+// An undersized control passes only via the SPACING exception (≥24px edge-to-edge from every
+// other target — the reading design.html A03 states, stricter than the SC's 24px-circle test)
+// or the INLINE exception (an inline link inside a line of text). Both floors are INCLUSIVE:
+// the ops chip's op-btn is exactly 24×24 against a 0px gap and stays a pass, by design.
+//
+// Issue 148 measured eight targets under the floor, three of them (the corner select checkbox,
+// the tag remover, the picker's 31 day cells) with 0–2px of neighbour spacing to fall back on.
+// Nothing caught them, for three separate reasons this scene now closes:
+//   (a) the day cells measured 23.84px and the sweep ROUNDED before comparing, so they read as
+//       24 — the comparison is now against the raw CSS px;
+//   (b) the tag remover was a <b> with a click listener, matching no interactive selector at
+//       all — the fix (a real button) is what puts it in front of this sweep, so the sweep
+//       ASSERTS it is present, and a regression back to bare prose fails here as well as at
+//       the keyboard;
+//   (c) the undersized controls live on TRANSIENT surfaces — the add form, the unified editor
+//       and its inline picker, the reports builder, the Timer start-details disclosure — which
+//       the old five-views-at-rest route never opened. The route now drives them.
+// The gate is ZERO unsanctioned undersized targets across all nine surfaces; the
+// spacing-sanctioned ones are named in the justification so each stays reviewable.
 function sweepTargets() {
   const sel = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"]), [data-act]';
   const { visible } = window.__probe;
   const targets = [...document.querySelectorAll(sel)]
     .filter(visible)
-    // A control nested inside another interactive control is a sub-affordance — the parent
-    // is the target the sweep measures.
     .filter((el) => !el.parentElement?.closest('button, a[href], [data-act]'));
   const boxes = targets.map((el) => {
-    const r = el.getBoundingClientRect();
+    const box = el.matches('input[type="checkbox"], input[type="radio"]') && el.closest('label')
+      ? el.closest('label')
+      : el;
+    const r = box.getBoundingClientRect();
+    const name = el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`;
     return {
       el,
-      label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
+      label: box === el ? name : `${name} (label)`,
       rect: r,
-      w: Math.round(r.width),
-      h: Math.round(r.height),
-      cx: r.left + r.width / 2,
-      cy: r.top + r.height / 2,
+      // Raw CSS px, never rounded: 23.84 is under the floor and must read as under it.
+      w: r.width,
+      h: r.height,
     };
   });
   const undersized = (b) => b.w < 24 || b.h < 24;
-  // SC 2.5.8 spacing test, radius 12: circle-vs-rect for an adequately-sized neighbour
-  // (closest point of the box to the circle centre), circle-vs-circle for an undersized one.
-  const R = 12;
-  const circleHitsRect = (b, r) => {
-    const nx = Math.max(r.left, Math.min(b.cx, r.right));
-    const ny = Math.max(r.top, Math.min(b.cy, r.bottom));
-    return Math.hypot(b.cx - nx, b.cy - ny) < R;
-  };
+  // Edge-to-edge distance between two boxes: 0 when they touch or overlap.
+  const spacing = (a, b) => Math.hypot(
+    Math.max(a.left - b.right, b.left - a.right, 0),
+    Math.max(a.top - b.bottom, b.top - a.bottom, 0),
+  );
+  const round = (n) => Math.round(n * 10) / 10;
   const violations = [];
   const spacingSanctioned = [];
   for (const b of boxes) {
     if (!undersized(b)) continue;
-    const crowd = [];
+    let nearest = Infinity;
+    let who = 'nothing';
     for (const o of boxes) {
       if (o.el === b.el) continue;
-      const hit = undersized(o)
-        ? Math.hypot(o.cx - b.cx, o.cy - b.cy) < 2 * R
-        : circleHitsRect(b, o.rect);
-      if (hit) crowd.push(o.label);
+      const d = spacing(b.rect, o.rect);
+      if (d < nearest) { nearest = d; who = o.label; }
     }
-    const entry = { label: b.label, w: b.w, h: b.h, crowd };
-    if (crowd.length === 0) { spacingSanctioned.push(entry); continue; }
+    const entry = { label: b.label, w: round(b.w), h: round(b.h), near: round(nearest), who };
+    if (nearest >= 24) { spacingSanctioned.push(entry); continue; }
     if (b.el.matches('a') && getComputedStyle(b.el).display === 'inline') continue; // inline-text exemption
     violations.push(entry);
   }
-  return { total: boxes.length, violations, spacingSanctioned };
+  const swept = boxes.map((b) => b.label);
+  return { total: boxes.length, violations, spacingSanctioned, swept };
 }
 async function sceneTargetSize(browser) {
+  const perSurface = [];
+  const sweep = async (page, surface) => perSurface.push({ surface, ...(await page.evaluate(sweepTargets)) });
+
+  // The five views at rest, over the running window.
   await withPage(browser, runningState(), 'index.html', async (page) => {
-    const perView = [];
     for (const view of ['entries', 'timer', 'clients', 'reports', 'settings']) {
       await page.click(`.nav-item[data-view="${view}"]`);
-      const res = await page.evaluate(sweepTargets);
-      perView.push({ surface: view, ...res });
+      await sweep(page, view);
       if (view === 'entries') await page.screenshot({ path: join(EVIDENCE, 'main-target-size.png') });
     }
-    // The popover is its own renderer — sweep both of its tray actions too.
-    const pop = await withPage(browser, runningState(), 'popover.html', async (pp) =>
-      pp.evaluate(sweepTargets),
-    );
-    perView.push({ surface: 'popover', ...pop });
-    const totalTargets = perView.reduce((s, v) => s + v.total, 0);
-    const allViolations = perView.flatMap((v) => v.violations.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} crowded by [${x.crowd.join(', ')}]`));
-    const sanctioned = perView.flatMap((v) => v.spacingSanctioned.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h}`));
-    const ok = totalTargets > 0 && allViolations.length === 0;
-    record(
-      'TARGET_SIZE',
-      ok,
-      `A03 sweep over ${totalTargets} visible targets (five views + popover): ` +
-        `unsanctioned undersized=[${allViolations.join('; ') || 'none'}]; ` +
-        `spacing-exception (undersized, its 24px circle clear of every other target's box and every undersized target's circle)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
-      'main-target-size.png',
-    );
   });
+
+  // The Entries add form — the inline picker's day grid, a tag chip with its remover, the
+  // Billable label, and the calendar's hover-corner select checkbox beside its ops chip.
+  await withPage(browser, addFormState(), 'index.html', async (page) => {
+    await page.waitForSelector('[data-view="entries"]:not([hidden]) #add-toggle');
+    await page.click('#add-toggle');
+    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
+    await page.fill('#add-tag-input', 'deep');
+    await page.press('#add-tag-input', 'Enter');
+    await page.waitForSelector('#add-tag-chips .chip-x', { state: 'attached' });
+    await sweep(page, 'entries (add form)');
+    await page.screenshot({ path: join(EVIDENCE, 'target-size-add-form.png') });
+  });
+
+  // The unified editor — the same picker and tag editor mounted in the edit form.
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await page.locator('[data-act="edit"]').first().click();
+    await page.waitForSelector('.entry-form .edit-picker .stp-block.me', { state: 'attached' });
+    await sweep(page, 'entries (unified editor)');
+  });
+
+  // The Timer view's start-details disclosure (idle-only) and the Reports builder — the two
+  // remaining surfaces that hold a labelled checkbox.
+  await withPage(browser, addFormState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #start-toggle');
+    await page.click('#start-toggle');
+    await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
+    await sweep(page, 'timer (start details)');
+    await page.click('.nav-item[data-view="reports"]');
+    await page.click('#rep-new');
+    await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
+    await page.click('#rep-preset-seg .preset[data-preset="custom"]');
+    await sweep(page, 'reports (builder)');
+  });
+
+  // The popover is its own renderer — sweep both of its tray actions too.
+  await withPage(browser, runningState(), 'popover.html', async (pp) => sweep(pp, 'popover'));
+
+  const totalTargets = perSurface.reduce((s, v) => s + v.total, 0);
+  const allViolations = perSurface.flatMap((v) =>
+    v.violations.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} — ${x.near}px from ${x.who}`),
+  );
+  const sanctioned = perSurface.flatMap((v) =>
+    v.spacingSanctioned.map((x) => `${x.label} ${x.w}x${x.h} (${x.near}px clear)`),
+  );
+  // Guard-the-guard: the three targets issue 148 measured under the floor must be IN the swept
+  // set. `.chip-x` is the load-bearing one — as a <b> it matched no selector, so an empty sweep
+  // of it would have "passed" this scene forever.
+  const swept = new Set(perSurface.flatMap((v) => v.swept.map((s) => s.split(' ')[0])));
+  const missing = ['button.chip-x', 'input.ck', 'button.stp-d'].filter(
+    (want) => ![...swept].some((s) => s.startsWith(want)),
+  );
+  const ok = totalTargets > 0 && allViolations.length === 0 && missing.length === 0;
+  record(
+    'TARGET_SIZE',
+    ok,
+    `A03 sweep over ${totalTargets} visible targets across ${perSurface.length} surfaces ` +
+      `(${perSurface.map((v) => `${v.surface}=${v.total}`).join(', ')}): ` +
+      `under 24×24 with less than 24px of clearance=[${allViolations.join('; ') || 'none'}]; ` +
+      `swept but absent (the tag remover, the select checkbox, a picker day cell)=[${missing.join(', ') || 'none'}]; ` +
+      `spacing-exception (undersized, ≥24px clear of every other target)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
+    'main-target-size.png',
+  );
 }
 
 // COLOUR_PAIRING — design.html D05 / A05 (WCAG 1.4.1): colour is never the sole signal —
