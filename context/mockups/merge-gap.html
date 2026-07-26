@@ -72,8 +72,10 @@
   .day-h .dsum{font-weight:400;color:var(--muted);font-size:12px}
   .row{display:grid;grid-template-columns:18px 130px 1fr auto;align-items:center;gap:16px;padding:12px 4px;border-bottom:1px solid var(--rule)}
   .row.sel{background:var(--wash);box-shadow:var(--sh-chip)}
-  .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--accent);background:var(--accent);display:flex;align-items:center;justify-content:center}
-  .row .ck .ic{width:12px;height:12px;color:#fff}
+  /* design.html D12 (issue #144): the checked box is a tick, not a colour — paper fill, neutral
+     edge, chip lift, ink mark. The accent is never spent on a selection. */
+  .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
+  .row .ck .ic{width:12px;height:12px;color:var(--ink)}
   .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12.5px}
   .row .what{display:flex;align-items:center;gap:8px;min-width:0}
   .row .what .where{color:var(--muted)}

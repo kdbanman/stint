@@ -344,7 +344,14 @@ prompt is now **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
 `openMergeConflict` — the merge-bar path routes through it; `editor.js` and its
 toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
 `MERGE_NOCONFLICT` (`packages/gui/judge/`, asserting the
-`.editor.conflict-prompt` modal + `main-merge-conflict.png`) + `MERGE_GAP` (the
+`.editor.conflict-prompt` modal + `main-merge-conflict.png`) +
+`MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — how the prompt PAINTS
+a choice: each chosen `.mc-opt` is the raised paper chip (`--paper` + a non-none
+shadow) while its unchosen peers recess to `--wash` and stay flat, no option or
+radio mark paints an accent-family colour, the modal holds zero `--accent-weak`
+fills, the filled-vs-empty radio dot carries the state without colour, and
+clicking the other client moves the chip onto it — design.html D12 in the app's
+only modal) + `MERGE_GAP` (the
 gapped selection swaps Merge into a `.confirm-gap` span/duration confirm before
 any fold, then commits with `allowGap` on the explicit confirm —
 `main-merge-gap.png`), BDD `features/reachable_by_hand.feature` "Merge a contiguous selection by hand
@@ -1414,7 +1421,16 @@ with its 7.75h counted ONLY on its start day (Mon reads 12.00h = 4.25h same-day
 + 7.75h overnight; Tue's header stays off it); hover reveals the ops + `.ck` ; a
 click opens `.edit-form.entry-form` inline; the `.ev.run` future-fade with no
 end edge; the `.ov` overlap band + `.zz` slept hatch; and checking two `.ck`
-boxes reveals `#merge-bar` . The per-day + range **billable totals** the
+boxes reveals `#merge-bar` . How the calendar PAINTS a chosen block is pinned
+separately by JUDGE `SELECTION_LIFT` (`selection-lift.png` /
+`selection-lift-editing.png`, issue 144 — over the same three-week
+`denseCalendarState` the accent-budget guard uses: two `.ck`-selected blocks and
+one `.editing` block each keep the `--paper` fill and compute a box-shadow a
+rung above the resting one their forty-eight untouched neighbours carry, none of
+the three and neither checked checkbox paints an accent-family colour, the
+checked box is a paper box with an ink tick, and the strip still holds zero
+`--accent-weak` fills — design.html D12, "a chosen thing lifts, it does not turn
+accent"). The per-day + range **billable totals** the
 calendar's headers/chip present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
 — including an empty day"), and the never-clip / fixed-width / working-hours-default / empty-column
@@ -1781,8 +1797,8 @@ and so carries the neutral button bg+border (quieter than `.primary` only via
 the muted ink + `.small` sizing), the report-view `.nav .nav-link` tabs take a
 `var(--wash)` fill + `var(--rule)` border (mirroring `context/mockups/main.html`
 `.nav .wk a`), and the left-rail `.nav-item` carries a `var(--paper)` fill +
-subtle border in its resting state (its `:hover` and the sanctioned `.active`
-accent-wash unchanged). Inert text
+subtle border in its resting state (its `:hover` and its `.active` state — the
+D12 lifted paper chip whose icon alone takes the accent — unchanged). Inert text
 (`.wordmark`/`.summary`/`.day-head`/`.entry .desc`/`.entry .time`/`.set-k`/`.report-lab`/`.settings-title`)
 stays bare; the in-chip `.chip-x` and the `.set-toggle` knob are documented
 in-control sub-affordance exceptions (the parent `.chip`/track IS the
@@ -1802,8 +1818,11 @@ three-week `denseCalendarState` fixture, 51 blocks: no closed entry block paints
 an accent-family colour as fill / gradient / border / shadow, every one computes
 the `--paper` fill plus a non-none box-shadow (D09 depth, not tint), exactly one
 block — the RUNNING one — keeps the accent, and the whole view holds ≤1
-`--accent-solid` fill) as the deterministic guards on the discipline;
-the subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
+`--accent-solid` fill) and the two D12 selection guards `SELECTION_LIFT`
+(`selection-lift.png`, issue 144 — the calendar's chosen blocks and their
+checkboxes) and `MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — the
+merge-conflict modal's chosen option) as the deterministic guards on the
+discipline; the subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
 screenshots). The mockups (`context/mockups/main.html` L43, `reports.html` L39,
 `timer.html` L40) carry the convention in comments as the design-intent
 reference. GUI-only presentation — no core / schema / CLI / IPC channel, so no
