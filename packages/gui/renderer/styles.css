@@ -301,10 +301,14 @@ header.mast {
   flex: none;
 }
 .timer-strip.running .strip-dot { background: var(--run-dot); }
+/* 24px is an A01 floor, not a taste call (issue 141): the running count-up below paints accent
+   as TEXT, and accent clears only 3:1 on paper — a ratio A01 allows text only at 24px or more.
+   Weight cannot buy the exemption instead: D06's 680 is semibold, and WCAG's bold allowance
+   starts at 700. Shrinking this clock re-breaks the floor. design.html D06 owns the range. */
 .timer-strip .clock {
   font-family: var(--num);
-  font-size: 22px;
-  font-weight: 640;
+  font-size: 24px;
+  font-weight: 680;
   line-height: 1;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;

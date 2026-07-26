@@ -1007,7 +1007,17 @@ carries the running description + client/project, and exposes Stop with
 count-up + state + description with NO full-panel Stop and `noSwitch:true` ),
 and the running card/strip accent count-up is the sanctioned
 `.timer-card.running` /`.timer-strip.running` use the `ACCENT_DISCIPLINE` scan
-allows. **The card stays fresh across views (issue #50):** JUDGE
+allows. That count-up is also TEXT, so design.html A01 governs it as well:
+`--accent` reads 3.80:1 on paper, a floor A01 licenses only for text at ≥24px,
+so the compact strip clock is **24px/680** (the reason D06's clock range starts
+at 24px) beside the Timer-view and popover clocks at 38px/680 — at the 22px/640
+it shipped, the strip clock was a 3.80:1 text colour with no large-text branch
+to stand on (issue #141). JUDGE `IN_WINDOW_TIMER` computes the strip clock's
+font-size from the rendered element, and GOLD
+`gui/test/design-guard.test.ts` censuses every `color:` declaration on every
+surface: the tokens painted as text must be exactly those design.html gives a
+text role, and each accent-as-text site must resolve to ≥24px at D06's 680.
+**The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
 Entries-toolbar control is touched (the Today preset latches the renderer's
 entries query), routing to the Timer view and clicking Start flips the card to
@@ -1600,7 +1610,12 @@ CSS actually names, read off the source, must be exactly the one design.html
 sanctions — so an off-table pairing fails instead of passing by omission), that
 `outline` is declared nowhere but the focus rule, that `--ring` paints under a
 selector a browser can match, and the A02 floors recomputed from
-`design.tokens.json`; the entry-row action
+`design.tokens.json`. The same census shape now covers text colour (issue
+#141): every `color:` declaration on every surface, its token held to
+design.html's text roles, and each `--accent` site — a 3:1 colour the running
+clocks borrow — scored against the size and weight that site resolves to, so
+A01 picks the right floor instead of the guard scoring only pairs someone
+remembered to list. The entry-row action
 buttons stay native `<button>` s (Enter/Space-activatable, tab-reachable for
 free), `index.html` /`popover.html` give `#toggle` an `aria-label` +
 `aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`

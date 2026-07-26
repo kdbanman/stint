@@ -546,7 +546,7 @@ async function scenePopoverReject(browser) {
 // Stop control (and never a #timer-switch). A third, IDLE page (STATES.md Entries × edge)
 // asserts the strip is STILL PAINTED with nothing running — its idle face: 00:00:00 clock,
 // state 'idle', empty description (app.js renderTimerStrip's idle branch). The strip clock
-// also computes the D06 compact Clock role: 22px, tabular numerals. Fails if the full
+// also computes the D06 compact Clock role: 24px, tabular numerals. Fails if the full
 // panel stayed on Entries, the card/strip placement regressed, a #timer-switch reappeared,
 // or the idle strip vanished/kept stale running data. Captures timer-view.png (the full
 // panel), main-timer.png (the Entries strip) and main-timer-idle.png (the idle strip).
@@ -556,7 +556,7 @@ async function sceneInWindowTimer(browser) {
     // full-panel Stop control (it lives on the Timer-view card only); no #timer-switch anywhere.
     const strip = await page.evaluate(() => {
       const el = document.querySelector('#timer-strip');
-      // design.html D06 — the strip clock is the compact Clock role: 22px, tabular numerals
+      // design.html D06 — the strip clock is the compact Clock role: 24px, tabular numerals
       // (computed style, so a stylesheet regression cannot hide behind the right markup).
       const clockCs = getComputedStyle(document.querySelector('#strip-clock'));
       return {
@@ -617,7 +617,7 @@ async function sceneInWindowTimer(browser) {
       strip.present &&
       strip.running &&
       strip.clock === '01:24:07' &&
-      strip.clockPx === '22px' &&
+      strip.clockPx === '24px' &&
       strip.clockTnum &&
       strip.state === 'running' &&
       strip.desc === 'auth refactor' &&
