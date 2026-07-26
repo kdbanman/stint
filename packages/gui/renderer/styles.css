@@ -2207,6 +2207,8 @@ body.popover { background: var(--canvas); margin: 0; }
 .dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
 .dh .dd { font-size: 13px; font-weight: 640; margin-left: 4px; }
 .dh .ds { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* The 44px hour rule below duplicates app.js's CAL_HOUR_PX, which positions every event — CSS
+   cannot read it, so the two are kept in step by hand (the why lives at that constant). */
 .dt {
   position: relative;
   background: repeating-linear-gradient(
