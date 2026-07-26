@@ -14,17 +14,19 @@
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {
-  const { rangeLabel, lineFlags, icon } = window.SU;
+  const { rangeLabel, lineFlags, icon, errMessage, escapeHtml } = window.SU;
   const $ = (id) => document.getElementById(id);
 
   // §12 R21: the builder's inline message region (#rep-warning) — a refused Save is surfaced
   // here, at the point of action, and PERSISTS until the next input on the builder (never a
   // same-tick self-erase). setWarn shows it; clearWarn tears it down on the next edit / a fresh
-  // open. Announced via role=status/aria-live in the markup.
+  // open. Announced via role=status/aria-live in the markup. The message reads through the
+  // shared SU.errMessage — a rejection carrying an Error object must render its message here
+  // exactly as it does on every other surface, not `[object Object]` (issue #168).
   function setWarn(msg) {
     const el = $('rep-warning');
     if (!el) return;
-    el.textContent = String(msg).replace(/^Error:\s*/, '');
+    el.textContent = errMessage(msg);
     el.hidden = false;
   }
   function clearWarn() {
@@ -53,9 +55,6 @@
     const h = Math.floor(s / 3600);
     const m = Math.floor((s % 3600) / 60);
     return `${h}h ${String(m).padStart(2, '0')}m`;
-  }
-  function escapeHtml(s) {
-    return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
   // The builder's edit state. `editing` is null for a fresh New report, or the name of the
@@ -503,7 +502,7 @@
       }
       status.textContent = `Exported ${res.written} entr${res.written === 1 ? 'y' : 'ies'} to ${res.path}.`;
     } catch (err) {
-      status.textContent = `Export failed: ${String((err && err.message) || err).replace(/^Error:\s*/, '')}`;
+      status.textContent = `Export failed: ${errMessage(err)}`;
     }
   }
 
@@ -523,7 +522,7 @@
       }
       status.textContent = `Exported ${res.written} entr${res.written === 1 ? 'y' : 'ies'} (all data) to ${res.path}.`;
     } catch (err) {
-      status.textContent = `Export failed: ${String((err && err.message) || err).replace(/^Error:\s*/, '')}`;
+      status.textContent = `Export failed: ${errMessage(err)}`;
     }
   }
 

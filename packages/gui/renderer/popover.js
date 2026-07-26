@@ -2,7 +2,7 @@
 // stop or start; opens the main window.
 // Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
 // loaded first; the tooling decision is recorded in context/architecture.html §08).
-const { fmtDur, elapsed, icon, injectSprite, localTime } = window.SU;
+const { fmtDur, elapsed, icon, injectSprite, localTime, errMessage, escapeHtml } = window.SU;
 
 const $ = (id) => document.getElementById(id);
 let state = null;
@@ -44,7 +44,7 @@ function render() {
     ctx.hidden = !running.clientLabel;
     // §07: the running entry's tags as quiet chips under the description.
     const list = running.tags ?? [];
-    tags.innerHTML = list.map((t) => `<span class="tag">${t}</span>`).join('');
+    tags.innerHTML = list.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('');
     tags.hidden = list.length === 0;
   } else {
     $('count').textContent = '00:00:00';
@@ -73,7 +73,7 @@ $('toggle').addEventListener('click', async () => {
     await load();
   } catch (err) {
     if (warn) {
-      warn.textContent = String((err && err.message) || err).replace(/^Error:\s*/, '');
+      warn.textContent = errMessage(err);
       warn.hidden = false;
     }
   }
