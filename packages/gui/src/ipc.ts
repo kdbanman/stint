@@ -9,7 +9,7 @@
 // exact instead of the old per-handler `as` casts (issue #87).
 import type { StartPayload } from './start.js';
 import type { ReportViewRequest, ExportRequest } from './reportview.js';
-import type { Client, Project, Tag, Report, EditPatch, Settings } from '@stint/core';
+import type { Client, Project, Tag, Report, EditPatch, Settings, GroupBy } from '@stint/core';
 
 export const CHANNELS = [
   'getState',
@@ -161,9 +161,10 @@ export interface ListEntriesQuery {
   toDate?: string;
   /**
    * Optional — main defaults to 'day' (issue #50). The Entries calendar always lays by
-   * day and its toolbar sends no `by` (grouped breakdowns live in Reports, G11).
+   * day and its toolbar sends no `by` (grouped breakdowns live in Reports, G11). Core's
+   * one grouping vocabulary, not a restatement of it (issue #170).
    */
-  by?: 'day' | 'client' | 'project' | 'tag';
+  by?: GroupBy;
   clientId?: number;
   projectId?: number;
   tag?: string;

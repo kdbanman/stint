@@ -24,7 +24,6 @@ import {
   buildEntryList,
   describeOverlaps,
   type Store,
-  type EntryGroupBy,
 } from '@stint/core';
 import type { IpcHandlers, ListEntriesQuery, EntryListView } from './ipc.js';
 import { buildUiState } from './uistate.js';
@@ -99,7 +98,7 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
   // buildEntryList only needs to group the surviving set. Issues #55/#50: `by` is optional on
   // ListEntriesQuery — default to the Entries calendar's 'day' grouping so a payload missing `by`
   // can never reject the whole query.
-  const { groups } = buildEntryList(entries, { by: (q.by as EntryGroupBy | undefined) ?? 'day' });
+  const { groups } = buildEntryList(entries, { by: q.by ?? 'day' });
   return {
     groups: groups.map((g) => ({
       key: g.key,

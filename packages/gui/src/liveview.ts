@@ -12,6 +12,7 @@
  * therefore owns no money arithmetic — only filtering, grouping, and summation of the
  * already-computed seconds (GOLD/PROP/BDD own the report math itself).
  */
+import { NO_CLIENT } from '@stint/core';
 import type { UiState, EntryRowView } from './ipc.js';
 
 /** The control-bar selection the live view derives against. Every field is optional. */
@@ -41,8 +42,6 @@ export interface DerivedView {
   /** The report total for the selection: the billable-only sum (what `tt report` shows). */
   reportTotalSeconds: number;
 }
-
-const NO_CLIENT = '(no client)';
 
 /**
  * Whether a row matches the free-text query — §09 R7's one match rule: case-insensitive
