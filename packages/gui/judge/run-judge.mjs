@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, timerViewRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -4157,6 +4157,96 @@ async function sceneCalendarLayout(browser) {
   }
 }
 
+// CALENDAR_ACCENT_BUDGET — design.html D11 / §02 principles 1–2, machine-scored (issue #143).
+// The Entries calendar is the app's busiest surface, and it used to fill every entry block with
+// --accent-weak behind an accent border: the design audit measured 51 accent-tinted blocks and
+// ZERO accent-solid primaries — the colour rationed for "the one thing that matters" was the
+// wallpaper. This scene pins the budget as an OUTCOME over a realistically dense fixture
+// (denseCalendarState: three weeks, 51 blocks, the last one OPEN), because the defect is
+// invisible at toy density — a one-day fixture would show almost nothing. Driven at the app's
+// 1040×800 default window with the page pinned to UTC, and AT REST: no toolbar control is
+// touched, so what is measured is the view as it loads. Deterministic sub-facts:
+//   • DENSITY — ≥50 `.ev` blocks paint (the audit's condition, not a toy one);
+//   • NO WALLPAPER — not one CLOSED block paints an accent-family colour (--accent /
+//     --accent-solid / --accent-weak) as fill, gradient, border or shadow;
+//   • NEUTRAL SURFACE + ELEVATION — every closed block computes the --paper fill and a non-none
+//     box-shadow: it is paper lifted off the track (§02 principle 2, "depth, not tint"), never a
+//     tinted box;
+//   • SIGNAL SURVIVES — exactly one block, the RUNNING one, still carries the accent (its
+//     future-fade gradient): §02 principle 1 rations the accent for the primary action and the
+//     live running state, so the calendar's one live thing is the one accented thing;
+//   • ACCENT-SOLID BUDGET — at most one --accent-solid fill visible in the whole view (D11).
+//     Zero today; the budget is what #150 spends when it promotes Add entry to the view's
+//     primary, so the assertion is ≤1, not ==0.
+// Re-tinting the blocks — an accent-weak fill, an accent border, an accent hover wash — flips
+// this to false. Captures calendar-accent-budget.png.
+async function sceneCalendarAccentBudget(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+
+  const probe = await page.evaluate(() => {
+    const { rgbOf, visible } = window.__probe;
+    // The accent FAMILY as bare "r, g, b" triplets, so an rgba() re-encoding of the same colour
+    // (the retired `color-mix(--accent 35%, transparent)` border computed to rgba(229,77,46,.35))
+    // is caught alongside the opaque form.
+    const triplets = ['--accent', '--accent-solid', '--accent-weak'].map((n) => rgbOf(n).slice(4, -1));
+    const paint = (el) => {
+      const cs = getComputedStyle(el);
+      return [cs.backgroundColor, cs.backgroundImage, cs.borderTopColor, cs.borderRightColor,
+        cs.borderBottomColor, cs.borderLeftColor, cs.boxShadow].join(' | ');
+    };
+    const carriesAccent = (el) => triplets.some((t) => paint(el).includes(t));
+    const blocks = [...document.querySelectorAll('.dcol .ev')];
+    const running = blocks.filter((el) => el.classList.contains('run'));
+    const closed = blocks.filter((el) => !el.classList.contains('run'));
+    const paperRgb = rgbOf('--paper');
+    const accentWeakRgb = rgbOf('--accent-weak');
+    const accentSolidRgb = rgbOf('--accent-solid');
+    let accentWeakFills = 0;
+    let accentSolidFills = 0;
+    for (const el of document.querySelectorAll('*')) {
+      if (!visible(el)) continue;
+      const bg = getComputedStyle(el).backgroundColor;
+      if (bg === accentWeakRgb) accentWeakFills++;
+      if (bg === accentSolidRgb) accentSolidFills++;
+    }
+    return {
+      evCount: blocks.length,
+      dayColumns: document.querySelectorAll('.dcol').length,
+      // The offenders, named — a failure justification points at the blocks, not just a count.
+      tintedBlocks: closed.filter(carriesAccent).map((el) => `${el.dataset.id}:${paint(el)}`).slice(0, 5),
+      tintedBlockCount: closed.filter(carriesAccent).length,
+      notPaper: closed.filter((el) => getComputedStyle(el).backgroundColor !== paperRgb).length,
+      notLifted: closed.filter((el) => getComputedStyle(el).boxShadow === 'none').length,
+      runningCount: running.length,
+      runningCarriesAccent: running.length === 1 && carriesAccent(running[0]),
+      // The audit's own two numbers, recomputed here so the report carries the before/after.
+      accentWeakFills,
+      accentSolidFills,
+    };
+  });
+  await page.screenshot({ path: join(EVIDENCE, 'calendar-accent-budget.png') });
+  await page.close();
+
+  const densityOk = probe.evCount >= 50;
+  const noWallpaperOk = probe.tintedBlockCount === 0;
+  const neutralOk = probe.notPaper === 0 && probe.notLifted === 0;
+  const signalOk = probe.runningCount === 1 && probe.runningCarriesAccent;
+  const budgetOk = probe.accentSolidFills <= 1;
+  record(
+    'CALENDAR_ACCENT_BUDGET',
+    densityOk && noWallpaperOk && neutralOk && signalOk && budgetOk,
+    `entries calendar accent budget over the dense fixture: ${JSON.stringify(probe)}; ` +
+      `density=${densityOk} no-wallpaper=${noWallpaperOk} neutral-surface+lift=${neutralOk} ` +
+      `running-is-the-signal=${signalOk} accent-solid≤1=${budgetOk}`,
+    'calendar-accent-budget.png',
+  );
+}
+
 // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
 // visible list AND the report total, with no getState reload during the keystroke. Hardened
 // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
@@ -5182,6 +5272,7 @@ const SCENES = {
   REPORTS_VIEW: { items: ['REPORTS_VIEW'], run: sceneReportsView },
   ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], run: sceneEntriesCalendar },
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
+  CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
   TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindow },

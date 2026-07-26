@@ -1524,18 +1524,20 @@ the row Delete click through a generic in-window confirm gate
 `.confirm` affordance (a `confirm-delete` + a `cancel-delete` control,
 monochrome `.danger` button, never the accent, §15) and `window.stint.remove` is
 reachable ONLY from inside the confirm callback; Cancel restores the button
-untouched. The same gate is factored for reuse by the future
-archive-when-referenced confirm, which lands with the Clients management view
-(§12 R10) — there is no GUI archive control to confirm yet, so only entry Delete
-is reachable today. JUDGE `CONFIRM_DELETE` (`packages/gui/judge/`,
-`main-confirm-delete.png` — a single Delete click surfaces the confirm gate and
-the instrumented `window.stint.remove` (`fixtures.mjs` records
+untouched. The same gate carries the archive-when-referenced confirm the
+Clients management view (§12 R10) offers: `armArchiveClient` /
+`armArchiveProject` route a REFERENCED record's Archive through `confirmInline`
+(an UNREFERENCED record archives directly — R13's exact scope), proven by JUDGE
+`CONFIRM_ARCHIVE` (`main-confirm-archive.png`, detailed in the §07 row). JUDGE
+`CONFIRM_DELETE` (`packages/gui/judge/`, `main-confirm-delete.png` — a single
+Delete click surfaces the confirm gate and the instrumented
+`window.stint.remove` (`fixtures.mjs` records
 `window.__REMOVE_CALLS__` ) is NOT called by that first click, then the explicit
-confirm fires `remove` exactly once carrying the entry id); GOLD `gui/test/confirm.test.ts` (a destructive request is armed, never
-permitted, until the explicit confirm) + JUDGE
-`CONFIRM_DELETE`/`CONFIRM_ARCHIVE` (Delete shows a confirm, Cancel preserves the
-entry, Delete+confirm removes it). No new
-IPC channel is added (`remove` already exists; archive has no GUI view yet), so
+confirm fires `remove` exactly once carrying the entry id); JUDGE `CONFIRM_DELETE` + `CONFIRM_ARCHIVE` hold it headlessly (Delete shows a
+confirm, Cancel preserves the entry, Delete+confirm removes it exactly once),
+over the surface-neutral BDD `features/overlap_and_editing.feature` "Deleting an
+entry without confirmation is refused". No new IPC channel is added for the gate (`remove` /
+`archiveClient` / `archiveProject` already exist), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are intentionally unchanged.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
@@ -1568,11 +1570,14 @@ actions confirm, and search/filter/group reflect live in the list AND the
 totals** (the §17 acceptance framing of the §12 R-confirm + R9-control-bar work;
 GUI-only — core/`tt` have no dialog and re-query per command, so this is a
 renderer fact): (a) the **confirm-before-acting** half reuses the §12 R13 gate
-above — a single Delete click only ARMS the in-window `.confirm` affordance and
-`window.stint.remove` is reachable ONLY from the explicit confirm, so **no entry
-is destroyed on a stray click** (archive-when-referenced reuses the same gate
-once the Clients archive control lands); (b) the **live-reflection** half is the
-new pure derivation `deriveView(state, sel)` (`gui/src/liveview.ts`, IMPORTED by
+above — the shipped gate is `confirmInline` in `gui/renderer/app.js`, entered
+through `armDelete` / `armArchiveClient` / `armArchiveProject`, which are the
+one home for which actions are destructive; a single Delete click only ARMS the
+in-window `.confirm` affordance and `window.stint.remove` is reachable ONLY from
+the explicit confirm, so **no entry is destroyed on a stray click**, and
+archive-when-referenced runs through the same gate from the Clients view's
+Archive control; (b) the **live-reflection** half is the new pure derivation
+`deriveView(state, sel)` (`gui/src/liveview.ts`, IMPORTED by
 the bundled SU entry `gui/renderer/su.ts` as `window.SU.deriveView` — no
 hand-mirror since issue #83; `gui/test/renderer-bundle.test.ts` asserts the
 shipped bundle IS this derivation) that recomputes the Entries view's visible
@@ -1584,26 +1589,35 @@ repaint the total off the snapshot; the authoritative grouped rows still come
 from `listEntries` for tt parity but the totals never wait on it). Because it
 sums the snapshot's core-owned `billableSeconds` , the live total equals what
 `tt report` produces for the same selection — no new core query, and no money
-arithmetic in the renderer (GOLD/PROP/BDD own the report math). The confirm
-decision is likewise extracted pure as `gui/src/confirm.ts`
-(`isDestructive`/`requestAction`/`confirmAction`/`mayProceed` — a destructive op
-may never run from a bare request), mirroring `toggle.ts` . **GOLD/unit**
-`gui/test/confirm.test.ts` (destructive actions require confirm, non-destructive
-pass through, an unconfirmed delete is blocked) + `gui/test/liveview.test.ts`
-(search/client/billable narrow rows; group switches grouping; list + report
-totals recompute to the filtered set and equal the full total when no selection
-is active). **JUDGE** (primary) `CONFIRM_DESTRUCTIVE` (`packages/gui/judge/`,
+arithmetic in the renderer (GOLD/PROP/BDD own the report math). **GOLD/unit**
+covers the live half only — `gui/test/liveview.test.ts` (search/client/billable
+narrow rows; group switches grouping; list + report totals recompute to the
+filtered set and equal the full total when no selection is active). The confirm
+half has NO unit leg by design: the rule is a DOM gate in the shipped renderer,
+and a pure model of it would stay green while the shipped gate rotted, so it is
+proven on the real surface — the routing `acceptance.html` §05 gives R11 (JUDGE
++ BDD). **JUDGE** (primary) `CONFIRM_DESTRUCTIVE` (`packages/gui/judge/`,
 `main-confirm.png` — the entry is present pre-confirm with zero remove calls,
 then gone post-confirm with exactly one `remove({ id })` , the remove mock
-dropping it from the snapshot so the reload reflects the real deletion) +
-`LIVE_FILTER` (`main-filtered.png` — over the multi-week seven-entry fixture
-(all-time billable 8.00h) the idle `#week-total` reads the WEEK-BOUNDED 5.00h
-(issue #55 Part B), a `refactor` keystroke narrows the visible rows to the two
-IN-WEEK matches (range + search compose) and moves `#week-total` 5.00h → 3.50h
-with no `getState` during the keystroke and zero `listEntries` rejections (the
-mock is strict about the required `by` , like core), both returning to the full
-set on clear). GOLD `gui/test/confirm.test.ts` pins the confirm gate surface-neutrally beside
-those two scenes. No new IPC channel (the live view derives off the existing
+dropping it from the snapshot so the reload reflects the real deletion), with
+`CONFIRM_DELETE` (`main-confirm-delete.png` — the arming click leaves
+`__REMOVE_CALLS__` empty; only the explicit confirm fires `remove` exactly once
+carrying the entry id) and
+`CONFIRM_ARCHIVE` (`main-confirm-archive.png` — a stray Archive click on a
+REFERENCED client arms the gate and archives nothing; only the explicit confirm
+fires exactly one `archiveClient` ) covering both destructive actions the
+shipped gate carries; **BDD** `features/overlap_and_editing.feature` "Deleting
+an entry without confirmation is refused (the entry survives)" (run TWICE over
+core + tt) holds the surface-neutral half — an unconfirmed destroy destroys
+nothing. Plus `LIVE_FILTER` (`main-filtered.png` — over the multi-week
+seven-entry fixture (all-time billable 8.00h) the idle `#week-total` reads the
+WEEK-BOUNDED 5.00h (issue #55 Part B), a `refactor` keystroke narrows the
+visible rows to the two IN-WEEK matches (range + search compose) and moves
+`#week-total` 5.00h → 3.50h with no `getState` during the keystroke and zero
+`listEntries` rejections (the mock is strict about the required `by` , like
+core), both returning to the full set on clear). BDD `features/overlap_and_editing.feature` "Deleting an entry without
+confirmation is refused" pins the refusal surface-neutrally beside those two
+scenes. No new IPC channel (the live view derives off the existing
 `getState` snapshot; confirm gates the existing `remove` client-side), so
 `parity-matrix.json` is intentionally untouched. **R21 write-rejection
 feedback** — a refused core write is surfaced where it was attempted (editor
@@ -1758,7 +1772,13 @@ uses (`button.primary` / running state / `.nav-item.active`) carry the accent �
 so it fails the moment a `button.ghost` reverts to `background:transparent`,
 inert text gains a pill background, or a second element steals the accent) joins
 the existing `ACCENT_DISCIPLINE` (`main-running.png` — accent confined to the
-primary action + running state) as the deterministic guards on the discipline;
+primary action + running state) and `CALENDAR_ACCENT_BUDGET`
+(`calendar-accent-budget.png`, issue 143 — the Entries calendar AT REST over the
+three-week `denseCalendarState` fixture, 51 blocks: no closed entry block paints
+an accent-family colour as fill / gradient / border / shadow, every one computes
+the `--paper` fill plus a non-none box-shadow (D09 depth, not tint), exactly one
+block — the RUNNING one — keeps the accent, and the whole view holds ≤1
+`--accent-solid` fill) as the deterministic guards on the discipline;
 the subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
 screenshots). The mockups (`context/mockups/main.html` L43, `reports.html` L39,
 `timer.html` L40) carry the convention in comments as the design-intent

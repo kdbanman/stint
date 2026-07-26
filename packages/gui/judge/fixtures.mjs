@@ -801,6 +801,106 @@ export function entriesCalendarState() {
   };
 }
 
+// design.html D11 (issue #143) — the weekly rhythm the dense calendar fixture repeats. One rota
+// per weekday, three blocks each, so three weeks of it read as an ordinary freelance workload
+// rather than a copy-pasted wall. `at` is a local (UTC, under the scene's pinned timezone)
+// start time; `mins` its length. Friday's lunch is the set's one non-billable block.
+const DENSE_WEEKDAY_ROTA = {
+  1: [
+    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
+    { at: '09:45', mins: 75, description: 'sprint planning', clientLabel: 'Acme / API' },
+    { at: '13:00', mins: 150, description: 'auth refactor', clientLabel: 'Acme / API' },
+  ],
+  2: [
+    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
+    { at: '10:00', mins: 120, description: 'deploy pipeline', clientLabel: 'Globex / Ops' },
+    { at: '14:00', mins: 105, description: 'refactor tests', clientLabel: 'Globex / Ops' },
+  ],
+  3: [
+    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
+    { at: '11:00', mins: 60, description: 'client call', clientLabel: 'Initech' },
+    { at: '14:30', mins: 90, description: 'invoice prep', clientLabel: 'Initech' },
+  ],
+  4: [
+    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
+    { at: '10:15', mins: 105, description: 'market research', clientLabel: 'Globex / Ops' },
+    { at: '13:30', mins: 165, description: 'deep work', clientLabel: 'Acme / API' },
+  ],
+  5: [
+    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
+    { at: '12:00', mins: 60, description: 'team lunch', clientLabel: 'Acme / Web', billable: false },
+    { at: '14:00', mins: 120, description: 'weekly wrap', clientLabel: 'Acme / Web' },
+  ],
+};
+
+// The six weekend blocks that break the weekday rota (two of the three weekends worked), keyed
+// by day. Jun 6–7 stay clear, so the calendar also paints genuinely EMPTY columns.
+const DENSE_WEEKEND = {
+  '2026-06-13': [
+    { at: '10:00', mins: 90, description: 'overnight render', clientLabel: 'Globex / Ops' },
+    { at: '14:00', mins: 60, description: 'docs pass', clientLabel: 'Acme / API' },
+  ],
+  '2026-06-14': [{ at: '11:00', mins: 45, description: 'inbox triage', clientLabel: 'Acme / Web' }],
+  '2026-06-20': [
+    { at: '10:30', mins: 120, description: 'prototype spike', clientLabel: 'Initech' },
+    { at: '15:00', mins: 75, description: 'infra cleanup', clientLabel: 'Globex / Ops' },
+  ],
+  '2026-06-21': [{ at: '11:00', mins: 45, description: 'inbox triage', clientLabel: 'Acme / Web' }],
+};
+
+/**
+ * design.html D11 (issue #143) — the CALENDAR_ACCENT_BUDGET fixture: the Entries calendar at
+ * REALISTIC density. The accent-wallpaper defect is invisible at toy density — the design audit
+ * measured 51 accent-tinted blocks over a three-week seed, and a one-day fixture would show
+ * almost nothing — so this seeds three weeks of ordinary work: **Thu 2026-06-04 through the
+ * pinned JUDGE Wednesday 2026-06-24**, 15 weekdays on DENSE_WEEKDAY_ROTA plus DENSE_WEEKEND's
+ * six blocks = **51 entry blocks**, the last of which is the OPEN row (the live running state,
+ * the calendar's one sanctioned accent). Ids are assigned in day order, so they are stable.
+ *
+ * No toolbar control is touched to reach it: the default Entries paint takes its columns from
+ * `state.days` and pads to the anchor's whole week (calendarModel), so the scene measures the
+ * view AT REST — Jun 25–28 paint as empty columns of the current week.
+ */
+export function denseCalendarState() {
+  const days = [];
+  let id = 0;
+  for (let d = new Date(Date.UTC(2026, 5, 4)); d <= new Date(Date.UTC(2026, 5, 24)); d.setUTCDate(d.getUTCDate() + 1)) {
+    const day = d.toISOString().slice(0, 10);
+    const templates = DENSE_WEEKEND[day] ?? DENSE_WEEKDAY_ROTA[d.getUTCDay()] ?? [];
+    const entries = templates.map((t) => {
+      const startUtc = `${day}T${t.at}:00Z`;
+      const billable = t.billable !== false;
+      return {
+        id: ++id,
+        description: t.description,
+        clientLabel: t.clientLabel,
+        startUtc,
+        endUtc: new Date(Date.parse(startUtc) + t.mins * 60_000).toISOString(),
+        billableSeconds: billable ? t.mins * 60 : 0,
+        rawSeconds: t.mins * 60,
+        billable,
+        overlapped: false,
+        overlapMinutes: 0,
+        overlapRelation: null,
+        sleptThrough: false,
+        excludedSeconds: 0,
+        tags: [],
+      };
+    });
+    if (entries.length) days.push({ day, entries });
+  }
+  // The last block of the pinned Wednesday is still OPEN — the one live running state on the
+  // whole calendar, and (after issue #143) the only block on it that may carry the accent.
+  const last = days[days.length - 1].entries[days[days.length - 1].entries.length - 1];
+  last.description = 'drafting proposals';
+  last.clientLabel = 'Globex / Ops';
+  last.startUtc = '2026-06-24T21:00:00Z';
+  last.endUtc = null;
+  last.billableSeconds = 0;
+  last.rawSeconds = 0;
+  return { status: { running: true, entry: { ...last } }, days, sleepFlaggedIds: [], settings: DEFAULT_SETTINGS };
+}
+
 /**
  * §12 R11 — the Settings-view fixture. The panel renders from getState().settings (the
  * eight §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
