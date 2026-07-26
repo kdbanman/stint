@@ -508,7 +508,9 @@ function renderTimerCard(running) {
       }
     }
   }
-  $('timer-state').textContent = running ? 'running' : 'idle';
+  // The word goes into the inner span, not the whole .state line — the line also holds the
+  // D05 dot, and writing textContent on the line would delete it (issue #142).
+  $('timer-state-word').textContent = running ? 'running' : 'idle';
   if (running) {
     $('timer-clock').textContent = fmtDur(elapsed(running.startUtc, running.excludedSeconds ?? 0));
     $('timer-desc').textContent = running.description ?? 'your timer';
@@ -992,10 +994,21 @@ async function mergeSelected(acknowledgedGap = false) {
   );
 }
 
+// The Escape listener belonging to the prompt currently up, held at module scope so
+// closeMergeConflict detaches it wherever the modal ends. Null whenever no prompt is open.
+let mergeConflictEscape = null;
+
 // Remove any open merge-conflict prompt (only one at a time). A local backdrop-remove
 // helper so app.js owns the modal's lifecycle end to end
 // — the two share the `.editor-backdrop` chrome but not the code path.
+// Every dismissal route (Cancel, the header ×, the backdrop, Escape, and the commit itself)
+// funnels through here, so detaching the key listener once here is what keeps it from
+// outliving the modal it belongs to.
 function closeMergeConflict() {
+  if (mergeConflictEscape) {
+    document.removeEventListener('keydown', mergeConflictEscape);
+    mergeConflictEscape = null;
+  }
   document.querySelector('.editor-backdrop')?.remove();
 }
 
@@ -1105,6 +1118,16 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
   backdrop.addEventListener('click', (ev) => {
     if (ev.target === backdrop) closeMergeConflict();
   });
+  // Craft checklist §4 — Esc cancels the innermost thing, which while this is up is the modal
+  // itself (issue 147: the app's ONE modal ignored Escape, so a keyboard user mid-merge had no
+  // way out). It is a CANCEL, not a confirm: it calls exactly what .mc-cancel calls, so no field
+  // resolution is applied and no merge is written — one dismissal behaviour, not two.
+  // The listener is on `document`, not the dialog: the prompt mounts on <body> and takes no
+  // focus when it opens, so a dialog-scoped keydown would never see the press.
+  mergeConflictEscape = (ev) => {
+    if (ev.key === 'Escape') closeMergeConflict();
+  };
+  document.addEventListener('keydown', mergeConflictEscape);
   return dialog;
 }
 
@@ -1317,8 +1340,12 @@ async function openEntryForm(row, e) {
     // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
     // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
     // only the OUTER whitespace and preserves every interior newline, so the stored record stays
-    // verbatim.
-    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea>` +
+    // verbatim. design.html D13 (issue 136): it carries the same visible `.uf-field` label its
+    // Client / Project / Tags siblings below do — edit mode had the add form's exact defect, the
+    // one unlabelled field in an otherwise labelled column. The placeholder stays: "(no
+    // description)" describes the EMPTY state, it does not repeat the label.
+    `<label class="uf-field uf-desc"><span>Description</span>` +
+    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea></label>` +
     `<label class="uf-field"><span>Client</span>` +
     `<select class="edit-client uf-select"></select></label>` +
     // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client

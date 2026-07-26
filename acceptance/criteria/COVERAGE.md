@@ -345,7 +345,12 @@ prompt is now **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
 `openMergeConflict` — the merge-bar path routes through it; `editor.js` and its
 toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
 `MERGE_NOCONFLICT` (`packages/gui/judge/`, asserting the
-`.editor.conflict-prompt` modal + `main-merge-conflict.png`) +
+`.editor.conflict-prompt` modal + `main-merge-conflict.png`; `MERGE_CONFLICT`
+also scores the modal's KEYBOARD EXIT — issue 147, where the app's one modal
+ignored Escape and left a keyboard user mid-merge with no way out: Escape now
+dismisses the prompt as a CANCEL, scored on the OUTCOME (prompt and backdrop
+gone AND no `merge` payload sent), because an Escape that silently confirmed
+would empty the DOM just the same) +
 `MERGE_CHOICE_LIFT` (`merge-choice-lift.png`, issue 144 — how the prompt PAINTS
 a choice: each chosen `.mc-opt` is the raised paper chip (`--paper` + a non-none
 shadow) while its unchosen peers recess to `--wash` and stay flat, no option or
@@ -990,8 +995,10 @@ actions)): the renderer paints the FULL card from the `UiState` running entry
 primary action while running (the start panel is idle-only, issue #51; the
 atomic stop-then-start stays core's `start` contract, §05 R01, with no dedicated
 Switch control), `gui/renderer/index.html` hosts `#timer-card` (with
-`#timer-clock` /`#timer-state`/`#timer-desc`/`#timer-meta`/`#timer-flags` + the
-Stop button, and NO `#timer-switch` ) INSIDE the `data-view="timer"` section and
+`#timer-clock` /`#timer-state` — the state LINE, an accent `.tc-dot` beside the
+`#timer-state-word` word (issue #142) — /`#timer-desc`/`#timer-meta`/`#timer-flags`
++ the Stop button, and NO `#timer-switch` ) INSIDE the `data-view="timer"` section
+and
 a compact `#timer-strip` (with `#strip-clock` /`#strip-state`/`#strip-desc`, no
 Stop, no flags grid) in the `data-view="entries"` section, +
 `gui/renderer/app.js` (`renderTimerCard()` paints the full running/idle face —
@@ -1017,7 +1024,24 @@ font-size from the rendered element, and GOLD
 `gui/test/design-guard.test.ts` censuses every `color:` declaration on every
 surface: the tokens painted as text must be exactly those design.html gives a
 text role, and each accent-as-text site must resolve to ≥24px at D06's 680.
-**The card stays fresh across views (issue #50):** JUDGE
+**The running state is worded, not only coloured (design.html D05/A05, issue
+#142):** the card's state line ships VISIBLE — `running` /`idle` in
+`#timer-state-word` with a `.tc-dot` beside it, `--faint` when idle and
+`--accent` when running — after shipping `display:none` , which left the
+recoloured count-up as the whole running signal on the one surface whose entire
+purpose is the timer (the Entries strip already carried its dot; the mast
+`.summary` stays hidden as the deliberate one-indicator-not-two call). The word
+takes `--ink` , not the accent: at 11px an accent word would be the same sub-24px
+accent-as-text breach A01 forbids and issue #141 closed on the strip clock, so
+the accent sits on the dot, a non-text mark on the A02 floor and the run-dot
+pairing exemption design.html §07 records. JUDGE `TIMER_VIEW` scores the OUTCOME
+— the word inside the card's rendered `innerText` , the state line laid out
+carrying that word, and the dot visible at the resolved `--accent` — replacing
+the presence-only `#timer-state.textContent` probe that the shipped bug
+satisfied. JUDGE `COLOUR_PAIRING` , the A05 scene, was fooled by the same
+presence-only read and now scores each running surface as RENDERED: the strip
+pairs by its visible dot (D05 takes a word OR an icon), the card by a visible
+word AND a visible dot. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
 Entries-toolbar control is touched (the Today preset latches the renderer's
 entries query), routing to the Timer view and clicking Start flips the card to
@@ -1671,14 +1695,34 @@ browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
 (acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
-GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
+`FIELD_LABELS` + GOLD `gui/test/design-guard.test.ts` are the whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,
 out of the tab order and unwalked — the blind spot issue 135 fell through, where
 the Settings global-hotkey field swallowed Tab as a chord and stranded the four
 controls after it. JUDGE `HOTKEY_NO_TRAP` (`settings-hotkey-focus.png`) walks
 focus from INSIDE that field: Tab/Shift-Tab/Escape each leave it and bind
 nothing, a walk from it reaches all four stranded controls, and a real chord
-still persists (WCAG 2.2 §2.1.2 no keyboard trap). No new IPC channel (pure renderer), so
+still persists (WCAG 2.2 §2.1.2 no keyboard trap). The same blind spot covers
+the app's one MODAL, which mounts on `<body>` outside every view:
+`MERGE_CONFLICT` now scores its Escape dismissal too (issue 147), so "Esc
+cancels the innermost thing" is proven at both places the renderer swallows or
+ignores keys. JUDGE `FIELD_LABELS`
+(`field-labels-timer.png` / `-entries.png` / `-reports.png`, issue 136) carries
+design.html **D13** — every field carries a VISIBLE label, which is also the
+§07 field-border exemption A01 is conditioned on. The app had been labelling
+fields with placeholder text, so the name vanished on the first keystroke; the
+start form's four attribute fields had no accessible name at all, and
+`#add-desc` / `#search` / `#rep-name` carried a placeholder plus an INVISIBLE
+`aria-label`. The scene drives all five views into the states that hold fields
+(the Timer start-details disclosure, the Entries add form + Custom range, the
+Reports builder + Custom range, Settings) and sweeps every visible
+`input`/`select`/`textarea` for two facts: a programmatic name that is not its
+placeholder, and a persistent VISIBLE element supplying it — through a
+`<label>`, `aria-labelledby`, or the row-heading idiom the control bars and
+settings rows use (`.report-lab` / `.set-k`), whose members are named in the
+justification so the population stays reviewable. Nothing caught this before
+because `design-guard.test.ts` scores tokens, contrast and spacing; label
+presence is a structural fact about the DRIVEN DOM. No new IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
 keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
