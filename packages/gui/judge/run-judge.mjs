@@ -2625,6 +2625,109 @@ async function sceneMergeConflict(browser) {
   });
 }
 
+// MERGE_CHOICE_LIFT — design.html D12 inside the app's only modal (issue #144). The
+// merge-conflict prompt is where D12 was most plainly abandoned: the chosen option filled
+// `--accent-weak` behind an accent border and an inset accent hairline, with an accent radio
+// dot, against an unchosen sibling sitting at plain paper — a selection that turned accent, in
+// the one dialog whose entire job is "which of these do you choose". A CSS comment conceded the
+// deviation; the triage on #144 did not preserve it, because a documented exception suppresses
+// its own rediscovery. The repaired idiom is the segmented one (`.seg-btn.on`) at dialog scale:
+// the dialog body is paper, so the unchosen peers recess to the sunken `--wash` and stay flat
+// while the chosen option is the raised paper chip. Driven over `mergeConflictState` — two
+// closed contiguous entries disagreeing on client AND billable, so the prompt offers a real
+// choice in two groups. Deterministic sub-facts:
+//   • CHOSEN LIFTS — every `.mc-opt.on` computes the `--paper` fill plus a non-none box-shadow;
+//   • UNCHOSEN SINKS — every unchosen peer is flat (box-shadow none) and NOT paper, so the lift
+//     is a measured contrast rather than a shadow nobody can see;
+//   • NO ACCENT ANYWHERE IN THE PROMPT — no `.mc-opt` (chosen or not) and no radio mark paints an
+//     accent-family colour as fill, gradient, border or shadow, and the whole modal paints ZERO
+//     `--accent-weak` fills;
+//   • THE CHIP FOLLOWS THE CHOICE — clicking the other client option moves `.on`, and with it the
+//     paper fill and the lift, onto the newly chosen row and off the old one;
+//   • COLOUR IS NOT THE SOLE CUE (A05/D05) — the chosen row's radio dot renders, the unchosen
+//     rows' do not, so the filled-vs-empty shape carries the state on its own.
+// Captures merge-choice-lift.png.
+async function sceneMergeChoiceLift(browser) {
+  await withPage(browser, mergeConflictState(), 'index.html', async (page) => {
+    await page.check('.entry[data-id="40"] .sel');
+    await page.check('.entry[data-id="41"] .sel');
+    await page.click('#merge-go');
+    await page.waitForSelector('.editor.conflict-prompt .mc-opt.on');
+
+    const readOpts = () =>
+      page.evaluate(() => {
+        const { rgbOf, visible } = window.__probe;
+        const triplets = ['--accent', '--accent-solid', '--accent-weak'].map((n) => rgbOf(n).slice(4, -1));
+        const paint = (el) => {
+          const cs = getComputedStyle(el);
+          return [cs.backgroundColor, cs.backgroundImage, cs.borderTopColor, cs.borderRightColor,
+            cs.borderBottomColor, cs.borderLeftColor, cs.boxShadow].join(' | ');
+        };
+        const carriesAccent = (el) => triplets.some((t) => paint(el).includes(t));
+        const paperRgb = rgbOf('--paper');
+        const accentWeakRgb = rgbOf('--accent-weak');
+        const panel = document.querySelector('.editor.conflict-prompt');
+        const opts = [...(panel?.querySelectorAll('.mc-opt') ?? [])];
+        const chosen = opts.filter((el) => el.classList.contains('on'));
+        const peers = opts.filter((el) => !el.classList.contains('on'));
+        // The radio dot is the `.rad::after` pseudo-element — read its computed content so the
+        // "shape, not colour" cue is asserted rather than assumed.
+        const hasDot = (el) => {
+          const r = el.querySelector('.rad');
+          return !!r && getComputedStyle(r, '::after').content !== 'none';
+        };
+        let accentWeakFills = 0;
+        for (const el of panel?.querySelectorAll('*') ?? []) {
+          if (visible(el) && getComputedStyle(el).backgroundColor === accentWeakRgb) accentWeakFills++;
+        }
+        return {
+          optCount: opts.length,
+          chosenCount: chosen.length,
+          chosenLabels: chosen.map((el) => el.textContent.trim()),
+          accentedOpts: opts.filter(carriesAccent).map((el) => `${el.textContent.trim()}:${paint(el)}`),
+          chosenNotPaper: chosen.filter((el) => getComputedStyle(el).backgroundColor !== paperRgb).length,
+          chosenNotLifted: chosen.filter((el) => getComputedStyle(el).boxShadow === 'none').length,
+          peersLifted: peers.filter((el) => getComputedStyle(el).boxShadow !== 'none').length,
+          peersOnPaper: peers.filter((el) => getComputedStyle(el).backgroundColor === paperRgb).length,
+          chosenDots: chosen.filter(hasDot).length,
+          peerDots: peers.filter(hasDot).length,
+          accentWeakFills,
+        };
+      });
+
+    const first = await readOpts();
+    await page.screenshot({ path: join(EVIDENCE, 'merge-choice-lift.png'), fullPage: true });
+    // The chip must FOLLOW the choice: pick the other client and re-read.
+    await page.click('.editor.conflict-prompt .mc-row .opts .mc-opt:not(.on)');
+    const second = await readOpts();
+
+    const shapeOk = first.optCount === 4 && first.chosenCount === 2 && second.chosenCount === 2;
+    const liftOk =
+      first.chosenNotPaper === 0 &&
+      first.chosenNotLifted === 0 &&
+      first.peersLifted === 0 &&
+      first.peersOnPaper === 0;
+    const noAccentOk = first.accentedOpts.length === 0 && first.accentWeakFills === 0;
+    const dotOk = first.chosenDots === first.chosenCount && first.peerDots === 0;
+    // The clicked peer now carries the chip, and the previously chosen client row has given it up.
+    const followsOk =
+      second.chosenNotPaper === 0 &&
+      second.chosenNotLifted === 0 &&
+      second.peersLifted === 0 &&
+      second.accentedOpts.length === 0 &&
+      JSON.stringify(second.chosenLabels) !== JSON.stringify(first.chosenLabels);
+    record(
+      'MERGE_CHOICE_LIFT',
+      shapeOk && liftOk && noAccentOk && dotOk && followsOk,
+      `merge-conflict option selection is the raised paper chip, never accent — ` +
+        `first: ${JSON.stringify(first)}; after choosing the other client: ${JSON.stringify(second)}; ` +
+        `shape=${shapeOk} chosen-lifts=${liftOk} no-accent=${noAccentOk} radio-dot-cue=${dotOk} ` +
+        `chip-follows-the-choice=${followsOk}`,
+      'merge-choice-lift.png',
+    );
+  });
+}
+
 // MERGE_NOCONFLICT — selecting two CONTIGUOUS entries that AGREE on client and billable and
 // clicking Merge fires the merge DIRECTLY, with no CONFLICT prompt (nothing to resolve) — and
 // no gap confirm either, because the selection is contiguous (10:00 == 10:00). This is the
@@ -4235,6 +4338,145 @@ async function sceneCalendarAccentBudget(browser) {
   );
 }
 
+// SELECTION_LIFT — design.html D12, machine-scored on the Entries calendar (issue #144).
+// "A chosen thing lifts — a raised paper chip with a shadow — it does not turn accent." The
+// calendar broke it at all three of its selection sites: a merge-selected block took an accent
+// border plus an inset accent hairline, the corner checkbox that made the choice filled solid
+// accent, and the block open in the editor (`.editing`) took the same accent ring. This scene
+// pins the repaired idiom as an OUTCOME over the same three-week `denseCalendarState` the
+// CALENDAR_ACCENT_BUDGET guard uses (51 blocks, the last one open), at the 1040×800 default
+// window with the page pinned to UTC — density matters here too, because "lifted" only means
+// something measured against the fifty neighbours that are not. Deterministic sub-facts:
+//   • CHOSEN LIFTS — each of the two `.ck`-selected blocks keeps the `--paper` fill and computes
+//     a box-shadow that DIFFERS from the resting rung its unselected neighbours carry (a real
+//     rung up the D09 ladder, not the same flat chip);
+//   • UNCHOSEN STAYS PUT — the unselected closed blocks still compute the resting shadow, so the
+//     contrast the lift depends on exists;
+//   • NO ACCENT ON SELECTION — not one selected block, and not one checked checkbox, paints an
+//     accent-family colour (`--accent` / `--accent-solid` / `--accent-weak`) as fill, gradient,
+//     border or shadow; the checked box is a `--paper` box with an ink tick;
+//   • EDITING IS THE SAME IDIOM — clicking a third block opens the unified form and marks it
+//     `.editing`, which lifts exactly like `.on` and carries no accent either;
+//   • BUDGET HELD — with three blocks in a selection state the calendar strip still paints ZERO
+//     `--accent-weak` fills and ≤1 `--accent-solid` (D11), so selection cannot smuggle the
+//     accent back onto the surface #143 cleared. (The strip, not the document: the open editor
+//     legitimately carries the view's one accent-solid primary and the picker's weak band.)
+// Re-accenting any selection site — an accent border, an accent-filled checkbox, an accent
+// hairline ring — flips this to false. Captures selection-lift.png.
+async function sceneSelectionLift(browser) {
+  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  await page.clock.install({ time: new Date(JUDGE_NOW) });
+  await page.clock.pauseAt(new Date(JUDGE_NOW));
+  await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
+  await page.goto(fileUrl('index.html'));
+  await page.waitForFunction(() => document.querySelectorAll('.dcol .ev .ck').length > 2);
+
+  // Three CLOSED blocks: two get merge-selected, the third is opened in the editor. Taken from
+  // the DOM so the scene never hardcodes fixture ids.
+  const ids = await page.evaluate(() =>
+    [...document.querySelectorAll('.dcol .ev')]
+      .filter((el) => !el.classList.contains('run') && el.querySelector('.ck'))
+      .slice(0, 3)
+      .map((el) => el.dataset.id),
+  );
+  await page.check(`.ev[data-id="${ids[0]}"] .ck`);
+  await page.check(`.ev[data-id="${ids[1]}"] .ck`);
+  await page.waitForSelector(`.ev[data-id="${ids[1]}"].on`);
+  // The primary evidence frame: the calendar itself, two blocks chosen among forty-nine that are
+  // not. Captured BEFORE the editor opens, because the form pushes the strip out of the viewport.
+  await page.locator('.cstrip').scrollIntoViewIfNeeded();
+  // Park the pointer clear of the strip so the hover ops chip retracts and the frame shows the
+  // resting selection, not a block under the cursor.
+  await page.mouse.move(600, 20);
+  // …and drop focus off the last checkbox, so the focus-within ops chip retracts too.
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.screenshot({ path: join(EVIDENCE, 'selection-lift.png') });
+  // The third block opens the unified form over its hover Edit affordance, so the `.editing`
+  // selection state is on screen beside the two merge-selected ones.
+  await page.click(`.ev[data-id="${ids[2]}"] [data-act="edit"]`);
+  await page.waitForSelector('.ev.editing');
+  await page.locator('.cstrip').scrollIntoViewIfNeeded();
+
+  const probe = await page.evaluate((sel) => {
+    const { rgbOf, visible } = window.__probe;
+    // Same accent-family triplet scan CALENDAR_ACCENT_BUDGET uses, so an rgba() re-encoding of
+    // an accent is caught alongside the opaque form.
+    const triplets = ['--accent', '--accent-solid', '--accent-weak'].map((n) => rgbOf(n).slice(4, -1));
+    const paint = (el) => {
+      const cs = getComputedStyle(el);
+      return [cs.backgroundColor, cs.backgroundImage, cs.borderTopColor, cs.borderRightColor,
+        cs.borderBottomColor, cs.borderLeftColor, cs.boxShadow].join(' | ');
+    };
+    const carriesAccent = (el) => triplets.some((t) => paint(el).includes(t));
+    const paperRgb = rgbOf('--paper');
+    const accentWeakRgb = rgbOf('--accent-weak');
+    const accentSolidRgb = rgbOf('--accent-solid');
+
+    const blocks = [...document.querySelectorAll('.dcol .ev')];
+    const closed = blocks.filter((el) => !el.classList.contains('run'));
+    const chosen = closed.filter((el) => el.classList.contains('on') || el.classList.contains('editing'));
+    const plain = closed.filter((el) => !el.classList.contains('on') && !el.classList.contains('editing'));
+    // The resting rung, read off the live surface rather than named: whatever the untouched
+    // majority computes IS "not lifted", so the comparison stays token-free.
+    const restShadow = plain.length ? getComputedStyle(plain[0]).boxShadow : '';
+    const checks = [...document.querySelectorAll('.dcol .ev .ck')].filter((el) => el.checked);
+
+    let accentWeakFills = 0;
+    let accentSolidFills = 0;
+    // Counted over the CALENDAR STRIP, not the document: the third block is open in the unified
+    // form, and that form legitimately carries the view's one accent-solid primary (Save entry)
+    // and the picker's accent-weak "me" band. The claim under test is that SELECTION did not put
+    // the accent back on the surface #143 cleared, so the strip is the surface to measure.
+    const strip = document.querySelector('.cstrip');
+    for (const el of strip?.querySelectorAll('*') ?? []) {
+      if (!visible(el)) continue;
+      const bg = getComputedStyle(el).backgroundColor;
+      if (bg === accentWeakRgb) accentWeakFills++;
+      if (bg === accentSolidRgb) accentSolidFills++;
+    }
+    return {
+      evCount: blocks.length,
+      stripFound: !!strip,
+      selectedCount: closed.filter((el) => el.classList.contains('on')).length,
+      editingCount: blocks.filter((el) => el.classList.contains('editing')).length,
+      editorOpen: !!document.querySelector('#entry-form-host .edit-form.entry-form'),
+      // The offenders, named — a failure points at the element, not just a count.
+      accentedSelections: chosen.filter(carriesAccent).map((el) => `${el.dataset.id}:${paint(el)}`),
+      chosenNotPaper: chosen.filter((el) => getComputedStyle(el).backgroundColor !== paperRgb).length,
+      chosenNotLifted: chosen.filter((el) => getComputedStyle(el).boxShadow === restShadow).length,
+      chosenShadow: chosen.length ? getComputedStyle(chosen[0]).boxShadow : '',
+      restShadow,
+      restIsFlat: restShadow === 'none',
+      checkedCount: checks.length,
+      accentedChecks: checks.filter(carriesAccent).map(paint),
+      checksArePaper: checks.every((el) => getComputedStyle(el).backgroundColor === paperRgb),
+      accentWeakFills,
+      accentSolidFills,
+      selIds: sel,
+    };
+  }, ids);
+  // The `.editing` companion frame — the same lift reached through the editor rather than the
+  // checkbox, with the unified form open above it.
+  await page.screenshot({ path: join(EVIDENCE, 'selection-lift-editing.png') });
+  await page.close();
+
+  const stateOk =
+    probe.evCount >= 50 && probe.selectedCount === 2 && probe.editingCount === 1 && probe.editorOpen;
+  const liftOk =
+    probe.chosenNotPaper === 0 && probe.chosenNotLifted === 0 && !probe.restIsFlat;
+  const noAccentOk = probe.accentedSelections.length === 0 && probe.accentedChecks.length === 0;
+  const checkOk = probe.checkedCount === 2 && probe.checksArePaper;
+  const budgetOk = probe.stripFound && probe.accentWeakFills === 0 && probe.accentSolidFills <= 1;
+  record(
+    'SELECTION_LIFT',
+    stateOk && liftOk && noAccentOk && checkOk && budgetOk,
+    `calendar selection over the dense fixture: ${JSON.stringify(probe)}; ` +
+      `states=${stateOk} chosen-lifts-off-the-rest=${liftOk} no-accent-on-selection=${noAccentOk} ` +
+      `checkbox-is-paper=${checkOk} accent-budget-held=${budgetOk}`,
+    'selection-lift.png',
+  );
+}
+
 // LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
 // visible list AND the report total, with no getState reload during the keystroke. Hardened
 // per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
@@ -5248,6 +5490,7 @@ const SCENES = {
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
   WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
   MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
+  MERGE_CHOICE_LIFT: { items: ['MERGE_CHOICE_LIFT'], run: sceneMergeChoiceLift },
   MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], run: sceneMergeNoconflict },
   MERGE_GAP: { items: ['MERGE_GAP'], run: sceneMergeGap },
   DELETE_CONFIRM: { items: ['DELETE_CONFIRM'], run: sceneDeleteConfirm },
@@ -5261,6 +5504,7 @@ const SCENES = {
   ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], run: sceneEntriesCalendar },
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
+  SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
   LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
   SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
   TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindow },

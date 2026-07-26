@@ -45,6 +45,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — readonly calendar at realistic density | Three weeks of ordinary work — 51 neutral paper blocks lifted off the track, the one running block the only accent on screen | JUDGE `CALENDAR_ACCENT_BUDGET` (issue 143) — `calendar-accent-budget.png` | |
 | **Edge** — readonly calendar (cross-midnight, `.ov` overlap band, `.zz` sleep hatch, hover ops chip) | Two segments sharing an id; yellow warn band; hatched excluded span; Delete/Split/Edit + `.ck` on hover | JUDGE `CALENDAR_LAYOUT` (issue #71 sub-fact) — `main-calendar.png` | |
 | **Edge** — multi-select + merge bar (contiguous, agreeing) | Two `.ck` checks reveal `#merge-bar`; direct merge, no prompt | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png` | |
+| **Edge** — selected / editing blocks on the calendar | Chosen blocks lift a rung off the flat ones, ink-ticked checkbox, no accent anywhere (D12) | JUDGE `SELECTION_LIFT` (issue 144) — `selection-lift.png`, `selection-lift-editing.png` | |
 | **Edge** — inline gap confirm (non-contiguous, agreeing) | Merge swaps to `.confirm-gap` naming span + fabricated gap | JUDGE `MERGE_GAP` — `main-merge-gap.png` | |
 | **Edge** — inline split form | Hover Split opens instant picker defaulting to midpoint | JUDGE `SPLIT_AFFORDANCE` — `main-split.png`; BDD `reachable_by_hand.feature` "Split an entry by hand" | |
 | **Edge** — two-step delete gate | Arm click shows confirm, no `remove` call; explicit confirm removes once | JUDGE `CONFIRM_DELETE`, `DELETE_CONFIRM` — `main-confirm-delete.png`, `main-confirm.png`; BDD "Deleting an entry without confirmation is refused" | |
@@ -56,6 +57,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | State | What it looks like | Evidence | Notes/Waiver |
 |---|---|---|---|
 | **Ideal** — conflicting merge prompt | Distinct client/project choices + a billable choice before commit | JUDGE `MERGE_CONFLICT` — `main-merge-conflict.png`; BDD "Merge resolving to a chosen client overrides the first-entry default" | |
+| **Ideal** — the chosen option's paint | Chosen option is a raised paper chip with an ink radio dot; peers recess to wash and stay flat (D12) | JUDGE `MERGE_CHOICE_LIFT` (issue 144) — `merge-choice-lift.png` | |
 | **Edge** — agreeing merge (no prompt) | Merge fires directly, no `.editor.conflict-prompt` | JUDGE `MERGE_NOCONFLICT` — `main-merge-conflict.png`; BDD "Merge concatenates descriptions and keeps the first entry's client" | |
 | **Error** — non-contiguous merge without acknowledgement | Refused, originals survive unmerged | BDD `overlap_and_editing.feature` "Merging a non-contiguous selection without acknowledgement is refused (the originals survive)" | Core-level refusal; same `confirmInline` gate as `MERGE_GAP`, no separate GUI screenshot |
 | **Empty** — N/A | Modal only renders on a ≥2-entry conflicting selection | — | Waived — no zero-data variant exists for a conditionally-mounted modal |
