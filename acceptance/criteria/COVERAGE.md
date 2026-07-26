@@ -1778,7 +1778,13 @@ uses (`button.primary` / running state / `.nav-item.active`) carry the accent �
 so it fails the moment a `button.ghost` reverts to `background:transparent`,
 inert text gains a pill background, or a second element steals the accent) joins
 the existing `ACCENT_DISCIPLINE` (`main-running.png` — accent confined to the
-primary action + running state) as the deterministic guards on the discipline;
+primary action + running state) and `CALENDAR_ACCENT_BUDGET`
+(`calendar-accent-budget.png`, issue 143 — the Entries calendar AT REST over the
+three-week `denseCalendarState` fixture, 51 blocks: no closed entry block paints
+an accent-family colour as fill / gradient / border / shadow, every one computes
+the `--paper` fill plus a non-none box-shadow (D09 depth, not tint), exactly one
+block — the RUNNING one — keeps the accent, and the whole view holds ≤1
+`--accent-solid` fill) as the deterministic guards on the discipline;
 the subjective whole-window look stays under JUDGE `DESKTOP_FEEL` (all
 screenshots). The mockups (`context/mockups/main.html` L43, `reports.html` L39,
 `timer.html` L40) carry the convention in comments as the design-intent
