@@ -44,12 +44,10 @@ unless asked otherwise.
   and edit the body with its URLs.
 - Embed by public URL:
   `https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/qa-evidence/issue-<N>/<file>`.
-  Keep each file **≤5 MB** — GitHub proxies external images through Camo, which drops
-  larger files. When you re-record a file in place, bust GitHub's image cache with
-  `?v=2` (bump N) since the filename is unchanged.
-- Use **markdown image syntax** (`![alt](url)`), not HTML img tags. If an embed shows up
-  as a plain link right after posting, leave it — embeds are repaired asynchronously by
-  CI. Do not re-edit the body to fix it.
+  Keep each file **≤5 MB**. When you re-record a file in place, bust GitHub's image
+  cache with `?v=[bumped N]` since the filename is unchanged.
+- Use **markdown image syntax** (`![alt](url)`), not HTML img tags. If you see an embed
+  replaced with a plain link, leave it — it'll be repaired by CI.
 - **Every bug issue includes one evidence line** naming its prefix so the bucket can be
   tidied after the issue closes (pruning 404s the images in the closed issue — optional,
   not mandated). Example:

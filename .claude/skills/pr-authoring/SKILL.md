@@ -21,17 +21,15 @@ right — don't re-narrate the diff or the session that produced it.
 ## Evidence (when the change is demonstrated visually)
 
 When the change is demonstrated by visual evidence (GIFs, screenshots), embed the pieces
-that *demonstrate the change* in the description itself — not in a comment. Evidence
-binaries are never committed to the repository (issue #256): upload them to the evidence
-bucket and embed from there.
+that *demonstrate the change* in the description itself — not in a comment. Visual
+evidence is uploaded to the bucket and embedded from there.
 
 - Upload first: `node scripts/upload-evidence.mjs acceptance/evidence/issue-<N> <files…>`
   (before/after captures for the PR's issue live under `acceptance/evidence/issue-<N>/`).
 - Embed by the bucket's public URL:
   `https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/issue-<N>/<file>`.
-- Keep each file **≤5 MB** — external images render through GitHub's Camo proxy, which
-  drops larger files (re-encode with a smaller scale / lower fps / gifsicle `--lossy`).
+- Keep each file **≤5 MB** (re-encode with a smaller scale / lower fps / gifsicle
+  `--lossy`).
 - Use **markdown image syntax** (`![alt](url)`), not HTML img tags.
-- Re-recording under an unchanged filename? Bust the image cache with `?v=N`.
-- If an embed shows up as a plain link right after posting, leave it — embeds are
-  repaired asynchronously by CI. Do not re-edit the body to fix it.
+- Re-recording under an unchanged filename? Bust the image cache with `?v=[bumped N]`.
+- If you see an embed replaced with a plain link, leave it — it'll be repaired by CI.

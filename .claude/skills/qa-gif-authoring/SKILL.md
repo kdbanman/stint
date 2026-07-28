@@ -83,8 +83,7 @@ ffmpeg -y -i in.webm -i pal.png \
 
 The driver's `record()` does this automatically. To keep GIFs small, record at
 ≤1000×720 and trim dead time; ~5–9 s lands around 0.5–2.5 MB. **Hard ceiling: 5 MB per
-file** — evidence is hosted off-repo and rendered through GitHub's Camo proxy, which drops
-anything larger. For a busy multi-colour frame that still runs large, re-encode at a
+file.** For a busy multi-colour frame that still runs large, re-encode at a
 smaller `scale=` and/or lower `fps`, or `gifsicle -O3 --lossy=40..120`. Finished GIFs are
 uploaded to the evidence bucket (`node scripts/upload-evidence.mjs <prefix> <files…>`),
 never committed.

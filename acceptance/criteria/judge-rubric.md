@@ -9,7 +9,7 @@ harness directly; the genuinely subjective items are scored by an LLM/human over
 captured screenshots. Any FAIL fails the suite; a sample of PASSes is spot-checked.
 
 The harness writes `acceptance/evidence/judge-report.json` and the screenshots in
-`acceptance/evidence/screenshots/`. Run it with `npm run judge`. (regenerated each run, gitignored — never committed)
+`acceptance/evidence/screenshots/`. Run it with `npm run judge`.
 
 > Renderer windows run headless via the pre-installed Chromium (Electron's own
 > binary is not fetched in this environment). The **tray icon's own title count-up**,
