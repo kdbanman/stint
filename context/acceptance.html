@@ -521,7 +521,7 @@ CLICKABILITY     Every clickable text affordance carries the neutral button back
       <li><strong>All code-change-adjacent requirements</strong> — any requirement whose implementation touched code in the change under review and is demonstrable in the GUI, including the §19 update flow (R03/R04) and §20 backup/restore (R04/R05).</li>
     </ul>
     <h3>Where they live</h3>
-    <p>Recordings are attached to / linked from the PR body as QA evidence under <code>acceptance/evidence/recordings/</code>, indexed by requirement id. The binaries themselves are git-ignored and linked from the PR; only the index is tracked. They are captured on a real macOS or Linux desktop session — which is also why several of the same requirements have a <span class="mc">MANUAL</span> runbook: the runbook is the executable gate, the recording is its visible artefact.</p>
+    <p>Recordings are attached to / linked from the PR body as QA evidence, indexed by requirement id in <code>acceptance/evidence/recordings/README.md</code>. The binaries themselves are never committed — they are uploaded to the public evidence bucket (<code>https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev</code>) under <code>acceptance/evidence/recordings/</code> and linked from the index and the PR (each ≤5&nbsp;MB so GitHub's Camo proxy renders them); only the index is tracked. They are captured on a real macOS or Linux desktop session — which is also why several of the same requirements have a <span class="mc">MANUAL</span> runbook: the runbook is the executable gate, the recording is its visible artefact.</p>
   </section>
 
   <section id="s13">

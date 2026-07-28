@@ -7,9 +7,16 @@ dist-pack/
 *.sqlite-shm
 .DS_Store
 acceptance/evidence/tmp/
-# Raw recording footage + conversion scratch — only the committed .gif deliverables are tracked.
+# Evidence binaries are never committed (issue #256): recordings, screenshots and
+# hand-captured issue evidence live on the public R2 evidence bucket, uploaded via
+# scripts/upload-evidence.mjs. Only text evidence (transcript, judge report) and
+# the recordings index are tracked.
+acceptance/evidence/recordings/*.gif
 acceptance/evidence/recordings/*.webm
 acceptance/evidence/recordings/.stage-*/
+acceptance/evidence/screenshots/
+acceptance/evidence/issue-*/
+acceptance/evidence/restyle-*/
 packages/gui/screenshots/tmp/
 .claude/settings.local.json
 .claude/worktrees/

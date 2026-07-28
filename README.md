@@ -61,9 +61,9 @@ toggles it from anywhere. The main window groups the day's entries, shows flags
 in context, and builds reports with CSV/JSON export. Anything the window does,
 `tt` does too.
 
-![The main window with a running timer and the day's entries](acceptance/evidence/screenshots/main-running.png)
+![The main window with a running timer and the day's entries](https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/screenshots/main-running.png)
 
-![The report builder grouping billable time by client, with overlap and sleep flags and CSV/JSON export](acceptance/evidence/screenshots/reports-summary.png)
+![The report builder grouping billable time by client, with overlap and sleep flags and CSV/JSON export](https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/screenshots/reports-summary.png)
 
 ## Developing Stint
 
