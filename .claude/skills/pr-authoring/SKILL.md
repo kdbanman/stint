@@ -31,9 +31,7 @@ bucket and embed from there.
   `https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/issue-<N>/<file>`.
 - Keep each file **≤5 MB** — external images render through GitHub's Camo proxy, which
   drops larger files (re-encode with a smaller scale / lower fps / gifsicle `--lossy`).
+- Use **markdown image syntax** (`![alt](url)`), not HTML img tags.
 - Re-recording under an unchanged filename? Bust the image cache with `?v=N`.
-- After creating or updating the body, **verify the embeds**: read the stored body back
-  through the API and confirm it matches what you sent — posting tooling has stripped the
-  `!` from markdown images and code-fenced `<img>` tags pointing at external hosts before.
-  If the read-back shows a neutralized embed, leave it as a working plain link and note it
-  for the owner to restore inline — do not fight the sanitizer.
+- If an embed shows up as a plain link right after posting, leave it — embeds are
+  repaired asynchronously by CI. Do not re-edit the body to fix it.

@@ -47,9 +47,9 @@ unless asked otherwise.
   Keep each file **≤5 MB** — GitHub proxies external images through Camo, which drops
   larger files. When you re-record a file in place, bust GitHub's image cache with
   `?v=2` (bump N) since the filename is unchanged.
-- **Sanitizer caveat:** some agent posting surfaces neutralize inline images pointing at
-  external hosts (the `!` is stripped or the tag is code-fenced). If your embed renders as
-  a plain link, leave it — the link still works, and the owner can restore the `!` inline.
+- Use **markdown image syntax** (`![alt](url)`), not HTML img tags. If an embed shows up
+  as a plain link right after posting, leave it — embeds are repaired asynchronously by
+  CI. Do not re-edit the body to fix it.
 - **Every bug issue includes one evidence line** naming its prefix so the bucket can be
   tidied after the issue closes (pruning 404s the images in the closed issue — optional,
   not mandated). Example:

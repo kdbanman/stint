@@ -1,0 +1,61 @@
+# Repairs evidence-bucket image embeds in agent-authored issue/PR bodies and comments
+# (issue #256). Agent posting surfaces neutralize inline images pointing at non-GitHub
+# hosts (anti-exfiltration): markdown embeds lose their leading `!`, HTML img tags get
+# entity-escaped into code spans. This workflow restores ONLY embeds pointing at the
+# project's own evidence bucket — never any other host, so the protection against
+# unknown/attacker domains stays intact.
+#
+# Idempotent: edits a body only when a repair changes it, so its own `edited` event
+# finds nothing to do and the loop terminates.
+name: repair-evidence-embeds
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    if: github.event.sender.type != 'Bot'
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const HOST = 'https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev';
+            const esc = HOST.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+
+            function repair(body) {
+              if (!body || !body.includes(HOST)) return body;
+              let b = body;
+              // 1. De-banged markdown image: [alt](HOST/....png) -> ![alt](HOST/....png)
+              b = b.replace(
+                new RegExp(`(?<!\\!)\\[([^\\]\\n]*)\\]\\((${esc}/[^\\s\\)]+\\.(?:png|gif|webp|jpe?g))\\)`, 'g'),
+                '![$1]($2)');
+              // 2. Code-span-fenced, entity-escaped img tag with a bucket src -> real tag.
+              //    Handles single or double escaping (&lt; / &amp;lt;) and 1-2 backticks.
+              b = b.replace(
+                new RegExp('`{1,2}(?:&amp;|&)lt;(img\\s[^`]*?' + esc.replace(/\\\//g, '/') + '[^`]*?)(?:&amp;|&)gt;`{1,2}', 'g'),
+                (_, inner) => '<' + inner.replace(/&amp;quot;|&quot;|&amp;#34;|&#34;/g, '"').replace(/&amp;#39;|&#39;/g, "'") + '>');
+              return b;
+            }
+
+            const { owner, repo } = context.repo;
+            const p = context.payload;
+            if (p.comment) {
+              const fixed = repair(p.comment.body);
+              if (fixed !== p.comment.body)
+                await github.rest.issues.updateComment({ owner, repo, comment_id: p.comment.id, body: fixed });
+            } else {
+              const item = p.pull_request ?? p.issue;
+              const fixed = repair(item.body);
+              if (fixed !== item.body)
+                await github.rest.issues.update({ owner, repo, issue_number: item.number, body: fixed });
+            }
