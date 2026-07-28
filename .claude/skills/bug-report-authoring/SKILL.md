@@ -23,7 +23,7 @@ unless asked otherwise.
 - **Severity + confidence** — state severity, and be honest about confidence. If you could
   not reproduce something end-to-end (e.g. couldn't run the packaged app), say so and say
   what still needs confirming. Never dress up a code-inspection hunch as a reproduction.
-- **Evidence line** — required: name the issue's `qa-evidence` directory; see below.
+- **Evidence line** — required: name the issue's evidence-bucket prefix; see below.
 
 ## Verify before you file
 
