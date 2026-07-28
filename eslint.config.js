@@ -47,7 +47,9 @@ export default tseslint.config(
   {
     files: ['scripts/**/*.mjs'],
     languageOptions: {
-      globals: { process: 'readonly', console: 'readonly', URL: 'readonly' },
+      // fetch: Node >= 18 global — used by upload-evidence.mjs (repo tooling, not shipped
+      // app code; the app's no-network gate scans packages/*, not scripts/).
+      globals: { process: 'readonly', console: 'readonly', URL: 'readonly', fetch: 'readonly' },
       parserOptions: { ecmaVersion: 2023, sourceType: 'module' },
     },
   },
