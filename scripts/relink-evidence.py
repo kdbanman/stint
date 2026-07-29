@@ -16,9 +16,6 @@ Usage (local):
   python3 relink-evidence.py             # dry run, prints a per-body diff summary
   python3 relink-evidence.py --only 126,145   # restrict to specific numbers
   python3 relink-evidence.py --apply     # actually PATCH the bodies
-
-Usage (GitHub Actions): dispatched by .github/workflows/relink-evidence.yml,
-which maps the form inputs to RELINK_ONLY / RELINK_APPLY env vars.
 """
 import json, os, re, sys, urllib.request
 
