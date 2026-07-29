@@ -1,0 +1,36 @@
+# Manually dispatched relink of evidence URLs in issue/PR bodies (issue #256).
+# Runs scripts/relink-evidence.py under the workflow's GITHUB_TOKEN — Actions-authored
+# edits bypass the agent-surface sanitizer, so repaired image embeds stay inline.
+#
+# Dry-run by default: dispatch with "apply" unchecked to see the would-change list in
+# the job log. Use "only" (comma-separated issue/PR numbers, e.g. "126,145") for a
+# pilot before the full run. Idempotent — safe to re-dispatch any time.
+name: relink-evidence
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: 'Restrict to these issue/PR numbers (comma-separated); empty = all'
+        required: false
+        default: ''
+      apply:
+        description: 'Actually PATCH the bodies (unchecked = dry run)'
+        type: boolean
+        default: false
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  relink:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Relink evidence URLs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELINK_ONLY: ${{ inputs.only }}
+          RELINK_APPLY: ${{ inputs.apply && 'true' || 'false' }}
+        run: python3 scripts/relink-evidence.py

@@ -1,17 +1,26 @@
 # Screen-recording QA evidence — recordings
 
-This directory holds two kinds of evidence:
+This directory is the tracked **index** of the §W screen-recording QA evidence. The
+GIF binaries themselves are never committed (issue #256) — they live on the public
+evidence bucket under
+`https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/<name>.gif`,
+each ≤5 MB so GitHub renders them through its Camo proxy. Regenerate with
+`npm run record`, re-encode anything over 5 MB (see the qa-gif-authoring skill), then
+upload: `node scripts/upload-evidence.mjs acceptance/evidence/recordings *.gif`.
 
-1. **Committed per-requirement GIFs** (below) — the §W screen-recording QA evidence.
+It holds two kinds of evidence:
+
+1. **Per-requirement GIFs** (below) — the §W screen-recording QA evidence.
    Each `.gif` drives the **real renderer** through the same canned fixtures + pinned
    clock the JUDGE harness uses (`packages/gui/judge/record.mjs`, `npm run record`;
    Playwright `recordVideo` → two-pass palette GIF, slowed ~0.5x with a ~1.5s end-frame
    hold and a visible cursor). They are ASCII-named by the recipe's requirement id — or,
    for the design-layer close-ups, by its design-rule id — and regenerated wholesale
    whenever the GUI changes: the whole set was last regenerated **after the design-layer
-   restyle**, so every committed GIF shows the current UI (the tomato accent and its
+   restyle**, so every uploaded GIF shows the current UI (the tomato accent and its
    solid primaries, the lifted-chip nav, the retuned spacing). The intermediate `.webm`
-   files are gitignored working artifacts.
+   files and the final `.gif`s are both gitignored working artifacts — only this index
+   is tracked.
 2. **Live MANUAL recordings** — the residual **live, OS-level** half of the MANUAL
    runbook procedures (real sleep/wake, the tray + global hotkey on a real desktop
    session, the live GitHub Releases query, and the OS-level app replacement + one-time
@@ -21,7 +30,7 @@ This directory holds two kinds of evidence:
 ## §W index — the screen-recording QA evidence
 
 One GIF per requirement row (combined rows share one GIF, referenced from each id).
-Every row below maps to a committed `.gif` and to the JUDGE item that gates the same
+Every row below maps to an uploaded `.gif` (public URL form above) and to the JUDGE item that gates the same
 behavior deterministically — the recording is that fact as a moving picture.
 
 | Req id(s) | GIF | What it demonstrates |

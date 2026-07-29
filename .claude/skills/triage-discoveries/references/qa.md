@@ -6,7 +6,7 @@ it, where its proof of fix lives. The procedure is in `SKILL.md`.
 ## Finding shape
 
 A reproduced, root-caused GUI defect: symptom, root cause with file:line
-pointers, embedded repro evidence from the `qa-evidence` branch, honest
+pointers, embedded repro evidence from the evidence bucket, honest
 severity and confidence. Filed by `bug-report-authoring` at the end of a QA
 audit. It reproduces through the real entry point — treat the defect as real
 unless the body itself flags a confidence gap.

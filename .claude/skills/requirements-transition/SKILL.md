@@ -147,9 +147,12 @@ a visible artifact the PR embeds):
 - Drive the real renderer via the record harness:
   `node packages/gui/judge/record.mjs --list` for recipe ids, `npm run record`
   or per-recipe runs to produce `.webm` (gitignored scratch).
-- Convert to **committed, ASCII-named GIFs** under
+- Convert to **ASCII-named GIFs** named for
   `acceptance/evidence/recordings/` (`§12 R15` → `12-r15.gif`), slowed ~0.5×
-  with a ~1.5 s end-frame hold, two-pass palette:
+  with a ~1.5 s end-frame hold, two-pass palette (≤5 MB each — gifsicle
+  `--lossy` or a smaller scale if over; never committed, uploaded to the
+  evidence bucket via `node scripts/upload-evidence.mjs
+  acceptance/evidence/recordings <files…>`):
 
   ```
   ffmpeg -y -i in.webm -vf "setpts=2.0*PTS,fps=15,scale=iw:-1:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5,palettegen=stats_mode=diff" pal.png
@@ -193,7 +196,7 @@ Final commit + push; refresh the PR body. **The human gate is the merge.**
 - [ ] All evidence regenerated; every requirement has a passing executable AC
       of its mapped method(s).
 - [ ] Both reviews run; improvement loop applied; skipped findings justified.
-- [ ] §W recordings captured LAST as committed inline-embedded GIFs (or
+- [ ] §W recordings captured LAST as bucket-uploaded inline-embedded GIFs (or
       honestly reported NOT CAPTURED); recordings index updated.
 - [ ] One PR with checklist, review outcomes, evidence, inline GIFs.
 - [ ] Gated swap done: old docs, retired files, and the work-list deleted;

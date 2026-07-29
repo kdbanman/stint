@@ -58,7 +58,7 @@ place of `<branch>`.
 | `context/mockups/design-system.html` | **The system, rendered.** The component sheet illustrating `context/design.html` — swatches per semantic token, type ramp, line-icon set, and component demos. The spec is normative; this page renders it. |
 | `README.md` | Implementation front door: layout, quick start, `tt` tour, GUI, and how to run the five AC method suites. |
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
-| `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — CLI transcript, screenshots, recordings, judge report). |
+| `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — the tracked text evidence: CLI transcript, judge report, recordings index). |
 | `features/` | Gherkin specs run against both surfaces (parity). |
 | `.claude/skills/` | The agentic process — the requirements-change skills (process.html §03) and the discovery, triage, and backlog skills (§06). |
 | `packages/gui/qa/` | The QA discovery driver — the real renderer over a real core store, plus the recording overlay. Guarded apparatus, never shipped. |

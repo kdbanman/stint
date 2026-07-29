@@ -423,7 +423,7 @@ release** artifact, with `tt` available in a terminal on the same database (find
 > `packages/gui/test/build-matrix.test.ts`) reported in the transcript's §19 R01 section. The
 > residual **live** end-to-end — a clean install of a stamped release, a real GitHub download, the OS-level
 > replacement + Gatekeeper, and the relaunch across a running timer — awaits a real desktop operator's
-> screen recording in `acceptance/evidence/recordings/` (see that directory's `README.md`).
+> screen recording on the evidence bucket under `acceptance/evidence/recordings/` (see `acceptance/evidence/recordings/README.md`).
 
 ---
 

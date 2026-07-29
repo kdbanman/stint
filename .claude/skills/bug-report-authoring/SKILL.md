@@ -23,7 +23,7 @@ unless asked otherwise.
 - **Severity + confidence** — state severity, and be honest about confidence. If you could
   not reproduce something end-to-end (e.g. couldn't run the packaged app), say so and say
   what still needs confirming. Never dress up a code-inspection hunch as a reproduction.
-- **Evidence line** — required: name the issue's `qa-evidence` directory; see below.
+- **Evidence line** — required: name the issue's evidence-bucket prefix; see below.
 
 ## Verify before you file
 
@@ -36,22 +36,25 @@ unless asked otherwise.
 
 ## Evidence & cleanup
 
-- Repro evidence lives on the **`qa-evidence` branch** — an orphan branch that is never
-  merged (see `context/process.html`, QA discovery). One `issue-<N>/` directory per issue
-  at the branch root. Main's tree and history never carry repro artifacts. The issue
-  number isn't known until the issue is filed, so file first, then commit the evidence to
-  the branch and edit the body with its URLs.
-- Embed by raw URL:
-  `https://raw.githubusercontent.com/<owner>/<repo>/refs/heads/qa-evidence/issue-<N>/<file>`.
-  When you re-record a file in place, bust GitHub's image cache with `?v=2` (bump N) since
-  the filename is unchanged.
-- **Every bug issue includes one evidence line** naming its directory so the branch can be
+- Repro evidence lives on the **evidence bucket** — the public R2 bucket (see
+  `context/process.html`, QA discovery), under one `qa-evidence/issue-<N>/` prefix per
+  issue. The repository never carries repro artifacts — no binary evidence is ever
+  committed. The issue number isn't known until the issue is filed, so file first, then
+  upload the evidence (`node scripts/upload-evidence.mjs qa-evidence/issue-<N> <files…>`)
+  and edit the body with its URLs.
+- Embed by public URL:
+  `https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/qa-evidence/issue-<N>/<file>`.
+  Keep each file **≤5 MB**. When you re-record a file in place, bust GitHub's image
+  cache with `?v=[bumped N]` since the filename is unchanged.
+- Use **markdown image syntax** (`![alt](url)`), not HTML img tags. If you see an embed
+  replaced with a plain link, leave it — it'll be repaired by CI.
+- **Every bug issue includes one evidence line** naming its prefix so the bucket can be
   tidied after the issue closes (pruning 404s the images in the closed issue — optional,
   not mandated). Example:
 
   ```markdown
   ## Evidence
-  Lives on the `qa-evidence` branch at `issue-48/`; prune after close if desired.
+  Lives on the evidence bucket at `qa-evidence/issue-48/`; prune after close if desired.
   ```
 
 - The reproduction driver is committed apparatus (`packages/gui/qa/driver.mjs` — the real
