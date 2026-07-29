@@ -16,10 +16,6 @@ Usage (local):
   python3 relink-evidence.py             # dry run, prints a per-body diff summary
   python3 relink-evidence.py --only 126,145   # restrict to specific numbers
   python3 relink-evidence.py --apply     # actually PATCH the bodies
-
-(The one-shot Actions workflow that dispatched this during the #256 migration has
-been removed; the script remains as the manual fallback — run it locally with a
-token, or re-wrap it in a workflow_dispatch workflow if it's ever needed at scale.)
 """
 import json, os, re, sys, urllib.request
 
