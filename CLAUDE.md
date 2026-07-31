@@ -60,7 +60,7 @@ place of `<branch>`.
 | `packages/` | `@stint/core` (schema, transitions, invariants, reporting), `tt` CLI, and the Electron GUI. |
 | `acceptance/` | The acceptance-criteria apparatus, split in two: `criteria/` (coverage matrix, JSON schemas, JUDGE rubric, MANUAL runbook, parity matrix — **what must hold**) and `evidence/` (generated **proof those criteria hold** — the tracked text evidence: CLI transcript, judge report, recordings index). |
 | `features/` | Gherkin specs run against both surfaces (parity). |
-| `.claude/skills/` | The agentic process — the requirements-change skills (process.html §03) and the discovery, triage, and backlog skills (§06). |
+| `.claude/skills/` | The agentic process — the transition-authoring skill (process.html §03) and the discovery, triage, and orchestration skills (§06). |
 | `packages/gui/qa/` | The QA discovery driver — the real renderer over a real core store, plus the recording overlay. Guarded apparatus, never shipped. |
 | `.github/workflows/`, `scripts/` | The enforcement apparatus process.html's principles constrain: CI/release workflows, evidence generator, no-network backstop, source census. |
 | `LICENSE` | MIT license. |

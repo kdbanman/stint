@@ -31,7 +31,7 @@ sense: recording an accepted decision whose rationale exists nowhere.
 | apparatus gap — a claim nothing checks | The new or strengthened check that **binds the claim**, following the repo's bind-two-homes-or-fail-loud pattern (`parity.test.ts`, `judge-bind.test.ts`, `build-matrix.test.ts`, `meta-docs.test.ts`), plus which `context/process.html` §05 row it joins. |
 | unrecorded decision | The doc § that will record it — named exactly, not "document this." |
 | structural | The test or binding that makes the drift class **impossible**, or the deletion-test claim that will hold after the change. |
-| process design with no code surface | Often no gate exists to build. Say so plainly and route to a dedicated session rather than inventing a check. |
+| process design with no code surface | Often no gate exists to build. Say so plainly in the proof-of-fix plan rather than inventing a check; the orchestrator's review is the catch. |
 
 A finding whose fix modifies a gate carries the self-reference flag (see
 `SKILL.md`) — common in this stream, since apparatus gaps are usually closed by
