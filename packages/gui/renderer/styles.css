@@ -31,6 +31,7 @@
   --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
   --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
   --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --on-accent:#fdfdfc;
   --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
   --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
   --danger:#ce2c31;--danger-weak:#feebec;
@@ -80,11 +81,11 @@ html, body {
   vertical-align: -2px;
 }
 /* An icon riding inside a clickable text button reads slightly smaller than its label and takes the
-   button's muted ink; the filled primary's icon goes white with its label. */
+   button's muted ink; the filled primary's icon goes on-accent with its label. */
 button .ic { width: 15px; height: 15px; color: var(--muted); }
 button:hover .ic { color: var(--ink); }
 button.primary .ic,
-button.primary:hover .ic { color: white; }
+button.primary:hover .ic { color: var(--on-accent); }
 
 /* The tabular-numeral helper — every clock/duration uses it so digits never jitter
    (design-system). Referenced by the editor/merge clocks, the popover clock, the settings
@@ -115,7 +116,7 @@ header.mast {
 /* The OS title bar already names the app and the strip below carries the running state, so the
    in-content wordmark stays a quiet label rather than a second masthead (design-system: less
    visual noise). */
-.wordmark { font-size: 12px; font-weight: 640; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.wordmark { font-size: 12px; color: var(--muted); }
 /* The running state already shows in the compact strip directly below the mast, so the mast's
    duplicate running summary stays hidden — one running indicator, not two (design-system). */
 .summary { display: none; font-family: var(--num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -151,13 +152,6 @@ header.mast {
   box-shadow: var(--sh-card);
 }
 .timer-card .tc-clock-block { flex: none; }
-.timer-card .tc-lbl {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
 .timer-card .clock {
   font-family: var(--num);
   font-size: 38px;
@@ -177,17 +171,15 @@ header.mast {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 640;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 8px;
 }
 /* The dot is the other sanctioned accent use on this card, and it is a non-text mark on the A02
-   floor — which is why the accent sits here and not on the word beside it. At 11px the word
-   would be accent-as-text below A01's ≥24px large-text branch, the same breach issue 141 closed
-   on the strip clock; the word inks instead, and the accent signals in a shape A01 permits. */
+   floor — which is why the accent sits here and not on the word beside it. At caption size the
+   word would be accent-as-text below A01's ≥24px large-text branch, the same breach issue 141
+   closed on the strip clock; the word inks instead, and the accent signals in a shape A01
+   permits. */
 .timer-card .tc-dot {
   width: 8px;
   height: 8px;
@@ -233,8 +225,6 @@ header.mast {
 .liveedit .le-pill {
   font-size: 11px;
   font-weight: 590;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--muted);
   background: var(--wash);
   border: 1px solid var(--rule-strong);
@@ -338,10 +328,7 @@ header.mast {
 .timer-strip.running .clock { color: var(--accent); }
 .timer-strip .state {
   display: none;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 640;
+  font-size: 12px;
   color: var(--muted);
 }
 /* The running-state text is the other sanctioned accent use on the strip. */
@@ -573,12 +560,6 @@ s {
   box-shadow: var(--sh-card);
 }
 .start-panel .sp-head { display: flex; align-items: center; }
-.start-panel .sp-title {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
 .start-panel .sp-actions { display: flex; gap: 8px; align-items: center; }
 /* §12 R05 (issue #51): the start panel is idle-only — renderTimerCard sets [hidden] while a
    timer runs, and the explicit display:none keeps it winning over the flex display above. */
@@ -816,8 +797,8 @@ button {
 button:hover { background: var(--hover); }
 /* Exactly one filled primary per view — the brightest thing in the view, so the eye lands (which
    one that is, state by state, is the accent-handoff rule below). The fill is --accent-solid
-   (tomato·11), never --accent: a white label reads 4.98:1 on the solid but fails the A01 floor on
-   tomato·9 (design.html D04/D11 — why accent-solid exists). */
+   (tomato·11), never --accent: the on-accent label reads 4.90:1 on the solid but fails the A01
+   floor on tomato·9 (design.html D04/D11 — why accent-solid exists). */
 /* Issue 154: the lift is the ladder's sub-card rung (--sh-chip), not a clay glow. D09 gives ONE
    elevation ladder and the chip lift below it; the hand-rolled `0 1px 2px accent 35%` that used to
    sit here was a sixth depth signal that also broke "depth, not tint" by colouring the shadow. Same
@@ -825,7 +806,7 @@ button:hover { background: var(--hover); }
 button.primary {
   background: var(--accent-solid);
   border-color: var(--accent-solid);
-  color: white;
+  color: var(--on-accent);
   font-weight: 590;
   box-shadow: var(--sh-chip);
 }
@@ -1225,8 +1206,6 @@ button.danger:hover { background: var(--danger-weak); }
 .pill {
   font-size: 11px;
   font-weight: 590;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   color: var(--muted);
   border: 1px solid var(--rule-strong);
   border-radius: 999px;
@@ -1442,12 +1421,9 @@ button.danger:hover { background: var(--danger-weak); }
 .report-table td,
 .report-table th { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
 .report-table th {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 12px;
   color: var(--muted);
   background: var(--wash);
-  font-weight: 590;
 }
 .report-table td.num,
 .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -1704,11 +1680,8 @@ button.danger:hover { background: var(--danger-weak); }
    the filled-vs-empty SHAPE, not a colour, is what says "chosen" (A05/D05). */
 .editor.conflict-prompt .conf { padding: 0; }
 .editor.conflict-prompt .mc-q {
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 12px;
   color: var(--muted);
-  font-weight: 640;
   margin: 0 0 12px;
 }
 .editor.conflict-prompt .opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -1804,7 +1777,7 @@ button.danger:hover { background: var(--danger-weak); }
    own rule, so a calendar column narrow enough to shave a cell under it overflows visibly
    instead of quietly measuring 23.9. */
 .stp-grid { display: grid; grid-template-columns: repeat(7, minmax(24px, 1fr)); gap: 2px; }
-.stp-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; text-transform: uppercase; }
+.stp-dow { font-size: 11px; color: var(--muted); text-align: center; padding: 4px 0; }
 .stp-d {
   text-align: center; padding: 8px 0; font-size: 12px; border-radius: var(--r1);
   cursor: pointer; color: var(--ink); background: var(--paper);
@@ -1812,8 +1785,8 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-d.stp-mut { color: transparent; cursor: default; }
 .stp-d:hover { background: var(--hover); }
-/* the selected day lifts as a raised paper chip (design.html D12 — selection ≠ accent; white
-   text on the raw accent is also a prohibited pair, 3.87:1). */
+/* the selected day lifts as a raised paper chip (design.html D12 — selection ≠ accent; on-accent
+   text on the raw accent is also a prohibited pair, 3.80:1). */
 .stp-d.stp-sel { background: var(--paper); color: var(--ink); font-weight: 590; box-shadow: var(--sh-chip); }
 .stp-d.stp-today { box-shadow: inset 0 0 0 1px var(--accent); }
 
@@ -1969,10 +1942,7 @@ body.popover { background: var(--paper); margin: 0; }
   display: flex;
   align-items: center;
   gap: 8px;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 640;
+  font-size: 12px;
   color: var(--muted);
 }
 .pop.running .pop-state { color: var(--run); }

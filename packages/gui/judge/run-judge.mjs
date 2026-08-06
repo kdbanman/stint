@@ -1294,7 +1294,7 @@ async function sceneFavoritesRail(browser) {
 // of the chrome stays monochrome warm grays. The scan checks BOTH family members as fills
 // and text colours; the sanctioned list is the post-transition truth:
 //   • button.primary — the per-view filled primary, whose FILL is --accent-solid (never raw
-//     --accent: white-on-tomato·9 is the prohibited 3.87:1 pair, D04);
+//     --accent: on-accent-on-tomato·9 is the prohibited 3.80:1 pair, D04);
 //   • the running-state surfaces (.entry.running / .timer-card.running / .timer-strip.running
 //     / the running popover / the live-edit strip) — running clock/state accents;
 //   • the picker "me" block's DRAG GRIPS (.stp-block.me .stp-resize's accent bar and the
@@ -1973,7 +1973,7 @@ async function sceneUnifiedFormAdd(browser) {
     // design.html D11 / V3: the "me" block is the OUTLINE idiom (accent-weak fill + an accent
     // border + ink labels; solid accent is reserved for primary actions), and Save entry is
     // the view's single accent-SOLID primary. The retired solid-accent me-fill would fail
-    // meWeakFill; a Save painted raw --accent (white-on-tomato·9, the prohibited pair) would
+    // meWeakFill; a Save painted raw --accent (on-accent-on-tomato·9, the prohibited pair) would
     // fail saveSolid.
     const paint = await page.evaluate(() => {
       const picker = document.querySelector('#add-picker');
@@ -4132,8 +4132,8 @@ async function sceneReportsView(browser) {
       const active = [...document.querySelectorAll('.nav-item.active')].map((b) => b.dataset.view);
       // Accent discipline (design.html D11 / V6): AT REST — the state probed here, with the
       // builder closed — the view's single accent affordance is the + New report primary, FILLED
-      // with --accent-solid (tomato·11 — a raw --accent fill under a white label is the prohibited
-      // 3.87:1 pair, D04). Anything else VISIBLE in the view painting EITHER family colour
+      // with --accent-solid (tomato·11 — a raw --accent fill under an on-accent label is the prohibited
+      // 3.80:1 pair, D04). Anything else VISIBLE in the view painting EITHER family colour
       // (--accent or --accent-solid, fill or text) is a break. Visibility is part of the claim:
       // the closed builder's own commit (#rep-save) is the accent-solid primary of the
       // builder-open state (PRIMARY_HANDOFF), and getComputedStyle reports its fill even inside a

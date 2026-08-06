@@ -18,8 +18,9 @@ export const START_MARKER =
 export const END_MARKER = '/* STINT-TOKENS end */';
 
 /* Every emitted line groups declarations by the primitive scale its tokens alias, at most five
-   per line — sand's ten semantic steps split into the surfaces line and the ink-ramp line, and
-   each signal family (tomato/grass/amber/red) reads as one line. */
+   per line — sand's ten semantic steps split into the surfaces line and the ink-ramp line, each
+   signal family (tomato/grass/amber/red) reads as one line, and on-accent (a sand alias in the
+   accent run) sits on a line of its own. */
 const MAX_DECLS_PER_LINE = 5;
 
 /** Resolve a DTCG alias like `{color.sand.1}` against the token tree; literals pass through. */
