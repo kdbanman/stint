@@ -1,0 +1,40 @@
+# Mirrors drag-dropped GitHub attachments into the public R2 evidence bucket and
+# rewrites issue/PR/comment bodies to point at the mirror (see the header of
+# scripts/mirror-issue-attachments.mjs for the why: agent sessions cannot fetch
+# github.com/user-attachments, so screenshot-bearing issues are unreadable to them).
+#
+# Terminates its own loop the same way repair-evidence-embeds does: the rewrite's
+# `edited` event has a Bot sender, and a rewritten body has no user-attachments URLs
+# left anyway. The two workflows edit disjoint bodies — repair fixes bucket embeds
+# that only agent-posted text carries, this mirrors uploads only humans can make —
+# so their concurrent runs on one event never contend for the same body.
+name: mirror-issue-attachments
+
+on:
+  issues:
+    types: [opened, edited]
+  pull_request:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    if: github.event.sender.type != 'Bot'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Mirror user-attachments into the evidence bucket
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STINT_R2_ACCOUNT_ID: ${{ secrets.STINT_R2_ACCOUNT_ID }}
+          STINT_R2_ACCESS_KEY_ID: ${{ secrets.STINT_R2_ACCESS_KEY_ID }}
+          STINT_R2_SECRET_ACCESS_KEY: ${{ secrets.STINT_R2_SECRET_ACCESS_KEY }}
+        run: node scripts/mirror-issue-attachments.mjs
