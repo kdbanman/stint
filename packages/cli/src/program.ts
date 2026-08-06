@@ -1195,6 +1195,8 @@ function normalizeRange(opts: Record<string, unknown>): RangeOpts {
     month: !!opts.month,
     lastMonth: !!opts.lastMonth,
   };
+  // range[0]/[1]: present by the length guard — variadic `--range <from...>` can arrive
+  // short, one value, when the TO is missing.
   if (r && r.length >= 2) out.range = [r[0]!, r[1]!];
   return out;
 }
@@ -1235,6 +1237,7 @@ function buildSavedReportInput(
   if (opts.range && opts.range.length >= 2) {
     rangeSpec = {
       kind: 'absolute',
+      // range[0]/[1]: present by the length guard — variadic `--range` can arrive short.
       fromUtc: parseTime(opts.range[0]!, nowDate),
       toUtc: parseTime(opts.range[1]!, nowDate),
     };
@@ -1312,6 +1315,7 @@ function buildSavedReportPatch(
   if (opts.range && opts.range.length >= 2) {
     patch.rangeSpec = {
       kind: 'absolute',
+      // range[0]/[1]: present by the length guard — variadic `--range` can arrive short.
       fromUtc: parseTime(opts.range[0]!, nowDate),
       toUtc: parseTime(opts.range[1]!, nowDate),
     };

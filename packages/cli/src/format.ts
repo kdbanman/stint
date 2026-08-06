@@ -9,6 +9,7 @@ export function table(headers: string[], rows: string[][]): string {
   const widths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] ?? '').length)),
   );
+  // widths[i]: widths is headers.map, and every caller's row carries one cell per header.
   const fmt = (cells: string[]) =>
     cells.map((c, i) => (c ?? '').padEnd(widths[i]!)).join('  ').trimEnd();
   const lines = [fmt(headers)];

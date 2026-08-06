@@ -114,6 +114,7 @@ export function describeOverlaps(
   // worst (most billing-significant) neighbour.
   for (let i = 0; i < spans.length; i++) {
     for (let j = i + 1; j < spans.length; j++) {
+      // spans[i], spans[j]: both loops are bounded by spans.length.
       const a = spans[i]!;
       const b = spans[j]!;
       if (!spansOverlap(a.s, a.e, b.s, b.e)) continue;

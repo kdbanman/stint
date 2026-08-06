@@ -44,6 +44,7 @@ export function resolveRestoreSelection(
   selection: string | 'latest',
 ): string | null {
   if (backups.length === 0) return null;
+  // backups[0]: the empty list already returned on the line above.
   if (selection === 'latest') return backups[0]!.name;
   return backups.find((b) => b.name === selection)?.name ?? null;
 }

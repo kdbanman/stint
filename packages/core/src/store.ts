@@ -533,6 +533,7 @@ export class Store {
     return this.tx(() => {
       const rows = ids.map((id) => this.requireEntry(id));
       const sorted = [...rows].sort((a, b) => Date.parse(a.start_utc) - Date.parse(b.start_utc));
+      // sorted[0]: one row per id, and the `ids.length < 2` guard above rules out empty.
       const first = sorted[0]!;
       const startUtc = first.start_utc;
       // §06 R3: refuse a non-contiguous selection unless the gap is acknowledged. A positive
@@ -542,6 +543,7 @@ export class Store {
       if (!opts.allowGap) {
         let gapSeconds = 0;
         for (let i = 0; i < sorted.length - 1; i++) {
+          // sorted[i], sorted[i + 1]: the loop stops at length - 1.
           const prevEnd = sorted[i]!.end_utc;
           if (prevEnd === null) continue;
           const g = Date.parse(sorted[i + 1]!.start_utc) - Date.parse(prevEnd);
@@ -565,6 +567,7 @@ export class Store {
         }
       }
       // Latest end; if any is still open, the merged entry is open.
+      // sorted[0]: non-empty by the same `ids.length < 2` guard.
       let endUtc: string | null = sorted[0]!.end_utc;
       for (const r of sorted) {
         if (r.end_utc === null) {
@@ -920,10 +923,13 @@ export class Store {
   }
 
   private reportDefById(id: number): SavedReport {
+    // Private: every caller passes an id inserted or read inside the same transaction.
     return this.toSavedReport(this.findByIdRow<ReportRow>('report', id)!);
   }
 
   private toSavedReport(row: ReportRow): SavedReport {
+    // range_preset: db.ts CHECK(range_preset IN …) is RangePreset's value list, and a
+    // 'preset' row is only ever written with one (saveReport / editReport).
     const spec: RangeSpec =
       row.range_kind === 'preset'
         ? { kind: 'preset', preset: row.range_preset as RangePreset }
@@ -932,6 +938,8 @@ export class Store {
       id: row.id,
       name: row.name,
       rangeSpec: spec,
+      // db.ts CHECK(group_by IN …) / CHECK(billable_filter IN …) hold these columns to
+      // exactly these two unions.
       by: row.group_by as SavedReport['by'],
       billableFilter: row.billable_filter as SavedReport['billableFilter'],
       rounding: row.rounding === 1,
@@ -1049,6 +1057,7 @@ export class Store {
   }
 
   private favoriteById(id: number): Favorite {
+    // Private: every caller passes an id inserted or read inside the same transaction.
     return this.toFavorite(this.findByIdRow<FavoriteRow>('favorite', id)!);
   }
 
