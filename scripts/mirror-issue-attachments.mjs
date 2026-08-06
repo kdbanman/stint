@@ -63,7 +63,7 @@ for (const url of assets) {
     console.error(`SKIPPED ${url}: fetch ${res.status} — original URL kept`);
     continue;
   }
-  const bytes = Buffer.from(await res.arrayBuffer());
+  const bytes = new Uint8Array(await res.arrayBuffer());
   if (bytes.length > LIMIT) {
     console.error(`SKIPPED ${url}: ${(bytes.length / 1e6).toFixed(1)} MB > 5 MB — original URL kept`);
     continue;
