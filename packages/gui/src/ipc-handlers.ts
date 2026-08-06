@@ -73,6 +73,8 @@ export interface IpcHandlerDeps {
  */
 function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
   const now = new Date();
+  // fromDate/toDate: no preset means the §09 R01 date pair — and a payload carrying neither
+  // is rejected by core's plain-date parse, never widened into a bogus window.
   const range = q.preset
     ? resolveRange(q.preset, store.settings().weekStart, now)
     : resolveDateRange(q.fromDate!, q.toDate!);
@@ -103,6 +105,7 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
       // The row projection itself is entryrow.ts's one job (issue #166) — the day-grouped
       // getState path builds its rows through the same function, so the two can never drift.
       entries: g.entries.map((e) => {
+        // byId.get: buildEntryList only regroups `entries`, so every grouped id is a key.
         const full = byId.get(e.id)!;
         return toEntryRowView(full, overlaps.get(full.id));
       }),
