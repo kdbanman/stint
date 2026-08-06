@@ -4,10 +4,12 @@
  * makes NO change, and opening an older one applies only additive structures and stamps the
  * version forward, never rewriting or dropping existing rows. There are no down-migrations.
  *
- * Prior coverage pinned only the fresh-DB stamp (SCHEMA_VERSION === 3, user_version === 3 on a
- * new DB). These guards close §20 R08's two unproven halves: (a) opening a planted OLDER DB
- * preserves every existing row byte-for-byte while adding the new v3 structures and stamping the
- * version forward; (b) re-opening an up-to-date DB mutates neither schema nor data.
+ * Prior coverage pinned only the fresh-DB stamp. These guards close §20 R08's two unproven
+ * halves: (a) opening a planted OLDER DB preserves every existing row byte-for-byte while
+ * adding the newer structures (v3's tables/index; v4's sleep_span source-CHECK rebuild) and
+ * stamping the version forward; (b) re-opening an up-to-date DB mutates neither schema nor data.
+ * The v4 coercion of an OUT-of-union source ('unknown') is the §20 R05 restore case, proven by
+ * integration/restore-v3-backup.test.ts — here every seeded row is in-union and must not change.
  *
  * §20 R09 is the max-version fence, hoisted to openDb's FIRST post-open action (nothing beyond
  * the database header is read; migrate()'s check remains as backstop): a DB stamped AHEAD of this
@@ -64,6 +66,10 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       db.exec("INSERT INTO tag(name) VALUES('deep')");
       db.exec('INSERT INTO entry_tag(entry_id, tag_id) VALUES(1, 1)');
       db.exec("INSERT INTO setting(key, value) VALUES('weekStart', 'monday')");
+      db.exec(
+        "INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) " +
+          "VALUES(1, '2026-06-24T09:10:00Z', '2026-06-24T09:20:00Z', 'event')",
+      );
       // Capture the existing rows BEFORE rolling the schema back to an older shape.
       const before = {
         client: db.prepare('SELECT * FROM client ORDER BY id').all(),
@@ -72,24 +78,34 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
         tag: db.prepare('SELECT * FROM tag ORDER BY id').all(),
         entry_tag: db.prepare('SELECT * FROM entry_tag ORDER BY entry_id, tag_id').all(),
         setting: db.prepare('SELECT * FROM setting ORDER BY key').all(),
+        sleep_span: db.prepare('SELECT * FROM sleep_span ORDER BY id').all(),
       };
 
       // …then plant a genuinely OLDER (pre-v3) database: drop the v3-only structures (the
-      // favorite / favorite_tag / report tables + the one_open_entry_idx partial unique index)
-      // and roll user_version back to 2. favorite_tag references favorite, so drop it first.
+      // favorite / favorite_tag / report tables + the one_open_entry_idx partial unique index),
+      // rebuild sleep_span to its pre-v4 shape (no source CHECK), and roll user_version back
+      // to 2. favorite_tag references favorite, so drop it first.
       db.exec('DROP TABLE IF EXISTS favorite_tag');
       db.exec('DROP TABLE IF EXISTS favorite');
       db.exec('DROP TABLE IF EXISTS report');
       db.exec('DROP INDEX IF EXISTS one_open_entry_idx');
+      db.exec(
+        'CREATE TABLE sleep_span_old (id INTEGER PRIMARY KEY AUTOINCREMENT, ' +
+          'entry_id INTEGER NOT NULL REFERENCES entry(id) ON DELETE CASCADE, ' +
+          'sleep_utc TEXT NOT NULL, wake_utc TEXT NOT NULL, source TEXT NOT NULL)',
+      );
+      db.exec('INSERT INTO sleep_span_old SELECT * FROM sleep_span');
+      db.exec('DROP TABLE sleep_span');
+      db.exec('ALTER TABLE sleep_span_old RENAME TO sleep_span');
       db.exec('PRAGMA user_version = 2');
       db.close();
 
-      // Re-open: the additive v2→v3 migration runs.
+      // Re-open: the v2→v4 migration runs (additive DDL + the sleep_span source-CHECK rebuild).
       db = openDb(dbPath);
 
       // The version stamped forward to the current schema version…
       expect(userVersion(db)).toBe(SCHEMA_VERSION);
-      expect(userVersion(db)).toBe(3);
+      expect(userVersion(db)).toBe(4);
       // …the new v3 structures were ADDED…
       const tables = tableNames(db);
       expect(tables).toContain('favorite');
@@ -101,7 +117,8 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
           .all() as { name: string }[]
       ).map((r) => r.name);
       expect(indexes).toContain('one_open_entry_idx');
-      // …and every pre-existing row is preserved byte-for-byte (nothing rewritten or dropped).
+      // …and every pre-existing row is preserved byte-for-byte (nothing rewritten or dropped;
+      // the sleep_span rebuild keeps ids and in-union source values untouched).
       expect(db.prepare('SELECT * FROM client ORDER BY id').all()).toEqual(before.client);
       expect(db.prepare('SELECT * FROM project ORDER BY id').all()).toEqual(before.project);
       expect(db.prepare('SELECT * FROM entry ORDER BY id').all()).toEqual(before.entry);
@@ -110,6 +127,7 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
         before.entry_tag,
       );
       expect(db.prepare('SELECT * FROM setting ORDER BY key').all()).toEqual(before.setting);
+      expect(db.prepare('SELECT * FROM sleep_span ORDER BY id').all()).toEqual(before.sleep_span);
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

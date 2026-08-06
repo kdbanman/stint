@@ -8,6 +8,7 @@
  * SCHEMA_VERSION 3 adds the saved-report `report` table, the pinned-timer-template
  * `favorite` / `favorite_tag` tables, and the §20 R02 partial unique index that gives
  * the one-open-entry invariant DB-level teeth alongside the existing triggers.
+ * SCHEMA_VERSION 4 constrains `sleep_span.source` to SleepSource's value list (#180).
  */
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
@@ -21,7 +22,18 @@ import {
 export type Db = DatabaseSync;
 
 /** The current schema version; bumped when migrations are added. */
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
+
+// One source for the sleep_span column set: the fresh-DB CREATE and the v3→v4 rebuild must
+// agree, or a migrated database diverges from a fresh one. The CHECK is the proof behind
+// the store's `source as SleepSource` cast (#180).
+const SLEEP_SPAN_COLUMNS_SQL = `
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  entry_id  INTEGER NOT NULL REFERENCES entry(id) ON DELETE CASCADE,
+  sleep_utc TEXT NOT NULL,
+  wake_utc  TEXT NOT NULL,
+  source    TEXT NOT NULL CHECK(source IN ('event', 'gap', 'unknown'))
+`;
 
 const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS client (
@@ -79,13 +91,7 @@ CREATE TABLE IF NOT EXISTS favorite_tag (
   PRIMARY KEY (favorite_id, tag_id)
 );
 
-CREATE TABLE IF NOT EXISTS sleep_span (
-  id        INTEGER PRIMARY KEY AUTOINCREMENT,
-  entry_id  INTEGER NOT NULL REFERENCES entry(id) ON DELETE CASCADE,
-  sleep_utc TEXT NOT NULL,
-  wake_utc  TEXT NOT NULL,
-  source    TEXT NOT NULL
-);
+CREATE TABLE IF NOT EXISTS sleep_span (${SLEEP_SPAN_COLUMNS_SQL});
 
 CREATE TABLE IF NOT EXISTS setting (
   key   TEXT PRIMARY KEY,
@@ -387,13 +393,35 @@ export function openDb(
   return db;
 }
 
+// v3→v4: give sleep_span.source the CHECK its report-table siblings already have. SQLite's
+// ALTER TABLE cannot add one, hence the rebuild. An out-of-union value coerces to 'unknown'
+// rather than being refused — the realistic carrier is a §20 R05 restore of a pre-v4 backup,
+// and a constraint rejecting it would break the recovery path it should be repairing (#180).
+function constrainSleepSource(db: Db): void {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sleep_span'")
+    .get();
+  if (table === undefined) return; // fresh DB: SCHEMA_SQL creates the table already CHECKed
+  db.exec(`
+    BEGIN IMMEDIATE;
+    CREATE TABLE sleep_span_v4 (${SLEEP_SPAN_COLUMNS_SQL});
+    INSERT INTO sleep_span_v4 (id, entry_id, sleep_utc, wake_utc, source)
+      SELECT id, entry_id, sleep_utc, wake_utc,
+        CASE WHEN source IN ('event', 'gap', 'unknown') THEN source ELSE 'unknown' END
+      FROM sleep_span;
+    DROP TABLE sleep_span;
+    ALTER TABLE sleep_span_v4 RENAME TO sleep_span;
+    COMMIT;
+  `);
+}
+
 function migrate(db: Db, path: string): void {
   // Only touch the schema when it is actually behind: an up-to-date database skips all
   // DDL, so concurrent opens don't each take a write lock just to re-assert the schema.
-  // Every statement in SCHEMA_SQL is IF NOT EXISTS, so the v2→v3 bump (which adds the
+  // Every statement in SCHEMA_SQL is IF NOT EXISTS, so the additive bumps (v2→v3: the
   // favorite / favorite_tag / report tables and the one_open_entry_idx partial unique
-  // index) is purely additive: an existing v2 DB simply re-runs the idempotent DDL and
-  // stamps user_version = 3 with no data migration.
+  // index) simply re-run the idempotent DDL; the v3→v4 sleep_span rebuild is the one
+  // step IF NOT EXISTS cannot express, and runs first so SCHEMA_SQL's CREATE is a no-op.
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
   // §20 R09 backstop — openDb's header read is the PRIMARY fence (first post-open action);
   // this check is defense-in-depth guarding the post-recovery reopen and any other migrate
@@ -404,6 +432,7 @@ function migrate(db: Db, path: string): void {
     throw new SchemaTooNewError(row.user_version, SCHEMA_VERSION, path);
   }
   if (row.user_version >= SCHEMA_VERSION) return;
+  constrainSleepSource(db);
   db.exec(SCHEMA_SQL);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

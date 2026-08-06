@@ -2080,21 +2080,26 @@ area is **MANUAL** `CHECK TRAY + GLOBAL HOTKEY` (no headless tray host).
 ### PRD §13
 
 `gold/contracts.test.ts`, `core/src/paths.ts`. **Schema shape (§13) pinned at
-`SCHEMA_VERSION` 3** — the v3 schema IS the contract: `gold/contracts.test.ts`
-"GOLD: schema shape (§13)" opens `openDb(':memory:')` and asserts the new
+`SCHEMA_VERSION` 4** — the v4 schema IS the contract: `gold/contracts.test.ts`
+"GOLD: schema shape (§13)" opens `openDb(':memory:')` and asserts the
 `favorite` / `favorite_tag` / `report` tables exist with their exact §13 column
 sets (PRAGMA table_info), the §20 R02 **partial unique index**
 `one_open_entry_idx` over the constant `(1) WHERE end_utc IS NULL` exists
 (UNIQUE + the partial WHERE clause + the constant-`(1)` shape — NOT
 `entry(end_utc)`, which would permit a second open row since SQLite treats NULLs
-as distinct), `SCHEMA_VERSION === 3` with a fresh DB stamping
-`user_version = 3`, and `foreign_keys` is ON after open — so a missing
-table/column/index or a stale version fails the assertion. The **open-time
-durability pragmas** (WAL/FK/busy-timeout/`synchronous=FULL`,
+as distinct), the `sleep_span.source` **CHECK** carries exactly
+`('event','gap','unknown')` in the DDL and rejects an out-of-union INSERT while
+accepting all three `SleepSource` literals (#180), `SCHEMA_VERSION === 4` with a
+fresh DB stamping `user_version = 4`, and `foreign_keys` is ON after open — so a
+missing table/column/index/constraint or a stale version fails the assertion.
+The **open-time durability pragmas** (WAL/FK/busy-timeout/`synchronous=FULL`,
 asserted-and-verified before any write per §20 R01) are pinned by
 `gold/contracts.test.ts` "DB open durability pragmas (§20 R01)" + PROP
 `core/test/prop/open-invariants.test.ts`. The v2→v3 bump is additive (new tables +
-index, all `IF NOT EXISTS`), no data migration. **macOS + Linux-only path
+index, all `IF NOT EXISTS`), no data migration; the v3→v4 bump rebuilds
+`sleep_span` to add the `source` CHECK, coercing an out-of-union value to
+`'unknown'` so a §20 R05 restore of a pre-v4 backup keeps working — proven by
+`core/test/integration/restore-v3-backup.test.ts`. **macOS + Linux-only path
 contract (Windows dropped)** — `gold/contracts.test.ts` "GOLD: data-dir path
 contract — macOS + Linux only (§13)" pins `DB_FILENAME` = `timetracker.sqlite`,
 the env-driven Linux branch (`$XDG_DATA_HOME` else `~/.local/share/stint`) and
@@ -2666,12 +2671,18 @@ reopen; the surface-neutral `checkinScheduleAnchor()` World step reads core's
 the process wrote — proving durability across the process boundary with no new
 CLI surface). Regenerate evidence via `npm run evidence`. **R08 additive,
 idempotent migrations** is pinned by GOLD `core/test/gold/migration.test.ts`:
-opening a planted OLDER (pre-v3) database preserves every existing row
-byte-for-byte while adding the new v3 structures
+opening a planted OLDER (v2-shaped) database preserves every existing row
+byte-for-byte while adding the newer structures
 (`favorite`/`favorite_tag`/`report` + the `one_open_entry_idx` partial unique
-index) and stamping `user_version` forward to `SCHEMA_VERSION`, and re-opening
-an up-to-date DB mutates neither schema nor data (a true no-op migration) —
-closing the gap where only fresh-DB stamping was tested. **R04/R05 GUI surface**
+index + the v3→v4 `sleep_span` source-CHECK rebuild) and stamping
+`user_version` forward to `SCHEMA_VERSION`, and re-opening an up-to-date DB
+mutates neither schema nor data (a true no-op migration) — closing the gap
+where only fresh-DB stamping was tested. The v4 rebuild's coercion of an
+out-of-union `sleep_span.source` to `'unknown'` is proven with R05 by
+INTEGRATION `core/test/integration/restore-v3-backup.test.ts`: a genuinely
+v3-shaped backup carrying an out-of-union source restores through the real
+`Store.restoreFromBackup` seam, migrates to v4, loses no row, and leaves the
+CHECK live (#180). **R04/R05 GUI surface**
 — the Settings → Backups renderer (restore list + retention + the
 corruption-recovery banner) is now gated by the deterministic **JUDGE** items
 `BACKUPS_SECTION` (R04) and `RECOVERY_NOTICE` (R05) in
@@ -2984,9 +2995,11 @@ descriptors); retention-0-keeps-all and negative-⇒-0 semantics in
 **Clause.** Additive, idempotent migrations; no down-migration; existing rows
 preserved
 
-covered — fresh-DB version stamp (`SCHEMA_VERSION === 3`, `user_version`) plus
-older-DB row-preservation and idempotent re-open in
-`core/test/gold/migration.test.ts` (#35)
+covered — fresh-DB version stamp (`SCHEMA_VERSION === 4`, `user_version`) plus
+older-DB row-preservation (including the v3→v4 `sleep_span` source-CHECK
+rebuild) and idempotent re-open in `core/test/gold/migration.test.ts` (#35,
+#180); the rebuild's out-of-union coercion is the §20 R05 restore case in
+`core/test/integration/restore-v3-backup.test.ts` (#180)
 
 ### §20 R09
 

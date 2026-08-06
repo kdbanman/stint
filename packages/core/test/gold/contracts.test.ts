@@ -90,7 +90,7 @@ describe('GOLD: settings defaults (§14)', () => {
   });
 
   it('schema version is pinned', () => {
-    expect(SCHEMA_VERSION).toBe(3);
+    expect(SCHEMA_VERSION).toBe(4);
   });
 
   it('a corrupt stored value falls back to the default on read (reads as strict as writes)', () => {
@@ -276,10 +276,11 @@ describe('GOLD: range-ordering contracts (§05 R5, §09 R01/R08)', () => {
 });
 
 describe('GOLD: schema shape (§13)', () => {
-  // Artefact-is-criterion: the v3 schema IS the contract. A fresh in-memory DB must carry
-  // the new favorite / favorite_tag / report tables with the exact §13 column sets and the
-  // §20 R02 partial unique index over the constant (1) WHERE end_utc IS NULL — and open with
-  // foreign_keys ON. A regression (missing table/column/index, or a stale version) fails here.
+  // Artefact-is-criterion: the v4 schema IS the contract. A fresh in-memory DB must carry
+  // the favorite / favorite_tag / report tables with the exact §13 column sets, the
+  // §20 R02 partial unique index over the constant (1) WHERE end_utc IS NULL, and the
+  // sleep_span.source CHECK — and open with foreign_keys ON. A regression (missing
+  // table/column/index/constraint, or a stale version) fails here.
   const objects = (db: Db, type: 'table' | 'index') =>
     (
       db
@@ -289,11 +290,11 @@ describe('GOLD: schema shape (§13)', () => {
   const columns = (db: Db, table: string) =>
     (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((r) => r.name);
 
-  it('SCHEMA_VERSION is pinned to 3 and a fresh DB stamps user_version = 3', () => {
-    expect(SCHEMA_VERSION).toBe(3);
+  it('SCHEMA_VERSION is pinned to 4 and a fresh DB stamps user_version = 4', () => {
+    expect(SCHEMA_VERSION).toBe(4);
     const db = openDb(':memory:');
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    expect(row.user_version).toBe(3);
+    expect(row.user_version).toBe(4);
     db.close();
   });
 
@@ -360,6 +361,36 @@ describe('GOLD: schema shape (§13)', () => {
     // keeps the second-open-row collision (proven by prop/invariants.test.ts) load-bearing.
     expect(sql).toMatch(/\(\s*1\s*\)/);
     expect(sql).not.toMatch(/\(\s*end_utc\s*\)\s*WHERE/i);
+    db.close();
+  });
+
+  it("sleep_span.source is CHECK-constrained to SleepSource's value list", () => {
+    const db = openDb(':memory:');
+    // The DDL carries the constraint — the schema-level proof behind the store's
+    // `source as SleepSource` cast (#180)…
+    const sql = (
+      db
+        .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'sleep_span'")
+        .get() as { sql: string }
+    ).sql;
+    expect(sql).toMatch(/CHECK\s*\(\s*source\s+IN\s*\(\s*'event'\s*,\s*'gap'\s*,\s*'unknown'\s*\)\s*\)/i);
+    // …and it has teeth: an out-of-union value is rejected at the storage layer, while
+    // every SleepSource literal is accepted.
+    db.exec(
+      "INSERT INTO entry(start_utc, end_utc) VALUES('2026-06-24T09:00:00Z', '2026-06-24T10:00:00Z')",
+    );
+    db.exec(
+      "INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) VALUES" +
+        "(1, '2026-06-24T09:10:00Z', '2026-06-24T09:12:00Z', 'event')," +
+        "(1, '2026-06-24T09:14:00Z', '2026-06-24T09:16:00Z', 'gap')," +
+        "(1, '2026-06-24T09:18:00Z', '2026-06-24T09:20:00Z', 'unknown')",
+    );
+    expect(() =>
+      db.exec(
+        "INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) " +
+          "VALUES(1, '2026-06-24T09:30:00Z', '2026-06-24T09:40:00Z', 'powerd')",
+      ),
+    ).toThrow(/CHECK/);
     db.close();
   });
 });
