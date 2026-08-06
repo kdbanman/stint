@@ -2,7 +2,7 @@
 name: triage-discoveries
 description: >-
   Use when un-triaged issues — audit findings (labeled "Agentic Discovery")
-  or owner-raised issues (no label) — need triage into the Triaged backlog.
+  or owner-raised issues (no label) — need triage into the triaged backlog.
   Decides and routes; does not fix.
 ---
 
@@ -27,7 +27,7 @@ orchestrator, or needing the transition machinery (§03).
 
 ## The asymmetry that shapes this skill
 
-**The audit's grilling confirmed the problem; `Triaged` promises a plan.**
+**The audit's grilling confirmed the problem; `Triaged: ready for execution` promises a plan.**
 
 Findings arrive unusually triage-ready — evidence with file:line, stakes,
 severity, confidence, sometimes fix constraints already in the body — because
@@ -37,7 +37,7 @@ re-litigate the problem: the grilling settled that it is one.
 
 ## Intake
 
-Default: any open issue carrying neither `Triaged` nor `Triaged: transition`,
+Default: any open issue carrying neither `Triaged: ready for execution` nor `Triaged: transition required`,
 or the set the user names. Audit findings carry `Agentic Discovery` plus one
 provenance label naming the instrument that filed it:
 
@@ -133,12 +133,13 @@ sessions carry the work is the operating session's judgment
 (`context/process.html` §06). Both labels feed the same downstream,
 `process-triaged-issues`:
 
-- **`Triaged`** (+ category labels): the orchestrator carries the fix
+- **`Triaged: ready for execution`** (+ category labels): the orchestrator carries the fix
   end-to-end — one or a few issue-anchored PRs, spec edits made in place,
   and a deterministic gate can catch a subtle implementation failure. A
-  multi-PR unit is still `Triaged`; record its sequencing in the comment
+  multi-PR unit is still `Triaged: ready for execution`; record its sequencing in the comment
   and the handoff.
-- **`Triaged: transition`** (+ category labels), never plain `Triaged`: the
+- **`Triaged: transition required`** (+ category labels), in place of
+  `Triaged: ready for execution`, never alongside it: the
   fix needs the transition machinery (§03) — a whole-doc rewrite or
   multi-doc restructure where intermediate states would make the spec lie
   and the old→new map is itself an artifact to review. The orchestrator
@@ -183,18 +184,20 @@ it just can't be fire-and-forget.
 4. **Annotate and label.** Per issue, **one** comment in house style (§04): the
    category with the doc refs that justify it, the owner's fix-direction
    decision, the proof-of-fix plan at real files, the routing verdict, and the
-   self-reference flag if it applies. Apply the category labels plus `Triaged`
-   or `Triaged: transition`; **preserve existing labels** — a label-set
+   self-reference flag if it applies. Apply the category labels plus `Triaged: ready for execution`
+   or `Triaged: transition required`; **preserve existing labels** — a label-set
    update replaces the whole set, so include any originals (`Agentic
    Discovery` and the provenance label, where an audit filed the issue). Be
    frugal elsewhere: one comment per issue, no thread noise.
-5. **File the handoff.** One issue per batch, labeled `Triaged Orchestration`:
+5. **File the handoff.** One issue per batch, labeled `[META] Orchestration`
+   and titled `[META] Orchestration: <batch>` — the between-issues knowledge
+   tracker, never a work item (never triaged, never anchors a PR):
    a copy-pasteable prompt giving the batch's **sequencing, batching and
    dependency** — what lands first, which issues share a load-bearing file,
    what is blocked on what. Only what the per-issue comments cannot carry, never
    a restated category or fix direction (§04).
 6. **Report and route.** Summarize: issue → category → route table, the owner
-   decisions made, which issues are now `Triaged` backlog and which go where
+   decisions made, which issues are now `Triaged: ready for execution` backlog and which go where
    instead. **Do not open PRs or fix anything.**
 
 ## Definition-of-done checklist
@@ -208,13 +211,13 @@ it just can't be fire-and-forget.
       batched grill, not guessed.
 - [ ] Proof of fix named at a real file/§ per issue; weak-but-existing guards
       diagnosed, not just re-flagged.
-- [ ] Routing verdict per issue naming scale, never session shape; `Triaged`
-      on units the orchestrator carries end-to-end; `Triaged: transition` on
+- [ ] Routing verdict per issue naming scale, never session shape; `Triaged: ready for execution`
+      on units the orchestrator carries end-to-end; `Triaged: transition required` on
       units needing the transition machinery; suspended issues left unlabeled
       with their open question tracked.
 - [ ] Gate-modifying fixes carry the self-reference flag.
 - [ ] One comment per issue, house style; labels applied with originals
       preserved.
-- [ ] A `Triaged Orchestration` handoff issue filed: sequencing, batching,
+- [ ] A `[META] Orchestration` handoff issue filed: sequencing, batching,
       dependency.
 - [ ] Final report tables the routing; no code touched, no PR opened.

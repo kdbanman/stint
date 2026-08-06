@@ -2,15 +2,15 @@
 name: process-triaged-issues
 description: >-
   Use when the user asks to process, work, or close out the triaged issue
-  backlog (issues labeled "Triaged" or "Triaged: transition") — the one
+  backlog (issues labeled "Triaged: ready for execution" or "Triaged: transition required") — the one
   execution engine downstream of triage. Drives each unit to an open PR.
 ---
 
 # Process triaged issues (Stint)
 
 Consume the triaged backlog — **the one downstream of the triage gate**
-(`context/process.html` §06): every open issue labeled `Triaged` or
-`Triaged: transition`. Hold **one** batched grill interview covering all the
+(`context/process.html` §06): every open issue labeled `Triaged: ready for execution` or
+`Triaged: transition required`. Hold **one** batched grill interview covering all the
 issues that need requirement decisions, then fan the work out — one subagent
 per unit — and drive until every unit has an open, ready-for-review PR. This
 skill ends at **PRs up, not merged to `main`**; merge to `main` stays the one
@@ -21,17 +21,17 @@ human gate (§07).
 - Upstream, one gate (`context/process.html` §06): `triage-discoveries`
   consumes any un-triaged open issue — audit findings and owner-raised alike —
   and records the category, the owner's fix direction, the proof of fix, and
-  a routing verdict naming **scale, never session shape**: `Triaged` (this
-  skill carries the fix end-to-end) or `Triaged: transition` (the fix needs
+  a routing verdict naming **scale, never session shape**: `Triaged: ready for execution` (this
+  skill carries the fix end-to-end) or `Triaged: transition required` (the fix needs
   the transition machinery, §03).
 - This skill: interview once, delegate, deliver PRs. Issue-scale requirement
   changes are handled here directly — the batched interview is the grill, the
   per-issue subagent lands the in-place spec edits with the code.
-- A `Triaged: transition` unit is handled by handing the machinery its input:
+- A `Triaged: transition required` unit is handled by handing the machinery its input:
   the batched interview settles its design (the synthesis, signed off), then
   the `requirements-transition` skill authors the coexisting docs and files
   the member backlog — and **stops at the owner's launch**. When the owner
-  launches, the member issues are ordinary `Triaged` units of a later batch
+  launches, the member issues are ordinary `Triaged: ready for execution` units of a later batch
   of this skill, targeting the transition branch their handoff names.
 - Session shape — one session or several, how work is grouped — is this
   session's judgment. The verdict never prescribes it.
@@ -44,13 +44,15 @@ pointing at real files.
 
 ## Step 1 — Gather
 
-Collect the open issues labeled `Triaged` or `Triaged: transition` (or the
+Collect the open issues labeled `Triaged: ready for execution` or `Triaged: transition required` (or the
 set the user names). Read each in full — body **plus** the triage comment.
 Decisions recorded there are settled: do not re-ask them.
 
 Then read the batch's **handoff issue** — one per batch, labeled
-`Triaged Orchestration`: the batch's sequencing, batching and dependency,
-which no per-issue comment carries. Filed by `triage-discoveries` for an
+`[META] Orchestration` (titled `[META] Orchestration: <batch>`): the batch's
+sequencing, batching and dependency, which no per-issue comment carries. The
+handoff is the between-issues knowledge tracker, never a work item — never
+triaged, never anchoring a PR of its own. Filed by `triage-discoveries` for an
 ordinary batch, or by `requirements-transition` for a transition's member
 backlog — in the latter case it also names the **base branch** every member
 unit targets. If none exists, work it out yourself before partitioning
@@ -59,7 +61,7 @@ rather than proceeding without it.
 ## Step 2 — One batched requirements interview
 
 For the issues labeled `needs new requirement or AC` — and for every
-`Triaged: transition` issue, whose synthesis this interview produces — run
+`Triaged: transition required` issue, whose synthesis this interview produces — run
 the grill **once across the whole batch**:
 
 - One tight cluster of related questions at a time; stop and wait for
@@ -91,7 +93,7 @@ single unit only when they share a requirement or the same files, so separate
 PRs would conflict or duplicate work. Keep a merged unit reviewable — when in
 doubt, split. A unit's PR names every issue it closes.
 
-A `Triaged: transition` issue partitions to a single **authoring unit**:
+A `Triaged: transition required` issue partitions to a single **authoring unit**:
 invoke `requirements-transition` with the signed-off synthesis; the unit is
 done when the transition branch is pushed and the member backlog is filed —
 execution waits for the owner's launch.
@@ -201,12 +203,12 @@ Do not end the run while any unit lacks an open PR:
 
 ## Definition-of-done checklist
 
-- [ ] All open `Triaged` / `Triaged: transition` issues gathered; bodies and
+- [ ] All open `Triaged: ready for execution` / `Triaged: transition required` issues gathered; bodies and
       triage comments read.
-- [ ] The batch's `Triaged Orchestration` handoff read (or worked out), and
+- [ ] The batch's `[META] Orchestration` handoff read (or worked out), and
       carried into Step 3 — including any base branch it names.
 - [ ] One batched grill held for every `needs new requirement or AC` and
-      `Triaged: transition` issue; written synthesis signed off before any
+      `Triaged: transition required` issue; written synthesis signed off before any
       delegation.
 - [ ] Units partitioned; any multi-issue unit justified by a shared
       requirement or files, and its PR names every issue; any multi-PR unit

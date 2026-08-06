@@ -3,7 +3,7 @@ name: requirements-transition
 description: >-
   Use for a Stint requirements change too large to land as in-place section
   edits — a whole-doc rewrite or multi-doc restructure. Reached from the
-  triaged backlog (`Triaged: transition`) or invoked by the owner directly.
+  triaged backlog (`Triaged: transition required`) or invoked by the owner directly.
   Authors the new docs and the executable issue backlog; never executes.
 ---
 
@@ -78,8 +78,9 @@ with reasons where a plausibly-core requirement is ruled not core.
 
 ## Step 4 — File the backlog
 
-Decompose the change into **member issues, born `Triaged`**, as sub-issues
-of one parent labeled `Triaged Orchestration` — the same handoff mechanism
+Decompose the change into **member issues, born `Triaged: ready for execution`**, as sub-issues
+of one parent labeled `[META] Orchestration` and titled
+`[META] Orchestration: <transition name>` — the same handoff mechanism
 every orchestrator batch uses (process.html §06).
 
 - **The parent** carries what runs *between* members: the base branch name,
@@ -133,8 +134,8 @@ the integration PR to `main`.
 - [ ] Mockup-coverage hard rule checked and reported.
 - [ ] Core definition applied: relabels, new-gap core requirements,
       recorded exclusions.
-- [ ] Backlog filed: `Triaged Orchestration` parent naming the base branch
-      and sequencing; member sub-issues born `Triaged`, each
+- [ ] Backlog filed: `[META] Orchestration` parent naming the base branch
+      and sequencing; member sub-issues born `Triaged: ready for execution`, each
       contract-complete; standard tail present and sequenced last.
 - [ ] Branch pushed; owner handed the parent issue and launch instructions;
       orchestrator NOT launched.
