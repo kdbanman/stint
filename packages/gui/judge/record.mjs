@@ -62,7 +62,6 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
-// acceptance/evidence/recordings/<reqId>.webm — the QA-evidence home the per-req agents read.
 const RECORDINGS = join(here, '..', '..', '..', 'acceptance', 'evidence', 'recordings');
 
 // Same Chromium resolution as run-judge.mjs — one source of truth for the browser binary, so
@@ -218,7 +217,6 @@ function decoratePage(page) {
   const PRE_MS = 380;
   const POST_MS = 360;
 
-  // Move the synthetic+real pointer to an element's centre in small visible steps.
   async function travelTo(target) {
     let box = null;
     try {
@@ -430,7 +428,6 @@ const RECIPES = {
     drive: async (page) => {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
-      // Dwell on the running surface: only edit-or-stop — the start panel is hidden (issue #51).
       await page.waitForFunction(() => !!document.querySelector('#start-panel')?.hidden);
       await wait(page, 800);
       // Stop the open row (a scoped toggle override flips the snapshot idle, faithful to
@@ -449,7 +446,6 @@ const RECIPES = {
       await page.waitForSelector('#timer-card.idle');
       await page.waitForSelector('#start-panel:not([hidden])');
       await wait(page, 600);
-      // The start panel is back: open the disclosure and start the next task with details.
       await page.click('#start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await page.fill('#start-desc', 'invoice prep');
@@ -485,14 +481,11 @@ const RECIPES = {
     drive: async (page) => {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
-      // Dwell on the RUNNING state, advancing the pinned clock so the count-up visibly ticks.
       await wait(page, 400);
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 400);
       }
-      // Make Stop actually close the open row: flip the injected snapshot to idle so the
-      // post-stop getState() reload paints the nothing-running state (faithful to core stop).
       await page.evaluate(() => {
         const idle = { status: { running: false, entry: null }, days: [], sleepFlaggedIds: [], settings: window.__STATE__.settings };
         const prevToggle = window.stint.toggle;
@@ -501,9 +494,7 @@ const RECIPES = {
           return prevToggle();
         };
       });
-      // Click the primary Stop button in the running Timer card.
       await page.click('[data-view="timer"]:not([hidden]) #timer-stop');
-      // Wait for the card to settle into the idle state (count-up halted, nothing running).
       await page.waitForSelector('#timer-card.idle');
       await page.waitForFunction(
         () => document.querySelector('#timer-state')?.textContent?.trim() === 'idle',
@@ -543,9 +534,6 @@ const RECIPES = {
     state: runningState,
     initOpts: { startStopsOpen: true },
     drive: async (page) => {
-      // Route to the Timer view and dwell on the RUNNING surface: the Active-Timer card shows
-      // Stop + the live-edit strip, the start panel is HIDDEN (no start affordance while
-      // running — issue #51), and there is NO Switch button.
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('#timer-card.running');
       await page.waitForSelector('#timer-stop:not([hidden])');
@@ -553,8 +541,6 @@ const RECIPES = {
       await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await wait(page, 800);
 
-      // STOP the open row → idle. A scoped toggle override flips the snapshot idle (faithful
-      // to core's stop) so the post-stop load() repaints the idle card AND the start panel.
       await page.evaluate(() => {
         const prevToggle = window.stint.toggle;
         window.stint.toggle = () => {
@@ -570,15 +556,10 @@ const RECIPES = {
       await page.waitForSelector('#start-panel:not([hidden])');
       await wait(page, 600);
 
-      // Open the `Details` disclosure → the inline attribute form reveals (idle-only surface).
       await page.click('#start-panel #start-toggle');
       await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
       await wait(page, 400);
 
-      // Fill the core-entry attribute set the form carries. The Billable box starts UNCHECKED
-      // (clientless ⇒ non-billable) and AUTO-CHECKS as the client lands — the §05 R07
-      // client-keyed default, visibly exercised; we leave it untouched so the payload omits
-      // billable and core derives the default.
       await page.fill('#start-desc', 'invoice prep');
       await wait(page, 300);
       await page.fill('#start-client', 'Globex');
@@ -588,9 +569,6 @@ const RECIPES = {
       await page.fill('#start-tags', 'admin');
       await wait(page, 500);
 
-      // Press 'Start' → the whole payload goes over `start`; startStopsOpen makes the
-      // submitted attributes the single fresh open row, so the repaint paints the running
-      // card with the entered description/label.
       await page.click('#start-go');
       await page.waitForSelector('#timer-card.running');
       await page.waitForFunction(
@@ -598,9 +576,6 @@ const RECIPES = {
       );
       await wait(page, 400);
 
-      // Step the pinned clock so the fresh entry's 00:00:0x visibly ticks — the start carried
-      // its attributes into a LIVE timer; with it running again the start panel hides once
-      // more (only edit-or-stop), and still no Switch button anywhere.
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
@@ -647,20 +622,16 @@ const RECIPES = {
       await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
       await page.evaluate(() => window.__recCaption && window.__recCaption('Reports — a custom range is a plain date pair (§09 R01)'));
       await wait(page, 600);
-      // Open the inline builder.
       await page.click('#rep-new');
       await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
       await wait(page, 400);
-      // Pick Custom… → the two plain date fields reveal (hidden until chosen).
       await page.click('#rep-preset-seg .preset[data-preset="custom"]');
       await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
       await wait(page, 500);
-      // Name the report and TYPE the plain-date pair — no time-of-day anywhere.
       await page.fill('#rep-name', 'June window');
       await page.fill('#rep-range-from', '2026-06-01');
       await page.fill('#rep-range-to', '2026-06-07');
       await wait(page, 700);
-      // Save → the new card lands with its spec summary printing the verbatim date pair.
       await page.click('#rep-save');
       await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length === 3);
       await page.waitForFunction(
@@ -668,7 +639,6 @@ const RECIPES = {
       );
       await page.evaluate(() => window.__recCaption && window.__recCaption('Saved: Custom 2026-06-01 – 2026-06-07 (plain dates, no time)'));
       await wait(page, 1200);
-      // Run the fresh custom card → the grouped run-output paints under the resolved-range header.
       await page.click('#rep-defs .def:last-child .def-run');
       await page.waitForFunction(
         () => !document.querySelector('#rep-run')?.hidden && document.querySelectorAll('#rep-run-rows .report-grp').length > 0,
@@ -682,12 +652,9 @@ const RECIPES = {
       await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
       await page.evaluate(() => window.__recCaption && window.__recCaption('Entries — Custom… is a plain date pair, applied live (no Apply)'));
       await wait(page, 700);
-      // Pick the toolbar's Custom… preset → the two plain date fields reveal.
       await page.click('#el-preset-seg .preset[data-preset="custom"]');
       await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
       await wait(page, 500);
-      // TYPE the plain-date pair → setting BOTH dates drives a LIVE listEntries carrying the raw
-      // { fromDate, toDate } strings; the calendar narrows on the spot (no Apply button exists).
       await page.fill('#el-range-from', '2026-06-23');
       await wait(page, 400);
       await page.fill('#el-range-to', '2026-06-23');
@@ -724,19 +691,13 @@ const RECIPES = {
     state: pickerState,
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Open the Add-entry disclosure in the Entries view (the default view). The unified add form
-      // mounts the INLINE interval picker in flow (no modal, no calendar-icon trigger) into
-      // #add-picker, seeded from the raw #add-from/#add-to fields; give the backfill a description
-      // so the saved row is legible in the list.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
       await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.fill('#add-desc', 'invoice prep');
       await wait(page, 700);
-      // Bring the "me" span into the scrollable day viewport so the drag is on camera.
       await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
-      // Helper: the "me" rectangle box, to grab its body centre and bottom edge for dragging.
       const meBox = () =>
         page.evaluate(() => {
           const me = document.querySelector('#add-picker .stp-block.me');
@@ -744,8 +705,6 @@ const RECIPES = {
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
         });
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
-      // into #add-from/#add-to. Slow, stepped move so the snap is legible on camera.
       const before = await meBox();
       const grabX = Math.round(before.cx);
       const grabY = Math.round((before.top + before.bottom) / 2);
@@ -755,9 +714,6 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE EDGE DOWN +15px → only the stop moves (+30min, 5-min snap), written
-      // LIVE into #add-to. Any seeded other-entries on the day paint gray; if the span lands on one,
-      // the overlap region paints yellow (warn-only, never blocks).
       const me2 = await meBox();
       await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
       await page.mouse.down();
@@ -765,9 +721,6 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 1200);
 
-      // Scope a local add override so the saved backfill SHOWS in the list on repaint (mirrors
-      // §05 R02's toggle override). It records the payload AND splices a completed row for the
-      // chosen span into the injected snapshot; the unchanged submit path is untouched.
       await page.evaluate(() => {
         window.stint.add = (p) => {
           window.__ADDED__ = p;
@@ -802,16 +755,10 @@ const RECIPES = {
         };
       });
 
-      // No Apply — the picker wrote the picked start/stop into the authoritative #add-from/#add-to
-      // fields LIVE on every drag (Save entry is the sole commit). Dwell so the live-updated span is
-      // legible on camera.
       await wait(page, 1200);
 
-      // Save → the unchanged submit path sends the explicit fromLocal/toLocal over `add`; the
-      // form closes and the repaint paints the new completed backfill entry into the list.
       await page.click('#add-go');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
-      // Dwell on the Entries list now carrying the saved 'invoice prep' backfill row.
       await page.waitForSelector('text=invoice prep').catch(() => {});
       await wait(page, 1500);
     },
@@ -844,14 +791,12 @@ const RECIPES = {
     drive: async (page) => {
       // Wait for the initial load() so `state` (and the picker's snapshotEntries) is populated.
       await page.waitForSelector('.entry', { state: 'attached' });
-      // (1) Open the unified add form; wait for the inline picker to mount and the client options.
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
       await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
       await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
       await wait(page, 700);
 
-      // Fill the LEFT-column attributes so the saved backfill row is legible in the list.
       await page.fill('#add-desc', 'invoice prep');
       await page.selectOption('#add-client', { label: 'Globex' });
       await page.waitForSelector('#add-project:not([disabled]) option[value="21"]', { state: 'attached' });
@@ -861,8 +806,6 @@ const RECIPES = {
       await page.press('#add-tag-input', 'Enter');
       await wait(page, 700);
 
-      // (2) DRAG the "me" body up so the span moves earlier and the raw Start/Stop fields update
-      // LIVE — the picker drives the form state (G7). Slow, stepped move so the change is legible.
       const meBox = () =>
         page.evaluate(() => {
           const me = document.querySelector('#add-picker .stp-block.me');
@@ -889,8 +832,6 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 1200);
 
-      // Scope a local add override so the saved backfill SHOWS in the list on repaint, and return
-      // the shared (overlap-carrying) __ACK__ so applyAck() raises the inline overlap banner.
       await page.evaluate(() => {
         window.stint.add = (p) => {
           window.__ADDED__ = p;
@@ -925,8 +866,6 @@ const RECIPES = {
         };
       });
 
-      // (3) SAVE — "Save entry" is the sole commit; the form closes, the repaint paints the new
-      // completed backfill row, and applyAck() raises the non-blocking overlap banner (§06 R4).
       await page.click('#add-go');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await page.waitForSelector('text=invoice prep').catch(() => {});
@@ -977,8 +916,6 @@ const RECIPES = {
     state: pickerDayState,
     contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
     drive: async (page) => {
-      // Helper: the "me" rectangle box within a given picker host, to grab its body centre and
-      // bottom edge for dragging.
       const meBox = (hostSel) =>
         page.evaluate((sel) => {
           const me = document.querySelector(`${sel} .stp-block.me`);
@@ -994,8 +931,6 @@ const RECIPES = {
       await wait(page, 600);
       await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
 
-      // DRAG THE BODY DOWN +30px → start+stop advance together (+60min, 5-min snap), written LIVE
-      // into the #add-from/#add-to fields. Slow, stepped move so the snap is legible.
       const a0 = await meBox('#add-picker');
       const aGrabX = Math.round(a0.cx);
       const aGrabY = Math.round((a0.top + a0.bottom) / 2);
@@ -1005,8 +940,6 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 700);
 
-      // DRAG THE BOTTOM RESIZE HANDLE DOWN +15px → only the stop moves (+30min, 5-min snap), LIVE.
-      // Any seeded other-entry on the day paints gray; an overlapping span paints yellow (warn-only).
       const a1 = await meBox('#add-picker');
       await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1));
       await page.mouse.down();
@@ -1014,7 +947,6 @@ const RECIPES = {
       await page.mouse.up();
       await wait(page, 1300);
 
-      // Close the add form — this scene is about the picker, not the save (proven by §05 R05).
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await wait(page, 500);
@@ -1037,9 +969,7 @@ const RECIPES = {
       await page.mouse.down();
       await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1 + 95), { steps: 24 });
       await page.mouse.up();
-      // Dwell on the gray other-entry + yellow overlap (warn-only) — the write is already live.
       await wait(page, 1300);
-      // Cancel the edit form (the requirement is the picker; the edit submit path is proven elsewhere).
       await page.click('.edit-form.entry-form .edit-cancel');
       await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
       await wait(page, 500);
@@ -1057,8 +987,6 @@ const RECIPES = {
       await page.click('#le-start-pick');
       await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
       await wait(page, 900);
-      // DRAG the start grip UP -20px (≈ -40min, 5-min snap): start 12:00 → 11:20, written LIVE
-      // into #le-start (no Apply — the text field is the authoritative commit path).
       const grip3 = page.locator('#le-start-disc .stp-grip');
       await grip3.scrollIntoViewIfNeeded();
       const r0 = await grip3.boundingBox();
@@ -1069,7 +997,6 @@ const RECIPES = {
       await page.mouse.move(rGrabX, rGrabY - 20, { steps: 16 });
       await page.mouse.up();
       await wait(page, 1000);
-      // Collapse the disclosure — the amended start stands in the Start text field.
       await page.click('#le-start-pick');
       await page.waitForSelector('#le-start-disc[hidden]', { state: 'attached' });
       await wait(page, 1200);
@@ -1084,7 +1011,6 @@ const RECIPES = {
       await page.click('#add-toggle');
       await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
       await page.fill('#add-desc', 'overnight deploy');
-      // Expand the Start/Stop expander (the overnight path) and type the overnight span.
       await page.click('#add-times-toggle');
       await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
       await page.fill('#add-from', '2026-06-24T22:00');
@@ -1096,7 +1022,6 @@ const RECIPES = {
       if (!overnightHandled) {
         throw new Error('overnight span not preserved via the Start/Stop expander (text should stay authoritative)');
       }
-      // Dwell on the typed overnight text values standing as the authoritative span.
       await wait(page, 1600);
     },
   },
@@ -1215,7 +1140,6 @@ const RECIPES = {
       );
       await wait(page, 1300);
 
-      // DRAG THE BOTTOM GRIP down +15px (≈ +30min) — the accent grip resizes the STOP alone.
       const b1 = await meBox('.edit-form .edit-picker');
       await page.mouse.move(Math.round(b1.cx), Math.round(b1.bottom - 1));
       await page.mouse.down();
@@ -1256,7 +1180,6 @@ const RECIPES = {
       }
       await wait(page, 1600);
 
-      // Drag the start grip up -15px (≈ -30min): the start moves, the end stays absent.
       const g = await page.locator('#le-start-disc .stp-grip').boundingBox();
       if (g) {
         const gx = Math.round(g.x + g.width / 2);
@@ -1293,21 +1216,15 @@ const RECIPES = {
       await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
       await page.fill('#add-desc', 'overnight deploy');
       await wait(page, 700);
-      // Expand the collapsed Start/Stop expander — the overnight escape hatch (raw text fields).
       await page.click('#add-times-toggle');
       await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
       await wait(page, 600);
-      // Type the cross-midnight span into the raw text fields; the picker reflects it LIVE.
       await page.fill('#add-from', '2026-06-24T22:00');
       await page.fill('#add-to', '2026-06-25T02:00');
-      // The picker's collapsed echo reflects the typed overnight span (the shared interval updated).
       await page.waitForFunction(
         () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
       );
       await wait(page, 1400);
-      // Scope an add override so the saved overnight backfill SHOWS on the Entries repaint (mirrors
-      // §05 R05). It records the payload AND splices a completed overnight row into the snapshot; the
-      // unchanged submit path stays the single source of truth.
       await page.evaluate(() => {
         window.stint.add = (p) => {
           window.__ADDED__ = p;
@@ -1341,8 +1258,6 @@ const RECIPES = {
           return Promise.resolve(window.__ACK__);
         };
       });
-      // Save → the unchanged submit path sends the EXACT typed overnight fromLocal/toLocal over `add`;
-      // the form closes and the repaint paints the new completed overnight backfill.
       await page.click('#add-go');
       await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
       await page.waitForSelector('text=overnight deploy').catch(() => {});
@@ -1369,7 +1284,6 @@ const RECIPES = {
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
       await page.evaluate(() => window.__recCaption && window.__recCaption('Running timer — adjust its start inline (§05 R06)'));
       await wait(page, 900);
-      // Expand the start-only disclosure — in flow below the Start field, no modal chrome.
       await page.click('#le-start-pick');
       await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
       await page.evaluate(() =>
@@ -1394,8 +1308,6 @@ const RECIPES = {
           return Promise.resolve(window.__ACK__);
         };
       });
-      // Drag the start grip UP -30px (-60min, 5-min snap): 21:35 → 20:35, written LIVE into
-      // the raw #le-start text field on every step (no Apply anywhere).
       const grip = page.locator('#le-start-disc .stp-grip');
       await grip.scrollIntoViewIfNeeded();
       const g = await grip.boundingBox();
@@ -1409,8 +1321,6 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Drags write Start live (5-min snap) — the end stays empty, never a synthetic now'));
       await wait(page, 1300);
-      // Step the pinned clock so the count-up visibly keeps ticking after the start edit —
-      // amending the start never stops the open row (§05 R06).
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 400);
@@ -1463,15 +1373,11 @@ const RECIPES = {
         window.__recCaption('Multiline description — a 3-line scrollable field, newlines kept verbatim (§05 R10)'));
       await wait(page, 700);
 
-      // Open the inline edit form; the description surfaces in the multiline <textarea rows=3>,
-      // seeded with its stored two lines intact. Hover the event first to reveal its ops.
       await page.hover(row);
       await page.click(`${row} [data-act="edit"]`);
       await page.waitForSelector(`${form} .edit-desc`);
       await wait(page, 900);
 
-      // Scope a local edit override that applies the description patch to the injected snapshot
-      // (faithful to core's edit), so the post-Save load() repaints from the freshly-typed value.
       await page.evaluate(() => {
         window.stint.edit = (p) => {
           window.__EDITED__ = p;
@@ -1486,9 +1392,6 @@ const RECIPES = {
         };
       });
 
-      // Type a fresh TWO-LINE description. Clear the field, type the first line, then a literal
-      // Enter (a newline inside a textarea — never a submit) and the second line: the field scrolls
-      // and keeps the interior break.
       const editDesc = page.locator(`${form} .edit-desc`);
       await editDesc.fill('');
       await editDesc.click();
@@ -1504,7 +1407,6 @@ const RECIPES = {
       await page.waitForSelector(form, { state: 'detached' }).catch(() => {});
       await wait(page, 700);
 
-      // Reopen in edit mode: the textarea now carries the newly-typed multiline text rendered INTACT.
       await page.hover(row);
       await page.click(`${row} [data-act="edit"]`);
       await page.waitForSelector(`${form} .edit-desc`);
@@ -1551,9 +1453,6 @@ const RECIPES = {
         window.__recCaption('The selection bar shows the live count — 2 selected'));
       await wait(page, 900);
 
-      // Fold the two source rows into one merged entry on the snapshot so the reload SHOWS the
-      // merge (spanning earliest start → latest end), faithful to core's merge; the winnerId
-      // decides the surviving client (resolved by the main process, never in the renderer).
       await page.evaluate(() => {
         window.stint.merge = (p) => {
           window.__MERGED__ = p;
@@ -1658,8 +1557,6 @@ const RECIPES = {
         window.__recCaption('The selection bar appears ABOVE the calendar — a "2 selected" chip pill'));
       await wait(page, 1400);
 
-      // The V5 oracles: the bar is ABOVE the calendar, and Merge is NEUTRAL (the view's single
-      // accent-solid primary is the add form's Save entry, so Merge never takes it).
       const facts = await page.evaluate(() => {
         const resolve = (name) => {
           const p = document.createElement('span');
@@ -1692,7 +1589,6 @@ const RECIPES = {
         );
       }
 
-      // Travel across the two things the bar is made of, so both read on camera.
       await travel('#merge-count');
       await wait(page, 700);
       await page.evaluate(() =>
@@ -1701,7 +1597,6 @@ const RECIPES = {
       await travel('#merge-go');
       await wait(page, 900);
 
-      // Merge → the disagreeing-field conflict prompt (the commit itself is §06 R03's evidence).
       await page.click('#merge-go');
       await page.waitForSelector('.editor.conflict-prompt');
       await page.evaluate(() =>
@@ -1726,21 +1621,18 @@ const RECIPES = {
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Entries — a readonly week calendar (§12 R16)'));
       await wait(page, 1100);
-      // Fixed-width day columns with per-day header totals + a range chip; scroll the week.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Fixed-width day columns, per-day totals + a range chip'));
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = s.scrollWidth; });
       await wait(page, 900);
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = 0; });
       await wait(page, 800);
-      // The 24h track scrolls — off-hours entries are reachable, never clipped.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('The 24h track scrolls — off-hours entries stay reachable, never clipped'));
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 0; });
       await wait(page, 800);
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = s.scrollHeight; });
       await wait(page, 900);
-      // Hover an event to reveal its ops + corner checkbox.
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 240; });
       await page.hover('.entry[data-id="7"]').catch(() => {});
       await page.evaluate(() =>
@@ -1772,12 +1664,10 @@ const RECIPES = {
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Entries toolbar — every control filters the calendar live (§12 R09)'));
       await wait(page, 1100);
-      // Idle default: 7 events over three weeks; the chip is the WEEK's 5.00h, not all-time 8.00h.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Idle: 7 entries across 3 weeks — "This week" chip reads the week-bounded 5.00h'));
       await wait(page, 1200);
 
-      // SEARCH — narrows to the two IN-WEEK refactor matches (3.50h); the out-of-week match stays out.
       await page.fill('#search', 'refactor');
       await settle(2);
       await page.evaluate(() =>
@@ -1786,7 +1676,6 @@ const RECIPES = {
       await page.fill('#search', '');
       await settle(7);
 
-      // RANGE PRESETS — each chip re-queries; the event set + chip move with the window.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Range presets — This month: 6 entries, 7.00h'));
       await page.click('#el-preset-seg .preset[data-preset="month"]');
@@ -1808,7 +1697,6 @@ const RECIPES = {
       await settle(5);
       await wait(page, 1100);
 
-      // BILLABLE TOGGLE — billable drops the lunch (4); non-billable keeps only it (1, 0.00h).
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Billable: 4 entries — the non-billable lunch drops out'));
       await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
@@ -1822,7 +1710,6 @@ const RECIPES = {
       await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
       await settle(5);
 
-      // CLIENT + PROJECT — Acme keeps 3 (2.50h); its API project narrows to 1 (2.00h).
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Client Acme: 3 entries, 2.50h'));
       await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
@@ -1838,14 +1725,12 @@ const RECIPES = {
       await page.selectOption('#el-client', '');
       await settle(5);
 
-      // TAG — 'ci' keeps the week's two ci-tagged entries (2.50h).
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Tag "ci": 2 entries, 2.50h'));
       await page.fill('#el-tag', 'ci');
       await settle(2);
       await wait(page, 1300);
 
-      // The wire verdict, stamped on camera: every query carried by:'day', zero rejections.
       const wire = await page.evaluate(() => ({
         errors: window.__LIST_ERRORS__ || 0,
         reqs: (window.__LIST_REQS__ || []).length,
@@ -1898,8 +1783,6 @@ const RECIPES = {
         window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox (§12 R06 / §06 R01)'));
       await wait(page, 700);
 
-      // (1) HOVER the event → the icon-only ops (Delete / Split / Edit) + the corner checkbox reveal.
-      // Hover raises entry 80 above its overlapping neighbour (83) so the ops are reachable.
       await page.hover(row);
       await page.waitForSelector(`${row} .ops .op-btn[data-act="edit"]`, { state: 'attached' });
       await page.waitForSelector(`${row} .ops .op-btn[data-act="split"]`, { state: 'attached' });
@@ -1907,8 +1790,6 @@ const RECIPES = {
       await page.waitForSelector(`${row} .ck`, { state: 'attached' });
       await wait(page, 1400);
 
-      // (2) CLICK Edit → the ONE unified editor opens in EDIT MODE in the shared view-level host
-      // (#entry-form-host), in flow (no modal), seeded from every tt-editable field.
       await page.hover(row);
       await page.click(`${row} [data-act="edit"]`);
       await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="80"]', { state: 'attached' });
@@ -1920,8 +1801,6 @@ const RECIPES = {
         document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
       await wait(page, 1700);
 
-      // (3) TWO-STEP DELETE in the edit-mode footer: the first click ARMS a worded confirm (nothing
-      // removed yet)…
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Two-step Delete — first arms a worded confirm, nothing removed yet'));
@@ -1930,7 +1809,6 @@ const RECIPES = {
       await page.waitForSelector('.edit-form .confirm-q', { state: 'attached' });
       await wait(page, 1500);
 
-      // …then the explicit confirm fires remove({id}); the event leaves the calendar on the repaint.
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Confirm — remove fires with the entry id; the event leaves the calendar'));
@@ -1938,11 +1816,6 @@ const RECIPES = {
       await page.waitForSelector(row, { state: 'detached' }).catch(() => {});
       await wait(page, 1600);
 
-      // (4) §12 R15 (issue #49) — EXACT stored times: open the NOT-5-min-aligned entry 84
-      // (09:07:33 → 11:03:00Z, UTC page). The editor renders the stored times to the second —
-      // never snapped to the picker grid — and Save entry with NO drag round-trips them
-      // unchanged (the committed patch carries no startUtc/endUtc). The waitForFunction below
-      // IS the assertion: the recording fails if the patch ever carries a time key.
       const exactRow = '.entry[data-id="84"]';
       await page.evaluate(() => {
         window.__EDITED__ = null; // beat (3) never edited, but keep the assertion self-contained
@@ -1951,7 +1824,6 @@ const RECIPES = {
       await page.click(`${exactRow} [data-act="edit"]`);
       await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="84"]', { state: 'attached' });
       await page.waitForSelector('.edit-form.entry-form .edit-client option[value="1"]', { state: 'attached' });
-      // Expand the Start/Stop expander so the exact seconds are ON CAMERA (09:07:33 / 11:03).
       await page.click('.edit-form .ef-times-toggle');
       await page.evaluate(() =>
         window.__recCaption &&
@@ -1972,8 +1844,6 @@ const RECIPES = {
       );
       await wait(page, 1400);
 
-      // (5) Reopen and drag the bottom stop grip: snapping applies ONLY to the actively dragged
-      // handle — the stop lands on the :05 grid while the untouched start keeps its 09:07:33.
       await page.hover(exactRow);
       await page.click(`${exactRow} [data-act="edit"]`);
       await page.waitForSelector('.edit-form .edit-picker .stp-resize', { state: 'attached' });
@@ -1990,8 +1860,6 @@ const RECIPES = {
       await page.mouse.down();
       await page.mouse.move(rx, ry + 30, { steps: 10 });
       await page.mouse.up();
-      // Assert the drag outcome: the stop snapped onto :05 (whole minute) and the start still
-      // carries its exact stored seconds — the recording fails on a timeout here.
       await page.waitForFunction(() => {
         const from = document.querySelector('.edit-form .edit-start')?.value ?? '';
         const to = document.querySelector('.edit-form .edit-end')?.value ?? '';
@@ -2032,7 +1900,6 @@ const RECIPES = {
       await wait(page, 1300);
       await page.click('.edit-form .edit-cancel');
       await page.waitForSelector('.edit-form', { state: 'detached' });
-      // Open the slept event → the reversible subtract/restore control + struck raw-vs-trimmed.
       await page.hover('.entry[data-id="12"]');
       await page.click('.entry[data-id="12"] [data-act="edit"]');
       await page.waitForSelector('.edit-form .ef-subtract');
@@ -2040,7 +1907,6 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Slept entry: raw 4h struck beside the trimmed 3h billable — Restore to reverse'));
       await wait(page, 1300);
-      // Restore lifts the exclusion (billable back to raw), then Subtract re-excludes it.
       await page.click('.edit-form .ef-subtract');
       await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
       await page.evaluate(() =>
@@ -2077,7 +1943,6 @@ const RECIPES = {
         window.__recCaption('Clients view — create client / project / tag in place (§07 R1)'));
       await wait(page, 1100);
 
-      // (1) + Add client — the inline "New client" field opens (the click issue #48 dead-ended).
       await page.click('#add-client-btn');
       await page.waitForSelector('#clients-list .client-add input[placeholder="New client"]');
       await page.evaluate(() =>
@@ -2160,8 +2025,6 @@ const RECIPES = {
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail');
       await wait(page, 500);
 
-      // (a) PIN from the running timer — the Pin control swaps into the INLINE name field;
-      // type the name and commit on Enter. The rail grows by one chip under that name.
       const before = await page.$$eval('.fav-card', (els) => els.length);
       await page.click('#fav-pin');
       await page.waitForSelector('.fav-pin-form .rename-input');
@@ -2172,11 +2035,8 @@ const RECIPES = {
         (n) => document.querySelectorAll('.fav-card').length === n + 1,
         before,
       );
-      // Dwell on (b) the LIST — every favorite is a row in the rail, the new one included.
       await wait(page, 900);
 
-      // (c) RENAME in place — open the newly pinned chip's kebab → Rename; the chip's name
-      // swaps into the inline field, Enter commits, and the name repaints.
       const pinned = page.locator('.fav-card', { hasText: 'Invoice prep' });
       await pinned.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
@@ -2190,7 +2050,6 @@ const RECIPES = {
       );
       await wait(page, 800);
 
-      // (d) UNPIN — open the renamed chip's kebab → Unpin; the chip leaves the rail.
       const renamed = page.locator('.fav-card', { hasText: 'Client invoicing' });
       await renamed.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
@@ -2260,9 +2119,6 @@ const RECIPES = {
       };
 
       // ---- (1) LIVE COUNT-UP + RUNNING STATE -------------------------------------------------
-      // Route to the Timer view; the canonical 'auth refactor' open row (Client A / API, tags
-      // deep/urgent) is running, the count-up reads a deterministic 01:24:07, and the state dot
-      // shows 'running'. Step the pinned clock so the count-up visibly TICKS UP on camera.
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
       await page.waitForSelector('#timer-card.running');
@@ -2276,17 +2132,8 @@ const RECIPES = {
       await tickClock(3, 350);
 
       // ---- (2) EDIT THE RUNNING TIMER LIVE — no stop ----------------------------------------
-      // The live-edit strip is seeded from the open entry. The End field is deliberately ABSENT —
-      // there is NO #le-end anywhere (the open row has no stop, §05 R06 / §12 R14, the same
-      // no-end fact the judge asserts) — then change description + start time + Billable and PROVE
-      // the row stays open (still running).
       await page.waitForSelector('#live-edit:not([hidden])');
       await page.waitForFunction(() => !document.querySelector('#live-edit #le-end'));
-      // Make each live edit visibly APPLY on the repaint: scope an `edit` override that applies
-      // the patch to the open row in __STATE__ (never an endUtc — the row stays open), faithful
-      // to core's edit-on-open-row. The renderer's commitLiveEdit still builds the minimal patch
-      // and calls window.stint.edit({id,patch}); this override just lets the post-edit load()
-      // repaint reflect it on camera. The "no endUtc" invariant is preserved (patch carries none).
       await page.evaluate(() => {
         window.stint.edit = (p) => {
           window.__EDITED__ = p;
@@ -2315,7 +2162,6 @@ const RECIPES = {
         window.__EDITED__ = null; // isolate this commit so the desc-only assertion is self-contained
       });
       await page.fill('#live-edit #le-desc', 'auth refactor v2');
-      // Advance the pinned clock past the 500ms debounce window to flush the single commit.
       await tickClock(1, 0);
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'auth refactor v2',
@@ -2355,8 +2201,6 @@ const RECIPES = {
       await wait(page, 900);
 
       // ---- (3) STOP, then START A NEW TIMER WITH DETAILS -------------------------------------
-      // Stop closes the open row → idle. Scope a toggle override that flips __STATE__ to idle
-      // (faithful to core's stop), so the post-stop load() paints the idle card (count-up halted).
       await page.evaluate(() => {
         const prevToggle = window.stint.toggle;
         window.stint.toggle = () => {
@@ -2395,15 +2239,11 @@ const RECIPES = {
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'invoice prep',
       );
-      // Confirm no Switch verb survives anywhere in the running Timer view (issue #34).
       await page.waitForFunction(() => !document.querySelector('#switch') && !document.querySelector('#timer-switch'));
       await tickClock(3);
       await wait(page, 600);
 
       // ---- (4) FAVORITES RAIL — pin, resume, rename, unpin -----------------------------------
-      // The rail paints one card per seeded favorite. PIN the running timer → the Pin control
-      // swaps into the INLINE name field (issue #52 — no window.prompt in Electron's renderer);
-      // type the name, commit on Enter, and a new chip appears.
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #fav-rail .fav-card');
       const before = await page.$$eval('.fav-card', (els) => els.length);
       await page.click('#fav-pin');
@@ -2472,8 +2312,6 @@ const RECIPES = {
       await tickClock(3);
       await wait(page, 600);
 
-      // RENAME via the kebab — open the pinned 'Invoice prep' chip's kebab → Rename; the
-      // chip's name swaps into the INLINE field, Enter commits, and the name repaints.
       const pinned = page.locator('.fav-card', { hasText: 'Invoice prep' });
       await pinned.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
@@ -2487,7 +2325,6 @@ const RECIPES = {
       );
       await wait(page, 700);
 
-      // UNPIN via the kebab — open the renamed chip's kebab → Unpin; the chip leaves the rail.
       const renamed = page.locator('.fav-card', { hasText: 'Client invoicing' });
       await renamed.locator('[data-act="fav-menu"]').click();
       await wait(page, 400);
@@ -2510,7 +2347,6 @@ const RECIPES = {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-clock');
       await wait(page, 400);
-      // Advance the pinned clock a few seconds so the count-up visibly advances on camera.
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 300);
@@ -2545,14 +2381,11 @@ const RECIPES = {
     state: savedReportsState,
     contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
-      // Enter the in-shell Reports view from the sidebar (the sidebar stays present throughout).
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('[data-view="reports"]:not([hidden])');
-      // Dwell on the SAVED-DEFINITIONS list — one card per seeded saved report.
       await page.waitForSelector('#rep-defs .def');
       await wait(page, 1100);
 
-      // Click the single accent primary action: + New report → the inline builder opens.
       await page.click('#rep-new');
       await page.waitForSelector('#rep-builder:not([hidden])');
       await wait(page, 500);
@@ -2568,29 +2401,21 @@ const RECIPES = {
       await wait(page, 300);
       await page.click('#rep-billable-seg .seg-btn[data-billable="billable"]');
       await wait(page, 400);
-      // Rounding stays OFF (the default) — dwell so the unchecked toggle is legible.
       await page.waitForSelector('#rep-rounding:not(:checked)');
       await wait(page, 500);
 
-      // SAVE the definition → saveReport (parity with `tt report save`); the builder closes and
-      // the new card appears in the list.
       await page.click('#rep-save');
       await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
       await page.waitForSelector('.def[data-name="Weekly billables — Acme"]');
       await wait(page, 900);
 
-      // RUN the new definition → runReport (parity with `tt report run`); the on-screen grouped
-      // summary paints with the grand total and the overlap + unreviewed-sleep flags IN CONTEXT.
       const newCard = page.locator('.def[data-name="Weekly billables — Acme"]');
       await newCard.locator('[data-act="run"]').click();
       await page.waitForSelector('#rep-run:not([hidden])');
       await page.waitForSelector('#rep-run-rows .report-grp');
-      // Dwell on the grouped summary: per-line + grand totals, with the flags on their rows.
       await page.waitForSelector('#rep-run-rows .report-flag');
       await wait(page, 1300);
 
-      // EXPORT (the report's OWN, FILTERED scope): Export CSV then JSON → exportEntries with
-      // scope 'filtered' + the saved ref; the confirmation line paints (the rows the report shows).
       await page.waitForSelector('#rep-run-export:not([hidden])');
       await page.click('#rep-export-csv');
       await page.waitForFunction(
@@ -2618,7 +2443,6 @@ const RECIPES = {
       );
       await wait(page, 1000);
 
-      // EDIT the card → the builder re-opens on the saved def; change Group by to Project.
       await newCard.locator('[data-act="edit"]').click();
       await page.waitForSelector('#rep-builder:not([hidden])');
       await page.waitForFunction(
@@ -2639,7 +2463,6 @@ const RECIPES = {
       );
       await wait(page, 800);
 
-      // RE-RUN to show the regroup taking effect (runReport over the amended def).
       await newCard.locator('[data-act="run"]').click();
       await page.waitForSelector('#rep-run:not([hidden])');
       await page.waitForFunction(
@@ -2647,11 +2470,6 @@ const RECIPES = {
       );
       await wait(page, 1100);
 
-      // RENAME the definition via the card kebab — the kebab swaps IN PLACE into the inline
-      // Rename / Delete menu (issue #52: Electron's renderer implements neither window.prompt
-      // nor window.confirm, so both affordances are inline controls). Rename swaps the card's
-      // name into the inline field; Enter commits renameReport (parity with `tt report
-      // rename`) and the card repaints under the new name.
       await newCard.locator('[data-act="menu"]').click();
       await page.waitForSelector('.def .def-menu');
       await wait(page, 400);
@@ -2663,9 +2481,6 @@ const RECIPES = {
       await page.waitForSelector('.def[data-name="Weekly billables — Acme (final)"]');
       await wait(page, 900);
 
-      // DELETE the renamed definition via the kebab — Delete ARMS the generic in-window
-      // confirm gate (§12 R13); only the explicit confirm fires removeReport (parity with
-      // `tt report rm`) and the card leaves the list.
       const renamedCard = page.locator('.def[data-name="Weekly billables — Acme (final)"]');
       await renamedCard.locator('[data-act="menu"]').click();
       await page.waitForSelector('.def .def-menu');
@@ -2689,15 +2504,11 @@ const RECIPES = {
     state: savedReportsState,
     contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
-      // Enter the in-shell Reports view from the sidebar; dwell on the saved-definition list
-      // (one restyled card per seeded saved report) so the new look reads on camera.
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('[data-view="reports"]:not([hidden])');
       await page.waitForSelector('#rep-defs .def');
       await wait(page, 1100);
 
-      // + New report → the inline restyled BUILDER opens. Build a definition by clicking each
-      // control so the segmented-control / toggle / field styling is legible in motion.
       await page.click('#rep-new');
       await page.waitForSelector('#rep-builder:not([hidden])');
       await wait(page, 500);
@@ -2710,15 +2521,11 @@ const RECIPES = {
       await page.click('#rep-billable-seg .seg-btn[data-billable="billable"]');
       await wait(page, 500);
 
-      // SAVE → the builder closes and the new card joins the restyled list.
       await page.click('#rep-save');
       await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
       await page.waitForSelector('.def[data-name="Weekly billables — Acme"]');
       await wait(page, 700);
 
-      // RUN → the on-screen GROUPED SUMMARY paints: per-line + grand totals, with the overlap
-      // and unreviewed-sleep flags surfaced IN CONTEXT on their affected rows. Dwell here so the
-      // restyled summary table + status flags are the closing beat.
       const newCard = page.locator('.def[data-name="Weekly billables — Acme"]');
       await newCard.locator('[data-act="run"]').click();
       await page.waitForSelector('#rep-run:not([hidden])');
@@ -2774,9 +2581,6 @@ const RECIPES = {
       });
       await wait(page, 1400);
 
-      // Scope a core-faithful setSetting: the injected mock accepts anything, but the REAL
-      // channel rejects a malformed HH:MM / inverted pair / out-of-range span — mirror that
-      // strictness here so the revert-on-reject beat below is honest. Recipe-scoped only.
       await page.evaluate(() => {
         const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
         window.stint.setSetting = (p) => {
@@ -2795,10 +2599,8 @@ const RECIPES = {
         };
       });
 
-      // 1) A valid working-hours edit persists and reads back on the repaint (09:00 → 08:00).
       await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', '08:00');
       await page.press('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', 'Tab');
-      // The change persisted over setSetting and the repaint reads it back from stored truth.
       await page.waitForFunction(
         () =>
           window.__SET_SETTING__?.key === 'workingHoursStart' &&
@@ -2807,7 +2609,6 @@ const RECIPES = {
       );
       await wait(page, 900);
 
-      // 2) An INVALID end (06:00 < start) is rejected; the re-render reverts to stored truth.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('An inverted pair is rejected — the field reverts to stored truth'),
       );
@@ -2820,7 +2621,6 @@ const RECIPES = {
       );
       await wait(page, 1100);
 
-      // 3) Flip the Picker-window mode → Around now: the Around select enables; pick 12 h.
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Picker window → Around now: the Around span enables'),
       );
@@ -2834,9 +2634,6 @@ const RECIPES = {
       await page.waitForFunction(() => window.__SET_SETTING__?.key === 'pickerAroundHours');
       await wait(page, 1000);
 
-      // 4) The consumer beat (post §12 R15/R16): the entries calendar opens to the configured
-      // window — a scroll default over the full 24h track, never clipped (G16). Guarded on the
-      // data-timeline-track hook so this recipe records meaningfully before those rows land.
       await page.click('.nav-item[data-view="entries"]');
       await wait(page, 700);
       const hasTrack = await page.evaluate(() => !!document.querySelector('[data-timeline-track]'));
@@ -2884,30 +2681,20 @@ const RECIPES = {
     state: emptyState,
     initOpts: { update: UPDATE_FIXTURE },
     drive: async (page) => {
-      // 1) CURRENT VERSION — route to Settings, scroll the Software Update group into view, and
-      // dwell on the "Current version" row (stamped APP_VERSION read over getVersion()) and the
-      // "Check for updates" row whose subcopy names GitHub Releases as the source.
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
       await page.waitForSelector('#update-check');
-      // Confirm the Current-version row printed the stamped version before the check (R06/R03).
       await page.waitForFunction(
         () => /2026\.6\.24/.test(document.querySelector('.set-row .ver')?.textContent || ''),
       );
       await page.evaluate(() => document.querySelector('#update-check')?.scrollIntoView({ block: 'center' }));
       await wait(page, 1100);
 
-      // 2) CHECK NOW — click "Check now"; the renderer queries the GitHub Releases bridge
-      // (window.stint.update.check), the verdict repaints "Update available · 2026.7.1" with the
-      // release link. Wait for the verdict line, then stamp a badge proving the bridge was queried.
       await page.click('#update-check');
       await page.waitForSelector('#update-status .update-result.new');
       await page.waitForFunction(
         () => /2026\.7\.1/.test(document.querySelector('#update-status')?.textContent || ''),
       );
-      // Stamp the proof badge: the injected check() set window.__CHECKED__ when the renderer queried
-      // it, and the resolved verdict is the "newer version" reply the live GitHub Releases query
-      // would give. Presentation-only, scoped to this page (mirrors §12 R03's scoped badge).
       await page.evaluate(() => {
         const v = window.__UPDATE__?.verdict || {};
         const b = document.createElement('div');
@@ -2921,11 +2708,9 @@ const RECIPES = {
           `update.check() -> GitHub Releases  ${window.__CHECKED__ ? 'CALLED ✓' : 'not called'}\n` +
           `verdict: ${v.status || '—'} · ${v.latestVersion || '—'}`;
         document.body.appendChild(b);
-        // Highlight the release link so the "newer version" verdict is unmistakable on camera.
         const link = document.querySelector('#update-status a[data-update-link]');
         if (link) link.style.outline = '2px solid #2f6fed';
       });
-      // Dwell on the verdict (Update available · 2026.7.1 + release link) and the proof badge.
       await wait(page, 1900);
     },
   },
@@ -2970,33 +2755,21 @@ const RECIPES = {
     state: emptyState,
     initOpts: { update: UPDATE_FIXTURE },
     drive: async (page) => {
-      // Route to Settings → Software Update.
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
       await wait(page, 500);
 
-      // A check first surfaces the newer release so the guided-install panel (the R04 surface)
-      // appears with its "Download & install <version>" primary action.
       await page.waitForSelector('#update-check');
       await page.click('#update-check');
       await page.waitForSelector('#update-download', { state: 'attached' });
       await wait(page, 900);
 
-      // DOWNLOAD: clicking replays the UPDATE_FIXTURE progress frames over onUpdateProgress —
-      // the progress bar advances (mid-download 42% 'downloading' frame) and the numbered guided
-      // steps repaint live, including the one-time Gatekeeper beat (no Developer ID).
       await page.click('#update-download');
-      // Dwell on the mid-download progress so the advancing bar + numbered steps are legible.
       await wait(page, 1100);
 
-      // The terminal 'ready' frame flips the action to "Reveal installer" pointing at the
-      // downloaded artifact in the temp folder — the user's hand-off to replace the app.
       await page.waitForSelector('#update-reveal', { state: 'attached' });
       await wait(page, 1200);
 
-      // Final dwell so the recording ends on the completed guided-install panel: Reveal
-      // installer + the full numbered steps (incl. Gatekeeper) + the "Updates never touch the
-      // database — the artifact downloads to a temp folder" note (R04's no-DB-touch guarantee).
       await page.evaluate(() => {
         const note = document.querySelector('.restore-note');
         if (note) note.scrollIntoView({ block: 'center' });
@@ -3024,7 +2797,6 @@ const RECIPES = {
     drive: async (page) => {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
-      // Dwell on the Backups group: Last backup + verified pill, retention picker, restore list.
       await page.waitForSelector('#backups-panel .set-grp');
       await page.waitForSelector('#backups-panel .backup-item');
       await page.evaluate(() =>
@@ -3032,13 +2804,10 @@ const RECIPES = {
       );
       await wait(page, 1300);
 
-      // CHANGE RETENTION (last 5 → last 10) over the same setSetting channel.
       await page.selectOption('#backups-panel select[data-key="backupRetention"]', '10');
       await page.waitForFunction(() => window.__SET_SETTING__?.key === 'backupRetention');
       await wait(page, 900);
 
-      // Scope a restoreBackup override so the restore visibly lands on the repaint: it records the
-      // payload and stamps a fresh Last-backup time, then we re-render to show the panel update.
       await page.evaluate(() => {
         const now = window.__JUDGE_NOW__;
         window.stint.restoreBackup = (p) => {
@@ -3049,11 +2818,9 @@ const RECIPES = {
         };
       });
 
-      // RESTORE through the confirm gate: first click ARMS the confirm…
       await page.click('#backups-panel .backup-item .backup-restore');
       await page.waitForSelector('#backups-panel .confirm-restore');
       await wait(page, 900);
-      // …the explicit confirm fires restoreBackup({name}); the panel repaints (re-render in onConfirm).
       await page.click('#backups-panel [data-act="confirm-restore"]');
       await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
       await page.waitForSelector('#backups-panel .backup-item');
@@ -3076,14 +2843,12 @@ const RECIPES = {
     drive: async (page) => {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
-      // Dwell on the recovery banner (recoveredFrom + quarantinedTo) atop the Backups group.
       await page.waitForSelector('#backups-panel #recovery-notice');
       await page.evaluate(() =>
         document.querySelector('#backups-panel #recovery-notice')?.scrollIntoView({ block: 'center' }),
       );
       await wait(page, 1600);
 
-      // Scope the restore override so the restore lands on the repaint and the notice clears.
       await page.evaluate(() => {
         const now = window.__JUDGE_NOW__;
         window.stint.restoreBackup = (p) => {
@@ -3094,14 +2859,12 @@ const RECIPES = {
         };
       });
 
-      // RESTORE from the list through the confirm gate: arm, then confirm → restoreBackup({name}).
       await page.waitForSelector('#backups-panel .backup-item .backup-restore');
       await page.click('#backups-panel .backup-item .backup-restore');
       await page.waitForSelector('#backups-panel .confirm-restore');
       await wait(page, 900);
       await page.click('#backups-panel [data-act="confirm-restore"]');
       await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
-      // The repaint clears the one-shot recovery notice (the user restored a chosen good backup).
       await page.waitForSelector('#backups-panel #recovery-notice', { state: 'detached' }).catch(() => {});
       await wait(page, 1400);
     },
@@ -3126,10 +2889,6 @@ const RECIPES = {
     state: runningState,
     contextOpts: { viewport: { width: 760, height: 620 } },
     drive: async (page) => {
-      // A tiny on-page badge that echoes the LIVE measured sidebar width + current viewport, so
-      // the constant 168px rail is legible while the content column reflows. Presentation-only,
-      // scoped to this recording page (no renderer/CSP change), mirroring the scoped overrides
-      // used by §05 R02/R05/R10.
       await page.evaluate(() => {
         const b = document.createElement('div');
         b.id = '__rec_badge__';
@@ -3146,28 +2905,19 @@ const RECIPES = {
         window.__recBadge__();
       });
 
-      // 1) Tour every view from the one rail — the sidebar is present in each, and the active
-      // highlight moves. Open on Entries (default), then visit each view including Reports
-      // (now in-shell) and Settings.
       for (const view of ['timer', 'entries', 'clients', 'reports', 'settings']) {
         await page.click(`.nav-item[data-view="${view}"]`);
         await page.waitForSelector(`.view[data-view="${view}"]:not([hidden])`);
-        // Confirm the rail is present AND the highlight is on THIS item (active accent moved).
         await page.waitForSelector(`.shell .nav .nav-item[data-view="${view}"].active`);
         await page.evaluate(() => window.__recBadge__());
         await wait(page, 650);
       }
 
-      // 2) Land back on Reports (in-shell) for the resize demonstration, so a content-rich view
-      // is visibly reflowing while the rail holds.
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('.view[data-view="reports"]:not([hidden])');
       await page.evaluate(() => window.__recBadge__());
       await wait(page, 500);
 
-      // 3) RESIZE NARROW (480px). The recordVideo frame tracks the viewport, so the window edge
-      // visibly pulls in; the badge keeps reading sidebar 168px (fixed) while the content column
-      // narrows. Step it in stages so the reflow is legible on camera.
       for (const w of [640, 560, 480]) {
         await page.setViewportSize({ width: w, height: 620 });
         await page.evaluate(() => window.__recBadge__());
@@ -3175,7 +2925,6 @@ const RECIPES = {
       }
       await wait(page, 700);
 
-      // 4) RESIZE WIDE (1200px). The content column expands; the rail still holds 168px.
       for (const w of [700, 950, 1200]) {
         await page.setViewportSize({ width: w, height: 620 });
         await page.evaluate(() => window.__recBadge__());
@@ -3183,9 +2932,6 @@ const RECIPES = {
       }
       await wait(page, 800);
 
-      // 5) Final pass: with the wide window, click through the rail once more so the recording
-      // ends proving every view still keeps the (constant-width) sidebar at the new size —
-      // including Reports in-shell.
       for (const view of ['timer', 'reports', 'settings', 'entries']) {
         await page.click(`.nav-item[data-view="${view}"]`);
         await page.waitForSelector(`.shell .nav .nav-item[data-view="${view}"].active`);
@@ -3225,13 +2971,11 @@ const RECIPES = {
     page: 'index.html',
     state: runningState,
     drive: async (page) => {
-      // 1) Open on Entries (the default view): show the COMPACT STRIP mirroring the running timer.
       await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
       await page.waitForSelector('#timer-strip.running');
       await page.waitForFunction(
         () => document.querySelector('#strip-desc')?.textContent?.trim() === 'auth refactor',
       );
-      // Dwell on the strip and step the pinned clock so its count-up visibly ticks (live timer).
       await wait(page, 700);
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
@@ -3239,28 +2983,19 @@ const RECIPES = {
       }
       await wait(page, 500);
 
-      // 2) Click the strip → route to the Timer view, where the FULL Active-Timer panel paints
-      // from the SAME running snapshot (large count-up + state + desc/meta/flags + Stop, no Switch).
       await page.click('#timer-strip');
       await page.waitForSelector('.view[data-view="timer"]:not([hidden]) #timer-card.running');
       await page.waitForFunction(
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'auth refactor',
       );
       await page.waitForSelector('#timer-stop:not([hidden])');
-      // §12 R04 — the running card's primary actions are exactly Stop + the favorite pin: confirm
-      // the Pin-as-favorite control (#timer-pin) is present/visible alongside Stop…
       await page.waitForSelector('#timer-pin:not([hidden])');
-      // …and that Switch is removed — no #timer-switch survives on the full panel (issue #34).
       await page.waitForFunction(() => !document.querySelector('#timer-switch'));
-      // Dwell on the full panel and step the clock so its larger count-up ticks on camera too.
       await wait(page, 700);
       for (let i = 4; i <= 6; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
       }
-      // Travel the cursor over the two remaining primary actions so the running card's
-      // Stop (+ favorite pin) set is legible on camera — the card hosts these and nothing else.
-      // Use stepped mouse.move so the synthetic cursor visibly travels to each control.
       for (const sel of ['#timer-stop', '#timer-pin']) {
         const box = await page.locator(sel).first().boundingBox();
         if (box) {
@@ -3274,8 +3009,6 @@ const RECIPES = {
       }
       await wait(page, 400);
 
-      // 3) Route back to Entries via the nav rail — the same running timer is still the compact
-      // strip there, proving the panel moved into Timer while Entries keeps the strip.
       await page.click('.nav-item[data-view="entries"]');
       await page.waitForSelector('.view[data-view="entries"]:not([hidden]) #timer-strip.running');
       await page.waitForFunction(
@@ -3301,24 +3034,19 @@ const RECIPES = {
     state: listState,
     initOpts: { toggleStarts: true },
     drive: async (page) => {
-      // 1) Entries (the default view): touch a toolbar control — the Today range preset.
       await page.waitForSelector('.view[data-view="entries"]:not([hidden]) #el-preset-seg');
       await wait(page, 600);
       await page.click('#el-preset-seg .preset[data-preset="today"]');
       await page.waitForFunction(() => !!window.__LIST_REQ__);
       await wait(page, 700);
-      // 2) Route to the Timer view — the card paints its idle face (00:00:00 / Start).
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('.view[data-view="timer"]:not([hidden]) #timer-card.idle');
       await wait(page, 800);
-      // 3) Click Start: the card must flip to running in place — no reload, no rerouting.
       await page.click('#toggle');
       await page.waitForSelector('#timer-card.running');
       await page.waitForFunction(
         () => document.querySelector('#timer-state')?.textContent?.trim() === 'running',
       );
-      // 4) Step the pinned clock so the fresh entry's 00:00:0x count-up visibly ticks — the
-      // card is the live timer, not a stale paint.
       await wait(page, 500);
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
@@ -3341,15 +3069,12 @@ const RECIPES = {
     page: 'popover.html',
     state: runningState,
     drive: async (page) => {
-      // The running popover: the toggle reads 'Stop', Open Stint is present, and NO #switch exists.
       await page.waitForFunction(
         () => document.querySelector('#toggle')?.textContent?.trim() === 'Stop',
       );
       await page.waitForSelector('#open');
       await page.waitForFunction(() => !document.querySelector('#switch'));
       await wait(page, 800);
-      // Step the pinned clock so the popover count-up visibly ticks — the live running timer, with
-      // still only Stop + Open Stint on the surface (no Switch).
       for (let i = 1; i <= 3; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
@@ -3398,7 +3123,6 @@ const RECIPES = {
     drive: async (page) => {
       await page.waitForSelector('.shell .nav .nav-item.active');
 
-      // The live computed-value badge. Scoped to this recording page — no renderer/CSP change.
       await page.evaluate(() => {
         const b = document.createElement('div');
         b.id = '__rec_badge__';
@@ -3461,8 +3185,6 @@ const RECIPES = {
       // Walk every rail item. Entries is already active on load, so visiting the other four and
       // returning to Entries shows the chip land on all five.
       for (const view of ['timer', 'clients', 'reports', 'settings', 'entries']) {
-        // HOVER first: travel the pointer in visible steps and dwell, so the quiet --hover wash on
-        // the still-flat inactive row is on camera immediately before the chip lifts.
         const box = await page.locator(`.nav-item[data-view="${view}"]`).first().boundingBox();
         if (box) {
           await page.mouse.move(
@@ -3525,9 +3247,6 @@ const RECIPES = {
     state: savedReportsState,
     contextOpts: { viewport: { width: 820, height: 760 } },
     drive: async (page) => {
-      // 1) THE RETIREMENT — read off disk whether the standalone page still ships, and stamp the
-      // verdict into an on-page badge so it is legible on camera. RENDERER is this file's own
-      // notion of the renderer dir (../renderer), the exact dir the real app loads from.
       const standaloneAbsent = !existsSync(join(RENDERER, 'report.html'));
       const reportJsAbsent = !existsSync(join(RENDERER, 'report.js'));
       await page.evaluate(
@@ -3546,13 +3265,9 @@ const RECIPES = {
         },
         [standaloneAbsent, reportJsAbsent],
       );
-      // Dwell on the in-shell window so the badge (retired-on-disk) is readable.
       await page.waitForSelector('.shell .nav');
       await wait(page, 1300);
 
-      // Actually try to open the OLD standalone sidebar-less page by its file:// URL: the
-      // browser fails to load it (the file is gone). We tolerate the navigation error and show
-      // the failed/empty page for a beat, then return — proving the page is genuinely removed.
       const standaloneUrl = 'file://' + join(RENDERER, 'report.html');
       try {
         await page.goto(standaloneUrl, { waitUntil: 'load', timeout: 4000 });
@@ -3561,28 +3276,20 @@ const RECIPES = {
       }
       await wait(page, 1200);
 
-      // 2) THE FOLD-IN — return to the in-shell window; the report function now lives inside the
-      // sidebar shell. Re-load index.html and route to Reports via the rail.
       await page.goto(fileUrl('index.html'), { waitUntil: 'load' });
       await page.waitForSelector('.shell .nav');
       await page.click('.nav-item[data-view="reports"]');
       await page.waitForSelector('.view[data-view="reports"]:not([hidden])');
-      // The sidebar is STILL present alongside the Reports view (the retired page had none).
       await page.waitForSelector('.shell .nav .nav-item[data-view="reports"].active');
-      // The saved-definition list paints in-shell — the report function folded in.
       await page.waitForSelector('#rep-defs .def');
       await wait(page, 1200);
 
-      // RUN one saved definition in-sidebar → the on-screen grouped summary appears (the job the
-      // standalone page used to do, now done inside the shell over the same runReport channel).
       const firstCard = page.locator('#rep-defs .def').first();
       await firstCard.locator('[data-act="run"]').click();
       await page.waitForSelector('#rep-run:not([hidden])');
       await page.waitForSelector('#rep-run-rows .report-grp');
       await wait(page, 1300);
 
-      // EXPORT CSV in-sidebar → exportEntries; the confirmation line paints. The sidebar is still
-      // present throughout — the contrast with the retired sidebar-less page the recording is about.
       await page.waitForSelector('#rep-run-export:not([hidden])');
       await page.click('#rep-export-csv');
       await page.waitForFunction(
