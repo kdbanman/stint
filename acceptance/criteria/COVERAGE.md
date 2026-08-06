@@ -982,7 +982,7 @@ machine-scored sub-facts beside order/default-active/routing —
 **`SIDEBAR_EVERY_VIEW`** (clicking through all five views keeps the
 `.shell .nav` rail visible (width>0, not hidden) on every route, with exactly
 one `.view` shown — no view escapes the shell) and **`FIXED_WIDTH_ON_RESIZE`**
-(the rail width is byte-identical 168 across 480/760/1200px viewports while the
+(the rail width is byte-identical 168 across 1040/1440/1920px viewports while the
 `.views` column width changes, proving resize lands on the content area, not the
 rail; the wide viewport is captured as `main-nav-wide.png` ). A regression (a
 view that hides the rail, or a rail that shrinks/grows on resize) flips the

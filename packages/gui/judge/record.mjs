@@ -57,6 +57,8 @@ import {
   pickerState,
   initScript,
   JUDGE_NOW,
+  WINDOW,
+  POPOVER,
   UPDATE_FIXTURE,
 } from './fixtures.mjs';
 
@@ -722,7 +724,7 @@ const RECIPES = {
   '§05 R05': {
     page: 'index.html',
     state: pickerState,
-    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       // Open the Add-entry disclosure in the Entries view (the default view). The unified add form
       // mounts the INLINE interval picker in flow (no modal, no calendar-icon trigger) into
@@ -840,7 +842,7 @@ const RECIPES = {
     page: 'index.html',
     state: addFormState,
     initOpts: { overlap: true },
-    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       // Wait for the initial load() so `state` (and the picker's snapshotEntries) is populated.
       await page.waitForSelector('.entry', { state: 'attached' });
@@ -975,7 +977,7 @@ const RECIPES = {
     // The shared picker-day snapshot (running open row + the two pickerState closed entries, all
     // on 2026-06-24), so every entry point's single-day column shows the gray other-entries.
     state: pickerDayState,
-    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       // Helper: the "me" rectangle box within a given picker host, to grab its body centre and
       // bottom edge for dragging.
@@ -1126,10 +1128,7 @@ const RECIPES = {
   'V3': {
     page: 'index.html',
     state: pickerDayState,
-    // Wider than the §12 R15 tour (940px, as §12 R07 uses): the editor's two-column layout must
-    // put the whole picker day column — block, labels and grips — inside the frame, since the
-    // block IS the subject here rather than one beat of a tour.
-    contextOpts: { viewport: { width: 940, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       const times = () =>
         page.evaluate(() => {
@@ -1285,7 +1284,7 @@ const RECIPES = {
   '§12 R17': {
     page: 'index.html',
     state: addFormState,
-    contextOpts: { viewport: { width: 940, height: 960 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       await page.waitForSelector('.entry', { state: 'attached' });
       await page.click('#add-toggle');
@@ -1363,7 +1362,7 @@ const RECIPES = {
   'running-start-only': {
     page: 'index.html',
     state: timerViewRunningState,
-    contextOpts: { viewport: { width: 760, height: 900 }, timezoneId: 'UTC' },
+    contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
@@ -1764,7 +1763,6 @@ const RECIPES = {
   '§12 R09': {
     page: 'index.html',
     state: listState,
-    contextOpts: { viewport: { width: 900, height: 700 } },
     drive: async (page) => {
       const settle = (n) =>
         page.waitForFunction((c) => document.querySelectorAll('.dcol .ev').length === c, n);
@@ -1888,7 +1886,6 @@ const RECIPES = {
   '§12 R06': {
     page: 'index.html',
     state: unifiedFormState,
-    contextOpts: { viewport: { width: 940, height: 940 } },
     drive: async (page) => {
       const row = '.entry[data-id="80"]';
       await page.waitForSelector('.dcol .ev');
@@ -2242,7 +2239,6 @@ const RECIPES = {
     page: 'index.html',
     state: timerViewFavoritesState,
     initOpts: { startStopsOpen: true },
-    contextOpts: { viewport: { width: 820, height: 980 } },
     drive: async (page) => {
       // The pinned fake clock starts paused at JUDGE_NOW. Because this one continuous scene flushes
       // a debounce AND ticks several count-ups, the clock can only move FORWARD (pauseAt cannot go
@@ -2543,7 +2539,6 @@ const RECIPES = {
   '§12 R08': {
     page: 'index.html',
     state: savedReportsState,
-    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
       // Enter the in-shell Reports view from the sidebar (the sidebar stays present throughout).
       await page.click('.nav-item[data-view="reports"]');
@@ -2687,7 +2682,6 @@ const RECIPES = {
   'reports-view': {
     page: 'index.html',
     state: savedReportsState,
-    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
       // Enter the in-shell Reports view from the sidebar; dwell on the saved-definition list
       // (one restyled card per seeded saved report) so the new look reads on camera.
@@ -2761,7 +2755,6 @@ const RECIPES = {
   'timeline-window-settings': {
     page: 'index.html',
     state: timelineWindowState,
-    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
@@ -3020,7 +3013,6 @@ const RECIPES = {
   '§20 R04': {
     page: 'index.html',
     state: backupsState,
-    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
@@ -3072,7 +3064,6 @@ const RECIPES = {
   '§20 R05': {
     page: 'index.html',
     state: recoveryState,
-    contextOpts: { viewport: { width: 820, height: 900 } },
     drive: async (page) => {
       await page.click('.nav-item[data-view="settings"]');
       await page.waitForSelector('[data-view="settings"]:not([hidden])');
@@ -3114,8 +3105,8 @@ const RECIPES = {
   // .nav-item.active) MOVING from item to item — including Reports, which is now IN-SHELL (the
   // standalone report.html is retired, §12 R08), so no view escapes the shell. Then it grabs the
   // window edge — Playwright setViewportSize, which resizes the captured recordVideo frame —
-  // and resizes NARROW (480px) then WIDE (1200px). styles.css pins `.shell .nav` to a 168px
-  // flex-none basis and lets `.views { flex: 1; min-width: 0 }` absorb all resize, so the
+  // and resizes WIDE (1920px) then back to the 1040px minimum. styles.css pins `.shell .nav` to a
+  // 168px flex-none basis and lets `.views { flex: 1; min-width: 0 }` absorb all resize, so the
   // recording SHOWS the sidebar holding a constant width while only the content area reflows.
   // To make the constant width legible on camera (a still frame can't show "it didn't move"),
   // the recipe stamps the live measured `.shell .nav` width into a small on-page badge before
@@ -3124,7 +3115,6 @@ const RECIPES = {
   '§12 R03': {
     page: 'index.html',
     state: runningState,
-    contextOpts: { viewport: { width: 760, height: 620 } },
     drive: async (page) => {
       // A tiny on-page badge that echoes the LIVE measured sidebar width + current viewport, so
       // the constant 168px rail is legible while the content column reflows. Presentation-only,
@@ -3165,19 +3155,20 @@ const RECIPES = {
       await page.evaluate(() => window.__recBadge__());
       await wait(page, 500);
 
-      // 3) RESIZE NARROW (480px). The recordVideo frame tracks the viewport, so the window edge
-      // visibly pulls in; the badge keeps reading sidebar 168px (fixed) while the content column
-      // narrows. Step it in stages so the reflow is legible on camera.
-      for (const w of [640, 560, 480]) {
-        await page.setViewportSize({ width: w, height: 620 });
+      // 3) RESIZE WIDE (1920px). The recordVideo frame tracks the viewport, so the window edge
+      // visibly pushes out; the badge keeps reading sidebar 168px (fixed) while the content column
+      // takes the room. Step it in stages so the reflow is legible on camera.
+      for (const w of [1300, 1600, 1920]) {
+        await page.setViewportSize({ width: w, height: WINDOW.height });
         await page.evaluate(() => window.__recBadge__());
         await wait(page, 550);
       }
       await wait(page, 700);
 
-      // 4) RESIZE WIDE (1200px). The content column expands; the rail still holds 168px.
-      for (const w of [700, 950, 1200]) {
-        await page.setViewportSize({ width: w, height: 620 });
+      // 4) RESIZE back to the 1040px minimum — the narrowest the window goes. The rail still
+      // holds 168px.
+      for (const w of [1600, 1300, WINDOW.width]) {
+        await page.setViewportSize({ width: w, height: WINDOW.height });
         await page.evaluate(() => window.__recBadge__());
         await wait(page, 550);
       }
@@ -3389,12 +3380,10 @@ const RECIPES = {
   // a picture; and the recipe ASSERTS those same four facts per item against the resolved tokens
   // (paper chip, non-`none` shadow, ink — never accent — label, accent icon). A regression to a
   // flat accent-weak marker therefore FAILS the recording rather than quietly re-recording the
-  // retired look. The narrow viewport keeps the 168px rail a large fraction of the frame (the
-  // "close-up"); the fixture is the canonical runningState so every view has content to route to.
+  // retired look. The fixture is the canonical runningState so every view has content to route to.
   'D12': {
     page: 'index.html',
     state: runningState,
-    contextOpts: { viewport: { width: 620, height: 620 } },
     drive: async (page) => {
       await page.waitForSelector('.shell .nav .nav-item.active');
 
@@ -3523,7 +3512,6 @@ const RECIPES = {
   '§12 R-report.html': {
     page: 'index.html',
     state: savedReportsState,
-    contextOpts: { viewport: { width: 820, height: 760 } },
     drive: async (page) => {
       // 1) THE RETIREMENT — read off disk whether the standalone page still ships, and stamp the
       // verdict into an on-page badge so it is legible on camera. RENDERER is this file's own
@@ -3608,10 +3596,11 @@ async function recordRecipe(browser, reqId, recipe) {
   rmSync(stage, { recursive: true, force: true });
   mkdirSync(stage, { recursive: true });
 
-  // A recipe may widen/heighten the viewport or pin a timezone (e.g. the §05 R05 picker scene
-  // needs a taller column and a UTC page so its seeded other-entries land on the column day);
-  // the recordVideo size tracks the viewport so the whole window is captured.
-  const viewport = recipe.contextOpts?.viewport ?? { width: 760, height: 620 };
+  // A recipe may pin a timezone (e.g. the §05 R05 picker scene needs a UTC page so its seeded
+  // other-entries land on the column day) or sweep the viewport, but it starts at the geometry of
+  // the window it is recording — main or popover; the recordVideo size tracks the viewport so the
+  // whole window is captured.
+  const viewport = recipe.contextOpts?.viewport ?? (recipe.page === 'popover.html' ? POPOVER : WINDOW);
   const context = await browser.newContext({
     viewport,
     colorScheme: 'light',

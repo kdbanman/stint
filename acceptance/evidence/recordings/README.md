@@ -16,9 +16,8 @@ It holds two kinds of evidence:
    Playwright `recordVideo` → two-pass palette GIF, slowed ~0.5x with a ~1.5s end-frame
    hold and a visible cursor). They are ASCII-named by the recipe's requirement id — or,
    for the design-layer close-ups, by its design-rule id — and regenerated wholesale
-   whenever the GUI changes: the whole set was last regenerated **after the design-layer
-   restyle**, so every uploaded GIF shows the current UI (the tomato accent and its
-   solid primaries, the lifted-chip nav, the retuned spacing). The intermediate `.webm`
+   whenever the GUI changes, so every uploaded GIF shows the current UI at a window size
+   the app can actually have. The intermediate `.webm`
    files and the final `.gif`s are both gitignored working artifacts — only this index
    is tracked.
 2. **Live MANUAL recordings** — the residual **live, OS-level** half of the MANUAL
