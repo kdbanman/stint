@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -58,7 +58,7 @@ async function newScenePage(browser, pageOpts) {
 }
 
 async function withPage(browser, state, name, fn, initOpts = {}) {
-  const page = await newScenePage(browser, { viewport: { width: 760, height: 620 }, colorScheme: 'light' });
+  const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light' });
   // Pin the page clock so derived count-ups and the captured evidence are
   // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -151,7 +151,7 @@ async function sceneEmptyState(browser) {
 //   SIDEBAR_EVERY_VIEW — routing to EACH of the five views keeps the `.shell .nav` rail
 //     visible (getBoundingClientRect width>0, not hidden) in ALL five, with exactly one `.view`
 //     visible each time — no view escapes the shell.
-//   FIXED_WIDTH_ON_RESIZE — the rail's measured width is FIXED across the 480/760/1200px
+//   FIXED_WIDTH_ON_RESIZE — the rail's measured width is FIXED across the 1040/1440/1920px
 //     viewports while the `.views` column width changes, proving resize lands on the content
 //     area, not the rail (168px is the JUDGE-pinned width, not asserted as a magic number).
 //   D12 LIFTED CHIP — selection ≠ accent: the ACTIVE item is a raised paper chip (computed
@@ -160,7 +160,7 @@ async function sceneEmptyState(browser) {
 //     (box-shadow none, no accent icon). An accent-weak active fill would fail every one
 //     of these.
 // All the facts fold into the single NAV_SHELL pass. Captures main-nav.png (default viewport)
-// and main-nav-wide.png (1200px) as the rubric evidence for the "quiet desktop shell" line.
+// and main-nav-wide.png (1920px) as the rubric evidence for the "quiet desktop shell" line.
 async function sceneNavShell(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const before = await page.evaluate(() => {
@@ -250,23 +250,23 @@ async function sceneNavShell(browser) {
           views: Math.round(views.getBoundingClientRect().width),
         };
       });
-    const at760 = await measure();
-    await page.setViewportSize({ width: 1200, height: 620 });
-    const at1200 = await measure();
+    const at1040 = await measure();
+    await page.setViewportSize({ width: 1440, height: WINDOW.height });
+    const at1440 = await measure();
+    await page.setViewportSize({ width: 1920, height: WINDOW.height });
+    const at1920 = await measure();
     await page.screenshot({ path: join(EVIDENCE, 'main-nav-wide.png') });
-    await page.setViewportSize({ width: 480, height: 620 });
-    const at480 = await measure();
     // Restore the default viewport so the page state matches the rest of the harness.
-    await page.setViewportSize({ width: 760, height: 620 });
+    await page.setViewportSize(WINDOW);
     // The rail stays a FIXED width on resize — byte-identical across viewports (whatever that
     // width is; the exact px is a style choice judged visually against the mocks, not pinned to a
     // magic number here, issue #25) — while the views column absorbs the change, so resize lands
     // on the content, not the rail.
     const fixedWidthOnResize =
-      at760.rail === at1200.rail &&
-      at760.rail === at480.rail &&
-      at1200.views !== at760.views &&
-      at480.views !== at760.views;
+      at1040.rail === at1440.rail &&
+      at1040.rail === at1920.rail &&
+      at1440.views !== at1040.views &&
+      at1920.views !== at1440.views;
 
     const orderOk =
       before.labels.join(',') === 'Timer,Entries,Clients,Reports,Settings' &&
@@ -290,8 +290,8 @@ async function sceneNavShell(browser) {
         `clicking Settings routed: active=${JSON.stringify(after.active)} visible=${JSON.stringify(after.visibleViews)}; ` +
         `sidebar-every-view rail visible on all five=${sidebarEveryView} ` +
         `(${everyView.map((p) => `${p.view}:w${p.railWidth}/${p.railVisible ? 'shown' : 'HIDDEN'}`).join(', ')}); ` +
-        `fixed-width-on-resize rail=${at480.rail}/${at760.rail}/${at1200.rail} (480/760/1200) ` +
-        `views=${at480.views}/${at760.views}/${at1200.views} → ${fixedWidthOnResize}`,
+        `fixed-width-on-resize rail=${at1040.rail}/${at1440.rail}/${at1920.rail} (1040/1440/1920) ` +
+        `views=${at1040.views}/${at1440.views}/${at1920.views} → ${fixedWidthOnResize}`,
       'main-nav.png',
     );
   });
@@ -826,7 +826,7 @@ async function sceneCrossViewFreshness(browser) {
 // and no part of that triple. Scored as one pair, because the bug guarded painted BOTH amber.
 async function sceneTimerView(browser) {
   {
-    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(timerViewRunningState()), {}));
@@ -991,7 +991,7 @@ async function sceneTimerView(browser) {
     // neither is the accent, which stays on the running clock/state and Stop (§15). Scored as one
     // pair on purpose: the shipped bug painted BOTH labels amber, and every check that reads one
     // colour in isolation passes on exactly that — amber `billable` is a perfectly good warn pill.
-    const palettePage = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const palettePage = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await palettePage.clock.install({ time: new Date(JUDGE_NOW) });
     await palettePage.clock.pauseAt(new Date(JUDGE_NOW));
     await palettePage.addInitScript(initScript(JSON.stringify(timerViewSleptRunningState()), {}));
@@ -1074,7 +1074,7 @@ async function sceneTimerView(browser) {
 // istically to UTC. Builds on the WRITE_REJECTION_FEEDBACK precedent (the #65 #timer-warning region).
 async function sceneFutureStartGuard(browser) {
   {
-    const page = await newScenePage(browser, { viewport: { width: 760, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(runningState()), { futureStartGuard: true, toggleStarts: true }));
@@ -1918,7 +1918,7 @@ async function sceneRunningSingleAction(browser) {
 // overlap warning the inline banner surfaces.
 async function sceneUnifiedFormAdd(browser) {
   {
-    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
@@ -2121,7 +2121,7 @@ async function sceneUnifiedFormAdd(browser) {
 // geometry (720px/24h track → 22:00 = 660px from the track top).
 async function sceneUnifiedFormExpander(browser) {
   {
-    const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState())));
@@ -3053,7 +3053,7 @@ async function sceneAddRefusalPalette(browser) {
   const painted = (p) => [p.color, p.background, p.border];
   const same = (a, b) => a.every((v, i) => v === b[i]);
 
-  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light', timezoneId: 'UTC' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(addFormState()), { rejectWrites: true }));
@@ -4751,7 +4751,7 @@ async function sceneEntriesCalendar(browser) {
 // breaks. Captures main-calendar.png.
 async function sceneCalendarLayout(browser) {
   {
-    const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
@@ -4993,8 +4993,8 @@ async function sceneCalendarLayout(browser) {
     // the DOM; this reads them off the screen — the outcome the requirement is actually about.
     // The header COUNT is exact on the vertical axis (all seven, the axis the defect was on); the
     // per-day totals are a floor on the horizontal one, because the strip is deliberately narrower
-    // than the week (columnsOk asserts that scroll): at this scene's 820px viewport the ~573px
-    // scrollport holds the 48px gutter plus four 124px columns, and the rest are a scroll away.
+    // than the week (columnsOk asserts that scroll): at the 1040px window the ~808px scrollport
+    // holds the 48px gutter plus six 124px columns, and the seventh is a scroll away.
     // The pre-fix defect measured ZERO totals on screen and ZERO headers vertically.
     const labelsOnScreenOk =
       structure.dhPosition === 'sticky' &&
@@ -5046,7 +5046,7 @@ async function sceneCalendarLayout(browser) {
 // Re-tinting the blocks — an accent-weak fill, an accent border, an accent hover wash — flips
 // this to false. Captures calendar-accent-budget.png.
 async function sceneCalendarAccentBudget(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
@@ -5138,7 +5138,7 @@ async function sceneCalendarAccentBudget(browser) {
 // Re-accenting any selection site — an accent border, an accent-filled checkbox, an accent
 // hairline ring — flips this to false. Captures selection-lift.png.
 async function sceneSelectionLift(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
@@ -5285,7 +5285,7 @@ async function sceneSelectionLift(browser) {
 //     audit's own measurement (763 → 795, +32px) kept as the guard.
 // Captures main-calendar-short.png.
 async function sceneCalendarEntryBlock(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 820, height: 900 }, colorScheme: 'light', timezoneId: 'UTC' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(shortEntriesCalendarState()), {}));
@@ -5415,7 +5415,7 @@ async function sceneCalendarEntryBlock(browser) {
 //     block, not on a control — the stop model holds from inside as well as outside.
 // Captures calendar-keyboard-focus.png (a block holding focus, its four controls open).
 async function sceneCalendarKeyboard(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 1040, height: 800 }, colorScheme: 'light', timezoneId: 'UTC' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
@@ -6616,7 +6616,7 @@ function sweepFieldLabels() {
 // Every row-heading-idiom control is NAMED in the justification, so that population stays
 // reviewable the way TARGET_SIZE's spacing exceptions do.
 async function sceneFieldLabels(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(addFormState())));
@@ -6773,7 +6773,7 @@ function sweepFieldChrome() {
 // what a wrapper-styled field can never satisfy, and is why the fix moves the chrome onto the
 // input rather than resetting the input's border and leaving the wrapper as the box.
 async function sceneFieldChrome(browser) {
-  const page = await newScenePage(browser, { viewport: { width: 940, height: 960 }, colorScheme: 'light' });
+  const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(addFormState())));

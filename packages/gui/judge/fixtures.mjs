@@ -34,6 +34,15 @@ const DEFAULT_SETTINGS = {
 // harness installs this as the page clock, the running fixture starts a fixed
 // 01:24:07 before it, and the count-up advances only by an explicit fast-forward.
 export const JUDGE_NOW = '2026-06-24T23:00:00Z';
+
+// Issue #126 — the geometry the shipped windows actually have (main.ts): the main window's
+// 1040×800 default, which is also its floor once the minimum rises, and the tray popover's fixed
+// 280×200 (POPOVER_WIDTH, resizable:false). Both harnesses render every scene at one of these, so
+// no committed evidence shows a size the window cannot be — that is a false green of presentation
+// (process.html §02), and it is why the cramped calendar and the clipped popover card survived
+// review. A scene needing a second viewport sweeps from these, never below them.
+export const WINDOW = { width: 1040, height: 800 };
+export const POPOVER = { width: 280, height: 200 };
 const RUNNING_ELAPSED_S = 5047; // 01:24:07
 const RUNNING_START = new Date(Date.parse(JUDGE_NOW) - RUNNING_ELAPSED_S * 1000).toISOString();
 
