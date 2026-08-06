@@ -2,60 +2,70 @@
 name: process-triaged-issues
 description: >-
   Use when the user asks to process, work, or close out the triaged issue
-  backlog (issues labeled "Triaged") — drives each one to an open PR.
+  backlog (issues labeled "Triaged: ready for execution" or "Triaged: transition required") — the one
+  execution engine downstream of triage. Drives each unit to an open PR.
 ---
 
 # Process triaged issues (Stint)
 
-Consume the triaged discovery backlog: take every open issue labeled
-`Triaged`, hold **one** batched grill interview covering all the issues that
-need requirement changes, then fan the work out — one subagent per issue (or
-small merged cluster) — and drive until every issue has an open, ready-for-
-review PR. This skill ends at **PRs up, not merged**; the owner merge stays the
-one human gate (`context/process.html` §07).
+Consume the triaged backlog — **the one downstream of the triage gate**
+(`context/process.html` §06): every open issue labeled `Triaged: ready for execution` or
+`Triaged: transition required`. Hold **one** batched grill interview covering all the
+issues that need requirement decisions, then fan the work out — one subagent
+per unit — and drive until every unit has an open, ready-for-review PR. This
+skill ends at **PRs up, not merged to `main`**; merge to `main` stays the one
+human gate (§07).
 
 ## Where this fits
 
-- Upstream, five discovery instruments into one gate
-  (`context/process.html` §06): `qa-audit` (via `bug-report-authoring`),
-  `arch-audit`, `design-audit`, `code-quality-audit`, and `sync-audit` file
-  their findings; `triage-discoveries` categorizes each against the doc that
-  owns it, records the owner's fix direction, names the proof of fix, and
-  labels. Every finding ends at the same `Triaged` comment-and-label contract;
-  this skill does not care which instrument an issue came from, only that the
-  contract holds.
-- This skill: interview once, delegate, deliver PRs.
-- For issue-scale requirement changes it substitutes for the
-  `change-requirements` → `requirements-transition` pair: the batched interview
-  is the grill, the per-issue subagent is the transition. A change too large
-  for one issue-anchored PR (a multi-doc restructure, an `*-old.html` swap)
-  still belongs to the pair — hand it back rather than force it through here.
+- Upstream, one gate (`context/process.html` §06): `triage-discoveries`
+  consumes any un-triaged open issue — audit findings and owner-raised alike —
+  and records the category, the owner's fix direction, the proof of fix, and
+  a routing verdict naming **scale, never session shape**: `Triaged: ready for execution` (this
+  skill carries the fix end-to-end) or `Triaged: transition required` (the fix needs
+  the transition machinery, §03).
+- This skill: interview once, delegate, deliver PRs. Issue-scale requirement
+  changes are handled here directly — the batched interview is the grill, the
+  per-issue subagent lands the in-place spec edits with the code.
+- A `Triaged: transition required` unit is handled by handing the machinery its input:
+  the batched interview settles its design (the synthesis, signed off), then
+  the `requirements-transition` skill authors the coexisting docs and files
+  the member backlog — and **stops at the owner's launch**. When the owner
+  launches, the member issues are ordinary `Triaged: ready for execution` units of a later batch
+  of this skill, targeting the transition branch their handoff names.
+- Session shape — one session or several, how work is grouped — is this
+  session's judgment. The verdict never prescribes it.
 
-Read first: `CLAUDE.md`; `context/process.html` §03 (subagents & model level),
-§04 (authoring rules every spec edit must obey), §07 (branch/PR); and the
-triage comment on each target issue — it carries the category, any owner
-decisions already made, and the regression-guard plan pointing at real files.
+Read first: `CLAUDE.md`; `context/process.html` §03 (skills & subagents),
+§04 (authoring rules every spec edit must obey), §06 (the pipeline), §07
+(branch/PR/merge); and the triage comment on each target issue — it carries
+the category, the owner decisions already made, and the regression-guard plan
+pointing at real files.
 
 ## Step 1 — Gather
 
-Collect the open issues labeled `Triaged` (or the set the user names) — plain
-`Triaged` only: `Triaged: dedicated session` marks an issue triage routed
-*away* from this orchestrator, never its input. Read each in full — body
-**plus** the triage comment. Decisions recorded there are settled: do not
-re-ask them.
+Collect the open issues labeled `Triaged: ready for execution` or `Triaged: transition required` (or the
+set the user names). Read each in full — body **plus** the triage comment.
+Decisions recorded there are settled: do not re-ask them.
 
 Then read the batch's **handoff issue** — one per batch, labeled
-`Triaged Orchestration`, filed by `triage-discoveries`: the batch's sequencing,
-batching and dependency, which no per-issue comment carries. If none exists,
-work it out yourself before partitioning rather than proceeding without it.
+`[META] Orchestration` (titled `[META] Orchestration: <batch>`): the batch's
+sequencing, batching and dependency, which no per-issue comment carries. The
+handoff is the between-issues knowledge tracker, never a work item — never
+triaged, never anchoring a PR of its own. Filed by `triage-discoveries` for an
+ordinary batch, or by `requirements-transition` for a transition's member
+backlog — in the latter case it also names the **base branch** every member
+unit targets. If none exists, work it out yourself before partitioning
+rather than proceeding without it.
 
 ## Step 2 — One batched requirements interview
 
-For the issues labeled `needs new requirement or AC`, run the
-change-requirements-style grill **once across the whole batch**:
+For the issues labeled `needs new requirement or AC` — and for every
+`Triaged: transition required` issue, whose synthesis this interview produces — run
+the grill **once across the whole batch**:
 
-- One tight cluster of related questions at a time; stop and wait for answers.
-  Never a flat questionnaire.
+- One tight cluster of related questions at a time; stop and wait for
+  answers. Never a flat questionnaire.
 - Every question carries a recommended answer and a one-line rationale.
 - Consult the codebase, don't ask what code can answer (schema, CLI command
   table, renderer, mockups).
@@ -77,15 +87,19 @@ get sign-off. **Do not delegate until it is signed off.**
 ## Step 3 — Partition into work units
 
 Default: one issue = one unit = one branch + PR (§07's one-issue convention).
-Merge issues into a single unit only when they share a requirement or the same
-files, so separate PRs would conflict or duplicate work (e.g. a feedback
-requirement whose call sites span several issues). Keep a merged unit
-reviewable — when in doubt, split. A unit's PR names every issue it closes.
+A unit may span **more than one PR** when its triage comment says so — the
+sequencing lives in the unit, not in a routing label. Merge issues into a
+single unit only when they share a requirement or the same files, so separate
+PRs would conflict or duplicate work. Keep a merged unit reviewable — when in
+doubt, split. A unit's PR names every issue it closes.
 
-Then sequence and batch deliberately — the backlog varies more in shape than
-a product-bugfix list (triaged arch issues especially), so don't just launch
-everything at once. **The handoff issue is the starting partition.** Depart from
-it where the tree has moved since, and say so:
+A `Triaged: transition required` issue partitions to a single **authoring unit**:
+invoke `requirements-transition` with the signed-off synthesis; the unit is
+done when the transition branch is pushed and the member backlog is filed —
+execution waits for the owner's launch.
+
+Then sequence and batch deliberately. **The handoff issue is the starting
+partition.** Depart from it where the tree has moved since, and say so:
 
 - **Gate-strengthening first.** A unit that adds or tightens a deterministic
   gate (a schema, a binding test, a drift comparison) lands before units
@@ -103,13 +117,37 @@ no interview; they become units directly.
 
 ## Step 4 — Delegate
 
-Launch one subagent per unit, in parallel:
+Launch one subagent per unit, in parallel. The judgment-heavy stages —
+interview, synthesis, partitioning, final PR review — stay in this session.
 
-- **Model level: Opus, high effort.** The §03 gate question justifies it: the
-  §05 deterministic gates catch implementation slips, and PR review is the
-  human gate.
-  The judgment-heavy stages — interview, synthesis, partitioning, final PR
-  review — stay in this session.
+### Choosing subagent model level
+
+Each subagent runs at a **model level** — `sonnet` < `opus` < `fable`.
+Decide per unit, by this procedure:
+
+1. **Default is `fable`.** Downgrading is a deliberate act, never the reflex.
+2. **Ask the gate question:** *if this subagent does its job subtly wrong,
+   what catches it?* A **deterministic gate** — the build, a test, a golden,
+   the judge, the evidence-drift comparison, a later stage that mechanically
+   rechecks — makes the task downgrade-eligible. If only a review or a human
+   would catch it, do not downgrade.
+3. **The levels:**
+   - `sonnet` — mechanical and fully specified, verified by command: run a
+     suite and report failures verbatim; regenerate evidence; apply an exact
+     rename list; collect an inventory a later stage rechecks.
+   - `opus` — well-scoped, gate-checked execution: implementation against a
+     precise contract with co-located tests that pin the behavior. Never for
+     anything that authors or alters requirements or acceptance criteria, or
+     touches a core (`●`) integrity/data-loss requirement.
+   - `fable` — uncertain or subtle work needing judgment and wayfinding:
+     authoring or altering requirements/ACs; core integrity/data-loss
+     requirements; review stages; repair whose cause is not yet understood;
+     any task deciding what the spec *means*.
+4. **Reasoning effort is always `high`.** When in doubt, `fable` — a wrong
+   cheap agent costs a diagnose-and-repair loop that dwarfs the saving.
+
+### Delegation rules
+
 - **Self-reference flagged units get no benefit of the doubt.** A unit whose
   fix modifies a deterministic gate (the judge, CI wiring, check scripts,
   test harnesses) cannot be vouched for by the gate it modifies — the triage
@@ -117,16 +155,18 @@ Launch one subagent per unit, in parallel:
   review that unit's gate-diff in this session line by line before calling it
   done; for small gate changes, just do the unit in-session.
 - **Isolation: own worktree + branch.** Units run concurrently and must not
-  share a working tree.
+  share a working tree. A unit's branch targets `main`, or the base branch
+  its handoff names (a transition's member units target the transition
+  branch).
 - **Prompt contents:** the issue number(s) and full text, the triage comment
-  verbatim, the signed-off interview decisions for that unit verbatim, and the
-  definition of done below. Do **not** prescribe skills or a step-by-step
-  method — the repo's `CLAUDE.md` and `context/process.html` steer the
-  session, and the triage comment already names the guard files. Beware the
-  corollary: a detailed-but-partial checklist **prescribes by omission** —
-  agents optimize to the enumerated list and the ambient steering loses.
-  Point prompts at the §05 inventory and the relevant skills; don't restate
-  them.
+  verbatim, the signed-off interview decisions for that unit verbatim, the
+  base branch, and the definition of done below. Do **not** prescribe skills
+  or a step-by-step method — the repo's `CLAUDE.md` and
+  `context/process.html` steer the session, and the triage comment already
+  names the guard files. Beware the corollary: a detailed-but-partial
+  checklist **prescribes by omission** — agents optimize to the enumerated
+  list and the ambient steering loses. Point prompts at the §05 inventory
+  and the relevant skills; don't restate them.
 - **Definition of done per unit:**
   - Spec-affecting units: `context/` docs and mockups updated per the
     decisions, obeying §04 authoring rules (mockup sync is a hard rule).
@@ -153,29 +193,38 @@ Do not end the run while any unit lacks an open PR:
   them.
 - Cross-unit conflicts land sequentially: rebase later units on the earlier
   branch or note the ordering in both PRs.
-- Finish with a table mapping issue → unit → PR, plus anything handed back
-  (too-large changes, design gaps the interview couldn't settle).
-
-Merging is not this skill's job.
+- **Member PRs targeting a shared transition branch are merged by this
+  session on green** (§07) — merge to `main` is the human gate, and a
+  transition's gates are the launch and its single integration PR. PRs
+  targeting `main` are never merged here.
+- Finish with a table mapping issue → unit → PR, plus anything handed to the
+  owner (a transition backlog awaiting launch, design gaps the interview
+  couldn't settle).
 
 ## Definition-of-done checklist
 
-- [ ] All open `Triaged` issues gathered; bodies and triage comments read.
-- [ ] The batch's `Triaged Orchestration` handoff read (or worked out), and
-      carried into Step 3.
-- [ ] One batched grill held for every `needs new requirement or AC` issue;
-      written synthesis signed off before any delegation.
+- [ ] All open `Triaged: ready for execution` / `Triaged: transition required` issues gathered; bodies and
+      triage comments read.
+- [ ] The batch's `[META] Orchestration` handoff read (or worked out), and
+      carried into Step 3 — including any base branch it names.
+- [ ] One batched grill held for every `needs new requirement or AC` and
+      `Triaged: transition required` issue; written synthesis signed off before any
+      delegation.
 - [ ] Units partitioned; any multi-issue unit justified by a shared
-      requirement or files, and its PR names every issue.
+      requirement or files, and its PR names every issue; any multi-PR unit
+      justified by its triage comment.
+- [ ] Transition units: `requirements-transition` invoked with the synthesis;
+      stopped at the owner's launch, never auto-launched.
 - [ ] Units sequenced: gate-strengthening work first, shared-file units
       ordered rather than raced, kindred small fixes batched.
 - [ ] Every self-reference-flagged unit's gate-diff reviewed in-session (or
       the unit done in-session); none delegated fire-and-forget.
-- [ ] Every unit delegated to an Opus high-effort subagent in its own
-      worktree, prompted with issue + triage comment + decisions — not with
-      skill instructions.
+- [ ] Every unit delegated to a subagent in its own worktree at a model level
+      chosen by the gate question — prompted with issue + triage comment +
+      decisions + base branch, not with skill instructions.
 - [ ] Every unit passed the §05 checks for its touched surfaces — operator-run
       rows included — and its PR follows `pr-authoring`.
 - [ ] Every unit's PR open and ready (not draft); failures re-driven, not
-      dropped.
-- [ ] Final report maps issue → PR; nothing merged by this skill.
+      dropped; member PRs to a transition branch merged on green, PRs to
+      `main` left for the owner.
+- [ ] Final report maps issue → PR; nothing merged to `main` by this skill.
