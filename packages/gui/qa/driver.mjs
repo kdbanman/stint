@@ -36,6 +36,8 @@ import { Store } from '@stint/core';
 // BUILT module, so the driver (and test/qa-driver.test.ts with it) needs `npm run build`
 // first, the same precondition the sweep already had.
 import { createIpcHandlers } from '../dist/ipc-handlers.js';
+// §12 R22 — the popover auto-sizes to its rendered card; sweeps apply the shipped clamp.
+import { popoverWindowSize, POPOVER_FALLBACK } from '../dist/popoversize.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
@@ -166,7 +168,14 @@ async function main() {
   let page = await makePage('index.html', { width: 1040, height: 800 });
   let popover = null;
   const openPopover = async () => {
-    if (!popover || popover.isClosed()) popover = await makePage('popover.html', { width: 280, height: 200 });
+    if (!popover || popover.isClosed()) {
+      popover = await makePage('popover.html', POPOVER_FALLBACK);
+      const card = await popover.evaluate(() => {
+        const c = document.getElementById('pop');
+        return { width: c.offsetWidth, height: c.offsetHeight };
+      });
+      await popover.setViewportSize(popoverWindowSize(card));
+    }
     return popover;
   };
 

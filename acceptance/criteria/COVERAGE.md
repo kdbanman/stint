@@ -1482,8 +1482,9 @@ supplies the calendar-structure half of the scene). Parity row `listEntries`
 →`tt list` (`parity-matrix.json`, asserted by `gui/test/parity.test.ts` ; its
 notes lose grouping). The §12 R9 Entries toolbar over the readonly entries
 calendar is thus fully covered. **R16 Readonly entries calendar (NEW,
-G10/G13/G16)**: the Entries view content is a readonly calendar — one fixed
-comfortable-width day column per in-range day over a full 24h track, with
+G10/G13/G16)**: the Entries view content is a readonly calendar — one day
+column per in-range day, sharing spare window width equally over a 124px
+floor (§12 R22), never compressed below it, over a full 24h track, with
 per-day billable header totals, a range chip, empty columns, a cross-midnight
 span shown as one `.ev` segment per touched day column (all sharing the entry
 `data-id` , counted only under its start day — issue #71), hover
@@ -1494,8 +1495,9 @@ renderer + `styles.css` ); it reuses the existing `getState` /`listEntries`
 reads and the §14 timeline-window settings, so **no new IPC channel** (no parity
 row). Headless-pinned by JUDGE `CALENDAR_LAYOUT` (`packages/gui/judge/`,
 `main-calendar.png` over `entriesCalendarState` under a UTC-pinned page): 7
-equal fixed-width columns that never stretch + horizontal scroll (`.cstrip`
-scrollWidth > clientWidth); a full 24h `.dt` track whose default scroll lands on
+equal floor-width columns + horizontal scroll at the default window (`.cstrip`
+scrollWidth > clientWidth; the spare-width share at a wider window is JUDGE
+`WINDOW_GEOMETRY`, §12 R22); a full 24h `.dt` track whose default scroll lands on
 working hours with the off-hours (pre-07:00 / post-18:00) entries present and
 reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
 Wed 1.00h) + the `#week-total` range chip (17.00h), read ON SCREEN at the
@@ -1525,7 +1527,7 @@ checked box is a paper box with an ink tick, and the strip still holds zero
 accent"). The per-day + range **billable totals** the
 calendar's headers/chip present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
-— including an empty day"), and the never-clip / fixed-width / working-hours-default / empty-column
+— including an empty day"), and the never-clip / floor-width / working-hours-default / empty-column
 behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **The event BLOCK
 itself** — that an event contains its own content, and that hovering one moves
 nothing — is JUDGE
@@ -2030,6 +2032,28 @@ production strings and `packages/core/test/gold/contracts.test.ts` sweeps core's
 refusals for CLI flags; JUDGE `WRITE_REJECTION_FEEDBACK` / `FUTURE_START_GUARD`
 / `POPOVER_REJECT` / `REPORTS_VIEW` now reject through mocks in Electron's REAL
 wrapped shape and score each region's rendered text as the reason ALONE.
+**R22 window sizing (NEW — issue #126, "the window can grow, the app can't")**:
+the main window opens at 1040×800 and that is also its minimum
+(`gui/src/main.ts` `minWidth` /`minHeight` — 840×600 was a permitted size that
+could not render the unified form's commit button); above it the content is
+fluid — `gui/renderer/styles.css` carries no `.app` width cap, `.dcol` flexes
+from its 124px floor, and only `.settings-panel` / `.reports-view` keep local
+line-length maxima. The tray popover window auto-sizes to its rendered card on
+every show: `togglePopover` measures `#pop` and sizes the window through
+`popoverWindowSize` (`gui/src/popoversize.ts`, clamped to `POPOVER_MAX`), and
+the judge/record harnesses import that same clamp so popover evidence renders
+at the window the user gets. Renderer + main-process only, **no new IPC
+channel** (the measurement rides `webContents.executeJavaScript`). Proven by
+JUDGE `WINDOW_GEOMETRY` (outcomes, not controls: the week whole at 1920 with
+no horizontal scroll and no truncated description; the three-week range still
+scrolling at the floor with more days visible than at 1040; Save entry inside
+the 1040×800 viewport with the exact-times fields inside their column in both
+form modes — the overflow transferred from issue #146; the popover card + both
+actions inside the auto-sized window) beside `NAV_SHELL` 's
+`FIXED_WIDTH_ON_RESIZE` (the `.views` column absorbs the 1040/1440/1920
+resize, rail byte-identical 168) — the sub-fact the pre-fix `.app` cap held at
+views=872/872/872 → false. The minimum-window and auto-sized-popover states
+carry rows in `STATES.md` (Entries × edge, Tray popover × edge).
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×

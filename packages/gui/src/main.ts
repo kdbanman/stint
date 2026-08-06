@@ -37,6 +37,7 @@ import {
   type EntryView,
 } from '@stint/core';
 import { CHANNELS, type UpdateProgress } from './ipc.js';
+import { popoverWindowSize, POPOVER_FALLBACK } from './popoversize.js';
 import { createIpcHandlers } from './ipc-handlers.js';
 import { toggleTimer } from './toggle.js';
 import { checkinActions } from './checkin-actions.js';
@@ -62,10 +63,6 @@ const RENDERER = join(__dirname, '..', 'renderer');
 // they must sit in electron-builder.yml's `files:` glob — `buildResources: build` feeds the
 // packager only and ships nothing into the bundle (the why is recorded there).
 const ASSETS = join(__dirname, '..', 'assets');
-// The popover's width, in px. ONE constant because `togglePopover` centres the window on the
-// tray icon by subtracting half of it: a width changed in only one of the two places slides
-// the popover off the icon, with nothing to fail (#174).
-const POPOVER_WIDTH = 280;
 // Coalescing window for the DB file-watcher, in ms. One `tt` write fires several fs events
 // (WAL + the -shm/-journal siblings), so the watcher must coalesce or a single command
 // repaints both surfaces repeatedly. It is a CEILING on refresh latency, so it stays well
@@ -261,19 +258,33 @@ function buildTrayMenu(): Menu {
   return Menu.buildFromTemplate([{ role: 'quit', label: 'Quit' }]);
 }
 
-function togglePopover(): void {
+/**
+ * §12 R22 (issue #126): showing the popover sizes the window to its rendered card first —
+ * the card is the source of truth, so the window can never clip its own controls the way
+ * the old fixed 280×200 did once the card outgrew it. The measurement crosses the renderer
+ * boundary untyped; popoverWindowSize parses and clamps it. Centering on the tray icon
+ * uses the same measured width, so the two cannot drift apart (#174).
+ */
+async function togglePopover(): Promise<void> {
   if (!popover) return;
   if (popover.isVisible()) {
     popover.hide();
-  } else {
-    const bounds = tray?.getBounds();
-    if (bounds)
-      popover.setPosition(
-        Math.round(bounds.x + bounds.width / 2 - POPOVER_WIDTH / 2),
-        Math.round(bounds.y + bounds.height),
-      );
-    popover.show();
+    return;
   }
+  const card: unknown = await popover.webContents
+    .executeJavaScript(
+      '(() => { const c = document.getElementById("pop"); return { width: c.offsetWidth, height: c.offsetHeight }; })()',
+    )
+    .catch(() => null);
+  const size = popoverWindowSize(card);
+  popover.setContentSize(size.width, size.height);
+  const bounds = tray?.getBounds();
+  if (bounds)
+    popover.setPosition(
+      Math.round(bounds.x + bounds.width / 2 - size.width / 2),
+      Math.round(bounds.y + bounds.height),
+    );
+  popover.show();
 }
 
 // --------------------------------------------------------------------- windows
@@ -287,8 +298,10 @@ function showMainWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1040,
     height: 800,
-    minWidth: 840,
-    minHeight: 600,
+    // §12 R22 (issue #126): the default is also the floor — 840×600 was a size the app
+    // permitted but could not render the unified form's commit button in.
+    minWidth: 1040,
+    minHeight: 800,
     show: true,
     title: 'Stint',
     // Linux window managers read the window's own icon for the taskbar and alt-tab; without
@@ -302,9 +315,11 @@ function showMainWindow(): void {
 }
 
 function createPopover(): void {
+  // The size here is a placeholder — togglePopover sizes the window to the rendered card
+  // before every show (§12 R22).
   popover = new BrowserWindow({
-    width: POPOVER_WIDTH,
-    height: 200,
+    width: POPOVER_FALLBACK.width,
+    height: POPOVER_FALLBACK.height,
     show: false,
     frame: false,
     resizable: false,

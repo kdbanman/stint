@@ -61,6 +61,8 @@ import {
   POPOVER,
   UPDATE_FIXTURE,
 } from './fixtures.mjs';
+// §12 R22 — the shipped popover auto-sizes to its rendered card; recordings apply the same clamp.
+import { popoverWindowSize } from '../dist/popoversize.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
@@ -1710,10 +1712,10 @@ const RECIPES = {
     },
   },
 
-  // §12 R16 — the readonly entries CALENDAR. Over a whole week of fixed-width day columns (each
-  // with its per-day billable header total, plus the range chip), the recording: scrolls the strip
-  // HORIZONTALLY across the columns (the week does not fit — the columns stay a fixed comfortable
-  // width, never stretched/compressed); scrolls the 24h track VERTICALLY to reveal the off-hours
+  // §12 R16 — the readonly entries CALENDAR. Over a whole week of day columns (each with its
+  // per-day billable header total, plus the range chip), the recording: scrolls the strip
+  // HORIZONTALLY across the columns (the week does not fit at this window — the columns hold
+  // their comfortable floor width); scrolls the 24h track VERTICALLY to reveal the off-hours
   // entries (scroll, never clip — every hour is reachable though the viewport opens on working
   // hours); and hovers an event to reveal its Delete / Split / Edit ops + the corner checkbox. The
   // empty days sit as present-but-empty columns throughout.
@@ -3582,6 +3584,19 @@ const RECIPES = {
   },
 };
 
+/** The popover window size the shipped auto-size gives this recipe's fixture (§12 R22). */
+async function measuredPopoverViewport(browser, recipe) {
+  const page = await browser.newPage({ viewport: POPOVER, colorScheme: 'light' });
+  await page.addInitScript(initScript(JSON.stringify(recipe.state()), recipe.initOpts ?? {}));
+  await page.goto(fileUrl(recipe.page));
+  const card = await page.evaluate(() => {
+    const c = document.getElementById('pop');
+    return { width: c.offsetWidth, height: c.offsetHeight };
+  });
+  await page.close();
+  return popoverWindowSize(card);
+}
+
 /**
  * Drive one recipe inside a Playwright context that has recordVideo enabled, then move the
  * produced .webm to acceptance/evidence/recordings/<reqId>.webm. Returns the saved path on
@@ -3600,7 +3615,11 @@ async function recordRecipe(browser, reqId, recipe) {
   // other-entries land on the column day) or sweep the viewport, but it starts at the geometry of
   // the window it is recording — main or popover; the recordVideo size tracks the viewport so the
   // whole window is captured.
-  const viewport = recipe.contextOpts?.viewport ?? (recipe.page === 'popover.html' ? POPOVER : WINDOW);
+  // A popover recipe records at the window main.ts's auto-size would give it (§12 R22), measured
+  // off a throwaway page first because the recordVideo frame is fixed at context creation.
+  const viewport =
+    recipe.contextOpts?.viewport ??
+    (recipe.page === 'popover.html' ? await measuredPopoverViewport(browser, recipe) : WINDOW);
   const context = await browser.newContext({
     viewport,
     colorScheme: 'light',
