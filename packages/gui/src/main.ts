@@ -315,7 +315,7 @@ function showMainWindow(): void {
 }
 
 function createPopover(): void {
-  // The size here is a placeholder — showPopover() sizes the window to the rendered card
+  // The size here is a placeholder — togglePopover sizes the window to the rendered card
   // before every show (§12 R22).
   popover = new BrowserWindow({
     width: POPOVER_FALLBACK.width,
