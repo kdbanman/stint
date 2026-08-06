@@ -1776,9 +1776,9 @@ reads every colour-accepting declaration on every surface, stylesheets and
 inline `style=` alike, and holds each colour it names to being a semantic token
 or a literal on a closed, reasoned list: the host macOS chrome the mockups draw
 to establish context (not a Stint surface — the same reasoning D08 already
-applies to the traffic lights), `black` as a `color-mix` shade operand, and the
-white label on a solid fill, which is BLOCKED on #164 because
-`design.tokens.json` has no `on-accent` token to reference. The tokenizer
+applies to the traffic lights) and `black` as a `color-mix` shade operand. The
+label on a solid fill references the `on-accent` token (sand·1 — issue #164),
+so no white literal survives on any surface. The tokenizer
 inverts the direction that made the holes possible: instead of listing the
 colours — a list that can never be complete, which is exactly how a keyword
 passed a hex regex — it lists the words that are NOT colours and reads every

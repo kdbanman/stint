@@ -1,6 +1,6 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D13, D14, A01/A02,
- * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157 and #158).
+ * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158 and #164).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -127,9 +127,8 @@ const contrast = (a: string, b: string): number => {
   const lb = luminance(b);
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 };
-/** Resolve a semantic token name (or the literal `white`) to its hex value. */
+/** Resolve a semantic token name to its hex value. */
 const semantic = (name: string): string => {
-  if (name === 'white') return '#ffffff';
   const ref = /^\{color\.([a-z]+)\.(\d+)\}$/.exec(tokens.semantic[name].$value);
   if (!ref) throw new Error(`semantic token ${name} is not a scale alias`);
   // both groups are non-optional in the pattern, so a match guarantees them
@@ -226,7 +225,11 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     ['muted', 'wash', TEXT_FLOOR],
     ['accent-ink', 'paper', TEXT_FLOOR],
     ['accent-ink', 'sidebar', TEXT_FLOOR],
-    ['white', 'accent-solid', TEXT_FLOOR],
+    // The label on a solid action fill (issue #164): on-accent is sand·1, not pure white, so the
+    // semantic layer stays one-step aliases. Scored on both solid fills a label sits on — the
+    // primary's accent-solid and the mockups' filled danger.
+    ['on-accent', 'accent-solid', TEXT_FLOOR],
+    ['on-accent', 'danger', TEXT_FLOOR],
     ['run', 'paper', TEXT_FLOOR],
     ['run', 'run-weak', TEXT_FLOOR],
     ['danger', 'paper', TEXT_FLOOR],
@@ -256,7 +259,7 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
   const prohibited: Array<[fg: string, bg: string]> = [
     ['faint', 'paper'], // faint is decorative/disabled only — never readable text
     ['accent-ink', 'accent-weak'], // why selection is a raised chip, not an accent wash (D12)
-    ['white', 'accent'], // why accent-solid exists (D11) — tomato·9 cannot carry a label
+    ['on-accent', 'accent'], // why accent-solid exists (D11) — tomato·9 cannot carry a label
   ];
 
   it('every permitted token pair meets its floor', () => {
@@ -565,9 +568,9 @@ describe('text colour: every token painted as text, on the floor it earns (desig
   // split out rather than scored as text.
   const ICON_SITE = /\.ic\b/;
   // Reach: the census reads TOKEN uses, `var(--x)`, which is what the helper was built for and
-  // what D02 requires a surface to write. The one text colour the app states as a literal is
-  // `white` on the primary button, whose pairing against `accent-solid` is scored in the
-  // permitted table above; D01's hex ban keeps any palette value out of the literals entirely.
+  // what D02 requires a surface to write. No text colour is stated as a literal — the colour
+  // census below holds every literal to its licence list, and D01's hex ban keeps palette
+  // values out entirely.
   const textColour = (): CensusHit[] =>
     censusTokens(/./, /^color$/).filter((h) => !ICON_SITE.test(h.selector));
 
@@ -583,6 +586,7 @@ describe('text colour: every token painted as text, on the floor it earns (desig
     '--flag',
     '--ink',
     '--muted',
+    '--on-accent',
     '--paper',
     '--run',
   ];
@@ -1330,25 +1334,6 @@ describe('the colour census (design.html D01 — issue #157)', () => {
     ['host menu bar', 'rgba(0,0,0,.06)', new Set(['.menubar'])],
     ['host menu bar ink', '#4a443b', new Set(['.menubar', '.menubar .clk'])],
 
-    // BLOCKED ON #164 — the label on a SOLID fill. D04 documents `accent-solid` as carrying a
-    // white label and design.tokens.json has no token for it, so the keyword is currently FORCED
-    // by the token system: there is no `on-accent` to reference. Substituting a near token
-    // (`--paper` is #fdfdfc, not white) would ship a visual change disguised as a lint fix, so
-    // these sites are licensed by name and by issue until #164's requirements session decides the
-    // token. `.btn.danger` is the identical unresolved question one fill over — a white label on
-    // a solid `--danger`, which has no `on-danger` either.
-    // REMOVE THESE TWO ROWS WHEN #164 LANDS.
-    [
-      '#164: label on a solid fill',
-      'white',
-      new Set(['button.primary', 'button.primary .ic, button.primary:hover .ic']),
-    ],
-    [
-      '#164: label on a solid fill',
-      '#fff',
-      new Set(['.btn.primary', '.btn.primary .ic', '.btn.danger', '.btn.danger .ic']),
-    ],
-
     // A SHADE OPERAND, not a colour of record. `color-mix(in srgb, var(--accent-solid) 88%, black)`
     // is the hover darkening: the colour is the token, and `black` is the direction it moves. The
     // sites are listed rather than the pattern waved through, so a NEW rule reaching for the same
@@ -1474,9 +1459,7 @@ describe('the colour census (design.html D01 — issue #157)', () => {
   it('every listed licence still spends itself (the lists stay earned)', () => {
     // The mirror of the census, and the reason the table cannot rot into a permissive blob: a row
     // whose selector has stopped writing the literal it is licensed for is a licence nobody is
-    // using, sitting there ready to legalise whatever reclaims the name. It is also how the #164
-    // rows announce themselves as finished — when that transition replaces `white` with a token,
-    // these rows go dead and this test says so.
+    // using, sitting there ready to legalise whatever reclaims the name.
     const spent = new Map<string, Set<string>>();
     for (const h of colourCensus()) {
       const written = spent.get(h.site) ?? new Set<string>();

@@ -10,6 +10,7 @@
   --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
   --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
   --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --on-accent:#fdfdfc;
   --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
   --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
   --danger:#ce2c31;--danger-weak:#feebec;
@@ -54,9 +55,9 @@
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:#fff;box-shadow:var(--sh-chip)}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent);box-shadow:var(--sh-chip)}
   .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
-  .btn.primary .ic{color:#fff}
+  .btn.primary .ic{color:var(--on-accent)}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
   .btn.ghost:hover{background:var(--hover);color:var(--ink)}
   .btn.sm{height:30px;padding:0 12px;font-size:12px}
@@ -95,12 +96,12 @@
   /* source preview */
   .srcs{display:flex;gap:8px;margin-bottom:16px}
   .src{flex:1;border:1px solid var(--rule);border-radius:var(--r1);padding:8px 12px;background:var(--wash)}
-  .src .lbl{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:640}
+  .src .lbl{font-size:12px;color:var(--muted)}
   .src .d{font-weight:590;margin-top:4px}
   .src .t{font-family:var(--num);font-size:12px;color:var(--muted);margin-top:4px}
   .merge-arrow{display:flex;align-items:center;color:var(--muted)}
   /* conflict resolution */
-  .ftitle{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:640;margin:4px 0 8px}
+  .ftitle{font-size:12px;color:var(--muted);margin:4px 0 8px}
   .conf{padding:12px 0;border-top:1px solid var(--rule)}
   .conf .q{font-weight:590;margin-bottom:8px}
   .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
