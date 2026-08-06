@@ -1405,6 +1405,7 @@ export class Store {
       entryId: r.entry_id,
       sleepUtc: r.sleep_utc,
       wakeUtc: r.wake_utc,
+      // db.ts CHECK(source IN …) holds this column to exactly SleepSource's value list.
       source: r.source as SleepSource,
     }));
   }
