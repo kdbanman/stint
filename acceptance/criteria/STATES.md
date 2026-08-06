@@ -56,6 +56,8 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — two-step delete gate | Arm click shows confirm, no `remove` call; explicit confirm removes once | JUDGE `CONFIRM_DELETE`, `DELETE_CONFIRM` — `main-confirm-delete.png`, `main-confirm.png`; BDD "Deleting an entry without confirmation is refused" | |
 | **Empty** — "No entries yet" | Never-tracked instruct copy ("press Ctrl+Alt+T" / `tt start`) | JUDGE `EMPTY_STATE` — `main-empty.png`; `app.js` `emptyState()` | |
 | **Empty** — "No matching entries" | Query-narrowed-to-nothing instruct copy ("Widen the range…") | JUDGE `LIVE_FILTER` (no-match search) — `main-no-matching.png`; `app.js` `emptyEntries()` | |
+| **Edge** — minimum window (1040×800, §12 R22) | The unified add form with its exact-times expander open commits without scrolling — Save entry inside the viewport, the Start/Stop fields inside their column, no horizontal overflow (both form modes) | JUDGE `WINDOW_GEOMETRY` — `min-window-add.png` | 1040×800 is both the default and the minimum (`main.ts`) |
+| **Edge** — wide window (1920) | Day columns share the spare width equally from the 124px floor: the week fully visible with no horizontal scroll, descriptions at natural width; a range that still doesn't fit keeps the floor and the horizontal scroll | JUDGE `WINDOW_GEOMETRY` — `calendar-wide.png` | |
 
 ## Merge-conflict modal (the app's only modal, `.editor.conflict-prompt` in `app.js`)
 
@@ -122,6 +124,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — idle popover | Bare dot, 00:00:00, "nothing running" | JUDGE `TRAY_POPOVER_SURFACE` (idle snapshot) — `popover-tray-surface.png` | |
 | **Ideal** — running popover | Count-up, "since HH:MM", description, client/project, tags | JUDGE `TRAY_COUNTUP`, `TRAY_POPOVER_SURFACE` — `popover-running-1.png`, `popover-running-2.png`, `popover-running.png` | |
 | **Error** — refused toggle (`#pop-warning`) | Announced region shows the refusal message (the `#toggle` handler's catch painting `#pop-warning`, `popover.js`) | JUDGE `POPOVER_REJECT` — `popover-reject.png` | |
+| **Edge** — auto-sized window (§12 R22) | The window hugs the rendered card (`popoverWindowSize`, max-clamped, sized on show): card, Stop/Start toggle, and Open Stint fully inside | JUDGE `WINDOW_GEOMETRY` — `popover-fit.png` | A warning that grows the card while the popover is already open extends past the sized window until the next show |
 | **Empty** — N/A | Popover is binary idle/running, no zero-data variant | — | Waived — no empty state applies |
 
 ## How this wires into COVERAGE.md

@@ -20,6 +20,9 @@ import { emptyState, runningState, startFormState, addFormState, editingState, u
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
 // — one source of truth, no hand-copied channel list to drift.
 import { CHANNELS } from '../dist/ipc.js';
+// §12 R22 — the same measure-and-clamp the shipped popover applies on show (main.ts
+// togglePopover), so popover evidence renders at the window the user gets.
+import { popoverWindowSize } from '../dist/popoversize.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const RENDERER = join(here, '..', 'renderer');
@@ -57,6 +60,15 @@ async function newScenePage(browser, pageOpts) {
   return page;
 }
 
+// Fit a popover page's viewport to its rendered card — the auto-size main.ts performs on show.
+async function fitPopoverViewport(page) {
+  const card = await page.evaluate(() => {
+    const c = document.getElementById('pop');
+    return { width: c.offsetWidth, height: c.offsetHeight };
+  });
+  await page.setViewportSize(popoverWindowSize(card));
+}
+
 async function withPage(browser, state, name, fn, initOpts = {}) {
   const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light' });
   // Pin the page clock so derived count-ups and the captured evidence are
@@ -65,6 +77,7 @@ async function withPage(browser, state, name, fn, initOpts = {}) {
   await page.clock.pauseAt(new Date(JUDGE_NOW));
   await page.addInitScript(initScript(JSON.stringify(state), initOpts));
   await page.goto(fileUrl(name));
+  if (name === 'popover.html') await fitPopoverViewport(page);
   const result = await fn(page);
   await page.close();
   return result;
@@ -4723,9 +4736,10 @@ async function sceneEntriesCalendar(browser) {
 // calendar half is ENTRIES_CALENDAR above). Deterministic sub-facts, machine-scored under the
 // pinned JUDGE clock with the page pinned to timezoneId 'UTC' so the fixture's UTC instants map
 // to a stable local-time geometry on the 24h track:
-//   • fixed & EQUAL-width day columns (never stretched to fill) — every `.dcol` measures the same
-//     comfortable width; the week does not fit, so the strip scrolls horizontally
-//     (`.cstrip` scrollWidth > clientWidth);
+//   • EQUAL-width day columns at the comfortable floor (never compressed below it) — every
+//     `.dcol` measures the same width; at this window the week does not fit at the floor, so
+//     the strip scrolls horizontally (`.cstrip` scrollWidth > clientWidth). (Columns sharing
+//     spare width at a wider window is WINDOW_GEOMETRY's half, §12 R22.);
 //   • the viewport DEFAULTS to working hours (scrollTop lands on the 07:00 offset, > 0) over a
 //     FULL 24h track (`.dt` ~24h tall) that SCROLLS, never clips — an entry BEFORE working-start
 //     (06:00) and one AFTER working-end (19:00) are both in the DOM and reachable;
@@ -4746,9 +4760,9 @@ async function sceneEntriesCalendar(browser) {
 //   • an overlap `.ov` warn band and a slept `.zz` hatch render;
 //   • checking two `.ck` boxes reveals the #merge-bar selection bar above the calendar —
 //     "2 selected" count pill + a NEUTRAL Merge button (design.html D11 / V5).
-// Fails if columns stretch, the viewport clips (an off-hours entry missing), a total/empty column
-// regresses, the header band or hour gutter scrolls off screen, or the hover/click/merge wiring
-// breaks. Captures main-calendar.png.
+// Fails if columns compress below the floor or diverge, the viewport clips (an off-hours entry
+// missing), a total/empty column regresses, the header band or hour gutter scrolls off screen,
+// or the hover/click/merge wiring breaks. Captures main-calendar.png.
 async function sceneCalendarLayout(browser) {
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -5019,6 +5033,160 @@ async function sceneCalendarLayout(browser) {
       'main-calendar.png',
     );
     await page.close();
+  }
+}
+
+// WINDOW_GEOMETRY — §12 R22 (issue #126): the app uses the window it is given, and every
+// surface fits the window it ships in. Outcomes, not controls, at real geometry:
+//   • 1920×800 over the one-week fixture: all 7 day columns fully visible with no horizontal
+//     scroll, equal widths above the 124px floor, and every description ellipsised at the
+//     1040 default renders its full natural width — the columns share the window;
+//   • 1920×800 over the three-week fixture: the range still does not fit, so columns hold the
+//     floor and the strip still scrolls (§12 R16) — but more days are fully visible than at
+//     the default;
+//   • WINDOW (1040×800 — the default AND the minimum): the unified add form, expander open,
+//     commits without scrolling — Save entry fully inside the viewport — and the exact-times
+//     fields sit inside their picker column with no document-level horizontal overflow
+//     (ex-issue #146: #add-to ran 14px past the window); the edit form's same row likewise;
+//   • the popover at its auto-sized window (the shipped clamp): card and both actions fully
+//     inside, nothing to scroll.
+async function sceneWindowGeometry(browser) {
+  const measureCalendar = (page) =>
+    page.evaluate(() => {
+      const strip = document.querySelector('.cstrip');
+      const s = strip.getBoundingClientRect();
+      const cols = [...document.querySelectorAll('.dcol')];
+      const widths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+      const fullyVisible = cols.filter((c) => {
+        const r = c.getBoundingClientRect();
+        return r.left >= s.left - 0.5 && r.right <= s.right + 0.5;
+      }).length;
+      return {
+        widths,
+        equal: widths.length > 0 && widths.every((w) => w === widths[0]),
+        fullyVisible,
+        hScroll: strip.scrollWidth > strip.clientWidth,
+        truncatedDescs: [...document.querySelectorAll('.dcol .ev .bd')].filter(
+          (b) => b.scrollWidth > b.clientWidth,
+        ).length,
+      };
+    });
+
+  // One-week fixture: the columns share a wider window; the week fits whole at 1920.
+  {
+    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
+    await page.clock.install({ time: new Date(JUDGE_NOW) });
+    await page.clock.pauseAt(new Date(JUDGE_NOW));
+    await page.addInitScript(initScript(JSON.stringify(entriesCalendarState()), {}));
+    await page.goto(fileUrl('index.html'));
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+    const weekAtDefault = await measureCalendar(page);
+    await page.setViewportSize({ width: 1920, height: WINDOW.height });
+    const weekAtWide = await measureCalendar(page);
+    await page.screenshot({ path: join(EVIDENCE, 'calendar-wide.png') });
+    await page.close();
+
+    // Three-week fixture: the floor and the horizontal scroll survive, and width still pays out.
+    const densePage = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
+    await densePage.clock.install({ time: new Date(JUDGE_NOW) });
+    await densePage.clock.pauseAt(new Date(JUDGE_NOW));
+    await densePage.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
+    await densePage.goto(fileUrl('index.html'));
+    await densePage.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+    const denseAtDefault = await measureCalendar(densePage);
+    await densePage.setViewportSize({ width: 1920, height: WINDOW.height });
+    const denseAtWide = await measureCalendar(densePage);
+    await densePage.close();
+
+    // The unified form at the 1040×800 minimum: committable without scrolling, and the
+    // exact-times fields inside their column in BOTH modes (ex-issue #146).
+    const addFit = await withPage(browser, addFormState(), 'index.html', async (page) => {
+      await page.waitForSelector('.entry', { state: 'attached' });
+      await page.click('#add-toggle');
+      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
+      await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
+      await page.click('#add-times-toggle');
+      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+      const probe = await page.evaluate(() => {
+        const r = (el) => el.getBoundingClientRect();
+        const save = document.querySelector('#add-go');
+        const col = document.querySelector('#add-form .uf-picker').getBoundingClientRect();
+        return {
+          scrollY: window.scrollY,
+          saveInViewport:
+            r(save).top >= 0 && r(save).bottom <= window.innerHeight && r(save).right <= window.innerWidth,
+          saveBottom: Math.round(r(save).bottom),
+          fieldsInColumn:
+            r(document.querySelector('#add-from')).right <= col.right + 0.5 &&
+            r(document.querySelector('#add-to')).right <= col.right + 0.5,
+          noHOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+        };
+      });
+      await page.screenshot({ path: join(EVIDENCE, 'min-window-add.png') });
+      return probe;
+    });
+    const editFit = await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+      await page.waitForSelector('.dcol .ev', { state: 'attached' });
+      await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
+      await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
+      await page.click('.edit-form .ef-times-toggle');
+      return page.evaluate(() => {
+        const r = (el) => el.getBoundingClientRect();
+        const col = document.querySelector('.edit-form .uf-picker').getBoundingClientRect();
+        return {
+          fieldsInColumn:
+            r(document.querySelector('.edit-form .edit-start')).right <= col.right + 0.5 &&
+            r(document.querySelector('.edit-form .edit-end')).right <= col.right + 0.5,
+          noHOverflow: document.documentElement.scrollWidth <= window.innerWidth,
+        };
+      });
+    });
+
+    // The popover at the window main.ts gives it (withPage applies the shipped clamp on load).
+    const popFit = await withPage(browser, runningState(), 'popover.html', async (page) => {
+      const probe = await page.evaluate(() => {
+        const inside = (el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= -0.5 && r.top >= -0.5 && r.right <= window.innerWidth + 0.5 && r.bottom <= window.innerHeight + 0.5;
+        };
+        return {
+          cardInside: inside(document.getElementById('pop')),
+          toggleInside: inside(document.getElementById('toggle')),
+          openInside: inside(document.getElementById('open')),
+          noOverflow:
+            document.documentElement.scrollWidth <= window.innerWidth &&
+            document.documentElement.scrollHeight <= window.innerHeight,
+          window: { w: window.innerWidth, h: window.innerHeight },
+        };
+      });
+      await page.screenshot({ path: join(EVIDENCE, 'popover-fit.png') });
+      return probe;
+    });
+
+    const weekOk =
+      weekAtWide.fullyVisible === 7 &&
+      !weekAtWide.hScroll &&
+      weekAtWide.equal &&
+      weekAtWide.widths[0] > weekAtDefault.widths[0] &&
+      weekAtDefault.truncatedDescs > 0 &&
+      weekAtWide.truncatedDescs === 0;
+    const denseOk =
+      denseAtWide.fullyVisible > denseAtDefault.fullyVisible &&
+      denseAtWide.equal &&
+      denseAtWide.widths[0] === denseAtDefault.widths[0] &&
+      denseAtWide.hScroll;
+    const addOk = addFit.scrollY === 0 && addFit.saveInViewport && addFit.fieldsInColumn && addFit.noHOverflow;
+    const editOk = editFit.fieldsInColumn && editFit.noHOverflow;
+    const popOk = popFit.cardInside && popFit.toggleInside && popFit.openInside && popFit.noOverflow;
+    record(
+      'WINDOW_GEOMETRY',
+      weekOk && denseOk && addOk && editOk && popOk,
+      `week@1040=${JSON.stringify(weekAtDefault)} week@1920=${JSON.stringify(weekAtWide)} → ${weekOk}; ` +
+        `dense@1040 fullyVisible=${denseAtDefault.fullyVisible} dense@1920=${JSON.stringify(denseAtWide)} → ${denseOk}; ` +
+        `add-form@minimum=${JSON.stringify(addFit)} → ${addOk}; edit-form=${JSON.stringify(editFit)} → ${editOk}; ` +
+        `popover=${JSON.stringify(popFit)} → ${popOk}`,
+      'calendar-wide.png',
+    );
   }
 }
 
@@ -7226,6 +7394,7 @@ const SCENES = {
   REPORTS_VIEW: { items: ['REPORTS_VIEW'], run: sceneReportsView },
   ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], run: sceneEntriesCalendar },
   CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
+  WINDOW_GEOMETRY: { items: ['WINDOW_GEOMETRY'], run: sceneWindowGeometry },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
   CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], run: sceneCalendarEntryBlock },

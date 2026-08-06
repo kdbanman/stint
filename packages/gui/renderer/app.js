@@ -215,8 +215,9 @@ function render() {
   renderEntries();
 }
 
-// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One fixed comfortable-width day
-// column per day in range over a FULL 24h track: the track is always the whole day so nothing
+// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One day column per day in range
+// — an equal share of spare window width over a comfortable floor (§12 R22, styles.css `.dcol`)
+// — over a FULL 24h track: the track is always the whole day so nothing
 // clips; the viewport scrolls to the working-hours default. HOUR_PX drives both the vertical
 // pixels-per-hour and the event positioning, so an entry's top/height is a pure function of its
 // local minutes-of-day — the SAME window math the picker uses (window.SU.timelineWindow), never
@@ -389,8 +390,8 @@ function renderEntries() {
   renderMergeBar();
 }
 
-// §12 R16: build the calendar — a horizontally-scrolling strip of fixed-width day columns over a
-// shared hour gutter, then default the viewport to the working-hours window (scroll, never clip).
+// §12 R16: build the calendar — a strip of equal day columns over a shared hour gutter,
+// horizontally scrolling when the range does not fit at the columns' floor width, then default the viewport to the working-hours window (scroll, never clip).
 function renderCalendar(host) {
   const model = calendarModel();
   const wrap = document.createElement('div');
@@ -442,7 +443,7 @@ function calGutter() {
   return gut;
 }
 
-// One fixed-width day column: a header carrying the weekday/date + that day's billable total
+// One day column: a header carrying the weekday/date + that day's billable total
 // (§12 R16 / G13), then a 24h track holding the day's positioned events + any overlap warn bands.
 function calColumn(d, isEnd) {
   const col = document.createElement('div');

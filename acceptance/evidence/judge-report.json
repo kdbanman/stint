@@ -11,8 +11,8 @@
     },
     {
       "item": "NAV_SHELL",
-      "pass": false,
-      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=true {\"bgIsPaper\":true,\"labelIsInk\":true,\"iconIsAccent\":true,\"lifted\":true,\"inactiveFlat\":true,\"inactiveNoAccentIcon\":true}; clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (1040/1440/1920) views=872/872/872 → false",
+      "pass": true,
+      "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=true {\"bgIsPaper\":true,\"labelIsInk\":true,\"iconIsAccent\":true,\"lifted\":true,\"inactiveFlat\":true,\"inactiveNoAccentIcon\":true}; clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (1040/1440/1920) views=872/1272/1752 → true",
       "screenshot": "main-nav.png"
     },
     {
@@ -250,6 +250,12 @@
       "screenshot": "main-calendar.png"
     },
     {
+      "item": "WINDOW_GEOMETRY",
+      "pass": true,
+      "justification": "week@1040={\"widths\":[124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":6,\"hScroll\":true,\"truncatedDescs\":5} week@1920={\"widths\":[234,234,234,234,234,234,234],\"equal\":true,\"fullyVisible\":7,\"hScroll\":false,\"truncatedDescs\":0} → true; dense@1040 fullyVisible=6 dense@1920={\"widths\":[124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":13,\"hScroll\":true,\"truncatedDescs\":12} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":781,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":273}} → true",
+      "screenshot": "calendar-wide.png"
+    },
+    {
       "item": "CALENDAR_ACCENT_BUDGET",
       "pass": true,
       "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":51,\"dayColumns\":25,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
@@ -342,7 +348,7 @@
     {
       "item": "TARGET_SIZE",
       "pass": true,
-      "justification": "A03 sweep over 322 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=12, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=35, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[button.ef-times-toggle 171.9x14 (53px clear)]",
+      "justification": "A03 sweep over 322 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=12, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=35, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[button.ef-times-toggle 171.9x14 (94px clear)]",
       "screenshot": "main-target-size.png"
     },
     {

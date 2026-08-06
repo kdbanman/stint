@@ -36,13 +36,15 @@ const DEFAULT_SETTINGS = {
 export const JUDGE_NOW = '2026-06-24T23:00:00Z';
 
 // Issue #126 — the geometry the shipped windows actually have (main.ts): the main window's
-// 1040×800 default, which is also its floor once the minimum rises, and the tray popover's fixed
-// 280×200 (POPOVER_WIDTH, resizable:false). Both harnesses render every scene at one of these, so
-// no committed evidence shows a size the window cannot be — that is a false green of presentation
-// (process.html §02), and it is why the cramped calendar and the clipped popover card survived
-// review. A scene needing a second viewport sweeps from these, never below them.
+// 1040×800 default, which is also its minimum. Both harnesses render every scene at a size the
+// window can be, so no committed evidence shows a size it cannot — that is a false green of
+// presentation (process.html §02), and it is why the cramped calendar and the clipped popover
+// card survived review. A scene needing a second viewport sweeps from WINDOW, never below it.
+// The shipped popover auto-sizes to its rendered card (§12 R22), so popover pages open at the
+// same pre-measure placeholder main.ts uses and are then fitted with the same clamp
+// (popoverWindowSize) the shipped window applies on show.
 export const WINDOW = { width: 1040, height: 800 };
-export const POPOVER = { width: 280, height: 200 };
+export { POPOVER_FALLBACK as POPOVER } from '../dist/popoversize.js';
 const RUNNING_ELAPSED_S = 5047; // 01:24:07
 const RUNNING_START = new Date(Date.parse(JUDGE_NOW) - RUNNING_ELAPSED_S * 1000).toISOString();
 
