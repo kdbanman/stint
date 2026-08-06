@@ -24,10 +24,9 @@ export type Db = DatabaseSync;
 /** The current schema version; bumped when migrations are added. */
 export const SCHEMA_VERSION = 4;
 
-// One source for the sleep_span column set: the fresh-DB CREATE in SCHEMA_SQL and the
-// v3→v4 rebuild in migrate() must agree, or a migrated database diverges from a fresh one.
-// The CHECK mirrors types.ts's SleepSource the way report's CHECKed columns mirror theirs —
-// it is the proof behind the store's `source as SleepSource` cast (#180).
+// One source for the sleep_span column set: the fresh-DB CREATE and the v3→v4 rebuild must
+// agree, or a migrated database diverges from a fresh one. The CHECK is the proof behind
+// the store's `source as SleepSource` cast (#180).
 const SLEEP_SPAN_COLUMNS_SQL = `
   id        INTEGER PRIMARY KEY AUTOINCREMENT,
   entry_id  INTEGER NOT NULL REFERENCES entry(id) ON DELETE CASCADE,
@@ -395,12 +394,9 @@ export function openDb(
 }
 
 // v3→v4: give sleep_span.source the CHECK its report-table siblings already have. SQLite's
-// ALTER TABLE cannot add a CHECK, so an existing table is rebuilt — create with the
-// constraint, copy, drop, rename — in one transaction. The copy coerces an out-of-union
-// value to 'unknown' (the literal that exists for exactly this "provenance lost" semantic)
-// rather than refusing it: the realistic carrier is a §20 R05 restore of a pre-v4 backup,
-// and a constraint that rejects a database the recovery path should be repairing would
-// break the restore. No row is lost either way (#180).
+// ALTER TABLE cannot add one, hence the rebuild. An out-of-union value coerces to 'unknown'
+// rather than being refused — the realistic carrier is a §20 R05 restore of a pre-v4 backup,
+// and a constraint rejecting it would break the recovery path it should be repairing (#180).
 function constrainSleepSource(db: Db): void {
   const table = db
     .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'sleep_span'")
