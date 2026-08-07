@@ -5314,9 +5314,9 @@ async function sceneHotkeyNoTrap(browser) {
     await page.waitForSelector('.backup-restore');
     // The A04 ring signature, in one place. An outline with style `none` paints nothing, and
     // Chromium versions disagree on the width they report alongside it (0px on one stack, 3px
-    // on another) — so a raw `outlineWidth` read makes this scene's justification vary by host,
-    // which the R08 judge-report drift gate rightly fails. Fold a none-style outline to 0px:
-    // the signature then means the same thing everywhere and stays byte-reproducible.
+    // on another) — so a raw `outlineWidth` read makes the signature, and the facts compared
+    // from it, vary by host. Fold a none-style outline to 0px: the signature then means the
+    // same thing everywhere and stays byte-reproducible.
     await page.evaluate(() => {
       window.__ringSig = (el) => {
         const cs = getComputedStyle(el);
