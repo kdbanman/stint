@@ -140,11 +140,17 @@ async function clickEventBody(page, selector) {
 }
 
 const results = [];
-// `pass` is true/false for the deterministic, gating facts; null marks an item that
-// is captured-but-not-machine-scored (the subjective rubric line), so it never
-// silently counts as a pass.
-function record(item, pass, justification, screenshot) {
-  results.push({ item, pass, justification, screenshot });
+// A scene records a NAMED SUB-FACT MAP (issue #185), never a bare boolean: `pass` is every fact
+// true, and judge-bind.test.ts binds the names to the rubric row's Sub-facts cell, so an
+// assertion added or dropped here fails until the rubric row moves with it. `null` is the
+// captured-but-not-machine-scored item, which never silently counts as a pass.
+function record(item, facts, justification, screenshot) {
+  if (facts !== null && (typeof facts !== 'object' || !Object.keys(facts).length)) {
+    throw new Error(`${item}: expected a non-empty {name: boolean} sub-fact map, or null if unscored`);
+  }
+  const scored = facts && Object.fromEntries(Object.entries(facts).map(([k, v]) => [k, !!v]));
+  const pass = scored ? Object.values(scored).every(Boolean) : null;
+  results.push({ item, pass, facts: scored ?? null, justification, screenshot });
 }
 
 // EMPTY_STATE — the empty main window instructs a concrete next action (§12 R5).
@@ -152,8 +158,14 @@ async function sceneEmptyState(browser) {
   await withPage(browser, emptyState(), 'index.html', async (page) => {
     const text = await page.textContent('.empty');
     await page.screenshot({ path: join(EVIDENCE, 'main-empty.png') });
-    const ok = /tt start/.test(text) && /Ctrl\+Alt\+T/.test(text);
-    record('EMPTY_STATE', ok, `empty state reads: ${JSON.stringify(text.trim())}`, 'main-empty.png');
+    const namesHotkey = /Ctrl\+Alt\+T/.test(text);
+    const namesCliStart = /tt start/.test(text);
+    record(
+      'EMPTY_STATE',
+      { namesHotkey, namesCliStart },
+      `empty state reads: ${JSON.stringify(text.trim())}`,
+      'main-empty.png',
+    );
   });
 }
 
@@ -269,7 +281,7 @@ async function sceneNavShell(browser) {
       after.entriesHidden;
     record(
       'NAV_SHELL',
-      orderOk && defaultOk && routedOk && sidebarEveryView && fixedWidthOnResize && chipOk,
+      { orderOk, defaultOk, routedOk, sidebarEveryView, fixedWidthOnResize, chipOk },
       `nav order ${JSON.stringify(before.labels)}; default active=${before.activeView} (one view shown); ` +
         `D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=${chipOk} ${JSON.stringify(chip)}; ` +
         `clicking Settings routed: active=${JSON.stringify(after.active)} visible=${JSON.stringify(after.visibleViews)}; ` +
@@ -384,18 +396,24 @@ async function sceneKeyboardFocus(browser) {
     await page.focus('#toggle');
     await page.screenshot({ path: join(EVIDENCE, 'main-focus.png') });
     const running = await withPage(browser, runningState(), 'index.html', async (rp) => focusWalk(rp));
-    const ok =
-      empty.focusables > 0 &&
-      empty.reached === empty.focusables && // every visible control was reached by Tab…
-      empty.ringMisses.length === 0 && // …and each showed a visible ring…
-      !empty.trappedOnBody && // …and focus never stuck on <body> (no trap / void)
-      running.focusables > 0 &&
-      running.reached === running.focusables &&
-      running.ringMisses.length === 0 &&
-      !running.trappedOnBody;
+    // Every visible control reached by Tab, each showing a visible ring, and focus never stuck
+    // on <body> (no trap / void) — on both windows.
+    const emptyWalkComplete = empty.focusables > 0 && empty.reached === empty.focusables;
+    const emptyRingsVisible = empty.ringMisses.length === 0;
+    const emptyNoTrap = !empty.trappedOnBody;
+    const runningWalkComplete = running.focusables > 0 && running.reached === running.focusables;
+    const runningRingsVisible = running.ringMisses.length === 0;
+    const runningNoTrap = !running.trappedOnBody;
     record(
       'KEYBOARD_FOCUS',
-      ok,
+      {
+        emptyWalkComplete,
+        emptyRingsVisible,
+        emptyNoTrap,
+        runningWalkComplete,
+        runningRingsVisible,
+        runningNoTrap,
+      },
       `Tab-walk reached ${empty.reached}/${empty.focusables} controls (empty) and ` +
         `${running.reached}/${running.focusables} (running); ring misses ` +
         `empty=[${empty.ringMisses.join(', ') || 'none'}] running=[${running.ringMisses.join(', ') || 'none'}]; ` +
@@ -420,8 +438,14 @@ async function sceneTrayCountup(browser) {
       return h * 3600 + m * 60 + sec;
     };
     const delta = toSec(t2) - toSec(t1);
-    const ok = t1 === '01:24:07' && delta === 3;
-    record('TRAY_COUNTUP', ok, `popover count advanced ${t1} → ${t2} (+${delta}s)`, 'popover-running-2.png');
+    const clockSeeded = t1 === '01:24:07';
+    const countsUp = delta === 3;
+    record(
+      'TRAY_COUNTUP',
+      { clockSeeded, countsUp },
+      `popover count advanced ${t1} → ${t2} (+${delta}s)`,
+      'popover-running-2.png',
+    );
   });
 }
 
@@ -469,7 +493,7 @@ async function sceneTrayPopoverSurface(browser) {
       idleProbe.openPresent;
     record(
       'TRAY_POPOVER_SURFACE',
-      runningOk && idleOk,
+      { runningOk, idleOk },
       `popover is the sole tray action surface (no Switch) — running: Stop+Open present, no #switch ${JSON.stringify(runningProbe)}; ` +
         `idle: Start + Open present, no #switch ${JSON.stringify(idleProbe)}`,
       'popover-tray-surface.png',
@@ -509,22 +533,17 @@ async function scenePopoverReject(browser) {
       toggleLive: !document.querySelector('#toggle').disabled,
     }));
 
-    const ok =
-      refused.shown &&
-      refused.announced &&
-      // Issue 138: the popover reads the same one mapping site (SU.errMessage), so the
-      // Electron-wrapped rejection must land here as the reason ALONE — the tray surface is
-      // the smallest region in the app and had the least room for a transport sentence.
-      refused.message === 'stop time is before the entry started' &&
-      readsClean(refused.message) &&
-      refused.toggleLive &&
-      refused.stillRunning &&
-      refused.openPresent &&
-      again.shown &&
-      again.toggleLive;
+    const refusalAnnounced = refused.shown && refused.announced;
+    // Issue 138: the popover reads the same one mapping site (SU.errMessage), so the
+    // Electron-wrapped rejection must land here as the reason ALONE — the tray surface is
+    // the smallest region in the app and had the least room for a transport sentence.
+    const reasonAlone =
+      refused.message === 'stop time is before the entry started' && readsClean(refused.message);
+    const stillOperable = refused.toggleLive && refused.stillRunning && refused.openPresent;
+    const repeatable = again.shown && again.toggleLive;
     record(
       'POPOVER_REJECT',
-      ok,
+      { refusalAnnounced, reasonAlone, stillOperable, repeatable },
       `refused popover toggle surfaced + operable: ${JSON.stringify(refused)}; second attempt ${JSON.stringify(again)}`,
       'popover-reject.png',
     );
@@ -624,7 +643,7 @@ async function sceneInWindowTimer(browser) {
       idleStrip.desc === '';
     record(
       'IN_WINDOW_TIMER',
-      cardOk && stripOk && idleOk,
+      { cardOk, stripOk, idleOk },
       `Timer-view card count advanced ${t1} → ${probe.clock} (+${delta}s) ${JSON.stringify(probe)}; ` +
         `Entries strip ${JSON.stringify(strip)}; idle strip ${JSON.stringify(idleStrip)}`,
       'timer-view.png',
@@ -681,12 +700,9 @@ async function sceneCrossViewFreshness(browser) {
       await page.screenshot({ path: join(EVIDENCE, 'timer-cross-view.png') });
       await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
       const clock2 = (await page.textContent('#timer-clock')).trim();
-      const ok =
-        !!latched &&
-        latched.preset === 'today' &&
-        idle.state === 'idle' &&
-        idle.toggle === 'Start' &&
-        idle.clock === '00:00:00' &&
+      const toolbarLatched = !!latched && latched.preset === 'today';
+      const idleCard = idle.state === 'idle' && idle.toggle === 'Start' && idle.clock === '00:00:00';
+      const flipsInPlace =
         !!after &&
         after.state === 'running' &&
         after.panelHidden &&
@@ -694,11 +710,11 @@ async function sceneCrossViewFreshness(browser) {
         after.stopVisible &&
         after.running &&
         after.noReload &&
-        after.clock === '00:00:00' &&
-        clock2 === '00:00:03';
+        after.clock === '00:00:00';
+      const countsUp = clock2 === '00:00:03';
       record(
         'CROSS_VIEW_FRESHNESS',
-        ok,
+        { toolbarLatched, idleCard, flipsInPlace, countsUp },
         `Entries toolbar latched (listEntries query ${JSON.stringify(latched)}); Timer card before Start ` +
           `${JSON.stringify(idle)}; after Start (no reload) ${JSON.stringify(after)}; count-up then ` +
           `advanced ${after ? after.clock : 'n/a'} → ${clock2} across a +3s pinned-clock step`,
@@ -821,46 +837,41 @@ async function sceneTimerView(browser) {
     const edited = await page.evaluate(() => window.__EDITED__);
     const toSec = (s) => { const [h, m, sec] = s.split(':').map(Number); return h * 3600 + m * 60 + sec; };
     const delta = toSec(t2) - toSec(t1);
-    const ok =
-      t1 === '01:24:07' &&
-      delta === 3 &&
-      before.stripPresent &&
-      before.noEnd &&
-      before.startIsText &&
-      before.hasStop &&
-      before.noSwitch &&
-      // D05/A05 (issue #142) — the word reaches the rendered card, it comes from the state
-      // line, and the dot beside it is laid out and accent-filled. Colour alone no longer
-      // carries the app's most important state.
+    const clockLive = t1 === '01:24:07' && delta === 3;
+    const clockRole = before.clockPx === '38px' && before.clockTnum && before.clockNumStack;
+    const startOnlyStrip =
+      before.stripPresent && before.noEnd && before.startIsText && before.hasStop && before.noSwitch;
+    // D05/A05 (issue #142) — the word reaches the rendered card, it comes from the state
+    // line, and the dot beside it is laid out and accent-filled. Colour alone no longer
+    // carries the app's most important state.
+    const saysRunning =
       before.cardText.includes('running') &&
       before.statePainted &&
       before.dotVisible &&
-      before.dotFill === before.accentRgb &&
-      before.clockPx === '38px' &&
-      before.clockTnum &&
-      before.clockNumStack &&
-      disc.inFlow &&
-      disc.noBackdrop &&
-      disc.noDialog &&
-      disc.expanded &&
+      before.dotFill === before.accentRgb;
+    const discInFlow = disc.inFlow && disc.noBackdrop && disc.noDialog && disc.expanded;
+    const startOnlyPicker =
       disc.grip &&
       disc.noResize &&
       disc.noEndLabel &&
       disc.noEndEcho &&
       disc.fade &&
-      disc.others >= 1 &&
-      // §12 R15 (issue #49): the strip renders the stored start EXACTLY, to the second — the
-      // fixture's open row started 5047s (01:24:07) before the 23:00:00Z pinned clock = 21:35:53.
+      disc.others >= 1;
+    // §12 R15 (issue #49): the strip renders the stored start EXACTLY, to the second — the
+    // fixture's open row started 5047s (01:24:07) before the 23:00:00Z pinned clock = 21:35:53.
+    // issue #159: the rendered value matches NO `T`-separated pattern — it is the string the
+    // user selects and retypes, not a serialization — and the placeholder promises exactly it.
+    const startSeededExactly =
       disc.startBefore === '2026-06-24 21:35:53' &&
-      // issue #159: the rendered value matches NO `T`-separated pattern — it is the string the
-      // user selects and retypes, not a serialization — and the placeholder promises exactly it.
       !/\d{4}-\d{2}-\d{2}T/.test(disc.startBefore) &&
       disc.startPlaceholder === 'YYYY-MM-DD HH:mm:ss' &&
-      new RegExp(`^${disc.startPlaceholder.replace(/[A-Za-z]/g, '\\d')}$`).test(disc.startBefore) &&
+      new RegExp(`^${disc.startPlaceholder.replace(/[A-Za-z]/g, '\\d')}$`).test(disc.startBefore);
+    const dragWritesLive =
       dragged.startLive === '2026-06-24 20:35:00' &&
       !/\d{4}-\d{2}-\d{2}T/.test(dragged.startLive) &&
       dragged.stillNoEndChrome &&
-      dragged.noBackdrop &&
+      dragged.noBackdrop;
+    const patchStartOnly =
       !!edited &&
       typeof edited.id === 'number' &&
       !!edited.patch &&
@@ -914,7 +925,7 @@ async function sceneTimerView(browser) {
       };
     });
     await palettePage.close();
-    const paletteOk =
+    const attrVsFlag =
       paint.attrShown &&
       paint.flagShown &&
       paint.attrText === 'billable' &&
@@ -932,7 +943,18 @@ async function sceneTimerView(browser) {
       paint.attrBg !== paint.accentWeak;
     record(
       'TIMER_VIEW',
-      ok && paletteOk,
+      {
+        clockLive,
+        clockRole,
+        startOnlyStrip,
+        saysRunning,
+        discInFlow,
+        startOnlyPicker,
+        startSeededExactly,
+        dragWritesLive,
+        patchStartOnly,
+        attrVsFlag,
+      },
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
         `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
         `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'}); ` +
@@ -998,17 +1020,19 @@ async function sceneFutureStartGuard(browser) {
       idle: !!(window.__STATE__ && window.__STATE__.status) && window.__STATE__.status.running === false,
     }));
 
-    const ok =
-      refused.shown && refused.announced && refused.notWritten && refused.stillRunning && refused.stopStillThere &&
-      // Issue 138 — the exact string the design-audit sweep captured from this region was
-      // "Error invoking remote method 'edit': StoreError: start time is in the future". The
-      // mock rejects in that same wrapped shape now, so the region must read the reason alone.
-      refused.message === 'start time is in the future' && readsClean(refused.message) &&
-      corrected.warningCleared && corrected.editedStart === '2026-06-24T22:00:00.000Z' && corrected.noEnd &&
-      stopped.idle;
+    const refusalAnnounced = refused.shown && refused.announced;
+    const nothingWritten = refused.notWritten;
+    const noWedge = refused.stillRunning && refused.stopStillThere;
+    // Issue 138 — the exact string the design-audit sweep captured from this region was
+    // "Error invoking remote method 'edit': StoreError: start time is in the future". The
+    // mock rejects in that same wrapped shape now, so the region must read the reason alone.
+    const reasonAlone = refused.message === 'start time is in the future' && readsClean(refused.message);
+    const correctionCommits =
+      corrected.warningCleared && corrected.editedStart === '2026-06-24T22:00:00.000Z' && corrected.noEnd;
+    const stoppable = stopped.idle;
     record(
       'FUTURE_START_GUARD',
-      ok,
+      { refusalAnnounced, nothingWritten, noWedge, reasonAlone, correctionCommits, stoppable },
       `future-reject=${JSON.stringify(refused)} corrected=${JSON.stringify(corrected)} stopped=${JSON.stringify(stopped)}`,
       'timer-future-start-reject.png',
     );
@@ -1094,40 +1118,39 @@ async function sceneFavoritesRail(browser) {
       { favorites: [] },
     );
 
-    const ok =
+    const railSeeded =
       probe.rows === 3 &&
       probe.names.includes('Standup') &&
       probe.names.includes('Deep work') &&
       probe.hasResume &&
       probe.hasKebab &&
       probe.hasPin &&
-      probe.emptyHidden &&
-      probe.callableChannels.length === 5 &&
-      Array.isArray(resumed) &&
-      resumed.length === 1 &&
-      resumed[0] &&
-      resumed[0].name === 'Standup' &&
+      probe.emptyHidden;
+    const channelsCallable = probe.callableChannels.length === 5;
+    const resumeFires =
+      Array.isArray(resumed) && resumed.length === 1 && resumed[0] && resumed[0].name === 'Standup';
+    const pinLands =
       !!pinned.payload &&
       pinned.payload.name === 'Invoice prep' &&
       pinned.payload.fromEntryId === 'open' &&
-      pinned.names.includes('Invoice prep') &&
+      pinned.names.includes('Invoice prep');
+    const renameLands =
       !!renamed.payload &&
       renamed.payload.name === 'Client invoicing' &&
       renamed.names.includes('Client invoicing') &&
-      !renamed.names.includes('Invoice prep') &&
-      // The kebab UNPIN really landed: unpinFavorite fired exactly once with the pinned
-      // chip's ref (id 93 — the pin mock's 90 + 3 seeded) and the chip LEFT the rail.
+      !renamed.names.includes('Invoice prep');
+    // The kebab UNPIN really landed: unpinFavorite fired exactly once with the pinned
+    // chip's ref (id 93 — the pin mock's 90 + 3 seeded) and the chip LEFT the rail.
+    const unpinLands =
       unpinned.calls === 1 &&
       !!unpinned.payload &&
       unpinned.payload.ref === 93 &&
       unpinned.names.length === 3 &&
-      !unpinned.names.includes('Client invoicing') &&
-      empty.shown &&
-      /pin/i.test(empty.text) &&
-      /tt fav/i.test(empty.text);
+      !unpinned.names.includes('Client invoicing');
+    const emptyInstructs = empty.shown && /pin/i.test(empty.text) && /tt fav/i.test(empty.text);
     record(
       'FAVORITES_RAIL',
-      ok,
+      { railSeeded, channelsCallable, resumeFires, pinLands, renameLands, unpinLands, emptyInstructs },
       `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
         `inline pin ${JSON.stringify(pinned)}; inline rename ${JSON.stringify(renamed)}; ` +
         `kebab unpin ${JSON.stringify(unpinned)}; empty ${JSON.stringify(empty)}`,
@@ -1239,10 +1262,10 @@ async function sceneAccentDiscipline(browser) {
     const timerFillCount = budget.find((b) => b.view === 'timer')?.filled.length ?? 0;
     const standingViews = budget.filter((b) => b.view !== 'settings');
     const everyStandingViewSpendsIt = standingViews.every((b) => b.filled.length === 1);
-    const budgetOk = everyViewWithinBudget && timerFillCount === 1 && everyStandingViewSpendsIt;
+    const timerSpendsExactlyOne = timerFillCount === 1;
     record(
       'ACCENT_SOLID_BUDGET',
-      budgetOk,
+      { everyViewWithinBudget, timerSpendsExactlyOne, everyStandingViewSpendsIt },
       `exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): ` +
         budget.map((b) => `${b.view}=[${b.filled.join(', ') || 'none'}]`).join('; ') +
         `; every view within budget=${everyViewWithinBudget}; ` +
@@ -1368,7 +1391,7 @@ async function scenePrimaryHandoff(browser) {
   const offenders = states.filter((s) => s.lit.length !== 1);
   record(
     'PRIMARY_HANDOFF',
-    offenders.length === 0 && states.length === 13,
+    { everyStateExactlyOneFill: offenders.length === 0, allThirteenStatesWalked: states.length === 13 },
     `exactly one visible --accent-solid fill in every state (D11): ` +
       states.map((s) => `${s.state}=[${s.lit.join(', ') || 'none'}]`).join('; ') +
       `; states measured=${states.length}/13 offending states=` +
@@ -1510,17 +1533,17 @@ async function sceneStartAttributes(browser) {
     await page.screenshot({ path: join(EVIDENCE, 'main-start-form.png') });
     await page.click('#start-go');
     const started = await page.evaluate(() => window.__STARTED__);
-    const ok =
+    const attributesSent =
       !!started &&
       started.description === 'auth refactor' &&
       started.client === 'Acme' &&
       started.project === 'API' &&
       Array.isArray(started.tags) &&
-      started.tags.join(',') === 'deep,urgent' &&
-      started.billable === false;
+      started.tags.join(',') === 'deep,urgent';
+    const billableSent = started?.billable === false;
     record(
       'START_ATTRIBUTES',
-      ok,
+      { attributesSent, billableSent },
       `Start form sent: ${JSON.stringify(started)}`,
       'main-start-form.png',
     );
@@ -1609,7 +1632,7 @@ async function sceneStartForm(browser) {
       running.noSwitch;
     record(
       'START_FORM',
-      formOk && idleLabelOk && billDefaultOk && runningOk,
+      { formOk, idleLabelOk, billDefaultOk, runningOk },
       `idle start form fields=${JSON.stringify(idle)}; billable default (§05 R07): unchecked→client checks (${billWithClient})→cleared unchecks (${billCleared}), untouched submit sent ${JSON.stringify(started)}; running surface hides the start panel (only edit-or-stop)=${JSON.stringify(running)}`,
       'main-start-form.png',
     );
@@ -1648,19 +1671,14 @@ async function sceneRunningSingleAction(browser) {
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'timer-running-single-action.png') });
-    const ok =
-      probe.visibleDescFields === 1 &&
-      probe.descFieldId === 'le-desc' &&
-      probe.panelHidden &&
-      !probe.startFormVisible &&
-      !probe.startToggleVisible &&
-      !probe.oneTapVisible &&
-      probe.stopVisible &&
-      probe.liveEditVisible &&
-      probe.noSwitch;
+    const oneDescriptionField = probe.visibleDescFields === 1 && probe.descFieldId === 'le-desc';
+    const startPanelHidden =
+      probe.panelHidden && !probe.startFormVisible && !probe.startToggleVisible && !probe.oneTapVisible;
+    const editOrStopRemain = probe.stopVisible && probe.liveEditVisible;
+    const noSwitch = probe.noSwitch;
     record(
       'RUNNING_SINGLE_ACTION',
-      ok,
+      { oneDescriptionField, startPanelHidden, editOrStopRemain, noSwitch },
       `running Timer view offers only edit-or-stop: ${JSON.stringify(probe)}`,
       'timer-running-single-action.png',
     );
@@ -1820,17 +1838,11 @@ async function sceneUnifiedFormAdd(browser) {
     const paintOk =
       paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert &&
       paint.meWeakFill && paint.meAccentBorder && paint.meInkLabels && paint.saveSolid;
-    const ok =
-      layoutOk &&
-      paintOk &&
-      liveUpdate &&
-      savePatch &&
-      commit.formClosed &&
-      commit.bannerVisible &&
-      /overlap/i.test(commit.bannerText);
+    const formCloses = commit.formClosed;
+    const overlapBanner = commit.bannerVisible && /overlap/i.test(commit.bannerText);
     record(
       'UNIFIED_FORM_ADD',
-      ok,
+      { layoutOk, paintOk, liveUpdate, savePatch, formCloses, overlapBanner },
       `unified add form: layout=${JSON.stringify(layout)}; picker paint=${JSON.stringify(paint)}; ` +
         `live drag seed=${JSON.stringify(seed)}→${JSON.stringify(dragged)} (live=${liveUpdate}); ` +
         `Save sole commit added=${JSON.stringify(a)} (patchOk=${savePatch}); ` +
@@ -1921,10 +1933,9 @@ async function sceneUnifiedFormExpander(browser) {
       reflected.fromValue === '2026-06-24T22:00' &&
       reflected.toValue === '2026-06-25T02:00';
     const savedOk = !!added && added.fromLocal === '2026-06-24T22:00' && added.toLocal === '2026-06-25T02:00';
-    const ok = collapsedOk && fieldsOk && reflectedOk && savedOk;
     record(
       'UNIFIED_FORM_EXPANDER',
-      ok,
+      { collapsedOk, fieldsOk, reflectedOk, savedOk },
       `collapsed Start/Stop expander drives the shared interval: ` +
         `collapsed=${JSON.stringify(collapsed)} (ok=${collapsedOk}); expand→fields=${JSON.stringify(fields)} (ok=${fieldsOk}); ` +
         `typed overnight reflected=${JSON.stringify(reflected)} (ok=${reflectedOk}); ` +
@@ -2277,10 +2288,20 @@ async function sceneUnifiedForm(browser) {
       removed.calls.length === 1 &&
       removed.calls[0].id === 80;
     const hostShared = addHostIsFormHost && sameHost;
-    const ok = hostShared && clickOpens && seeded && pickerOk && footer && savePatch && deleteGate && overlapDetailOk && sleptOk && exactTimesOk;
     record(
       'UNIFIED_FORM',
-      ok,
+      {
+        hostShared,
+        clickOpens,
+        seeded,
+        pickerOk,
+        footer,
+        savePatch,
+        deleteGate,
+        overlapDetailOk,
+        sleptOk,
+        exactTimesOk,
+      },
       `unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in ` +
         `flow), seeded, INLINE picker (in-flow, no backdrop/apply, ` +
         `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
@@ -2324,16 +2345,12 @@ async function sceneMultilineDesc(browser) {
         resize: cs.resize,
       };
     });
-    const ok =
-      probe.present &&
-      probe.tag === 'TEXTAREA' &&
-      probe.rows === 3 &&
-      probe.value === 'line one\nline two' &&
-      probe.hasInteriorNewline &&
-      (probe.overflowY === 'auto' || probe.overflowY === 'scroll');
+    const isTextarea = probe.present && probe.tag === 'TEXTAREA' && probe.rows === 3;
+    const keepsNewline = probe.value === 'line one\nline two' && probe.hasInteriorNewline;
+    const scrollsNotGrows = probe.overflowY === 'auto' || probe.overflowY === 'scroll';
     record(
       'MULTILINE_DESC',
-      ok,
+      { isTextarea, keepsNewline, scrollsNotGrows },
       `description control is a 3-line scrollable textarea rendering the stored newline verbatim: ${JSON.stringify(probe)}`,
       'main-multiline-desc.png',
     );
@@ -2367,15 +2384,12 @@ async function sceneOverlapBanner(browser) {
           ariaLive: banner ? banner.getAttribute('aria-live') : null,
         };
       });
-      const ok =
-        beforeHidden &&
-        probe.visible &&
-        /overlap/i.test(probe.text) &&
-        probe.role === 'status' &&
-        probe.ariaLive === 'polite';
+      const hiddenBefore = beforeHidden;
+      const raisedOnOverlap = probe.visible && /overlap/i.test(probe.text);
+      const announced = probe.role === 'status' && probe.ariaLive === 'polite';
       record(
         'OVERLAP_BANNER',
-        ok,
+        { hiddenBefore, raisedOnOverlap, announced },
         `overlap write raises inline banner (hidden before=${beforeHidden}): ${JSON.stringify(probe)}`,
         'main-overlap-banner.png',
       );
@@ -2428,13 +2442,10 @@ async function sceneSplitAffordance(browser) {
     // control sends it over the split IPC as a UTC ISO.
     await page.click(`${closedRow} [data-act="confirm-split"]`);
     const split = await page.evaluate(() => window.__SPLIT__);
-    const ok =
-      before.closedHasSplit &&
-      !before.openHasSplit &&
-      geom.noOverlap &&
-      geom.chipInColumn &&
-      splitForm.splitInputIsText &&
-      splitForm.noDatetimeLocal &&
+    const closedOnly = before.closedHasSplit && !before.openHasSplit;
+    const chipGeometry = geom.noOverlap && geom.chipInColumn;
+    const rawTextField = splitForm.splitInputIsText && splitForm.noDatetimeLocal;
+    const splitsInsideSpan =
       !!split &&
       split.id === 30 &&
       typeof split.atUtc === 'string' &&
@@ -2442,7 +2453,7 @@ async function sceneSplitAffordance(browser) {
       Date.parse(split.atUtc) < Date.parse('2026-06-24T11:00:00Z');
     record(
       'SPLIT_AFFORDANCE',
-      ok,
+      { closedOnly, chipGeometry, rawTextField, splitsInsideSpan },
       `closed row exposes Split (open row none=${!before.openHasSplit}); ops chip clears the corner checkbox=${geom.noOverlap}, chip in column=${geom.chipInColumn}; split input is plain text=${splitForm.splitInputIsText}, no datetime-local=${splitForm.noDatetimeLocal}; split IPC: ${JSON.stringify(split)}`,
       'main-split.png',
     );
@@ -2575,7 +2586,7 @@ async function sceneInlineGateContainment(browser) {
     const unoccluded = [split, confirm].every((g) => g.clearsStickyAxes && g.topmost && g.controlsReachable);
     record(
       'INLINE_GATE_CONTAINMENT',
-      contained && chromed && unoccluded,
+      { contained, chromed, unoccluded },
       `split picker (first column) ${JSON.stringify(split)}; delete confirm (last column) ${JSON.stringify(confirm)}`,
       'main-inline-gate.png',
     );
@@ -2692,15 +2703,17 @@ async function sceneWriteRejectionFeedback(browser) {
       toggleReject.message === 'stop time is before the entry started' &&
       [editReject, splitReject, renameReject, toggleReject].every((r) => readsClean(r.message));
 
-    const ok =
-      editReject.formOpen && editReject.shown && editReject.announced && editReject.notWritten &&
-      splitReject.formOpen && splitReject.shown && splitReject.announced && splitReject.notWritten &&
-      renameReject.formOpen && renameReject.shown && renameReject.announced && renameReject.notWritten &&
-      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors &&
-      copyOk;
+    const editRejected =
+      editReject.formOpen && editReject.shown && editReject.announced && editReject.notWritten;
+    const splitRejected =
+      splitReject.formOpen && splitReject.shown && splitReject.announced && splitReject.notWritten;
+    const renameRejected =
+      renameReject.formOpen && renameReject.shown && renameReject.announced && renameReject.notWritten;
+    const toggleRejected =
+      toggleReject.timerShown && toggleReject.timerAnnounced && toggleReject.bannerMirrors;
     record(
       'WRITE_REJECTION_FEEDBACK',
-      ok,
+      { editRejected, splitRejected, renameRejected, toggleRejected, copyOk },
       `edit-save=${JSON.stringify(editReject)} split=${JSON.stringify(splitReject)} rename=${JSON.stringify(renameReject)} toggle=${JSON.stringify(toggleReject)} copy-reads-clean=${copyOk}`,
       'main-edit-reject.png',
     );
@@ -2808,17 +2821,21 @@ async function sceneAddRefusalPalette(browser) {
   // The two palettes are only a split if they DIFFER — pin it here so a token edit that collapsed
   // danger onto flag could not make every assertion above pass vacuously.
   const palettesDiffer = !same(refused.danger, refused.flag);
-  const ok =
-    refused.formOpen && refused.shown && refused.announced && refused.notWritten &&
-    refused.message === 'stop time must be after start time' && readsClean(refused.message) &&
-    refusalReadsDanger &&
-    advisoryChromeIntact &&
-    advisory.shown && advisory.written && /allowed, but flagged/i.test(advisory.text) &&
-    advisoryReadsFlag &&
-    palettesDiffer;
+  const refusalAnnounced = refused.formOpen && refused.shown && refused.announced && refused.notWritten;
+  const reasonAlone =
+    refused.message === 'stop time must be after start time' && readsClean(refused.message);
+  const advisoryShown = advisory.shown && advisory.written && /allowed, but flagged/i.test(advisory.text);
   record(
     'ADD_REFUSAL_PALETTE',
-    ok,
+    {
+      refusalAnnounced,
+      reasonAlone,
+      refusalReadsDanger,
+      advisoryChromeIntact,
+      advisoryShown,
+      advisoryReadsFlag,
+      palettesDiffer,
+    },
     `refused save=${JSON.stringify(refused)} (danger=${refusalReadsDanger}); reopened=${JSON.stringify(reopened)} ` +
       `(flag base intact=${advisoryChromeIntact}); overlap advisory=${JSON.stringify(advisory)} (flag=${advisoryReadsFlag}); ` +
       `palettes differ=${palettesDiffer}`,
@@ -2892,20 +2909,17 @@ async function sceneMergeConflict(browser) {
       merged: window.__MERGED__ ?? null,
     }));
     const escapeCancels = !afterEscape.promptShown && !afterEscape.backdropShown && !afterEscape.merged;
-    const ok =
-      barHiddenInitially &&
-      barHiddenWithOne &&
-      barShownWithTwo &&
+    const barGatedOnTwo = barHiddenInitially && barHiddenWithOne && barShownWithTwo;
+    const promptOffersChoices =
       probe.promptShown &&
       probe.offersClientA &&
       probe.offersClientB &&
       probe.clientChoiceCount === 2 &&
-      probe.offersBillable &&
-      !probe.merged &&
-      escapeCancels;
+      probe.offersBillable;
+    const nothingMergedYet = !probe.merged;
     record(
       'MERGE_CONFLICT',
-      ok,
+      { barGatedOnTwo, promptOffersChoices, nothingMergedYet, escapeCancels },
       `selection bar hidden until 2 selected, then shows above the calendar with the "2 selected" pill + neutral Merge (${JSON.stringify(barWithTwo)}); conflict prompt offers client choices + billable, no merge committed yet: ${JSON.stringify(probe)}; ` +
         `Escape cancels the prompt — dismissed with nothing merged (${escapeCancels}): ${JSON.stringify(afterEscape)}`,
       'main-merge-conflict.png',
@@ -2993,7 +3007,7 @@ async function sceneMergeChoiceLift(browser) {
       JSON.stringify(second.chosenLabels) !== JSON.stringify(first.chosenLabels);
     record(
       'MERGE_CHOICE_LIFT',
-      shapeOk && liftOk && noAccentOk && dotOk && followsOk,
+      { shapeOk, liftOk, noAccentOk, dotOk, followsOk },
       `merge-conflict option selection is the raised paper chip, never accent — ` +
         `first: ${JSON.stringify(first)}; after choosing the other client: ${JSON.stringify(second)}; ` +
         `shape=${shapeOk} chosen-lifts=${liftOk} no-accent=${noAccentOk} radio-dot-cue=${dotOk} ` +
@@ -3019,9 +3033,8 @@ async function sceneMergeNoconflict(browser) {
       gapConfirmShown: !!document.querySelector('.confirm-gap'),
       merged: window.__MERGED__,
     }));
-    const ok =
-      !probe.conflictPromptShown &&
-      !probe.gapConfirmShown &&
+    const noPrompts = !probe.conflictPromptShown && !probe.gapConfirmShown;
+    const mergesDirectly =
       !!probe.merged &&
       Array.isArray(probe.merged.ids) &&
       probe.merged.ids.length === 2 &&
@@ -3029,7 +3042,7 @@ async function sceneMergeNoconflict(browser) {
       probe.merged.allowGap === undefined;
     record(
       'MERGE_NOCONFLICT',
-      ok,
+      { noPrompts, mergesDirectly },
       `contiguous agreeing selection merges with no conflict prompt and no gap confirm: ${JSON.stringify(probe)}`,
       'main-merge-conflict.png',
     );
@@ -3066,21 +3079,22 @@ async function sceneMergeGap(browser) {
     });
     await page.click('[data-act="confirm-gap"]');
     const after = await page.evaluate(() => ({ merged: window.__MERGED__ }));
-    const ok =
+    const gapArmsConfirm =
       armed.confirmShown &&
       armed.namesGap &&
       armed.statesSpan &&
       armed.statesGapDuration &&
       armed.hasConfirmBtn &&
-      armed.hasCancelBtn &&
-      !armed.merged &&
+      armed.hasCancelBtn;
+    const nothingMergedOnArm = !armed.merged;
+    const confirmMergesWithGap =
       !!after.merged &&
       Array.isArray(after.merged.ids) &&
       after.merged.ids.length === 2 &&
       after.merged.allowGap === true;
     record(
       'MERGE_GAP',
-      ok,
+      { gapArmsConfirm, nothingMergedOnArm, confirmMergesWithGap },
       `gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed=${JSON.stringify(armed)} after=${JSON.stringify(after)}`,
       'main-merge-gap.png',
     );
@@ -3103,8 +3117,14 @@ async function sceneDeleteConfirm(browser) {
         removed: window.__REMOVED__ === true,
       };
     });
-    const ok = probe.confirmShown && probe.confirmText && probe.confirmBtn && !probe.removed;
-    record('DELETE_CONFIRM', ok, `delete arms a confirm step, no immediate remove: ${JSON.stringify(probe)}`, 'main-edit.png');
+    const armShowsConfirm = probe.confirmShown && probe.confirmText && probe.confirmBtn;
+    const nothingRemovedOnArm = !probe.removed;
+    record(
+      'DELETE_CONFIRM',
+      { armShowsConfirm, nothingRemovedOnArm },
+      `delete arms a confirm step, no immediate remove: ${JSON.stringify(probe)}`,
+      'main-edit.png',
+    );
   });
 }
 
@@ -3131,17 +3151,18 @@ async function sceneConfirmDelete(browser) {
     const confirmed = await page.evaluate(() => ({
       removeCalls: (window.__REMOVE_CALLS__ || []).slice(),
     }));
-    const ok =
+    const armsWithoutRemoving =
       armed.confirmShown &&
       armed.confirmBtn &&
       armed.cancelBtn &&
-      armed.removeCallsAfterArm === 0 && // the stray first click destroyed nothing
+      armed.removeCallsAfterArm === 0; // the stray first click destroyed nothing
+    const confirmRemovesOnce =
       confirmed.removeCalls.length === 1 && // confirm removed exactly once
       confirmed.removeCalls[0] &&
       confirmed.removeCalls[0].id === 20;
     record(
       'CONFIRM_DELETE',
-      ok,
+      { armsWithoutRemoving, confirmRemovesOnce },
       `single Delete click surfaces a confirm and does not remove (calls after arm=${armed.removeCallsAfterArm}); ` +
         `only the explicit confirm removes, exactly once: ${JSON.stringify(confirmed.removeCalls)}`,
       'main-confirm-delete.png',
@@ -3174,20 +3195,20 @@ async function sceneConfirmDestructive(browser) {
       goneAfterConfirm: !document.querySelector('.entry[data-id="20"]'),
       removeCalls: (window.__REMOVE_CALLS__ || []).slice(),
     }));
-    const ok =
-      presentBefore &&
+    const armsWithoutRemoving =
       armed.confirmShown &&
       armed.confirmBtn &&
       armed.cancelBtn &&
       armed.stillPresent && // present after the stray first click…
-      armed.removeCallsAfterArm === 0 && // …and nothing removed by it
+      armed.removeCallsAfterArm === 0; // …and nothing removed by it
+    const confirmRemovesOnce =
       after.goneAfterConfirm && // gone only after the explicit confirm…
       after.removeCalls.length === 1 && // …which removed exactly once
       after.removeCalls[0] &&
       after.removeCalls[0].id === 20;
     record(
       'CONFIRM_DESTRUCTIVE',
-      ok,
+      { presentBefore, armsWithoutRemoving, confirmRemovesOnce },
       `Delete confirms before acting: present pre-confirm=${armed.stillPresent} (remove calls=${armed.removeCallsAfterArm}); ` +
         `gone post-confirm=${after.goneAfterConfirm}, removed once: ${JSON.stringify(after.removeCalls)}`,
       'main-confirm.png',
@@ -3449,7 +3470,7 @@ async function sceneClientsView(browser) {
       return { stopCount: stops.length, backwards, firstStop: stops[0]?.name ?? null, lastStop: stops.at(-1)?.name ?? null };
     });
 
-    const ok =
+    const viewSeeded =
       probe.visible &&
       probe.names.includes('Acme') &&
       probe.names.includes('Globex') &&
@@ -3461,14 +3482,16 @@ async function sceneClientsView(browser) {
       probe.projArchive &&
       probe.addProject &&
       probe.addClient &&
-      probe.unnamedIconButtons.length === 0 &&
+      probe.unnamedIconButtons.length === 0;
+    const createsLand =
       created.addedClient?.name === 'Initech' &&
       created.clientNames.includes('Initech') &&
       created.addedProject?.name === 'Mobile' &&
       created.addedProject?.clientId === 1 &&
       created.acmeProjects.includes('Mobile') &&
       created.addedTag?.name === 'billing' &&
-      created.tagNames.includes('billing') &&
+      created.tagNames.includes('billing');
+    const noRaceOnMutate =
       norace.dupClientIds.length === 0 &&
       norace.dupProjectIds.length === 0 &&
       norace.dupTagIds.length === 0 &&
@@ -3479,26 +3502,26 @@ async function sceneClientsView(browser) {
       !norace.clientNames.includes('Globex') &&
       norace.tagNames.includes('deep') &&
       norace.tagNames.includes('billing') &&
-      !norace.tagNames.includes('urgent') &&
+      !norace.tagNames.includes('urgent');
+    const emptyInstructs =
       refEmpty.clientRows === 0 &&
       refEmpty.tagRows === 0 &&
       /No clients yet/.test(refEmpty.clientsText) &&
       /tt client add/.test(refEmpty.clientsText) &&
       /No tags yet/.test(refEmpty.tagsText) &&
-      /tt tag add/.test(refEmpty.tagsText) &&
-      // …and the FOCUS-ORDER fact (issue 161): the Tab-walk over the archived-inclusive view
-      // advances in reading order at every step. The stop floor guards the guard — a walk that
-      // has gone blind (a selector rename, a view that never routed) finds nothing to disorder
-      // and would otherwise pass vacuously.
-      focusOrder.stopCount >= 15 &&
-      focusOrder.backwards.length === 0;
+      /tt tag add/.test(refEmpty.tagsText);
+    // The FOCUS-ORDER fact (issue 161): the Tab-walk over the archived-inclusive view advances
+    // in reading order at every step. The stop floor guards the guard — a walk that has gone
+    // blind (a selector rename, a view that never routed) finds nothing to disorder and would
+    // otherwise pass vacuously.
+    const focusOrderReads = focusOrder.stopCount >= 15 && focusOrder.backwards.length === 0;
     // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
     // when their item is active) is judged visually against the mock, not gated on a
     // computed-style scan (issue #25) — the offender list is kept in the justification as
     // captured evidence only. The D16 accessible-name fact IS machine-gated above.
     record(
       'CLIENTS_VIEW',
-      ok,
+      { viewSeeded, createsLand, noRaceOnMutate, emptyInstructs, focusOrderReads },
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
@@ -3535,18 +3558,19 @@ async function sceneConfirmArchive(browser) {
     const confirmed = await page.evaluate(() => ({
       archiveCalls: (window.__ARCHIVE_CLIENT_CALLS__ || []).slice(),
     }));
-    const ok =
+    const armsWithoutArchiving =
       armed.confirmShown &&
       armed.confirmBtn &&
       armed.cancelBtn &&
       armed.stillListed &&
-      armed.archiveCallsAfterArm === 0 && // the stray first click archived nothing
+      armed.archiveCallsAfterArm === 0; // the stray first click archived nothing
+    const confirmArchivesOnce =
       confirmed.archiveCalls.length === 1 && // the confirm archived exactly once
       confirmed.archiveCalls[0] &&
       confirmed.archiveCalls[0].id === 1;
     record(
       'CONFIRM_ARCHIVE',
-      ok,
+      { armsWithoutArchiving, confirmArchivesOnce },
       `archiving a referenced client arms a confirm and does not archive (calls after arm=${armed.archiveCallsAfterArm}); ` +
         `only the explicit confirm archives, exactly once: ${JSON.stringify(confirmed.archiveCalls)}`,
       'main-confirm-archive.png',
@@ -3585,18 +3609,14 @@ async function sceneRestoreArchived(browser) {
       restoredPayload: window.__RESTORED_CLIENT__ || null,
       nowActive: !!document.querySelector('#clients .client[data-id="3"]:not(.archived)'),
     }));
-    const ok =
-      !before.archivedClientShown &&
-      !before.archivedTagShown &&
-      revealed.archivedClientRestore &&
-      revealed.archivedTagRestore &&
-      revealed.pill &&
-      restored.restoredPayload &&
-      restored.restoredPayload.id === 3 &&
-      restored.nowActive;
+    const archivedHidden = !before.archivedClientShown && !before.archivedTagShown;
+    const toggleRevealsRestore =
+      revealed.archivedClientRestore && revealed.archivedTagRestore && revealed.pill;
+    const restoreReactivates =
+      restored.restoredPayload && restored.restoredPayload.id === 3 && restored.nowActive;
     record(
       'RESTORE_ARCHIVED',
-      ok,
+      { archivedHidden, toggleRevealsRestore, restoreReactivates },
       `archived records hidden by default (${JSON.stringify(before)}), revealed with a Restore ` +
         `button on "show archived" (${JSON.stringify(revealed)}), and Restore returns the client ` +
         `to the active list: ${JSON.stringify(restored)}`,
@@ -3652,19 +3672,17 @@ async function sceneTagChips(browser) {
       Array.isArray(patch.addTags) && patch.addTags.join(',') === 'billing' &&
       Array.isArray(patch.removeTags) && patch.removeTags.join(',') === 'meeting' &&
       Object.keys(patch).sort().join(',') === 'addTags,removeTags';
-    const ok =
+    const chipsOnEvents =
       probe.openRowChips.join(',') === 'deep,urgent' &&
       probe.closedRowChips.join(',') === 'meeting' &&
       probe.summaryChips.join(',') === 'deep,urgent' &&
       probe.noPerRowTags &&
       // 2 (open event) + 1 (closed event) = 3 chips painted across the entries.
-      probe.totalRowChips === 3 &&
-      seededChips.join(',') === 'meeting' &&
-      workingChips.join(',') === 'billing' &&
-      tagsPatchOk;
+      probe.totalRowChips === 3;
+    const editorSeedsChips = seededChips.join(',') === 'meeting' && workingChips.join(',') === 'billing';
     record(
       'TAG_CHIPS',
-      ok,
+      { chipsOnEvents, editorSeedsChips, tagsPatchOk },
       `tags render as chips on events + running summary; NO per-row tags control; edited via the ` +
         `unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: ` +
         `${JSON.stringify(probe)} seeded=${JSON.stringify(seededChips)} working=${JSON.stringify(workingChips)} ` +
@@ -4008,10 +4026,21 @@ async function sceneReportsView(browser) {
       refuseInverted.cardCount === 2;
     const emptyOk =
       defsEmpty.shown && defsEmpty.text === 'No saved reports yet.' && defsEmpty.cards === 0;
-    const ok = listOk && sidebarOk && accentOk && builderOk && customOk && editOk && runOk && exportOk && kebabOk && refusalOk && emptyOk;
     record(
       'REPORTS_VIEW',
-      ok,
+      {
+        listOk,
+        sidebarOk,
+        accentOk,
+        builderOk,
+        customOk,
+        editOk,
+        runOk,
+        exportOk,
+        kebabOk,
+        refusalOk,
+        emptyOk,
+      },
       `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
@@ -4203,12 +4232,9 @@ async function sceneEntriesCalendar(browser) {
       onCustom.evText.some((t) => /refactor tests/.test(t)) &&
       !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
     const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy;
-    const ok =
-      controlsOk && defaultOk && searchOk && presetsOk && billableOk && clientProjectOk &&
-      tagOk && customRangeOk && wireOk;
     record(
       'ENTRIES_CALENDAR',
-      ok,
+      { controlsOk, defaultOk, searchOk, presetsOk, billableOk, clientProjectOk, tagOk, customRangeOk, wireOk },
       `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} ` +
         `-> presets month=${onMonth.evCount}/${onMonth.weekTotal} lastWeek=${onLastWeek.evCount}/${onLastWeek.weekTotal} ` +
         `lastMonth=${onLastMonth.evCount}/${onLastMonth.weekTotal} today=${onToday.evCount}/${onToday.weekTotal} ` +
@@ -4469,12 +4495,22 @@ async function sceneCalendarLayout(browser) {
       Math.abs(axes.gutOffset) <= 1 &&
       axes.headersOnScreen === structure.colCount &&
       axes.hourLabelsOnScreen > 0;
-    const ok =
-      columnsOk && neverClipOk && totalsOk && emptyOk && flagsOk && runOk && hoverOk &&
-      labelsOnScreenOk && crossMidnightOk && editorOpen && mergeHiddenBefore && mergeShown;
     record(
       'CALENDAR_LAYOUT',
-      ok,
+      {
+        columnsOk,
+        neverClipOk,
+        totalsOk,
+        emptyOk,
+        flagsOk,
+        runOk,
+        hoverOk,
+        labelsOnScreenOk,
+        crossMidnightOk,
+        editorOpen,
+        mergeHiddenBefore,
+        mergeShown,
+      },
       `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
         `labelsOnScreen=${labelsOnScreenOk} axes=${JSON.stringify(axes)}; ` +
         `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
@@ -4629,7 +4665,7 @@ async function sceneWindowGeometry(browser) {
     const popOk = popFit.cardInside && popFit.toggleInside && popFit.openInside && popFit.noOverflow;
     record(
       'WINDOW_GEOMETRY',
-      weekOk && denseOk && addOk && editOk && popOk,
+      { weekOk, denseOk, addOk, editOk, popOk },
       `week@1040=${JSON.stringify(weekAtDefault)} week@1920=${JSON.stringify(weekAtWide)} → ${weekOk}; ` +
         `dense@1040 fullyVisible=${denseAtDefault.fullyVisible} dense@1920=${JSON.stringify(denseAtWide)} → ${denseOk}; ` +
         `add-form@minimum=${JSON.stringify(addFit)} → ${addOk}; edit-form=${JSON.stringify(editFit)} → ${editOk}; ` +
@@ -4707,7 +4743,7 @@ async function sceneCalendarAccentBudget(browser) {
   const budgetOk = probe.accentSolidFills <= 1;
   record(
     'CALENDAR_ACCENT_BUDGET',
-    densityOk && noWallpaperOk && neutralOk && signalOk && budgetOk,
+    { densityOk, noWallpaperOk, neutralOk, signalOk, budgetOk },
     `entries calendar accent budget over the dense fixture: ${JSON.stringify(probe)}; ` +
       `density=${densityOk} no-wallpaper=${noWallpaperOk} neutral-surface+lift=${neutralOk} ` +
       `running-is-the-signal=${signalOk} accent-solid≤1=${budgetOk}`,
@@ -4826,7 +4862,7 @@ async function sceneSelectionLift(browser) {
   const budgetOk = probe.stripFound && probe.accentWeakFills === 0 && probe.accentSolidFills <= 1;
   record(
     'SELECTION_LIFT',
-    stateOk && liftOk && noAccentOk && checkOk && budgetOk,
+    { stateOk, liftOk, noAccentOk, checkOk, budgetOk },
     `calendar selection over the dense fixture: ${JSON.stringify(probe)}; ` +
       `states=${stateOk} chosen-lifts-off-the-rest=${liftOk} no-accent-on-selection=${noAccentOk} ` +
       `checkbox-is-paper=${checkOk} accent-budget-held=${budgetOk}`,
@@ -4936,7 +4972,7 @@ async function sceneCalendarEntryBlock(browser) {
   const noHoverShift = titleShift === 0 && blockShift === 0;
   record(
     'CALENDAR_ENTRY_BLOCK',
-    liveOk && containedOk && shortfallReal && controlIntact && noHoverShift,
+    { liveOk, containedOk, shortfallReal, controlIntact, noHoverShift },
     `short-entry blocks=${JSON.stringify(blocks)}; live=${liveOk} contained=${containedOk} ` +
       `shortfall-real=${shortfallReal} control-intact=${controlIntact}; ` +
       `hover title ${atRest.title}->${hovered.title} (delta ${titleShift}px), ` +
@@ -5064,7 +5100,15 @@ async function sceneCalendarKeyboard(browser) {
   const tabLeavesOk = afterTab.isBlock && afterTab.blockId !== sampleId;
   record(
     'CALENDAR_KEYBOARD',
-    fixtureReal && oneStopPerBlock && traversable && invisibleStops.length === 0 && rovingOk && escapeOk && tabLeavesOk,
+    {
+      fixtureReal,
+      oneStopPerBlock,
+      traversable,
+      noInvisibleStops: invisibleStops.length === 0,
+      rovingOk,
+      escapeOk,
+      tabLeavesOk,
+    },
     `dense calendar: ${fixture.blocks} blocks holding ${fixture.controls} hover-revealed controls; ` +
       `one Tab cycle = ${walk.length} stops (wrapped back to body: ${wrapped}), ${calStops.length} ` +
       `of them in the calendar, all of them blocks: ${calStops.every((s) => s.isBlock)}; ` +
@@ -5147,10 +5191,9 @@ async function sceneLiveFilter(browser) {
       /Widen the range/.test(noMatch.text) &&
       !/No entries yet/.test(noMatch.text) &&
       noMatch.listErrors === 0;
-    const ok = listLiveOk && totalLiveOk && noReloadOnSearch && noMatchOk;
     record(
       'LIVE_FILTER',
-      ok,
+      { listLiveOk, totalLiveOk, noReloadOnSearch, noMatchOk },
       `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
         `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
         `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
@@ -5229,17 +5272,12 @@ async function sceneSettingsView(browser) {
       probe.segChip.chipInk &&
       probe.segChip.chipLifted &&
       probe.segChip.peersFlat;
-    const ok =
-      probe.visible &&
-      probe.allSeven &&
-      probe.offenders.length === 0 &&
-      segChipOk &&
-      !!set &&
-      set.key === 'dateFormat' &&
-      set.value === 'iso';
+    const allControlsPresent = probe.visible && probe.allSeven;
+    const accentDiscipline = probe.offenders.length === 0;
+    const editFiresSetSetting = !!set && set.key === 'dateFormat' && set.value === 'iso';
     record(
       'SETTINGS_VIEW',
-      ok,
+      { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
       `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
@@ -5369,12 +5407,11 @@ async function sceneHotkeyNoTrap(browser) {
     const reachedAll = reached.size === 4;
     const captureWorks =
       !!captured && captured.key === 'globalHotkey' && captured.value === 'CommandOrControl+Shift+J';
-    const ok =
-      setup.allPresent && focused.onHotkey && ringDelta && escaped && retreated && released &&
-      reachedAll && captureWorks;
+    const allPresent = setup.allPresent;
+    const focusLandsOnHotkey = focused.onHotkey;
     record(
       'HOTKEY_NO_TRAP',
-      ok,
+      { allPresent, focusLandsOnHotkey, ringDelta, escaped, retreated, released, reachedAll, captureWorks },
       `Tab INTO .set-hotkey from the control before it landed on the field (${focused.onHotkey}); ` +
         `Tab from .set-hotkey advanced to ${afterTab.label} (escaped=${escaped}); ` +
         `Shift-Tab retreated to ${afterShiftTab.label} writing nothing (${retreated}); ` +
@@ -5392,10 +5429,8 @@ async function sceneHotkeyNoTrap(browser) {
 // and the ONE viewport derivation they drive. SU.timelineWindow is the single source of the
 // window math (G16; §12 R15's picker and §12 R16's calendar must consume it, never re-derive
 // it) and is evaluated in-page under the pinned JUDGE_NOW clock. The timeline consumers mark
-// their scroll container with the `data-timeline-track` hook; until §12 R15/R16 land there is
-// no track in the DOM, so that fact reports "pending" WITHOUT failing — it is re-verified in
-// the post-wave AC pass once the consumer rows land (this scene is their dependency, not the
-// reverse).
+// their scroll container with the `data-timeline-track` hook; this scene drives Settings only,
+// where no consumer mounts, so `consumerTrack` reports "pending" WITHOUT failing.
 async function sceneTimelineWindow(browser) {
   await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -5517,26 +5552,23 @@ async function sceneTimelineWindow(browser) {
       return { present: true, ok, scrollable, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
     });
 
-    const ok =
-      probe.allFour &&
-      probe.startValue === '09:00' &&
-      probe.endValue === '15:00' &&
+    const groupSeeded = probe.allFour && probe.startValue === '09:00' && probe.endValue === '15:00';
+    const aroundDisabledUndimmed =
       probe.aroundDisabled &&
       probe.aroundRowOff &&
       probe.labelDimmedBy.length === 0 &&
-      probe.labelContrast >= 4.5 &&
+      probe.labelContrast >= 4.5;
+    const modeFlipEnablesAround =
       !!set &&
       set.key === 'pickerWindowMode' &&
       set.value === 'around_now' &&
       afterFlip.aroundEnabled &&
-      !afterFlip.rowOff &&
-      windows.workingOk &&
-      windows.aroundOk &&
-      windows.calendarOk &&
-      (track.present ? track.ok : true);
+      !afterFlip.rowOff;
+    const windowMath = windows.workingOk && windows.aroundOk && windows.calendarOk;
+    const consumerTrack = track.present ? track.ok : true;
     record(
       'TIMELINE_WINDOW',
-      ok,
+      { groupSeeded, aroundDisabledUndimmed, modeFlipEnablesAround, windowMath, consumerTrack },
       `Timeline group renders all four keys (allFour=${probe.allFour}) with stored 09:00–15:00 ` +
         `(${probe.startValue}–${probe.endValue}); Around disabled while working_hours ` +
         `(disabled=${probe.aroundDisabled}, row off=${probe.aroundRowOff}) with its LABEL ` +
@@ -5575,10 +5607,10 @@ async function sceneTimelineWindowAround(browser) {
         modeOn: !!(seg && seg.classList.contains('on')),
       };
     });
-    const ok = probe.aroundEnabled && !probe.rowOff && probe.aroundValue === '8' && probe.modeOn;
+    const aroundFixturePaints = probe.aroundEnabled && !probe.rowOff && probe.aroundValue === '8' && probe.modeOn;
     record(
       'TIMELINE_WINDOW',
-      ok,
+      { aroundFixturePaints },
       `around_now fixture paints the mode segment on (${probe.modeOn}) with the Around select ` +
         `enabled (${probe.aroundEnabled}, row off=${probe.rowOff}) reading the stored span (${probe.aroundValue}h)`,
       'timeline-window.png',
@@ -5748,7 +5780,7 @@ async function sceneSoftwareUpdate(browser) {
         checkFailure.noDownload;
       record(
         'SOFTWARE_UPDATE',
-        versionOk && checkOk && downloadOk && errorOk && checkFailureOk,
+        { versionOk, checkOk, downloadOk, errorOk, checkFailureOk },
         `version row=${JSON.stringify(versionShown)} (R06); Check now → ${JSON.stringify(afterCheck)} (R03); ` +
           `Download & install → ${JSON.stringify(afterDownload)}, reveal fired=${revealed} (R04); ` +
           `rejected download → error phase ${JSON.stringify(errorPhase)}; ` +
@@ -5838,19 +5870,16 @@ async function sceneBackupsSection(browser) {
       { backups: [] },
     );
 
-    const ok =
+    const groupSeeded =
       probe.lastBackupShown &&
       probe.verifiedPill &&
       probe.retentionValue === '5' &&
       probe.rowCount === 2 &&
       probe.eachHasRestore &&
-      probe.offenders.length === 0 &&
-      !!setRet &&
-      setRet.key === 'backupRetention' &&
-      setRet.value === 10 &&
-      armedNotRestored &&
-      !!restored &&
-      restored.name === probe.rowNames[0] &&
+      probe.offenders.length === 0;
+    const retentionEditFires = !!setRet && setRet.key === 'backupRetention' && setRet.value === 10;
+    const restoreGated = armedNotRestored && !!restored && restored.name === probe.rowNames[0];
+    const neverBackedUpEmpty =
       backupsEmpty.rows === 0 &&
       !backupsEmpty.verifiedPill &&
       backupsEmpty.retentionPresent &&
@@ -5858,7 +5887,7 @@ async function sceneBackupsSection(browser) {
       backupsEmpty.empties.some((t) => /No backups to restore from yet/.test(t));
     record(
       'BACKUPS_SECTION',
-      ok,
+      { groupSeeded, retentionEditFires, restoreGated, neverBackedUpEmpty },
       `backups group: last-backup+verified=${probe.lastBackupShown}/${probe.verifiedPill}, ` +
         `retention=${probe.retentionValue} (edit fired ${JSON.stringify(setRet)}), ` +
         `restore list rows=${probe.rowCount} ${JSON.stringify(probe.rowNames)} (each Restore… present=${probe.eachHasRestore}); ` +
@@ -5889,14 +5918,11 @@ async function sceneRecoveryNotice(browser) {
         restoreReachable: !!document.querySelector('#backups-panel .backup-restore'),
       };
     });
-    const ok =
-      probe.bannerShown &&
-      probe.recoveredFromShown &&
-      probe.quarantinedShown &&
-      probe.restoreReachable;
+    const bannerNamesBoth = probe.bannerShown && probe.recoveredFromShown && probe.quarantinedShown;
+    const restoreReachable = probe.restoreReachable;
     record(
       'RECOVERY_NOTICE',
-      ok,
+      { bannerNamesBoth, restoreReachable },
       `recovery banner shown=${probe.bannerShown} naming recoveredFrom=${probe.recoveredFromShown} ` +
         `+ quarantinedTo=${probe.quarantinedShown}; Restore… still reachable=${probe.restoreReachable}; ` +
         `text=${JSON.stringify(probe.text)}`,
@@ -5942,10 +5968,10 @@ async function sceneParityReach(browser) {
       routed.push({ view, ...shown });
     }
     const allRouted = routed.every((r) => r.visible && r.navActive === r.view);
-    const ok = methodProbe.missing.length === 0 && allRouted;
+    const everyChannelPresent = methodProbe.missing.length === 0;
     record(
       'PARITY_REACH',
-      ok,
+      { everyChannelPresent, allRouted },
       `window.stint exposes ${methodProbe.exposed}/${methodProbe.total} channels ` +
         `(missing=[${methodProbe.missing.join(', ') || 'none'}]); nav reaches all five views ` +
         `(${routed.map((r) => `${r.view}:${r.visible ? 'shown' : 'hidden'}`).join(', ')})`,
@@ -6093,10 +6119,13 @@ async function sceneFieldLabels(browser) {
   const rowIdiom = fields.filter((f) => f.idiom === 'row-heading').map((f) => `${f.label} → '${f.name}'`);
   // Guard-the-guard: an empty sweep satisfies both emptiness assertions vacuously. The five views
   // hold well over 20 visible fields across these states, so a sweep that has gone blind fails.
-  const ok = fields.length >= 20 && unnamed.length === 0 && placeholderOnly.length === 0;
   record(
     'FIELD_LABELS',
-    ok,
+    {
+      sweepReal: fields.length >= 20,
+      everyFieldNamed: unnamed.length === 0,
+      noPlaceholderOnly: placeholderOnly.length === 0,
+    },
     `D13 sweep over ${all.length} visible controls, ${fields.length} of them fields ` +
       `(${surfaces.map((s) => `${s.surface}=${s.total}`).join(', ')}): ` +
       `no accessible name at all (every control, D13 + D16)=[${unnamed.join('; ') || 'none'}]; ` +
@@ -6285,10 +6314,14 @@ async function sceneFieldChrome(browser) {
   const focusOk = focus.onField && focus.accentBorder && focus.ring && focus.wrapperBare;
   // Guard-the-guard: the five views hold well over 20 visible fields in these states, so a
   // sweep that has gone blind fails instead of passing on an empty set.
-  const ok = all.length >= 20 && offenders.length === 0 && widths.length === 1 && focusOk;
   record(
     'FIELD_CHROME',
-    ok,
+    {
+      sweepReal: all.length >= 20,
+      oneFieldGrammar: offenders.length === 0,
+      oneBorderWidth: widths.length === 1,
+      focusOk,
+    },
     `D13/D07 sweep over ${all.length} visible fields ` +
       `(${surfaces.map((s) => `${s.surface}=${s.fields.length}`).join(', ')}): ` +
       `not one solid --rule-strong border + --r1 radius + on-grid padding=[${offenders.join('; ') || 'none'}]; ` +
@@ -6437,10 +6470,13 @@ async function sceneTargetSize(browser) {
   const missing = ['button.chip-x', 'input.ck', 'button.stp-d'].filter(
     (want) => ![...swept].some((s) => s.startsWith(want)),
   );
-  const ok = totalTargets > 0 && allViolations.length === 0 && missing.length === 0;
   record(
     'TARGET_SIZE',
-    ok,
+    {
+      sweepReal: totalTargets > 0,
+      noUndersizedTargets: allViolations.length === 0,
+      noneAbsent: missing.length === 0,
+    },
     `A03 sweep over ${totalTargets} visible targets across ${perSurface.length} surfaces ` +
       `(${perSurface.map((v) => `${v.surface}=${v.total}`).join(', ')}): ` +
       `under 24×24 with less than 24px of clearance=[${allViolations.join('; ') || 'none'}]; ` +
@@ -6548,30 +6584,21 @@ async function sceneColourPairing(browser) {
     },
     { rejectWrites: true },
   );
-  const ok =
-    // The strip pairs by its dot — D05 takes a word OR an icon, and the strip's word is the
-    // deliberately hidden one (one running indicator per surface, not two).
-    pairing.strip.dotVisible &&
-    pairing.strip.stateWord === 'running' &&
-    // The card must carry BOTH (issue #142): the word is what a screen reader and a colour-
-    // blind user get, the dot is the mark beside it. Presence is not enough — it had both in
-    // the DOM, display:none, the whole time the bug shipped.
-    pairing.card.wordVisible &&
-    pairing.card.dotVisible &&
-    pairing.card.stateWord === 'running' &&
-    /^(non-)?billable$/.test(pairing.card.billableWord) &&
-    /overlap\s*\d+m/.test(calendar.otag) &&
-    calendar.moon &&
-    /overlap/i.test(warn.text) &&
-    warn.flagText &&
-    warn.flagBg &&
-    err.text.length > 0 &&
-    err.dangerText &&
-    err.dangerBg &&
-    err.mirrorsError;
+  // The strip pairs by its dot — D05 takes a word OR an icon, and the strip's word is the
+  // deliberately hidden one (one running indicator per surface, not two).
+  const stripPairs = pairing.strip.dotVisible && pairing.strip.stateWord === 'running';
+  // The card must carry BOTH (issue #142): the word is what a screen reader and a colour-
+  // blind user get, the dot is the mark beside it. Presence is not enough — it had both in
+  // the DOM, display:none, the whole time the bug shipped.
+  const cardPairs =
+    pairing.card.wordVisible && pairing.card.dotVisible && pairing.card.stateWord === 'running';
+  const billableWorded = /^(non-)?billable$/.test(pairing.card.billableWord);
+  const calendarMarkersWorded = /overlap\s*\d+m/.test(calendar.otag) && calendar.moon;
+  const warnWorded = /overlap/i.test(warn.text) && warn.flagText && warn.flagBg;
+  const errWorded = err.text.length > 0 && err.dangerText && err.dangerBg && err.mirrorsError;
   record(
     'COLOUR_PAIRING',
-    ok,
+    { stripPairs, cardPairs, billableWorded, calendarMarkersWorded, warnWorded, errWorded },
     `D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip=${JSON.stringify(pairing.strip)}, card=${JSON.stringify({ stateWord: pairing.card.stateWord, wordVisible: pairing.card.wordVisible, dotVisible: pairing.card.dotVisible })}); ` +
       `billable worded ('${pairing.card.billableWord}'); overlap band worded ('${calendar.otag}') + slept hatch carries #i-moon (${calendar.moon}); ` +
       `warn advisory worded on flag palette=${JSON.stringify(warn)}; err block worded on danger palette=${JSON.stringify(err)}`,
