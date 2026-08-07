@@ -5,8 +5,9 @@ qualities that resist assertion. An agent drives the **real renderer** through a
 injected `window.stint` mock (`packages/gui/judge/`), captures screenshots + the
 accessibility tree, and scores each item below PASS/FAIL with a one-line
 justification citing the screenshot. Deterministic sub-facts are asserted by the
-harness directly; the genuinely subjective items are scored by an LLM/human over the
-captured screenshots. Any FAIL fails the suite; a sample of PASSes is spot-checked.
+harness directly and enumerated per row in **Sub-facts** below, which
+`packages/gui/test/judge-bind.test.ts` binds to the names the harness records; the
+genuinely subjective items are scored by an LLM/human over the captured screenshots. Any FAIL fails the suite; a sample of PASSes is spot-checked.
 
 The harness writes `acceptance/evidence/judge-report.json` and the screenshots in
 `acceptance/evidence/screenshots/`. Run it with `npm run judge`.
@@ -81,6 +82,76 @@ The harness writes `acceptance/evidence/judge-report.json` and the screenshots i
 | `TARGET_SIZE` | **The A03 floor (target size), machine-scored over the surfaces the undersized targets actually live on.** Sweeping every **visible interactive control** (buttons, links, form fields, tabbable elements, `[data-act]` affordances) across **nine surfaces** — the five views of the running main window, the Entries **add form** and **unified editor** (both with their inline picker and a tag chip), the Timer **start-details disclosure**, the **Reports builder**, and the tray popover — every target's bounding box is **≥24×24 CSS px** (inclusive: the ops chip's 24×24 button against a 0px gap is a pass), or it stands **≥24px clear of every other target**, or it is an **inline link** inside a line of text. Two rules fix WHAT is measured: a control nested inside another target measures with its parent, and a **checkbox/radio inside a `<label>` measures as the LABEL** — the whole label is what a pointer aims at, so the 13px native glyph is a paint detail. Issue 148 found eight targets under the floor and three of them (`.ck` at 16×16, the tag remover at 10×17, 31 picker day cells at 23.84px) with 0–2px of neighbour spacing to fall back on; the sweep missed all three because it **rounded** before comparing, because the remover was a `<b>` matching no interactive selector, and because the transient surfaces were never opened. So the scene also asserts the three are **present in the swept set** — a remover that regresses to bare prose fails here, not just at the keyboard. Zero unsanctioned undersized targets gates the pass, and every spacing-sanctioned control is named in the report (the exact-times disclosure) so the exception list stays reviewable. The **toolbar search field** was on that list until issue 149 moved its chrome onto the input; at its real 33px height it now clears the floor outright rather than leaning on spacing. | design.html A03 | `main-target-size.png`, `target-size-add-form.png` |
 | `COLOUR_PAIRING` | **The A05 floor (colour never the sole signal, WCAG 1.4.1) via the D05 pairing rule, machine-scored.** Every semantic colour in the window carries a **word or icon beside it**: the **run-dot** renders beside the literal word **"running"**, and every marker is scored **as rendered, not merely present** — the Entries strip pairs by its **visible dot** (D05 takes a word *or* an icon, and the strip's word is the deliberately hidden one — one indicator per surface, not two), while the **Timer card carries both a visible word and a visible dot**, the run-dot's contrast exemption in design.html §07 being *conditional on that pairing*. Presence alone is what this scene used to score, and it passed a Timer card whose word and dot were both `display: none` for as long as issue #142 shipped — a card signalling running by a recoloured clock and nothing else, the one thing D05 forbids. **billable-ness is worded**, not colour-only (the running card's `billable` / `non-billable` badge); the calendar's **overlap band carries its worded `.otag`** ("overlap Nm") and the **slept hatch carries the `#i-moon` icon marker**; and the two message palettes both carry **sentences**, not bare colour — the **warn advisory** (overlap banner) is worded on the `--flag`/`--flag-bg` palette while the **err block** (a refused Stop's `#timer-warning`) is worded on the `--danger`/`--danger-weak` palette with the Entries mirror carrying `.error` (D15 — an advisory never reads as a block, and neither state rides on hue alone). Fails if any of these markers loses its word/icon while keeping its colour — including by hiding it rather than deleting it. | design.html D05/D15/A05 | `main-colour-pairing.png` |
 | `DESKTOP_FEEL` | The window reads as a quiet, minimal desktop app that respects the system (system typography, light-mode Warm Paper surfaces, monochrome with one rationed accent) — not a busy or branded web page. | §15 · design.html | all screenshots |
+
+## Sub-facts
+
+Each row's deterministic sub-facts, named as the harness records them
+(`packages/gui/judge/run-judge.mjs` — a scene records a `{name: boolean}` map, and `pass` is
+every fact true). `packages/gui/test/judge-bind.test.ts` binds the two sets both directions, so
+an assertion added or dropped fails until this list moves with it. The captured-not-scored rows
+carry none.
+
+| Item | Sub-facts |
+|------|-----------|
+| `EMPTY_STATE` | `namesHotkey`, `namesCliStart` |
+| `NAV_SHELL` | `orderOk`, `defaultOk`, `routedOk`, `sidebarEveryView`, `fixedWidthOnResize`, `chipOk` |
+| `KEYBOARD_FOCUS` | `emptyWalkComplete`, `emptyRingsVisible`, `emptyNoTrap`, `runningWalkComplete`, `runningRingsVisible`, `runningNoTrap` |
+| `TRAY_COUNTUP` | `clockSeeded`, `countsUp` |
+| `TRAY_POPOVER_SURFACE` | `runningOk`, `idleOk` |
+| `POPOVER_REJECT` | `refusalAnnounced`, `reasonAlone`, `stillOperable`, `repeatable` |
+| `IN_WINDOW_TIMER` | `cardOk`, `stripOk`, `idleOk` |
+| `CROSS_VIEW_FRESHNESS` | `toolbarLatched`, `idleCard`, `flipsInPlace`, `countsUp` |
+| `TIMER_VIEW` | `clockLive`, `clockRole`, `startOnlyStrip`, `saysRunning`, `discInFlow`, `startOnlyPicker`, `startSeededExactly`, `dragWritesLive`, `patchStartOnly`, `attrVsFlag` |
+| `FUTURE_START_GUARD` | `refusalAnnounced`, `nothingWritten`, `noWedge`, `reasonAlone`, `correctionCommits`, `stoppable` |
+| `FAVORITES_RAIL` | `railSeeded`, `channelsCallable`, `resumeFires`, `pinLands`, `renameLands`, `unpinLands`, `emptyInstructs` |
+| `ACCENT_DISCIPLINE` | — |
+| `ACCENT_SOLID_BUDGET` | `everyViewWithinBudget`, `timerSpendsExactlyOne`, `everyStandingViewSpendsIt` |
+| `PRIMARY_HANDOFF` | `everyStateExactlyOneFill`, `allThirteenStatesWalked` |
+| `CLICKABILITY` | — |
+| `START_ATTRIBUTES` | `attributesSent`, `billableSent` |
+| `START_FORM` | `formOk`, `idleLabelOk`, `billDefaultOk`, `runningOk` |
+| `RUNNING_SINGLE_ACTION` | `oneDescriptionField`, `startPanelHidden`, `editOrStopRemain`, `noSwitch` |
+| `UNIFIED_FORM_ADD` | `layoutOk`, `paintOk`, `liveUpdate`, `savePatch`, `formCloses`, `overlapBanner` |
+| `UNIFIED_FORM_EXPANDER` | `collapsedOk`, `fieldsOk`, `reflectedOk`, `savedOk` |
+| `UNIFIED_FORM` | `hostShared`, `clickOpens`, `seeded`, `pickerOk`, `footer`, `savePatch`, `deleteGate`, `overlapDetailOk`, `sleptOk`, `exactTimesOk` |
+| `MULTILINE_DESC` | `isTextarea`, `keepsNewline`, `scrollsNotGrows` |
+| `OVERLAP_BANNER` | `hiddenBefore`, `raisedOnOverlap`, `announced` |
+| `SPLIT_AFFORDANCE` | `closedOnly`, `chipGeometry`, `rawTextField`, `splitsInsideSpan` |
+| `INLINE_GATE_CONTAINMENT` | `contained`, `chromed`, `unoccluded` |
+| `WRITE_REJECTION_FEEDBACK` | `editRejected`, `splitRejected`, `renameRejected`, `toggleRejected`, `copyOk` |
+| `ADD_REFUSAL_PALETTE` | `refusalAnnounced`, `reasonAlone`, `refusalReadsDanger`, `advisoryChromeIntact`, `advisoryShown`, `advisoryReadsFlag`, `palettesDiffer` |
+| `MERGE_CONFLICT` | `barGatedOnTwo`, `promptOffersChoices`, `nothingMergedYet`, `escapeCancels` |
+| `MERGE_CHOICE_LIFT` | `shapeOk`, `liftOk`, `noAccentOk`, `dotOk`, `followsOk` |
+| `MERGE_NOCONFLICT` | `noPrompts`, `mergesDirectly` |
+| `MERGE_GAP` | `gapArmsConfirm`, `nothingMergedOnArm`, `confirmMergesWithGap` |
+| `DELETE_CONFIRM` | `armShowsConfirm`, `nothingRemovedOnArm` |
+| `CONFIRM_DELETE` | `armsWithoutRemoving`, `confirmRemovesOnce` |
+| `CONFIRM_DESTRUCTIVE` | `presentBefore`, `armsWithoutRemoving`, `confirmRemovesOnce` |
+| `CLIENTS_VIEW` | `viewSeeded`, `createsLand`, `noRaceOnMutate`, `emptyInstructs`, `focusOrderReads` |
+| `CONFIRM_ARCHIVE` | `armsWithoutArchiving`, `confirmArchivesOnce` |
+| `RESTORE_ARCHIVED` | `archivedHidden`, `toggleRevealsRestore`, `restoreReactivates` |
+| `TAG_CHIPS` | `chipsOnEvents`, `editorSeedsChips`, `tagsPatchOk` |
+| `REPORTS_VIEW` | `listOk`, `sidebarOk`, `accentOk`, `builderOk`, `customOk`, `editOk`, `runOk`, `exportOk`, `kebabOk`, `refusalOk`, `emptyOk` |
+| `ENTRIES_CALENDAR` | `controlsOk`, `defaultOk`, `searchOk`, `presetsOk`, `billableOk`, `clientProjectOk`, `tagOk`, `customRangeOk`, `wireOk` |
+| `CALENDAR_LAYOUT` | `columnsOk`, `neverClipOk`, `totalsOk`, `emptyOk`, `flagsOk`, `runOk`, `hoverOk`, `labelsOnScreenOk`, `crossMidnightOk`, `editorOpen`, `mergeHiddenBefore`, `mergeShown` |
+| `WINDOW_GEOMETRY` | `weekOk`, `denseOk`, `addOk`, `editOk`, `popOk` |
+| `CALENDAR_ACCENT_BUDGET` | `densityOk`, `noWallpaperOk`, `neutralOk`, `signalOk`, `budgetOk` |
+| `SELECTION_LIFT` | `stateOk`, `liftOk`, `noAccentOk`, `checkOk`, `budgetOk` |
+| `CALENDAR_ENTRY_BLOCK` | `liveOk`, `containedOk`, `shortfallReal`, `controlIntact`, `noHoverShift` |
+| `CALENDAR_KEYBOARD` | `fixtureReal`, `oneStopPerBlock`, `traversable`, `noInvisibleStops`, `rovingOk`, `escapeOk`, `tabLeavesOk` |
+| `LIVE_FILTER` | `listLiveOk`, `totalLiveOk`, `noReloadOnSearch`, `noMatchOk` |
+| `SETTINGS_VIEW` | `allControlsPresent`, `accentDiscipline`, `segChipOk`, `editFiresSetSetting` |
+| `HOTKEY_NO_TRAP` | `allPresent`, `focusLandsOnHotkey`, `ringDelta`, `escaped`, `retreated`, `released`, `reachedAll`, `captureWorks` |
+| `TIMELINE_WINDOW` | `groupSeeded`, `aroundDisabledUndimmed`, `modeFlipEnablesAround`, `windowMath`, `consumerTrack`, `aroundFixturePaints` |
+| `SOFTWARE_UPDATE` | `versionOk`, `checkOk`, `downloadOk`, `errorOk`, `checkFailureOk` |
+| `BACKUPS_SECTION` | `groupSeeded`, `retentionEditFires`, `restoreGated`, `neverBackedUpEmpty` |
+| `RECOVERY_NOTICE` | `bannerNamesBoth`, `restoreReachable` |
+| `PARITY_REACH` | `everyChannelPresent`, `allRouted` |
+| `FIELD_LABELS` | `sweepReal`, `everyFieldNamed`, `noPlaceholderOnly` |
+| `FIELD_CHROME` | `sweepReal`, `oneFieldGrammar`, `oneBorderWidth`, `focusOk` |
+| `TARGET_SIZE` | `sweepReal`, `noUndersizedTargets`, `noneAbsent` |
+| `COLOUR_PAIRING` | `stripPairs`, `cardPairs`, `billableWorded`, `calendarMarkersWorded`, `warnWorded`, `errWorded` |
+| `DESKTOP_FEEL` | — |
 
 **Guardrail.** JUDGE is non-deterministic, so it is never the sole gate on anything
 that changes a billable number. It owns presentation and discoverability; the

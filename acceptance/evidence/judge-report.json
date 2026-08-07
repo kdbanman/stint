@@ -6,360 +6,733 @@
     {
       "item": "EMPTY_STATE",
       "pass": true,
+      "facts": {
+        "namesHotkey": true,
+        "namesCliStart": true
+      },
       "justification": "empty state reads: \"No entries yetPress Ctrl+Alt+T or run tt start to begin.\"",
       "screenshot": "main-empty.png"
     },
     {
       "item": "NAV_SHELL",
       "pass": true,
+      "facts": {
+        "orderOk": true,
+        "defaultOk": true,
+        "routedOk": true,
+        "sidebarEveryView": true,
+        "fixedWidthOnResize": true,
+        "chipOk": true
+      },
       "justification": "nav order [\"Timer\",\"Entries\",\"Clients\",\"Reports\",\"Settings\"]; default active=entries (one view shown); D12 lifted chip (paper bg + ink label + accent icon + shadow; inactive flat)=true {\"bgIsPaper\":true,\"labelIsInk\":true,\"iconIsAccent\":true,\"lifted\":true,\"inactiveFlat\":true,\"inactiveNoAccentIcon\":true}; clicking Settings routed: active=[\"settings\"] visible=[\"settings\"]; sidebar-every-view rail visible on all five=true (timer:w168/shown, entries:w168/shown, clients:w168/shown, reports:w168/shown, settings:w168/shown); fixed-width-on-resize rail=168/168/168 (1040/1440/1920) views=872/1272/1752 → true",
       "screenshot": "main-nav.png"
     },
     {
       "item": "KEYBOARD_FOCUS",
       "pass": true,
+      "facts": {
+        "emptyWalkComplete": true,
+        "emptyRingsVisible": true,
+        "emptyNoTrap": true,
+        "runningWalkComplete": true,
+        "runningRingsVisible": true,
+        "runningNoTrap": true
+      },
       "justification": "Tab-walk reached 20/20 controls (empty) and 21/21 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
       "item": "TRAY_COUNTUP",
       "pass": true,
+      "facts": {
+        "clockSeeded": true,
+        "countsUp": true
+      },
       "justification": "popover count advanced 01:24:07 → 01:24:10 (+3s)",
       "screenshot": "popover-running-2.png"
     },
     {
       "item": "TRAY_POPOVER_SURFACE",
       "pass": true,
+      "facts": {
+        "runningOk": true,
+        "idleOk": true
+      },
       "justification": "popover is the sole tray action surface (no Switch) — running: Stop+Open present, no #switch {\"toggleLabel\":\"Stop\",\"togglePressed\":\"true\",\"noSwitch\":true,\"openPresent\":true,\"openLabel\":\"Open Stint\"}; idle: Start + Open present, no #switch {\"toggleLabel\":\"Start\",\"togglePressed\":\"false\",\"noSwitch\":true,\"openPresent\":true}",
       "screenshot": "popover-tray-surface.png"
     },
     {
       "item": "POPOVER_REJECT",
       "pass": true,
+      "facts": {
+        "refusalAnnounced": true,
+        "reasonAlone": true,
+        "stillOperable": true,
+        "repeatable": true
+      },
       "justification": "refused popover toggle surfaced + operable: {\"shown\":true,\"announced\":true,\"message\":\"stop time is before the entry started\",\"toggleLive\":true,\"stillRunning\":true,\"openPresent\":true}; second attempt {\"shown\":true,\"toggleLive\":true}",
       "screenshot": "popover-reject.png"
     },
     {
       "item": "IN_WINDOW_TIMER",
       "pass": true,
+      "facts": {
+        "cardOk": true,
+        "stripOk": true,
+        "idleOk": true
+      },
       "justification": "Timer-view card count advanced 01:24:07 → 01:24:10 (+3s) {\"inTimerView\":true,\"clock\":\"01:24:10\",\"running\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"meta\":\"Client A / API\",\"hasStop\":true,\"noSwitch\":true}; Entries strip {\"present\":true,\"running\":true,\"clock\":\"01:24:07\",\"clockPx\":\"24px\",\"clockTnum\":true,\"state\":\"running\",\"desc\":\"auth refactor\",\"noStop\":true,\"noSwitch\":true}; idle strip {\"present\":true,\"idle\":true,\"clock\":\"00:00:00\",\"state\":\"idle\",\"desc\":\"\"}",
       "screenshot": "timer-view.png"
     },
     {
       "item": "CROSS_VIEW_FRESHNESS",
       "pass": true,
+      "facts": {
+        "toolbarLatched": true,
+        "idleCard": true,
+        "flipsInPlace": true,
+        "countsUp": true
+      },
       "justification": "Entries toolbar latched (listEntries query {\"by\":\"day\",\"billable\":\"all\",\"preset\":\"today\"}); Timer card before Start {\"state\":\"idle\",\"toggle\":\"Start\",\"clock\":\"00:00:00\"}; after Start (no reload) {\"state\":\"running\",\"panelHidden\":true,\"startVisible\":false,\"stopVisible\":true,\"running\":true,\"clock\":\"00:00:00\",\"noReload\":true}; count-up then advanced 00:00:00 → 00:00:03 across a +3s pinned-clock step",
       "screenshot": "timer-cross-view.png"
     },
     {
       "item": "TIMER_VIEW",
       "pass": true,
+      "facts": {
+        "clockLive": true,
+        "clockRole": true,
+        "startOnlyStrip": true,
+        "saysRunning": true,
+        "discInFlow": true,
+        "startOnlyPicker": true,
+        "startSeededExactly": true,
+        "dragWritesLive": true,
+        "patchStartOnly": true,
+        "attrVsFlag": true
+      },
       "justification": "Timer clock 01:24:07 → 01:24:10 (+3s); strip {\"stripPresent\":true,\"noEnd\":true,\"startIsText\":true,\"hasStop\":true,\"noSwitch\":true,\"cardText\":\"01:24:07\\nrunning\\nauth refactor\\nclient a / api\\nbillable\\nstop\\npin\",\"statePainted\":true,\"dotVisible\":true,\"dotFill\":\"rgb(229, 77, 46)\",\"accentRgb\":\"rgb(229, 77, 46)\",\"clockPx\":\"38px\",\"clockTnum\":true,\"clockNumStack\":true}; start-only disclosure {\"inFlow\":true,\"noBackdrop\":true,\"noDialog\":true,\"expanded\":true,\"grip\":true,\"noResize\":true,\"noEndLabel\":true,\"noEndEcho\":true,\"fade\":true,\"others\":2,\"startBefore\":\"2026-06-24 21:35:53\",\"startPlaceholder\":\"YYYY-MM-DD HH:mm:ss\"}; grip drag → {\"startLive\":\"2026-06-24 20:35:00\",\"stillNoEndChrome\":true,\"noBackdrop\":true}; edit patch {\"id\":1,\"patch\":{\"startUtc\":\"2026-06-24T20:35:00.000Z\"}} (endUtc present: false); attribute-vs-advisory paint {\"attrShown\":true,\"flagShown\":true,\"attrText\":\"billable\",\"flagText\":\"slept\",\"attrColor\":\"rgb(99, 99, 94)\",\"attrBg\":\"rgba(0, 0, 0, 0)\",\"attrBorderWidth\":\"0px\",\"attrRadius\":\"0px\",\"flagPaint\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"flagRadius\":\"999px\",\"flagTriple\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"muted\":\"rgb(99, 99, 94)\",\"accent\":\"rgb(229, 77, 46)\",\"accentSolid\":\"rgb(209, 52, 21)\",\"accentWeak\":\"rgb(254, 235, 231)\"}",
       "screenshot": "timer-view-full.png"
     },
     {
       "item": "FUTURE_START_GUARD",
       "pass": true,
+      "facts": {
+        "refusalAnnounced": true,
+        "nothingWritten": true,
+        "noWedge": true,
+        "reasonAlone": true,
+        "correctionCommits": true,
+        "stoppable": true
+      },
       "justification": "future-reject={\"shown\":true,\"announced\":true,\"message\":\"start time is in the future\",\"notWritten\":true,\"stillRunning\":true,\"stopStillThere\":true} corrected={\"warningCleared\":true,\"editedStart\":\"2026-06-24T22:00:00.000Z\",\"noEnd\":true} stopped={\"idle\":true}",
       "screenshot": "timer-future-start-reject.png"
     },
     {
       "item": "FAVORITES_RAIL",
       "pass": true,
+      "facts": {
+        "railSeeded": true,
+        "channelsCallable": true,
+        "resumeFires": true,
+        "pinLands": true,
+        "renameLands": true,
+        "unpinLands": true,
+        "emptyInstructs": true
+      },
       "justification": "rail {\"rows\":3,\"names\":[\"Standup\",\"Deep work\",\"Admin / email\"],\"hasResume\":true,\"hasKebab\":true,\"hasPin\":true,\"emptyHidden\":true,\"callableChannels\":[\"listFavorites\",\"pinFavorite\",\"renameFavorite\",\"unpinFavorite\",\"startFavorite\"]}; resume fired [{\"name\":\"Standup\"}]; inline pin {\"payload\":{\"name\":\"Invoice prep\",\"fromEntryId\":\"open\"},\"names\":[\"Standup\",\"Deep work\",\"Admin / email\",\"Invoice prep\"]}; inline rename {\"payload\":{\"ref\":93,\"name\":\"Client invoicing\"},\"names\":[\"Standup\",\"Deep work\",\"Admin / email\",\"Client invoicing\"]}; kebab unpin {\"calls\":1,\"payload\":{\"ref\":93},\"names\":[\"Standup\",\"Deep work\",\"Admin / email\"]}; empty {\"shown\":true,\"text\":\"No favorites yet. Pin the running timer, or run tt fav add.\"}",
       "screenshot": "timer-favorites.png"
     },
     {
       "item": "ACCENT_DISCIPLINE",
       "pass": null,
+      "facts": null,
       "justification": "primary=rgb(209, 52, 21) accent-solid=rgb(209, 52, 21) (accent=rgb(229, 77, 46)); primary-fill-uses-accent-solid=true; accent family seen on [only sanctioned surfaces]",
       "screenshot": "main-running.png"
     },
     {
       "item": "ACCENT_SOLID_BUDGET",
       "pass": true,
+      "facts": {
+        "everyViewWithinBudget": true,
+        "timerSpendsExactlyOne": true,
+        "everyStandingViewSpendsIt": true
+      },
       "justification": "exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): timer=[#timer-stop]; entries=[#add-toggle]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; every standing-primary view spends it=true; running Timer view carries exactly its Stop primary=true (count 1)",
       "screenshot": "main-running.png"
     },
     {
       "item": "PRIMARY_HANDOFF",
       "pass": true,
+      "facts": {
+        "everyStateExactlyOneFill": true,
+        "allThirteenStatesWalked": true
+      },
       "justification": "exactly one visible --accent-solid fill in every state (D11): timer · idle at rest=[#toggle]; timer · Details expanded=[#start-go]; timer · pin-as-favourite field=[button.small primary]; entries · at rest=[#add-toggle]; entries · add form open=[#add-go]; clients · at rest=[#add-client-btn]; clients · inline rename open=[button.small primary]; clients · add-client field open=[button.small primary]; reports · at rest=[#rep-new]; reports · builder open=[#rep-save]; timer · running at rest=[#timer-stop]; timer · running + pin-as-favourite field=[button.small primary]; entries · merge-conflict modal up=[button.small primary mc-merge]; states measured=13/13 offending states=[none]",
       "screenshot": "primary-handoff-timer.png"
     },
     {
       "item": "CLICKABILITY",
       "pass": null,
+      "facts": null,
       "justification": "clickable affordances reading as bare prose=[none]; inert text wearing a pill fill=[none]; stray accent family=[none], accent-solid-filled primary action(s)=2 (Entries 1 + Timer 1; expect ≥1, reserved for the primary action)",
       "screenshot": "main-clickability.png"
     },
     {
       "item": "START_ATTRIBUTES",
       "pass": true,
+      "facts": {
+        "attributesSent": true,
+        "billableSent": true
+      },
       "justification": "Start form sent: {\"billable\":false,\"description\":\"auth refactor\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}",
       "screenshot": "main-start-form.png"
     },
     {
       "item": "START_FORM",
       "pass": true,
+      "facts": {
+        "formOk": true,
+        "idleLabelOk": true,
+        "billDefaultOk": true,
+        "runningOk": true
+      },
       "justification": "idle start form fields={\"formVisible\":true,\"fields\":{\"desc\":true,\"client\":true,\"project\":true,\"tags\":true,\"bill\":true},\"toggleLabel\":\"Start\",\"noSwitch\":true,\"billUncheckedOnOpen\":true}; billable default (§05 R07): unchecked→client checks (true)→cleared unchecks (false), untouched submit sent {\"description\":\"auth refactor\",\"client\":\"Acme\"}; running surface hides the start panel (only edit-or-stop)={\"panelHidden\":true,\"startFormVisible\":false,\"startToggleVisible\":false,\"stopVisible\":true,\"liveEditVisible\":true,\"noSwitch\":true}",
       "screenshot": "main-start-form.png"
     },
     {
       "item": "RUNNING_SINGLE_ACTION",
       "pass": true,
+      "facts": {
+        "oneDescriptionField": true,
+        "startPanelHidden": true,
+        "editOrStopRemain": true,
+        "noSwitch": true
+      },
       "justification": "running Timer view offers only edit-or-stop: {\"visibleDescFields\":1,\"descFieldId\":\"le-desc\",\"panelHidden\":true,\"startFormVisible\":false,\"startToggleVisible\":false,\"oneTapVisible\":false,\"stopVisible\":true,\"liveEditVisible\":true,\"noSwitch\":true}",
       "screenshot": "timer-running-single-action.png"
     },
     {
       "item": "UNIFIED_FORM_ADD",
       "pass": true,
+      "facts": {
+        "layoutOk": true,
+        "paintOk": true,
+        "liveUpdate": true,
+        "savePatch": true,
+        "formCloses": true,
+        "overlapBanner": true
+      },
       "justification": "unified add form: layout={\"visible\":true,\"unified\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"clientTag\":\"SELECT\",\"projectTag\":\"SELECT\",\"hasTagChips\":true,\"hasBill\":true,\"pickerCal\":true,\"pickerTrack\":true,\"pickerHours\":25,\"pickerMe\":true,\"expanderCollapsed\":true,\"startText\":\"text\",\"stopText\":\"text\",\"noDatetimeLocal\":true}; picker paint={\"others\":2,\"overlaps\":1,\"overlapInert\":true,\"meWeakFill\":true,\"meAccentBorder\":true,\"meInkLabels\":true,\"saveSolid\":true}; live drag seed={\"from\":\"2026-06-24 22:00:00\",\"to\":\"2026-06-24 23:00:00\"}→{\"from\":\"2026-06-24 20:00:00\",\"to\":\"2026-06-24 21:00:00\"} (live=true); Save sole commit added={\"fromLocal\":\"2026-06-24 20:00:00\",\"toLocal\":\"2026-06-24 21:00:00\",\"billable\":true,\"description\":\"design review\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (patchOk=true); form closed=true, overlap banner=true \"This entry overlaps 1 other entry — allowed, but flagged in reports.\"",
       "screenshot": "unified-add.png"
     },
     {
       "item": "UNIFIED_FORM_EXPANDER",
       "pass": true,
+      "facts": {
+        "collapsedOk": true,
+        "fieldsOk": true,
+        "reflectedOk": true,
+        "savedOk": true
+      },
       "justification": "collapsed Start/Stop expander drives the shared interval: collapsed={\"toggleCollapsed\":true,\"fieldsHidden\":true,\"echoPresent\":true,\"echoTabular\":true} (ok=true); expand→fields={\"fieldsShown\":true,\"fromText\":\"text\",\"toText\":\"text\"} (ok=true); typed overnight reflected={\"echo\":\"22:00 – 02:00\",\"meStartMin\":1320,\"fromValue\":\"2026-06-24T22:00\",\"toValue\":\"2026-06-25T02:00\"} (ok=true); Save sole commit added={\"fromLocal\":\"2026-06-24T22:00\",\"toLocal\":\"2026-06-25T02:00\",\"billable\":true,\"description\":\"overnight deploy\"} (ok=true)",
       "screenshot": "unified-form-expander.png"
     },
     {
       "item": "UNIFIED_FORM",
       "pass": true,
+      "facts": {
+        "hostShared": true,
+        "clickOpens": true,
+        "seeded": true,
+        "pickerOk": true,
+        "footer": true,
+        "savePatch": true,
+        "deleteGate": true,
+        "overlapDetailOk": true,
+        "sleptOk": true,
+        "exactTimesOk": true
+      },
       "justification": "unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in flow), seeded, INLINE picker (in-flow, no backdrop/apply, month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, gray others + inert yellow overlap), footer Split + two-step Delete, save patch, §12 R10 flags (overlap detail + reversible subtract), §12 R15 exact times (stored start/stop shown to the second, no-drag Save patches no time, only the dragged stop grip snaps to :05): hostShared=true clickOpens=true probe={\"inContext\":true,\"noBackdrop\":true,\"noDialog\":true,\"hostStatic\":true,\"descTag\":\"TEXTAREA\",\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"projectSeeded\":\"11\",\"tagChips\":[\"deep\"],\"billSeeded\":true,\"startSeeded\":true,\"endPresent\":true,\"endSeeded\":true,\"hasSplit\":true,\"hasDelete\":true,\"footAccent\":1} picker={\"inFlow\":true,\"noBackdrop\":true,\"noApply\":true,\"hasCal\":true,\"hasTrack\":true,\"hours\":25,\"others\":4,\"overlaps\":1,\"overlapInert\":true} seed={\"from\":\"2026-06-24 14:00:00\",\"to\":\"2026-06-24 15:30:00\"}→body={\"from\":\"2026-06-24 12:00:00\",\"to\":\"2026-06-24 13:30:00\"}(bodyOk=true)→resize={\"from\":\"2026-06-24 12:00:00\",\"to\":\"2026-06-24 14:30:00\"}(resizeOk=true) edited={\"id\":80,\"patch\":{\"description\":\"final draft\"}} armed={\"confirmShown\":true,\"question\":\"Confirm delete?\",\"removedYet\":false} removed={\"removed\":true,\"calls\":[{\"id\":80}]} overlapDetail=\"Overlap: 30m with previous entry\" sleptBefore={\"subtractLabel\":\"Subtract slept\",\"struckBefore\":false} sleptAfter={\"subtractLabel\":\"Restore\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"} sleptRestored=true exactTimes: seed={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 11:03:00\"} noDragSave={\"id\":84,\"patch\":{}} snapDrag={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 12:00:00\"} (shown=true roundTrip=true snap=true)",
       "screenshot": "main-edit.png"
     },
     {
       "item": "MULTILINE_DESC",
       "pass": true,
+      "facts": {
+        "isTextarea": true,
+        "keepsNewline": true,
+        "scrollsNotGrows": true
+      },
       "justification": "description control is a 3-line scrollable textarea rendering the stored newline verbatim: {\"present\":true,\"tag\":\"TEXTAREA\",\"rows\":3,\"value\":\"line one\\nline two\",\"hasInteriorNewline\":true,\"overflowY\":\"auto\",\"resize\":\"vertical\"}",
       "screenshot": "main-multiline-desc.png"
     },
     {
       "item": "OVERLAP_BANNER",
       "pass": true,
+      "facts": {
+        "hiddenBefore": true,
+        "raisedOnOverlap": true,
+        "announced": true
+      },
       "justification": "overlap write raises inline banner (hidden before=true): {\"visible\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"role\":\"status\",\"ariaLive\":\"polite\"}",
       "screenshot": "main-overlap-banner.png"
     },
     {
       "item": "SPLIT_AFFORDANCE",
       "pass": true,
+      "facts": {
+        "closedOnly": true,
+        "chipGeometry": true,
+        "rawTextField": true,
+        "splitsInsideSpan": true
+      },
       "justification": "closed row exposes Split (open row none=true); ops chip clears the corner checkbox=true, chip in column=true; split input is plain text=true, no datetime-local=true; split IPC: {\"id\":30,\"atUtc\":\"2026-06-24T10:00:00.000Z\"}",
       "screenshot": "main-split.png"
     },
     {
       "item": "INLINE_GATE_CONTAINMENT",
       "pass": true,
+      "facts": {
+        "contained": true,
+        "chromed": true,
+        "unoccluded": true
+      },
       "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/124\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/124\"}",
       "screenshot": "main-inline-gate.png"
     },
     {
       "item": "WRITE_REJECTION_FEEDBACK",
       "pass": true,
+      "facts": {
+        "editRejected": true,
+        "splitRejected": true,
+        "renameRejected": true,
+        "toggleRejected": true,
+        "copyOk": true
+      },
       "justification": "edit-save={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"entry end must be after its start\",\"notWritten\":true} split={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"split point must be strictly inside the entry span\",\"notWritten\":true} rename={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"a client named that already exists\",\"notWritten\":true} toggle={\"timerShown\":true,\"timerAnnounced\":true,\"message\":\"stop time is before the entry started\",\"bannerMirrors\":true} copy-reads-clean=true",
       "screenshot": "main-edit-reject.png"
     },
     {
       "item": "ADD_REFUSAL_PALETTE",
       "pass": true,
+      "facts": {
+        "refusalAnnounced": true,
+        "reasonAlone": true,
+        "refusalReadsDanger": true,
+        "advisoryChromeIntact": true,
+        "advisoryShown": true,
+        "advisoryReadsFlag": true,
+        "palettesDiffer": true
+      },
       "justification": "refused save={\"erred\":true,\"color\":\"rgb(206, 44, 49)\",\"background\":\"rgb(254, 235, 236)\",\"border\":\"rgb(206, 44, 49)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"stop time must be after start time\",\"notWritten\":true} (danger=true); reopened={\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag base intact=true); overlap advisory={\"shown\":true,\"written\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag=true); palettes differ=true",
       "screenshot": "add-refusal-palette.png"
     },
     {
       "item": "MERGE_CONFLICT",
       "pass": true,
+      "facts": {
+        "barGatedOnTwo": true,
+        "promptOffersChoices": true,
+        "nothingMergedYet": true,
+        "escapeCancels": true
+      },
       "justification": "selection bar hidden until 2 selected, then shows above the calendar with the \"2 selected\" pill + neutral Merge ({\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}); conflict prompt offers client choices + billable, no merge committed yet: {\"promptShown\":true,\"offersClientA\":true,\"offersClientB\":true,\"clientChoiceCount\":2,\"offersBillable\":true}; Escape cancels the prompt — dismissed with nothing merged (true): {\"promptShown\":false,\"backdropShown\":false,\"merged\":null}",
       "screenshot": "main-merge-conflict.png"
     },
     {
       "item": "MERGE_CHOICE_LIFT",
       "pass": true,
+      "facts": {
+        "shapeOk": true,
+        "liftOk": true,
+        "noAccentOk": true,
+        "dotOk": true,
+        "followsOk": true
+      },
       "justification": "merge-conflict option selection is the raised paper chip, never accent — first: {\"optCount\":4,\"chosenCount\":2,\"chosenLabels\":[\"Client A / API\",\"Billable\"],\"accentedOpts\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"peersLifted\":0,\"peersOnPaper\":0,\"chosenDots\":2,\"peerDots\":0,\"accentWeakFills\":0}; after choosing the other client: {\"optCount\":4,\"chosenCount\":2,\"chosenLabels\":[\"Client B\",\"Billable\"],\"accentedOpts\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"peersLifted\":0,\"peersOnPaper\":0,\"chosenDots\":2,\"peerDots\":0,\"accentWeakFills\":0}; shape=true chosen-lifts=true no-accent=true radio-dot-cue=true chip-follows-the-choice=true",
       "screenshot": "merge-choice-lift.png"
     },
     {
       "item": "MERGE_NOCONFLICT",
       "pass": true,
+      "facts": {
+        "noPrompts": true,
+        "mergesDirectly": true
+      },
       "justification": "contiguous agreeing selection merges with no conflict prompt and no gap confirm: {\"conflictPromptShown\":false,\"gapConfirmShown\":false,\"merged\":{\"ids\":[50,51]}}",
       "screenshot": "main-merge-conflict.png"
     },
     {
       "item": "MERGE_GAP",
       "pass": true,
+      "facts": {
+        "gapArmsConfirm": true,
+        "nothingMergedOnArm": true,
+        "confirmMergesWithGap": true
+      },
       "justification": "gapped selection gates on a span/duration confirm before folding; only the explicit confirm commits with allowGap: armed={\"confirmShown\":true,\"namesGap\":true,\"statesSpan\":true,\"statesGapDuration\":true,\"hasConfirmBtn\":true,\"hasCancelBtn\":true} after={\"merged\":{\"ids\":[60,61],\"allowGap\":true}}",
       "screenshot": "main-merge-gap.png"
     },
     {
       "item": "DELETE_CONFIRM",
       "pass": true,
+      "facts": {
+        "armShowsConfirm": true,
+        "nothingRemovedOnArm": true
+      },
       "justification": "delete arms a confirm step, no immediate remove: {\"confirmShown\":true,\"confirmText\":true,\"confirmBtn\":true,\"removed\":false}",
       "screenshot": "main-edit.png"
     },
     {
       "item": "CONFIRM_DELETE",
       "pass": true,
+      "facts": {
+        "armsWithoutRemoving": true,
+        "confirmRemovesOnce": true
+      },
       "justification": "single Delete click surfaces a confirm and does not remove (calls after arm=0); only the explicit confirm removes, exactly once: [{\"id\":20}]",
       "screenshot": "main-confirm-delete.png"
     },
     {
       "item": "CONFIRM_DESTRUCTIVE",
       "pass": true,
+      "facts": {
+        "presentBefore": true,
+        "armsWithoutRemoving": true,
+        "confirmRemovesOnce": true
+      },
       "justification": "Delete confirms before acting: present pre-confirm=true (remove calls=0); gone post-confirm=true, removed once: [{\"id\":20}]",
       "screenshot": "main-confirm.png"
     },
     {
       "item": "CLIENTS_VIEW",
       "pass": true,
+      "facts": {
+        "viewSeeded": true,
+        "createsLand": true,
+        "noRaceOnMutate": true,
+        "emptyInstructs": true,
+        "focusOrderReads": true
+      },
       "justification": "clients listed with nested projects, rename/archive in place: {\"visible\":true,\"names\":[\"Acme\",\"Globex\"],\"acmeProjects\":[\"API\",\"Web\"],\"clientRename\":true,\"clientArchive\":true,\"projRename\":true,\"projArchive\":true,\"addProject\":true,\"addClient\":true,\"offenders\":[],\"unnamedIconButtons\":[]}; create flows driven — Add client/Add project/Add tag each opened its inline field, committed over the IPC, and landed in the active list: {\"addedClient\":{\"name\":\"Initech\"},\"addedProject\":{\"name\":\"Mobile\",\"clientId\":1},\"addedTag\":{\"name\":\"billing\"},\"clientNames\":[\"Acme\",\"Globex\",\"Initech\"],\"acmeProjects\":[\"API\",\"Web\",\"Mobile\"],\"tagNames\":[\"deep\",\"urgent\",\"billing\"]}; rename/archive writes render each record exactly once (issue #66, no duplicate data-id): {\"clientCount\":2,\"projectCount\":3,\"tagCount\":2,\"clientNames\":[\"Acme Corp\",\"Initech\"],\"tagNames\":[\"deep\",\"billing\"],\"dupClientIds\":[],\"dupProjectIds\":[],\"dupTagIds\":[]}; empty reference data instructs (No clients yet / No tags yet): {\"clientsText\":\"No clients yetAdd a client, or run tt client add.\",\"tagsText\":\"No tags yetAdd a tag, or run tt tag add.\",\"clientRows\":0,\"tagRows\":0}; the Tab-walk over the archived-inclusive view advances in reading order, measured against the view's own box so a scroll cannot fake a backwards step (issue 161): {\"stopCount\":24,\"backwards\":[],\"firstStop\":\"show-archived[Hide archived]\",\"lastStop\":\"restore-tag[Restore]\"}",
       "screenshot": "main-clients.png"
     },
     {
       "item": "CONFIRM_ARCHIVE",
       "pass": true,
+      "facts": {
+        "armsWithoutArchiving": true,
+        "confirmArchivesOnce": true
+      },
       "justification": "archiving a referenced client arms a confirm and does not archive (calls after arm=0); only the explicit confirm archives, exactly once: [{\"id\":1}]",
       "screenshot": "main-confirm-archive.png"
     },
     {
       "item": "RESTORE_ARCHIVED",
       "pass": true,
+      "facts": {
+        "archivedHidden": true,
+        "toggleRevealsRestore": true,
+        "restoreReactivates": true
+      },
       "justification": "archived records hidden by default ({\"archivedClientShown\":false,\"archivedTagShown\":false}), revealed with a Restore button on \"show archived\" ({\"archivedClientRestore\":true,\"archivedTagRestore\":true,\"pill\":true}), and Restore returns the client to the active list: {\"restoredPayload\":{\"id\":3},\"nowActive\":true}",
       "screenshot": "main-clients-archived.png"
     },
     {
       "item": "TAG_CHIPS",
       "pass": true,
+      "facts": {
+        "chipsOnEvents": true,
+        "editorSeedsChips": true,
+        "tagsPatchOk": true
+      },
       "justification": "tags render as chips on events + running summary; NO per-row tags control; edited via the unified form's chip editor (remove 'meeting', add 'billing') over one edit patch: {\"openRowChips\":[\"deep\",\"urgent\"],\"closedRowChips\":[\"meeting\"],\"summaryChips\":[\"deep\",\"urgent\"],\"noPerRowTags\":true,\"totalRowChips\":3} seeded=[\"meeting\"] working=[\"billing\"] edited={\"id\":71,\"patch\":{\"addTags\":[\"billing\"],\"removeTags\":[\"meeting\"]}} (tagsPatchOk=true)",
       "screenshot": "main-tags.png"
     },
     {
       "item": "REPORTS_VIEW",
       "pass": true,
+      "facts": {
+        "listOk": true,
+        "sidebarOk": true,
+        "accentOk": true,
+        "builderOk": true,
+        "customOk": true,
+        "editOk": true,
+        "runOk": true,
+        "exportOk": true,
+        "kebabOk": true,
+        "refusalOk": true,
+        "emptyOk": true
+      },
       "justification": "reports view: list={\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\",\"hasRun\":true,\"hasEdit\":true},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\",\"hasRun\":true,\"hasEdit\":true}],\"railVisible\":true,\"activeNav\":[\"reports\"],\"newSolidFilled\":true,\"otherAccented\":false} builder={\"name\":true,\"range\":true,\"custom\":true,\"customHidden\":true,\"fromType\":\"date\",\"toType\":\"date\",\"datetimeLocals\":0,\"by\":true,\"client\":true,\"project\":true,\"tag\":true,\"billable\":true,\"rounding\":true,\"increment\":true,\"presets\":[\"today\",\"week\",\"last-week\",\"month\",\"last-month\",\"custom\"],\"bys\":[\"client\",\"project\",\"day\",\"tag\"]} refuse-incomplete={\"savedYet\":null,\"builderOpen\":true,\"toFocused\":true,\"warnShown\":true} refuse-duplicate={\"builderOpen\":true,\"warnPersists\":true,\"message\":\"a saved report named that already exists\",\"cardCount\":2} refuse-inverted={\"savedYet\":null,\"builderOpen\":true,\"warnPersists\":true,\"message\":\"report range end must not be before its start\",\"cardCount\":2} customSave={\"payload\":{\"name\":\"June window\",\"rangeSpec\":{\"kind\":\"absolute\",\"fromDate\":\"2026-06-01\",\"toDate\":\"2026-06-07\"},\"by\":\"client\",\"billableFilter\":\"billable\",\"rounding\":false,\"roundingIncrementMin\":15},\"cards\":[{\"name\":\"Weekly billables — Globex\",\"spec\":\"This week · by project · billable only · no rounding\"},{\"name\":\"Monthly — all clients by client\",\"spec\":\"Last month · by client · all entries · round 15 min\"},{\"name\":\"June window\",\"spec\":\"Custom: 2026-06-01 – 2026-06-07 · by client · billable only · no rounding\"}]} edit={\"title\":\"Edit “Weekly billables — Globex”\",\"name\":\"Weekly billables — Globex\",\"deleteVisible\":true} run={\"ranReport\":{\"ref\":\"Weekly billables — Globex\"},\"rangeHeader\":\"Jun 22, 2026 → Jun 28, 2026\",\"grand\":\"21h 35m\",\"groups\":[\"Globex overlap\",\"Initech unreviewed sleep\"],\"subs\":[\"Project Alpha\",\"Q3 Strategy overlap\",\"Market research unreviewed sleep\"],\"flagRows\":[{\"label\":\"Globex overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Q3 Strategy overlap\",\"flags\":[\"overlap\"]},{\"label\":\"Initech unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]},{\"label\":\"Market research unreviewed sleep\",\"flags\":[\"unreviewed sleep\"]}],\"flagInTable\":4,\"flagOutside\":0} export filtered CSV={\"format\":\"csv\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"filtered\",\"savedReportRef\":\"Weekly billables — Globex\"} all-data CSV={\"format\":\"csv\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} JSON={\"format\":\"json\",\"scope\":\"all\",\"savedReportRef\":\"Weekly billables — Globex\"} labels={\"filteredCsv\":\"Export CSV\",\"filteredJson\":\"Export JSON\",\"allCsv\":\"Export All Data (CSV)\",\"allJson\":\"Export All Data (JSON)\",\"allStatus\":\"Exported 3 entries (all data) to /tmp/stint-export.json.\"} inline rename={\"payload\":{\"name\":\"June window\",\"newName\":\"June window v2\"},\"names\":[\"Weekly billables — Globex\",\"Monthly — all clients by client\",\"June window v2\"]} armed={\"stillListed\":true,\"removedYet\":null} deleted={\"payload\":{\"name\":\"June window v2\"},\"count\":2} zero-defs empty={\"shown\":true,\"text\":\"No saved reports yet.\",\"cards\":0}",
       "screenshot": "reports-list.png"
     },
     {
       "item": "ENTRIES_CALENDAR",
       "pass": true,
+      "facts": {
+        "controlsOk": true,
+        "defaultOk": true,
+        "searchOk": true,
+        "presetsOk": true,
+        "billableOk": true,
+        "clientProjectOk": true,
+        "tagOk": true,
+        "customRangeOk": true,
+        "wireOk": true
+      },
       "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":7,\"weekTotal\":\"5.00h\"} -> search={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"preset\":\"week\",\"search\":\"refactor\"},\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> presets month=6/7.00h lastWeek=1/2.00h lastMonth=1/1.00h today=3/3.00h -> billable=4/5.00h nonBillable=1/0.00h -> client=3/2.50h project=1/2.00h -> tag=2/2.50h -> custom dates={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"],\"weekTotal\":\"2.00h\"} -> wire={\"errors\":0,\"reqCount\":15,\"allCarryBy\":true}",
       "screenshot": "entries-calendar.png"
     },
     {
       "item": "CALENDAR_LAYOUT",
       "pass": true,
+      "facts": {
+        "columnsOk": true,
+        "neverClipOk": true,
+        "totalsOk": true,
+        "emptyOk": true,
+        "flagsOk": true,
+        "runOk": true,
+        "hoverOk": true,
+        "labelsOnScreenOk": true,
+        "crossMidnightOk": true,
+        "editorOpen": true,
+        "mergeHiddenBefore": true,
+        "mergeShown": true
+      },
       "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":308,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"weekTotal\":\"17.00h\",\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true,\"headerCount\":7,\"headersOnScreen\":7,\"dayTotalsOnScreen\":6,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":11}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true axes={\"scrolledRight\":true,\"gutOffset\":0,\"headersOnScreen\":7,\"hourLabelsOnScreen\":11}; crossMidnight=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
       "screenshot": "main-calendar.png"
     },
     {
       "item": "WINDOW_GEOMETRY",
       "pass": true,
+      "facts": {
+        "weekOk": true,
+        "denseOk": true,
+        "addOk": true,
+        "editOk": true,
+        "popOk": true
+      },
       "justification": "week@1040={\"widths\":[124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":6,\"hScroll\":true,\"truncatedDescs\":5} week@1920={\"widths\":[234,234,234,234,234,234,234],\"equal\":true,\"fullyVisible\":7,\"hScroll\":false,\"truncatedDescs\":0} → true; dense@1040 fullyVisible=6 dense@1920={\"widths\":[124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":13,\"hScroll\":true,\"truncatedDescs\":12} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":781,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
       "item": "CALENDAR_ACCENT_BUDGET",
       "pass": true,
+      "facts": {
+        "densityOk": true,
+        "noWallpaperOk": true,
+        "neutralOk": true,
+        "signalOk": true,
+        "budgetOk": true
+      },
       "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":51,\"dayColumns\":25,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
       "screenshot": "calendar-accent-budget.png"
     },
     {
       "item": "SELECTION_LIFT",
       "pass": true,
+      "facts": {
+        "stateOk": true,
+        "liftOk": true,
+        "noAccentOk": true,
+        "checkOk": true,
+        "budgetOk": true
+      },
       "justification": "calendar selection over the dense fixture: {\"evCount\":51,\"stripFound\":true,\"selectedCount\":2,\"editingCount\":1,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":0,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
       "screenshot": "selection-lift.png"
     },
     {
       "item": "CALENDAR_ENTRY_BLOCK",
       "pass": true,
+      "facts": {
+        "liveOk": true,
+        "containedOk": true,
+        "shortfallReal": true,
+        "controlIntact": true,
+        "noHoverShift": true
+      },
       "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":null},{\"dy\":12,\"intoEntry\":false,\"tag\":null}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 629->629 (delta 0px), block 624->624 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
       "item": "CALENDAR_KEYBOARD",
       "pass": true,
+      "facts": {
+        "fixtureReal": true,
+        "oneStopPerBlock": true,
+        "traversable": true,
+        "noInvisibleStops": true,
+        "rovingOk": true,
+        "escapeOk": true,
+        "tabLeavesOk": true
+      },
       "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 71 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
       "screenshot": "calendar-keyboard-focus.png"
     },
     {
       "item": "LIVE_FILTER",
       "pass": true,
+      "facts": {
+        "listLiveOk": true,
+        "totalLiveOk": true,
+        "noReloadOnSearch": true,
+        "noMatchOk": true
+      },
       "justification": "live filter: list 7→2→7 rows, report total 5.00h→3.50h→5.00h (week-bounded idle, range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
       "screenshot": "main-filtered.png"
     },
     {
       "item": "SETTINGS_VIEW",
       "pass": true,
+      "facts": {
+        "allControlsPresent": true,
+        "accentDiscipline": true,
+        "segChipOk": true,
+        "editFiresSetSetting": true
+      },
       "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), D12 raised-chip segment selection=true {\"present\":true,\"chipPaper\":true,\"chipInk\":true,\"chipLifted\":true,\"peersFlat\":true}, date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
       "screenshot": "main-settings.png"
     },
     {
       "item": "HOTKEY_NO_TRAP",
       "pass": true,
+      "facts": {
+        "allPresent": true,
+        "focusLandsOnHotkey": true,
+        "ringDelta": true,
+        "escaped": true,
+        "retreated": true,
+        "released": true,
+        "reachedAll": true,
+        "captureWorks": true
+      },
       "justification": "Tab INTO .set-hotkey from the control before it landed on the field (true); Tab from .set-hotkey advanced to select.set-field (escaped=true); Shift-Tab retreated to select.set-field writing nothing (true); Escape released to (body) writing nothing (true); Tab-walk from the field reached 4/4 stranded controls [dateFormat, updateCheck, backupRetention, backupRestore] via [\"select.set-field\",\"update-check\",\"select.set-field\",\"button.set-update-btn backup-restore\"]; capture intact — Ctrl+Shift+J persisted {\"key\":\"globalHotkey\",\"value\":\"CommandOrControl+Shift+J\"} (true); A04 focus-ring delta on the field=true (rest none|0px|rgb(33, 32, 28)|rgb(188, 187, 181) 0px 1px 0px 0px → focused solid|2px|rgb(229, 77, 46)|rgb(188, 187, 181) 0px 1px 0px 0px)",
       "screenshot": "settings-hotkey-focus.png"
     },
     {
       "item": "TIMELINE_WINDOW",
       "pass": true,
+      "facts": {
+        "groupSeeded": true,
+        "aroundDisabledUndimmed": true,
+        "modeFlipEnablesAround": true,
+        "windowMath": true,
+        "consumerTrack": true
+      },
       "justification": "Timeline group renders all four keys (allFour=true) with stored 09:00–15:00 (09:00–15:00); Around disabled while working_hours (disabled=true, row off=true) with its LABEL undimmed (dimmed ancestors=[none], as-rendered contrast 16.02:1 ≥ 4.5); mode flip fired setSetting={\"key\":\"pickerWindowMode\",\"value\":\"around_now\"} and enabled Around (true); SU.timelineWindow working={\"startMin\":540,\"endMin\":900} (exact 540–900: true), around_now/8={\"startMin\":1140,\"endMin\":1440} vs expected {\"startMin\":1140,\"endMin\":1440} (true), calendar-forced-working-hours ok=true; consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)",
       "screenshot": "timeline-window.png"
     },
     {
       "item": "TIMELINE_WINDOW",
       "pass": true,
+      "facts": {
+        "aroundFixturePaints": true
+      },
       "justification": "around_now fixture paints the mode segment on (true) with the Around select enabled (true, row off=false) reading the stored span (8h)",
       "screenshot": "timeline-window.png"
     },
     {
       "item": "SOFTWARE_UPDATE",
       "pass": true,
+      "facts": {
+        "versionOk": true,
+        "checkOk": true,
+        "downloadOk": true,
+        "errorOk": true,
+        "checkFailureOk": true
+      },
       "justification": "version row=\"2026.6.24\" (R06); Check now → {\"checked\":true,\"resultText\":\"Update available · 2026.7.1\",\"resultIsNew\":true,\"linkHref\":\"https://github.com/kdbanman/stint/releases/tag/v2026.7.1\",\"linkOpensExternally\":true,\"pillPresent\":true,\"downloadLabel\":\"Download & install 2026.7.1\"} (R03); Download & install → {\"downloaded\":true,\"head\":\"Downloaded 2026.7.1Reveal installer\",\"steps\":[\"1Download the new version\",\"2Replace the app in /Applications (Stint reveals the installer for you)\",\"3Approve once at first launch in System Settings → Privacy & Security — one-time Gatekeeper clearance, no Developer ID needed\"],\"revealPresent\":true,\"gatekeeperStep\":true,\"noDbNote\":true}, reveal fired=true (R04); rejected download → error phase {\"downloadFailed\":true,\"neverCompleted\":true,\"head\":\"Update download failedDownload & install 2026.7.1\",\"errShown\":true,\"errAnnounced\":true,\"errMessage\":\"The update download failed.\",\"retryPresent\":true,\"noReveal\":true}; failed check → {\"checked\":true,\"shown\":true,\"announced\":true,\"message\":\"Could not check for updates — GitHub could not be reached. Check your connection and try again.\",\"retryPresent\":true,\"noDownload\":true} (issue 138)",
       "screenshot": "main-software-update.png"
     },
     {
       "item": "BACKUPS_SECTION",
       "pass": true,
+      "facts": {
+        "groupSeeded": true,
+        "retentionEditFires": true,
+        "restoreGated": true,
+        "neverBackedUpEmpty": true
+      },
       "justification": "backups group: last-backup+verified=true/true, retention=5 (edit fired {\"key\":\"backupRetention\",\"value\":10}), restore list rows=2 [\"timetracker.sqlite.bak-20260627T101500Z\",\"timetracker.sqlite.bak-20260626T090000Z\"] (each Restore… present=true); confirm gate: armed-not-restored=true, confirmed restore={\"name\":\"timetracker.sqlite.bak-20260627T101500Z\"}; stray accent=[none]; never-backed-up empty {\"empties\":[\"No backups yet — Stint backs up automatically on launch.\",\"No backups to restore from yet.\"],\"rows\":0,\"verifiedPill\":false,\"retentionPresent\":true}",
       "screenshot": "main-backups.png"
     },
     {
       "item": "RECOVERY_NOTICE",
       "pass": true,
+      "facts": {
+        "bannerNamesBoth": true,
+        "restoreReachable": true
+      },
       "justification": "recovery banner shown=true naming recoveredFrom=true + quarantinedTo=true; Restore… still reachable=true; text=\"Database recovered from timetracker.sqlite.bak-20260627T101500Z on launch. The unreadable file was set aside as /db/timetracker.sqlite.corrupted-20260627T120500Z.\"",
       "screenshot": "main-recovery.png"
     },
     {
       "item": "PARITY_REACH",
       "pass": true,
+      "facts": {
+        "everyChannelPresent": true,
+        "allRouted": true
+      },
       "justification": "window.stint exposes 45/45 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
     },
     {
       "item": "FIELD_LABELS",
       "pass": true,
+      "facts": {
+        "sweepReal": true,
+        "everyFieldNamed": true,
+        "noPlaceholderOnly": true
+      },
       "justification": "D13 sweep over 34 visible controls, 29 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=8): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'KeepOlder automatic backups are pruned.']",
       "screenshot": "field-labels-timer.png"
     },
     {
       "item": "FIELD_CHROME",
       "pass": true,
+      "facts": {
+        "sweepReal": true,
+        "oneFieldGrammar": true,
+        "oneBorderWidth": true,
+        "focusOk": true
+      },
       "justification": "D13/D07 sweep over 29 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=8): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
       "screenshot": "field-chrome-search-focus.png"
     },
     {
       "item": "TARGET_SIZE",
       "pass": true,
+      "facts": {
+        "sweepReal": true,
+        "noUndersizedTargets": true,
+        "noneAbsent": true
+      },
       "justification": "A03 sweep over 322 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=12, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=35, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[button.ef-times-toggle 171.9x14 (94px clear)]",
       "screenshot": "main-target-size.png"
     },
     {
       "item": "COLOUR_PAIRING",
       "pass": true,
+      "facts": {
+        "stripPairs": true,
+        "cardPairs": true,
+        "billableWorded": true,
+        "calendarMarkersWorded": true,
+        "warnWorded": true,
+        "errWorded": true
+      },
       "justification": "D05/A05 pairing: run-dot beside 'running', both as RENDERED (strip={\"dotVisible\":true,\"wordVisible\":false,\"stateWord\":\"running\"}, card={\"stateWord\":\"running\",\"wordVisible\":true,\"dotVisible\":true}); billable worded ('billable'); overlap band worded ('overlap 30m') + slept hatch carries #i-moon (true); warn advisory worded on flag palette={\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"flagText\":true,\"flagBg\":true}; err block worded on danger palette={\"text\":\"stop time is before the entry started\",\"dangerText\":true,\"dangerBg\":true,\"mirrorsError\":true}",
       "screenshot": "main-colour-pairing.png"
     },
     {
       "item": "DESKTOP_FEEL",
       "pass": null,
+      "facts": null,
       "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)",
       "screenshot": "main-running.png"
     }
