@@ -49,6 +49,12 @@ provenance label naming the instrument that filed it:
 | `Agentic Code Quality Audit` | `code-quality-audit` | `references/code-quality.md` |
 | `Agentic Sync Audit` | `sync-audit` | `references/sync.md` |
 
+**Batch small, precedence first.** Triage a batch of <10 issues, prioritizing
+those which should obviously come before other un-triaged issues. A small
+batch keeps one interview answerable in one sitting, and triaging the issues
+that reshape a surface before the issues that polish it keeps a pass from
+deciding fixes a pending decision would discard.
+
 **Prefer one discovery type per batch** — one audit run's output, one triage
 pass — so the operator holds one owning doc's vocabulary, one set of guard
 homes, and one finding shape at a time. Load that type's reference file and
@@ -179,8 +185,10 @@ it just can't be fire-and-forget.
    level: a misclassification misroutes the issue and no gate catches it (§03).
 3. **Decide with the owner.** Batch the fix-direction questions across the whole
    batch into one grill-style interview: tight clusters, recommended answers,
-   one at a time — never a flat questionnaire. Sizing and proof of fix are
-   usually yours to recommend; fix direction is theirs to make.
+   one at a time — never a flat questionnaire. When you have questions, use
+   `author-grill-assist-doc` (`context/process.html` §03) — the assist
+   artifact carries the context the owner needs to answer. Sizing and proof
+   of fix are usually yours to recommend; fix direction is theirs to make.
 4. **Annotate and label.** Per issue, **one** comment in house style (§04): the
    category with the doc refs that justify it, the owner's fix-direction
    decision, the proof-of-fix plan at real files, the routing verdict, and the
