@@ -120,9 +120,10 @@ describe('PROP: app_state stays consistent with the entry table after every comm
     'open ⇒ schedule present & anchored at start; idle ⇒ schedule absent — across reopens',
     // Each fast-check iteration owns a fresh FILE-backed Store and reads back through a fresh
     // connection after every op (the integrity-checked openDb the durability contract requires).
-    // That real disk I/O, multiplied across the run, legitimately overruns the 5s default on a
-    // slower box — raise the budget so the property never flakes on machine speed. The
-    // assertions are unchanged; only the time allowance is widened.
+    // The heaviest property in the suite: up to 100 store builds each replaying up to 25 ops of
+    // real disk I/O, so total runtime scales with disk speed — ~17s on a fast box, past 30s on a
+    // slow shared CI runner (issue #259's flake). The budget is sized as a hang detector, not a
+    // disk-speed lottery; any property that grows to this shape needs the same explicit limit.
     (ops) => {
       const { clock, set } = mutableClock(BASE);
       withFreshStore(clock, (store, path) => {
@@ -171,7 +172,7 @@ describe('PROP: app_state stays consistent with the entry table after every comm
         }
       });
     },
-    30_000,
+    120_000,
   );
 });
 
