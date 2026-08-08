@@ -70,20 +70,30 @@
   .pill.chip{color:var(--ink);background:var(--paper);border-color:transparent;box-shadow:var(--sh-chip);font-weight:590}
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
-  /* faded entries backdrop */
+  /* faded backdrop: a fragment of the entries week grid (§12 R16) — the checked selection
+     lives on calendar events */
   .scroll{filter:saturate(.96)}
-  .day-h{display:flex;align-items:baseline;gap:8px;font-weight:640;font-size:13px;padding:4px 4px 8px;border-bottom:1px solid var(--rule)}
-  .day-h .dsum{font-weight:450;color:var(--muted);font-size:12px}
-  .row{display:grid;grid-template-columns:18px 120px 1fr auto;align-items:center;gap:16px;padding:12px 4px;border-bottom:1px solid var(--rule)}
-  .row.sel{background:var(--wash);box-shadow:var(--sh-chip)}
-  /* design.html D12 (issue #144): the checked box is a tick, not a colour — paper fill, neutral
-     edge, chip lift, ink mark. The accent is never spent on a selection. */
-  .row .ck{width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
-  .row .ck .ic{width:12px;height:12px;color:var(--ink)}
-  .row .tr{font-family:var(--num);font-variant-numeric:tabular-nums;color:var(--muted);font-size:12px}
-  .row .what{display:flex;align-items:center;gap:8px;min-width:0}
-  .row .what .where{color:var(--muted)}
-  .row .du{font-variant-numeric:tabular-nums;font-weight:590;font-size:12px;justify-self:end}
+  .cgrid{display:flex}
+  .gut{width:48px;flex:none;position:relative}
+  .gut .sp2{height:36px;border-bottom:1px solid var(--rule)}
+  .gut .gtr{position:relative;height:240px}
+  .hlab{position:absolute;right:8px;font-size:11px;color:var(--muted);transform:translateY(-6px);font-variant-numeric:tabular-nums}
+  .dcol{flex:1;min-width:0;border-left:1px solid var(--rule)}
+  .dcol.end{border-right:1px solid var(--rule)}
+  .dh{height:36px;padding:6px 12px 0;border-bottom:1px solid var(--rule)}
+  .dh .dw{font-size:11px;color:var(--muted);font-weight:590}
+  .dh .dd{font-size:12px;font-weight:640;margin-left:4px}
+  .dh .ds{font-size:11px;color:var(--muted);margin-left:8px}
+  .dt{position:relative;height:240px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 59px,var(--rule) 59px,var(--rule) 60px)}
+  .ev{position:absolute;left:6px;right:6px;border-radius:var(--r1);background:var(--paper);border:1px solid var(--rule-strong);box-shadow:var(--sh-chip);padding:4px 8px 4px 28px;overflow:hidden;font-size:11px}
+  .ev .bd{display:block;font-size:12px;font-weight:590;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .bc{display:block;font-size:11px;color:var(--muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .bt{display:block;font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
+  /* design.html D12 (issue #144): a chosen block LIFTS, it does not turn accent; the checked
+     box is a tick — paper fill, neutral edge, chip lift, ink mark. */
+  .ev.on{box-shadow:var(--sh-pop);z-index:3}
+  .ev .ck{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
+  .ev .ck .ic{width:12px;height:12px;color:var(--ink)}
   .selbar{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;border-radius:var(--r1);background:var(--wash);border:1px solid var(--rule)}
   .selbar .cap{flex:1}
   /* modal */
@@ -156,15 +166,20 @@
         <button class="btn sm"><svg class="ic"><use href="#i-swap"/></svg> Merge</button>
       </div>
 
+      <!-- the CONTIGUOUS selection on the week grid (§12 R16): one entry's end equals the
+           next's start exactly, so the merge fires with no gap gate -->
       <div class="scroll">
-        <div class="day-h">Wednesday, June 24 <span class="dsum">· 2h 00m</span></div>
-        <div class="row sel">
-          <span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="tr">09:00 – 10:00</span>
-          <span class="what">api work <span class="where">Client A · API</span></span><span class="du tnum">1h 00m</span>
-        </div>
-        <div class="row sel">
-          <span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="tr">10:00 – 11:00</span>
-          <span class="what">internal sync <span class="where">Client B</span></span><span class="du tnum">1h 00m</span>
+        <div class="cgrid">
+          <div class="gut"><div class="sp2"></div><div class="gtr">
+            <span class="hlab" style="top:0">09:00</span><span class="hlab" style="top:60px">10:00</span><span class="hlab" style="top:120px">11:00</span><span class="hlab" style="top:180px">12:00</span><span class="hlab" style="top:240px">13:00</span>
+          </div></div>
+          <div class="dcol end">
+            <div class="dh"><span class="dw">Wed</span><b class="dd">24</b><span class="ds tnum">2.00h</span></div>
+            <div class="dt">
+              <div class="ev on" style="top:0;height:60px"><span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">api work</span><span class="bc">Client A · API</span><span class="bt">09:00 – 10:00</span></div>
+              <div class="ev on" style="top:60px;height:60px"><span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">internal sync</span><span class="bc">Client B</span><span class="bt">10:00 – 11:00</span></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

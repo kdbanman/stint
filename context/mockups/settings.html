@@ -176,6 +176,14 @@
       <div class="srow"><div class="sk">Picker window</div><div class="sc"><span class="seg"><button class="on">Working hours</button><button>Around now</button></span></div></div>
       <div class="srow off"><div class="sk">Around</div><div class="sc"><select class="field" disabled><option>4 h</option><option>6 h</option><option selected>8 h</option><option>12 h</option></select></div></div>
 
+      <!-- §14 / §12 R09/R23: the Entries-calendar settings — show_weekend (the same row the
+           Entries-toolbar toggle drives) and the two drag-snap resolutions (whole minutes
+           1–30, fine ≤ coarse; the fine-snap TOGGLE itself is ephemeral UI, not a setting) -->
+      <div class="sgrp">Entries calendar</div>
+      <div class="srow"><div class="sk">Show weekend<small>Also toggled from the Entries toolbar</small></div><div class="sc"><span class="toggle"><span class="sw"><i></i></span></span></div></div>
+      <div class="srow"><div class="sk">Fine snap<small>Drag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value</small></div><div class="sc"><span class="vrow"><input class="field time tnum" value="5" aria-label="Fine snap minutes"><span class="meta">min</span></span></div></div>
+      <div class="srow"><div class="sk">Coarse snap<small>Default drag resolution · 1–30 min</small></div><div class="sc"><span class="vrow"><input class="field time tnum" value="15" aria-label="Coarse snap minutes"><span class="meta">min</span></span></div></div>
+
       <div class="sgrp">Check-ins</div>
       <div class="srow"><div class="sk">First check-in</div><div class="sc"><select class="field"><option>30 min</option><option selected>60 min</option><option>90 min</option></select></div></div>
       <div class="srow"><div class="sk">Check-in interval</div><div class="sc"><select class="field"><option>15 min</option><option selected>30 min</option><option>60 min</option></select></div></div>
