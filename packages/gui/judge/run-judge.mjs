@@ -1035,7 +1035,7 @@ async function sceneFutureStartGuard(browser) {
     const refusalAnnounced = refused.shown && refused.announced;
     const nothingWritten = refused.notWritten;
     const noWedge = refused.stillRunning && refused.stopStillThere;
-    // Issue 138 — the exact string the design-audit sweep captured from this region was
+    // Issue 138 — the exact string the audit-design sweep captured from this region was
     // "Error invoking remote method 'edit': StoreError: start time is in the future". The
     // mock rejects in that same wrapped shape now, so the region must read the reason alone.
     const reasonAlone = refused.message === 'start time is in the future' && readsClean(refused.message);

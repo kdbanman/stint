@@ -436,7 +436,7 @@ describe('SU.escapeHtml / SU.errMessage — the shared text primitives (issue #1
    * with its OWN sentence wrapped around the reason, and the app painted the whole thing:
    * users met "Error invoking remote method 'edit': StoreError: start time is in the future"
    * in an error region. These pin the exact production strings captured from the running app
-   * (the design-audit sweep's DOM capture), so a leak has to break a test to ship again.
+   * (the audit-design sweep's DOM capture), so a leak has to break a test to ship again.
    */
   it('errMessage strips the IPC wrapper and the exception class — the production strings', () => {
     expect(

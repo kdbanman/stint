@@ -1,6 +1,6 @@
 ---
-name: arch-audit
-description: Run an adversarial architecture audit — critique the systems that specify, implement, verify, and deliver the product, grill the owner over the verdicts, then file the confirmed problems as issues. Use when the user asks for an architecture audit or review. For the visual surface use design-audit; for modules and tests use code-quality-audit.
+name: audit-arch
+description: Run an adversarial architecture audit — critique the systems that specify, implement, verify, and deliver the product, grill the owner over the verdicts, then file the confirmed problems as issues. Use when the user asks for an architecture audit or review. For the visual surface use audit-design; for modules and tests use audit-code-quality.
 ---
 
 # Adversarial architecture audit
@@ -30,7 +30,7 @@ Load before starting; they set the goals and vocabulary:
   `github.com/mattpocock/skills` at run time.)
 - The repo's `grill-me` skill for phase 2's interview stance.
 
-For module-level code and test findings, prefer the `code-quality-audit`
+For module-level code and test findings, prefer the `audit-code-quality`
 skill — this audit targets the systems, not individual modules.
 
 ## Phase 1 — critique
@@ -84,7 +84,7 @@ doc records it.
 ## Phase 3 — file the problems
 
 One issue per confirmed problem, labeled **Agentic Discovery** (the family
-label every discovery instrument applies — `triage-discoveries` intakes on it)
+label every discovery instrument applies — `triage-issues` intakes on it)
 plus **Agentic Arch Audit** (the provenance label, this instrument's alone).
 Problem capture only — no solution sections; fixes are the fix-PR's job. Each
 issue is self-contained: the problem in one sentence; evidence (file:line,

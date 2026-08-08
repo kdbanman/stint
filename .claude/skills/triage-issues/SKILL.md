@@ -1,5 +1,5 @@
 ---
-name: triage-discoveries
+name: triage-issues
 description: >-
   Use when un-triaged issues — audit findings (labeled "Agentic Discovery")
   or owner-raised issues (no label) — need triage into the triaged backlog.
@@ -43,11 +43,11 @@ provenance label naming the instrument that filed it:
 
 | Provenance label | Instrument | Reference |
 |---|---|---|
-| `Agentic QA Audit` | `qa-audit` | `references/qa.md` |
-| `Agentic Arch Audit` | `arch-audit` | `references/arch.md` |
-| `Agentic Design Audit` | `design-audit` | `references/design.md` |
-| `Agentic Code Quality Audit` | `code-quality-audit` | `references/code-quality.md` |
-| `Agentic Sync Audit` | `sync-audit` | `references/sync.md` |
+| `Agentic QA Audit` | `audit-qa` | `references/qa.md` |
+| `Agentic Arch Audit` | `audit-arch` | `references/arch.md` |
+| `Agentic Design Audit` | `audit-design` | `references/design.md` |
+| `Agentic Code Quality Audit` | `audit-code-quality` | `references/code-quality.md` |
+| `Agentic Sync Audit` | `audit-sync` | `references/sync.md` |
 
 **Batch small, precedence first.** Triage a batch of <10 issues, prioritizing
 those which should obviously come before other un-triaged issues. A small
@@ -59,7 +59,7 @@ deciding fixes a pending decision would discard.
 pass — so the operator holds one owning doc's vocabulary, one set of guard
 homes, and one finding shape at a time. Load that type's reference file and
 work from it. When a cluster genuinely spans types (a layout defect filed by
-both `qa-audit` and `design-audit`), load every reference the cluster touches
+both `audit-qa` and `audit-design`), load every reference the cluster touches
 and triage it as one cluster rather than splitting it across passes.
 
 Batching by type scopes *which issues are in the batch* — it does not split the
@@ -149,7 +149,7 @@ sessions carry the work is the operating session's judgment
   fix needs the transition machinery (§03) — a whole-doc rewrite or
   multi-doc restructure where intermediate states would make the spec lie
   and the old→new map is itself an artifact to review. The orchestrator
-  interviews, hands `requirements-transition` the signed-off synthesis to
+  interviews, hands `process-requirements-transition` the signed-off synthesis to
   author against, and stops at the owner's launch.
 
 An issue whose triage is *suspended* rather than completed (the owner withdraws

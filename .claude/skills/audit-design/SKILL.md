@@ -1,15 +1,15 @@
 ---
-name: design-audit
+name: audit-design
 description: Run a recurring adversarial design audit — judge the running GUI and mockups against the design spec and the distilled craft corpus, grill the owner over the verdicts, then file confirmed problems as issues. Use when the user asks for a design audit, design review, or polish pass.
 ---
 
 # Adversarial design audit
 
-One session, three phases in order — the design sibling of `arch-audit`. The
+One session, three phases in order — the design sibling of `audit-arch`. The
 charter: **judge how the product looks, reads, and feels** against
 `context/design.html` (the binding rules), the platform grammar, and the craft
 corpus in `references/` — never against private taste. Functional defects are
-`qa-audit`'s job; requirements critique is `arch-audit`'s; this session is
+`audit-qa`'s job; requirements critique is `audit-arch`'s; this session is
 about the surface: hierarchy, alignment, colour, type, states, motion,
 interaction feel.
 
@@ -18,7 +18,7 @@ Two kinds of output, routed differently:
 - **Defects** — the spec or a checklist rule is violated (a token bypassed, a
   floor missed, a state unhandled, a misalignment): one GitHub issue per
   confirmed problem, labeled **Agentic Discovery** + **Agentic Design Audit**,
-  triaged by the `triage-discoveries` skill.
+  triaged by the `triage-issues` skill.
 - **Opportunities** — the spec is satisfied but the design could be better (a
   new idiom, a palette evolution, dark mode): appended to the standing
   **Design opportunities** issue, one-line handle each. Never filed as defects.

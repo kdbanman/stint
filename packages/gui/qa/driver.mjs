@@ -21,7 +21,7 @@
  *     <qa-dir>/commands/ for NNN.mjs recipes (export default async (ctx) => {}) and
  *     writes results to <qa-dir>/responses/. ctx: { page, store, cine, record, shot,
  *     out, popover, browser }. Recipes are scratch — consumed by the sweep, never
- *     committed. The procedures live in the qa-gif-authoring and bug-report-authoring
+ *     committed. The procedures live in the author-qa-gif and author-bug-report
  *     skills.
  *
  * Usage:  node packages/gui/qa/driver.mjs        (STINT_QA_DIR overrides the work dir)
@@ -180,7 +180,7 @@ async function main() {
   };
 
   // Annotated GIF recorder — Playwright recordVideo → ffmpeg palette GIF at fps=50/3,
-  // the same conversion packages/gui/judge/record.mjs uses. See the qa-gif-authoring skill.
+  // the same conversion packages/gui/judge/record.mjs uses. See the author-qa-gif skill.
   async function record(name, fn, { file = 'index.html', viewport = { width: 1040, height: 800 } } = {}) {
     const rp = await makePage(file, viewport, { recordVideo: { dir: dirs.videos, size: viewport } });
     await rp.mouse.move(Math.round(viewport.width / 2), Math.round(viewport.height / 2), { steps: 2 });

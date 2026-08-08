@@ -1,6 +1,6 @@
 # Reference — `Agentic Design Audit` findings
 
-Loaded by `triage-discoveries`. Facts only: what the finding is, which doc owns
+Loaded by `triage-issues`. Facts only: what the finding is, which doc owns
 it, where its proof of fix lives. The procedure is in `SKILL.md`.
 
 ## Finding shape
