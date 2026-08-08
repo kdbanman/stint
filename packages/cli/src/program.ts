@@ -736,9 +736,12 @@ export function buildProgram(deps: Deps): Command {
     );
 
   // ---------------------------------------------------------------- export
+  // §09 R06: with no range flag the export is the WHOLE RECORD — every entry ever, the
+  // durability / data-out escape hatch (byte-identical to the GUI's "Export All Data").
+  // A range flag narrows when asked; there is no implicit default window.
   program
     .command('export')
-    .description('Raw entries for a range')
+    .description('Raw entries — the whole record by default; range flags narrow')
     .option('--today', 'today')
     .option('--week', 'this week')
     .option('--last-week', 'last week')
@@ -751,10 +754,9 @@ export function buildProgram(deps: Deps): Command {
     .action((opts) => {
       withStore((store) => {
         const settings = store.settings();
-        const range = resolveRangeOpts(normalizeRange(opts), settings, now(), 'week')!;
+        const range = resolveRangeOpts(normalizeRange(opts), settings, now());
         const entries = store.listEntries({
-          fromUtc: range.fromUtc,
-          toUtc: range.toUtc,
+          ...(range ? { fromUtc: range.fromUtc, toUtc: range.toUtc } : {}),
           billable: 'all',
         });
         const payload = opts.json
