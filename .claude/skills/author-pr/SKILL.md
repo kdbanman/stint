@@ -1,5 +1,5 @@
 ---
-name: pr-authoring
+name: author-pr
 description: Author or update a pull request description. Use whenever opening a PR or revising its body.
 ---
 

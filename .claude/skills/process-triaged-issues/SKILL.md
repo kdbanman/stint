@@ -18,7 +18,7 @@ human gate (§07).
 
 ## Where this fits
 
-- Upstream, one gate (`context/process.html` §06): `triage-discoveries`
+- Upstream, one gate (`context/process.html` §06): `triage-issues`
   consumes any un-triaged open issue — audit findings and owner-raised alike —
   and records the category, the owner's fix direction, the proof of fix, and
   a routing verdict naming **scale, never session shape**: `Triaged: ready for execution` (this
@@ -29,7 +29,7 @@ human gate (§07).
   per-issue subagent lands the in-place spec edits with the code.
 - A `Triaged: transition required` unit is handled by handing the machinery its input:
   the batched interview settles its design (the synthesis, signed off), then
-  the `requirements-transition` skill authors the coexisting docs and files
+  the `process-requirements-transition` skill authors the coexisting docs and files
   the member backlog — and **stops at the owner's launch**. When the owner
   launches, the member issues are ordinary `Triaged: ready for execution` units of a later batch
   of this skill, targeting the transition branch their handoff names.
@@ -52,8 +52,8 @@ Then read the batch's **handoff issue** — one per batch, labeled
 `[META] Orchestration` (titled `[META] Orchestration: <batch>`): the batch's
 sequencing, batching and dependency, which no per-issue comment carries. The
 handoff is the between-issues knowledge tracker, never a work item — never
-triaged, never anchoring a PR of its own. Filed by `triage-discoveries` for an
-ordinary batch, or by `requirements-transition` for a transition's member
+triaged, never anchoring a PR of its own. Filed by `triage-issues` for an
+ordinary batch, or by `process-requirements-transition` for a transition's member
 backlog — in the latter case it also names the **base branch** every member
 unit targets. If none exists, work it out yourself before partitioning
 rather than proceeding without it.
@@ -94,7 +94,7 @@ PRs would conflict or duplicate work. Keep a merged unit reviewable — when in
 doubt, split. A unit's PR names every issue it closes.
 
 A `Triaged: transition required` issue partitions to a single **authoring unit**:
-invoke `requirements-transition` with the signed-off synthesis; the unit is
+invoke `process-requirements-transition` with the signed-off synthesis; the unit is
 done when the transition branch is pushed and the member backlog is filed —
 execution waits for the owner's launch.
 
@@ -176,7 +176,7 @@ Decide per unit, by this procedure:
     touches** — automatic *and* operator-run. §05 is the source of truth;
     this file never restates it.
   - Issue-anchored branch pushed; a ready (not draft) PR opened that closes
-    the unit's issue(s), authored per the `pr-authoring` skill.
+    the unit's issue(s), authored per the `author-pr` skill.
 
 ## Step 5 — Drive to PRs-up
 
@@ -213,7 +213,7 @@ Do not end the run while any unit lacks an open PR:
 - [ ] Units partitioned; any multi-issue unit justified by a shared
       requirement or files, and its PR names every issue; any multi-PR unit
       justified by its triage comment.
-- [ ] Transition units: `requirements-transition` invoked with the synthesis;
+- [ ] Transition units: `process-requirements-transition` invoked with the synthesis;
       stopped at the owner's launch, never auto-launched.
 - [ ] Units sequenced: gate-strengthening work first, shared-file units
       ordered rather than raced, kindred small fixes batched.
@@ -223,7 +223,7 @@ Do not end the run while any unit lacks an open PR:
       chosen by the gate question — prompted with issue + triage comment +
       decisions + base branch, not with skill instructions.
 - [ ] Every unit passed the §05 checks for its touched surfaces — operator-run
-      rows included — and its PR follows `pr-authoring`.
+      rows included — and its PR follows `author-pr`.
 - [ ] Every unit's PR open and ready (not draft); failures re-driven, not
       dropped; member PRs to a transition branch merged on green, PRs to
       `main` left for the owner.

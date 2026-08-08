@@ -3036,7 +3036,7 @@ reconciliation, heartbeat) is GUI-resident by design; the CLI is review-only;
 CLI-only use accrues no sleep spans and no check-ins
 
 no executable AC by design — a recorded decision whose proof is the spec text
-itself (prd.html §10a item 7), truth-guarded by the sync-audit instrument; the
+itself (prd.html §10a item 7), truth-guarded by the audit-sync instrument; the
 user-facing caveat rides README's `tt sleep ls` tour line, and
 `core/test/bdd/world.ts`'s sleep-seeding comment cites the clause instead of
 re-deriving the asymmetry (#91)

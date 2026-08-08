@@ -50,7 +50,7 @@ async function put(objKey, body, type) {
 
 for (const f of files) {
   const body = await readFile(f);
-  if (body.length > LIMIT) { console.error(`REFUSED ${f}: ${(body.length / 1e6).toFixed(1)} MB > 5 MB — re-encode first (see qa-gif-authoring)`); process.exitCode = 1; continue; }
+  if (body.length > LIMIT) { console.error(`REFUSED ${f}: ${(body.length / 1e6).toFixed(1)} MB > 5 MB — re-encode first (see author-qa-gif)`); process.exitCode = 1; continue; }
   const objKey = `${prefix.replace(/\/$/, '')}/${basename(f)}`;
   const type = TYPES[f.split('.').pop().toLowerCase()] ?? 'application/octet-stream';
   await put(objKey, body, type);

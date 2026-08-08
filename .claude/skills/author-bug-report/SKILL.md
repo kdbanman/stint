@@ -1,5 +1,5 @@
 ---
-name: bug-report-authoring
+name: author-bug-report
 description: Write high-signal bug-report issues after finding a defect (e.g. from an agentic QA sweep). Use when filing GitHub issues for bugs you have reproduced.
 ---
 
@@ -13,7 +13,7 @@ unless asked otherwise.
 
 - **Title** — component + the symptom, not the fix: `GUI: "+ Add client" does nothing`.
 - **What happens** — the user-visible symptom, plainly, in the fewest steps to see it.
-- **Evidence** — embed a GIF or screenshot (record with the `qa-gif-authoring` skill).
+- **Evidence** — embed a GIF or screenshot (record with the `author-qa-gif` skill).
   See *Evidence & cleanup* below.
 - **Why (root cause)** — the minimal mechanism with `file:line` pointers, plus the proof
   you actually reproduced it (the exact call/DOM state, before/after values). Point at the
@@ -63,4 +63,4 @@ unless asked otherwise.
 
 ## Pairs with
 
-- `qa-gif-authoring` — for the annotated screen-recording evidence you embed.
+- `author-qa-gif` — for the annotated screen-recording evidence you embed.

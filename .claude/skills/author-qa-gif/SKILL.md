@@ -1,5 +1,5 @@
 ---
-name: qa-gif-authoring
+name: author-qa-gif
 description: Author clear, annotated GIFs from a Playwright-driven page, then convert to an optimized GIF with ffmpeg. Use wherever a screen recording is the deliverable and the viewer must follow what is happening on screen — acceptance evidence, feature walkthroughs, QA runs, demos. Pairs with the Chromium-over-real-core driver.
 ---
 

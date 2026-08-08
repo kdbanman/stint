@@ -1,6 +1,6 @@
 # Reference — `Agentic Sync Audit` findings
 
-Loaded by `triage-discoveries`. Facts only: what the finding is, which doc owns
+Loaded by `triage-issues`. Facts only: what the finding is, which doc owns
 it, where its proof of fix lives. The procedure is in `SKILL.md`.
 
 ## Finding shape
@@ -9,10 +9,10 @@ The one instrument that files **two** shapes under a single provenance label,
 so read the shape from the body, never from the label:
 
 - **Bug-report shape** — behavior drift reproduced through the real entry
-  point. Triage it exactly like a `qa-audit` finding; `references/qa.md` names
+  point. Triage it exactly like a `audit-qa` finding; `references/qa.md` names
   the guard homes.
 - **Problem shape** — stale doc text, either lean. Triage it like an
-  `arch-audit` finding; `references/arch.md` names the guard homes.
+  `audit-arch` finding; `references/arch.md` names the guard homes.
 
 Every finding also names its **direction**, which is the fact triage acts on:
 

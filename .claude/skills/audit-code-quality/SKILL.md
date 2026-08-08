@@ -1,11 +1,11 @@
 ---
-name: code-quality-audit
+name: audit-code-quality
 description: Run a module-level code & test quality audit — read the implementation and tests against engineering.html's balance rules, grill the owner over the verdicts, then file the confirmed findings as issues. Use when the user asks for a code quality audit or review, a consistency review, or a codebase sweep.
 ---
 
 # Code quality audit
 
-The module-level twin of `arch-audit`: that skill critiques the four *systems*
+The module-level twin of `audit-arch`: that skill critiques the four *systems*
 that carry the requirements; this one reads the *code and tests themselves*
 against `context/engineering.html`. Same posture as every discovery instrument
 (process.html §06): the run gates nothing, fixes nothing, and produces no
@@ -66,7 +66,7 @@ whether it is one.
 ## Phase 3 — file the findings
 
 One issue per confirmed problem, labeled **Agentic Discovery** (the family
-label every discovery instrument applies — `triage-discoveries` intakes on it)
+label every discovery instrument applies — `triage-issues` intakes on it)
 plus **Agentic Code Quality Audit** (the provenance label, this instrument's
 alone; findings are traceable to the audit that filed them). Problem capture
 only — no solution sections. Each issue is self-contained: the problem in one

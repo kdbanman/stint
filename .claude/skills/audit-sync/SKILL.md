@@ -1,5 +1,5 @@
 ---
-name: sync-audit
+name: audit-sync
 description: Run a sync audit — judge requirements↔implementation sync and file drift findings as issues. Use when asked for a sync audit or assessment, a doc-drift check, or whether the docs still tell the truth about the tree.
 ---
 
@@ -73,7 +73,7 @@ surface; depth per claim is where judgment economizes, not breadth.
 Reading settles most claims; behavior settles the rest. For every
 can't-settle-by-reading verdict and every claim about what a surface *does*,
 get behavioral evidence: run the suites, run the `tt` CLI, drive the real
-renderer through the QA driver (`packages/gui/qa/` — the `qa-audit` skill has
+renderer through the QA driver (`packages/gui/qa/` — the `audit-qa` skill has
 the driving discipline). A claim settled by observation outranks one settled
 by reading; a coverage-row verdict is only confirmed by what the cited test
 demonstrably exercises, not by its filename or header comment.
@@ -92,14 +92,14 @@ shapes below it takes. This instrument is the one that files both shapes, so
 the shape is read from the issue body, never inferred from the label:
 
 - **Behavior drift** → reproduce through the real entry point, then file in the
-  bug-report shape with `bug-report-authoring`. Never file a reading-only hunch
+  bug-report shape with `author-bug-report`. Never file a reading-only hunch
   as a reproduced defect.
-- **Doc drift** (either lean) → file in the arch-audit problem shape: the
+- **Doc drift** (either lean) → file in the audit-arch problem shape: the
   problem in one sentence, evidence, stakes, severity and confidence, no
   solution sections.
 
 Findings then ride the normal triage gate
-(`triage-discoveries`); this skill never triages its own findings and never
+(`triage-issues`); this skill never triages its own findings and never
 edits a doc or a line of code to "quickly fix" what it found. Claims checked
 and found *in agreement* are a one-line note in the run summary — visible
 coverage, never an issue. Close with the summary: surface covered, agreement

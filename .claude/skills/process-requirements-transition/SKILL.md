@@ -1,5 +1,5 @@
 ---
-name: requirements-transition
+name: process-requirements-transition
 description: >-
   Use for a Stint requirements change too large to land as in-place section
   edits — a whole-doc rewrite or multi-doc restructure. Reached from the
@@ -103,7 +103,7 @@ every orchestrator batch uses (process.html §06).
      findings feed a bounded improvement loop (2–3 rounds), skips justified.
   3. **Recordings** — captured LAST so they show the shipped UI; scope is
      every core GUI member plus flagged rows; authored per
-     `qa-gif-authoring`, uploaded to the evidence bucket, index updated.
+     `author-qa-gif`, uploaded to the evidence bucket, index updated.
   4. **Swap + integration PR** — delete the `*-old.html` docs and files
      retired by DELETED members; ensure `README.md`, `CLAUDE.md`,
      `COVERAGE.md`, and the parity matrix reference only the new state (no

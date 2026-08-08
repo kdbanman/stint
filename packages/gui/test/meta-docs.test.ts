@@ -451,9 +451,9 @@ describe('GOLD — acceptance/criteria/*.md stay line-diffable (#128)', () => {
  * GOLD — the skill set and process.html name the same skills (issue #133).
  *
  * process.html §03/§06 specify the agentic process by naming its skills; the skills live in
- * `.claude/skills/*`. Two hand-maintained homes for one fact, and the rename that motivated
- * this check (the `*-review` → `*-audit` sweep, the two triage skills merged into
- * `triage-discoveries`) is exactly the drift it catches: a skill dir renamed without the doc
+ * `.claude/skills/*`. Two hand-maintained homes for one fact, and the renames that motivated
+ * this check (the audit sweep that produced `audit-*`, the two triage skills merged into
+ * `triage-issues`) are exactly the drift it catches: a skill dir renamed without the doc
  * following leaves the doc naming a skill that no longer exists, which reads as current
  * specification. Both directions, per the repo's bind-two-homes-or-fail-loud pattern.
  *

@@ -5,7 +5,7 @@ GIF binaries themselves are never committed (issue #256) — they live on the pu
 evidence bucket under
 `https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/<name>.gif`,
 each ≤5 MB so GitHub renders them through its Camo proxy. Regenerate with
-`npm run record`, re-encode anything over 5 MB (see the qa-gif-authoring skill), then
+`npm run record`, re-encode anything over 5 MB (see the author-qa-gif skill), then
 upload: `node scripts/upload-evidence.mjs acceptance/evidence/recordings *.gif`.
 
 It holds two kinds of evidence:
