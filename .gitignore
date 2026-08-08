@@ -14,6 +14,8 @@ acceptance/evidence/tmp/
 acceptance/evidence/recordings/*.gif
 acceptance/evidence/recordings/*.webm
 acceptance/evidence/recordings/.stage-*/
+# The recorder's one-per-host pid lockfile (record.mjs, issue #250) and its reclaim graves.
+acceptance/evidence/recordings/.lock*
 acceptance/evidence/screenshots/
 acceptance/evidence/issue-*/
 acceptance/evidence/restyle-*/

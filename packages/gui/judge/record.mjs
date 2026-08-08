@@ -13,10 +13,15 @@
  * recordings are the "show it working" QA evidence per-req agents attach to the transition PR.
  *
  * Capability honesty: video capture needs a Chromium that can record (the full headless
- * Chromium build + ffmpeg). If this host cannot record — Playwright returns no video() handle
- * or no .webm file is produced — we do NOT fake anything: we print a clear MISSING-CAPABILITY
- * report and exit non-zero so the calling agent surfaces it instead of silently shipping a
- * stub.
+ * Chromium build + ffmpeg). If this host cannot record — Playwright returns no video() handle —
+ * we do NOT fake anything: we print a clear MISSING-CAPABILITY report and exit non-zero so the
+ * calling agent surfaces it instead of silently shipping a stub. A recording that WAS muxed but
+ * whose file is gone or empty is reported as exactly that (issue #250: it usually means another
+ * process removed it, not that the host cannot record), never as a capability gap.
+ *
+ * One recorder per host: the final <slug>.webm/<slug>.gif output names are deliberately stable
+ * (the recordings index cites them), so two concurrent runs would interleave one output set. A
+ * pid lockfile in the recordings dir refuses to start while a sibling recorder is alive.
  *
  * Usage:
  *   node packages/gui/judge/record.mjs                # record every known fixture
@@ -31,7 +36,17 @@
  *     -lavfi "fps=50/3,paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" 20-r04.gif
  */
 import { chromium } from 'playwright-core';
-import { mkdirSync, existsSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  existsSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -3306,16 +3321,19 @@ async function measuredPopoverViewport(browser, recipe) {
 /**
  * Drive one recipe inside a Playwright context that has recordVideo enabled, then move the
  * produced .webm to acceptance/evidence/recordings/<reqId>.webm. Returns the saved path on
- * success. Throws if the recipe ran but Playwright produced NO video — that throw is what the
- * caller turns into the explicit missing-capability report (we never fabricate a file).
+ * success; throws when no recording survives (we never fabricate a file). A no-video()-handle
+ * throw carries `noVideoHandle: true` — the only failure that proves the HOST cannot record —
+ * and is what the caller escalates to the explicit missing-capability report.
  */
 async function recordRecipe(browser, reqId, recipe) {
-  // Per-recipe staging dir so Playwright's auto-named .webm cannot collide between recipes;
-  // we rename the single produced file to <ascii-slug>.webm afterward. The dir is ASCII-slugged
-  // too (the §-prefixed reqId is not filesystem-clean) and matches the .gitignore .stage-* rule.
-  const stage = join(RECORDINGS, `.stage-${asciiSlug(reqId)}`);
-  rmSync(stage, { recursive: true, force: true });
-  mkdirSync(stage, { recursive: true });
+  // Per-recipe, per-RUN staging dir: per-recipe so Playwright's auto-named .webm cannot collide
+  // between recipes; per-run (mkdtemp's random suffix) so a concurrent record.mjs can never
+  // share — or delete — an in-flight directory (issue #250: the old fixed .stage-<slug> path
+  // let a second run rmSync the first run's directory mid-mux, which then read as a capability
+  // gap). We rename the single produced file to <ascii-slug>.webm afterward. The prefix is
+  // ASCII-slugged (the §-prefixed reqId is not filesystem-clean) and matches the .gitignore
+  // .stage-* rule.
+  const stage = mkdtempSync(join(RECORDINGS, `.stage-${asciiSlug(reqId)}-`));
 
   // A recipe may pin a timezone (e.g. the §05 R05 picker scene needs a UTC page so its seeded
   // other-entries land on the column day) or sweep the viewport, but it starts at the geometry of
@@ -3354,9 +3372,20 @@ async function recordRecipe(browser, reqId, recipe) {
   await page.close();
   await context.close();
 
+  // Three distinguishable failures, diagnosed by what each one actually proves (issue #250):
+  // no video() handle and video.path() throwing are evidence about the HOST; a muxed file that
+  // is then gone or empty is evidence about the FILESYSTEM (something removed or truncated it
+  // after recording worked) and must not be reported in the capability register — an agent that
+  // reads "capability is missing" correctly stops retrying, and a serial retry would succeed.
   if (!video) {
     rmSync(stage, { recursive: true, force: true });
-    throw new Error('Playwright produced no video() handle — this Chromium build cannot record.');
+    // The only branch that implicates the host outright — main()'s global MISSING-CAPABILITY
+    // verdict keys on this marker.
+    const err = new Error(
+      'Playwright produced no video() handle — this Chromium build cannot record.',
+    );
+    err.noVideoHandle = true;
+    throw err;
   }
   let produced;
   try {
@@ -3366,8 +3395,16 @@ async function recordRecipe(browser, reqId, recipe) {
     throw new Error(`video.path() failed — no recording was muxed: ${err.message}`);
   }
   if (!produced || !existsSync(produced) || statSync(produced).size === 0) {
+    const seen = !produced
+      ? 'video.path() returned no path'
+      : !existsSync(produced)
+        ? `the file at ${produced} no longer exists`
+        : `the file at ${produced} is empty`;
     rmSync(stage, { recursive: true, force: true });
-    throw new Error('no non-empty .webm file was produced — recording capability is missing here.');
+    throw new Error(
+      `recording finished but ${seen} — possibly removed by a concurrent process on this ` +
+        'host, NOT proof that recording capability is missing; retry serially.',
+    );
   }
   // Stage the .webm under an ASCII-safe name (the .webm itself is git-ignored — the GIF is the
   // committed deliverable, embedded inline in the PR).
@@ -3390,6 +3427,64 @@ async function recordRecipe(browser, reqId, recipe) {
   return { webm: webmOut, webmBytes, gif: gifOut, gifBytes: statSync(gifOut).size, gifGap: null };
 }
 
+// The recorder lock. Constraint: the final <slug>.webm/<slug>.gif names are deliberately
+// stable — the recordings index (README.md) cites them — so per-run staging alone cannot make
+// concurrent runs safe: two recorders would still interleave their writes into ONE output set
+// (issue #250). The lock keeps recorders to one per host at a time. It holds the owner's pid;
+// a lock whose pid is dead is stale (a crashed recorder must not brick the next run) and is
+// reclaimed via an atomic rename, so exactly one waiting contender wins it.
+const LOCK = join(RECORDINGS, '.lock');
+
+function pidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH: no such process. Anything else (EPERM) means SOME live process owns the pid.
+    return err.code !== 'ESRCH';
+  }
+}
+
+function acquireRecorderLock() {
+  const payload = JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString() });
+  // Two passes: the first may find a stale lock and reclaim it; the second either wins the
+  // recreate or finds the live winner of the reclaim race and reports it.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      writeFileSync(LOCK, payload, { flag: 'wx' });
+      return;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+    }
+    let holder = null;
+    try {
+      holder = JSON.parse(readFileSync(LOCK, 'utf8'));
+    } catch {
+      // Unreadable or garbage lock: a crashed or interrupted writer left it — treat as stale.
+    }
+    if (holder && Number.isInteger(holder.pid) && pidAlive(holder.pid)) {
+      console.error(
+        `CONCURRENT RUN: another record.mjs (pid ${holder.pid}, started ${holder.startedAt}) ` +
+          `holds ${LOCK}. Recordings write stable output names, so two recorders on one host ` +
+          'would interleave one output set. This is NOT a missing capability — re-run after ' +
+          'the other recorder finishes.',
+      );
+      process.exit(1);
+    }
+    // Stale: rename-then-remove so only one contender reclaims it; a loser's rename throws
+    // (the file is gone) and it falls through to race for the recreate above.
+    const grave = `${LOCK}.stale-${process.pid}`;
+    try {
+      renameSync(LOCK, grave);
+      rmSync(grave, { force: true });
+    } catch {
+      // Another contender reclaimed it first; retry the acquire.
+    }
+  }
+  console.error(`could not acquire ${LOCK}: it kept reappearing while stale — retry.`);
+  process.exit(1);
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes('--list')) {
@@ -3406,6 +3501,17 @@ async function main() {
   const ids = requested.length ? requested : Object.keys(RECIPES);
 
   mkdirSync(RECORDINGS, { recursive: true });
+  acquireRecorderLock();
+  // 'exit' fires on every in-process termination path, including the process.exit calls below.
+  // A kill signal skips it — that is what the stale-pid reclaim above is for.
+  process.on('exit', () => rmSync(LOCK, { force: true }));
+  // With the lock held there is no live sibling, so any leftover .stage-* dir is a dead run's
+  // debris (only a kill mid-recipe skips recordRecipe's own cleanup) — sweep it.
+  for (const entry of readdirSync(RECORDINGS)) {
+    if (entry.startsWith('.stage-')) {
+      rmSync(join(RECORDINGS, entry), { recursive: true, force: true });
+    }
+  }
   const exe = resolveChromium();
   const browser = await chromium.launch({
     executablePath: exe,
@@ -3428,7 +3534,7 @@ async function main() {
           );
         }
       } catch (err) {
-        failures.push({ id, message: err.message });
+        failures.push({ id, message: err.message, noVideoHandle: err.noVideoHandle === true });
         console.error(`FAILED   ${id.padEnd(22)} ${err.message}`);
       }
     }
@@ -3436,13 +3542,14 @@ async function main() {
     await browser.close();
   }
 
-  // If EVERY recipe failed the same way, this host almost certainly cannot record video at
-  // all — surface that as a single clear missing-capability verdict (not N scattered errors)
-  // so per-req agents can report "no recording capability here" rather than fake an artifact.
-  if (saved.length === 0 && failures.length > 0) {
+  // Escalate to the global missing-capability verdict ONLY when no recipe produced a video()
+  // handle — the one observation that implicates the host itself. A recording that was muxed
+  // and then lost proves the opposite (recording worked; the file was removed afterward, e.g.
+  // by a concurrent run — issue #250), so "none survived" must never read as "cannot record".
+  if (saved.length === 0 && failures.length > 0 && failures.every((f) => f.noVideoHandle)) {
     console.error('\nMISSING CAPABILITY: screen-recording is not available on this host.');
     console.error(
-      'No .webm was produced for any recipe. The Playwright recordVideo path needs a ' +
+      'Playwright returned no video() handle for any recipe. The recordVideo path needs a ' +
         'Chromium build that can capture video (full headless Chromium + ffmpeg). ' +
         'Nothing was faked — re-run on a host with recording support, or capture the ' +
         'recordings manually per acceptance/criteria/manual/runbook.md.',
