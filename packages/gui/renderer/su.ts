@@ -26,7 +26,7 @@
  * that serves every page — a helper re-typed in a second file is a fork by construction, and
  * the copies diverge silently (issue #168). `renderer-static.test.ts` fails the second copy.
  */
-import { DEFAULT_SETTINGS, formatDuration, formatHours, localDay, resolveTimeZone, wallClockOf, wallClockToUtc } from '@stint/core';
+import { DEFAULT_SETTINGS, formatDuration, formatHours, groupKeyLabel, localDay, resolveTimeZone, wallClockOf, wallClockToUtc } from '@stint/core';
 import { countUpSeconds } from '../src/timerview.js';
 import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
@@ -389,6 +389,9 @@ const SU = {
   localDateLabel,
   rangeLabel,
   lineFlags,
+  // Core's one week/month group-key labelling (§09 R02) — reports.js paints depth-0 report
+  // rows through it, so the GUI label can never fork from `tt report`'s.
+  groupKeyLabel,
   friendlyHotkey,
   // The field vocabulary, bound to the configured zone (§04 R06): the renderer scripts render
   // and parse the raw Start/Stop fields through these, so seed and reparse share one zone.

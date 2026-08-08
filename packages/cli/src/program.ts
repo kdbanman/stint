@@ -21,6 +21,7 @@ import {
   toCsv,
   toJsonEntries,
   detectOverlaps,
+  groupKeyLabel,
   SETTING_DESCRIPTORS,
   settingDescriptor,
   type EntryView,
@@ -527,7 +528,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'custom range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag', 'client')
+    .option('--by <grouping>', 'client | project | day | week | month | tag', 'client')
     .option('--round [minutes]', 'round grouped totals (default increment from settings)')
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
@@ -542,7 +543,7 @@ export function buildProgram(deps: Deps): Command {
         const settings = store.settings();
         const range = resolveRangeOpts(normalizeRange(opts), settings, now(), 'week')!;
         const by = opts.by as GroupBy;
-        if (!['client', 'project', 'day', 'tag'].includes(by)) {
+        if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(by)) {
           throw new CliError(`unknown --by grouping "${by}"`);
         }
         let rounding = settings.rounding;
@@ -608,7 +609,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'absolute range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag', 'client')
+    .option('--by <grouping>', 'client | project | day | week | month | tag', 'client')
     .option('--round [minutes]', 'round grouped totals (default increment from settings)')
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
@@ -672,7 +673,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'absolute range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag')
+    .option('--by <grouping>', 'client | project | day | week | month | tag')
     .option('--round [minutes]', 'round grouped totals')
     .option('--no-round', 'turn rounding off')
     .option('--client <name>', 'filter by client')
@@ -1236,7 +1237,7 @@ function buildSavedReportInput(
   nowDate: Date,
 ): SavedReportInput {
   const by = (opts.by ?? 'client') as GroupBy;
-  if (!['client', 'project', 'day', 'tag'].includes(by)) {
+  if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(by)) {
     throw new CliError(`unknown --by grouping "${by}"`);
   }
   let rangeSpec: RangeSpec;
@@ -1331,7 +1332,7 @@ function buildSavedReportPatch(
   else if (opts.month) patch.rangeSpec = { kind: 'preset', preset: 'month' };
   else if (opts.lastMonth) patch.rangeSpec = { kind: 'preset', preset: 'last-month' };
   if (opts.by !== undefined) {
-    if (!['client', 'project', 'day', 'tag'].includes(opts.by)) {
+    if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(opts.by)) {
       throw new CliError(`unknown --by grouping "${opts.by}"`);
     }
     patch.by = opts.by as GroupBy;
@@ -1398,7 +1399,11 @@ function renderReport(
   lines.push(head);
   lines.push('');
   for (const line of report.lines) {
-    lines.push(`${line.key.padEnd(28)}${dur(rounding ? line.roundedSeconds : line.totalSeconds)}`);
+    // §09 R02: a week/month line renders its human label ("Week of Jul 27" / "Jul 2026")
+    // through core's one groupKeyLabel — the same derivation the GUI paints — while every
+    // other grouping's key IS its label. Children are always project names (raw).
+    const label = groupKeyLabel(line.key, report.options.by);
+    lines.push(`${label.padEnd(28)}${dur(rounding ? line.roundedSeconds : line.totalSeconds)}`);
     for (const child of line.children) {
       lines.push(
         `  ${child.key.padEnd(26)}${dur(rounding ? child.roundedSeconds : child.totalSeconds)}`,

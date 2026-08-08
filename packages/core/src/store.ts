@@ -676,8 +676,10 @@ export class Store {
       },
       { fromUtc: req.fromUtc, toUtc: req.toUtc },
       this.now(),
-      // §04 R06 / §14: by-day report lines bucket in the configured zone.
+      // §04 R06 / §14: by-day/week/month report lines bucket in the configured zone, and
+      // week buckets start on the configured week-start day (§09 R02).
       this.timeZone(),
+      this.settings().weekStart,
     );
   }
 

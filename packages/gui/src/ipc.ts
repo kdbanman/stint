@@ -315,7 +315,7 @@ export interface SavedReportView {
   id: number;
   name: string;
   rangeSpec: SavedReportRangeView;
-  by: 'client' | 'project' | 'day' | 'tag';
+  by: GroupBy;
   billableFilter: 'billable' | 'all' | 'non-billable';
   clientId?: number;
   projectId?: number;
@@ -334,7 +334,7 @@ export interface SavedReportView {
 export interface SavedReportInputView {
   name: string;
   rangeSpec: SavedReportRangeView;
-  by: 'client' | 'project' | 'day' | 'tag';
+  by: GroupBy;
   billableFilter: 'billable' | 'all' | 'non-billable';
   clientId?: number;
   projectId?: number;

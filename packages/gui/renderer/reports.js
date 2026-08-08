@@ -14,7 +14,7 @@
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {
-  const { rangeLabel, lineFlags, icon, errMessage, escapeHtml } = window.SU;
+  const { rangeLabel, lineFlags, icon, errMessage, escapeHtml, groupKeyLabel } = window.SU;
   const $ = (id) => document.getElementById(id);
 
   // §12 R21: the builder's inline message region (#rep-warning) — a refused Save is surfaced
@@ -46,7 +46,7 @@
     'last-month': 'Last month',
   };
   const BILLABLE_LABEL = { billable: 'billable only', all: 'all entries', 'non-billable': 'non-billable' };
-  const BY_LABEL = { client: 'client', project: 'project', day: 'day', tag: 'tag' };
+  const BY_LABEL = { client: 'client', project: 'project', day: 'day', week: 'week', month: 'month', tag: 'tag' };
 
   // Hours + minutes, matching the on-screen summary in the mockup ("21h 35m"). The exact
   // seconds come from core; this is display-only formatting (never stored, never billed).
@@ -449,8 +449,12 @@
     // (.report-sub td), not an inline style, so the table reads from one place.
     const cls = depth === 0 ? 'report-grp' : 'report-sub';
     const secs = rounding ? line.roundedSeconds : line.totalSeconds;
+    // §09 R02: a depth-0 week/month line renders core's human label ("Week of Jul 27" /
+    // "Jul 2026") via SU.groupKeyLabel — the same derivation `tt report` prints. Sub-rows
+    // are always project names (raw keys), and every other grouping's key IS its label.
+    const label = depth === 0 ? groupKeyLabel(line.key, report.options.by) : line.key;
     return (
-      `<tr class="${cls}"><td>${escapeHtml(line.key)}${flagsHtml(line, report)}</td>` +
+      `<tr class="${cls}"><td>${escapeHtml(label)}${flagsHtml(line, report)}</td>` +
       `<td class="num">${fmtHM(secs)}</td></tr>` +
       (line.children || []).map((c) => rowHtml(c, depth + 1, report, rounding)).join('')
     );

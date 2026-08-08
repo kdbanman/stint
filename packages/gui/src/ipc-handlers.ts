@@ -98,7 +98,13 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
   // buildEntryList only needs to group the surviving set. Issues #55/#50: `by` is optional on
   // ListEntriesQuery — default to the Entries calendar's 'day' grouping so a payload missing `by`
   // can never reject the whole query.
-  const { groups } = buildEntryList(entries, { by: q.by ?? 'day', timeZone: store.timeZone() });
+  const { groups } = buildEntryList(entries, {
+    by: q.by ?? 'day',
+    timeZone: store.timeZone(),
+    // Threaded so a by-week query is expressible over this channel (§09 R02); the Entries
+    // view itself only ever lays by day (G11).
+    weekStart: store.settings().weekStart,
+  });
   return {
     groups: groups.map((g) => ({
       key: g.key,
