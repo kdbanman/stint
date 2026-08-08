@@ -19,8 +19,9 @@
  * listing mode over the real SCENES table (no browser launched) — not from regexing the
  * harness source, so a refactor of the harness cannot fool the guard and a renamed local
  * cannot break it. Sub-facts only exist once a scene has run, so (2) reads the committed
- * acceptance/evidence/judge-report.json, which CI byte-compares against a fresh
- * `npm run judge`; a stale report fails there, not silently here. The third leg is
+ * acceptance/evidence/judge-report.json, whose scored contract (item, pass, facts) CI
+ * compares against a fresh `npm run judge` (scripts/compare-judge-contract.mjs); a stale
+ * report fails there, not silently here. The third leg is
  * enforced at judge runtime: the driver throws if a scene records a rubric item it does
  * not declare, or misses one it does.
  *
