@@ -137,11 +137,17 @@
       return `<span class="hk set-hotkey" data-key="${f.key}">${esc(friendlyHotkey(String(v)))}</span>`;
     }
     // select
+    // A stored value the option list does not carry (e.g. a time-zone ALIAS core accepts
+    // but Intl.supportedValuesOf omits, like Asia/Kolkata) is appended as its own option —
+    // otherwise the browser would silently show the first option while the stored truth
+    // differs.
+    const listed = f.options.some(([val]) => val === v);
     return (
       `<select class="set-field" data-key="${f.key}"${f.cast === 'number' ? ' data-cast="number"' : ''}${off ? ' disabled' : ''} aria-label="${esc(f.label)}">` +
       f.options
         .map(([val, lbl]) => `<option value="${esc(val)}"${val === v ? ' selected' : ''}>${esc(lbl)}</option>`)
         .join('') +
+      (listed || v === undefined ? '' : `<option value="${esc(v)}" selected>${esc(v)}</option>`) +
       `</select>`
     );
   }
