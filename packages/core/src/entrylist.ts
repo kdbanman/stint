@@ -43,17 +43,22 @@ export function matchesQuery(e: EntryView, query: string): boolean {
  * view and the Reports view can never disagree on a bucket's name (issue #170) — tag
  * grouping puts an entry under each of its tags, and untagged ones under `UNTAGGED`.
  */
-export function groupEntries(entries: EntryView[], by: GroupBy): EntryGroup[] {
-  const sorted = sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by)));
+export function groupEntries(entries: EntryView[], by: GroupBy, timeZone?: string): EntryGroup[] {
+  const sorted = sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by, timeZone)));
   if (by === 'day') sorted.reverse(); // newest day first
   return sorted.map(([key, es]) => ({ key, entries: es }));
 }
 
 /**
  * Build the Entries-view list from a filtered set of entries: bucket them by the chosen
- * grouping. Every filter — search included — is already applied by store.listEntries, so
- * this never re-filters (issue #176: a second query pass here would double-filter).
+ * grouping — day buckets keyed in the configured zone (§04 R06/§14; `timeZone` as
+ * `groupKeysOf` takes it). Every filter — search included — is already applied by
+ * store.listEntries, so this never re-filters (issue #176: a second query pass here
+ * would double-filter).
  */
-export function buildEntryList(entries: EntryView[], opts: { by: GroupBy }): EntryList {
-  return { groups: groupEntries(entries, opts.by) };
+export function buildEntryList(
+  entries: EntryView[],
+  opts: { by: GroupBy; timeZone?: string },
+): EntryList {
+  return { groups: groupEntries(entries, opts.by, opts.timeZone) };
 }

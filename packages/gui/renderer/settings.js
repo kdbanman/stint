@@ -8,7 +8,7 @@
 // nav-item to render the panel, mirrors the date-format mode onto the renderer, and
 // re-reads on every external change.
 (function () {
-  const { friendlyHotkey, applyDateFormat } = window.SU;
+  const { friendlyHotkey, applyDateFormat, applyTimeZone } = window.SU;
   const panel = () => document.getElementById('settings-panel');
 
   // The live date-format mode. render() re-applies it off fresh getState (on startup, on
@@ -60,7 +60,25 @@
       group: 'System', key: 'dateFormat', label: 'Date & number format', kind: 'select',
       options: [['system', 'System locale'], ['iso', 'ISO (24-hour)']],
     },
+    // §04 R06 / §14 — the configured time zone: 'System' first (follow the OS at read
+    // time), then the platform's IANA zone list (the same list core validates against).
+    // Persists over the SAME setSetting channel `tt config set time_zone` uses.
+    {
+      group: 'System', key: 'timeZone', label: 'Time zone', kind: 'select',
+      note: 'Display, time entry, and day grouping use this zone',
+      options: [['system', 'System']].concat(timeZoneOptions()),
+    },
   ];
+
+  // The platform zone list for the time-zone select ([value, label] pairs). Guarded: an
+  // engine without Intl.supportedValuesOf still renders the control with 'System' alone.
+  function timeZoneOptions() {
+    try {
+      return Intl.supportedValuesOf('timeZone').map((z) => [z, z]);
+    } catch {
+      return [];
+    }
+  }
 
   function esc(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -380,19 +398,21 @@
     return `${(kb / 1024).toFixed(1)} MB`;
   }
 
-  // A human, local date+time label honouring the live date-format mode (ISO 24h vs system locale)
-  // — the same mode the §14 date-format control drives, so backups read consistently with the app.
-  // Display only, and deliberately NOT core's `backupStamp`, which is the filename-safe UTC token
-  // a backup file is named by: one name, one representation.
+  // A human date+time label honouring the live date-format mode (ISO 24h vs system locale)
+  // AND the configured time zone (§04 R06) — the same modes the §14 controls drive, so
+  // backups read consistently with the app. Display only, and deliberately NOT core's
+  // `backupStamp`, which is the filename-safe UTC token a backup file is named by: one
+  // name, one representation.
   function backupLabel(iso) {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '—';
     if (dateFormatMode === 'iso') {
-      const p = (n) => String(n).padStart(2, '0');
-      return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+      // The field vocabulary's zone-bound rendering, minute precision.
+      return window.SU.localInputValue(d).slice(0, 16);
     }
     return d.toLocaleString([], {
       year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+      timeZone: window.SU.currentZone(),
     });
   }
 
@@ -595,9 +615,11 @@
       return;
     }
     const settings = (state && state.settings) || {};
-    // Mirror the editable mode so the renderer keeps honouring it across app.js loads.
+    // Mirror the editable modes so the renderer keeps honouring them across app.js loads.
     dateFormatMode = settings.dateFormat === 'iso' ? 'iso' : 'system';
     applyDateFormat(dateFormatMode);
+    // §04 R06 / §14: the configured zone drives every SU display/parse/geometry helper.
+    applyTimeZone(settings.timeZone || 'system');
     host.innerHTML = panelHtml(settings);
     wire(host);
     // §19 R03 — the Software Update group renders into its own host element (after the

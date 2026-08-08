@@ -26,7 +26,7 @@
  * that serves every page — a helper re-typed in a second file is a fork by construction, and
  * the copies diverge silently (issue #168). `renderer-static.test.ts` fails the second copy.
  */
-import { DEFAULT_SETTINGS, formatDuration, formatHours } from '@stint/core';
+import { DEFAULT_SETTINGS, formatDuration, formatHours, localDay, resolveTimeZone, wallClockOf, wallClockToUtc } from '@stint/core';
 import { countUpSeconds } from '../src/timerview.js';
 import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
@@ -89,13 +89,28 @@ function escapeHtml(s: unknown): string {
   return String(s).replace(/[&<>"']/g, (c) => HTML_ESCAPES[c]);
 }
 
-// The ONE local minutes-of-day derivation (0–1440) — every timeline surface positions against
-// it: the picker's seeds and reseeds, the entries calendar's event geometry, and this file's
-// own window math. Display only; the stored instant is always UTC ISO. Takes a Date or an ISO
-// string because both call shapes exist and neither should re-type the arithmetic (issue #168).
+// §04 R06 / §14: the configured time zone every zone-sensitive helper below reads. The raw
+// SETTING is held ('system' or an IANA zone) and resolved per call, so the 'system'
+// sentinel follows an OS zone change without a reload; settings.js re-applies it from
+// fresh state on startup and on every settings change, exactly like applyDateFormat.
+let timeZoneSetting: string = 'system';
+function applyTimeZone(setting: string): void {
+  timeZoneSetting = typeof setting === 'string' && setting !== '' ? setting : 'system';
+}
+/** The configured zone, resolved now ('system' → the OS zone at this read). */
+function zone(): string {
+  return resolveTimeZone(timeZoneSetting);
+}
+
+// The ONE local minutes-of-day derivation (0–1440) in the CONFIGURED zone — every timeline
+// surface positions against it: the picker's seeds and reseeds, the entries calendar's
+// event geometry, and this file's own window math. Display only; the stored instant is
+// always UTC ISO. Takes a Date or an ISO string because both call shapes exist and neither
+// should re-type the arithmetic (issue #168).
 function localMinuteOfDay(when: Date | string): number {
   const d = when instanceof Date ? when : new Date(when);
-  return d.getHours() * 60 + d.getMinutes();
+  const w = wallClockOf(d, zone());
+  return w.hour * 60 + w.minute;
 }
 
 // §12 R15 (issue #49): the EXACT minute-of-day, seconds riding the fraction (09:07:33 →
@@ -104,12 +119,60 @@ function localMinuteOfDay(when: Date | string): number {
 // instant to the second.
 function exactMinuteOfDay(when: Date | string): number {
   const d = when instanceof Date ? when : new Date(when);
-  return localMinuteOfDay(d) + d.getSeconds() / 60;
+  const w = wallClockOf(d, zone());
+  return w.hour * 60 + w.minute + w.second / 60;
+}
+
+// The configured zone's calendar-day token of an instant — core's one localDay vocabulary
+// (glossary "Group key"), so the calendar's day columns can never disagree with the day
+// buckets core's getState/listEntries grouping keys (§12 R16).
+function localDayOf(when: Date | string): string {
+  const iso = when instanceof Date ? when.toISOString() : when;
+  return localDay(iso, timeZoneSetting);
+}
+
+// The configured zone's midnight of the day `when` falls on — the timeline column anchor.
+// Calendar arithmetic through core's wallClockToUtc (never `+ 24h`), DST-compatible.
+function startOfDay(when: Date | string): Date {
+  const d = when instanceof Date ? when : new Date(when);
+  const w = wallClockOf(d, zone());
+  return wallClockToUtc({ year: w.year, month: w.month, day: w.day }, zone());
+}
+
+// The configured-zone midnight of a civil 'YYYY-MM-DD' token — the mini calendar's
+// click-to-column mapping (a cell is a civil date, not an instant, so this is the one
+// conversion that turns it into the column's anchor instant).
+function dayStartOfToken(token: string): Date {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(token ?? ''));
+  if (!m) return new Date(NaN);
+  return wallClockToUtc({ year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) }, zone());
+}
+
+// The instant at wall-clock `minutes` (fraction = seconds, issue #49) on `day`'s
+// configured-zone calendar day — the inverse the picker's write-backs use. Resolved
+// through wallClockToUtc so a DST-transition day maps its wall minutes compatibly.
+function dateAtMinute(day: Date | string, minutes: number): Date {
+  const d = day instanceof Date ? day : new Date(day);
+  const w = wallClockOf(d, zone());
+  const whole = Math.floor(minutes);
+  const seconds = Math.round((minutes - whole) * 60);
+  return wallClockToUtc(
+    {
+      year: w.year,
+      month: w.month,
+      day: w.day,
+      hour: Math.floor(whole / 60),
+      minute: whole % 60,
+      second: seconds,
+    },
+    zone(),
+  );
 }
 
 // §12 R11: the chosen date/number format. 'system' renders the runner's locale; 'iso'
-// renders an unambiguous 24h HH:MM off the instant's local wall-clock. Display only — the
-// stored instant is always UTC ISO; this only changes how a time is shown.
+// renders an unambiguous 24h HH:MM off the instant's wall-clock in the CONFIGURED zone
+// (§04 R06). Display only — the stored instant is always UTC ISO; these only change how a
+// time is shown.
 let dateFormat: 'system' | 'iso' = 'system';
 function applyDateFormat(mode: string): void {
   dateFormat = mode === 'iso' ? 'iso' : 'system';
@@ -117,17 +180,23 @@ function applyDateFormat(mode: string): void {
 function localTime(iso: string): string {
   const d = new Date(iso);
   if (dateFormat === 'iso') {
+    const w = wallClockOf(d, zone());
     const p = (n: number) => String(n).padStart(2, '0');
-    return `${p(d.getHours())}:${p(d.getMinutes())}`;
+    return `${p(w.hour)}:${p(w.minute)}`;
   }
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: zone() });
 }
 
 // §09 R1: a short local-date label for a single range endpoint, used by the report
 // view's resolved-range header. Display only — the authoritative UTC bounds come from
 // core's resolveRange; this never re-derives a range, it only formats one core returned.
 function localDateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+  return new Date(iso).toLocaleDateString([], {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: zone(),
+  });
 }
 
 // The resolved window as "From → To". The report range is half-open [from, to), so the
@@ -321,12 +390,21 @@ const SU = {
   rangeLabel,
   lineFlags,
   friendlyHotkey,
-  localInputValue,
-  parseLocalInput,
+  // The field vocabulary, bound to the configured zone (§04 R06): the renderer scripts render
+  // and parse the raw Start/Stop fields through these, so seed and reparse share one zone.
+  localInputValue: (date: Date) => localInputValue(date, timeZoneSetting),
+  parseLocalInput: (value: string) => parseLocalInput(value, timeZoneSetting),
   localMinuteOfDay,
   exactMinuteOfDay,
+  localDayOf,
+  startOfDay,
+  dayStartOfToken,
+  dateAtMinute,
+  /** The configured zone, resolved now — for Intl formatting options in renderer scripts. */
+  currentZone: () => zone(),
   timelineWindow,
   applyDateFormat,
+  applyTimeZone,
   errMessage,
   escapeHtml,
   tagDiff,

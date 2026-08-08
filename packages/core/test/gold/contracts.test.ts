@@ -30,6 +30,9 @@ import {
   resolveRange,
   resolveSavedRange,
   resolveReportDef,
+  parseTime,
+  formatStamp,
+  localDay,
   defaultDataDir,
   DB_FILENAME,
   APP_VERSION,
@@ -80,6 +83,7 @@ describe('GOLD: settings defaults (§14)', () => {
         "pickerWindowMode": "working_hours",
         "rounding": false,
         "roundingIncrementMin": 15,
+        "timeZone": "system",
         "weekStart": "monday",
         "workingHoursEnd": "18:00",
         "workingHoursStart": "07:00",
@@ -845,6 +849,106 @@ describe('GOLD: resolveRange preset windows (§09 R01)', () => {
       fromUtc: localMidnight(2026, 2, 8), // 2026-03-08
       toUtc: localMidnight(2026, 2, 9), // 2026-03-09
     });
+  });
+});
+
+describe('GOLD: the configured time zone drives resolution and parsing (§04 R06, §14)', () => {
+  // With an EXPLICIT zone the bounds pin to absolute `Z` literals valid on every host —
+  // strictly stronger than the host-zone goldens above, which must float with the runner.
+  // Every literal is read off a 2026 calendar + the zone's published offsets, never off a
+  // second call of the code under test.
+  const NOW = new Date('2026-06-24T17:30:00Z'); // Wed; 11:30 in Edmonton (MDT, UTC−6)
+
+  it('today in a pinned zone is that zone’s calendar day, midnight to midnight', () => {
+    expect(resolveRange('today', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-24T06:00:00.000Z', // Wed 00:00 MDT
+      toUtc: '2026-06-25T06:00:00.000Z', // Thu 00:00 MDT
+    });
+  });
+
+  it('this week in a pinned zone runs Monday-midnight to Monday-midnight in THAT zone', () => {
+    expect(resolveRange('week', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-22T06:00:00.000Z', // Mon 2026-06-22 00:00 MDT
+      toUtc: '2026-06-29T06:00:00.000Z', // Mon 2026-06-29 00:00 MDT
+    });
+  });
+
+  it('the pinned zone decides WHICH day "today" is, not just its bounds', () => {
+    // 2026-06-25T03:00Z is still Wed Jun 24 in Edmonton but already Thu Jun 25 in UTC —
+    // the two zones disagree on the calendar day itself.
+    const lateEvening = new Date('2026-06-25T03:00:00Z');
+    expect(resolveRange('today', 'monday', lateEvening, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-24T06:00:00.000Z',
+      toUtc: '2026-06-25T06:00:00.000Z',
+    });
+    expect(resolveRange('today', 'monday', lateEvening, 'UTC')).toEqual({
+      fromUtc: '2026-06-25T00:00:00.000Z',
+      toUtc: '2026-06-26T00:00:00.000Z',
+    });
+    expect(localDay('2026-06-25T03:00:00Z', 'America/Edmonton')).toBe('2026-06-24');
+    expect(localDay('2026-06-25T03:00:00Z', 'UTC')).toBe('2026-06-25');
+  });
+
+  it('a DST-spanning week in a pinned zone bounds at true local midnights (167-hour week)', () => {
+    // The week of Sun 2026-03-08 in America/New_York contains the spring-forward: it opens
+    // at EST midnight (05:00Z) and closes at EDT midnight (04:00Z) — 167 hours, which a
+    // naive `+ 7 × 24h` can never produce.
+    const midWeek = new Date('2026-03-11T12:00:00Z');
+    expect(resolveRange('week', 'sunday', midWeek, 'America/New_York')).toEqual({
+      fromUtc: '2026-03-08T05:00:00.000Z', // Sun 00:00 EST
+      toUtc: '2026-03-15T04:00:00.000Z', // Sun 00:00 EDT
+    });
+  });
+
+  it('a month in a pinned zone runs 1st-midnight to 1st-midnight in that zone', () => {
+    expect(resolveRange('month', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-01T06:00:00.000Z',
+      toUtc: '2026-07-01T06:00:00.000Z',
+    });
+  });
+
+  it('a bare clock time parses as today-in-the-configured-zone (tt add 14:30)', () => {
+    // 14:30 on the Edmonton calendar day of NOW (Wed Jun 24, MDT = UTC−6) → 20:30Z.
+    expect(parseTime('14:30', NOW, 'America/Edmonton')).toBe('2026-06-24T20:30:00Z');
+    expect(parseTime('14:30', NOW, 'UTC')).toBe('2026-06-24T14:30:00Z');
+  });
+
+  it('a zoneless datetime parses in the configured zone, DST-compatible (§04 R06)', () => {
+    // Nonexistent (spring-forward gap): 02:30 never happens on 2026-03-08 in New York —
+    // compatible mode shifts it forward past the gap to 03:30 EDT (07:30Z).
+    expect(parseTime('2026-03-08T02:30', NOW, 'America/New_York')).toBe('2026-03-08T07:30:00Z');
+    // Ambiguous (fall-back hour): 01:30 happens twice on 2026-11-01 — compatible mode takes
+    // the EARLIER instant (EDT, 05:30Z), never the second pass (EST, 06:30Z).
+    expect(parseTime('2026-11-01T01:30', NOW, 'America/New_York')).toBe('2026-11-01T05:30:00Z');
+    // An explicit-zone instant is untouched by the configured zone.
+    expect(parseTime('2026-06-24T14:30:00Z', NOW, 'America/New_York')).toBe('2026-06-24T14:30:00Z');
+  });
+
+  it('formatStamp renders the configured zone through the one display path', () => {
+    const settings = { dateFormat: 'iso' as const, timeZone: 'America/Edmonton' };
+    expect(formatStamp('2026-06-24T15:00:00Z', settings)).toBe('2026-06-24 09:00:00');
+    expect(formatStamp(null, settings)).toBe('—');
+    // 'system' resolves against the OS zone at read time — same wall clock as the host's.
+    expect(formatStamp('2026-06-24T15:00:00Z', { dateFormat: 'iso', timeZone: 'system' })).toBe(
+      formatStamp('2026-06-24T15:00:00Z', {
+        dateFormat: 'iso',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    );
+  });
+
+  it('an unknown zone is rejected and stores nothing; UTC and IANA zones are accepted', () => {
+    const store = Store.openMemory();
+    try {
+      expect(() => store.setSetting('timeZone', 'Mars/Olympus_Mons')).toThrow(/time_zone/);
+      expect(store.settings().timeZone).toBe('system');
+      store.setSetting('timeZone', 'America/Edmonton');
+      expect(store.settings().timeZone).toBe('America/Edmonton');
+      store.setSetting('timeZone', 'UTC');
+      expect(store.settings().timeZone).toBe('UTC');
+    } finally {
+      store.close();
+    }
   });
 });
 

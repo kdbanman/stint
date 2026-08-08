@@ -183,6 +183,10 @@
       <div class="sgrp">System</div>
       <div class="srow"><div class="sk">Global hotkey</div><div class="sc"><span class="kbd">Ctrl Alt T</span></div></div>
       <div class="srow"><div class="sk">Date & number format</div><div class="sc"><select class="field"><option selected>System locale</option></select></div></div>
+      <!-- §04 R06 / §14 — the configured time zone: 'System' first (follow the OS at read
+           time), then the platform's IANA zone list; display, time entry, and day grouping
+           all resolve in the chosen zone. -->
+      <div class="srow"><div class="sk">Time zone<small>Display, time entry, and day grouping use this zone</small></div><div class="sc"><select class="field"><option selected>System</option><option>America/Edmonton</option><option>America/New_York</option><option>Europe/Berlin</option></select></div></div>
 
       <div class="sgrp">Software update</div>
       <div class="srow"><div class="sk">Current version</div><div class="sc"><span class="vrow"><span class="ver tnum">2026.6.27.2</span> <span class="pill">update available</span></span></div></div>

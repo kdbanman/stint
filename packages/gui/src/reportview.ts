@@ -80,10 +80,11 @@ export function resolveExportRange(
   req: { preset?: RangePreset; fromUtc?: string; toUtc?: string },
   weekStart: WeekStart,
   now: Date,
+  timeZone?: string,
 ): { fromUtc: string; toUtc: string } {
-  if (req.preset) return resolveRange(req.preset, weekStart, now);
+  if (req.preset) return resolveRange(req.preset, weekStart, now, timeZone);
   if (req.fromUtc && req.toUtc) return { fromUtc: req.fromUtc, toUtc: req.toUtc };
-  return resolveRange('week', weekStart, now);
+  return resolveRange('week', weekStart, now, timeZone);
 }
 
 /**
@@ -92,15 +93,16 @@ export function resolveExportRange(
  * math), keeping the returned shape the core `Report` the report view already paints.
  */
 export function buildReportView(
-  store: Pick<Store, 'report' | 'settings'>,
+  store: Pick<Store, 'report' | 'settings' | 'timeZone'>,
   req: ReportViewRequest,
   now: Date,
 ): Report {
   const { preset, fromUtc, toUtc, ...rest } = req;
   // A preset, when supplied, resolves through core (the renderer never re-derives date
-  // math); otherwise the explicit custom from/to is passed straight through.
+  // math) in the configured zone (§04 R06/§14); otherwise the explicit custom from/to is
+  // passed straight through.
   const range = preset
-    ? resolveRange(preset, store.settings().weekStart, now)
+    ? resolveRange(preset, store.settings().weekStart, now, store.timeZone())
     : { fromUtc: fromUtc!, toUtc: toUtc! };
   return store.report({ ...rest, fromUtc: range.fromUtc, toUtc: range.toUtc });
 }
@@ -123,7 +125,10 @@ export function buildReportView(
  */
 export function resolveExportDefinition(
   req: ExportRequest,
-  store: Pick<Store, 'runReport' | 'reportFilteredEntries' | 'resolveReportRange' | 'listEntries' | 'settings'>,
+  store: Pick<
+    Store,
+    'runReport' | 'reportFilteredEntries' | 'resolveReportRange' | 'listEntries' | 'settings' | 'timeZone'
+  >,
   now: Date,
 ): { range: { fromUtc: string; toUtc: string }; entries: EntryView[] } {
   if (req.scope === 'filtered') {
@@ -138,7 +143,7 @@ export function resolveExportDefinition(
   const range =
     req.savedReportRef !== undefined
       ? store.resolveReportRange(req.savedReportRef, now)
-      : resolveExportRange(req, store.settings().weekStart, now);
+      : resolveExportRange(req, store.settings().weekStart, now, store.timeZone());
   const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
   return { range, entries };
 }
@@ -171,25 +176,25 @@ export function exportFileName(fromUtc: string, format: 'csv' | 'json'): string 
 // (once), never in the page.
 
 /** Core RangeSpec → renderer-safe range view (absolute window → its covering date pair). */
-function rangeSpecToView(spec: RangeSpec): SavedReportRangeView {
+function rangeSpecToView(spec: RangeSpec, timeZone?: string): SavedReportRangeView {
   if (spec.kind === 'preset') return { kind: 'preset', preset: spec.preset };
-  const { fromDate, toDate } = utcWindowToDatePair(spec.fromUtc, spec.toUtc);
+  const { fromDate, toDate } = utcWindowToDatePair(spec.fromUtc, spec.toUtc, timeZone);
   return { kind: 'absolute', fromDate, toDate };
 }
 
-/** Renderer-safe range view → core RangeSpec (date pair → the half-open local window). */
-function rangeSpecFromView(spec: SavedReportRangeView): RangeSpec {
+/** Renderer-safe range view → core RangeSpec (date pair → the configured zone's half-open window). */
+function rangeSpecFromView(spec: SavedReportRangeView, timeZone?: string): RangeSpec {
   if (spec.kind === 'preset') return { kind: 'preset', preset: spec.preset };
-  const { fromUtc, toUtc: toUtcBound } = resolveDateRange(spec.fromDate, spec.toDate);
+  const { fromUtc, toUtc: toUtcBound } = resolveDateRange(spec.fromDate, spec.toDate, timeZone);
   return { kind: 'absolute', fromUtc, toUtc: toUtcBound };
 }
 
 /** §09 R08 — a core saved report → the renderer-safe projection the Reports view paints. */
-export function savedReportToView(def: SavedReport): SavedReportView {
+export function savedReportToView(def: SavedReport, timeZone?: string): SavedReportView {
   const out: SavedReportView = {
     id: def.id,
     name: def.name,
-    rangeSpec: rangeSpecToView(def.rangeSpec),
+    rangeSpec: rangeSpecToView(def.rangeSpec, timeZone),
     by: def.by,
     billableFilter: def.billableFilter,
     rounding: def.rounding,
@@ -204,10 +209,13 @@ export function savedReportToView(def: SavedReport): SavedReportView {
 }
 
 /** §09 R08 — the Reports view's create payload → core SavedReportInput. */
-export function savedReportInputFromView(v: SavedReportInputView): SavedReportInput {
+export function savedReportInputFromView(
+  v: SavedReportInputView,
+  timeZone?: string,
+): SavedReportInput {
   const out: SavedReportInput = {
     name: v.name,
-    rangeSpec: rangeSpecFromView(v.rangeSpec),
+    rangeSpec: rangeSpecFromView(v.rangeSpec, timeZone),
     by: v.by,
     billableFilter: v.billableFilter,
     rounding: v.rounding,
@@ -221,9 +229,12 @@ export function savedReportInputFromView(v: SavedReportInputView): SavedReportIn
 }
 
 /** §09 R08 — the Reports view's amend payload → core SavedReportPatch. */
-export function savedReportPatchFromView(v: Partial<SavedReportInputView>): SavedReportPatch {
+export function savedReportPatchFromView(
+  v: Partial<SavedReportInputView>,
+  timeZone?: string,
+): SavedReportPatch {
   const out: SavedReportPatch = {};
-  if (v.rangeSpec !== undefined) out.rangeSpec = rangeSpecFromView(v.rangeSpec);
+  if (v.rangeSpec !== undefined) out.rangeSpec = rangeSpecFromView(v.rangeSpec, timeZone);
   if (v.by !== undefined) out.by = v.by;
   if (v.billableFilter !== undefined) out.billableFilter = v.billableFilter;
   if (v.clientId !== undefined) out.clientId = v.clientId;
