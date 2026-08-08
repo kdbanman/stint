@@ -4,8 +4,11 @@ A check is manual **only where headless CI physically cannot reach** — live ne
 real desktop OS, real wall-clock/power events, or the live Actions run itself. Any other
 manual check is a process defect. `context/process.html` §05 owns the normative inventory
 of that residue ("Manual — the live residue"); this runbook is the procedures for it and
-nothing else. Every procedure below declares the §05 row it serves, and every §05 row has
-a procedure here.
+nothing else. Every procedure below declares the §05 row it serves — and, on its
+**Claims** line, the requirement ids it covers: a MANUAL badge in
+`context/acceptance.html` §04/§05 resolves against these declarations only, never against
+a mention in step prose (`packages/gui/test/meta-docs.test.ts`). Every §05 row has a
+procedure here.
 
 Everything else the GUI does is proven headlessly by its BDD / PROP / GOLD / JUDGE mirror —
 `context/acceptance.html` §04 and `acceptance/criteria/COVERAGE.md` route each requirement
@@ -21,6 +24,7 @@ GUI access) confirms each step and attaches evidence.
 ## CHECK SLEEP-SPAN — second-accurate spans + working subtract (§10a, §17 R5)
 
 **§05 residue row —** Real sleep/wake spans (§10a)
+**Claims —** §10a · §17 R5
 
 1. `tt start "deep work" --client "Client A"`
 2. Record start. Sleep the machine: `systemctl suspend` (or `rtcwake -m mem -s 120`,
@@ -36,6 +40,7 @@ GUI access) confirms each step and attaches evidence.
 ## CHECK MISSED-SLEEP RECONCILE — wall-clock gap on launch (§10a, source=gap)
 
 **§05 residue row —** Real sleep/wake spans (§10a)
+**Claims —** §10a
 
 1. With a timer open, fully quit the app, sleep the machine ~120 s, wake, relaunch.
    - [ ] On launch a SleepSpan (source `gap`) is created from the wall-clock gap and
@@ -46,6 +51,7 @@ GUI access) confirms each step and attaches evidence.
 ## CHECK TRAY + GLOBAL HOTKEY (§12 R01/R2)
 
 **§05 residue row —** Tray + global hotkey on a real desktop session (§12 R01/R02)
+**Claims —** §12 R01/R02 · §10b · §17 R6 · §14
 
 §12 R01 (G8) requires the tray's **single left-click to open the compact popover only**
 — the old 3-item Start/Stop + Open Stint **dropdown action menu is removed**, and the
@@ -107,6 +113,7 @@ show: an OS notification actually arriving, and the OS shortcut actually re-regi
 ## CHECK SOFTWARE UPDATE — CHECK FOR UPDATES (§19 R03)
 
 **§05 residue row —** Live update check against GitHub Releases (§19 R03)
+**Claims —** §19 R03 · §17 R9
 
 §19 R03 (decision **G3**) adds the **Check for updates** action to GUI **Settings → Software
 Update**: alongside the Current version row (R06), a **Check now** button queries the **GitHub
@@ -179,6 +186,7 @@ Start a **socket monitor** before step 1 and leave it running for the whole chec
 ## CHECK INSTALL — single artifact puts the GUI in Applications/launcher and `tt` on PATH (§19 R02)
 
 **§05 residue row —** OS-level install, app replacement, Gatekeeper (§19 R02/R04)
+**Claims —** §19 R02
 
 §19 R02 (decision **G2**) is the single-installer mechanism: **one** artifact per platform, run
 **once**, leaves **both** the GUI installed (in Applications on macOS / the app launcher on Linux)
@@ -258,6 +266,7 @@ asserts the glob, but confirm the *built* bundle here):
 ## CHECK PUBLISH-ON-MERGE — every merge to main publishes a GitHub Release with both artifacts (§19 R05)
 
 **§05 residue row —** Publish-on-merge actually firing (§19 R05)
+**Claims —** §19 R05
 
 §19 R05 (decision **G4**) makes the public repo the distribution backend: **every merge to `main`**
 runs CI that builds both platform artifacts and **publishes a GitHub Release**. The mechanism is the
@@ -319,6 +328,7 @@ Run it by merging a PR to `main` (or pressing **Run workflow** / `workflow_dispa
 ## CHECK INSTALL & UPDATE (§17 R13) — the installer lands both surfaces on one version, and the in-app updater completes a guided install without touching the DB
 
 **§05 residue row —** OS-level install, app replacement, Gatekeeper (§19 R02/R04)
+**Claims —** §17 R13 · §19 R04 · §16
 
 §17 R13 is the **acceptance umbrella** over the whole §19 packaging-installation-update story: the
 single installer puts the GUI in Applications / the app launcher **and** `tt` on `PATH` (§19 R02),

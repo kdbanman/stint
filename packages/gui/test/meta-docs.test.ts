@@ -231,10 +231,12 @@ describe('GOLD — the MANUAL runbook holds exactly the §05 live residue (#129)
  * routing a requirement's proof to a procedure that does not exist.
  *
  * Resolution is by requirement id, ANY-of per row: a row keyed `12 R01/R03/R04` or
- * `19 R01–R06` resolves when the live procedures name any one of its ids (a badge may be
- * narrowed to a sliver of its row); a bare-section row (`10a`, `16`) resolves on any
- * mention of its section. Ids are normalized (R01 ≡ R1). Only `## CHECK …` sections count
- * as live text, so a mention anywhere else in the runbook cannot satisfy a badge.
+ * `19 R01–R06` resolves when a live procedure claims any one of its ids (a badge may be
+ * narrowed to a sliver of its row); a bare-section row (`10a`, `16`) resolves on a claim
+ * of its section. Ids are normalized (R01 ≡ R1). A badge resolves ONLY against each
+ * procedure's `**Claims —**` declaration line — an id mentioned in passing step prose
+ * satisfies nothing, so a badge cannot ride a side note. Every live procedure must carry
+ * the line (asserted below), so a new procedure cannot opt out of declaring.
  */
 const acceptance = read('context/acceptance.html');
 
@@ -277,15 +279,22 @@ const rowIds = (rawKey: string): { section: string; rs: number[] } | null => {
   return { section, rs: [...rs] };
 };
 
-/** Every §-id the live `## CHECK` procedures name, normalized: `12`, `12 R1`, `17 R5`, … */
-const liveClaims = ((): Set<string> => {
-  const live = runbook
+/** Each live `## CHECK` procedure with its `**Claims —**` line (null when it carries none). */
+const liveProcedures = ((): { heading: string; claims: string | null }[] =>
+  runbook
     .split(/^## /m)
     .slice(1)
     .filter((p) => p.startsWith('CHECK '))
-    .join('\n');
+    .map((part) => ({
+      heading: (part.split('\n', 1)[0] ?? '').trim(),
+      claims: /^\*\*Claims —\*\* (.+)$/m.exec(part)?.[1] ?? null,
+    })))();
+
+/** Every §-id the live procedures DECLARE, normalized: `12`, `12 R1`, `17 R5`, … */
+const liveClaims = ((): Set<string> => {
   const claims = new Set<string>();
-  for (const m of live.matchAll(/§(\d+[ab]?)((?:\s*R\d+)?(?:\s*\/\s*R?\d+)*)/g)) {
+  const declared = liveProcedures.map((p) => p.claims ?? '').join('\n');
+  for (const m of declared.matchAll(/§(\d+[ab]?)((?:\s*R\d+)?(?:\s*\/\s*R?\d+)*)/g)) {
     const sec = m[1] ?? '';
     claims.add(sec);
     for (const r of (m[2] ?? '').matchAll(/\d+/g)) claims.add(`${sec} R${parseInt(r[0], 10)}`);
@@ -307,12 +316,17 @@ describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a
     expect(liveClaims.size).toBeGreaterThan(10);
   });
 
+  it('every live procedure declares its claims', () => {
+    const undeclared = liveProcedures.filter((p) => p.claims === null).map((p) => p.heading);
+    expect(undeclared, 'live `## CHECK` procedures with no `**Claims —**` line').toEqual([]);
+  });
+
   it('every MANUAL badge sits on a row whose key parses to requirement ids', () => {
     const unparsed = manualRows.filter((r) => rowIds(r.key) === null).map((r) => `${r.table} ${r.key}`);
     expect(unparsed).toEqual([]);
   });
 
-  it('every MANUAL badge resolves to a live runbook procedure', () => {
+  it('every MANUAL badge resolves to a live procedure claim', () => {
     const dangling = manualRows
       .filter((r) => {
         const ids = rowIds(r.key);
@@ -322,7 +336,7 @@ describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a
           : !ids.rs.some((n) => liveClaims.has(`${ids.section} R${n}`));
       })
       .map((r) => `${r.table} ${r.key}`);
-    expect(dangling, 'MANUAL badges no live `## CHECK` procedure covers').toEqual([]);
+    expect(dangling, 'MANUAL badges no live `## CHECK` procedure claims').toEqual([]);
   });
 });
 
