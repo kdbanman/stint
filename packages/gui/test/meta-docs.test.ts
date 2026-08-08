@@ -137,9 +137,8 @@ describe('GOLD — every file path COVERAGE.md cites exists in the tree (#81)', 
  *      VERBATIM in process.html's "Manual — the live residue" table, and every row in that
  *      table is claimed by at least one procedure. Both directions, so neither a re-introduced
  *      off-residue procedure nor a newly-added §05 row without a procedure can pass.
- *   2. Every JUDGE scene id the runbook cites exists in the rubric — the retired-procedure table
- *      points at scenes by id, and a renamed scene would dangle the pointer that replaced a
- *      deleted procedure (the exact way this fix could rot into the false green it removed).
+ *   2. Every JUDGE scene id the runbook cites exists in the rubric — the procedures name the
+ *      scenes carrying their headless halves, and a renamed scene would dangle that pointer.
  *   3. Every structured file path it cites exists, the same check COVERAGE.md gets above.
  */
 const runbook = read('acceptance/criteria/manual/runbook.md');
@@ -156,8 +155,8 @@ const residueRows = ((): string[] => {
 /** Each `## CHECK …` procedure paired with the §05 row it declares (null when it declares none). */
 const procedures = ((): { heading: string; row: string | null }[] => {
   const out: { heading: string; row: string | null }[] = [];
-  // Split on the procedure headings; the retired-procedure table lives under an `##` of its own
-  // and declares no row, so it is excluded by the `CHECK ` prefix.
+  // Split on the procedure headings; a non-procedure `##` section declares no row and is
+  // excluded by the `CHECK ` prefix.
   const parts = runbook.split(/^## /m).slice(1);
   for (const part of parts) {
     const heading = (part.split('\n', 1)[0] ?? '').trim();
@@ -207,14 +206,14 @@ describe('GOLD — the MANUAL runbook holds exactly the §05 live residue (#129)
         .map((m) => m[1] as string)
         .filter((c) => !NOT_SCENES.has(c)),
     );
-    expect(cited.size).toBeGreaterThan(10);
+    expect(cited.size).toBeGreaterThan(0);
     expect([...cited].filter((c) => !rubricIds.has(c)).sort()).toEqual([]);
   });
 
   it('every file path the runbook cites exists in the tree', () => {
     // `…/stint/tt-launcher.sh` and friends are elided install locations, not repo paths.
     const cites = [...pathCitations(runbook)].filter((c) => !c.includes('…'));
-    expect(cites.length).toBeGreaterThan(20);
+    expect(cites.length).toBeGreaterThan(10);
     expect(cites.filter((c) => !existsInTree(c)).sort()).toEqual([]);
   });
 });
