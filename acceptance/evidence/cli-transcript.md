@@ -244,7 +244,7 @@ no-network check passed: no networking imports, APIs, or unexpected prod deps.
 
 ## §19 R01 — build matrix: macOS + Linux only (no Windows)
 
-The packaging config is fixed at two platforms. This block is the verbatim verdict of the static config guard `packages/gui/test/build-matrix.test.ts` (no build, no network): it FAILS the moment a Windows target is added to `electron-builder.yml` or a `windows-latest` runner appears in a CI matrix. The live two-platform artifact build + launch is the MANUAL `CHECK BUILD MATRIX` runbook procedure.
+The packaging config is fixed at two platforms. This block is the verbatim verdict of the static config guard `packages/gui/test/build-matrix.test.ts` (no build, no network): it FAILS the moment a Windows target is added to `electron-builder.yml` or a `windows-latest` runner appears in a CI matrix. The artifacts launching on a real desktop is the MANUAL `CHECK INSTALL` runbook procedure; the published two-artifact release is `CHECK PUBLISH-ON-MERGE`.
 
 ```text
 electron-builder.yml: mac+linux targets, no `win` block ............ OK
@@ -271,7 +271,7 @@ publish-on-merge pipeline is wired to publish (§19 R05): CONFIRMED
 
 ## §16 / §19 R04 — in-app update never touches the database (simulated app-replacement)
 
-The §19 R04 download + guided install replaces the *application* only; it never opens, migrates, or rewrites the database. This block EXECUTES the headless-drivable core of the MANUAL `CHECK UPDATE-MID-TIMER` procedure: start a live timer, capture the open entry + the live DB's byte hash, then SIMULATE the app-replacement (swap a stand-in app bundle, leave the data directory alone — the runbook step-2 "simulate the §19 R04 app-replacement step" path), and re-open on BOTH surfaces. The live `tt.sqlite` must be byte-identical and the same entry still open with an unchanged id/start, the derived elapsed continuing to grow. The real GitHub artifact download + the OS-level Gatekeeper swap remain the live MANUAL check; the byte-untouched invariant it gates is what this executes.
+The §19 R04 download + guided install replaces the *application* only; it never opens, migrates, or rewrites the database. This block EXECUTES the headless-drivable core of MANUAL `CHECK INSTALL & UPDATE` part (d): start a live timer, capture the open entry + the live DB's byte hash, then SIMULATE the app-replacement (swap a stand-in app bundle, leave the data directory alone), and re-open on BOTH surfaces. The live `tt.sqlite` must be byte-identical and the same entry still open with an unchanged id/start, the derived elapsed continuing to grow. The real GitHub artifact download + the OS-level Gatekeeper swap remain the live MANUAL check; the byte-untouched invariant it gates is what this executes.
 
 ```text
 # A live timer is open across a SIMULATED in-app update (the app bundle is swapped,
@@ -288,7 +288,7 @@ same entry still open, id + start unchanged (both surfaces) ....... OK
 derived elapsed continued (+2700s == 2700s wall) ........... OK
 
 in-app update touched no data (§16 / §19 R04): CONFIRMED
-(live GitHub download + OS Gatekeeper swap: see MANUAL CHECK UPDATE-MID-TIMER / CHECK INSTALL & UPDATE part (c)/(d))
+(live GitHub download + OS Gatekeeper swap: see MANUAL CHECK INSTALL & UPDATE part (c)/(d))
 ```
 
 ## Machine contract — `--json` everywhere, clean exit codes

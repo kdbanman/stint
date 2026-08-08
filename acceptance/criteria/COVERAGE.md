@@ -1198,7 +1198,7 @@ patch) joins the existing `MERGE_CONFLICT` + `MERGE_NOCONFLICT`
 delete, delete-without-confirmation refused) prove each field persists, the
 Split tiles the span, and the two-step Delete removes — over core AND `tt`. The edit/split/merge *arithmetic* is
 the §06 BDD/GOLD coverage above. The §12 R06 unified-form edit mode is thus
-covered by JUDGE `UNIFIED_FORM` + MANUAL (the readonly entries calendar that
+covered by JUDGE `UNIFIED_FORM` (the readonly entries calendar that
 hosts the hover-Edit / click-to-open is §12 R16; add mode is §12 R07). **Flags
 in context** now also include the **at-write-time overlap banner** (a
 non-blocking inline advisory raised when a write creates an overlap, alongside
@@ -1268,7 +1268,7 @@ warned-not-blocked behaviour is proven surface-neutral on core AND tt by
 entry is warned, not blocked" + the attribute-bearing "Attribute-bearing
 backfill that overlaps is warned, not blocked" — run TWICE via the World
 `backfill` capability: CoreWorld `store.add` , CliWorld `tt add … --from/--to`
-); AC = **BDD · JUDGE · MANUAL**. The manual-add surface is the **one unified
+); AC = **BDD · JUDGE**. The manual-add surface is the **one unified
 entry form in ADD mode** (G5), inline in the Entries view (no modal) — the same
 form edit mode uses (§12 R06). JUDGE `UNIFIED_FORM_ADD` (`unified-add.png`)
 drives the real renderer end to end: the two-column
@@ -1661,7 +1661,7 @@ GUI counterpart to `tt rm` 's confirm / `--force` ; **done when no entry is
 destroyed on a single stray click without a confirm step**): the destructive op
 itself (`tt rm`) is already BDD-covered (§06), but the confirm GATE is a
 renderer-only fact the surface-neutral BDD harness cannot express (core/tt have
-no dialog), so it is proven by **JUDGE** (primary) + MANUAL. The renderer routes
+no dialog), so it is proven by **JUDGE** (primary). The renderer routes
 the row Delete click through a generic in-window confirm gate
 (`gui/renderer/app.js`
 `confirmInline(btn, {kind, question, confirmLabel, onConfirm})` , with
@@ -1823,7 +1823,7 @@ active element never STUCK on `<body>` /null — a single body focus is the
 browser's natural end-of-cycle wrap, a trap is two body hits with no control
 between — and each control, including the `input` /`select` filters, showing a
 non-default focus ring); design.html's A-floors carry no MANUAL secondary — no design floor is physical
-(acceptance.html §07) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
+(acceptance.html §04) — so `KEYBOARD_FOCUS` + `HOTKEY_NO_TRAP` + `TARGET_SIZE` +
 `FIELD_LABELS` + `FIELD_CHROME` + GOLD `gui/test/design-guard.test.ts` are the
 whole net. `KEYBOARD_FOCUS` walks
 only the DEFAULT view, so a routed-away view's controls sit behind `[hidden]`,

@@ -137,9 +137,8 @@ describe('GOLD — every file path COVERAGE.md cites exists in the tree (#81)', 
  *      VERBATIM in process.html's "Manual — the live residue" table, and every row in that
  *      table is claimed by at least one procedure. Both directions, so neither a re-introduced
  *      off-residue procedure nor a newly-added §05 row without a procedure can pass.
- *   2. Every JUDGE scene id the runbook cites exists in the rubric — the retired-procedure table
- *      points at scenes by id, and a renamed scene would dangle the pointer that replaced a
- *      deleted procedure (the exact way this fix could rot into the false green it removed).
+ *   2. Every JUDGE scene id the runbook cites exists in the rubric — the procedures name the
+ *      scenes carrying their headless halves, and a renamed scene would dangle that pointer.
  *   3. Every structured file path it cites exists, the same check COVERAGE.md gets above.
  */
 const runbook = read('acceptance/criteria/manual/runbook.md');
@@ -156,8 +155,8 @@ const residueRows = ((): string[] => {
 /** Each `## CHECK …` procedure paired with the §05 row it declares (null when it declares none). */
 const procedures = ((): { heading: string; row: string | null }[] => {
   const out: { heading: string; row: string | null }[] = [];
-  // Split on the procedure headings; the retired-procedure table lives under an `##` of its own
-  // and declares no row, so it is excluded by the `CHECK ` prefix.
+  // Split on the procedure headings; a non-procedure `##` section declares no row and is
+  // excluded by the `CHECK ` prefix.
   const parts = runbook.split(/^## /m).slice(1);
   for (const part of parts) {
     const heading = (part.split('\n', 1)[0] ?? '').trim();
@@ -207,15 +206,137 @@ describe('GOLD — the MANUAL runbook holds exactly the §05 live residue (#129)
         .map((m) => m[1] as string)
         .filter((c) => !NOT_SCENES.has(c)),
     );
-    expect(cited.size).toBeGreaterThan(10);
+    expect(cited.size).toBeGreaterThan(0);
     expect([...cited].filter((c) => !rubricIds.has(c)).sort()).toEqual([]);
   });
 
   it('every file path the runbook cites exists in the tree', () => {
     // `…/stint/tt-launcher.sh` and friends are elided install locations, not repo paths.
     const cites = [...pathCitations(runbook)].filter((c) => !c.includes('…'));
-    expect(cites.length).toBeGreaterThan(20);
+    expect(cites.length).toBeGreaterThan(10);
     expect(cites.filter((c) => !existsInTree(c)).sort()).toEqual([]);
+  });
+});
+
+/**
+ * GOLD — every MANUAL badge in acceptance.html's routing tables resolves to a live
+ * runbook procedure (issue #252).
+ *
+ * acceptance.html §04 (the coverage map) and §05 (the §17 criteria, routed) hand each
+ * requirement to its proving methods by badge. The residue bind above keeps the runbook
+ * honest against process.html §05, but nothing read the badges: when #129/#196 culled the
+ * runbook to the live residue, eleven rows kept promising MANUAL proof no procedure
+ * carried — six of them as the PRIMARY method. This closes that side: a MANUAL badge on a
+ * row whose PRD §/criterion id no live `## CHECK` procedure names FAILS CI, instead of
+ * routing a requirement's proof to a procedure that does not exist.
+ *
+ * Resolution is by requirement id, ANY-of per row: a row keyed `12 R01/R03/R04` or
+ * `19 R01–R06` resolves when a live procedure claims any one of its ids (a badge may be
+ * narrowed to a sliver of its row); a bare-section row (`10a`, `16`) resolves on a claim
+ * of its section. Ids are normalized (R01 ≡ R1). A badge resolves ONLY against each
+ * procedure's `**Claims —**` declaration line — an id mentioned in passing step prose
+ * satisfies nothing, so a badge cannot ride a side note. Every live procedure must carry
+ * the line (asserted below), so a new procedure cannot opt out of declaring.
+ */
+const acceptance = read('context/acceptance.html');
+
+/** Rows of a routing table (first <table> of the section): key cell + MANUAL-badge flag. */
+const routingRows = (sectionId: string): { key: string; manual: boolean }[] => {
+  const table =
+    new RegExp(`<section id="${sectionId}">[\\s\\S]*?</table>`).exec(acceptance)?.[0] ?? '';
+  const rows: { key: string; manual: boolean }[] = [];
+  for (const tr of table.match(/<tr>[\s\S]*?<\/tr>/g) ?? []) {
+    const cells = [...tr.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map((m) => m[1] ?? '');
+    if (cells.length < 2) continue; // the <th> header row has no <td> cells
+    const key = (cells[0] ?? '').replace(/<[^>]+>/g, '').trim();
+    // Only the METHODS cell (last) decides the badge — a subject cell may name MANUAL
+    // in prose (the design.html row's "no MANUAL secondary" note).
+    const manual = /<span class="mc">MANUAL<\/span>/.test(cells[cells.length - 1] ?? '');
+    rows.push({ key, manual });
+  }
+  return rows;
+};
+
+/**
+ * A row key parsed to its requirement ids: `12 R01/R03/R04` → §12 + [1,3,4];
+ * `19 R01–R06` expands the range; a §05-table key (`R6`, `R12 core`) defaults to §17;
+ * `10a` / `16` are bare sections. Non-requirement keys (`design.html`) parse to null —
+ * asserted MANUAL-free below rather than silently skipped.
+ */
+const rowIds = (rawKey: string): { section: string; rs: number[] } | null => {
+  const m = /^(?:R(\d+)\b|(\d+[ab]?)\b)(.*)$/.exec(rawKey.trim());
+  if (!m) return null;
+  const section = m[2] ?? '17';
+  const rs = new Set<number>();
+  if (m[1] !== undefined) rs.add(parseInt(m[1], 10));
+  const rest = m[3] ?? '';
+  const range = /R(\d+)\s*[–-]\s*R?(\d+)/.exec(rest);
+  if (range) {
+    for (let i = parseInt(range[1] ?? '0', 10); i <= parseInt(range[2] ?? '0', 10); i++) rs.add(i);
+  } else {
+    for (const r of rest.matchAll(/R(\d+)/g)) rs.add(parseInt(r[1] ?? '0', 10));
+  }
+  return { section, rs: [...rs] };
+};
+
+/** Each live `## CHECK` procedure with its `**Claims —**` line (null when it carries none). */
+const liveProcedures = ((): { heading: string; claims: string | null }[] =>
+  runbook
+    .split(/^## /m)
+    .slice(1)
+    .filter((p) => p.startsWith('CHECK '))
+    .map((part) => ({
+      heading: (part.split('\n', 1)[0] ?? '').trim(),
+      claims: /^\*\*Claims —\*\* (.+)$/m.exec(part)?.[1] ?? null,
+    })))();
+
+/** Every §-id the live procedures DECLARE, normalized: `12`, `12 R1`, `17 R5`, … */
+const liveClaims = ((): Set<string> => {
+  const claims = new Set<string>();
+  const declared = liveProcedures.map((p) => p.claims ?? '').join('\n');
+  for (const m of declared.matchAll(/§(\d+[ab]?)((?:\s*R\d+)?(?:\s*\/\s*R?\d+)*)/g)) {
+    const sec = m[1] ?? '';
+    claims.add(sec);
+    for (const r of (m[2] ?? '').matchAll(/\d+/g)) claims.add(`${sec} R${parseInt(r[0], 10)}`);
+  }
+  return claims;
+})();
+
+describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a live runbook procedure (#252)', () => {
+  const rows = [
+    ...routingRows('s4').map((r) => ({ ...r, table: '§04' })),
+    ...routingRows('s5').map((r) => ({ ...r, table: '§05' })),
+  ];
+  const manualRows = rows.filter((r) => r.manual);
+
+  it('parsed both tables and the live procedures (nothing is silently empty)', () => {
+    expect(rows.filter((r) => r.table === '§04').length).toBeGreaterThan(30);
+    expect(rows.filter((r) => r.table === '§05').length).toBe(14);
+    expect(manualRows.length).toBeGreaterThan(4);
+    expect(liveClaims.size).toBeGreaterThan(10);
+  });
+
+  it('every live procedure declares its claims', () => {
+    const undeclared = liveProcedures.filter((p) => p.claims === null).map((p) => p.heading);
+    expect(undeclared, 'live `## CHECK` procedures with no `**Claims —**` line').toEqual([]);
+  });
+
+  it('every MANUAL badge sits on a row whose key parses to requirement ids', () => {
+    const unparsed = manualRows.filter((r) => rowIds(r.key) === null).map((r) => `${r.table} ${r.key}`);
+    expect(unparsed).toEqual([]);
+  });
+
+  it('every MANUAL badge resolves to a live procedure claim', () => {
+    const dangling = manualRows
+      .filter((r) => {
+        const ids = rowIds(r.key);
+        if (ids === null) return true;
+        return ids.rs.length === 0
+          ? !liveClaims.has(ids.section)
+          : !ids.rs.some((n) => liveClaims.has(`${ids.section} R${n}`));
+      })
+      .map((r) => `${r.table} ${r.key}`);
+    expect(dangling, 'MANUAL badges no live `## CHECK` procedure claims').toEqual([]);
   });
 });
 
