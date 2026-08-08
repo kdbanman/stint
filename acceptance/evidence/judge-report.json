@@ -186,7 +186,7 @@
         "billableSent": true
       },
       "justification": "Start form sent: {\"billable\":false,\"description\":\"auth refactor\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\",\"urgent\"]}",
-      "screenshot": "main-start-form.png"
+      "screenshot": "main-start-attributes.png"
     },
     {
       "item": "START_FORM",

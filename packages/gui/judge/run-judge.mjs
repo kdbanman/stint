@@ -11,7 +11,7 @@
  */
 import { chromium } from 'playwright-core';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
 import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
@@ -52,11 +52,23 @@ const PROBE_HELPERS = `window.__probe = {
   },
 };`;
 
+// Every screenshot filename the harness writes, in write order. Capture filenames are
+// hand-chosen per scene, so nothing structural stops two scenes picking the same one —
+// last writer wins while both cite it, and no freshness gate notices (issue #283). The
+// driver slices this per scene and holds each scene to its declared `captures` list.
+const captured = [];
+
 // Every scene page — withPage's and the hand-built ones — comes through here so the probe
-// helpers are always installed before the renderer loads.
+// helpers are always installed before the renderer loads, and every capture lands in
+// `captured` no matter which page took it.
 async function newScenePage(browser, pageOpts) {
   const page = await browser.newPage(pageOpts);
   await page.addInitScript(PROBE_HELPERS);
+  const screenshot = page.screenshot.bind(page);
+  page.screenshot = (options = {}) => {
+    if (options.path) captured.push(basename(options.path));
+    return screenshot(options);
+  };
   return page;
 }
 
@@ -1530,7 +1542,7 @@ async function sceneStartAttributes(browser) {
     await page.fill('#start-project', 'API');
     await page.fill('#start-tags', 'deep, urgent');
     await page.uncheck('#start-bill');
-    await page.screenshot({ path: join(EVIDENCE, 'main-start-form.png') });
+    await page.screenshot({ path: join(EVIDENCE, 'main-start-attributes.png') });
     await page.click('#start-go');
     const started = await page.evaluate(() => window.__STARTED__);
     const attributesSent =
@@ -1545,7 +1557,7 @@ async function sceneStartAttributes(browser) {
       'START_ATTRIBUTES',
       { attributesSent, billableSent },
       `Start form sent: ${JSON.stringify(started)}`,
-      'main-start-form.png',
+      'main-start-attributes.png',
     );
   });
 }
@@ -6620,72 +6632,75 @@ async function sceneDesktopFeel() {
 
 /**
  * The declarative rubric-row -> scene table (issue #85). Each entry binds the
- * acceptance/criteria/judge-rubric.md row id(s) a scene proves to the function that
- * drives it; the driver runs them in order and throws if a scene records an item it
- * does not declare — or misses one it does — so rubric↔scene drift fails loud instead
- * of silently accumulating. `node run-judge.mjs --list-items` prints the bound row ids
- * for the bind test without launching a browser.
+ * acceptance/criteria/judge-rubric.md row id(s) a scene proves, and the screenshot
+ * file(s) it writes (issue #283), to the function that drives it; the driver runs them
+ * in order and throws if a scene records an item — or writes a capture — it does not
+ * declare, or misses one it does, so rubric↔scene and capture↔scene drift fail loud
+ * instead of silently accumulating. `node run-judge.mjs --list-items` prints the bound
+ * row ids and `--list-captures` the scene→capture pairs for the bind test, no browser.
+ * Captures must be unique across scenes (judge-bind.test.ts): a shared filename means
+ * last writer wins while every citation of it points at the other scene's state.
  */
 const SCENES = {
-  EMPTY_STATE: { items: ['EMPTY_STATE'], run: sceneEmptyState },
-  NAV_SHELL: { items: ['NAV_SHELL'], run: sceneNavShell },
-  KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], run: sceneKeyboardFocus },
-  TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], run: sceneTrayCountup },
-  TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], run: sceneTrayPopoverSurface },
-  POPOVER_REJECT: { items: ['POPOVER_REJECT'], run: scenePopoverReject },
-  IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], run: sceneInWindowTimer },
-  CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], run: sceneCrossViewFreshness },
-  TIMER_VIEW: { items: ['TIMER_VIEW'], run: sceneTimerView },
-  FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], run: sceneFutureStartGuard },
-  FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], run: sceneFavoritesRail },
-  ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE', 'ACCENT_SOLID_BUDGET'], run: sceneAccentDiscipline },
-  PRIMARY_HANDOFF: { items: ['PRIMARY_HANDOFF'], run: scenePrimaryHandoff },
-  CLICKABILITY: { items: ['CLICKABILITY'], run: sceneClickability },
-  START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], run: sceneStartAttributes },
-  START_FORM: { items: ['START_FORM'], run: sceneStartForm },
-  RUNNING_SINGLE_ACTION: { items: ['RUNNING_SINGLE_ACTION'], run: sceneRunningSingleAction },
-  UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], run: sceneUnifiedFormAdd },
-  UNIFIED_FORM_EXPANDER: { items: ['UNIFIED_FORM_EXPANDER'], run: sceneUnifiedFormExpander },
-  UNIFIED_FORM: { items: ['UNIFIED_FORM'], run: sceneUnifiedForm },
-  MULTILINE_DESC: { items: ['MULTILINE_DESC'], run: sceneMultilineDesc },
-  OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], run: sceneOverlapBanner },
-  SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], run: sceneSplitAffordance },
-  INLINE_GATE_CONTAINMENT: { items: ['INLINE_GATE_CONTAINMENT'], run: sceneInlineGateContainment },
-  WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], run: sceneWriteRejectionFeedback },
-  ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], run: sceneAddRefusalPalette },
-  MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], run: sceneMergeConflict },
-  MERGE_CHOICE_LIFT: { items: ['MERGE_CHOICE_LIFT'], run: sceneMergeChoiceLift },
-  MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], run: sceneMergeNoconflict },
-  MERGE_GAP: { items: ['MERGE_GAP'], run: sceneMergeGap },
-  DELETE_CONFIRM: { items: ['DELETE_CONFIRM'], run: sceneDeleteConfirm },
-  CONFIRM_DELETE: { items: ['CONFIRM_DELETE'], run: sceneConfirmDelete },
-  CONFIRM_DESTRUCTIVE: { items: ['CONFIRM_DESTRUCTIVE'], run: sceneConfirmDestructive },
-  CLIENTS_VIEW: { items: ['CLIENTS_VIEW'], run: sceneClientsView },
-  CONFIRM_ARCHIVE: { items: ['CONFIRM_ARCHIVE'], run: sceneConfirmArchive },
-  RESTORE_ARCHIVED: { items: ['RESTORE_ARCHIVED'], run: sceneRestoreArchived },
-  TAG_CHIPS: { items: ['TAG_CHIPS'], run: sceneTagChips },
-  REPORTS_VIEW: { items: ['REPORTS_VIEW'], run: sceneReportsView },
-  ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], run: sceneEntriesCalendar },
-  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], run: sceneCalendarLayout },
-  WINDOW_GEOMETRY: { items: ['WINDOW_GEOMETRY'], run: sceneWindowGeometry },
-  CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], run: sceneCalendarAccentBudget },
-  SELECTION_LIFT: { items: ['SELECTION_LIFT'], run: sceneSelectionLift },
-  CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], run: sceneCalendarEntryBlock },
-  CALENDAR_KEYBOARD: { items: ['CALENDAR_KEYBOARD'], run: sceneCalendarKeyboard },
-  LIVE_FILTER: { items: ['LIVE_FILTER'], run: sceneLiveFilter },
-  SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], run: sceneSettingsView },
-  HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], run: sceneHotkeyNoTrap },
-  TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindow },
-  TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], run: sceneTimelineWindowAround },
-  SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], run: sceneSoftwareUpdate },
-  BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], run: sceneBackupsSection },
-  RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], run: sceneRecoveryNotice },
-  PARITY_REACH: { items: ['PARITY_REACH'], run: sceneParityReach },
-  FIELD_LABELS: { items: ['FIELD_LABELS'], run: sceneFieldLabels },
-  FIELD_CHROME: { items: ['FIELD_CHROME'], run: sceneFieldChrome },
-  TARGET_SIZE: { items: ['TARGET_SIZE'], run: sceneTargetSize },
-  COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], run: sceneColourPairing },
-  DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], run: sceneDesktopFeel },
+  EMPTY_STATE: { items: ['EMPTY_STATE'], captures: ['main-empty.png'], run: sceneEmptyState },
+  NAV_SHELL: { items: ['NAV_SHELL'], captures: ['main-nav.png', 'main-nav-wide.png'], run: sceneNavShell },
+  KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], captures: ['main-focus.png'], run: sceneKeyboardFocus },
+  TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], captures: ['popover-running-1.png', 'popover-running-2.png'], run: sceneTrayCountup },
+  TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], captures: ['popover-tray-surface.png', 'popover-running.png'], run: sceneTrayPopoverSurface },
+  POPOVER_REJECT: { items: ['POPOVER_REJECT'], captures: ['popover-reject.png'], run: scenePopoverReject },
+  IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], captures: ['main-timer.png', 'timer-view.png', 'main-timer-idle.png'], run: sceneInWindowTimer },
+  CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], captures: ['timer-cross-view.png'], run: sceneCrossViewFreshness },
+  TIMER_VIEW: { items: ['TIMER_VIEW'], captures: ['timer-view-full.png', 'timer-card-attr-vs-flag.png'], run: sceneTimerView },
+  FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], captures: ['timer-future-start-reject.png'], run: sceneFutureStartGuard },
+  FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], captures: ['timer-favorites.png', 'timer-favorites-empty.png'], run: sceneFavoritesRail },
+  ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE', 'ACCENT_SOLID_BUDGET'], captures: ['main-running.png'], run: sceneAccentDiscipline },
+  PRIMARY_HANDOFF: { items: ['PRIMARY_HANDOFF'], captures: ['primary-handoff-timer.png', 'primary-handoff-reports.png'], run: scenePrimaryHandoff },
+  CLICKABILITY: { items: ['CLICKABILITY'], captures: ['main-clickability.png'], run: sceneClickability },
+  START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], captures: ['main-start-attributes.png'], run: sceneStartAttributes },
+  START_FORM: { items: ['START_FORM'], captures: ['main-start-form.png', 'main-start-form-running.png'], run: sceneStartForm },
+  RUNNING_SINGLE_ACTION: { items: ['RUNNING_SINGLE_ACTION'], captures: ['timer-running-single-action.png'], run: sceneRunningSingleAction },
+  UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], captures: ['unified-add.png'], run: sceneUnifiedFormAdd },
+  UNIFIED_FORM_EXPANDER: { items: ['UNIFIED_FORM_EXPANDER'], captures: ['unified-form-expander.png'], run: sceneUnifiedFormExpander },
+  UNIFIED_FORM: { items: ['UNIFIED_FORM'], captures: ['main-edit.png', 'main-edit-exact-times.png'], run: sceneUnifiedForm },
+  MULTILINE_DESC: { items: ['MULTILINE_DESC'], captures: ['main-multiline-desc.png'], run: sceneMultilineDesc },
+  OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], captures: ['main-overlap-banner.png'], run: sceneOverlapBanner },
+  SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], captures: ['main-split.png'], run: sceneSplitAffordance },
+  INLINE_GATE_CONTAINMENT: { items: ['INLINE_GATE_CONTAINMENT'], captures: ['main-inline-gate.png'], run: sceneInlineGateContainment },
+  WRITE_REJECTION_FEEDBACK: { items: ['WRITE_REJECTION_FEEDBACK'], captures: ['main-edit-reject.png'], run: sceneWriteRejectionFeedback },
+  ADD_REFUSAL_PALETTE: { items: ['ADD_REFUSAL_PALETTE'], captures: ['add-refusal-palette.png'], run: sceneAddRefusalPalette },
+  MERGE_CONFLICT: { items: ['MERGE_CONFLICT'], captures: ['main-merge-conflict.png'], run: sceneMergeConflict },
+  MERGE_CHOICE_LIFT: { items: ['MERGE_CHOICE_LIFT'], captures: ['merge-choice-lift.png'], run: sceneMergeChoiceLift },
+  MERGE_NOCONFLICT: { items: ['MERGE_NOCONFLICT'], captures: [], run: sceneMergeNoconflict },
+  MERGE_GAP: { items: ['MERGE_GAP'], captures: ['main-merge-gap.png'], run: sceneMergeGap },
+  DELETE_CONFIRM: { items: ['DELETE_CONFIRM'], captures: [], run: sceneDeleteConfirm },
+  CONFIRM_DELETE: { items: ['CONFIRM_DELETE'], captures: ['main-confirm-delete.png'], run: sceneConfirmDelete },
+  CONFIRM_DESTRUCTIVE: { items: ['CONFIRM_DESTRUCTIVE'], captures: ['main-confirm.png'], run: sceneConfirmDestructive },
+  CLIENTS_VIEW: { items: ['CLIENTS_VIEW'], captures: ['main-clients.png', 'main-clients-created.png', 'main-clients-mutated.png', 'main-clients-empty.png'], run: sceneClientsView },
+  CONFIRM_ARCHIVE: { items: ['CONFIRM_ARCHIVE'], captures: ['main-confirm-archive.png'], run: sceneConfirmArchive },
+  RESTORE_ARCHIVED: { items: ['RESTORE_ARCHIVED'], captures: ['main-clients-archived.png'], run: sceneRestoreArchived },
+  TAG_CHIPS: { items: ['TAG_CHIPS'], captures: ['main-tags.png'], run: sceneTagChips },
+  REPORTS_VIEW: { items: ['REPORTS_VIEW'], captures: ['reports-list.png', 'reports-run.png', 'reports-empty.png'], run: sceneReportsView },
+  ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], captures: ['entries-search.png', 'entries-calendar.png'], run: sceneEntriesCalendar },
+  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], captures: ['main-calendar.png'], run: sceneCalendarLayout },
+  WINDOW_GEOMETRY: { items: ['WINDOW_GEOMETRY'], captures: ['calendar-wide.png', 'min-window-add.png', 'popover-fit.png'], run: sceneWindowGeometry },
+  CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], captures: ['calendar-accent-budget.png'], run: sceneCalendarAccentBudget },
+  SELECTION_LIFT: { items: ['SELECTION_LIFT'], captures: ['selection-lift.png', 'selection-lift-editing.png'], run: sceneSelectionLift },
+  CALENDAR_ENTRY_BLOCK: { items: ['CALENDAR_ENTRY_BLOCK'], captures: ['main-calendar-short.png'], run: sceneCalendarEntryBlock },
+  CALENDAR_KEYBOARD: { items: ['CALENDAR_KEYBOARD'], captures: ['calendar-keyboard-focus.png'], run: sceneCalendarKeyboard },
+  LIVE_FILTER: { items: ['LIVE_FILTER'], captures: ['main-filtered.png', 'main-no-matching.png'], run: sceneLiveFilter },
+  SETTINGS_VIEW: { items: ['SETTINGS_VIEW'], captures: ['main-settings.png'], run: sceneSettingsView },
+  HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], captures: ['settings-hotkey-focus.png'], run: sceneHotkeyNoTrap },
+  TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], captures: ['timeline-window.png'], run: sceneTimelineWindow },
+  TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], captures: [], run: sceneTimelineWindowAround },
+  SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], captures: ['main-software-update.png', 'main-software-update-error.png', 'main-software-update-check-error.png'], run: sceneSoftwareUpdate },
+  BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], captures: ['main-backups.png', 'main-backups-empty.png'], run: sceneBackupsSection },
+  RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], captures: ['main-recovery.png'], run: sceneRecoveryNotice },
+  PARITY_REACH: { items: ['PARITY_REACH'], captures: ['parity-timer.png', 'parity-entries.png', 'parity-clients.png', 'parity-reports.png', 'parity-settings.png'], run: sceneParityReach },
+  FIELD_LABELS: { items: ['FIELD_LABELS'], captures: ['field-labels-timer.png', 'field-labels-entries.png', 'field-labels-reports.png'], run: sceneFieldLabels },
+  FIELD_CHROME: { items: ['FIELD_CHROME'], captures: ['field-chrome-search-focus.png'], run: sceneFieldChrome },
+  TARGET_SIZE: { items: ['TARGET_SIZE'], captures: ['main-target-size.png', 'target-size-add-form.png'], run: sceneTargetSize },
+  COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], captures: ['main-colour-pairing.png'], run: sceneColourPairing },
+  DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], captures: [], run: sceneDesktopFeel },
 };
 
 async function main() {
@@ -6699,6 +6714,7 @@ async function main() {
 
   for (const [name, scene] of Object.entries(SCENES)) {
     const before = results.length;
+    const shotsBefore = captured.length;
     await scene.run(browser);
     const recorded = [...new Set(results.slice(before).map((r) => r.item))];
     const missing = scene.items.filter((i) => !recorded.includes(i));
@@ -6707,6 +6723,18 @@ async function main() {
       throw new Error(
         `scene ${name} drifted from its declared rubric rows — ` +
           `missing: [${missing.join(', ')}] undeclared: [${undeclared.join(', ')}]`,
+      );
+    }
+    // The capture side of the declaration (issue #283): the scene wrote exactly the files
+    // it declares, so the --list-captures listing the bind test asserts uniqueness over is
+    // the truth about what a judge run writes, not a parallel hand-copied list.
+    const wrote = [...new Set(captured.slice(shotsBefore))];
+    const unwritten = scene.captures.filter((f) => !wrote.includes(f));
+    const unregistered = wrote.filter((f) => !scene.captures.includes(f));
+    if (unwritten.length || unregistered.length) {
+      throw new Error(
+        `scene ${name} drifted from its declared captures — ` +
+          `declared but not written: [${unwritten.join(', ')}] written but not declared: [${unregistered.join(', ')}]`,
       );
     }
   }
@@ -6746,6 +6774,13 @@ if (process.argv.includes('--list-items')) {
   // The bind-test listing mode (the record.mjs precedent): every rubric row id the
   // scene table declares, one per line, no browser.
   for (const id of [...new Set(Object.values(SCENES).flatMap((s) => s.items))]) console.log(id);
+} else if (process.argv.includes('--list-captures')) {
+  // The capture listing (issue #283): every screenshot each scene declares it writes, one
+  // tab-separated scene→file pair per line, no browser. judge-bind.test.ts asserts no file
+  // has two writers; the driver's per-scene drift check holds these declarations to what a
+  // run actually writes.
+  for (const [name, scene] of Object.entries(SCENES))
+    for (const file of scene.captures) console.log(`${name}\t${file}`);
 } else {
   main().catch((err) => {
     console.error(err);

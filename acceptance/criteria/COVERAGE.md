@@ -176,7 +176,7 @@ scenarios), `features/overlap_and_editing.feature` ("Editing amends a field
 without disturbing the open state", "Editing the running entry's start does not
 stop it"), `prop/editing.test.ts`, `cli/test/gold/cli.test.ts` (edit/add),
 `gui/test/start.test.ts` (GUI start carries all attributes), JUDGE
-`START_ATTRIBUTES` (`main-start-form.png`) + `UNIFIED_FORM_ADD`
+`START_ATTRIBUTES` (`main-start-attributes.png`) + `UNIFIED_FORM_ADD`
 (`unified-add.png` — the unified entry form in ADD mode: the two-column form
 with the left attribute fields + the right inline interval picker over the
 collapsed Start/Stop expander (no `datetime-local`); dragging the picker "me"
@@ -1161,7 +1161,7 @@ first", run TWICE over core + `tt start` ), and the by-hand attributed start is
 BDD `features/reachable_by_hand.feature` "Start with attributes by hand (the
 Start form)" (run TWICE over core + `tt` ). JUDGE `START_ATTRIBUTES` +
 `START_FORM` + `RUNNING_SINGLE_ACTION` (`packages/gui/judge/`,
-`main-start-form.png` / `main-start-form-running.png` /
+`main-start-attributes.png` / `main-start-form.png` / `main-start-form-running.png` /
 `timer-running-single-action.png` — the scenes route to the Timer view first;
 the opened idle form exposes all five attribute controls with the primary
 reading Start and `noSwitch:true` , its billable box opening unchecked, checking
