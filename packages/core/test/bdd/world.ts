@@ -30,6 +30,7 @@ import {
   settingDescriptor,
   formatStamp,
   type Clock,
+  type GroupBy,
 } from '@stint/core';
 
 export interface EntryRec {
@@ -80,7 +81,7 @@ export interface ReportReq {
   preset?: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
   fromUtc?: string;
   toUtc?: string;
-  by: 'client' | 'project' | 'day' | 'tag';
+  by: GroupBy;
   billableFilter: 'billable' | 'all' | 'non-billable';
   rounding?: boolean;
   roundingIncrementMin?: number;
@@ -361,7 +362,7 @@ export interface World {
   saveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
     rounding?: boolean;
     roundingIncrementMin?: number;
@@ -376,7 +377,7 @@ export interface World {
   attemptSaveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean };
   /**
@@ -389,7 +390,7 @@ export interface World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): void;
   /**
@@ -403,7 +404,7 @@ export interface World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean };
   /**
@@ -418,7 +419,7 @@ export interface World {
   /** §09 R08 — amend a saved report's range preset (CoreWorld store.editReport / CliWorld `tt report edit <name> --<preset>`). */
   editReportRange(name: string, preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month'): void;
   /** §09 R08 — amend a saved report's group-by (CoreWorld store.editReport / CliWorld `tt report edit <name> --by <by>`). */
-  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void;
+  editReportBy(name: string, by: GroupBy): void;
   /** §09 R08 — rename a saved report (CoreWorld store.renameReport / CliWorld `tt report rename`). */
   renameReport(name: string, to: string): void;
   /** §09 R08 — delete a saved report (CoreWorld store.removeReport / CliWorld `tt report rm`). */
@@ -1036,7 +1037,7 @@ export class CoreWorld implements World {
   saveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
     rounding?: boolean;
     roundingIncrementMin?: number;
@@ -1055,7 +1056,7 @@ export class CoreWorld implements World {
   attemptSaveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean } {
     // §13 — the SAME saveReport the happy path uses; core's assertNameFree throw on a duplicate
@@ -1071,7 +1072,7 @@ export class CoreWorld implements World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): void {
     // §09 R01/R08: an ABSOLUTE spec freezes the exact from/to bounds (no re-resolution).
@@ -1088,7 +1089,7 @@ export class CoreWorld implements World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean } {
     // §09 R01/R08 — the SAME saveReport the happy path uses; core's from ≤ to guard throws on
@@ -1116,7 +1117,7 @@ export class CoreWorld implements World {
   editReportRange(name: string, preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month'): void {
     this.store.editReport(name, { rangeSpec: { kind: 'preset', preset } });
   }
-  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void {
+  editReportBy(name: string, by: GroupBy): void {
     this.store.editReport(name, { by });
   }
   renameReport(name: string, to: string): void {
@@ -1772,7 +1773,7 @@ export class CliWorld implements World {
   saveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
     rounding?: boolean;
     roundingIncrementMin?: number;
@@ -1795,7 +1796,7 @@ export class CliWorld implements World {
   attemptSaveReport(o: {
     name: string;
     preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month';
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean } {
     // §13 — a duplicate `tt report save` exits non-zero with a diagnostic and stores nothing;
@@ -1817,7 +1818,7 @@ export class CliWorld implements World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): void {
     // §09 R01/R08: `tt report save --range FROM TO` freezes an ABSOLUTE window, parity with the
@@ -1831,7 +1832,7 @@ export class CliWorld implements World {
     name: string;
     fromUtc: string;
     toUtc: string;
-    by: 'client' | 'project' | 'day' | 'tag';
+    by: GroupBy;
     billableFilter: 'billable' | 'all' | 'non-billable';
   }): { rejected: boolean } {
     // §09 R01/R08 — an inverted `tt report save --range FROM TO` exits non-zero with the core
@@ -1860,7 +1861,7 @@ export class CliWorld implements World {
     };
     this.tt(['report', 'edit', name, PRESET_FLAG[preset]]);
   }
-  editReportBy(name: string, by: 'client' | 'project' | 'day' | 'tag'): void {
+  editReportBy(name: string, by: GroupBy): void {
     this.tt(['report', 'edit', name, '--by', by]);
   }
   renameReport(name: string, to: string): void {

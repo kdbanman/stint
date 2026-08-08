@@ -579,19 +579,26 @@ R8);
 parity `report` →`tt [report, export]` (the preset/date pair travel inside
 existing payloads — no new channel/parity row). The GUI picker is thus fully
 covered (no longer a gap). **R2 group-by control** (the report's
-Client/Project/Day/Tag selector): the grouping engine is core's `store.report`
-keyed by `by` , proven surface-neutral on core AND tt by
+Client/Project/Day/Week/Month/Tag selector): the grouping engine is core's
+`store.report` keyed by `by` , proven surface-neutral on core AND tt by
 `features/reporting.feature` (grouping by project/tag/day sums each bucket, an
 entry fans out under every one of its tags, and the grand total is
-GROUPING-INVARIANT across client/project/day/tag — run TWICE via the World
+GROUPING-INVARIANT across all six groupings — run TWICE via the World
 `report` capability: CoreWorld `store.report` with the `by` , CliWorld
-`tt report --by <client|project|day|tag> --json` ). The GUI `#by-seg` segment
+`tt report --by <client|project|day|week|month|tag> --json` ). Week/month
+bucket keys and labels — the configured week-start day (both `weekStart`
+settings), start-day attribution in the configured zone, `YYYY-MM` month keys,
+and core's `groupKeyLabel` ("Week of Jul 27" / "Jul 2026") — are pinned by GOLD
+`core/test/gold/contracts.test.ts` "GOLD: week/month grouping buckets (§09
+R02)"; the v4→v5 `report.group_by` CHECK widening by GOLD
+`core/test/gold/migration.test.ts` . The GUI `#by-seg` segment
 (`gui/renderer/index.html` (Reports view) + `reports.js` ) is the
-discoverability surface — exactly the four `data-by` groupings (default Client),
+discoverability surface — exactly the six `data-by` groupings (default Client),
 each click sending the `by` field over the same `report` IPC, the renderer
-painting `line.key` + the core-owned seconds and re-deriving no buckets/totals
+painting core's `groupKeyLabel(line.key, by)` + the core-owned seconds and
+re-deriving no buckets/totals
 (§09 R4 rounding/grouping owned by core). JUDGE `REPORTS_VIEW`
-(`packages/gui/judge/`, `reports-list.png` / `reports-list.png` — four group-by
+(`packages/gui/judge/`, `reports-list.png` / `reports-list.png` — six group-by
 options labelled, default Client, switching to Day regroups the rows while the
 grand total stays invariant). The GUI grouping control is thus fully covered.
 **R3 client/project/tag filters** (the report's client/project/tag filter set,
@@ -1423,7 +1430,7 @@ saved-reports coverage folds into one JUDGE item tagged **§12 R08 / §09
 R08–R09** in `judge-rubric.md` : `REPORTS_VIEW` (`reports-list.png` /
 `reports-run.png` — the saved-definition list paints one card per def with name
 + spec summary + Run/Edit; + New report / Edit opens the inline builder with the
-range presets (incl Custom), the four group-bys, the client/project/tag filters,
+range presets (incl Custom), the six group-bys, the client/project/tag filters,
 the billable segment, and the rounding toggle + 6/10/15/30 increment; clicking
 Run paints the grouped run-output with per-line + grand totals and the
 overlap/unreviewed-sleep flags surfaced in context on the affected rows, plus
@@ -1436,7 +1443,7 @@ which `PRIMARY_HANDOFF` gates, §15 / G10 / D11).
 Supporting BDD/GOLD all surface-neutral
 and shared with tt: `features/reports.feature` + `features/reporting.feature` +
 `features/search.feature` (range presets/custom, grouping by
-client/project/day/tag with the grand total grouping-invariant, the
+client/project/day/week/month/tag with the grand total grouping-invariant, the
 client/project/tag/billable filters, nearest-not-up rounding, and the CSV/JSON
 export bytes — each run TWICE over core + `tt report` /`tt export`), GOLD
 `core/test/gold/contracts.test.ts` + `cli/test/gold/cli.test.ts` +

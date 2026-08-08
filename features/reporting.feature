@@ -1,11 +1,12 @@
-Feature: Report grouping (group by client / project / day / tag)
+Feature: Report grouping (group by client / project / day / week / month / tag)
   # PRD §09 R2 — the report's Group by control. The same range of this-week entries can be
-  # regrouped by client, project, day, or tag; each grouping sums the SAME underlying
-  # billable time into different buckets, so the grand total is grouping-invariant. This
+  # regrouped by client, project, day, week, month, or tag; each grouping sums the SAME
+  # underlying billable time into different buckets, so the grand total is grouping-
+  # invariant. This
   # locks the grouping CONTRACT the GUI Group-by segment drives (gui/renderer/reports.js
   # #by-seg → window.stint.report({ by })). It runs TWICE — once over @stint/core
   # (store.report with the chosen `by`) and once over tt (`tt report --by <client|project|
-  # day|tag> --json`) — so the grouping engine the GUI control drives is proven identical on
+  # day|week|month|tag> --json`) — so the grouping engine the GUI control drives is proven identical on
   # both logic surfaces (§17 R8). The fixed clock is a Wednesday (2026-06-24); the entries
   # below all fall in that week, on two distinct days, under two clients/projects, with tags.
 
@@ -57,13 +58,16 @@ Feature: Report grouping (group by client / project / day / tag)
 
   Scenario: The grand total is grouping-invariant
     # Regrouping never changes the underlying time: the same week's entries total the same
-    # number of billable hours whether grouped by client, project, day, or tag — the property
-    # the GUI Group-by control relies on (switching the segment regroups the SAME totals).
+    # number of billable hours under every grouping — client, project, day, week, month, or
+    # tag — the property the GUI Group-by control relies on (switching the segment regroups
+    # the SAME totals). Week and month attribute by the entry's START day, like day.
     Given a closed entry "build" for "Acme" / "API" tagged "deep,urgent" this week on day 1 lasting 2 hours
     And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours
     Then a report for this week totals 5 billable hours grouped by client
     And a report for this week totals 5 billable hours grouped by project
     And a report for this week totals 5 billable hours grouped by day
+    And a report for this week totals 5 billable hours grouped by week
+    And a report for this week totals 5 billable hours grouped by month
     And a report for this week totals 5 billable hours grouped by tag
 
   # PRD §09 R1 — a CUSTOM range is a pair of PLAIN DATES, no time component (G3): the GUI's

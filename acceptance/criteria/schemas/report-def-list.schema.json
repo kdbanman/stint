@@ -40,7 +40,7 @@
       "range_to_utc": {
         "oneOf": [{ "type": "string", "format": "date-time" }, { "type": "null" }]
       },
-      "group_by": { "enum": ["client", "project", "day", "tag"] },
+      "group_by": { "enum": ["client", "project", "day", "week", "month", "tag"] },
       "billable_filter": { "enum": ["billable", "all", "non-billable"] },
       "client_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },
       "project_id": { "oneOf": [{ "type": "integer" }, { "type": "null" }] },

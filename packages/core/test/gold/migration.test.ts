@@ -100,12 +100,13 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       db.exec('PRAGMA user_version = 2');
       db.close();
 
-      // Re-open: the v2→v4 migration runs (additive DDL + the sleep_span source-CHECK rebuild).
+      // Re-open: the v2→v5 migration runs (additive DDL + the sleep_span source-CHECK
+      // rebuild + the report group_by widening).
       db = openDb(dbPath);
 
       // The version stamped forward to the current schema version…
       expect(userVersion(db)).toBe(SCHEMA_VERSION);
-      expect(userVersion(db)).toBe(4);
+      expect(userVersion(db)).toBe(5);
       // …the new v3 structures were ADDED…
       const tables = tableNames(db);
       expect(tables).toContain('favorite');
@@ -128,6 +129,68 @@ describe('GOLD: additive, idempotent migrations (§20 R08)', () => {
       );
       expect(db.prepare('SELECT * FROM setting ORDER BY key').all()).toEqual(before.setting);
       expect(db.prepare('SELECT * FROM sleep_span ORDER BY id').all()).toEqual(before.sleep_span);
+      db.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the v4→v5 widening preserves saved reports and admits week/month defs (§09 R02)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-migrate-v5-'));
+    try {
+      const dbPath = join(dir, 'timetracker.sqlite');
+      // Build a current DB with a saved report, then roll it back to the v4 shape: rebuild
+      // the report table with the four-value group_by CHECK and stamp user_version = 4.
+      let db = openDb(dbPath);
+      db.exec(
+        "INSERT INTO report(name, range_kind, range_preset, group_by, billable_filter, rounding, rounding_increment_min, created_utc) " +
+          "VALUES('Weekly', 'preset', 'week', 'client', 'billable', 0, 15, '2026-06-24T12:00:00Z')",
+      );
+      const beforeRows = db.prepare('SELECT * FROM report ORDER BY id').all();
+      db.exec(`
+        CREATE TABLE report_v4 (
+          id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+          name                   TEXT NOT NULL UNIQUE COLLATE NOCASE,
+          range_kind             TEXT NOT NULL CHECK(range_kind IN ('preset', 'absolute')),
+          range_preset           TEXT CHECK(range_preset IN ('today', 'week', 'last-week', 'month', 'last-month')),
+          range_from_utc         TEXT,
+          range_to_utc           TEXT,
+          group_by               TEXT NOT NULL CHECK(group_by IN ('client', 'project', 'day', 'tag')),
+          billable_filter        TEXT NOT NULL CHECK(billable_filter IN ('billable', 'all', 'non-billable')),
+          client_id              INTEGER REFERENCES client(id),
+          project_id             INTEGER REFERENCES project(id),
+          tag                    TEXT,
+          search                 TEXT,
+          rounding               INTEGER NOT NULL DEFAULT 0,
+          rounding_increment_min INTEGER NOT NULL DEFAULT 0,
+          created_utc            TEXT NOT NULL
+        )`);
+      db.exec('INSERT INTO report_v4 SELECT * FROM report');
+      db.exec('DROP TABLE report');
+      db.exec('ALTER TABLE report_v4 RENAME TO report');
+      db.exec('PRAGMA user_version = 4');
+      // The planted v4 CHECK really rejects a week def before the migration runs.
+      expect(() =>
+        db.exec(
+          "INSERT INTO report(name, range_kind, range_preset, group_by, billable_filter, rounding, rounding_increment_min, created_utc) " +
+            "VALUES('By week', 'preset', 'week', 'week', 'billable', 0, 15, '2026-06-24T12:00:00Z')",
+        ),
+      ).toThrow(/CHECK/);
+      db.close();
+
+      // Re-open: the v4→v5 rebuild widens the CHECK, preserving the stored def untouched…
+      db = openDb(dbPath);
+      expect(userVersion(db)).toBe(5);
+      expect(db.prepare('SELECT * FROM report ORDER BY id').all()).toEqual(beforeRows);
+      // …and a week-grouped (and month-grouped) definition is now storable.
+      db.exec(
+        "INSERT INTO report(name, range_kind, range_preset, group_by, billable_filter, rounding, rounding_increment_min, created_utc) " +
+          "VALUES('By week', 'preset', 'week', 'week', 'billable', 0, 15, '2026-06-24T12:00:00Z')",
+      );
+      db.exec(
+        "INSERT INTO report(name, range_kind, range_preset, group_by, billable_filter, rounding, rounding_increment_min, created_utc) " +
+          "VALUES('By month', 'preset', 'month', 'month', 'billable', 0, 15, '2026-06-24T12:00:00Z')",
+      );
       db.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });
