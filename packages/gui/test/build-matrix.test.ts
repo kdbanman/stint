@@ -1,12 +1,10 @@
 /**
- * GOLD — build-matrix guard (PRD §19 R01; runbook "CHECK BUILD MATRIX").
+ * GOLD — build-matrix guard (PRD §19 R01).
  *
  * §19 R01 fixes the distribution build matrix at macOS + Linux ONLY: no Windows
- * target anywhere. The CHECK BUILD MATRIX manual procedure asks a human to inspect
- * two config files for the absence of Windows. This test is the automated CI safety
- * valve the manual check could not be: it FAILS the moment a Windows target creeps
- * back into the electron-builder config or the CI workflow matrices via a config
- * change — so a regression cannot merge green.
+ * target anywhere. This test is the automated CI safety valve: it FAILS the moment
+ * a Windows target creeps back into the electron-builder config or the CI workflow
+ * matrices via a config change — so a regression cannot merge green.
  *
  * It asserts, by static inspection of the checked-in config (no build/network):
  *   1. electron-builder.yml declares `mac` + `linux` target blocks and NO `win` block
@@ -15,7 +13,8 @@
  *      windows-latest runner anywhere in the release or CI workflows.
  *   3. No Windows artifact extension (.exe / .msi / NSIS) is referenced by any of
  *      the three config files.
- * This is the executable mirror of the runbook FAIL conditions for §19 R01.
+ * The live complements are the runbook's CHECK INSTALL (the built artifacts launch
+ * on a real desktop) and CHECK PUBLISH-ON-MERGE (the published two-artifact release).
  */
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -256,7 +255,7 @@ describe('GOLD — pack never auto-publishes in CI (§19 R05)', () => {
 });
 
 /**
- * GOLD — PR-time packaging-smoke guard (PRD §19 R01; runbook "CHECK BUILD MATRIX").
+ * GOLD — PR-time packaging-smoke guard (PRD §19 R01).
  *
  * §19 R01's real artifacts are built by release.yml, which only runs POST-merge — so a
  * broken packaging toolchain (e.g. the `app-builder-bin` native helper missing, the

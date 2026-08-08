@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Packaging-toolchain GOLD backstop (PRD §19 R01; runbook "CHECK BUILD MATRIX").
+ * Packaging-toolchain GOLD backstop (PRD §19 R01).
  *
  * electron-builder shells out to a precompiled native helper, `app-builder`, shipped
  * by the `app-builder-bin` package as a per-platform binary. If that binary is missing

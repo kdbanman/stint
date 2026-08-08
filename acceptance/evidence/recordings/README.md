@@ -90,7 +90,7 @@ the retired look FAILS the recording instead of quietly re-recording it.
 To regenerate: `npm run record` (all recipes) or `node packages/gui/judge/record.mjs
 "<recipe id>"` for one. `--list` prints every recipe id.
 
-## §16 / §19 R04 — CHECK UPDATE-MID-TIMER (in-app update never touches the database)
+## §16 / §19 R04 — in-app update never touches the database (CHECK INSTALL & UPDATE part (d))
 
 The §16 decided behavior is that the §19 R04 download + guided install replaces the
 *application* only and **never touches the database**: a timer left running while the
