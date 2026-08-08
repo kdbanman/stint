@@ -15,6 +15,15 @@
  *      drift #185 documents — a scene's assertions change, the ids still match, and the
  *      row's claim goes stale unread. An assertion added or deleted renames the set.
  *
+ *   3. CAPTURE (#283). No two scenes write the same screenshot file. Capture filenames
+ *      are hand-chosen per scene, so a collision means last writer wins while both
+ *      scenes cite the file as their evidence — one of them is then reviewed every wave
+ *      against an image of the OTHER scene's state, and no freshness gate can notice
+ *      because the file exists and is fresh. The scene side comes from
+ *      `node run-judge.mjs --list-captures` (the same listing-mode philosophy as
+ *      --list-items); the driver holds each scene's declaration to what it actually
+ *      writes, so the listing is the truth about a run, not a parallel hand-copied list.
+ *
  * The scene side of (1) comes from `node run-judge.mjs --list-items` — the harness's own
  * listing mode over the real SCENES table (no browser launched) — not from regexing the
  * harness source, so a refactor of the harness cannot fool the guard and a renamed local
@@ -68,6 +77,17 @@ const sceneIds = (): string[] =>
   })
     .split('\n')
     .filter(Boolean);
+
+const sceneCaptures = (): { scene: string; capture: string }[] =>
+  execFileSync(process.execPath, [join(repoRoot, 'packages/gui/judge/run-judge.mjs'), '--list-captures'], {
+    encoding: 'utf8',
+  })
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const [scene, capture] = line.split('\t');
+      return { scene: scene!, capture: capture! };
+    });
 
 const reportResults = (): { item: string; facts: Record<string, boolean> | null }[] =>
   (JSON.parse(read('acceptance/evidence/judge-report.json')) as {
@@ -179,6 +199,25 @@ describe('judge rubric ↔ recorded sub-facts (issue #185)', () => {
       .filter(([, names]) => new Set(names).size !== names.length)
       .map(([id]) => id);
     expect(dupes, 'rubric rows repeating a sub-fact name').toEqual([]);
+  });
+});
+
+describe('judge scene capture uniqueness (issue #283)', () => {
+  it('the harness lists a non-trivial capture set', () => {
+    expect(sceneCaptures().length).toBeGreaterThan(50);
+  });
+
+  it('no two scenes write the same capture file', () => {
+    const writers = new Map<string, string[]>();
+    for (const { scene, capture } of sceneCaptures()) {
+      const scenes = writers.get(capture) ?? [];
+      if (!scenes.includes(scene)) scenes.push(scene);
+      writers.set(capture, scenes);
+    }
+    const collisions = [...writers]
+      .filter(([, scenes]) => scenes.length > 1)
+      .map(([capture, scenes]) => `${capture} written by [${scenes.join(', ')}]`);
+    expect(collisions, 'capture files with two writers — last writer wins, every citation of it lies').toEqual([]);
   });
 });
 
