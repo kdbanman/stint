@@ -64,7 +64,10 @@ describe('shipping IPC handler-map parity (issue #87)', () => {
 describe('GOLD — exportEntries writes the chosen scope to the save target (§09 R06/R09)', () => {
   const NOW = new Date('2026-06-24T18:00:00Z');
 
-  /** A real store with one billable and one non-billable closed entry this week. */
+  /**
+   * A real store with one billable and one non-billable closed entry this week, plus one
+   * months earlier — the row a whole-record 'all' export keeps and any window would drop.
+   */
   function seeded(): Store {
     const store = Store.openMemory(() => NOW);
     const { clientId, projectId } = store.resolveClientProjectByName({ client: 'Acme', project: 'API' });
@@ -82,6 +85,12 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
       fromUtc: '2026-06-23T09:00:00Z',
       toUtc: '2026-06-23T09:30:00Z',
       billable: false,
+    });
+    store.add({
+      description: 'january audit',
+      fromUtc: '2026-01-05T09:00:00Z',
+      toUtc: '2026-01-05T10:00:00Z',
+      billable: true,
     });
     return store;
   }
@@ -101,33 +110,30 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
     return { handlers, asked };
   }
 
-  // The handler resolves its range against the real wall clock (`new Date()` inside main), so
-  // the requests below carry EXPLICIT bounds rather than a preset — the range resolution is
-  // reportview.test.ts's subject; the write path is this one's.
-  const WINDOW = { fromUtc: '2026-06-22T00:00:00Z', toUtc: '2026-06-29T00:00:00Z' };
-
-  /** The raw entries `tt export` would write for the same window — the scope-'all' expectation. */
-  function rawWindow(store: Store) {
-    return store.listEntries({ ...WINDOW, billable: 'all' });
+  /** Every raw entry ever — what no-flag `tt export` writes — the scope-'all' expectation. */
+  function wholeRecord(store: Store) {
+    return store.listEntries({ billable: 'all' });
   }
 
-  it("scope 'all' writes the `tt export` CSV bytes to the path the dialog returned", () => {
+  it("scope 'all' writes the whole-record `tt export` CSV bytes to the path the dialog returned", () => {
     const dir = mkdtempSync(join(tmpdir(), 'stint-gold-export-'));
     const store = seeded();
     try {
       const target = join(dir, 'picked.csv');
       const { handlers, asked } = harness(store, target);
 
-      const res = handlers.exportEntries({ format: 'csv', scope: 'all', ...WINDOW });
+      const res = handlers.exportEntries({ format: 'csv', scope: 'all' });
 
       // The ack reports the row count and the path actually written…
-      expect(res).toEqual({ written: rawWindow(store).length, path: target });
+      expect(res).toEqual({ written: wholeRecord(store).length, path: target });
       // …the file exists with the same bytes core's toCsv produces for those entries (so the
-      // file the GUI lands and `tt export --week --csv` are the same bytes)…
+      // file the GUI lands and no-flag `tt export --csv` are the same bytes)…
       const written = readFileSync(target, 'utf8');
-      expect(written).toBe(toCsv(rawWindow(store), NOW));
-      // …including the non-billable row, because 'all' does not narrow.
+      expect(written).toBe(toCsv(wholeRecord(store), NOW));
+      // …including the non-billable row ('all' does not narrow by billable) AND the January
+      // row months outside any current window ('all' is the whole record, not a range).
       expect(written).toMatch(/,admin,/);
+      expect(written).toMatch(/,january audit,/);
       // The dialog was asked once, for the right format, with a dated default name.
       expect(asked).toHaveLength(1);
       expect(asked[0]?.format).toBe('csv');
@@ -138,19 +144,19 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
     }
   });
 
-  it("scope 'all' writes the `tt export` JSON bytes verbatim", () => {
+  it("scope 'all' writes the whole-record `tt export` JSON bytes verbatim", () => {
     const dir = mkdtempSync(join(tmpdir(), 'stint-gold-export-'));
     const store = seeded();
     try {
       const target = join(dir, 'picked.json');
       const { handlers } = harness(store, target);
 
-      const res = handlers.exportEntries({ format: 'json', scope: 'all', ...WINDOW });
+      const res = handlers.exportEntries({ format: 'json', scope: 'all' });
 
-      expect(res).toEqual({ written: rawWindow(store).length, path: target });
+      expect(res).toEqual({ written: wholeRecord(store).length, path: target });
       const written = readFileSync(target, 'utf8');
       expect(written.endsWith('\n')).toBe(true);
-      expect(JSON.parse(written)).toEqual(toJsonEntries(rawWindow(store), NOW));
+      expect(JSON.parse(written)).toEqual(toJsonEntries(wholeRecord(store), NOW));
     } finally {
       store.close();
       rmSync(dir, { recursive: true, force: true });
@@ -161,11 +167,12 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
     const dir = mkdtempSync(join(tmpdir(), 'stint-gold-export-'));
     const store = seeded();
     try {
-      // A billable-only saved report over the window: `admin` (clientless ⇒ non-billable) fails
-      // its filter, so the filtered file must drop the row the raw file keeps.
+      // A billable-only saved report over this week: `admin` (clientless ⇒ non-billable) fails
+      // its filter and `january audit` falls outside its window, so the filtered file must
+      // drop both rows the whole-record file keeps.
       store.saveReport({
         name: 'This week',
-        rangeSpec: { kind: 'absolute', ...WINDOW },
+        rangeSpec: { kind: 'absolute', fromUtc: '2026-06-22T00:00:00Z', toUtc: '2026-06-29T00:00:00Z' },
         by: 'client',
         billableFilter: 'billable',
         rounding: false,
@@ -183,6 +190,7 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
       const written = readFileSync(target, 'utf8');
       expect(written).toMatch(/Acme,API,deep,auth refactor/);
       expect(written).not.toMatch(/,admin,/);
+      expect(written).not.toMatch(/,january audit,/);
       expect(res).toEqual({ written: 1, path: target });
     } finally {
       store.close();
@@ -196,7 +204,7 @@ describe('GOLD — exportEntries writes the chosen scope to the save target (§0
     try {
       const { handlers, asked } = harness(store, undefined);
 
-      const res = handlers.exportEntries({ format: 'csv', scope: 'all', ...WINDOW });
+      const res = handlers.exportEntries({ format: 'csv', scope: 'all' });
 
       // Cancel is non-destructive: the ack says so and NOTHING landed on disk anywhere.
       expect(res).toEqual({ canceled: true });

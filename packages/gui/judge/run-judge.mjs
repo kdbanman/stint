@@ -3757,6 +3757,33 @@ async function sceneReportsView(browser) {
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-list.png'), fullPage: true });
 
+    // (a2) §09 R06 / §12 R08 — PRE-RUN, COMPUTED state (issue #262). Before ANY report has
+    // run: the run-scoped FILTERED export row is genuinely invisible (computed style, not the
+    // hidden attribute — `.report-export { display:flex }` once outspecified the UA's
+    // `[hidden] { display:none }`, so the row rendered while its markup said hidden and its
+    // buttons silently no-oped), while Export All Data is VISIBLE and WORKING: it is standing
+    // chrome with no disarmed state — clicking it pre-run fires a real exportEntries call with
+    // scope 'all' and NO saved ref (the whole record needs no report), and the status paints
+    // the honest "(all data)" ack.
+    const preRun = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      return {
+        runVisible: visible(document.querySelector('#rep-run')),
+        filteredVisible: visible(document.querySelector('#rep-run-export')),
+        allVisible: visible(document.querySelector('#rep-run-export-all')),
+        allCsvVisible: visible(document.querySelector('#rep-export-all-csv')),
+      };
+    });
+    await page.click('#rep-export-all-csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.scope === 'all' && window.__EXPORTED__?.format === 'csv');
+    await page.waitForFunction(
+      () => /all data/.test(document.querySelector('#rep-export-all-status')?.textContent || ''),
+    );
+    const preRunExport = await page.evaluate(() => ({
+      payload: { ...window.__EXPORTED__ },
+      status: document.querySelector('#rep-export-all-status')?.textContent.trim() ?? '',
+    }));
+
     await page.click('#rep-new');
     await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
     const builder = await page.evaluate(() => ({
@@ -3889,17 +3916,26 @@ async function sceneReportsView(browser) {
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-run.png'), fullPage: true });
 
-    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run) carry
-    // scope 'filtered' + the saved ref — the rows the report shows (byte-identical to
-    // `tt report run <name> --csv|--json`).
+    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run, revealed
+    // by the run) carry scope 'filtered' + the saved ref — the rows the report shows
+    // (byte-identical to `tt report run <name> --csv|--json`). The run also makes the filtered
+    // row COMPUTED-visible (the pre-run probe above proved it computed-invisible before).
+    const postRunVisible = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      return {
+        filteredVisible: visible(document.querySelector('#rep-run-export')),
+        allVisible: visible(document.querySelector('#rep-run-export-all')),
+      };
+    });
     await page.click('#rep-export-csv');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'filtered');
     const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
     await page.click('#rep-export-json');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'filtered');
     const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
-    // …and Export All Data (set apart at the bottom) carries scope 'all' + the saved ref — every
-    // raw entry in the range (byte-identical to `tt export`), its status the honest "(all data)".
+    // …and Export All Data (set apart at the bottom) carries scope 'all' and NO saved ref even
+    // with a run on screen — the whole record (byte-identical to no-flag `tt export`), its
+    // status the honest "(all data)".
     await page.click('#rep-export-all-csv');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'all');
     const afterAllCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
@@ -3995,15 +4031,27 @@ async function sceneReportsView(browser) {
       run.flagOutside === 0 && // flags IN CONTEXT (none in a separate list)
       run.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
       run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
+    const preRunExportOk =
+      // Computed OUTCOME, not attribute (the issue-262 false green): pre-run, no run-output
+      // and no filtered exports are actually painted…
+      !preRun.runVisible && !preRun.filteredVisible &&
+      // …while Export All Data is standing chrome — laid out, and a click WORKS: a real
+      // exportEntries call, scope 'all', whole record (no saved ref), honest "(all data)" ack.
+      preRun.allVisible && preRun.allCsvVisible &&
+      preRunExport.payload.scope === 'all' && preRunExport.payload.format === 'csv' &&
+      preRunExport.payload.savedReportRef === undefined &&
+      /all data/.test(preRunExport.status);
     const exportOk =
+      // The run reveals the filtered row as a computed outcome (Export All stays standing).
+      postRunVisible.filteredVisible && postRunVisible.allVisible &&
       afterCsv.format === 'csv' && afterCsv.scope === 'filtered' &&
       afterJson.format === 'json' && afterJson.scope === 'filtered' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
       afterJson.savedReportRef === 'Weekly billables — Globex' &&
       afterAllCsv.format === 'csv' && afterAllCsv.scope === 'all' &&
       afterAllJson.format === 'json' && afterAllJson.scope === 'all' &&
-      afterAllCsv.savedReportRef === 'Weekly billables — Globex' &&
-      afterAllJson.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllCsv.savedReportRef === undefined && // the whole record consults no report, run or not
+      afterAllJson.savedReportRef === undefined &&
       /Export All Data/.test(exportLabels.allCsv || '') &&
       /Export All Data/.test(exportLabels.allJson || '') &&
       /all data/.test(exportLabels.allStatus || '');
@@ -4048,12 +4096,13 @@ async function sceneReportsView(browser) {
         customOk,
         editOk,
         runOk,
+        preRunExportOk,
         exportOk,
         kebabOk,
         refusalOk,
         emptyOk,
       },
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} pre-run=${JSON.stringify(preRun)} pre-run all-data export=${JSON.stringify(preRunExport)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} post-run visibility=${JSON.stringify(postRunVisible)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
 }

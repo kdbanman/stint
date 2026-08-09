@@ -342,6 +342,15 @@ export interface World {
    */
   exportRows(o: { fromUtc: string; toUtc: string; format: 'csv' | 'json' }): ExportRowRec[];
   /**
+   * §09 R06 — the WHOLE-RECORD export: every raw entry ever, no range — the durability /
+   * data-out escape hatch (the GUI "Export All Data" buttons / no-flag `tt export`).
+   * Surface-neutral: CoreWorld renders core's toCsv/toJsonEntries over an unbounded
+   * listEntries; CliWorld shells `tt export --csv|--json` with no range flag. Both return
+   * the parsed rows so a scenario can assert the export covers everything — billable and
+   * non-billable, inside and outside any current window.
+   */
+  exportAllRows(format: 'csv' | 'json'): ExportRowRec[];
+  /**
    * §09 R08 — save a named report definition (relative preset spec + group-by + billable
    * filter + optional rounding). Surface-neutral: CoreWorld store.saveReport, CliWorld
    * `tt report save <name> --<preset> --by … [--all|--non-billable] [--round <min>]`. The
@@ -425,8 +434,9 @@ export interface World {
    * narrowed by the def's client/project/tag/search + billable filter), parsed back to the
    * surface-neutral row shape. CoreWorld store.exportSavedReport(name,'csv') → reportFiltered
    * Entries → toCsv; CliWorld `tt report run <name> --csv`. Both must equal each other — the
-   * filtered export is byte-identical across surfaces. The RAW, whole-range escape hatch is a
-   * separate scope (`tt export` / "Export All Data"), exercised via exportRows over the window.
+   * filtered export is byte-identical across surfaces. The RAW escape hatch is a separate
+   * scope (`tt export` / "Export All Data" — the whole record), exercised via exportAllRows
+   * (or exportRows when a range flag narrows).
    */
   exportSavedReportRows(name: string): ExportRowRec[];
   /**
@@ -1007,6 +1017,22 @@ export class CoreWorld implements World {
     });
     const now = this.clock();
     if (o.format === 'json') {
+      return toJsonEntries(entries, now).map((e) => ({
+        description: e.description,
+        client: e.client,
+        rawSeconds: e.raw_duration_s,
+        billable: e.billable,
+      }));
+    }
+    return parseCsvExport(toCsv(entries, now));
+  }
+  exportAllRows(format: 'csv' | 'json'): ExportRowRec[] {
+    // §09 R06: the WHOLE RECORD — listEntries with no range keys (billable='all'), rendered
+    // via the SAME core exporters — exactly what no-flag `tt export` and the GUI's always-on
+    // "Export All Data" buttons write.
+    const entries = this.store.listEntries({ billable: 'all' });
+    const now = this.clock();
+    if (format === 'json') {
       return toJsonEntries(entries, now).map((e) => ({
         description: e.description,
         client: e.client,
@@ -1724,9 +1750,17 @@ export class CliWorld implements World {
     // chosen format back to the surface-neutral row shape so the export contract is asserted
     // identical to CoreWorld's (proving the GUI export reaches nothing tt cannot, §17 R8).
     const args = ['export', '--range', o.fromUtc, o.toUtc, o.format === 'json' ? '--json' : '--csv'];
-    const r = this.tt(args);
-    if (o.format === 'json') {
-      const rows = JSON.parse(r.out || '[]') as {
+    return this.parseExportOutput(this.tt(args).out, o.format);
+  }
+  exportAllRows(format: 'csv' | 'json'): ExportRowRec[] {
+    // §09 R06: NO range flag — `tt export` alone is the whole record (the recorded CLI
+    // default: everything ever, not an implicit this-week window).
+    return this.parseExportOutput(this.tt(['export', format === 'json' ? '--json' : '--csv']).out, format);
+  }
+  /** Parse `tt export` stdout (either format) back to the surface-neutral row shape. */
+  private parseExportOutput(out: string, format: 'csv' | 'json'): ExportRowRec[] {
+    if (format === 'json') {
+      const rows = JSON.parse(out || '[]') as {
         client: string | null;
         description: string | null;
         raw_duration_s: number;
@@ -1739,7 +1773,7 @@ export class CliWorld implements World {
         billable: e.billable,
       }));
     }
-    return parseCsvExport(r.out);
+    return parseCsvExport(out);
   }
   saveReport(o: {
     name: string;
