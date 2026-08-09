@@ -650,10 +650,12 @@ view (`gui/renderer/index.html` + `reports.js` ) is the discoverability
 surface over it — the on-screen grouped summary surfaces the **overlap /
 unreviewed-sleep flags in context on the affected rows** (via the pure
 `window.SU.lineFlags` over the core Report's `overlappedEntryIds`
-/`unreviewedSleepEntryIds`, not a separate list), the run-output's filtered
-**Export CSV / Export JSON** write the rows the report shows, and the standing
-**Export All Data** buttons — always visible, always clickable, no run
-required — write the whole record. Because the renderer cannot touch `fs` ,
+/`unreviewedSleepEntryIds`, not a separate list), the run-output — and its
+filtered **Export CSV / Export JSON**, which write the rows the report
+shows — expands inside the card of the definition that ran it (the §12 R08
+accordion), and the standing view-level **Export All Data** buttons — always
+visible, always clickable, no run required, inside no card — write the whole
+record. Because the renderer cannot touch `fs` ,
 the export round-trips through the `exportEntries` IPC channel:
 `gui/src/reportview.ts` (Electron-free, unit-tested) resolves the scope via
 `resolveExportDefinition` and renders the bytes via `exportPayload`
@@ -1415,16 +1417,21 @@ R08–R09** in `judge-rubric.md` : `REPORTS_VIEW` (`reports-list.png` /
 + spec summary + Run/Edit; + New report / Edit opens the inline builder with the
 range presets (incl Custom), the four group-bys, the client/project/tag filters,
 the billable segment, and the rounding toggle + 6/10/15/30 increment; clicking
-Run paints the grouped run-output with per-line + grand totals and the
-overlap/unreviewed-sleep flags surfaced in context on the affected rows, plus
-the resolved-range header; the filtered Export CSV / Export JSON — revealed by
-the run, computed-invisible before it — each drive a real `exportEntries` call
-carrying the saved report's ref, byte-identical to
-`tt report run <name> --csv|--json` , while the standing Export All Data
-buttons work BEFORE any run (computed-visible, a pre-run click fires scope
-'all' with no ref — the whole record, byte-identical to no-flag `tt export` ,
-issue #262); at rest only the standing + New report
-primary carries the accent, and once the builder is open it hands off to the
+Run expands the ran card around the grouped run-output — per-line + grand
+totals, the overlap/unreviewed-sleep flags surfaced in context on the affected
+rows, the resolved-range header — the §12 R08 accordion: results inside the
+card that ran them, exactly one card expanded at a time (running a second
+report collapses the first, its body emptied), collapse discarding the results
+(`oneOpenOk`, issue #268); the filtered Export CSV / Export JSON — inside the
+expanded card, revealed by the run, computed-invisible before it, no scope
+label — each drive a real `exportEntries` call carrying the saved report's
+ref, byte-identical to `tt report run <name> --csv|--json` , while the
+standing view-level Export All Data buttons (inside no card) work BEFORE any
+run (computed-visible, a pre-run click fires scope 'all' with no ref — the
+whole record, byte-identical to no-flag `tt export` , issue #262); the Edit
+builder nests inside its card while New report's opens below the list; at
+rest only the standing + New report primary carries the accent, and once the
+builder is open — in either accordion placement — it hands off to the
 builder's own Save — the commit, not the control that merely opened the form,
 which `PRIMARY_HANDOFF` gates, §15 / G10 / D11).
 Supporting BDD/GOLD all surface-neutral

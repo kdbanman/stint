@@ -102,15 +102,22 @@
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   .defs{overflow:hidden;margin-bottom:8px}
-  .def{display:flex;align-items:center;gap:16px;padding:16px 16px;border-bottom:1px solid var(--rule)}
+  /* §12 R08 — the ACCORDION (issue #268): each saved-definition card is a head row over an
+     expansion body. What a card owns — its run results, its Edit builder — expands INSIDE it;
+     exactly one card is expanded at a time, and collapsing discards the results. In the app
+     the expand is a snappy 0fr→1fr grid transition (~120ms, design.html D10), instant under
+     prefers-reduced-motion; this static page draws the expanded state. */
+  .def{border-bottom:1px solid var(--rule)}
   .def:last-child{border-bottom:0}
-  .def.sel{background:var(--wash)}
+  .dh{display:flex;align-items:center;gap:16px;padding:16px 16px}
+  .def.sel > .dh{background:var(--wash)}
   .def .di{flex:1;min-width:0}
   .def .dn{font-size:13px;font-weight:590}
   .def .ds{font-size:12px;color:var(--muted);margin-top:4px}
   .def .ds b{color:var(--ink);font-weight:590}
   .def .da{display:flex;align-items:center;gap:8px;flex:none}
-  .editor{border-bottom:1px solid var(--rule);background:var(--sidebar);padding:16px}
+  .dbody{padding:0 16px 16px}
+  .editor{border-top:1px solid var(--rule);background:var(--sidebar);padding:16px}
   .editor .en{margin-bottom:16px}
   .ctrl{display:grid;grid-template-columns:92px 1fr;gap:12px 16px;align-items:center}
   .ctrl .cl{font-size:12px;color:var(--muted);text-align:right}
@@ -121,10 +128,14 @@
      surfaced in the builder at the point of action; the builder stays open, nothing persists. */
   .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin-top:16px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
-  .runhd{display:flex;align-items:baseline;justify-content:space-between;margin:24px 0 8px}
-  .runhd .rt{font-size:17px;font-weight:640}
-  .runhd .rc{font-size:12px;color:var(--muted)}
+  /* §12 R08 — the run-output, nested inside its card: a head row (Run · name, the total, and
+     the close control that collapses + DISCARDS the results), the resolved-range line, and
+     the grouped table. */
   .summary{overflow:hidden}
+  .shead{display:flex;align-items:center;gap:12px;padding:12px 16px;background:var(--wash);border-bottom:1px solid var(--rule);font-size:13px;color:var(--muted)}
+  .shead .sname{margin-right:auto}
+  .shead b{color:var(--ink);font-weight:640}
+  .srange{padding:8px 16px;font-size:12px;color:var(--muted);background:var(--wash);border-bottom:1px solid var(--rule);font-variant-numeric:tabular-nums}
   table{width:100%;border-collapse:collapse;font-size:13px}
   td,th{text-align:left;padding:12px 16px;border-bottom:1px solid var(--rule)}
   th{font-size:12px;color:var(--muted);background:var(--wash)}
@@ -133,11 +144,14 @@
   .subr td{color:var(--muted);padding-left:32px}
   .subr td .pill{margin-left:8px}
   .tot td{font-weight:680;border-top:1px solid var(--rule-strong);border-bottom:0;background:var(--wash)}
-  .export{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:16px}
+  /* §09 R06/R09 — the report's own filtered export: inside the expanded card, under the
+     run-output it exports. The nesting states its scope, so no label names it. */
+  .export{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:12px}
   .export .escope{margin-right:auto;font-size:12px;font-weight:590;color:var(--muted);letter-spacing:.02em}
-  /* §09 R06: the raw "Export All Data" block sits apart at the bottom — a hairline rule and a
-     lighter margin mark it as the whole-record data-out escape hatch, not the report's
-     filtered export. Standing chrome: present and clickable whether or not a report has run. */
+  /* §09 R06: the raw "Export All Data" block sits apart at the bottom of the VIEW — outside
+     every card (run-independent, so it stays outside the accordion) — the whole-record
+     data-out escape hatch, not the report's filtered export. Standing chrome: present and
+     clickable whether or not a report has run. */
   .export-all{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
 </style>
 </head>
@@ -170,6 +184,11 @@
 <symbol id="i-grip" viewBox="0 0 24 24"><path d="M9 7h.01M15 7h.01M9 12h.01M15 12h.01M9 17h.01M15 17h.01"/></symbol>
 <symbol id="i-restore" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 1 2.3 5.6M4 12V7M4 12h5"/></symbol>
 </defs></svg>
+<!-- Window 1 — §12 R08, a report RUN (issue #268): the accordion. The run's grouped summary,
+     its resolved-range line, and its filtered export expand INSIDE the card of the definition
+     that ran it; every other card is collapsed (exactly one expanded at a time); the close
+     control on the run head collapses the card and DISCARDS the results. Export All Data
+     stays view-level at the bottom — run-independent, outside the accordion. -->
 <div class="win">
   <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Reports</div></div>
   <div class="shell">
@@ -185,82 +204,148 @@
 
       <div class="vhead">
         <h2 class="vtitle">Saved reports</h2>
-        <!-- design.html D11 — at most ONE accent-filled primary per view, and this page draws the
-             builder OPEN. New report is the view's standing primary at rest; while the builder is
-             up the most-likely action is its Save definition, so New report hands the accent over
-             and reads as the secondary (paper + border). Two filled buttons here would put the
-             accent on the control that merely opens a form beside the one that commits it. -->
+        <!-- design.html D11 — no builder is open in this window, so New report is the view's
+             standing primary and carries the one accent fill. -->
+        <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg> New report</button>
+      </div>
+
+      <div class="defs card">
+        <div class="def">
+          <div class="dh">
+            <div class="di"><div class="dn">Weekly billables — Globex</div>
+              <div class="ds"><b>This week</b> · by project · Globex Corp · billable only · no rounding</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          </div>
+          <!-- The expanded body: the run-output nested in the card that ran it. -->
+          <div class="dbody">
+            <div class="summary card">
+              <div class="shead"><span class="sname">Run · <b>Weekly billables — Globex</b></span><span>Total <b class="tnum">21h 35m</b></span><button class="iconbtn" aria-label="Collapse this report's results"><svg class="ic"><use href="#i-x"/></svg></button></div>
+              <div class="srange">Jun 22 – Jun 28, 2026</div>
+              <table>
+                <thead><tr><th>Project</th><th class="num">Hours</th></tr></thead>
+                <tbody>
+                  <tr class="grp"><td>Q3 Strategy</td><td class="num">12h 30m</td></tr>
+                  <tr class="subr"><td>Platform architecture review <span class="pill warn">overlap 15m</span></td><td class="num">8h 00m</td></tr>
+                  <tr class="subr"><td>Roadmap workshop</td><td class="num">4h 30m</td></tr>
+                  <tr class="grp"><td>Project Alpha</td><td class="num">9h 05m</td></tr>
+                  <tr class="subr"><td>Sprint delivery <span class="pill warn">unreviewed sleep</span></td><td class="num">9h 05m</td></tr>
+                  <tr class="tot"><td>Total</td><td class="num">21h 35m</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <!-- §09 R06/R09 — the report's OWN export: the FILTERED rows it shows, inside the
+                 card with the run-output (the nesting states the scope — no label names it),
+                 byte-identical to `tt report run <name> --csv|--json`. -->
+            <div class="export"><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export JSON</button></div>
+          </div>
+        </div>
+        <div class="def">
+          <div class="dh">
+            <div class="di"><div class="dn">Monthly — all clients by client</div>
+              <div class="ds"><b>Last month</b> · by client · all clients · all entries · round 15 min</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          </div>
+        </div>
+        <div class="def">
+          <div class="dh">
+            <div class="di"><div class="dn">Tax quarter — non-billable audit</div>
+              <div class="ds"><b>Apr 1 – Jun 30</b> · by tag · non-billable · no rounding</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- §09 R06 — the raw data-out escape hatch, set apart at the BOTTOM of the VIEW, outside
+           every card: the WHOLE RECORD, every raw entry ever (billable + non-billable, no
+           range), byte-identical to no-flag `tt export`. Standing chrome — needs no run and
+           consults none, so it never joins the accordion. -->
+      <div class="export export-all"><span class="escope">All data</span><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (CSV)</button><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (JSON)</button></div>
+    </div>
+  </div>
+</div>
+
+<!-- Window 2 — §12 R08, EDITING a definition: the builder joins the same nested pattern,
+     expanded inside the card being edited. One expanded card at a time, so no run-output is
+     on screen (opening the builder discarded it); Export All Data still stands at the view
+     bottom. A NEW report's builder opens below the list instead — a fresh def has no card. -->
+<div class="win">
+  <div class="bar"><div class="lights"><i class="r"></i><i class="y"></i><i class="g"></i></div><div class="t">Stint — Reports</div></div>
+  <div class="shell">
+    <nav class="nav">
+  <a href="timer.html"><svg class="ic"><use href="#i-clock"/></svg> Timer</a>
+  <a href="main.html"><svg class="ic"><use href="#i-list"/></svg> Entries</a>
+  <a href="clients.html"><svg class="ic"><use href="#i-users"/></svg> Clients</a>
+  <a href="#" class="on"><svg class="ic"><use href="#i-chart"/></svg> Reports</a>
+  <a href="settings.html"><svg class="ic"><use href="#i-settings"/></svg> Settings</a>
+  <span class="sp"></span>
+</nav>
+    <div class="view">
+
+      <div class="vhead">
+        <h2 class="vtitle">Saved reports</h2>
+        <!-- design.html D11 — at most ONE accent-filled primary per view, and this window draws
+             the builder OPEN. New report is the view's standing primary at rest; while the
+             builder is up the most-likely action is its Save definition, so New report hands
+             the accent over and reads as the secondary (paper + border). Two filled buttons
+             here would put the accent on the control that merely opens a form beside the one
+             that commits it. -->
         <button class="btn"><svg class="ic"><use href="#i-plus"/></svg> New report</button>
       </div>
 
       <div class="defs card">
         <div class="def">
-          <div class="di"><div class="dn">Weekly billables — Globex</div>
-            <div class="ds"><b>This week</b> · by project · Globex Corp · billable only · no rounding</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          <div class="dh">
+            <div class="di"><div class="dn">Weekly billables — Globex</div>
+              <div class="ds"><b>This week</b> · by project · Globex Corp · billable only · no rounding</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          </div>
         </div>
         <div class="def sel">
-          <div class="di"><div class="dn">Monthly — all clients by client</div>
-            <div class="ds"><b>Last month</b> · by client · all clients · all entries · round 15 min</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm" style="color:var(--accent-ink)">Editing…</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
-        </div>
-        <div class="editor">
-          <div class="en"><label class="lab">Report name</label><input class="field" value="Monthly — all clients by client" style="max-width:380px"></div>
-          <div class="ctrl">
-            <span class="cl">Range</span>
-            <div class="cr"><select class="field"><option>Today</option><option>This week</option><option>Last week</option><option>This month</option><option>Last month</option><option selected>Custom…</option></select><input class="field date tnum invalid" aria-invalid="true" value="2026-05-31"><span class="meta">–</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-01"></div>
-            <span class="cl">Group by</span>
-            <div class="cr"><span class="seg"><button class="on">Client</button><button>Project</button><button>Day</button><button>Tag</button></span></div>
-            <span class="cl">Filters</span>
-            <div class="cr">
-              <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
-              <select class="field"><option>All projects</option></select>
-              <select class="field"><option>All tags</option><option selected>deep</option></select>
-              <span class="seg"><button>All</button><button class="on">Billable</button><button>Non-billable</button></span>
-            </div>
-            <span class="cl">Rounding</span>
-            <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
-              <select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
+          <div class="dh">
+            <div class="di"><div class="dn">Monthly — all clients by client</div>
+              <div class="ds"><b>Last month</b> · by client · all clients · all entries · round 15 min</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm" style="color:var(--accent-ink)">Editing…</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
           </div>
-          <!-- §12 R21: a refused Save is surfaced in the builder — a duplicate name (core rejects,
-               §13), an incomplete custom range (focus the missing field), or an inverted custom
-               range whose From is after its To (core rejects, §09 R01). Announced, persistent;
-               the builder stays open and nothing is stored. -->
-          <div class="msg err">That custom range ends before it starts — set From on or before To.</div>
-          <div class="efoot">
-            <button class="btn danger sm left">Delete</button>
-            <button class="btn sm">Cancel</button>
-            <button class="btn primary sm">Save definition</button>
+          <!-- The expanded body: the builder nested in the card being edited. -->
+          <div class="editor">
+            <div class="en"><label class="lab">Report name</label><input class="field" value="Monthly — all clients by client" style="max-width:380px"></div>
+            <div class="ctrl">
+              <span class="cl">Range</span>
+              <div class="cr"><select class="field"><option>Today</option><option>This week</option><option>Last week</option><option>This month</option><option>Last month</option><option selected>Custom…</option></select><input class="field date tnum invalid" aria-invalid="true" value="2026-05-31"><span class="meta">–</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-01"></div>
+              <span class="cl">Group by</span>
+              <div class="cr"><span class="seg"><button class="on">Client</button><button>Project</button><button>Day</button><button>Tag</button></span></div>
+              <span class="cl">Filters</span>
+              <div class="cr">
+                <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
+                <select class="field"><option>All projects</option></select>
+                <select class="field"><option>All tags</option><option selected>deep</option></select>
+                <span class="seg"><button>All</button><button class="on">Billable</button><button>Non-billable</button></span>
+              </div>
+              <span class="cl">Rounding</span>
+              <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
+                <select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
+            </div>
+            <!-- §12 R21: a refused Save is surfaced in the builder — a duplicate name (core rejects,
+                 §13), an incomplete custom range (focus the missing field), or an inverted custom
+                 range whose From is after its To (core rejects, §09 R01). Announced, persistent;
+                 the builder stays open and nothing is stored. -->
+            <div class="msg err">That custom range ends before it starts — set From on or before To.</div>
+            <div class="efoot">
+              <button class="btn danger sm left">Delete</button>
+              <button class="btn sm">Cancel</button>
+              <button class="btn primary sm">Save definition</button>
+            </div>
           </div>
         </div>
         <div class="def">
-          <div class="di"><div class="dn">Tax quarter — non-billable audit</div>
-            <div class="ds"><b>Apr 1 – Jun 30</b> · by tag · non-billable · no rounding</div></div>
-          <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          <div class="dh">
+            <div class="di"><div class="dn">Tax quarter — non-billable audit</div>
+              <div class="ds"><b>Apr 1 – Jun 30</b> · by tag · non-billable · no rounding</div></div>
+            <div class="da"><button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Run</button><button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Edit</button><button class="iconbtn"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+          </div>
         </div>
       </div>
 
-      <div class="runhd"><span class="rt">Monthly — billable #deep by client</span><span class="rc tnum">May 2026 · billable only · #deep · round 15 min</span></div>
-      <div class="summary card">
-        <table>
-          <thead><tr><th>Client</th><th class="num">Hours</th></tr></thead>
-          <tbody>
-            <tr class="grp"><td>Globex Corp</td><td class="num">52h 30m</td></tr>
-            <tr class="subr"><td>Q3 Strategy</td><td class="num">31h 00m</td></tr>
-            <tr class="subr"><td>Project Alpha <span class="pill warn">overlap 15m</span></td><td class="num">21h 30m</td></tr>
-            <tr class="grp"><td>Initech</td><td class="num">26h 45m</td></tr>
-            <tr class="subr"><td>Market research <span class="pill warn">unreviewed sleep</span></td><td class="num">26h 45m</td></tr>
-            <tr class="grp"><td>— internal —</td><td class="num">7h 00m</td></tr>
-            <tr class="tot"><td>Total</td><td class="num">86h 15m</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <!-- §09 R06 — the report's OWN export: the FILTERED rows it shows (billable #deep),
-           byte-identical to `tt report run <name> --csv|--json`. Beside the run-output. -->
-      <div class="export"><span class="escope">This report</span><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export JSON</button></div>
-      <!-- §09 R06 — the raw data-out escape hatch, set apart at the BOTTOM: the WHOLE RECORD,
-           every raw entry ever (billable + non-billable, no range), byte-identical to no-flag
-           `tt export`. Standing chrome — needs no run and consults none. -->
       <div class="export export-all"><span class="escope">All data</span><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (CSV)</button><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (JSON)</button></div>
     </div>
   </div>
