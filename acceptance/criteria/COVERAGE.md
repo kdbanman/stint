@@ -664,38 +664,51 @@ contract (§09 R06)" + "GOLD: JSON export shape (§09 R06)" lock header ==
 `client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped`
 , the fixed-fixture row verbatim, comma/quote/newline quoting, and
 `export-entry.schema.json` validation; `cli/test/gold/cli.test.ts` "GOLD: tt
-export (§09 R06)" proves the CLI surface is byte-identical to core), proven by
+export (§09 R06)" proves the CLI surface is byte-identical to core, and pins
+the no-flag default: `tt export` alone is the WHOLE RECORD — every entry ever,
+a months-old row included — while the range flags still narrow), proven by
 GOLD (`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` , `schemas/*` ), by
 surface-neutral BDD (`features/reporting.feature` "CSV and JSON export the raw
 entries for the range with the same shape" — run TWICE over core `toCsv`
 /`toJsonEntries` + `tt export --range … --csv|--json` via the World `exportRows`
-capability, so the GUI export bytes reach nothing tt cannot), and reused
-verbatim by `tt export` . The GUI report view (`gui/renderer/index.html`
-(Reports view) + `reports.js` ) is the discoverability surface over it — the
-on-screen grouped summary surfaces the **overlap / unreviewed-sleep flags in
-context on the affected rows** (via the pure `window.SU.lineFlags` over the core
-Report's `overlappedEntryIds` /`unreviewedSleepEntryIds`, not a separate list),
-and the **Export CSV / Export JSON** buttons write the raw entries for the shown
-range to a file. Because the renderer cannot touch `fs` , the export round-trips
-through a new `exportEntries` IPC channel: `gui/src/reportview.ts`
-(Electron-free, unit-tested) resolves the same range via core's `resolveRange`
-and renders the bytes via `exportPayload` (byte-identical to
-`tt export --csv/--json` ), and `gui/src/main.ts` writes them through Electron's
-`dialog.showSaveDialog` + `node:fs writeFileSync` (no network).
-`gui/test/reportview.test.ts` (GOLD) proves `exportPayload` matches `toCsv`
-/`toJsonEntries` byte-for-byte, the preset/custom range resolution mirrors core,
-and `buildReportView` is a faithful preset-resolving pass-through; JUDGE
-`REPORTS_VIEW` (`packages/gui/judge/`, `reports-run.png` — grouped summary with
-per-line + grand totals, both flags on their affected rows (none outside the
-table), both export buttons present + non-accented, each driving a real
-`exportEntries` call); GOLD `gui/test/reportview.test.ts` (`exportPayload` and both
+capability, so the GUI export bytes reach nothing tt cannot — and "Exporting
+everything covers the whole record, not an implicit window" — the UNSCOPED
+export keeps billable, non-billable, and long-past entries, run TWICE via the
+World `exportAllRows` capability over core's unbounded `listEntries` and
+no-flag `tt export` ), and reused verbatim by `tt export` . The GUI Reports
+view (`gui/renderer/index.html` + `reports.js` ) is the discoverability
+surface over it — the on-screen grouped summary surfaces the **overlap /
+unreviewed-sleep flags in context on the affected rows** (via the pure
+`window.SU.lineFlags` over the core Report's `overlappedEntryIds`
+/`unreviewedSleepEntryIds`, not a separate list), the run-output's filtered
+**Export CSV / Export JSON** write the rows the report shows, and the standing
+**Export All Data** buttons — always visible, always clickable, no run
+required — write the whole record. Because the renderer cannot touch `fs` ,
+the export round-trips through the `exportEntries` IPC channel:
+`gui/src/reportview.ts` (Electron-free, unit-tested) resolves the scope via
+`resolveExportDefinition` and renders the bytes via `exportPayload`
+(byte-identical to `tt export --csv/--json` ), and `gui/src/main.ts` writes
+them through Electron's `dialog.showSaveDialog` + `node:fs writeFileSync` (no
+network). `gui/test/reportview.test.ts` (GOLD) proves `exportPayload` matches
+`toCsv` /`toJsonEntries` byte-for-byte and `buildReportView` is a faithful
+preset-resolving pass-through; JUDGE `REPORTS_VIEW` (`packages/gui/judge/`,
+`reports-run.png` — grouped summary with per-line + grand totals, both flags
+on their affected rows (none outside the table), both export blocks
+non-accented, each driving a real `exportEntries` call; PRE-RUN computed
+facts: the filtered row genuinely invisible, Export All Data visible AND
+working with scope 'all' and no ref before any run — issue #262's dead
+buttons); the `[hidden]`-companion static gate in
+`gui/test/renderer-static.test.ts` (every display-setting hideable block in
+`styles.css` carries a `[hidden] { display: none }` companion, so an author
+display rule can never silently defeat the hidden attribute again); GOLD
+`gui/test/reportview.test.ts` (`exportPayload` and both
 `resolveExportDefinition` scopes byte-identical to `tt report run --csv/--json`
-and `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (the
+and no-flag `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (the
 `exportEntries` write path — each scope's bytes landing at the path the save
-dialog returned, cancel writing nothing). New parity row
-`exportEntries` →`tt export` (`parity-matrix.json`; the `report` row now maps to
-`tt report` alone). The GUI summary + export is thus fully covered (no longer a
-gap). **R7 free-text search** (a query narrows the entry list to those whose
+dialog returned, the 'all' file keeping an out-of-window row, cancel writing
+nothing). Parity row `exportEntries` →`tt export` (`parity-matrix.json`; the
+`report` row maps to `tt report` alone). The GUI summary + export is thus
+fully covered (no longer a gap). **R7 free-text search** (a query narrows the entry list to those whose
 description, client name, project name, or any tag contains it —
 case-insensitive substring): the matching engine is core's
 `listEntries({ search })` (applied post-`toView`, like the `tag` post-filter, so
@@ -785,9 +798,9 @@ client/project/tag/search + billable filter), rendered by
 `store.exportSavedReport(ref, 'csv'|'json', now)` via the SAME core `toCsv`
 /`toJsonEntries` — the report's OWN filtered export (byte-identical to
 `tt report run <name> --csv|--json` and the GUI report's Export CSV/JSON);
-`store.resolveReportRange(ref, now)` bounds the separate ALL-DATA scope — every
-RAW entry in the range (billable='all', no narrowing, byte-identical to
-`tt export` / the GUI "Export All Data"). `tt report run <name>` : default
+the separate ALL-DATA scope is the WHOLE RECORD — every raw entry ever
+(billable='all', no range, no narrowing, no report consulted — byte-identical
+to no-flag `tt export` / the GUI "Export All Data"). `tt report run <name>` : default
 renders the grouped `Report` (human) with the saved grouping/rounding, while
 `--csv|--json` EXPORT THE FILTERED SET the report shows (the rows behind the
 totals, `--json` validated against `export-entry.schema.json` ) via
@@ -820,8 +833,8 @@ raw `tt export` ; human `run` prints the renderReport totals; a range edit
 re-resolves which rows the export carries; unknown name exits non-zero); GUI
 `gui/test/reportview.test.ts` (`resolveExportDefinition` 's two scopes —
 'filtered' == the report's rows (byte-identical to `exportSavedReport` ), 'all'
-== the raw range (byte-identical to `tt export` ), and a 'filtered' request
-without a saved ref is rejected). **GUI parity** — the Reports view's
+== the whole record, a saved ref ignored (byte-identical to no-flag
+`tt export` ), and a 'filtered' request without a saved ref is rejected). **GUI parity** — the Reports view's
 saved-definitions rail drives seven new IPC channels
 (`saveReport`/`listReports`/`showReport`/`renameReport`/`editReport`/`removeReport`/`runReport`)
 over the SAME core Store the tt verbs use; each gets a `parity-matrix.json` row
@@ -929,7 +942,7 @@ group_by, filters, rounding); `ls --json` validates against
 non-zero with `unknown --by grouping` and writes no def; `run --json` validates
 against `report.schema.json` and re-resolves the relative range to the same
 window/totals as the equivalent ad-hoc `tt report --week …` ; `run --csv` is
-byte-identical to `tt export` over the resolved range; `rm` then `ls` /`run` is
+byte-identical to `tt export --range` over the resolved window; `rm` then `ls` /`run` is
 a clean unknown-name round trip; the ad-hoc `tt report …` query form still works
 alongside the saved verbs. Cross-noted with §09 R08–R09 above. **`tt fav
 add|ls|rm|rename|start` + `tt start --fav` (favorites — §11 parity for §05
@@ -1434,9 +1447,13 @@ range presets (incl Custom), the six group-bys, the client/project/tag filters,
 the billable segment, and the rounding toggle + 6/10/15/30 increment; clicking
 Run paints the grouped run-output with per-line + grand totals and the
 overlap/unreviewed-sleep flags surfaced in context on the affected rows, plus
-the resolved-range header; and Export CSV / Export JSON each drive a real
-`exportEntries` call carrying the saved report's ref, byte-identical to
-`tt report run <name> --csv|--json` ; at rest only the standing + New report
+the resolved-range header; the filtered Export CSV / Export JSON — revealed by
+the run, computed-invisible before it — each drive a real `exportEntries` call
+carrying the saved report's ref, byte-identical to
+`tt report run <name> --csv|--json` , while the standing Export All Data
+buttons work BEFORE any run (computed-visible, a pre-run click fires scope
+'all' with no ref — the whole record, byte-identical to no-flag `tt export` ,
+issue #262); at rest only the standing + New report
 primary carries the accent, and once the builder is open it hands off to the
 builder's own Save — the commit, not the control that merely opened the form,
 which `PRIMARY_HANDOFF` gates, §15 / G10 / D11).
@@ -2789,10 +2806,12 @@ BDD** (`features/reporting.feature`, run TWICE over core + tt via
 always up (97m → nearest 15 = 90m) while the stored billable seconds are
 untouched (CoreWorld `store.report` rounding-on / CliWorld
 `tt report --round 15 --json`); a report FLAGS two overlapping entries in range
-(`overlappedEntryIds` / `tt report --json overlapped_entry_ids`); and CSV + JSON
+(`overlappedEntryIds` / `tt report --json overlapped_entry_ids`); CSV + JSON
 export the RAW entries for a range with the same row shape (CoreWorld core
-`toCsv`/`toJsonEntries` / CliWorld `tt export --range … --csv|--json`), backed
-by the World `report`/`reportOverlaps`/`exportRows` capabilities
+`toCsv`/`toJsonEntries` / CliWorld `tt export --range … --csv|--json`); and the
+UNSCOPED export covers the whole record (CoreWorld unbounded `listEntries` /
+CliWorld no-flag `tt export`), backed by the World
+`report`/`reportOverlaps`/`exportRows`/`exportAllRows` capabilities
 
 ### §17 R8
 

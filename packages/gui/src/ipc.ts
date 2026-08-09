@@ -47,9 +47,10 @@ export const CHANNELS = [
   'runReport',
   // §09 R06/R09: the Reports view's exports — the report's own Export CSV/JSON (scope
   // 'filtered', parity with `tt report run <name> --csv|--json`) and Export All Data (scope
-  // 'all', parity with `tt export`). The renderer cannot touch Node/fs, so the export round-
-  // trips through main: it lists the scoped entries, renders the bytes via core's
-  // toCsv/toJsonEntries, and writes the file through Electron's save dialog.
+  // 'all' — the whole record, every raw entry ever, parity with no-flag `tt export`). The
+  // renderer cannot touch Node/fs, so the export round-trips through main: it lists the
+  // scoped entries, renders the bytes via core's toCsv/toJsonEntries, and writes the file
+  // through Electron's save dialog.
   'exportEntries',
   // §05 R09: pinned timer favorites — the Timer view's favorites rail. CRUD over the SAME
   // @stint/core Store the tt `fav add|ls|rename|rm` verbs drive, so favorites are reachable

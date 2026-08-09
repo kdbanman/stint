@@ -100,6 +100,7 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Edge** — inverted / same-day custom range | Inverted rejected & stores nothing; same-day accepted | BDD `saved_reports.feature` "A saved report with an inverted custom range is rejected…", "…same-day … custom range is accepted" | Not separately GUI-machine-scored |
 | **Ideal** — run output table | Grouped totals, resolved-range header, overlap/sleep flags in context | JUDGE `REPORTS_VIEW` — `reports-run.png` | |
 | **Edge** — export blocks with status lines | Filtered CSV/JSON vs. bottom "Export All Data" (all-data wording) | JUDGE `REPORTS_VIEW` (issue #72 sub-facts) — `reports-run.png`; BDD "Export the range by hand" | |
+| **Ideal** — pre-run export state | Filtered export row computed-invisible; "Export All Data" standing, clickable, whole-record (no run, no ref) | JUDGE `REPORTS_VIEW` (`preRunExportOk`, issue #262); BDD `reporting.feature` "Exporting everything covers the whole record"; static `renderer-static.test.ts` `[hidden]`-companion gate | |
 
 ## Settings view (`index.html` `data-view="settings"`, `settings.js`)
 

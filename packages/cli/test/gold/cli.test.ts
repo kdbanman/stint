@@ -186,6 +186,37 @@ describe('GOLD: tt export (§09 R06)', () => {
     const validate = validator('export-entry.schema.json');
     expect(validate(json) || validate.errors).toBe(true);
   });
+
+  it('no flags exports the WHOLE RECORD — every entry ever, not an implicit window', () => {
+    // §09 R06: the no-flag export is the durability / data-out escape hatch (byte-identical
+    // to the GUI's Export All Data). Seed this week's entry plus one months earlier; the
+    // default export carries BOTH — there is no silent this-week default.
+    seed();
+    tt(['add', 'january audit', '--from', '2026-01-05T09:00:00Z', '--to', '2026-01-05T10:00:00Z']);
+    const r = tt(['export', '--csv']);
+    expect(r.code).toBe(0);
+    const lines = r.out.split('\n');
+    expect(lines).toHaveLength(3); // header + the two entries, oldest first
+    expect(lines[1]).toContain('january audit');
+    expect(lines[2]).toContain('auth refactor');
+    // A range flag still narrows: the January row drops out of a this-week export.
+    const week = tt(['export', '--week', '--csv']);
+    expect(week.out).toContain('auth refactor');
+    expect(week.out).not.toContain('january audit');
+  });
+
+  it('no-flag --json is the whole record too, valid against the export-entry schema', () => {
+    seed();
+    tt(['add', 'january audit', '--from', '2026-01-05T09:00:00Z', '--to', '2026-01-05T10:00:00Z']);
+    const r = tt(['export', '--json']);
+    const json = JSON.parse(r.out);
+    const validate = validator('export-entry.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json.map((e: { description: string }) => e.description)).toEqual([
+      'january audit',
+      'auth refactor',
+    ]);
+  });
 });
 
 describe('GOLD: tt list --json (§11)', () => {

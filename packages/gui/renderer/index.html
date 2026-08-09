@@ -476,7 +476,8 @@
             </div>
             <!-- §09 R06/R09: the report's OWN export — the FILTERED rows it shows (its range
                  narrowed by the def's client/project/tag + billable filter), byte-identical to
-                 `tt report run <name> --csv|--json`. Belongs to the run-output, beside Run. -->
+                 `tt report run <name> --csv|--json`. Belongs to the run-output, beside Run;
+                 hidden until a run paints rows for it to export. -->
             <div class="report-export" id="rep-run-export" hidden>
               <span class="report-export-scope">This report</span>
               <button type="button" id="rep-export-csv" class="report-export-btn">Export CSV</button>
@@ -484,10 +485,11 @@
               <span id="rep-export-status" class="report-export-status" role="status" aria-live="polite"></span>
             </div>
             <!-- §09 R06: the raw data-out escape hatch, set apart at the BOTTOM of the view and
-                 distinct from the filtered export above — every raw entry in the resolved range
-                 (billable AND non-billable, unfiltered), byte-identical to `tt export`. -->
-            <div class="report-export report-export-all" id="rep-run-export-all" hidden>
-              <span class="report-export-scope">All data in range</span>
+                 distinct from the filtered export above — the WHOLE RECORD, every raw entry ever
+                 (billable AND non-billable, no range), byte-identical to no-flag `tt export`.
+                 Standing chrome: always visible, always clickable, no run required. -->
+            <div class="report-export report-export-all" id="rep-run-export-all">
+              <span class="report-export-scope">All data</span>
               <button type="button" id="rep-export-all-csv" class="report-export-btn ghost">Export All Data (CSV)</button>
               <button type="button" id="rep-export-all-json" class="report-export-btn ghost">Export All Data (JSON)</button>
               <span id="rep-export-all-status" class="report-export-status" role="status" aria-live="polite"></span>

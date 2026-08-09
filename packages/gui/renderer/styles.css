@@ -699,6 +699,9 @@ s {
    63px past their column and 14px past the window (ex-issue 146, folded into issue 126),
    and narrowing them trades overflow for clipped seconds on wider font metrics. */
 .unified-form .uf-times .ef-times-body { display: flex; flex-direction: column; gap: 8px; }
+/* The [hidden] companion (issue #262's bug class): without it the display rule above defeats
+   the hidden attribute and the §12 R17 expander body renders expanded while collapsed. */
+.unified-form .uf-times .ef-times-body[hidden] { display: none; }
 .unified-form .uf-foot { display: flex; gap: 8px; align-items: center; }
 .unified-form .uf-foot-spacer { flex: 1; }
 
@@ -1032,7 +1035,12 @@ textarea:focus-visible {
   color: var(--muted);
   background: transparent;
   border: 0;
-  padding: 0;
+  /* A03 target size: with the expander body genuinely collapsing (its [hidden] companion,
+     issue #262), the toggle sits 12px above the footer buttons — the on-grid vertical
+     padding + min-height keep the quiet text-button look while lifting the hit target to
+     the 24px floor. */
+  padding: 4px 0;
+  min-height: 24px;
   cursor: pointer;
 }
 .entry-form .ef-times-toggle:hover { color: var(--ink); }
@@ -1460,6 +1468,11 @@ button.danger:hover { background: var(--danger-weak); }
   align-items: center;
   margin-top: 16px;
 }
+/* The [hidden] companion every display-setting hideable block needs: `display: flex` above
+   outspecifies the UA's `[hidden] { display: none }`, so without this the filtered export
+   row rendered before any report had run — armed with a handler that silently returned
+   (issue #262). renderer-static.test.ts guards the whole class. */
+.report-export[hidden] { display: none; }
 .report-export-btn {
   font-family: inherit;
   font-size: 13px;
@@ -1468,7 +1481,7 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--ink);
 }
 .report-export-status { font-size: 12px; color: var(--muted); }
-/* The scope label that names each export block (This report / All data in range). */
+/* The scope label that names each export block (This report / All data). */
 .report-export-scope {
   font-size: 12px;
   font-weight: 590;
@@ -1477,7 +1490,8 @@ button.danger:hover { background: var(--danger-weak); }
   margin-right: 2px;
 }
 /* §09 R06: the raw "Export All Data" block sits apart at the bottom of the view — a hairline
-   rule above it and a lighter margin mark it as the data-out escape hatch, not the report. */
+   rule above it and a lighter margin mark it as the whole-record data-out escape hatch, not
+   the report. Standing chrome: present whether or not a report has run. */
 .report-export-all {
   margin-top: 20px;
   padding-top: 16px;

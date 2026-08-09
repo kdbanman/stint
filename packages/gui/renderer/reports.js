@@ -77,8 +77,9 @@
     roundingIncrementMin: 15,
   };
 
-  // The saved definition whose run-output is currently shown (so the Export buttons carry
-  // its ref — main exports the definition's range, byte-identical to `tt report run --csv`).
+  // The saved definition whose run-output is currently shown (so the FILTERED Export buttons
+  // carry its ref — main exports the definition's rows, byte-identical to `tt report run
+  // --csv`). Export All Data never reads it: the whole-record export depends on no run.
   let runningRef = null;
 
   // ----------------------------------------------------------------- spec summary
@@ -428,11 +429,12 @@
 
   // ----------------------------------------------------------------- run-output (§09 R09)
 
+  // Tear down the run-output and its FILTERED export row (a filtered export belongs to a
+  // run). The Export All Data block is untouched — it is standing chrome, never run-armed.
   function hideRun() {
     runningRef = null;
     $('rep-run').hidden = true;
     $('rep-run-export').hidden = true;
-    $('rep-run-export-all').hidden = true;
   }
 
   // §09 R09: the flags a grouped line carries, shown IN CONTEXT on the affected row (not in
@@ -477,9 +479,7 @@
     $('rep-run-range').textContent = rangeLabel(report.rangeFromUtc, report.rangeToUtc);
     $('rep-run').hidden = false;
     $('rep-run-export').hidden = false;
-    $('rep-run-export-all').hidden = false;
     $('rep-export-status').textContent = '';
-    $('rep-export-all-status').textContent = '';
   }
 
   // Run a saved definition by name. core resolves its stored range-spec and totals it
@@ -510,16 +510,16 @@
     }
   }
 
-  // §09 R06: Export All Data — the raw escape hatch. Scope 'all' with the run's ref, so main
-  // exports EVERY raw entry in the resolved range (billable + non-billable, unfiltered — byte-
-  // identical to `tt export`), NOT the filtered report. The status says "all data" so the scope
-  // is never mistaken for the report's rows.
+  // §09 R06: Export All Data — the raw escape hatch. Scope 'all' with NO ref: main exports
+  // the WHOLE RECORD — every raw entry ever, billable + non-billable, no range (byte-
+  // identical to `tt export` with no flags), NOT any report. Always armed — it needs no run
+  // and has no disarmed state (a disarmed silent return was the §12 R21 dead click of issue
+  // #262). The status says "all data" so the scope is never mistaken for a report's rows.
   async function exportAllData(format) {
-    if (runningRef === null) return;
     const status = $('rep-export-all-status');
     status.textContent = '';
     try {
-      const res = await window.stint.exportEntries({ format, scope: 'all', savedReportRef: runningRef });
+      const res = await window.stint.exportEntries({ format, scope: 'all' });
       if (!res || res.canceled) {
         status.textContent = 'Export canceled.';
         return;
@@ -676,7 +676,8 @@
     // §09 R06 / R09: the report's own Export CSV / JSON (the FILTERED rows it shows).
     $('rep-export-csv').addEventListener('click', () => void exportRun('csv'));
     $('rep-export-json').addEventListener('click', () => void exportRun('json'));
-    // §09 R06: Export All Data — the raw escape hatch, set apart at the bottom of the view.
+    // §09 R06: Export All Data — the whole-record escape hatch, set apart at the bottom of
+    // the view and always clickable (no run required).
     $('rep-export-all-csv').addEventListener('click', () => void exportAllData('csv'));
     $('rep-export-all-json').addEventListener('click', () => void exportAllData('json'));
   }
