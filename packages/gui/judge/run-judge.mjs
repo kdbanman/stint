@@ -3725,6 +3725,9 @@ async function sceneTagChips(browser) {
 // Reports × empty.
 async function sceneReportsView(browser) {
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
+    // The accordion's 0fr→1fr expand rides a real transition (~160ms); the probes and the
+    // evidence frames must read the settled layout, not a mid-expand slice.
+    await noMotion(page);
     await page.click('.nav-item[data-view="reports"]');
     await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
 
