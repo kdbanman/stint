@@ -185,9 +185,10 @@ it just can't be fire-and-forget.
    level: a misclassification misroutes the issue and no gate catches it (§03).
 3. **Decide with the owner.** Batch the fix-direction questions across the whole
    batch into one grill-style interview: tight clusters, recommended answers,
-   one at a time — never a flat questionnaire. When you have questions, use
-   `author-grill-assist-doc` (`context/process.html` §03) — the assist
-   artifact carries the context the owner needs to answer. Sizing and proof
+   one at a time — never a flat questionnaire, never `AskUserQuestion`. Always
+   deliver the interview as an `author-grill-assist-doc` artifact
+   (`context/process.html` §03) — it carries the context the owner needs to
+   answer and assembles their response for the session. Sizing and proof
    of fix are usually yours to recommend; fix direction is theirs to make.
 4. **Annotate and label.** Per issue, **one** comment in house style (§04): the
    category with the doc refs that justify it, the owner's fix-direction

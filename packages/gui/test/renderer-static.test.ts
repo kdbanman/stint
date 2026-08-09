@@ -154,16 +154,18 @@ describe('renderer static contract', () => {
   });
 
   it('local minutes-of-day is derived in exactly one place (issue #168)', () => {
-    // The expression `getHours() * 60 + getMinutes()` positions every timeline surface — the
-    // picker's seeds, the entries calendar's event geometry, SU.timelineWindow's own math. It
-    // was written four times. A timezone or DST fix must have ONE site to find, so count the
-    // arithmetic itself across the renderer rather than trusting the helper's name.
+    // The minute-of-day derivation positions every timeline surface — the picker's seeds,
+    // the entries calendar's event geometry, SU.timelineWindow's own math. It was written
+    // four times as `getHours() * 60 + getMinutes()`. The one derivation is now su.ts's
+    // localMinuteOfDay over core's wallClockOf in the CONFIGURED zone (§04 R06), so the
+    // OS-zone getter arithmetic must appear NOWHERE in the renderer — any recurrence is a
+    // second, zone-ignorant derivation by construction.
     const dir = fileURLToPath(new URL('../renderer/', import.meta.url));
     const files = readdirSync(dir).filter((f) => /\.(js|ts)$/.test(f));
     const sites = files.flatMap((f) =>
       [...read(f).matchAll(/getHours\(\)\s*\*\s*60/g)].map(() => f),
     );
-    expect(sites, 'minutes-of-day must be derived only by su.ts localMinuteOfDay').toEqual(['su.ts']);
+    expect(sites, 'minutes-of-day must be derived only by su.ts localMinuteOfDay (wallClockOf)').toEqual([]);
   });
 
   it('every display-setting hideable block carries a [hidden] companion — hidden must actually hide (issue #262)', () => {

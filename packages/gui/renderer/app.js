@@ -3,6 +3,7 @@
 // instructing empty state, and a live count-up on the running entry.
 // Classic script: helpers come from window.SU (the bundled su.ts entry — dist/su.js,
 // loaded first; the tooling decision is recorded in context/architecture.html §08).
+const SU = window.SU;
 const {
   fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, parseLocalInput,
   tagDiff, deriveView, errMessage, escapeHtml, localMinuteOfDay,
@@ -55,6 +56,13 @@ async function load() {
   state = searchQuery && !entryCtrlActive
     ? await window.stint.search({ query: searchQuery })
     : await window.stint.getState();
+  // §04 R06 / §12 R11: apply the display settings to SU on EVERY (re)load — not only when
+  // the Settings view repaints — so a `tt config set time_zone/date_format` reaches every
+  // stamp, field seed, and calendar minute on the next refresh.
+  if (state && state.settings) {
+    SU.applyDateFormat(state.settings.dateFormat || 'system');
+    SU.applyTimeZone(state.settings.timeZone || 'system');
+  }
   // §12 R9: when the toolbar is active, the entries calendar shows the queried set —
   // re-run the range/filter/search query on every (re)load so a tt write keeps the
   // filtered calendar fresh. Otherwise entryGroups stays null and render() paints the
@@ -232,14 +240,12 @@ const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never
 const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
 const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// An instant's LOCAL day as a 'YYYY-MM-DD' token — the same local-day vocabulary core's localDay
-// gives the snapshot's day keys (localTodayDay does this for `now`), so the two compare directly.
-// Used to detect a cross-midnight span (§12 R16 / issue #71): a closed entry whose local end day
-// differs from its local start day.
+// An instant's LOCAL day as a 'YYYY-MM-DD' token — core's localDay in the CONFIGURED zone
+// (SU.localDayOf, §04 R06), the same vocabulary core gives the snapshot's day keys, so the
+// two compare directly. Used to detect a cross-midnight span (§12 R16 / issue #71): a
+// closed entry whose local end day differs from its local start day.
 function calLocalDayOf(iso) {
-  const d = new Date(iso);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return SU.localDayOf(iso);
 }
 // 'YYYY-MM-DD' → { dw, dd } via UTC math, so a day column's weekday/date label never depends
 // on the runner timezone (the day key is already the entry's local day, resolved by core).
@@ -1835,12 +1841,11 @@ async function openEntryForm(row, e) {
   });
 }
 
-// Today as a LOCAL 'YYYY-MM-DD' day string — the same local-day vocabulary core's
-// localDay gives the snapshot's day keys, so the two compare directly.
+// Today as a 'YYYY-MM-DD' day string in the CONFIGURED zone (SU.localDayOf, §04 R06) —
+// the same local-day vocabulary core's localDay gives the snapshot's day keys, so the two
+// compare directly.
 function localTodayDay() {
-  const d = new Date();
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  return SU.localDayOf(new Date());
 }
 
 function weekTotal() {

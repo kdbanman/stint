@@ -30,6 +30,10 @@ import {
   resolveRange,
   resolveSavedRange,
   resolveReportDef,
+  parseTime,
+  formatStamp,
+  localDay,
+  groupKeyLabel,
   defaultDataDir,
   DB_FILENAME,
   APP_VERSION,
@@ -80,6 +84,7 @@ describe('GOLD: settings defaults (§14)', () => {
         "pickerWindowMode": "working_hours",
         "rounding": false,
         "roundingIncrementMin": 15,
+        "timeZone": "system",
         "weekStart": "monday",
         "workingHoursEnd": "18:00",
         "workingHoursStart": "07:00",
@@ -90,7 +95,7 @@ describe('GOLD: settings defaults (§14)', () => {
   });
 
   it('schema version is pinned', () => {
-    expect(SCHEMA_VERSION).toBe(4);
+    expect(SCHEMA_VERSION).toBe(5);
   });
 
   it('a corrupt stored value falls back to the default on read (reads as strict as writes)', () => {
@@ -290,11 +295,11 @@ describe('GOLD: schema shape (§13)', () => {
   const columns = (db: Db, table: string) =>
     (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((r) => r.name);
 
-  it('SCHEMA_VERSION is pinned to 4 and a fresh DB stamps user_version = 4', () => {
-    expect(SCHEMA_VERSION).toBe(4);
+  it('SCHEMA_VERSION is pinned to 5 and a fresh DB stamps user_version = 5', () => {
+    expect(SCHEMA_VERSION).toBe(5);
     const db = openDb(':memory:');
     const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-    expect(row.user_version).toBe(4);
+    expect(row.user_version).toBe(5);
     db.close();
   });
 
@@ -845,6 +850,189 @@ describe('GOLD: resolveRange preset windows (§09 R01)', () => {
       fromUtc: localMidnight(2026, 2, 8), // 2026-03-08
       toUtc: localMidnight(2026, 2, 9), // 2026-03-09
     });
+  });
+});
+
+describe('GOLD: the configured time zone drives resolution and parsing (§04 R06, §14)', () => {
+  // With an EXPLICIT zone the bounds pin to absolute `Z` literals valid on every host —
+  // strictly stronger than the host-zone goldens above, which must float with the runner.
+  // Every literal is read off a 2026 calendar + the zone's published offsets, never off a
+  // second call of the code under test.
+  const NOW = new Date('2026-06-24T17:30:00Z'); // Wed; 11:30 in Edmonton (MDT, UTC−6)
+
+  it('today in a pinned zone is that zone’s calendar day, midnight to midnight', () => {
+    expect(resolveRange('today', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-24T06:00:00.000Z', // Wed 00:00 MDT
+      toUtc: '2026-06-25T06:00:00.000Z', // Thu 00:00 MDT
+    });
+  });
+
+  it('this week in a pinned zone runs Monday-midnight to Monday-midnight in THAT zone', () => {
+    expect(resolveRange('week', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-22T06:00:00.000Z', // Mon 2026-06-22 00:00 MDT
+      toUtc: '2026-06-29T06:00:00.000Z', // Mon 2026-06-29 00:00 MDT
+    });
+  });
+
+  it('the pinned zone decides WHICH day "today" is, not just its bounds', () => {
+    // 2026-06-25T03:00Z is still Wed Jun 24 in Edmonton but already Thu Jun 25 in UTC —
+    // the two zones disagree on the calendar day itself.
+    const lateEvening = new Date('2026-06-25T03:00:00Z');
+    expect(resolveRange('today', 'monday', lateEvening, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-24T06:00:00.000Z',
+      toUtc: '2026-06-25T06:00:00.000Z',
+    });
+    expect(resolveRange('today', 'monday', lateEvening, 'UTC')).toEqual({
+      fromUtc: '2026-06-25T00:00:00.000Z',
+      toUtc: '2026-06-26T00:00:00.000Z',
+    });
+    expect(localDay('2026-06-25T03:00:00Z', 'America/Edmonton')).toBe('2026-06-24');
+    expect(localDay('2026-06-25T03:00:00Z', 'UTC')).toBe('2026-06-25');
+  });
+
+  it('a DST-spanning week in a pinned zone bounds at true local midnights (167-hour week)', () => {
+    // The week of Sun 2026-03-08 in America/New_York contains the spring-forward: it opens
+    // at EST midnight (05:00Z) and closes at EDT midnight (04:00Z) — 167 hours, which a
+    // naive `+ 7 × 24h` can never produce.
+    const midWeek = new Date('2026-03-11T12:00:00Z');
+    expect(resolveRange('week', 'sunday', midWeek, 'America/New_York')).toEqual({
+      fromUtc: '2026-03-08T05:00:00.000Z', // Sun 00:00 EST
+      toUtc: '2026-03-15T04:00:00.000Z', // Sun 00:00 EDT
+    });
+  });
+
+  it('a month in a pinned zone runs 1st-midnight to 1st-midnight in that zone', () => {
+    expect(resolveRange('month', 'monday', NOW, 'America/Edmonton')).toEqual({
+      fromUtc: '2026-06-01T06:00:00.000Z',
+      toUtc: '2026-07-01T06:00:00.000Z',
+    });
+  });
+
+  it('a bare clock time parses as today-in-the-configured-zone (tt add 14:30)', () => {
+    // 14:30 on the Edmonton calendar day of NOW (Wed Jun 24, MDT = UTC−6) → 20:30Z.
+    expect(parseTime('14:30', NOW, 'America/Edmonton')).toBe('2026-06-24T20:30:00Z');
+    expect(parseTime('14:30', NOW, 'UTC')).toBe('2026-06-24T14:30:00Z');
+  });
+
+  it('a zoneless datetime parses in the configured zone, DST-compatible (§04 R06)', () => {
+    // Nonexistent (spring-forward gap): 02:30 never happens on 2026-03-08 in New York —
+    // compatible mode shifts it forward past the gap to 03:30 EDT (07:30Z).
+    expect(parseTime('2026-03-08T02:30', NOW, 'America/New_York')).toBe('2026-03-08T07:30:00Z');
+    // Ambiguous (fall-back hour): 01:30 happens twice on 2026-11-01 — compatible mode takes
+    // the EARLIER instant (EDT, 05:30Z), never the second pass (EST, 06:30Z).
+    expect(parseTime('2026-11-01T01:30', NOW, 'America/New_York')).toBe('2026-11-01T05:30:00Z');
+    // An explicit-zone instant is untouched by the configured zone.
+    expect(parseTime('2026-06-24T14:30:00Z', NOW, 'America/New_York')).toBe('2026-06-24T14:30:00Z');
+  });
+
+  it('formatStamp renders the configured zone through the one display path', () => {
+    const settings = { dateFormat: 'iso' as const, timeZone: 'America/Edmonton' };
+    expect(formatStamp('2026-06-24T15:00:00Z', settings)).toBe('2026-06-24 09:00:00');
+    expect(formatStamp(null, settings)).toBe('—');
+    // 'system' resolves against the OS zone at read time — same wall clock as the host's.
+    expect(formatStamp('2026-06-24T15:00:00Z', { dateFormat: 'iso', timeZone: 'system' })).toBe(
+      formatStamp('2026-06-24T15:00:00Z', {
+        dateFormat: 'iso',
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }),
+    );
+  });
+
+  it('an unknown zone is rejected and stores nothing; UTC and IANA zones are accepted', () => {
+    const store = Store.openMemory();
+    try {
+      expect(() => store.setSetting('timeZone', 'Mars/Olympus_Mons')).toThrow(/time_zone/);
+      expect(store.settings().timeZone).toBe('system');
+      store.setSetting('timeZone', 'America/Edmonton');
+      expect(store.settings().timeZone).toBe('America/Edmonton');
+      store.setSetting('timeZone', 'UTC');
+      expect(store.settings().timeZone).toBe('UTC');
+    } finally {
+      store.close();
+    }
+  });
+});
+
+describe('GOLD: week/month grouping buckets (§09 R02)', () => {
+  // The week/month group keys and their human labels: attribution is by the entry's START
+  // day in the configured zone (the same rule as by-day, glossary "Group key"); a week
+  // bucket is keyed by its start day under the configured week_start setting, a month
+  // bucket by YYYY-MM. The store threads BOTH settings into the one groupKeysOf
+  // derivation, so these run end-to-end through store.report.
+  const WEEK_NOW = new Date('2026-07-31T12:00:00Z'); // Fri, mid-window
+  const RANGE = { fromUtc: '2026-07-01T00:00:00Z', toUtc: '2026-08-01T00:00:00Z' };
+  const OPTS = {
+    ...RANGE,
+    billableFilter: 'billable',
+    rounding: false,
+    roundingIncrementMin: 15,
+  } as const;
+
+  function weekStore() {
+    const store = Store.openMemory(() => WEEK_NOW);
+    store.setSetting('timeZone', 'UTC');
+    // Wed Jul 29 and Thu Jul 30 — one configured week either way; a third entry the
+    // PREVIOUS Saturday (Jul 25) splits differently under monday- vs sunday-start weeks.
+    store.add({ billable: true, tags: [], fromUtc: '2026-07-29T09:00:00Z', toUtc: '2026-07-29T10:00:00Z' });
+    store.add({ billable: true, tags: [], fromUtc: '2026-07-30T09:00:00Z', toUtc: '2026-07-30T11:00:00Z' });
+    store.add({ billable: true, tags: [], fromUtc: '2026-07-25T09:00:00Z', toUtc: '2026-07-25T10:00:00Z' });
+    return store;
+  }
+
+  it('week buckets key by the week start day of the entry start, per week_start', () => {
+    const store = weekStore();
+    // Default monday start: Sat Jul 25 → week of Mon Jul 20; Wed/Thu → week of Mon Jul 27.
+    let r = store.report({ ...OPTS, by: 'week' });
+    expect(r.lines.map((l) => [l.key, l.totalSeconds])).toEqual([
+      ['2026-07-20', 3600],
+      ['2026-07-27', 3 * 3600],
+    ]);
+    // Sunday start: Sat Jul 25 belongs to the week of Sun Jul 19; Wed/Thu to Sun Jul 26.
+    store.setSetting('weekStart', 'sunday');
+    r = store.report({ ...OPTS, by: 'week' });
+    expect(r.lines.map((l) => l.key)).toEqual(['2026-07-19', '2026-07-26']);
+    store.close();
+  });
+
+  it('a start near local midnight attributes to the CONFIGURED zone week', () => {
+    const store = Store.openMemory(() => WEEK_NOW);
+    store.setSetting('timeZone', 'America/Edmonton');
+    // Mon Jul 27 03:00Z is still Sun Jul 26 in Edmonton (MDT, UTC−6) — under a
+    // monday-start week it belongs to the week of Mon Jul 20, not Jul 27.
+    store.add({ billable: true, tags: [], fromUtc: '2026-07-27T03:00:00Z', toUtc: '2026-07-27T04:00:00Z' });
+    const r = store.report({ ...OPTS, by: 'week' });
+    expect(r.lines.map((l) => l.key)).toEqual(['2026-07-20']);
+    store.close();
+  });
+
+  it('month buckets key YYYY-MM of the start day in the configured zone', () => {
+    const store = Store.openMemory(() => WEEK_NOW);
+    store.setSetting('timeZone', 'America/Edmonton');
+    // Aug 1 03:00Z is still Fri Jul 31 in Edmonton — it buckets under 2026-07.
+    store.add({ billable: true, tags: [], fromUtc: '2026-08-01T03:00:00Z', toUtc: '2026-08-01T04:00:00Z' });
+    store.add({ billable: true, tags: [], fromUtc: '2026-07-10T15:00:00Z', toUtc: '2026-07-10T16:00:00Z' });
+    const r = store.report({ ...OPTS, toUtc: '2026-08-02T00:00:00Z', by: 'month' });
+    expect(r.lines.map((l) => [l.key, l.totalSeconds])).toEqual([['2026-07', 2 * 3600]]);
+    store.close();
+  });
+
+  it('the grand total is grouping-invariant across all six groupings', () => {
+    const store = weekStore();
+    const totals = (['client', 'project', 'day', 'week', 'month', 'tag'] as const).map(
+      (by) => store.report({ ...OPTS, by }).grandTotalSeconds,
+    );
+    expect(new Set(totals).size).toBe(1);
+    expect(totals[0]).toBe(4 * 3600);
+    store.close();
+  });
+
+  it('groupKeyLabel renders "Week of Jul 27" / "Jul 2026" and leaves other keys raw', () => {
+    expect(groupKeyLabel('2026-07-27', 'week')).toBe('Week of Jul 27');
+    expect(groupKeyLabel('2026-01-05', 'week')).toBe('Week of Jan 5');
+    expect(groupKeyLabel('2026-07', 'month')).toBe('Jul 2026');
+    expect(groupKeyLabel('2026-12', 'month')).toBe('Dec 2026');
+    expect(groupKeyLabel('2026-07-27', 'day')).toBe('2026-07-27');
+    expect(groupKeyLabel('Acme', 'client')).toBe('Acme');
   });
 });
 

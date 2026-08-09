@@ -466,6 +466,66 @@ describe('GOLD: config set validates (§14)', () => {
     expect(unknownKey.err).not.toMatch(/^error: /);
   });
 
+  // §04 R06 / §14 — the configured time zone on the tt surface: round-trip, rejection, the
+  // recorded behavior change (`tt list` renders the configured zone's wall clock, never raw
+  // UTC ISO), zone-aware bare-clock parsing, and compatible DST input resolution. Every
+  // expected literal is read off the zone's published offsets (Edmonton MDT = UTC−6 in
+  // June; New York EST/EDT around the 2026 transitions), never off the code under test.
+  it('round-trips time_zone through config set / ls --json; an unknown zone is rejected', () => {
+    const set = tt(['config', 'set', 'time_zone', 'America/Edmonton']);
+    expect(set.code).toBe(0);
+    expect(set.out).toBe('set time_zone = America/Edmonton');
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).timeZone).toBe('America/Edmonton');
+    const bad = tt(['config', 'set', 'time_zone', 'Mars/Olympus_Mons']);
+    expect(bad.code).toBe(2);
+    expect(bad.err).toMatch(/IANA time zone/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).timeZone).toBe('America/Edmonton');
+  });
+
+  it('tt list renders START/END in the configured zone — the recorded change from raw UTC', () => {
+    tt(['config', 'set', 'time_zone', 'America/Edmonton']);
+    tt(['config', 'set', 'date_format', 'iso']);
+    tt(['add', 'zoned work', '--from', '2026-06-24T15:00:00Z', '--to', '2026-06-24T16:00:00Z']);
+    const r = tt(['list', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--all']);
+    expect(r.code).toBe(0);
+    // 15:00Z/16:00Z are 09:00/10:00 MDT — the table shows the configured wall clock…
+    expect(r.out).toContain('2026-06-24 09:00:00');
+    expect(r.out).toContain('2026-06-24 10:00:00');
+    // …and no raw UTC ISO stamp survives in the human table.
+    expect(r.out).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/);
+    // The machine read-side is untouched: --json still carries the stored UTC instants.
+    const rows = JSON.parse(
+      tt(['list', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--all', '--json']).out,
+    );
+    expect(rows[0].start_utc).toBe('2026-06-24T15:00:00Z');
+  });
+
+  it('a bare clock time (tt add 14:30-style) parses as today-in-the-configured-zone', () => {
+    tt(['config', 'set', 'time_zone', 'America/Edmonton']);
+    // now = 2026-06-24T10:24:07Z = 04:24 MDT, so "today" is Jun 24 in Edmonton; 14:00 and
+    // 14:30 MDT are 20:00Z and 20:30Z.
+    tt(['add', 'afternoon call', '--from', '14:00', '--to', '14:30']);
+    const rows = JSON.parse(
+      tt(['list', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z', '--all', '--json']).out,
+    );
+    expect(rows[0].start_utc).toBe('2026-06-24T20:00:00Z');
+    expect(rows[0].end_utc).toBe('2026-06-24T20:30:00Z');
+  });
+
+  it('DST input resolves compatibly: a gap time shifts forward, an ambiguous one takes the earlier offset', () => {
+    tt(['config', 'set', 'time_zone', 'America/New_York']);
+    // 02:30 never exists on 2026-03-08 (spring forward): compatible mode lands 03:30 EDT = 07:30Z.
+    tt(['add', 'gap entry', '--from', '2026-03-08T02:30', '--to', '2026-03-08T04:00']);
+    // 01:30 exists twice on 2026-11-01 (fall back): the EARLIER instant wins — EDT, 05:30Z.
+    tt(['add', 'ambiguous entry', '--from', '2026-11-01T01:30', '--to', '2026-11-01T03:00']);
+    const rows = JSON.parse(
+      tt(['list', '--range', '2026-03-01T00:00:00Z', '2026-12-01T00:00:00Z', '--all', '--json']).out,
+    );
+    const byDesc = (d: string) => rows.find((e: { description: string }) => e.description === d);
+    expect(byDesc('gap entry').start_utc).toBe('2026-03-08T07:30:00Z');
+    expect(byDesc('ambiguous entry').start_utc).toBe('2026-11-01T05:30:00Z');
+  });
+
   it('round-trips picker_window_mode through config set / ls --json', () => {
     const set = tt(['config', 'set', 'picker_window_mode', 'around_now']);
     expect(set.code).toBe(0);
@@ -490,9 +550,14 @@ describe('GOLD: tt report (§09)', () => {
 
   it('human report groups client → project with totals', () => {
     seed();
+    // §04 R06 — the header's range bounds render in the CONFIGURED zone through core's one
+    // formatting path (no longer raw UTC ISO). Pin zone + iso format so the bytes are
+    // host-independent; the same window as before now reads as its wall clock in UTC.
+    tt(['config', 'set', 'time_zone', 'UTC']);
+    tt(['config', 'set', 'date_format', 'iso']);
     const r = tt(['report', '--range', '2026-06-24T00:00:00Z', '2026-06-25T00:00:00Z']);
     expect(r.out).toMatchInlineSnapshot(`
-      "Report  2026-06-24T00:00:00Z → 2026-06-25T00:00:00Z  (billable, by client)
+      "Report  2026-06-24 00:00:00 → 2026-06-25 00:00:00  (billable, by client)
 
       Client A                    01:30:00  (1.50h)
         API                       01:30:00  (1.50h)
@@ -524,6 +589,7 @@ describe('GOLD: settings defaults (§14)', () => {
       checkin_interval_min    30
       global_hotkey           CommandOrControl+Alt+T
       date_format             system
+      time_zone               system
       working_hours_start     07:00
       working_hours_end       18:00
       picker_window_mode      working_hours
@@ -542,6 +608,7 @@ describe('GOLD: settings defaults (§14)', () => {
       checkinIntervalMin: 30,
       globalHotkey: 'CommandOrControl+Alt+T',
       dateFormat: 'system',
+      timeZone: 'system',
       workingHoursStart: '07:00',
       workingHoursEnd: '18:00',
       pickerWindowMode: 'working_hours',

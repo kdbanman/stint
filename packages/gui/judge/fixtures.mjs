@@ -18,6 +18,9 @@ const DEFAULT_SETTINGS = {
   globalHotkey: 'CommandOrControl+Alt+T',
   // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
   dateFormat: 'system',
+  // §04 R06 / §14 — the configured time zone ('system' follows the OS at read time); the
+  // Settings view's Time zone select edits it over the same setSetting channel.
+  timeZone: 'system',
   // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
   // default-window mode, and the around-now span. The Settings → Timeline group edits them;
   // SU.timelineWindow derives the picker/calendar default viewport from them (G16).

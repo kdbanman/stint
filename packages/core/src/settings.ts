@@ -3,6 +3,7 @@
  * gives them a typed, defaulted interface.
  */
 import type { Db } from './db.js';
+import { isSupportedTimeZone } from './time.js';
 
 export type WeekStart = 'monday' | 'sunday';
 /** Date format (PRD §12 R11): the runner's locale, or an unambiguous ISO rendering. */
@@ -31,6 +32,14 @@ export interface Settings {
    * unambiguous ISO time. A pure display preference — stored instants are always UTC ISO.
    */
   dateFormat: DateFormat;
+  /**
+   * §04 R06 / §14 — the zone display, wall-clock parsing, day buckets, and range presets
+   * resolve in: the literal sentinel `'system'` (resolved against the OS at read time, so
+   * it follows OS zone changes) or an explicit IANA zone (e.g. `America/Edmonton`), which
+   * pins it. Validated against the platform zone list. A display/derivation preference —
+   * stored instants are always UTC ISO (§04 R06).
+   */
+  timeZone: string;
   /**
    * §14 — the working-hours pair shaping the default timeline viewport (G15/G16): strict
    * zero-padded HH:MM, start strictly before end. The interval picker (§12 R15) opens to
@@ -62,6 +71,7 @@ export const DEFAULT_SETTINGS: Settings = {
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
   dateFormat: 'system',
+  timeZone: 'system',
   workingHoursStart: '07:00',
   workingHoursEnd: '18:00',
   pickerWindowMode: 'working_hours',
@@ -141,6 +151,22 @@ export const SETTING_DESCRIPTORS: SettingDescriptor[] = [
     parse: (r) => (r === 'system' || r === 'iso' ? r : undefined),
     validate: (v) => {
       if (v !== 'system' && v !== 'iso') throw new Error('date_format must be system or iso');
+    },
+  },
+  {
+    key: 'timeZone',
+    snake: 'time_zone',
+    // §14 — 'system' (follow the OS at read time) or a platform-supported IANA zone; any
+    // other value is rejected rather than stored (validate below carries the descriptive
+    // message, so a mistyped `tt config set` names the fix), and reads are as strict as
+    // writes (readSettings re-validates, so a hand-corrupted zone falls back to 'system').
+    parse: (r) => r,
+    validate: (v) => {
+      if (v !== 'system' && !isSupportedTimeZone(v)) {
+        throw new Error(
+          `time_zone must be "system" or an IANA time zone the platform supports (e.g. America/Edmonton)`,
+        );
+      }
     },
   },
   // §14 — the timeline-window settings (G15). Key-value rows in the existing `setting`

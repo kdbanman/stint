@@ -76,6 +76,7 @@ window.STP = (function () {
   // against, so a timezone or DST fix has a single site to find (issue #168).
   const {
     localInputValue, parseLocalInput, localMinuteOfDay, exactMinuteOfDay, timelineWindow,
+    localDayOf, startOfDay,
   } = window.SU;
   function hhmm(minutes) {
     // Floor, not round: an exact seed carries fractional minutes (seconds ride the fraction,
@@ -84,25 +85,30 @@ window.STP = (function () {
     const m = Math.floor(minutes);
     return `${pad(Math.floor(m / 60) % 24)}:${pad(m % 60)}`;
   }
-  // The local Y-M-D the column is drawn against; the calendar selection sets this.
+  // The CONFIGURED zone's Y-M-D the column is drawn against (§04 R06 — SU.localDayOf is
+  // core's localDay in the configured zone); the calendar selection sets this.
   function sameLocalDay(a, b) {
-    return (
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate()
-    );
+    return localDayOf(a) === localDayOf(b);
   }
+  // The configured zone's midnight of the day an instant falls on (SU.startOfDay —
+  // calendar arithmetic via core's wallClockToUtc, DST-compatible).
   function startOfLocalDay(date) {
-    return new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+    return startOfDay(date);
   }
-  // Build a local Date on `day` at `minute` of that day (minute may exceed the column for
-  // labels; the geometry clamps before this is called). `minute` may be FRACTIONAL (an exact
-  // seed carries seconds in the fraction, issue #49) — round to whole seconds so 547.55 min
-  // inverts to exactly 09:07:33, never a float-drifted 09:07:32.999.
+  // Build the instant on `day`'s configured-zone calendar day at `minute` of that day
+  // (minute may exceed the column for labels; the geometry clamps before this is called).
+  // `minute` may be FRACTIONAL (an exact seed carries seconds in the fraction, issue #49) —
+  // SU.dateAtMinute rounds to whole seconds so 547.55 min inverts to exactly 09:07:33,
+  // never a float-drifted 09:07:32.999.
   function dateAtMinute(day, minute) {
-    const d = startOfLocalDay(day);
-    d.setMinutes(0, Math.round(minute * 60), 0);
-    return d;
+    return window.SU.dateAtMinute(day, minute);
+  }
+  // The configured zone's civil {y, m (0-based), d} of an instant — the mini calendar's
+  // month arithmetic works in civil numbers (via localDayOf), never OS-zone Date getters,
+  // so a pinned zone across the dateline from the OS still selects the right cells.
+  function civilParts(date) {
+    const [y, m, d] = localDayOf(date).split('-').map(Number);
+    return { y, m: m - 1, d };
   }
 
   // Other entries clamped to `day`, as [from,to] minute pairs (drawn gray, warn-only).
@@ -414,12 +420,18 @@ window.STP = (function () {
     }
 
     // ---- month calendar (pick the day) --------------------------------------------
-    let calMonth = new Date(columnDay.getFullYear(), columnDay.getMonth(), 1);
+    // The calendar works in CIVIL {y, m} numbers of the CONFIGURED zone (civilParts —
+    // never OS-zone Date getters, which read the wrong civil day when the configured zone
+    // sits across midnight from the OS). Cell dates render/compare through UTC-anchored
+    // civil math and become instants only on click, via SU.dateAtMinute's day mapping.
+    let calMonth = (({ y, m }) => ({ y, m }))(civilParts(columnDay));
+    // A representative instant of a civil day, for the zone-free label/dow math below.
+    const civilUtc = (y, m, d) => new Date(Date.UTC(y, m, d));
+    const dayToken = (y, m, d) =>
+      `${y}-${pad(m + 1)}-${pad(d)}`;
     function renderCalendar() {
-      box.querySelector('.stp-month').textContent = calMonth.toLocaleDateString(undefined, {
-        month: 'long',
-        year: 'numeric',
-      });
+      box.querySelector('.stp-month').textContent = civilUtc(calMonth.y, calMonth.m, 1)
+        .toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
       const grid = box.querySelector('.stp-grid');
       grid.innerHTML = '';
       for (const dow of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) {
@@ -428,25 +440,26 @@ window.STP = (function () {
         h.textContent = dow;
         grid.appendChild(h);
       }
-      const first = new Date(calMonth.getFullYear(), calMonth.getMonth(), 1);
-      const lead = (first.getDay() + 6) % 7;
-      const daysInMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 0).getDate();
+      const lead = (civilUtc(calMonth.y, calMonth.m, 1).getUTCDay() + 6) % 7;
+      const daysInMonth = civilUtc(calMonth.y, calMonth.m + 1, 0).getUTCDate();
       for (let i = 0; i < lead; i++) {
         const blank = document.createElement('span');
         blank.className = 'stp-d stp-mut';
         grid.appendChild(blank);
       }
-      const today = new Date();
+      const todayToken = localDayOf(new Date());
+      const selectedToken = localDayOf(columnDay);
       for (let day = 1; day <= daysInMonth; day++) {
         const cell = document.createElement('button');
         cell.type = 'button';
         cell.className = 'stp-d';
-        const cellDate = new Date(calMonth.getFullYear(), calMonth.getMonth(), day);
-        if (sameLocalDay(cellDate, columnDay)) cell.classList.add('stp-sel');
-        if (sameLocalDay(cellDate, today)) cell.classList.add('stp-today');
+        const token = dayToken(calMonth.y, calMonth.m, day);
+        if (token === selectedToken) cell.classList.add('stp-sel');
+        if (token === todayToken) cell.classList.add('stp-today');
         cell.textContent = String(day);
         cell.addEventListener('click', () => {
-          columnDay = startOfLocalDay(cellDate);
+          // The clicked civil day's configured-zone midnight becomes the new column anchor.
+          columnDay = window.SU.dayStartOfToken(token);
           renderCalendar();
           renderTrack();
           commit(); // moving the span to another day is a live form-state change
@@ -455,11 +468,11 @@ window.STP = (function () {
       }
     }
     box.querySelector('.stp-prev').addEventListener('click', () => {
-      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1);
+      calMonth = calMonth.m === 0 ? { y: calMonth.y - 1, m: 11 } : { y: calMonth.y, m: calMonth.m - 1 };
       renderCalendar();
     });
     box.querySelector('.stp-next').addEventListener('click', () => {
-      calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1);
+      calMonth = calMonth.m === 11 ? { y: calMonth.y + 1, m: 0 } : { y: calMonth.y, m: calMonth.m + 1 };
       renderCalendar();
     });
 
@@ -478,6 +491,7 @@ window.STP = (function () {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
+        timeZone: window.SU.currentZone(), // the column IS a configured-zone day (§04 R06)
       });
       track.innerHTML = '';
       paintHourLabels(track);
@@ -592,7 +606,7 @@ window.STP = (function () {
         endMin = exactMinuteOfDay(e);
         if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
       }
-      calMonth = new Date(columnDay.getFullYear(), columnDay.getMonth(), 1);
+      calMonth = (({ y, m }) => ({ y, m }))(civilParts(columnDay));
       renderCalendar();
       renderTrack(); // repaints the column AND refreshes the echo (updateEcho at its foot)
     }

@@ -21,6 +21,7 @@ import {
   secondsBetween,
   elapsedSeconds,
   formatDuration,
+  resolveTimeZone,
   type Clock,
 } from './time.js';
 import {
@@ -675,7 +676,20 @@ export class Store {
       },
       { fromUtc: req.fromUtc, toUtc: req.toUtc },
       this.now(),
+      // §04 R06 / §14: by-day/week/month report lines bucket in the configured zone, and
+      // week buckets start on the configured week-start day (§09 R02).
+      this.timeZone(),
+      this.settings().weekStart,
     );
+  }
+
+  /**
+   * §04 R06 / §14 — the configured time zone, resolved: the `time_zone` setting with the
+   * `'system'` sentinel resolved against the OS at read time. The one zone every
+   * zone-sensitive derivation of this store (day buckets, saved-range resolution) uses.
+   */
+  timeZone(): string {
+    return resolveTimeZone(this.settings().timeZone);
   }
 
   // -------------------------------------------------------- saved reports (§09 R08–R09)
@@ -829,7 +843,7 @@ export class Store {
    */
   runReport(ref: string | number, now: Date = this.now()): Report {
     const def = this.requireReportDefByRef(ref);
-    return this.report(resolveReportDef(def, this.settings().weekStart, now));
+    return this.report(resolveReportDef(def, this.settings().weekStart, now, this.timeZone()));
   }
 
   /**
@@ -844,7 +858,7 @@ export class Store {
    */
   reportFilteredEntries(ref: string | number, now: Date = this.now()): EntryView[] {
     const def = this.requireReportDefByRef(ref);
-    const req = resolveReportDef(def, this.settings().weekStart, now);
+    const req = resolveReportDef(def, this.settings().weekStart, now, this.timeZone());
     return this.listEntries({
       fromUtc: req.fromUtc,
       toUtc: req.toUtc,
@@ -864,7 +878,7 @@ export class Store {
    */
   resolveReportRange(ref: string | number, now: Date = this.now()): { fromUtc: string; toUtc: string } {
     const def = this.requireReportDefByRef(ref);
-    return resolveSavedRange(def.rangeSpec, this.settings().weekStart, now);
+    return resolveSavedRange(def.rangeSpec, this.settings().weekStart, now, this.timeZone());
   }
 
   /**

@@ -14,6 +14,12 @@ $('open').innerHTML = 'Open Stint' + icon('arrow');
 
 async function load() {
   state = await window.stint.getState();
+  // §04 R06 / §12 R11: the popover is a separate document, so it applies the display
+  // settings itself — "since HH:MM" honours the configured zone and date format.
+  if (state && state.settings) {
+    window.SU.applyDateFormat(state.settings.dateFormat || 'system');
+    window.SU.applyTimeZone(state.settings.timeZone || 'system');
+  }
   render();
 }
 

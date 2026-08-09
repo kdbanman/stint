@@ -4075,7 +4075,7 @@ async function sceneReportsView(browser) {
       builder.name && builder.range && builder.custom && builder.by && builder.client &&
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
       ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
-      ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b)) &&
+      ['client', 'project', 'day', 'week', 'month', 'tag'].every((b) => builder.bys.includes(b)) &&
       builder.nestedIn === null; // a NEW report's builder opens at view level (no card yet)
     const savedSpec = customSave.payload && customSave.payload.rangeSpec;
     const customOk =
@@ -5413,7 +5413,8 @@ async function sceneSettingsView(browser) {
           has('firstCheckinMin') &&
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
-          has('dateFormat'),
+          has('dateFormat') &&
+          has('timeZone'),
         offenders,
         segChip,
       };
@@ -5435,7 +5436,7 @@ async function sceneSettingsView(browser) {
     record(
       'SETTINGS_VIEW',
       { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });

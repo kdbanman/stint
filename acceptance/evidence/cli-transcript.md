@@ -5,6 +5,30 @@ exit code of a `tt` command run against a fresh database with the clock pinned t
 `2026-06-24T17:30:00Z` (so durations are reproducible). Sections map to the PRD §17
 acceptance criteria.
 
+## §04 R06 / §14 — the configured time zone (pinned for reproducibility)
+
+Human-readable timestamps render in the CONFIGURED zone through core's one formatting path (never raw UTC ISO), and wall-clock time input parses in the same zone. The default `time_zone` is the `system` sentinel — resolved against the OS at read time — which would make this transcript depend on the runner's zone/locale, so it is pinned to an explicit IANA zone (`America/Edmonton`, MDT = UTC−6 in June) and `date_format` to `iso` before anything else runs. Every rendered stamp below is that zone's wall clock.
+
+```console
+$ tt config set time_zone America/Edmonton
+set time_zone = America/Edmonton
+# exit 0
+```
+
+```console
+$ tt config set date_format iso
+set date_format = iso
+# exit 0
+```
+
+```console
+$ tt config set time_zone Mars/Olympus_Mons
+time_zone must be "system" or an IANA time zone the platform supports (e.g. America/Edmonton)
+# exit 2
+```
+
+An unknown zone is validated against the platform zone list and rejected — nothing stored (§14).
+
 ## R1 / R2 — one open entry; surfaces never disagree
 
 A timer started through `tt` is the single open entry; starting another atomically closes the first.
@@ -31,13 +55,29 @@ $ tt start "code review" --client "Client A" --at 2026-06-24T16:00:00Z
 
 ```console
 $ tt list --today --all
-ID  START                 END                   DUR       CLIENT/PROJECT  DESCRIPTION    BILL  FLAGS
-1   2026-06-24T09:00:00Z  2026-06-24T16:00:00Z  07:00:00  Client A / API  auth refactor  yes
-2   2026-06-24T16:00:00Z  —                     01:30:00  Client A        code review    yes
+ID  START                END                  DUR       CLIENT/PROJECT  DESCRIPTION    BILL  FLAGS
+1   2026-06-24 03:00:00  2026-06-24 10:00:00  07:00:00  Client A / API  auth refactor  yes
+2   2026-06-24 10:00:00  —                    01:30:00  Client A        code review    yes
 # exit 0
 ```
 
-Exactly one entry is open (R2); the first was closed at 16:00.
+Exactly one entry is open (R2); the first was closed at 16:00Z — rendered 10:00, the configured zone's wall clock (§04 R06). `--today` is the configured zone's calendar day.
+
+```console
+$ tt add "phone screen" --from 01:15 --to 01:45
+added entry 3 · 00:30:00
+# exit 0
+```
+
+Wall-clock input parses in the configured zone, symmetric with display: 01:15 in America/Edmonton is 07:15Z (the `--json` read-side below stays stored UTC).
+
+```console
+$ tt list --range 2026-06-24T07:00:00Z 2026-06-24T08:00:00Z --all --json
+[{"id":3,"client":null,"project":null,"tags":[],"description":"phone screen","start_utc":"2026-06-24T07:15:00Z","end_utc":"2026-06-24T07:45:00Z","raw_duration_s":1800,"excluded_s":0,"billable":false,"overlapped":false}]
+# exit 0
+```
+
+Stored truth is untouched by the display zone: the machine contract still carries UTC ISO.
 
 ## R3 — close / sleep / crash never corrupts elapsed
 
@@ -69,13 +109,15 @@ stopped 00:25:00 · Client A
 
 ```console
 $ tt report --today --all
-Report  2026-06-24T00:00:00Z → 2026-06-25T00:00:00Z  (all, by client)
+Report  2026-06-24 00:00:00 → 2026-06-25 00:00:00  (all, by client)
 
+(no client)                 00:30:00  (0.50h)
+  (no project)              00:30:00  (0.50h)
 Client A                    07:25:00  (7.42h)
   (no project)              00:25:00  (0.42h)
   API                       07:00:00  (7.00h)
 
-Total                       07:25:00  (7.42h)
+Total                       07:55:00  (7.92h)
 # exit 0
 ```
 
@@ -83,13 +125,15 @@ Exact stored totals — rounding is off by default (R4).
 
 ```console
 $ tt report --today --all --round 15
-Report  2026-06-24T00:00:00Z → 2026-06-25T00:00:00Z  (all, by client, rounded 15m)
+Report  2026-06-24 00:00:00 → 2026-06-25 00:00:00  (all, by client, rounded 15m)
 
+(no client)                 00:30:00  (0.50h)
+  (no project)              00:30:00  (0.50h)
 Client A                    07:30:00  (7.50h)
   (no project)              00:30:00  (0.50h)
   API                       07:00:00  (7.00h)
 
-Total                       07:30:00  (7.50h)
+Total                       08:00:00  (8.00h)
 # exit 0
 ```
 
@@ -98,6 +142,7 @@ Rounding applies only to the grouped line, nearest 15 min; stored times are unto
 ```console
 $ tt export --today --csv
 client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped
+,,,phone screen,2026-06-24T07:15:00Z,2026-06-24T07:45:00Z,1800,0,false,false
 Client A,API,deep,auth refactor,2026-06-24T09:00:00Z,2026-06-24T16:00:00Z,25200,0,true,false
 Client A,,,code review,2026-06-24T16:00:00Z,2026-06-24T16:25:00Z,1500,0,true,false
 # exit 0
@@ -107,16 +152,40 @@ CSV export — the exact §09 R6 column contract (R7).
 
 ```console
 $ tt report --today --by tag --all
-Report  2026-06-24T00:00:00Z → 2026-06-25T00:00:00Z  (all, by tag)
+Report  2026-06-24 00:00:00 → 2026-06-25 00:00:00  (all, by tag)
 
-(untagged)                  00:25:00  (0.42h)
+(untagged)                  00:55:00  (0.92h)
 deep                        07:00:00  (7.00h)
 
-Total                       07:25:00  (7.42h)
+Total                       07:55:00  (7.92h)
 # exit 0
 ```
 
 Grouping by tag (R7).
+
+```console
+$ tt report --week --by week --all
+Report  2026-06-22 00:00:00 → 2026-06-29 00:00:00  (all, by week)
+
+Week of Jun 22              07:55:00  (7.92h)
+
+Total                       07:55:00  (7.92h)
+# exit 0
+```
+
+Grouping by week (§09 R02) — a bucket starts on the configured week-start day, labelled "Week of …" by its start date.
+
+```console
+$ tt report --week --by month --all
+Report  2026-06-22 00:00:00 → 2026-06-29 00:00:00  (all, by month)
+
+Jun 2026                    07:55:00  (7.92h)
+
+Total                       07:55:00  (7.92h)
+# exit 0
+```
+
+Grouping by month (§09 R02) — buckets keyed YYYY-MM, labelled like "Jun 2026".
 
 ## R5 — sleep yields a flagged entry, second-accurate spans, reversible subtract
 
@@ -189,7 +258,8 @@ week_start              monday
 first_checkin_min       60
 checkin_interval_min    30
 global_hotkey           CommandOrControl+Alt+T
-date_format             system
+date_format             iso
+time_zone               America/Edmonton
 working_hours_start     07:00
 working_hours_end       18:00
 picker_window_mode      working_hours
@@ -228,7 +298,7 @@ Rejected — the pair must satisfy start<end (core validation, identical on both
 
 ```console
 $ tt config ls --json
-{"rounding":false,"roundingIncrementMin":15,"weekStart":"monday","firstCheckinMin":60,"checkinIntervalMin":30,"globalHotkey":"CommandOrControl+Alt+T","dateFormat":"system","workingHoursStart":"08:30","workingHoursEnd":"16:30","pickerWindowMode":"around_now","pickerAroundHours":8,"backupRetention":5}
+{"rounding":false,"roundingIncrementMin":15,"weekStart":"monday","firstCheckinMin":60,"checkinIntervalMin":30,"globalHotkey":"CommandOrControl+Alt+T","dateFormat":"iso","timeZone":"America/Edmonton","workingHoursStart":"08:30","workingHoursEnd":"16:30","pickerWindowMode":"around_now","pickerAroundHours":8,"backupRetention":5}
 # exit 0
 ```
 

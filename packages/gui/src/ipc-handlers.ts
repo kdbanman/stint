@@ -75,9 +75,10 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
   const now = new Date();
   // fromDate/toDate: no preset means the §09 R01 date pair — and a payload carrying neither
   // is rejected by core's plain-date parse, never widened into a bogus window.
+  // §04 R06 / §14: presets and the plain-date pair resolve in the configured zone.
   const range = q.preset
-    ? resolveRange(q.preset, store.settings().weekStart, now)
-    : resolveDateRange(q.fromDate!, q.toDate!);
+    ? resolveRange(q.preset, store.settings().weekStart, now, store.timeZone())
+    : resolveDateRange(q.fromDate!, q.toDate!, store.timeZone());
   const filter: Parameters<Store['listEntries']>[0] = {
     fromUtc: range.fromUtc,
     toUtc: range.toUtc,
@@ -97,7 +98,13 @@ function listEntries(store: Store, q: ListEntriesQuery): EntryListView {
   // buildEntryList only needs to group the surviving set. Issues #55/#50: `by` is optional on
   // ListEntriesQuery — default to the Entries calendar's 'day' grouping so a payload missing `by`
   // can never reject the whole query.
-  const { groups } = buildEntryList(entries, { by: q.by ?? 'day' });
+  const { groups } = buildEntryList(entries, {
+    by: q.by ?? 'day',
+    timeZone: store.timeZone(),
+    // Threaded so a by-week query is expressible over this channel (§09 R02); the Entries
+    // view itself only ever lays by day (G11).
+    weekStart: store.settings().weekStart,
+  });
   return {
     groups: groups.map((g) => ({
       key: g.key,
@@ -175,8 +182,10 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
         // the ONE inverse of the format those fields render (localtime.ts, issue #159) — either
         // separator accepted, never an engine-locale guess. An unreadable value stays an Invalid
         // Date, so toUtc throws exactly as before and the renderer surfaces it (§12 R21).
-        fromUtc: toUtc(parseLocalInput(payload.fromLocal)),
-        toUtc: toUtc(parseLocalInput(payload.toLocal)),
+        // §04 R06: the two wall-clock strings parse in the CONFIGURED zone (symmetric with
+        // display), through the same localtime pair the renderer renders/parses with.
+        fromUtc: toUtc(parseLocalInput(payload.fromLocal, store.timeZone())),
+        toUtc: toUtc(parseLocalInput(payload.toLocal, store.timeZone())),
         clientId,
         projectId,
         tags: payload.tags ?? [],
@@ -243,24 +252,27 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
     // source of truth — at parity with `tt report save|ls|show|rename|rm|run`. The mutators refresh
     // all windows so an open Reports view repaints; the reads do not.
     saveReport: (payload) => {
-      const def = store.saveReport(savedReportInputFromView(payload));
+      const def = store.saveReport(savedReportInputFromView(payload, store.timeZone()));
       refreshAll();
-      return savedReportToView(def);
+      return savedReportToView(def, store.timeZone());
     },
-    listReports: () => store.listReports().map(savedReportToView),
+    listReports: () => store.listReports().map((d) => savedReportToView(d, store.timeZone())),
     showReport: (payload) => {
       const def = store.getReport(payload.name);
-      return def ? savedReportToView(def) : null;
+      return def ? savedReportToView(def, store.timeZone()) : null;
     },
     renameReport: (payload) => {
       const def = store.renameReport(payload.name, payload.newName);
       refreshAll();
-      return savedReportToView(def);
+      return savedReportToView(def, store.timeZone());
     },
     editReport: (payload) => {
-      const def = store.editReport(payload.name, savedReportPatchFromView(payload.patch));
+      const def = store.editReport(
+        payload.name,
+        savedReportPatchFromView(payload.patch, store.timeZone()),
+      );
       refreshAll();
-      return savedReportToView(def);
+      return savedReportToView(def, store.timeZone());
     },
     removeReport: (payload) => {
       store.removeReport(payload.name);

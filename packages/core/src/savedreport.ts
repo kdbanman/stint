@@ -73,8 +73,9 @@ export function resolveSavedRange(
   spec: RangeSpec,
   weekStart: WeekStart,
   now: Date = new Date(),
+  timeZone?: string,
 ): { fromUtc: string; toUtc: string } {
-  if (spec.kind === 'preset') return resolveRange(spec.preset, weekStart, now);
+  if (spec.kind === 'preset') return resolveRange(spec.preset, weekStart, now, timeZone);
   return { fromUtc: spec.fromUtc, toUtc: spec.toUtc };
 }
 
@@ -107,8 +108,9 @@ export function resolveReportDef(
   def: SavedReport,
   weekStart: WeekStart,
   now: Date = new Date(),
+  timeZone?: string,
 ): ResolvedReportRequest {
-  const range = resolveSavedRange(def.rangeSpec, weekStart, now);
+  const range = resolveSavedRange(def.rangeSpec, weekStart, now, timeZone);
   const req: ResolvedReportRequest = {
     fromUtc: range.fromUtc,
     toUtc: range.toUtc,
