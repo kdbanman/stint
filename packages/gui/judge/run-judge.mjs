@@ -5317,7 +5317,8 @@ async function sceneSettingsView(browser) {
           has('firstCheckinMin') &&
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
-          has('dateFormat'),
+          has('dateFormat') &&
+          has('timeZone'),
         offenders,
         segChip,
       };
@@ -5339,7 +5340,7 @@ async function sceneSettingsView(browser) {
     record(
       'SETTINGS_VIEW',
       { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });

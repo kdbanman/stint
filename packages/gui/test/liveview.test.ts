@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS = {
   checkinIntervalMin: 30,
   globalHotkey: 'CommandOrControl+Alt+T',
   dateFormat: 'system',
+  timeZone: 'system',
   workingHoursStart: '07:00',
   workingHoursEnd: '18:00',
   pickerWindowMode: 'working_hours',

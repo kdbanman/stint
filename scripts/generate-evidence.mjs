@@ -72,6 +72,22 @@ function section(title, body) {
   if (body) md.push(body, '');
 }
 
+// ─────────────── §04 R06 / §14 — pin the display settings first ──────────────
+section(
+  '§04 R06 / §14 — the configured time zone (pinned for reproducibility)',
+  'Human-readable timestamps render in the CONFIGURED zone through core\'s one formatting ' +
+    'path (never raw UTC ISO), and wall-clock time input parses in the same zone. The ' +
+    'default `time_zone` is the `system` sentinel — resolved against the OS at read time — ' +
+    'which would make this transcript depend on the runner\'s zone/locale, so it is pinned ' +
+    'to an explicit IANA zone (`America/Edmonton`, MDT = UTC−6 in June) and `date_format` ' +
+    'to `iso` before anything else runs. Every rendered stamp below is that zone\'s wall clock.',
+);
+show(['config', 'set', 'time_zone', 'America/Edmonton']);
+show(['config', 'set', 'date_format', 'iso']);
+show(['config', 'set', 'time_zone', 'Mars/Olympus_Mons'], {
+  note: 'An unknown zone is validated against the platform zone list and rejected — nothing stored (§14).',
+});
+
 // ───────────────────────────── R1 + R2 ──────────────────────────────────────
 section(
   'R1 / R2 — one open entry; surfaces never disagree',
@@ -80,7 +96,19 @@ section(
 show(['start', 'auth refactor', '--client', 'Client A', '--project', 'API', '--tag', 'deep', '--at', '2026-06-24T09:00:00Z']);
 show(['status'], { note: 'Derived elapsed = now − start, computed on demand (R1, R3).' });
 show(['start', 'code review', '--client', 'Client A', '--at', '2026-06-24T16:00:00Z']);
-show(['list', '--today', '--all'], { note: 'Exactly one entry is open (R2); the first was closed at 16:00.' });
+show(['list', '--today', '--all'], {
+  note:
+    'Exactly one entry is open (R2); the first was closed at 16:00Z — rendered 10:00, the ' +
+    'configured zone\'s wall clock (§04 R06). `--today` is the configured zone\'s calendar day.',
+});
+show(['add', 'phone screen', '--from', '01:15', '--to', '01:45'], {
+  note:
+    'Wall-clock input parses in the configured zone, symmetric with display: 01:15 in ' +
+    'America/Edmonton is 07:15Z (the `--json` read-side below stays stored UTC).',
+});
+show(['list', '--range', '2026-06-24T07:00:00Z', '2026-06-24T08:00:00Z', '--all', '--json'], {
+  note: 'Stored truth is untouched by the display zone: the machine contract still carries UTC ISO.',
+});
 
 // ───────────────────────────── R3 ───────────────────────────────────────────
 section(

@@ -67,7 +67,23 @@ advances 01:00 → 04:00 (02:00 never happened that day), and the 2026-11-01
 fall-back span `05:00Z → 06:00Z` is 3600 real seconds though BOTH ends read
 `01:00` in New York. The expected seconds and every per-zone wall clock are
 calendar literals, so the timezone arbitrary drives live assertions and the
-duration is never recomputed the way `secondsBetween` computes it. The
+duration is never recomputed the way `secondsBetween` computes it. The same
+five-zone arbitrary additionally drives the **configured `time_zone` setting**
+(§04 R06 / §14) through a real store: with `time_zone` set to the zone and
+`date_format` iso, core's one display path (`formatStamp` — what `tt list` and
+the GUI stamps render) must show those literal wall clocks and `localDay` must
+bucket the start under that zone's calendar day. The R06 display/input clause is
+further pinned by GOLD `core/test/gold/contracts.test.ts` "the configured time
+zone drives resolution and parsing (§04 R06, §14)" (zone-pinned `resolveRange`
+windows with absolute `Z` literals including a 167-hour DST week; bare-clock and
+zoneless-datetime `parseTime` in the configured zone with compatible DST
+resolution — gap shifts forward, ambiguity takes the earlier offset;
+`formatStamp`; the `time_zone` validation), by GOLD
+`cli/test/gold/cli.test.ts` (the `tt` surface: `time_zone` round-trip +
+rejection, the zone-rendered `tt list` human table with no raw UTC ISO, the
+zone-parsed bare-clock `tt add`, and the two DST input cases), and
+surface-neutrally by BDD `features/settings.feature` ("Both surfaces render
+timestamps in the configured time zone", run TWICE over core + `tt`). The
 durability/integrity guarantees the badge labels are **hardened
 in §20** — open-time pragmas (§20 R01, now asserted-and-verified on every open:
 GOLD `core/test/gold/contracts.test.ts` "DB open durability pragmas (§20 R01)" +
@@ -510,7 +526,14 @@ rollback and the 31st-of-March case (no day-of-month leaks into a bound; last
 month lands on a short February), and today including a DST-transition day whose
 end bound is the true next local midnight rather than `+24h`. None of those
 expected values is a second call of `resolveRange` , so flipping the week-start
-offset or the month arithmetic reddens them. The plain-date
+offset or the month arithmetic reddens them. `resolveRange` resolves in the
+**configured time zone** (§04 R06 / §14 — `timeZone` argument, `'system'`/absent
+= the OS zone at read time), pinned with absolute `Z` literals by the GOLD block
+"the configured time zone drives resolution and parsing (§04 R06, §14)"
+(zone-pinned today/week/month windows, the day-disagreement case where Edmonton
+and UTC name different calendar days, and a 167-hour DST week in
+America/New_York) — strictly stronger than the host-floating cases above, which
+remain the `'system'`-default proof. The plain-date
 pair → window rule lives GUI-side in exactly ONE place: `gui/src/reportview.ts`
 `resolveDateRange(fromDate, toDate)` resolves the two `YYYY-MM-DD` field strings
 to the half-open LOCAL window [from-day 00:00, day-after-to-day 00:00) — the
@@ -2129,7 +2152,10 @@ path. Re-introducing a Windows path or changing the data-dir suffix fails
 `features/settings.feature` , `gui/judge/run-judge.mjs` . The settings
 (rounding, rounding increment, week start, first check-in, check-in interval,
 global hotkey, the §12 R11 **date/number format** (`dateFormat:
-'system'|'iso'`), and the **§14 timeline-window settings** — four key-value rows
+'system'|'iso'`), the §04 R06 **time zone** (`time_zone` — the `'system'`
+sentinel resolved against the OS at read time, or a platform-supported IANA
+zone; an unknown name rejected with nothing stored), and the **§14
+timeline-window settings** — four key-value rows
 realizing G15's three settings: `working_hours_start` /`working_hours_end`
 (strict zero-padded HH:MM, defaults 07:00/18:00, cross-field start<end),
 `picker_window_mode` (`working_hours`|`around_now`), `picker_around_hours`
@@ -2138,9 +2164,9 @@ realizing G15's three settings: `working_hours_start` /`working_hours_end`
 owns its snake_case key, parse, and validation), so `readSettings`
 /`writeSetting`/`tt config ls/set` and the GUI `setSetting` channel all derive
 from the one list — the timeline keys reached `tt config` with **zero CLI
-edits** (§17 R8 parity by construction). GOLD pins the fresh-database defaults
-table + `--json` object (`cli/test/gold/cli.test.ts` — 12 rows incl. the four
-timeline keys in descriptor order; the raw camelCase `config ls --json` object
+edits** (§17 R8 parity by construction) — as did `time_zone`. GOLD pins the
+fresh-database defaults table + `--json` object (`cli/test/gold/cli.test.ts` —
+13 rows incl. `time_zone` and the four timeline keys in descriptor order; the raw camelCase `config ls --json` object
 validates against `schemas/settings.schema.json` , the one schema over
 `store.settings()` 's verbatim shape — defaults and a non-default in-domain
 value both pass), the `store.settings()` snapshot
@@ -2151,11 +2177,16 @@ leaving the default stored: malformed HH:MM (`7:00`, `25:00` , `7am` ), a
 start>=end pair (either key), `picker_around_hours` 0/25/2.5, an unknown mode —
 on core (`writeSetting` throws) AND tt (`config set` exits non-zero with a
 diagnostic), plus the `picker_window_mode around_now` round-trip through
-`config ls --json` . BDD `features/settings.feature` proves each setting —
-including all four timeline keys — round-trips and reads back, the fresh-DB
-timeline defaults, and the rejection scenarios (`working_hours_end 06:00`,
-`picker_around_hours 25` ) on BOTH core AND tt via the World `setConfig`
-/`getConfig`/`attemptSetConfig` (§17 R8). JUDGE `TIMELINE_WINDOW`
+`config ls --json` and the `time_zone` round-trip + unknown-zone rejection (the
+`tt` half of the §04 R06 coverage cross-noted under PRD §04). BDD
+`features/settings.feature` proves each setting — including all four timeline
+keys and `time_zone` — round-trips and reads back, the fresh-DB defaults, and
+the rejection scenarios (`working_hours_end 06:00`, `picker_around_hours 25`,
+`time_zone Mars/Olympus_Mons` ) on BOTH core AND tt via the World `setConfig`
+/`getConfig`/`attemptSetConfig` (§17 R8), plus "Both surfaces render timestamps
+in the configured time zone" over the World `renderedStart` capability
+(CoreWorld `formatStamp` over the store's settings; CliWorld the human
+`tt list` START cell). JUDGE `TIMELINE_WINDOW`
 (`timeline-window.png`, `acceptance/evidence/judge-report.json` ) proves the
 Settings → Timeline group renders/persists all four keys over the existing
 `setSetting` channel (Around disabled while the mode is `working_hours` ; the

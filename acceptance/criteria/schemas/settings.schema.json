@@ -12,6 +12,7 @@
     "checkinIntervalMin",
     "globalHotkey",
     "dateFormat",
+    "timeZone",
     "workingHoursStart",
     "workingHoursEnd",
     "pickerWindowMode",
@@ -27,6 +28,11 @@
     "checkinIntervalMin": { "type": "integer", "minimum": 1 },
     "globalHotkey": { "type": "string", "minLength": 1 },
     "dateFormat": { "enum": ["system", "iso"] },
+    "timeZone": {
+      "type": "string",
+      "minLength": 1,
+      "description": "'system' (follow the OS zone at read time) or a platform-supported IANA zone (§14); core validates against Intl.supportedValuesOf('timeZone')."
+    },
     "workingHoursStart": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
     "workingHoursEnd": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
     "pickerWindowMode": { "enum": ["working_hours", "around_now"] },

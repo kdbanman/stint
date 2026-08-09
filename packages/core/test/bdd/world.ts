@@ -28,6 +28,7 @@ import {
   toCsv,
   toJsonEntries,
   settingDescriptor,
+  formatStamp,
   type Clock,
 } from '@stint/core';
 
@@ -310,6 +311,15 @@ export interface World {
    * rejection — the same strictness on BOTH surfaces (§17 R8).
    */
   attemptSetConfig(key: string, value: string): { rejected: boolean };
+  /**
+   * §04 R06 / §14 — the DISPLAYED start stamp of the entry named by `desc`, rendered in the
+   * CONFIGURED time zone through core's one formatting path. Surface-neutral: CoreWorld
+   * renders core's formatStamp over the store's own settings (exactly what the GUI stamp
+   * labels paint); CliWorld reads the START cell off `tt list`'s human table — which is
+   * what proves the CLI's human output renders the configured zone, not raw UTC. Scenarios
+   * pin `date_format` to `iso` first so the stamp shape is host-independent.
+   */
+  renderedStart(desc: string): string;
   list(): EntryRec[];
   /**
    * §09 R7 — free-text search over the entries. Surface-neutral: CoreWorld drives
@@ -895,6 +905,13 @@ export class CoreWorld implements World {
     } catch {
       return { rejected: true };
     }
+  }
+  renderedStart(desc: string): string {
+    // §04 R06: core's ONE formatting path over the store's own settings — the same call the
+    // GUI's stamp labels make (formatStamp honors time_zone + date_format).
+    const entry = this.store.listEntries().find((e) => e.description === desc);
+    if (!entry) throw new Error(`no entry "${desc}"`);
+    return formatStamp(entry.startUtc, this.store.settings());
   }
   list(): EntryRec[] {
     return this.store.listEntries().map((e) => ({
@@ -1630,6 +1647,17 @@ export class CliWorld implements World {
     // stores nothing; that non-zero exit is the surface's rejection signal.
     const r = this.tt(['config', 'set', key, value]);
     return { rejected: r.code !== 0 };
+  }
+  renderedStart(desc: string): string {
+    // §04 R06: read the START cell off the HUMAN `tt list` table — the recorded behavior
+    // change (no raw UTC ISO): the stamp is the configured zone's wall clock through core's
+    // formatStamp. The scenario pins date_format=iso, so the cell is `YYYY-MM-DD HH:MM:SS`.
+    const r = this.tt(['list', '--all']);
+    const line = r.out.split('\n').find((l) => desc !== '' && l.includes(desc));
+    if (!line) throw new Error(`no tt list row for "${desc}" in:\n${r.out}`);
+    const m = /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.exec(line);
+    if (!m) throw new Error(`no rendered stamp on the row: ${line}`);
+    return m[0];
   }
   list(): EntryRec[] {
     return this.listRows(['list', '--all', '--json']);

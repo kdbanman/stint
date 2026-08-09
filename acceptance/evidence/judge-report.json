@@ -596,7 +596,7 @@
         "segChipOk": true,
         "editFiresSetSetting": true
       },
-      "justification": "settings panel exposes all seven §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\"]), accent discipline holds (offenders=[none]), D12 raised-chip segment selection=true {\"present\":true,\"chipPaper\":true,\"chipInk\":true,\"chipLifted\":true,\"peersFlat\":true}, date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
+      "justification": "settings panel exposes all eight §14 controls ([\"rounding\",\"roundingIncrementMin\",\"weekStart\",\"weekStart\",\"weekStart\",\"workingHoursStart\",\"workingHoursEnd\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerWindowMode\",\"pickerAroundHours\",\"firstCheckinMin\",\"checkinIntervalMin\",\"globalHotkey\",\"dateFormat\",\"timeZone\"]), accent discipline holds (offenders=[none]), D12 raised-chip segment selection=true {\"present\":true,\"chipPaper\":true,\"chipInk\":true,\"chipLifted\":true,\"peersFlat\":true}, date-format edit fired setSetting={\"key\":\"dateFormat\",\"value\":\"iso\"}",
       "screenshot": "main-settings.png"
     },
     {
@@ -612,7 +612,7 @@
         "reachedAll": true,
         "captureWorks": true
       },
-      "justification": "Tab INTO .set-hotkey from the control before it landed on the field (true); Tab from .set-hotkey advanced to select.set-field (escaped=true); Shift-Tab retreated to select.set-field writing nothing (true); Escape released to (body) writing nothing (true); Tab-walk from the field reached 4/4 stranded controls [dateFormat, updateCheck, backupRetention, backupRestore] via [\"select.set-field\",\"update-check\",\"select.set-field\",\"button.set-update-btn backup-restore\"]; capture intact — Ctrl+Shift+J persisted {\"key\":\"globalHotkey\",\"value\":\"CommandOrControl+Shift+J\"} (true); A04 focus-ring delta on the field=true (rest none|0px|rgb(33, 32, 28)|rgb(188, 187, 181) 0px 1px 0px 0px → focused solid|2px|rgb(229, 77, 46)|rgb(188, 187, 181) 0px 1px 0px 0px)",
+      "justification": "Tab INTO .set-hotkey from the control before it landed on the field (true); Tab from .set-hotkey advanced to select.set-field (escaped=true); Shift-Tab retreated to select.set-field writing nothing (true); Escape released to (body) writing nothing (true); Tab-walk from the field reached 4/4 stranded controls [dateFormat, updateCheck, backupRetention, backupRestore] via [\"select.set-field\",\"select.set-field\",\"update-check\",\"select.set-field\",\"button.set-update-btn backup-restore\"]; capture intact — Ctrl+Shift+J persisted {\"key\":\"globalHotkey\",\"value\":\"CommandOrControl+Shift+J\"} (true); A04 focus-ring delta on the field=true (rest none|0px|rgb(33, 32, 28)|rgb(188, 187, 181) 0px 1px 0px 0px → focused solid|2px|rgb(229, 77, 46)|rgb(188, 187, 181) 0px 1px 0px 0px)",
       "screenshot": "settings-hotkey-focus.png"
     },
     {
@@ -690,7 +690,7 @@
         "everyFieldNamed": true,
         "noPlaceholderOnly": true
       },
-      "justification": "D13 sweep over 34 visible controls, 29 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=8): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "justification": "D13 sweep over 35 visible controls, 30 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=9): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
       "screenshot": "field-labels-timer.png"
     },
     {
@@ -702,7 +702,7 @@
         "oneBorderWidth": true,
         "focusOk": true
       },
-      "justification": "D13/D07 sweep over 29 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=8): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
+      "justification": "D13/D07 sweep over 30 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=9): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
       "screenshot": "field-chrome-search-focus.png"
     },
     {
@@ -713,7 +713,7 @@
         "noUndersizedTargets": true,
         "noneAbsent": true
       },
-      "justification": "A03 sweep over 326 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=14, settings=22, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=37, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
+      "justification": "A03 sweep over 327 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=14, settings=23, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=37, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
       "screenshot": "main-target-size.png"
     },
     {

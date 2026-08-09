@@ -1098,12 +1098,31 @@ export const steps: StepDef[] = [
   },
   {
     // §14 — an INVALID setting write is rejected on this surface (a malformed HH:MM, an
-    // inverted working-hours pair, an out-of-range around span), storing nothing. Runs over
-    // the World attemptSetConfig capability so the strictness is proven identical on core
-    // AND tt (§17 R8); a follow-up "the configured … is …" step asserts the default survived.
+    // inverted working-hours pair, an out-of-range around span, an unknown time zone),
+    // storing nothing. Runs over the World attemptSetConfig capability so the strictness is
+    // proven identical on core AND tt (§17 R8); a follow-up "the configured … is …" step
+    // asserts the default survived.
     pattern: /^setting (?:the )?(.+?) to "([^"]*)" is rejected$/,
     run: (w, _c, setting, value) => {
       expect(w.attemptSetConfig(settingKey(setting), value).rejected).toBe(true);
+    },
+  },
+  {
+    // §04 R06 / §14 — seed a closed entry at EXPLICIT UTC instants, so a zone scenario can
+    // pin exactly which wall clock the configured zone must render them as.
+    pattern: /^a closed entry "([^"]*)" from (\S+) to (\S+)$/,
+    run: (w, _c, desc, fromIso, toIso) => {
+      w.backfillAt({ desc, fromIso, toIso });
+    },
+  },
+  {
+    // §04 R06 / §14 — BOTH surfaces render stored UTC in the ONE configured zone: CoreWorld
+    // through core's formatStamp over the store's settings (what the GUI stamp labels
+    // paint), CliWorld off the human `tt list` table's START cell — the recorded behavior
+    // change away from raw UTC ISO. Run twice, the two surfaces are proven to show one zone.
+    pattern: /^the entry "([^"]*)" renders a start of "([^"]*)"$/,
+    run: (w, _c, desc, stamp) => {
+      expect(w.renderedStart(desc)).toBe(stamp);
     },
   },
 
@@ -1661,6 +1680,8 @@ function settingKey(spoken: string): string {
     'check-in interval': 'checkin_interval_min',
     'global hotkey': 'global_hotkey',
     'date format': 'date_format',
+    // §04 R06 / §14 — the configured time zone ('system' or an IANA zone).
+    'time zone': 'time_zone',
     // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
     // default-window mode, and the around-now span.
     'working hours start': 'working_hours_start',

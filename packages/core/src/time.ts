@@ -11,6 +11,128 @@ export type Clock = () => Date;
 
 export const systemClock: Clock = () => new Date();
 
+// ───────────────────────────── configured time zone (§04 R06, §14) ─────────────────────
+
+/**
+ * §14 — resolve the `time_zone` setting to a concrete IANA zone. The sentinel `'system'`
+ * (or an absent value) is resolved against the OS **at read time**, so an OS zone change
+ * is followed without a restart; an explicit IANA zone pins display/parsing regardless of
+ * the OS. Every zone-sensitive derivation (display, wall-clock parsing, day buckets,
+ * range presets) resolves through this one function, so "whose local" has one answer.
+ */
+export function resolveTimeZone(setting?: string): string {
+  return !setting || setting === 'system'
+    ? Intl.DateTimeFormat().resolvedOptions().timeZone
+    : setting;
+}
+
+/**
+ * §14 — whether `tz` is a time zone the platform supports: the engine's own Intl accepts
+ * it (constructing a formatter with an unknown zone throws a RangeError). Deliberately NOT
+ * bare membership in `Intl.supportedValuesOf('timeZone')`: that list carries only the
+ * CLDR-canonical names, so it omits `'UTC'` and rejects valid IANA aliases the platform
+ * formats fine (`Asia/Kolkata` vs the list's `Asia/Calcutta`) — a validation that refuses
+ * zones the OS itself reports would strand a `'system'` user trying to pin their own zone.
+ * The supported-values list remains the GUI dropdown's option source. The `'system'`
+ * sentinel is NOT a zone — settings.ts accepts it before consulting this.
+ */
+export function isSupportedTimeZone(tz: string): boolean {
+  if (typeof tz !== 'string' || tz.trim() === '') return false;
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** A wall-clock reading — the civil date/time an instant shows on a zone's clock. */
+export interface WallClock {
+  year: number;
+  month: number; // 1–12
+  day: number; // 1–31
+  hour: number;
+  minute: number;
+  second: number;
+}
+
+// One cached formatter per zone: wallClockOf runs per rendered timestamp and per calendar
+// event, and Intl.DateTimeFormat construction is orders of magnitude dearer than format().
+const wallFormatters = new Map<string, Intl.DateTimeFormat>();
+function wallFormatter(timeZone: string): Intl.DateTimeFormat {
+  let f = wallFormatters.get(timeZone);
+  if (!f) {
+    // en-CA + h23: numeric fields whose values are read back as numbers below — the locale
+    // only shapes separators, which formatToParts sidesteps entirely.
+    f = new Intl.DateTimeFormat('en-CA', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    });
+    wallFormatters.set(timeZone, f);
+  }
+  return f;
+}
+
+/** The wall-clock reading of an instant in an IANA zone (the display-side primitive). */
+export function wallClockOf(instant: Date, timeZone: string): WallClock {
+  const parts = wallFormatter(timeZone).formatToParts(instant);
+  const num = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return {
+    year: num('year'),
+    month: num('month'),
+    day: num('day'),
+    hour: num('hour'),
+    minute: num('minute'),
+    second: num('second'),
+  };
+}
+
+const DAY_MS = 86_400_000;
+
+/** A zone's UTC offset (ms east of UTC) at an instant, derived from its wall clock. */
+function zoneOffsetMs(timeZone: string, utcMs: number): number {
+  // Offsets are whole seconds; diff on the second-truncated instant so a millisecond
+  // fraction on the input never smears into the offset.
+  const floored = Math.floor(utcMs / 1000) * 1000;
+  const w = wallClockOf(new Date(floored), timeZone);
+  return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - floored;
+}
+
+/**
+ * The instant a wall-clock reading names in an IANA zone — the parse-side inverse of
+ * {@link wallClockOf}, with **compatible** DST resolution (§04 R06): a wall time that
+ * never exists (the spring-forward gap) shifts forward past the gap; one that exists
+ * twice (the fall-back hour) takes the earlier instant (the first, pre-transition
+ * offset). Out-of-range fields (month 13, day 0) carry over as calendar arithmetic via
+ * Date.UTC normalisation, which is what lets resolveRange step days/months plainly.
+ */
+export function wallClockToUtc(
+  w: { year: number; month: number; day: number; hour?: number; minute?: number; second?: number },
+  timeZone: string,
+): Date {
+  const wallMs = Date.UTC(w.year, w.month - 1, w.day, w.hour ?? 0, w.minute ?? 0, w.second ?? 0);
+  // The zone's offset a day before and a day after the wall reading (read as if UTC)
+  // brackets any transition near it; a candidate offset is real iff re-reading the zone at
+  // the candidate instant yields the same offset.
+  const before = zoneOffsetMs(timeZone, wallMs - DAY_MS);
+  const after = zoneOffsetMs(timeZone, wallMs + DAY_MS);
+  const candidates: number[] = [];
+  for (const off of before === after ? [before] : [before, after]) {
+    const utc = wallMs - off;
+    if (zoneOffsetMs(timeZone, utc) === off && !candidates.includes(utc)) candidates.push(utc);
+  }
+  // Ambiguous (two real instants): the earlier one. Nonexistent (none): apply the
+  // pre-transition offset, which lands past the gap by exactly the gap's size.
+  if (candidates.length > 0) return new Date(Math.min(...candidates));
+  return new Date(wallMs - before);
+}
+
 /**
  * Normalise a Date to an ISO-8601 UTC string at second precision (the on-disk
  * format). Milliseconds are dropped so timestamps are clean and consistent across
@@ -84,13 +206,18 @@ const LOCAL_DATETIME_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{1,2}):(\d{2})(?::(\d{2})
  *
  * Accepted forms (PRD §11):
  *   - relative:  `-90m`, `-1h30m`, `+5m`     → offset from `now`
- *   - clock:     `14:30`                      → that time today, local zone
- *   - local ISO: `2026-06-24T14:30`           → local zone, no offset
+ *   - clock:     `14:30`                      → that time today, configured zone
+ *   - local ISO: `2026-06-24T14:30`           → configured zone, no offset
  *   - full ISO:  `2026-06-24T14:30:00Z` / with offset → as written
  *
- * `now` defaults to the system clock; injectable for deterministic parsing.
+ * `now` defaults to the system clock; injectable for deterministic parsing. The two
+ * wall-clock forms parse in `timeZone` (an IANA zone or the `'system'` sentinel/absent →
+ * the OS zone, §04 R06/§14), symmetric with display, with compatible DST resolution
+ * (wallClockToUtc): a nonexistent time shifts forward past the gap, an ambiguous one
+ * takes the earlier offset. "Today" for the bare-clock form is the configured zone's
+ * calendar day of `now`.
  */
-export function parseTime(input: string, now: Date = new Date()): string {
+export function parseTime(input: string, now: Date = new Date(), timeZone?: string): string {
   const s = input.trim();
   if (s === '') throw new TimeParseError(input);
 
@@ -111,25 +238,33 @@ export function parseTime(input: string, now: Date = new Date()): string {
     return toUtc(new Date(now.getTime() + sign * ms));
   }
 
-  // Clock time today, local zone: 14:30
+  const tz = resolveTimeZone(timeZone);
+
+  // Clock time today, configured zone: 14:30
   const hhmm = HHMM_RE.exec(s);
   if (hhmm) {
-    const d = new Date(now);
-    d.setHours(Number(hhmm[1]), Number(hhmm[2]), 0, 0);
-    return toUtc(d);
+    const today = wallClockOf(now, tz);
+    return toUtc(
+      wallClockToUtc(
+        { ...today, hour: Number(hhmm[1]), minute: Number(hhmm[2]), second: 0 },
+        tz,
+      ),
+    );
   }
 
-  // Local datetime without zone: 2026-06-24T14:30(:ss)?
+  // Zoneless datetime, configured zone: 2026-06-24T14:30(:ss)?
   const ldt = LOCAL_DATETIME_RE.exec(s);
   if (ldt) {
-    const d = new Date(
-      Number(ldt[1]),
-      Number(ldt[2]) - 1,
-      Number(ldt[3]),
-      Number(ldt[4]),
-      Number(ldt[5]),
-      ldt[6] ? Number(ldt[6]) : 0,
-      0,
+    const d = wallClockToUtc(
+      {
+        year: Number(ldt[1]),
+        month: Number(ldt[2]),
+        day: Number(ldt[3]),
+        hour: Number(ldt[4]),
+        minute: Number(ldt[5]),
+        second: ldt[6] ? Number(ldt[6]) : 0,
+      },
+      tz,
     );
     if (Number.isNaN(d.getTime())) throw new TimeParseError(input);
     return toUtc(d);
@@ -174,5 +309,38 @@ export function renderLocal(
     second: '2-digit',
     hour12: false,
     timeZone: opts.timeZone,
+  }).format(d);
+}
+
+/**
+ * §04 R06 — the ONE human rendering of a stored UTC instant, honoring both display
+ * settings: `time_zone` (resolved at read time — 'system' follows the OS) and
+ * `date_format` ('iso' → an unambiguous fixed `YYYY-MM-DD HH:MM:SS`; 'system' → the
+ * runner's locale). Both surfaces' timestamp columns route through this (`tt list` /
+ * `tt backup ls` and the GUI's stamp labels), so what zone a timestamp reads in has a
+ * single answer. Display only — stored truth stays UTC ISO; `null` renders the em-dash
+ * placeholder (an open entry's end).
+ */
+export function formatStamp(
+  iso: string | null,
+  settings: { dateFormat: 'system' | 'iso'; timeZone: string },
+): string {
+  if (!iso) return '—';
+  const tz = resolveTimeZone(settings.timeZone);
+  const d = new Date(iso);
+  if (settings.dateFormat === 'iso') {
+    const w = wallClockOf(d, tz);
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${w.year}-${p(w.month)}-${p(w.day)} ${p(w.hour)}:${p(w.minute)}:${p(w.second)}`;
+  }
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+    timeZone: tz,
   }).format(d);
 }
