@@ -2440,10 +2440,11 @@ const RECIPES = {
       );
       await wait(page, 1100);
 
-      // EXPORT ALL DATA (the RAW scope): the escape hatch set apart at the bottom → exportEntries
-      // with scope 'all'; its status carries the honest "(all data)" wording so the two scopes
-      // read as genuinely different (issue #72 — a filtered report never silently ships raw rows).
-      await page.waitForSelector('#rep-run-export-all:not([hidden])');
+      // EXPORT ALL DATA (the RAW scope): the whole-record escape hatch set apart at the bottom —
+      // standing chrome, no run required (issue #262) → exportEntries with scope 'all' and no
+      // ref; its status carries the honest "(all data)" wording so the two scopes read as
+      // genuinely different (issue #72 — a filtered report never silently ships raw rows).
+      await page.waitForSelector('#rep-run-export-all');
       await page.click('#rep-export-all-csv');
       await page.waitForFunction(
         () => /all data/.test(document.querySelector('#rep-export-all-status')?.textContent || ''),

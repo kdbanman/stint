@@ -4,9 +4,9 @@
  * invoice tooling `tt export` feeds. This drives the Electron-free helpers (the units
  * main.ts's `report` / `exportEntries` handlers delegate to) against an in-memory Store and
  * proves: the export bytes are byte-identical to core's toCsv/toJsonEntries (so the GUI and
- * `tt export` agree for the same range), the range resolves through core's resolveRange (no
- * renderer-side date math), and buildReportView is a faithful preset-resolving pass-through
- * to store.report.
+ * `tt export` agree for the same entries), the two export scopes cover exactly their honest
+ * sets (the report's filtered rows; the whole record), and buildReportView is a faithful
+ * preset-resolving pass-through to store.report.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -20,7 +20,6 @@ import {
 } from '@stint/core';
 import {
   buildReportView,
-  resolveExportRange,
   resolveExportDefinition,
   exportPayload,
   exportFileName,
@@ -30,14 +29,6 @@ import {
 
 const NOW = new Date('2026-06-24T18:00:00Z'); // a Wednesday
 const mem = () => Store.openMemory(() => NOW);
-
-/**
- * Local midnight on a LITERAL calendar date, as the UTC instant a range bound carries.
- * A range bound is a local-midnight instant, so a hard-coded `Z` string would only be right
- * in one timezone; naming the day this way pins the exact boundary in any of them.
- */
-const localMidnight = (year: number, monthIndex: number, day: number) =>
-  new Date(year, monthIndex, day).toISOString();
 
 /** Seed one billable Acme entry this week so a report/export over the week is non-empty. */
 function seed(store: Store): void {
@@ -60,58 +51,6 @@ function seed(store: Store): void {
     billable: false,
   });
 }
-
-// Which ARM of resolveExportRange wins — preset, explicit custom, or the This-week default
-// — is the behavior under test here; the preset windows themselves are pinned in core by
-// GOLD `core/test/gold/contracts.test.ts` "resolveRange preset windows". Expected windows
-// are literal calendar dates rather than a call of resolveRange: resolveExportRange's preset
-// arm IS `return resolveRange(preset, weekStart, now)`, so comparing the two would assert
-// nothing at all.
-describe('resolveExportRange — preset/custom range resolution', () => {
-  // Local-parts construction, so the clock's local calendar day (and weekday) is the same
-  // in whatever timezone the suite runs, and so is local midnight on the named day.
-  const WEDNESDAY = new Date(2026, 5, 24, 18, 0, 0); // 2026-06-24 18:00 local — a Wednesday
-
-  it('resolves a named preset through core (no renderer date math)', () => {
-    const store = mem();
-    const ws = store.settings().weekStart; // monday
-    expect(resolveExportRange({ preset: 'week' }, ws, WEDNESDAY)).toEqual({
-      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
-      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
-    });
-    store.close();
-  });
-
-  it('passes an explicit custom from/to straight through', () => {
-    const r = resolveExportRange(
-      { fromUtc: '2026-06-10T00:00:00Z', toUtc: '2026-06-13T00:00:00Z' },
-      'monday',
-      WEDNESDAY,
-    );
-    expect(r).toEqual({ fromUtc: '2026-06-10T00:00:00Z', toUtc: '2026-06-13T00:00:00Z' });
-  });
-
-  it('a preset takes precedence over a custom from/to when both are present', () => {
-    const r = resolveExportRange(
-      { preset: 'today', fromUtc: '2026-01-01T00:00:00Z', toUtc: '2026-01-02T00:00:00Z' },
-      'monday',
-      WEDNESDAY,
-    );
-    // The January custom pair is ignored: the window is the preset's day, not those bounds.
-    expect(r).toEqual({
-      fromUtc: localMidnight(2026, 5, 24), // 2026-06-24
-      toUtc: localMidnight(2026, 5, 25), // 2026-06-25
-    });
-  });
-
-  it('defaults to This week when neither preset nor custom range is given', () => {
-    const r = resolveExportRange({}, 'monday', WEDNESDAY);
-    expect(r).toEqual({
-      fromUtc: localMidnight(2026, 5, 22), // Mon 2026-06-22
-      toUtc: localMidnight(2026, 5, 29), // Mon 2026-06-29
-    });
-  });
-});
 
 // §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). The GUI-side
 // resolveDateRange is the ONE home of the plain-date → window rule: [from 00:00 local,
@@ -261,7 +200,7 @@ describe('exportPayload — bytes identical to tt export', () => {
   it('CSV matches core toCsv for the same entries (the bytes tt export writes)', () => {
     const store = mem();
     seed(store);
-    const range = resolveExportRange({ preset: 'week' }, store.settings().weekStart, NOW);
+    const range = resolveRange('week', store.settings().weekStart, NOW);
     const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
 
     const expected = toCsv(entries, NOW);
@@ -280,7 +219,7 @@ describe('exportPayload — bytes identical to tt export', () => {
   it('JSON matches core toJsonEntries (pretty-printed, trailing newline) for the same range', () => {
     const store = mem();
     seed(store);
-    const range = resolveExportRange({ preset: 'week' }, store.settings().weekStart, NOW);
+    const range = resolveRange('week', store.settings().weekStart, NOW);
     const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
 
     const payload = exportPayload(entries, 'json', NOW);
@@ -290,14 +229,9 @@ describe('exportPayload — bytes identical to tt export', () => {
     store.close();
   });
 
-  it('an empty range exports just the CSV header (a valid, header-only file)', () => {
+  it('an empty record exports just the CSV header (a valid, header-only file)', () => {
     const store = mem();
-    const range = resolveExportRange(
-      { fromUtc: '2030-01-01T00:00:00Z', toUtc: '2030-01-02T00:00:00Z' },
-      'monday',
-      NOW,
-    );
-    const entries = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
+    const entries = store.listEntries({ billable: 'all' });
     expect(entries).toEqual([]);
     expect(exportPayload(entries, 'csv', NOW)).toBe(toCsv([], NOW));
     store.close();
@@ -323,7 +257,7 @@ describe('resolveExportDefinition — the two export scopes (§09 R06/R09)', () 
 
   it("scope 'filtered' exports the rows the report shows (byte-identical to `tt report run --csv`)", () => {
     const store = withWeeklyReport();
-    const { range, entries } = resolveExportDefinition(
+    const { fileDayUtc, entries } = resolveExportDefinition(
       { format: 'csv', scope: 'filtered', savedReportRef: 'Weekly' },
       store,
       NOW,
@@ -332,30 +266,46 @@ describe('resolveExportDefinition — the two export scopes (§09 R06/R09)', () 
     expect(entries.map((e) => e.description)).toEqual(['auth refactor']);
     // Byte-identical to the core exporter the CLI `report run <name> --csv` drives.
     expect(exportPayload(entries, 'csv', NOW)).toBe(store.exportSavedReport('Weekly', 'csv', NOW));
-    // The range names the resolved this-week window.
-    expect(range).toEqual(store.resolveReportRange('Weekly', NOW));
+    // The file is named for the resolved this-week window's start day.
+    expect(fileDayUtc).toBe(store.resolveReportRange('Weekly', NOW).fromUtc);
     store.close();
   });
 
-  it("scope 'all' exports every raw entry in the report's range (byte-identical to `tt export`)", () => {
+  it("scope 'all' exports the WHOLE RECORD — every raw entry ever (byte-identical to no-flag `tt export`)", () => {
     const store = withWeeklyReport();
-    const { range, entries } = resolveExportDefinition(
+    // An entry months OUTSIDE the report's week — the whole-record export must keep it.
+    store.add({
+      description: 'january audit',
+      fromUtc: '2026-01-05T09:00:00Z',
+      toUtc: '2026-01-05T10:00:00Z',
+      billable: true,
+    });
+    const { fileDayUtc, entries } = resolveExportDefinition({ format: 'csv', scope: 'all' }, store, NOW);
+    // Every entry ever: both this-week rows (the non-billable "admin" too) AND January.
+    expect(entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor', 'january audit']);
+    const raw = store.listEntries({ billable: 'all' });
+    expect(exportPayload(entries, 'csv', NOW)).toBe(toCsv(raw, NOW));
+    // The file is named for the export day (no range to name it after).
+    expect(fileDayUtc).toBe(NOW.toISOString());
+    store.close();
+  });
+
+  it("scope 'all' ignores a saved ref — no report bounds or filters the whole record", () => {
+    const store = withWeeklyReport();
+    store.add({
+      description: 'january audit',
+      fromUtc: '2026-01-05T09:00:00Z',
+      toUtc: '2026-01-05T10:00:00Z',
+      billable: true,
+    });
+    const withRef = resolveExportDefinition(
       { format: 'csv', scope: 'all', savedReportRef: 'Weekly' },
       store,
       NOW,
     );
-    // Keeps BOTH rows — the non-billable "admin" too (the raw escape hatch, unfiltered).
-    expect(entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor']);
-    const raw = store.listEntries({ fromUtc: range.fromUtc, toUtc: range.toUtc, billable: 'all' });
-    expect(exportPayload(entries, 'csv', NOW)).toBe(toCsv(raw, NOW));
-    store.close();
-  });
-
-  it("scope 'all' with an ad-hoc preset (no saved ref) exports the raw range — the `tt export` path", () => {
-    const store = mem();
-    seed(store);
-    const { entries } = resolveExportDefinition({ format: 'csv', scope: 'all', preset: 'week' }, store, NOW);
-    expect(entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor']);
+    const without = resolveExportDefinition({ format: 'csv', scope: 'all' }, store, NOW);
+    expect(exportPayload(withRef.entries, 'csv', NOW)).toBe(exportPayload(without.entries, 'csv', NOW));
+    expect(withRef.entries.map((e) => e.description).sort()).toEqual(['admin', 'auth refactor', 'january audit']);
     store.close();
   });
 
@@ -418,7 +368,7 @@ describe('buildReportView — preset-resolving pass-through to store.report', ()
 });
 
 describe('exportFileName — a dated default for the save dialog', () => {
-  it('names the file after the range start day and the chosen format', () => {
+  it('names the file after the day stamp (range start / export day) and the chosen format', () => {
     expect(exportFileName('2026-06-22T00:00:00.000Z', 'csv')).toBe('stint-export-2026-06-22.csv');
     expect(exportFileName('2026-06-22T00:00:00.000Z', 'json')).toBe('stint-export-2026-06-22.json');
   });

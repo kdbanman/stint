@@ -1139,6 +1139,15 @@ export const steps: StepDef[] = [
     },
   },
   {
+    // §09 R06 — the UNSCOPED export: the whole record, every raw entry ever (billable and
+    // non-billable, no range) — what the GUI's always-on "Export All Data" buttons and
+    // no-flag `tt export` write. Distinct from the ranged step above, which narrows.
+    pattern: /^I export everything as (csv|json)$/,
+    run: (w, ctx, format) => {
+      ctx.exportRows = w.exportAllRows(format as 'csv' | 'json');
+    },
+  },
+  {
     pattern: /^the export has (\d+) rows?$/,
     run: (_w, ctx, count) => {
       expect(ctx.exportRows ?? []).toHaveLength(Number(count));

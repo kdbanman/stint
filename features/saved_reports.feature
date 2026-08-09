@@ -39,14 +39,15 @@ Feature: Saved reports
     Then the saved report run totals 2 billable hours
 
   Scenario: A saved report's two export scopes differ — the filtered export drops an off-filter row the raw keeps
-    # PRD §09 R06/R09 — a saved report exports at TWO honest scopes. The FILTERED scope (the rows
-    # the report SHOWS) is byte-identical to `tt report run <name> --csv|--json` / the GUI report's
-    # Export; ALL DATA (every raw entry in the resolved range) is byte-identical to `tt export` /
-    # the GUI "Export All Data". An off-filter entry INSIDE the range tells them apart: "audit" is
+    # PRD §09 R06/R09 — the two honest export meanings. The FILTERED scope (the rows the report
+    # SHOWS) is byte-identical to `tt report run <name> --csv|--json` / the GUI report's Export;
+    # a RAW export (`tt export`, whole-record by default, narrowed here by --range) keeps every
+    # entry its window covers. An off-filter entry INSIDE the range tells them apart: "audit" is
     # non-billable, so it sits in last week yet fails the report's billable filter — the filtered
     # export drops it while the raw range export keeps it. "review" (this week) proves the range
     # itself excludes out-of-window entries. Run TWICE so both scopes are proven on @stint/core
     # (store.exportSavedReport / listEntries) and tt (`report run --csv` / `export --range`), §17 R8.
+    # The GUI's "Export All Data" is the UNSCOPED whole record — proven in reporting.feature.
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     And a closed entry "ops sync" for "Globex" last week lasting 2 hours
     And a closed non-billable entry "audit" for "Globex" last week lasting 1 hour

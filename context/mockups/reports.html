@@ -136,7 +136,8 @@
   .export{display:flex;gap:8px;align-items:center;justify-content:flex-end;margin-top:16px}
   .export .escope{margin-right:auto;font-size:12px;font-weight:590;color:var(--muted);letter-spacing:.02em}
   /* §09 R06: the raw "Export All Data" block sits apart at the bottom — a hairline rule and a
-     lighter margin mark it as the data-out escape hatch, not the report's filtered export. */
+     lighter margin mark it as the whole-record data-out escape hatch, not the report's
+     filtered export. Standing chrome: present and clickable whether or not a report has run. */
   .export-all{margin-top:16px;padding-top:16px;border-top:1px solid var(--rule)}
 </style>
 </head>
@@ -257,9 +258,10 @@
       <!-- §09 R06 — the report's OWN export: the FILTERED rows it shows (billable #deep),
            byte-identical to `tt report run <name> --csv|--json`. Beside the run-output. -->
       <div class="export"><span class="escope">This report</span><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export CSV</button><button class="btn sm"><svg class="ic"><use href="#i-download"/></svg> Export JSON</button></div>
-      <!-- §09 R06 — the raw data-out escape hatch, set apart at the BOTTOM: EVERY entry in the
-           range (billable + non-billable, unfiltered), byte-identical to `tt export`. -->
-      <div class="export export-all"><span class="escope">All data in range</span><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (CSV)</button><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (JSON)</button></div>
+      <!-- §09 R06 — the raw data-out escape hatch, set apart at the BOTTOM: the WHOLE RECORD,
+           every raw entry ever (billable + non-billable, no range), byte-identical to no-flag
+           `tt export`. Standing chrome — needs no run and consults none. -->
+      <div class="export export-all"><span class="escope">All data</span><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (CSV)</button><button class="btn ghost sm"><svg class="ic"><use href="#i-download"/></svg> Export All Data (JSON)</button></div>
     </div>
   </div>
 </div>

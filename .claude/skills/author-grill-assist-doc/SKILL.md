@@ -25,7 +25,8 @@ and educational.
 
 1. Author the artifact and publish it (default-private).
 2. Ask the questions briefly again in the session after authoring the
-   artifact; the user responds in the session after reading the artifact.
+   artifact; the user answers in the doc and pastes its assembled response
+   block back into the session.
 3. Redeploy to the same URL on revision — never mint a new artifact for an
    update to the same grill.
 
@@ -52,6 +53,13 @@ collapsed), that anticipate questions about subtle things — important system
 interactions, reasons for certain behaviours, etc. Decision-relevant context
 that someone familiar with the project would already know, but someone new
 would not. Again: common language, ASD-STE100, necessary jargon only.
+
+**Interactive response assembly.** Each question carries its options as
+pick-one inputs — always including an **Other** choice — plus a free-text
+commentary field. Every input persists to `localStorage` as it happens, so a
+reload loses nothing. One **Assemble Response** button at the page's end
+copies every answer and note into a single paste-ready text block the owner
+drops back into the session.
 
 ## Structure
 
