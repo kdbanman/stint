@@ -151,6 +151,8 @@ show(['report', '--today', '--all'], { note: 'Exact stored totals — rounding i
 show(['report', '--today', '--all', '--round', '15'], { note: 'Rounding applies only to the grouped line, nearest 15 min; stored times are untouched.' });
 show(['export', '--today', '--csv'], { note: 'CSV export — the exact §09 R6 column contract (R7).' });
 show(['report', '--today', '--by', 'tag', '--all'], { note: 'Grouping by tag (R7).' });
+show(['report', '--week', '--by', 'week', '--all'], { note: 'Grouping by week (§09 R02) — a bucket starts on the configured week-start day, labelled "Week of …" by its start date.' });
+show(['report', '--week', '--by', 'month', '--all'], { note: 'Grouping by month (§09 R02) — buckets keyed YYYY-MM, labelled like "Jun 2026".' });
 
 // ───────────────────────────── R5 ───────────────────────────────────────────
 section('R5 — sleep yields a flagged entry, second-accurate spans, reversible subtract');

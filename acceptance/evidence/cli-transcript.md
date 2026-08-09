@@ -163,6 +163,30 @@ Total                       07:55:00  (7.92h)
 
 Grouping by tag (R7).
 
+```console
+$ tt report --week --by week --all
+Report  2026-06-22 00:00:00 → 2026-06-29 00:00:00  (all, by week)
+
+Week of Jun 22              07:55:00  (7.92h)
+
+Total                       07:55:00  (7.92h)
+# exit 0
+```
+
+Grouping by week (§09 R02) — a bucket starts on the configured week-start day, labelled "Week of …" by its start date.
+
+```console
+$ tt report --week --by month --all
+Report  2026-06-22 00:00:00 → 2026-06-29 00:00:00  (all, by month)
+
+Jun 2026                    07:55:00  (7.92h)
+
+Total                       07:55:00  (7.92h)
+# exit 0
+```
+
+Grouping by month (§09 R02) — buckets keyed YYYY-MM, labelled like "Jun 2026".
+
 ## R5 — sleep yields a flagged entry, second-accurate spans, reversible subtract
 
 _A 6m30s suspend→resume cycle was recorded on entry 2 (as `powerMonitor` would on a real machine)._

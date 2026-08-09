@@ -9,6 +9,8 @@
  * `favorite` / `favorite_tag` tables, and the §20 R02 partial unique index that gives
  * the one-open-entry invariant DB-level teeth alongside the existing triggers.
  * SCHEMA_VERSION 4 constrains `sleep_span.source` to SleepSource's value list (#180).
+ * SCHEMA_VERSION 5 widens `report.group_by` to the six-value grouping vocabulary
+ * (week/month join client/project/day/tag — §09 R02, #261).
  */
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
@@ -22,7 +24,7 @@ import {
 export type Db = DatabaseSync;
 
 /** The current schema version; bumped when migrations are added. */
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 // One source for the sleep_span column set: the fresh-DB CREATE and the v3→v4 rebuild must
 // agree, or a migrated database diverges from a fresh one. The CHECK is the proof behind
@@ -33,6 +35,28 @@ const SLEEP_SPAN_COLUMNS_SQL = `
   sleep_utc TEXT NOT NULL,
   wake_utc  TEXT NOT NULL,
   source    TEXT NOT NULL CHECK(source IN ('event', 'gap', 'unknown'))
+`;
+
+// One source for the report column set, same reason as SLEEP_SPAN_COLUMNS_SQL: the
+// fresh-DB CREATE and the v4→v5 rebuild must agree. The group_by CHECK is the storage
+// twin of core's one GroupBy vocabulary (report.ts, §09 R02) and the proof behind the
+// store's `group_by as SavedReport['by']` cast.
+const REPORT_COLUMNS_SQL = `
+  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+  name                   TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  range_kind             TEXT NOT NULL CHECK(range_kind IN ('preset', 'absolute')),
+  range_preset           TEXT CHECK(range_preset IN ('today', 'week', 'last-week', 'month', 'last-month')),
+  range_from_utc         TEXT,
+  range_to_utc           TEXT,
+  group_by               TEXT NOT NULL CHECK(group_by IN ('client', 'project', 'day', 'week', 'month', 'tag')),
+  billable_filter        TEXT NOT NULL CHECK(billable_filter IN ('billable', 'all', 'non-billable')),
+  client_id              INTEGER REFERENCES client(id),
+  project_id             INTEGER REFERENCES project(id),
+  tag                    TEXT,
+  search                 TEXT,
+  rounding               INTEGER NOT NULL DEFAULT 0,
+  rounding_increment_min INTEGER NOT NULL DEFAULT 0,
+  created_utc            TEXT NOT NULL
 `;
 
 const SCHEMA_SQL = `
@@ -151,23 +175,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS one_open_entry_idx ON entry((1)) WHERE end_utc
 -- UTC window (range_from_utc / range_to_utc), discriminated by range_kind — so a saved
 -- report and an ad-hoc report can never diverge on how a range resolves. The name is the
 -- handle both surfaces use (\`tt report show <name>\` / the GUI list), unique case-insensitively.
-CREATE TABLE IF NOT EXISTS report (
-  id                     INTEGER PRIMARY KEY AUTOINCREMENT,
-  name                   TEXT NOT NULL UNIQUE COLLATE NOCASE,
-  range_kind             TEXT NOT NULL CHECK(range_kind IN ('preset', 'absolute')),
-  range_preset           TEXT CHECK(range_preset IN ('today', 'week', 'last-week', 'month', 'last-month')),
-  range_from_utc         TEXT,
-  range_to_utc           TEXT,
-  group_by               TEXT NOT NULL CHECK(group_by IN ('client', 'project', 'day', 'tag')),
-  billable_filter        TEXT NOT NULL CHECK(billable_filter IN ('billable', 'all', 'non-billable')),
-  client_id              INTEGER REFERENCES client(id),
-  project_id             INTEGER REFERENCES project(id),
-  tag                    TEXT,
-  search                 TEXT,
-  rounding               INTEGER NOT NULL DEFAULT 0,
-  rounding_increment_min INTEGER NOT NULL DEFAULT 0,
-  created_utc            TEXT NOT NULL
-);
+CREATE TABLE IF NOT EXISTS report (${REPORT_COLUMNS_SQL});
 
 CREATE INDEX IF NOT EXISTS entry_start_idx ON entry(start_utc);
 CREATE INDEX IF NOT EXISTS entry_client_idx ON entry(client_id);
@@ -415,13 +423,33 @@ function constrainSleepSource(db: Db): void {
   `);
 }
 
+// v4→v5: widen report.group_by's CHECK to the six-value grouping vocabulary (§09 R02,
+// #261). SQLite's ALTER TABLE cannot amend a CHECK, hence the rebuild — the same pattern
+// as constrainSleepSource. Purely widening: every value a pre-v5 CHECK admitted stays
+// valid, so the copy needs no data fix-up and can never fail on existing rows.
+function widenReportGroupBy(db: Db): void {
+  const table = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'report'")
+    .get();
+  if (table === undefined) return; // fresh (or pre-v3) DB: SCHEMA_SQL creates the widened table
+  db.exec(`
+    BEGIN IMMEDIATE;
+    CREATE TABLE report_v5 (${REPORT_COLUMNS_SQL});
+    INSERT INTO report_v5 SELECT * FROM report;
+    DROP TABLE report;
+    ALTER TABLE report_v5 RENAME TO report;
+    COMMIT;
+  `);
+}
+
 function migrate(db: Db, path: string): void {
   // Only touch the schema when it is actually behind: an up-to-date database skips all
   // DDL, so concurrent opens don't each take a write lock just to re-assert the schema.
   // Every statement in SCHEMA_SQL is IF NOT EXISTS, so the additive bumps (v2→v3: the
   // favorite / favorite_tag / report tables and the one_open_entry_idx partial unique
-  // index) simply re-run the idempotent DDL; the v3→v4 sleep_span rebuild is the one
-  // step IF NOT EXISTS cannot express, and runs first so SCHEMA_SQL's CREATE is a no-op.
+  // index) simply re-run the idempotent DDL; the v3→v4 sleep_span rebuild and the v4→v5
+  // report group_by widening are the steps IF NOT EXISTS cannot express, and run first
+  // so SCHEMA_SQL's CREATEs are no-ops.
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
   // §20 R09 backstop — openDb's header read is the PRIMARY fence (first post-open action);
   // this check is defense-in-depth guarding the post-recovery reopen and any other migrate
@@ -433,6 +461,7 @@ function migrate(db: Db, path: string): void {
   }
   if (row.user_version >= SCHEMA_VERSION) return;
   constrainSleepSource(db);
+  widenReportGroupBy(db);
   db.exec(SCHEMA_SQL);
   db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }

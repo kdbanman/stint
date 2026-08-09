@@ -4009,7 +4009,7 @@ async function sceneReportsView(browser) {
       builder.name && builder.range && builder.custom && builder.by && builder.client &&
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
       ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
-      ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b));
+      ['client', 'project', 'day', 'week', 'month', 'tag'].every((b) => builder.bys.includes(b));
     const savedSpec = customSave.payload && customSave.payload.rangeSpec;
     const customOk =
       builder.fromType === 'date' && builder.toType === 'date' && builder.datetimeLocals === 0 &&
