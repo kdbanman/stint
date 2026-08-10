@@ -93,7 +93,7 @@
         "flipsInPlace": true,
         "countsUp": true
       },
-      "justification": "Entries toolbar latched (listEntries query {\"by\":\"day\",\"billable\":\"all\",\"preset\":\"today\"}); Timer card before Start {\"state\":\"idle\",\"toggle\":\"Start\",\"clock\":\"00:00:00\"}; after Start (no reload) {\"state\":\"running\",\"panelHidden\":true,\"startVisible\":false,\"stopVisible\":true,\"running\":true,\"clock\":\"00:00:00\",\"noReload\":true}; count-up then advanced 00:00:00 → 00:00:03 across a +3s pinned-clock step",
+      "justification": "Entries toolbar latched (listEntries query {\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-15\",\"toDate\":\"2026-06-21\"}); Timer card before Start {\"state\":\"idle\",\"toggle\":\"Start\",\"clock\":\"00:00:00\"}; after Start (no reload) {\"state\":\"running\",\"panelHidden\":true,\"startVisible\":false,\"stopVisible\":true,\"running\":true,\"clock\":\"00:00:00\",\"noReload\":true}; count-up then advanced 00:00:00 → 00:00:03 across a +3s pinned-clock step",
       "screenshot": "timer-cross-view.png"
     },
     {
@@ -298,7 +298,7 @@
         "chromed": true,
         "unoccluded": true
       },
-      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/124\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/124\"}",
+      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/103\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/104\"}",
       "screenshot": "main-inline-gate.png"
     },
     {
@@ -477,16 +477,19 @@
       "pass": true,
       "facts": {
         "controlsOk": true,
-        "defaultOk": true,
+        "weekDefaultOk": true,
+        "pickerOk": true,
+        "stepOk": true,
+        "pickerSelectOk": true,
+        "pickerKeysOk": true,
         "searchOk": true,
-        "presetsOk": true,
         "billableOk": true,
         "clientProjectOk": true,
         "tagOk": true,
-        "customRangeOk": true,
+        "weekendOk": true,
         "wireOk": true
       },
-      "justification": "entries calendar: default={\"hasByControl\":false,\"hasRangeChip\":false,\"hasReportShortcut\":false,\"hasPresets\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":7} -> search={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"preset\":\"week\",\"search\":\"refactor\"},\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"]} -> presets month=6 lastWeek=1 lastMonth=1 today=3 -> billable=4 nonBillable=1 -> client=3 project=1 -> tag=2 -> custom dates={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"]} -> wire={\"errors\":0,\"reqCount\":15,\"allCarryBy\":true}",
+      "justification": "week-only entries toolbar: default={\"hasByControl\":false,\"hasRangeChip\":false,\"hasReportShortcut\":false,\"hasPresets\":false,\"hasDatePair\":false,\"hasPrev\":true,\"hasNext\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"weekLabel\":\"Jun 22 – 26, 2026\",\"filtersRight\":true,\"monthLabel\":\"June 2026\",\"dotDays\":[\"2026-06-17\",\"2026-06-23\",\"2026-06-24\"],\"todayCell\":\"2026-06-24\",\"todayRing\":true,\"wsBand\":[\"2026-06-22\",\"2026-06-23\",\"2026-06-24\",\"2026-06-25\",\"2026-06-26\",\"2026-06-27\",\"2026-06-28\"],\"wsFirst\":\"2026-06-22\",\"wsLast\":\"2026-06-28\",\"pickerRunMarks\":0,\"weekendRole\":\"switch\",\"weekendChecked\":\"false\",\"dayCols\":5,\"evCount\":5} -> prev={\"evCount\":1,\"evText\":[\"refactor planningAcme / API09:00–11:00deep\"],\"weekLabel\":\"Jun 15 – 19, 2026\",\"wsFirst\":\"2026-06-15\",\"wsLast\":\"2026-06-21\"} next=5@2026-06-22 -> picked={\"evCount\":1,\"evText\":[\"refactor planningAcme / API09:00–11:00deep\"],\"weekLabel\":\"Jun 15 – 19, 2026\",\"wsFirst\":\"2026-06-15\",\"wsLast\":\"2026-06-21\"} -> keys right=2026-06-18 down=2026-06-25 enter=5@2026-06-22 -> search=2 -> billable=4/1 -> client=3 project=1 -> tag=2 -> weekend on={\"setSetting\":{\"key\":\"showWeekend\",\"value\":true},\"checked\":\"true\",\"dayCols\":7,\"weekLabel\":\"Jun 22 – 28, 2026\"} off={\"setSetting\":{\"key\":\"showWeekend\",\"value\":false},\"checked\":\"false\",\"weekLabel\":\"Jun 22 – 26, 2026\"} -> wire={\"errors\":0,\"reqCount\":19,\"allCarryBy\":true,\"allPlainDates\":true}",
       "screenshot": "entries-calendar.png"
     },
     {
@@ -494,7 +497,9 @@
       "pass": true,
       "facts": {
         "columnsOk": true,
+        "tallHoursOk": true,
         "neverClipOk": true,
+        "todayOk": true,
         "totalsOk": true,
         "emptyOk": true,
         "flagsOk": true,
@@ -502,11 +507,13 @@
         "hoverOk": true,
         "labelsOnScreenOk": true,
         "crossMidnightOk": true,
+        "hiddenSegOk": true,
+        "weekendRevealOk": true,
         "editorOpen": true,
         "mergeHiddenBefore": true,
         "mergeShown": true
       },
-      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":308,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true,\"headerCount\":7,\"headersOnScreen\":7,\"dayTotalsOnScreen\":6,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":11}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true axes={\"scrolledRight\":true,\"gutOffset\":0,\"headersOnScreen\":7,\"hourLabelsOnScreen\":11}; crossMidnight=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
+      "justification": "week grid layout: structure={\"colCount\":5,\"colSpread\":1,\"minColWidth\":103,\"hScroll\":false,\"vScroll\":true,\"scrollTop\":420,\"trackHeight\":1440,\"hourStepPx\":60,\"evCount\":10,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":null,\"26\":\"7.75h\"},\"dayHasTotal\":{\"22\":true,\"23\":true,\"24\":true,\"25\":false,\"26\":true},\"emptyCols\":1,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"todayCount\":1,\"todayText\":\"24\",\"todayRing\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"hiddenSegs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90}],\"trackBottomPx\":1440,\"runNoEnd\":true,\"headerCount\":5,\"headersOnScreen\":5,\"dayTotalsOnScreen\":4,\"dayTotalsCount\":4,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":7}; weekend={\"dayCols\":7,\"colSpread\":1,\"hScroll\":false,\"segs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"satHasTotal\":false,\"friTotal\":\"7.75h\"}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true; crossMidnight=true hiddenSeg=true weekendReveal=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
       "screenshot": "main-calendar.png"
     },
     {
@@ -514,12 +521,12 @@
       "pass": true,
       "facts": {
         "weekOk": true,
-        "denseOk": true,
+        "weekendOk": true,
         "addOk": true,
         "editOk": true,
         "popOk": true
       },
-      "justification": "week@1040={\"widths\":[124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":6,\"hScroll\":true,\"truncatedDescs\":5} week@1920={\"widths\":[234,234,234,234,234,234,234],\"equal\":true,\"fullyVisible\":7,\"hScroll\":false,\"truncatedDescs\":0} → true; dense@1040 fullyVisible=6 dense@1920={\"widths\":[124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124,124],\"equal\":true,\"fullyVisible\":13,\"hScroll\":true,\"truncatedDescs\":12} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":781,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
+      "justification": "week@1040={\"count\":5,\"minWidth\":103,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":8} week@1920={\"count\":5,\"minWidth\":279,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":74,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":11} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":732,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
@@ -532,7 +539,7 @@
         "signalOk": true,
         "budgetOk": true
       },
-      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":51,\"dayColumns\":25,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
+      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":18,\"dayColumns\":5,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
       "screenshot": "calendar-accent-budget.png"
     },
     {
@@ -545,7 +552,7 @@
         "checkOk": true,
         "budgetOk": true
       },
-      "justification": "calendar selection over the dense fixture: {\"evCount\":51,\"stripFound\":true,\"selectedCount\":2,\"editingCount\":1,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":0,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
+      "justification": "calendar selection over the dense fixture: {\"evCount\":18,\"stripFound\":true,\"selectedCount\":2,\"editingCount\":1,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":0,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
       "screenshot": "selection-lift.png"
     },
     {
@@ -558,7 +565,7 @@
         "controlIntact": true,
         "noHoverShift": true
       },
-      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"202\",\"height\":22,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"203\",\"height\":44,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}},{\"id\":\"204\",\"height\":132,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":null},{\"dy\":12,\"intoEntry\":false,\"tag\":null}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":55}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 629->629 (delta 0px), block 624->624 (delta 0px)",
+      "justification": "short-entry blocks=[{\"id\":\"201\",\"height\":18,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":72}},{\"id\":\"202\",\"height\":30,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":72}},{\"id\":\"203\",\"height\":45,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"dt\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"dt\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":72}},{\"id\":\"204\",\"height\":180,\"selfHit\":true,\"below\":[{\"dy\":4,\"intoEntry\":false,\"tag\":\"views\"},{\"dy\":12,\"intoEntry\":false,\"tag\":\"views\"}],\"bd\":{\"top\":5,\"bottom\":21},\"bc\":{\"top\":21,\"bottom\":35},\"bt\":{\"top\":39,\"bottom\":72}}]; live=true contained=true shortfall-real=true control-intact=true; hover title 837->837 (delta 0px), block 832->832 (delta 0px)",
       "screenshot": "main-calendar-short.png"
     },
     {
@@ -573,7 +580,7 @@
         "escapeOk": true,
         "tabLeavesOk": true
       },
-      "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 70 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
+      "justification": "dense calendar: 18 blocks holding 70 hover-revealed controls; one Tab cycle = 37 stops (wrapped back to body: true), 18 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
       "screenshot": "calendar-keyboard-focus.png"
     },
     {
@@ -584,7 +591,7 @@
         "noReloadOnSearch": true,
         "noMatchOk": true
       },
-      "justification": "live filter: list 7→2→7 rows (range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
+      "justification": "live filter: list 5→2→5 rows (range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesTry another week or clear the filters to see more.\",\"listErrors\":0}",
       "screenshot": "main-filtered.png"
     },
     {
@@ -690,7 +697,7 @@
         "everyFieldNamed": true,
         "noPlaceholderOnly": true
       },
-      "justification": "D13 sweep over 37 visible controls, 32 of them fields (timer (start details)=5, entries (add form + custom range)=13, clients=0, reports (builder + custom range)=8, settings=11): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#el-client → 'Client'; #el-project → 'Client'; #el-tag → 'Tag'; #rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "justification": "D13 sweep over 35 visible controls, 30 of them fields (timer (start details)=5, entries (toolbar + add form)=11, clients=0, reports (builder + custom range)=8, settings=11): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
       "screenshot": "field-labels-timer.png"
     },
     {
@@ -702,7 +709,7 @@
         "oneBorderWidth": true,
         "focusOk": true
       },
-      "justification": "D13/D07 sweep over 32 visible fields (timer (start details)=4, entries (add form + custom range)=10, clients=0, reports (builder + custom range)=7, settings=11): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
+      "justification": "D13/D07 sweep over 30 visible fields (timer (start details)=4, entries (toolbar + add form)=8, clients=0, reports (builder + custom range)=7, settings=11): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
       "screenshot": "field-chrome-search-focus.png"
     },
     {

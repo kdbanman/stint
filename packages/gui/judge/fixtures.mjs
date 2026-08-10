@@ -248,14 +248,15 @@ export function flaggedState() {
 
 /**
  * Issue #146 — the INLINE_GATE_CONTAINMENT fixture. Two CLOSED entries pinned to the two
- * EDGE columns of the rendered week: id=40 on Monday 2026-06-22 (the calendar's FIRST day
- * column) and id=41 on Sunday 2026-06-28 (its LAST). Both dates sit in one Mon–Sun week, so
- * calendarModel pads to exactly those seven columns and the two entries land hard against
- * the calendar's left and right edges.
+ * EDGE columns of the rendered week: id=40 on Monday 2026-06-22 (the week grid's FIRST day
+ * column) and id=41 on Friday 2026-06-26 (its LAST — the week-only grid shows Mon–Fri with
+ * the weekend hidden, §12 R09, so Friday is the right edge at the default settings). Both
+ * dates sit in one Mon–Sun week, so calendarModel paints exactly those five columns and the
+ * two entries land hard against the grid's left and right edges.
  *
- * The edges are the whole point. A gate armed on a MIDDLE column overflows its 124px day
- * column but still lands inside the calendar, so it cannot tell a positioned, clamped layer
- * from the in-flow run that shipped — the escape only becomes visible where there is no
+ * The edges are the whole point. A gate armed on a MIDDLE column overflows its day column
+ * but still lands inside the calendar, so it cannot tell a positioned, clamped layer from
+ * the in-flow run that shipped — the escape only becomes visible where there is no
  * neighbouring column left to spill into. Two entries, not one, so a clamp that only pulls
  * the left edge in (or only the right) fails on the other.
  *
@@ -291,7 +292,7 @@ export function edgeColumnState() {
           { ...entry(42, '2026-06-22', 'overlapping neighbour', 10, 13), startUtc: '2026-06-22T10:50:00Z' },
         ],
       },
-      { day: '2026-06-28', entries: [entry(41, '2026-06-28', 'last column')] },
+      { day: '2026-06-26', entries: [entry(41, '2026-06-26', 'last column')] },
     ],
     sleepFlaggedIds: [],
     settings: DEFAULT_SETTINGS,
@@ -806,19 +807,28 @@ export function liveState() {
 }
 
 /**
- * §12 R16 — the ENTRIES_CALENDAR fixture. A whole Monday-start week (Jun 22–28, containing the
- * pinned Wednesday JUDGE clock) that exercises every calendar fact the scene asserts. The scene
- * runs its page in timezoneId 'UTC' so each UTC instant lands on a deterministic local time on
- * the 24h track:
- *   Mon 06-22 — an OVERLAP pair (09:00–11:00 vs 10:30–12:00, 30m warn band) plus an OFF-HOURS
- *               entry BEFORE working-start (06:00–06:45, above the 07:00 default viewport);
+ * §12 R16 — the CALENDAR_LAYOUT fixture. The current Monday-start week (Jun 22–28, containing
+ * the pinned Wednesday JUDGE clock) that exercises every week-grid fact the scene asserts. The
+ * scene runs its page in timezoneId 'UTC' so each UTC instant lands on a deterministic local
+ * time on the 24h track:
+ *   Mon 06-22 — an OVERLAP pair (09:00–11:00 vs 10:30–12:00, 30m warn band), an OFF-HOURS
+ *               entry BEFORE working-start (06:00–06:45, above the 07:00 default viewport),
+ *               and a CROSS-MIDNIGHT span (22:30 → Tue 06:15) whose two segments both land on
+ *               SHOWN columns;
  *   Tue 06-23 — a SLEPT entry (13:00–17:00, raw 4h trimmed to 3h billable → the `.zz` hatch) plus
  *               an OFF-HOURS entry AFTER working-end (19:00–20:00, below the 18:00 default viewport);
- *   Wed 06-24 — the RUNNING/open entry (09:00–, future-fade, no end) plus a plain closed entry;
- *   Thu–Sun   — EMPTY days (present-but-empty `.dcol`).
- * All entries are billable, so the per-day header totals and the range chip are deterministic:
- * Mon 4.25h, Tue 4.00h, Wed 1.00h, week 9.25h. The off-hours entries prove the 24h track SCROLLS
- * (never clips): they are in the DOM and reachable though the viewport opens on working hours.
+ *   Wed 06-24 — TODAY (the `.dd.today` ink ring): the RUNNING/open entry (09:00–, future-fade,
+ *               no end) plus a plain closed entry;
+ *   Thu       — an EMPTY day (present-but-empty `.dcol`);
+ *   Fri 06-26 — a CROSS-MIDNIGHT span into the HIDDEN weekend (22:30 → Sat 06:15): with
+ *               show_weekend off only its start-day segment is drawn (§12 R09/R16 — a segment
+ *               on a day the grid does not show is simply not drawn), while Friday's header
+ *               still counts the full 7.75h (start-day attribution); toggling the weekend on
+ *               reveals the Sat seg-end without giving Sat's header a total.
+ * All entries are billable, so the per-day header totals are deterministic: Mon 12.00h
+ * (4.25h same-day + the 7.75h overnight span), Tue 4.00h, Wed 1.00h, Fri 7.75h. The off-hours
+ * entries prove the 24h track SCROLLS (never clips): they are in the DOM and reachable though
+ * the viewport opens on working hours.
  */
 export function entriesCalendarState() {
   const ev = (o) => ({
@@ -873,78 +883,70 @@ export function entriesCalendarState() {
           ev({ id: 7, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T14:00:00Z', endUtc: '2026-06-24T15:00:00Z', billableSeconds: 3600, billable: true }),
         ],
       },
+      {
+        day: '2026-06-26',
+        entries: [
+          // §12 R09/R16: the weekend-crossing span (Fri 22:30 → Sat 06:15, 7.75h — the mockup's
+          // own "Overnight render"). With the weekend hidden only the start-day segment draws;
+          // Sat's seg-end appears when show_weekend flips on, and Sat's header never counts it.
+          ev({ id: 9, description: 'overnight render', clientLabel: 'Globex / Ops', startUtc: '2026-06-26T22:30:00Z', endUtc: '2026-06-27T06:15:00Z', billableSeconds: 27900, billable: true }),
+        ],
+      },
     ],
     sleepFlaggedIds: [4],
     settings: DEFAULT_SETTINGS,
   };
 }
 
-// design.html D11 (issue #143) — the weekly rhythm the dense calendar fixture repeats. One rota
-// per weekday, three blocks each, so three weeks of it read as an ordinary freelance workload
-// rather than a copy-pasted wall. `at` is a local (UTC, under the scene's pinned timezone)
-// start time; `mins` its length. Friday's lunch is the set's one non-billable block.
+// design.html D11 (issue #143) — the daily rhythm the dense-week fixture lays down. One rota
+// per elapsed weekday of the current week, six blocks each, so the view reads as a genuinely
+// busy freelance week rather than a copy-pasted wall. `at` is a local (UTC, under the scene's
+// pinned timezone) start time; `mins` its length. Tuesday's lunch is the set's one
+// non-billable block.
 const DENSE_WEEKDAY_ROTA = {
   1: [
     { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
     { at: '09:45', mins: 75, description: 'sprint planning', clientLabel: 'Acme / API' },
-    { at: '13:00', mins: 150, description: 'auth refactor', clientLabel: 'Acme / API' },
+    { at: '11:15', mins: 90, description: 'auth refactor', clientLabel: 'Acme / API' },
+    { at: '13:00', mins: 150, description: 'deep work', clientLabel: 'Acme / API' },
+    { at: '15:45', mins: 60, description: 'code review', clientLabel: 'Globex / Ops' },
+    { at: '17:00', mins: 45, description: 'docs pass', clientLabel: 'Acme / API' },
   ],
   2: [
     { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
     { at: '10:00', mins: 120, description: 'deploy pipeline', clientLabel: 'Globex / Ops' },
+    { at: '12:15', mins: 45, description: 'team lunch', clientLabel: 'Acme / Web', billable: false },
     { at: '14:00', mins: 105, description: 'refactor tests', clientLabel: 'Globex / Ops' },
+    { at: '16:00', mins: 60, description: 'invoice prep', clientLabel: 'Initech' },
+    { at: '17:15', mins: 30, description: 'inbox triage', clientLabel: 'Acme / Web' },
   ],
   3: [
     { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
-    { at: '11:00', mins: 60, description: 'client call', clientLabel: 'Initech' },
-    { at: '14:30', mins: 90, description: 'invoice prep', clientLabel: 'Initech' },
-  ],
-  4: [
-    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
     { at: '10:15', mins: 105, description: 'market research', clientLabel: 'Globex / Ops' },
-    { at: '13:30', mins: 165, description: 'deep work', clientLabel: 'Acme / API' },
+    { at: '13:30', mins: 90, description: 'invoice prep', clientLabel: 'Initech' },
+    { at: '15:15', mins: 75, description: 'prototype spike', clientLabel: 'Initech' },
+    { at: '16:45', mins: 45, description: 'weekly wrap', clientLabel: 'Acme / Web' },
   ],
-  5: [
-    { at: '09:00', mins: 30, description: 'standup', clientLabel: 'Acme / Web' },
-    { at: '12:00', mins: 60, description: 'team lunch', clientLabel: 'Acme / Web', billable: false },
-    { at: '14:00', mins: 120, description: 'weekly wrap', clientLabel: 'Acme / Web' },
-  ],
-};
-
-// The six weekend blocks that break the weekday rota (two of the three weekends worked), keyed
-// by day. Jun 6–7 stay clear, so the calendar also paints genuinely EMPTY columns.
-const DENSE_WEEKEND = {
-  '2026-06-13': [
-    { at: '10:00', mins: 90, description: 'overnight render', clientLabel: 'Globex / Ops' },
-    { at: '14:00', mins: 60, description: 'docs pass', clientLabel: 'Acme / API' },
-  ],
-  '2026-06-14': [{ at: '11:00', mins: 45, description: 'inbox triage', clientLabel: 'Acme / Web' }],
-  '2026-06-20': [
-    { at: '10:30', mins: 120, description: 'prototype spike', clientLabel: 'Initech' },
-    { at: '15:00', mins: 75, description: 'infra cleanup', clientLabel: 'Globex / Ops' },
-  ],
-  '2026-06-21': [{ at: '11:00', mins: 45, description: 'inbox triage', clientLabel: 'Acme / Web' }],
 };
 
 /**
- * design.html D11 (issue #143) — the CALENDAR_ACCENT_BUDGET fixture: the Entries calendar at
- * REALISTIC density. The accent-wallpaper defect is invisible at toy density — the design audit
- * measured 51 accent-tinted blocks over a three-week seed, and a one-day fixture would show
- * almost nothing — so this seeds three weeks of ordinary work: **Thu 2026-06-04 through the
- * pinned JUDGE Wednesday 2026-06-24**, 15 weekdays on DENSE_WEEKDAY_ROTA plus DENSE_WEEKEND's
- * six blocks = **51 entry blocks**, the last of which is the OPEN row (the live running state,
- * the calendar's one sanctioned accent). Ids are assigned in day order, so they are stable.
+ * design.html D11 (issue #143) — the CALENDAR_ACCENT_BUDGET fixture: the Entries week grid at
+ * REALISTIC density. The accent-wallpaper defect is invisible at toy density, and since the
+ * view went week-only (§12 R09) the DENSEST surface the app can show is one busy week — so
+ * this seeds the current week's elapsed days full: **Mon 2026-06-22 through the pinned JUDGE
+ * Wednesday 2026-06-24** on DENSE_WEEKDAY_ROTA (6 + 6 + 5 blocks) plus the open row =
+ * **17 entry blocks**, the last of which is the OPEN row (the live running state, the
+ * calendar's one sanctioned accent). Ids are assigned in day order, so they are stable.
  *
- * No toolbar control is touched to reach it: the default Entries paint takes its columns from
- * `state.days` and pads to the anchor's whole week (calendarModel), so the scene measures the
- * view AT REST — Jun 25–28 paint as empty columns of the current week.
+ * No toolbar control is touched to reach it: the default Entries paint IS the current week
+ * (calendarModel), so the scene measures the view AT REST — Thu/Fri paint as empty columns.
  */
 export function denseCalendarState() {
   const days = [];
   let id = 0;
-  for (let d = new Date(Date.UTC(2026, 5, 4)); d <= new Date(Date.UTC(2026, 5, 24)); d.setUTCDate(d.getUTCDate() + 1)) {
+  for (let d = new Date(Date.UTC(2026, 5, 22)); d <= new Date(Date.UTC(2026, 5, 24)); d.setUTCDate(d.getUTCDate() + 1)) {
     const day = d.toISOString().slice(0, 10);
-    const templates = DENSE_WEEKEND[day] ?? DENSE_WEEKDAY_ROTA[d.getUTCDay()] ?? [];
+    const templates = DENSE_WEEKDAY_ROTA[d.getUTCDay()] ?? [];
     const entries = templates.map((t) => {
       const startUtc = `${day}T${t.at}:00Z`;
       const billable = t.billable !== false;
@@ -967,24 +969,35 @@ export function denseCalendarState() {
     });
     if (entries.length) days.push({ day, entries });
   }
-  // The last block of the pinned Wednesday is still OPEN — the one live running state on the
-  // whole calendar, and (after issue #143) the only block on it that may carry the accent.
-  const last = days[days.length - 1].entries[days[days.length - 1].entries.length - 1];
-  last.description = 'drafting proposals';
-  last.clientLabel = 'Globex / Ops';
-  last.startUtc = '2026-06-24T21:00:00Z';
-  last.endUtc = null;
-  last.billableSeconds = 0;
-  last.rawSeconds = 0;
-  return { status: { running: true, entry: { ...last } }, days, sleepFlaggedIds: [], settings: DEFAULT_SETTINGS };
+  // A late OPEN row closes the pinned Wednesday — the one live running state on the whole
+  // grid, and (after issue #143) the only block on it that may carry the accent.
+  const wed = days[days.length - 1];
+  const open = {
+    id: ++id,
+    description: 'drafting proposals',
+    clientLabel: 'Globex / Ops',
+    startUtc: '2026-06-24T21:00:00Z',
+    endUtc: null,
+    billableSeconds: 0,
+    rawSeconds: 0,
+    billable: true,
+    overlapped: false,
+    overlapMinutes: 0,
+    overlapRelation: null,
+    sleptThrough: false,
+    excludedSeconds: 0,
+    tags: [],
+  };
+  wed.entries.push(open);
+  return { status: { running: true, entry: { ...open } }, days, sleepFlaggedIds: [], settings: DEFAULT_SETTINGS };
 }
 
 /**
  * §12 R16 (issues #187 / #151) — the SHORT-ENTRY calendar fixture. One day carrying the four
- * durations the design audit measured — 10 / 30 / 60 / 180 minutes — because the block height is
- * `duration × 0.733px/min` (floored at 18px) while the content height is fixed by text flow at
- * ~55px, so the two cross at about 75 minutes and only a fixture that reaches BELOW that line can
- * catch a spill. Fixture realism is the whole guard: the audit first killed a narrower version of
+ * durations the design audit measured — 10 / 30 / 45 / 180 minutes — because the block height is
+ * `duration × 1px/min` (the week grid's 60px hours, floored at 18px) while the content height is
+ * fixed by text flow at ~55px, so the two cross at about 55 minutes and only a fixture that
+ * reaches BELOW that line can catch a spill. Fixture realism is the whole guard: the audit first killed a narrower version of
  * this finding by measuring a 132px block — very nearly the longest plausible entry — and a scene
  * seeded only with hour-plus entries would repeat that mistake. A 30-minute standup is the common
  * case, not an edge case.
@@ -1014,11 +1027,13 @@ export function shortEntriesCalendarState() {
         entries: [
           // 10 min → an 18px block (the floor): only the description can fit.
           ev({ id: 201, description: 'quick call', clientLabel: 'Acme / API', startUtc: '2026-06-24T08:00:00Z', endUtc: '2026-06-24T08:10:00Z', billableSeconds: 600 }),
-          // 30 min → 22px: the ordinary standup the audit named.
+          // 30 min → 30px: the ordinary standup the audit named.
           ev({ id: 202, description: 'standup', clientLabel: 'Acme / API', startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T09:30:00Z', billableSeconds: 1800 }),
-          // 60 min → 44px: still 11px short of the content's 55px.
-          ev({ id: 203, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T10:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 3600 }),
-          // 180 min → 132px: the control, with room for every line.
+          // 45 min → 45px: still ~10px short of the content's ~55px. (This was the audit's
+          // 60-minute case; at the week grid's 60px hours a 60-minute block now FITS its
+          // content, so 45 keeps a genuinely-overflowing mid duration in the fixture.)
+          ev({ id: 203, description: 'invoice prep', clientLabel: 'Initech', startUtc: '2026-06-24T10:00:00Z', endUtc: '2026-06-24T10:45:00Z', billableSeconds: 2700 }),
+          // 180 min → 180px: the control, with room for every line.
           ev({ id: 204, description: 'deep work', clientLabel: 'Globex / Ops', startUtc: '2026-06-24T13:00:00Z', endUtc: '2026-06-24T16:00:00Z', billableSeconds: 10800 }),
         ],
       },

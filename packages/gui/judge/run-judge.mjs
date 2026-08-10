@@ -82,7 +82,10 @@ async function fitPopoverViewport(page) {
 }
 
 async function withPage(browser, state, name, fn, initOpts = {}) {
-  const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light' });
+  // timezoneId pinned like the explicitly-UTC scenes: the week-only Entries view derives
+  // "today" (the default week, the today ring) from the PAGE's zone, so an unpinned page
+  // would move those facts with the runner's timezone (CI is UTC; a local run must match).
+  const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   // Pin the page clock so derived count-ups and the captured evidence are
   // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -672,8 +675,10 @@ async function sceneCrossViewFreshness(browser) {
     listState(),
     'index.html',
     async (page) => {
-      await page.click('#el-preset-seg .preset[data-preset="today"]');
-      await page.waitForFunction(() => !!window.__LIST_REQ__);
+      // Touch the week machinery (the range presets are gone, §12 R09): stepping to the
+      // previous week latches the toolbar's entries-only query exactly as a preset used to.
+      await page.click('#el-prev-week');
+      await page.waitForFunction(() => window.__LIST_REQ__?.fromDate === '2026-06-15');
       const latched = await page.evaluate(() => window.__LIST_REQ__ ?? null);
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-card');
@@ -712,7 +717,8 @@ async function sceneCrossViewFreshness(browser) {
       await page.screenshot({ path: join(EVIDENCE, 'timer-cross-view.png') });
       await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
       const clock2 = (await page.textContent('#timer-clock')).trim();
-      const toolbarLatched = !!latched && latched.preset === 'today';
+      const toolbarLatched =
+        !!latched && latched.by === 'day' && latched.fromDate === '2026-06-15' && latched.toDate === '2026-06-21';
       const idleCard = idle.state === 'idle' && idle.toggle === 'Start' && idle.clock === '00:00:00';
       const flipsInPlace =
         !!after &&
@@ -2441,9 +2447,12 @@ async function sceneSplitAffordance(browser) {
       const chip = row?.querySelector('.ops')?.getBoundingClientRect();
       const ck = row?.querySelector('.ck')?.getBoundingClientRect();
       const col = row?.closest('.dt')?.getBoundingClientRect();
-      // No horizontal overlap between the ops chip and the corner checkbox, and the chip stays
-      // inside its day column.
-      const noOverlap = !!chip && !!ck && (chip.left >= ck.right || ck.left >= chip.right);
+      // No overlap between the ops chip and the corner checkbox — beside it at generous
+      // column widths, on the row below it once the fit-to-width columns narrow (§12 R16's
+      // container-stepped chip) — and the chip stays inside its day column.
+      const noOverlap =
+        !!chip && !!ck &&
+        (chip.left >= ck.right || ck.left >= chip.right || chip.top >= ck.bottom || ck.top >= chip.bottom);
       const chipInColumn = !!chip && !!col && chip.left >= col.left - 0.5 && chip.right <= col.right + 0.5;
       return { noOverlap, chipInColumn };
     });
@@ -2889,7 +2898,7 @@ async function sceneMergeConflict(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        aboveCalendar: !!bar && bar.nextElementSibling?.classList.contains('ebody'),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),
@@ -4203,78 +4212,123 @@ async function sceneReportsView(browser) {
   });
 }
 
-// ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
-// readonly entries calendar. Hardened per the issue-#55 triage: over the MULTI-WEEK,
-// multi-client, mixed-billable fixture, EACH toolbar control (range preset, billable toggle,
-// client, project, tag, search) is driven in turn and the VISIBLE EVENT COUNT is asserted to
-// move to the expected subset — counts, not just pixels — with NO listEntries call
-// rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
-// The toolbar carries NO range-total chip (#264: §12 R09 retired it — day-header totals are
-// CALENDAR_LAYOUT's, report totals are Reports'). Deterministic sub-facts are machine-scored
-// under the pinned JUDGE clock (Wed 2026-06-24, weekStart monday).
+// ENTRIES_CALENDAR — §12 R09 (the week-only toolbar + week picker) over §12 R16 (the week
+// grid). The Entries view shows EXACTLY ONE WEEK: the month-calendar week picker (entry-dot
+// days, today ring, selected-week band, a roving-grid keyboard path, no live-timer
+// treatment), the prev/next-week steppers, the filters/search on the toolbar's right, and
+// the Show-weekend toggle over the persisted show_weekend row. The range concept is GONE:
+// no presets, no custom date pair, no range-total chip, no Reports shortcut. Hardened per
+// the issue-#55 triage: over the MULTI-WEEK, multi-client, mixed-billable fixture, EACH
+// control is driven in turn and the VISIBLE EVENT COUNT is asserted to move to the expected
+// subset — counts, not just pixels — with NO listEntries call rejecting
+// (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core). Deterministic
+// sub-facts are machine-scored under the pinned JUDGE clock (Wed 2026-06-24, weekStart
+// monday, show_weekend off).
 async function sceneEntriesCalendar(browser) {
   await withPage(browser, listState(), 'index.html', async (page) => {
     const probe = () =>
       page.evaluate(() => ({
-        req: { ...(window.__LIST_REQ__ || {}) },
         evCount: document.querySelectorAll('.dcol .ev').length,
         evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
+        weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+        wsFirst: document.querySelector('#week-picker .d.ws.first')?.dataset.day ?? null,
+        wsLast: document.querySelector('#week-picker .d.ws.last')?.dataset.day ?? null,
       }));
     const waitCount = (n) =>
       page.waitForFunction((n) => document.querySelectorAll('.dcol .ev').length === n, n);
 
-    // The default load paints the readonly entries calendar (R16) — no toolbar control touched
-    // yet. All SEVEN fixture entries lay into their day columns. The retired range chip and its
-    // Reports shortcut must be GONE (#264): no #week-total, no #report-btn.
+    // The default load paints the CURRENT week (Mon Jun 22 – Fri Jun 26 shown, weekend off) off
+    // the snapshot — the five in-week fixture entries lay into their day columns. The retired
+    // controls stay retired (#264 chip/shortcut, and now the whole range machinery).
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+    // The picker's entry dots arrive from one async unfiltered listEntries read — wait for them
+    // so the dot facts read a settled picker.
+    await page.waitForFunction(() => document.querySelectorAll('#week-picker .edot').length > 0);
     const before = await page.evaluate(() => ({
       hasByControl: !!document.querySelector('#el-by-seg'),
       hasRangeChip: !!document.querySelector('#week-total'),
       hasReportShortcut: !!document.querySelector('#report-btn'),
       hasPresets: !!document.querySelector('#el-preset-seg'),
+      hasDatePair: !!document.querySelector('#el-custom-range, #el-range-from, #el-range-to, #el-range-apply'),
+      hasPrev: !!document.querySelector('#el-prev-week'),
+      hasNext: !!document.querySelector('#el-next-week'),
       hasBillable: !!document.querySelector('#el-billable-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
       hasProjectFilter: !!document.querySelector('#el-project'),
       hasTagFilter: !!document.querySelector('#el-tag'),
       hasSearch: !!document.querySelector('#search'),
-      fromType: document.querySelector('#el-range-from')?.type ?? '',
-      toType: document.querySelector('#el-range-to')?.type ?? '',
-      hasApply: !!document.querySelector('#el-range-apply'),
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+      // §12 R09: the filters sit to the RIGHT of the toolbar — the spacer pushes them past
+      // the week label. Asserted on the controls sharing the label's row (the toolbar wraps
+      // at the 1040 minimum, exactly as the mockup's own toolbar does; a wrapped row cannot
+      // be "right of" a label it is below).
+      filtersRight: (() => {
+        const label = document.querySelector('#el-week-label')?.getBoundingClientRect();
+        if (!label) return false;
+        return ['#el-billable-seg', '#el-client', '#el-tag', '#search', '#el-weekend'].every((s) => {
+          const r = document.querySelector(s)?.getBoundingClientRect();
+          return !!r && (r.left > label.right || r.top > label.bottom - 1);
+        });
+      })(),
+      // the week picker (one month calendar beside the grid)
+      monthLabel: document.querySelector('#week-picker .wk-hd .m')?.textContent ?? '',
+      dotDays: [...document.querySelectorAll('#week-picker .d')]
+        .filter((d) => d.querySelector('.edot'))
+        .map((d) => d.dataset.day),
+      todayCell: document.querySelector('#week-picker .d.today')?.dataset.day ?? null,
+      todayRing: (() => {
+        const tn = document.querySelector('#week-picker .d.today .tn2');
+        return !!tn && getComputedStyle(tn).boxShadow !== 'none';
+      })(),
+      wsBand: [...document.querySelectorAll('#week-picker .d.ws')].map((d) => d.dataset.day),
+      wsFirst: document.querySelector('#week-picker .d.ws.first')?.dataset.day ?? null,
+      wsLast: document.querySelector('#week-picker .d.ws.last')?.dataset.day ?? null,
+      // §12 R09: the picker renders NO live/running-timer treatment.
+      pickerRunMarks: document.querySelectorAll('#week-picker .run-dot, #week-picker .dot').length,
+      // the weekend toggle at the toolbar's right, off by default (§14)
+      weekendRole: document.querySelector('#el-weekend')?.getAttribute('role') ?? '',
+      weekendChecked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      dayCols: document.querySelectorAll('.dcol').length,
       evCount: document.querySelectorAll('.dcol .ev').length,
     }));
 
+    // PREV WEEK — the visible week steps back to Jun 15–21: one event (last week's 'refactor
+    // planning'), the label and the picker's selected-week band move with it.
+    await page.click('#el-prev-week');
+    await waitCount(1);
+    const onPrev = await probe();
+    // NEXT WEEK — steps forward again to the current week; the default five return.
+    await page.click('#el-next-week');
+    await waitCount(5);
+    const onNext = await probe();
+
+    // PICKER CLICK — clicking ANY day selects that day's WHOLE week: Jun 17 (a Wednesday)
+    // selects Jun 15–21.
+    await page.click('#week-picker .d[data-day="2026-06-17"]');
+    await waitCount(1);
+    const onPicked = await probe();
+
+    // PICKER KEYBOARD — the roving grid: the picked cell holds the grid's one tabindex="0";
+    // ArrowRight moves the active cell to the 18th, ArrowDown to the 25th, and Enter selects
+    // that day's week (the current week — the five events return).
+    await page.focus('#week-picker .d[data-day="2026-06-17"]');
+    await page.keyboard.press('ArrowRight');
+    const afterRight = await page.evaluate(() => document.activeElement?.dataset?.day ?? null);
+    await page.keyboard.press('ArrowDown');
+    const afterDown = await page.evaluate(() => document.activeElement?.dataset?.day ?? null);
+    await page.keyboard.press('Enter');
+    await waitCount(5);
+    const onKeyed = await probe();
+
     // SEARCH — matches three "refactor" descriptions in the fixture, but only the TWO inside
-    // the default week window survive (range + search COMPOSE): last week's 'refactor planning'
+    // the selected week survive (week + search COMPOSE): last week's 'refactor planning'
     // stays excluded. The events narrow to 2.
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
     await waitCount(2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
     const onSearch = await probe();
-
     await page.fill('#search', '');
-    await waitCount(7);
-
-    // RANGE PRESETS — each preset re-queries and the visible subset moves with it:
-    // month (June: 6 events) → last-week (1) → last-month (1) → today (3) → week (5).
-    await page.click('#el-preset-seg .preset[data-preset="month"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'month');
-    await waitCount(6);
-    const onMonth = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="last-week"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-week');
-    await waitCount(1);
-    const onLastWeek = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="last-month"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-month');
-    await waitCount(1);
-    const onLastMonth = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="today"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'today');
-    await waitCount(3);
-    const onToday = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="week"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'week');
     await waitCount(5);
 
     // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events);
@@ -4319,47 +4373,81 @@ async function sceneEntriesCalendar(browser) {
     await page.waitForFunction(() => window.__LIST_REQ__?.tag === undefined);
     await waitCount(5);
 
-    await page.click('#el-preset-seg .preset[data-preset="custom"]');
-    await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-    await page.fill('#el-range-from', '2026-06-23');
-    await page.fill('#el-range-to', '2026-06-23');
-    await page.waitForFunction(
-      () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
-    );
-    await waitCount(2);
+    // SHOW-WEEKEND TOGGLE — drives the PERSISTED show_weekend row over the same setSetting
+    // channel the Settings view uses (§12 R09/§14), and the grid follows: five columns off,
+    // seven on, no stored data touched. The captured payload proves the persisted row is the
+    // mechanism, not a local flag.
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const onWeekend = await page.evaluate(() => ({
+      setSetting: window.__SET_SETTING__ ?? null,
+      checked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      dayCols: document.querySelectorAll('.dcol').length,
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+    }));
     await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
-    const onCustom = await probe();
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 5);
+    const offWeekend = await page.evaluate(() => ({
+      setSetting: window.__SET_SETTING__ ?? null,
+      checked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+    }));
 
-    // Issue #55: NO listEntries call rejected across the whole drive, and EVERY query carried
-    // the required by:'day' grouping (the strict mock mirrors core's required-field contract).
+    // Issue #55: NO listEntries call rejected across the whole drive, EVERY query carried the
+    // required by:'day' grouping, and every windowed query carried the week's PLAIN-DATE pair
+    // (raw YYYY-MM-DD strings, never a derived instant — the §09 R01 vocabulary).
     const wire = await page.evaluate(() => ({
       errors: window.__LIST_ERRORS__ || 0,
       reqCount: (window.__LIST_REQS__ || []).length,
       allCarryBy: (window.__LIST_REQS__ || []).every((r) => r && r.by === 'day'),
+      allPlainDates: (window.__LIST_REQS__ || []).every(
+        (r) => /^\d{4}-\d{2}-\d{2}$/.test(String(r.fromDate)) && /^\d{4}-\d{2}-\d{2}$/.test(String(r.toDate)),
+      ),
     }));
 
     const controlsOk =
-      !before.hasByControl &&
-      // #264 / §12 R09: the range-total chip and its Reports shortcut are RETIRED — absent.
-      !before.hasRangeChip && !before.hasReportShortcut &&
-      before.hasPresets && before.hasBillable && before.hasClientFilter &&
-      before.hasProjectFilter && before.hasTagFilter && before.hasSearch;
-    const defaultOk = before.evCount === 7;
+      // the whole range machinery is GONE with the week-only view (#265), the #264 retirements
+      // with it — and no grouping control returns.
+      !before.hasByControl && !before.hasRangeChip && !before.hasReportShortcut &&
+      !before.hasPresets && !before.hasDatePair &&
+      // the R09 controls are present, the filters/search/toggle to the toolbar's RIGHT
+      before.hasPrev && before.hasNext && before.hasBillable && before.hasClientFilter &&
+      before.hasProjectFilter && before.hasTagFilter && before.hasSearch && before.filtersRight;
+    const weekDefaultOk =
+      before.evCount === 5 && // the current week's five entries, not the fixture's seven
+      before.dayCols === 5 && // Mon–Fri, weekend hidden (§14 default)
+      before.weekLabel === 'Jun 22 – 26, 2026';
+    const pickerOk =
+      before.monthLabel === 'June 2026' &&
+      // entry-dot days: exactly the June days carrying entries (17, 23, 24 — May's stays off
+      // this month's grid); dots are unfiltered by design
+      before.dotDays.join(',') === '2026-06-17,2026-06-23,2026-06-24' &&
+      before.todayCell === '2026-06-24' && before.todayRing &&
+      // the selected week highlighted as ONE unit — all seven days, weekend included
+      before.wsBand.length === 7 &&
+      before.wsFirst === '2026-06-22' && before.wsLast === '2026-06-28' &&
+      before.pickerRunMarks === 0 && // no live-timer treatment (§12 R09)
+      before.weekendRole === 'switch' && before.weekendChecked === 'false';
+    const stepOk =
+      onPrev.evCount === 1 &&
+      onPrev.evText.some((t) => /refactor planning/.test(t)) &&
+      onPrev.weekLabel === 'Jun 15 – 19, 2026' &&
+      onPrev.wsFirst === '2026-06-15' && onPrev.wsLast === '2026-06-21' &&
+      onNext.evCount === 5 && onNext.wsFirst === '2026-06-22';
+    const pickerSelectOk =
+      onPicked.evCount === 1 &&
+      onPicked.wsFirst === '2026-06-15' && onPicked.wsLast === '2026-06-21' &&
+      onPicked.weekLabel === 'Jun 15 – 19, 2026';
+    const pickerKeysOk =
+      afterRight === '2026-06-18' && afterDown === '2026-06-25' &&
+      onKeyed.evCount === 5 && onKeyed.wsFirst === '2026-06-22';
     const searchOk =
-      onSearch.req.search === 'refactor' &&
-      onSearch.req.by === 'day' && // the query carries the REQUIRED grouping (issue #55)
       onSearch.evCount === 2 && // narrowed to the two IN-WEEK "refactor" events…
       onSearch.evText.some((t) => /auth refactor/.test(t)) &&
       onSearch.evText.some((t) => /refactor tests/.test(t)) &&
       !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded…
-      !onSearch.evText.some((t) => /refactor planning/.test(t)); // …range + search compose
-    const presetsOk =
-      onMonth.evCount === 6 &&
-      onLastWeek.evCount === 1 &&
-      onLastWeek.evText.some((t) => /refactor planning/.test(t)) &&
-      onLastMonth.evCount === 1 &&
-      onLastMonth.evText.some((t) => /may retro/.test(t)) &&
-      onToday.evCount === 3;
+      !onSearch.evText.some((t) => /refactor planning/.test(t)); // …week + search compose
     const billableOk =
       onBillable.evCount === 4 &&
       !onBillable.evText.some((t) => /team lunch/.test(t)) &&
@@ -4374,36 +4462,49 @@ async function sceneEntriesCalendar(browser) {
       onTag.evCount === 2 &&
       onTag.evText.some((t) => /deploy pipeline/.test(t)) &&
       onTag.evText.some((t) => /refactor tests/.test(t));
-    const customRangeOk =
-      before.fromType === 'date' && before.toType === 'date' && !before.hasApply &&
-      onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
-      onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
-      !String(onCustom.req.fromDate).includes('T') &&
-      onCustom.evCount === 2 &&
-      onCustom.evText.some((t) => /standup/.test(t)) &&
-      onCustom.evText.some((t) => /refactor tests/.test(t)) &&
-      !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
-    const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy;
+    const weekendOk =
+      onWeekend.setSetting?.key === 'showWeekend' && onWeekend.setSetting?.value === true &&
+      onWeekend.checked === 'true' && onWeekend.dayCols === 7 &&
+      onWeekend.weekLabel === 'Jun 22 – 28, 2026' &&
+      offWeekend.setSetting?.key === 'showWeekend' && offWeekend.setSetting?.value === false &&
+      offWeekend.checked === 'false' && offWeekend.weekLabel === 'Jun 22 – 26, 2026';
+    const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy && wire.allPlainDates;
     record(
       'ENTRIES_CALENDAR',
-      { controlsOk, defaultOk, searchOk, presetsOk, billableOk, clientProjectOk, tagOk, customRangeOk, wireOk },
-      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} ` +
-        `-> presets month=${onMonth.evCount} lastWeek=${onLastWeek.evCount} ` +
-        `lastMonth=${onLastMonth.evCount} today=${onToday.evCount} ` +
-        `-> billable=${onBillable.evCount} nonBillable=${onNonBillable.evCount} ` +
-        `-> client=${onClient.evCount} project=${onProject.evCount} ` +
-        `-> tag=${onTag.evCount} -> custom dates=${JSON.stringify(onCustom)} ` +
+      {
+        controlsOk,
+        weekDefaultOk,
+        pickerOk,
+        stepOk,
+        pickerSelectOk,
+        pickerKeysOk,
+        searchOk,
+        billableOk,
+        clientProjectOk,
+        tagOk,
+        weekendOk,
+        wireOk,
+      },
+      `week-only entries toolbar: default=${JSON.stringify(before)} -> prev=${JSON.stringify(onPrev)} ` +
+        `next=${onNext.evCount}@${onNext.wsFirst} -> picked=${JSON.stringify(onPicked)} ` +
+        `-> keys right=${afterRight} down=${afterDown} enter=${onKeyed.evCount}@${onKeyed.wsFirst} ` +
+        `-> search=${onSearch.evCount} -> billable=${onBillable.evCount}/${onNonBillable.evCount} ` +
+        `-> client=${onClient.evCount} project=${onProject.evCount} -> tag=${onTag.evCount} ` +
+        `-> weekend on=${JSON.stringify(onWeekend)} off=${JSON.stringify(offWeekend)} ` +
         `-> wire=${JSON.stringify(wire)}`,
       'entries-calendar.png',
     );
   });
 }
 
-// CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
-// entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
-// calendar half is ENTRIES_CALENDAR above). Machine-scored under the pinned JUDGE clock with the
-// page pinned to timezoneId 'UTC' so the fixture's UTC instants map to a stable local-time
-// geometry on the 24h track.
+// CALENDAR_LAYOUT — §12 R16: the week-grid structure over the real renderer +
+// entriesCalendarState. Drives the grid half of the requirement (the toolbar/picker half is
+// ENTRIES_CALENDAR above): fit-to-width columns with NO horizontal scroll, taller 60px hours
+// over the full 24h track, the today indicator, per-day header totals (start-day attribution),
+// cross-midnight segments — including the hidden-day rule (§16): a segment on a day the grid
+// does not show is simply not drawn, and the Show-weekend toggle reveals it without changing
+// any total. Machine-scored under the pinned JUDGE clock with the page pinned to timezoneId
+// 'UTC' so the fixture's UTC instants map to a stable local-time geometry on the 24h track.
 async function sceneCalendarLayout(browser) {
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -4413,47 +4514,40 @@ async function sceneCalendarLayout(browser) {
     await page.goto(fileUrl('index.html'));
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
 
-    // The 24h track geometry the renderer uses (HOUR_PX=44), replicated to check off-hours
-    // positioning: working-start 07:00 → 420 min → ~308px; working-end 18:00 → 1080 min → ~792px.
-    const pxPerMin = 44 / 60;
+    // The 24h track geometry the renderer uses (HOUR_PX=60 — the §12 R16 taller hours): working
+    // hours 07:00–18:00 → 420–1080 min → 420–1080 px at 1px/min.
+    const pxPerMin = 60 / 60;
     const workStartPx = 420 * pxPerMin;
     const workEndPx = 1080 * pxPerMin;
 
     const structure = await page.evaluate(
       ({ workStartPx, workEndPx }) => {
         const cols = [...document.querySelectorAll('.dcol')];
-        const colWidths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+        const colWidths = cols.map((c) => c.getBoundingClientRect().width);
         const strip = document.querySelector('.cstrip');
         const track = document.querySelector('.dt');
         const evs = [...document.querySelectorAll('.dcol .ev')];
         const evTop = (el) => parseFloat(el.style.top) || 0;
         const evNum = (el, prop) => Math.round(parseFloat(el.style[prop]) || 0);
-        // §12 R16 (issue #71): the cross-midnight entry (data-id 8, 22:30→06:15 next day) renders
-        // as TWO segments sharing its id — a start-day segment and an end-day segment. Capture each
-        // segment's class + top/height so the rubric can assert the split geometry (start segment
-        // reaches the track bottom at a TRUE height; end segment runs from the track top) rather
-        // than the single 18px sliver the same-day end-min math used to collapse it to.
-        const xmid = [...document.querySelectorAll('.dcol .ev[data-id="8"]')].map((el) => ({
+        const segsOf = (id) => [...document.querySelectorAll(`.dcol .ev[data-id="${id}"]`)].map((el) => ({
           cls: el.className,
           top: evNum(el, 'top'),
           height: evNum(el, 'height'),
         }));
         const dayTotals = {};
+        const dayHasTotal = {};
         for (const dh of document.querySelectorAll('.dcol .dh')) {
           const dd = dh.querySelector('.dd')?.textContent?.trim();
           dayTotals[dd] = dh.querySelector('.ds')?.textContent?.trim() ?? null;
+          dayHasTotal[dd] = !!dh.querySelector('.ds');
         }
         const emptyCols = cols.filter((c) => c.querySelectorAll('.dt .ev').length === 0).length;
         const runEv = document.querySelector('.dcol .ev.run');
         const runBg = runEv ? getComputedStyle(runEv).backgroundImage : '';
         const runBt = runEv ? runEv.querySelector('.bt')?.textContent?.trim() ?? '' : '';
         // §12 R16 / G13, issue #145: the day headers must be ON SCREEN at the post-render scroll
-        // position, not merely present in the DOM. This scene used to read the per-day totals out
-        // of the markup, which is a CONTROL-level fact — and it passed while the render scrolled
-        // the whole 52px header band out of the viewport, leaving seven unlabelled columns with
-        // zero visible totals. Measured against the scrollport rect instead: `.dh` is vertically
-        // inside `.cstrip`'s box (the axis the working-hours scroll moves), and the header band's
-        // own visible height is its full 52px, so a partly-clipped band fails too.
+        // position, not merely present in the DOM — the sticky header band keeps the totals and
+        // the hour labels visible while the working-hours scroll moves the track beneath them.
         const stripRect = strip.getBoundingClientRect();
         const gut = document.querySelector('.gut');
         const dhs = [...document.querySelectorAll('.dcol .dh')];
@@ -4461,28 +4555,29 @@ async function sceneCalendarLayout(browser) {
           const r = el.getBoundingClientRect();
           return r.height > 0 && r.top >= stripRect.top - 0.5 && r.bottom <= stripRect.bottom + 0.5;
         };
-        // Fully on screen on BOTH axes — the strictest reading of "a reader can see this label".
-        // The rightmost columns sit past the horizontal scroll by design (the strip scrolls), so
-        // this is a floor, not an equality.
         const fullyVisible = (el) => {
           const r = el.getBoundingClientRect();
-          return (
-            vInside(el) && r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5
-          );
+          return vInside(el) && r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5;
         };
+        // The taller hours, read off the painted gutter: consecutive hour labels sit 60px apart.
+        const hlabTops = [...document.querySelectorAll('.gut .hlab')].map((el) => parseFloat(el.style.top));
+        const today = document.querySelector('.dcol .dh .dd.today');
         return {
           colCount: cols.length,
-          colWidths,
-          allEqualWidth: colWidths.length > 0 && colWidths.every((w) => w === colWidths[0]),
-          fixedWidth: colWidths[0] ?? 0,
-          hScroll: !!strip && strip.scrollWidth > strip.clientWidth,
+          colSpread: colWidths.length ? Math.max(...colWidths) - Math.min(...colWidths) : 0,
+          minColWidth: colWidths.length ? Math.round(Math.min(...colWidths)) : 0,
+          // §12 R16: fit to width — the columns + gutter FILL the strip and nothing scrolls
+          // horizontally at the default window.
+          hScroll: !!strip && strip.scrollWidth > strip.clientWidth + 1,
           vScroll: !!strip && strip.scrollHeight > strip.clientHeight,
           scrollTop: strip ? Math.round(strip.scrollTop) : 0,
           trackHeight: track ? Math.round(track.getBoundingClientRect().height) : 0,
+          hourStepPx: hlabTops.length > 1 ? hlabTops[1] - hlabTops[0] : 0,
           evCount: evs.length,
           hasBeforeWork: evs.some((el) => evTop(el) < workStartPx),
           hasAfterWork: evs.some((el) => evTop(el) > workEndPx),
           dayTotals,
+          dayHasTotal,
           emptyCols,
           overlapBands: document.querySelectorAll('.dcol .ov').length,
           overlapTag: document.querySelector('.dcol .ov .otag')?.textContent?.trim() ?? '',
@@ -4490,18 +4585,21 @@ async function sceneCalendarLayout(browser) {
           sleptMoon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
           runPresent: !!runEv,
           runFade: /gradient/.test(runBg),
-          xmid,
-          // The full 24h track bottom in px (CAL_DAY_PX = 44 * 24) — the start segment must reach
-          // it, proving it runs to local midnight, not to a clipped 18px block.
-          trackBottomPx: 44 * 24,
+          // §12 R16: the TODAY indicator — the ink ring on the date numeral (Wed 24 under the
+          // pinned clock), one and only one, distinct from selection.
+          todayCount: document.querySelectorAll('.dcol .dh .dd.today').length,
+          todayText: today?.textContent?.trim() ?? null,
+          todayRing: !!today && getComputedStyle(today).boxShadow !== 'none',
+          // Both-shown cross-midnight (id 8, Mon 22:30 → Tue 06:15) and the weekend-crossing
+          // span (id 9, Fri 22:30 → Sat 06:15) whose Sat segment must NOT be drawn (weekend off).
+          xmid: segsOf('8'),
+          hiddenSegs: segsOf('9'),
+          trackBottomPx: 60 * 24,
           runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
-          // issue #145 — the header band and hour gutter AT THE DEFAULT PAINT.
           headerCount: dhs.length,
           headersOnScreen: dhs.filter(vInside).length,
-          dayTotalsOnScreen: [...document.querySelectorAll('.dcol .dh .ds')].filter(fullyVisible)
-            .length,
-          // The mechanism, named so a regression says WHICH half broke: the labels stick to the
-          // scrollport instead of riding the scroll.
+          dayTotalsOnScreen: [...document.querySelectorAll('.dcol .dh .ds')].filter(fullyVisible).length,
+          dayTotalsCount: document.querySelectorAll('.dcol .dh .ds').length,
           dhPosition: dhs[0] ? getComputedStyle(dhs[0]).position : '',
           gutPosition: gut ? getComputedStyle(gut).position : '',
           hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
@@ -4511,28 +4609,38 @@ async function sceneCalendarLayout(browser) {
     );
     await page.screenshot({ path: join(EVIDENCE, 'main-calendar.png') });
 
-    // issue #145, the other axis: the hour gutter labels the time for EVERY column, so it has to
-    // survive the horizontal scroll the fixed-width columns force — the same defect as the header
-    // band, ninety degrees round. Scroll the strip fully right, then read the gutter's left edge
-    // against the scrollport's (sticky pins the two together) and confirm the header band is still
-    // on screen at the same time, so the two axes are proven to compose rather than one at a time.
-    const axes = await page.evaluate(() => {
+    // §12 R09/R16/§16: the Show-weekend toggle reveals the weekend columns AND the weekend
+    // segment of the Fri→Sat span — without giving Sat's header a total (start-day attribution,
+    // asserted per §16\'s "hiding a segment never changes attribution or any total") and still
+    // with no horizontal scroll at seven columns. Toggled back off so the hover/editor/merge
+    // probes below run at the default five-column paint.
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const weekend = await page.evaluate(() => {
       const strip = document.querySelector('.cstrip');
-      strip.scrollLeft = strip.scrollWidth;
-      const s = strip.getBoundingClientRect();
-      const vInside = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.height > 0 && r.top >= s.top - 0.5 && r.bottom <= s.bottom + 0.5;
+      const cols = [...document.querySelectorAll('.dcol')].map((c) => c.getBoundingClientRect().width);
+      const segs = [...document.querySelectorAll('.dcol .ev[data-id="9"]')].map((el) => ({
+        cls: el.className,
+        top: Math.round(parseFloat(el.style.top) || 0),
+        height: Math.round(parseFloat(el.style.height) || 0),
+      }));
+      const satHead = [...document.querySelectorAll('.dcol .dh')].find(
+        (dh) => dh.querySelector('.dd')?.textContent?.trim() === '27',
+      );
+      return {
+        dayCols: cols.length,
+        colSpread: cols.length ? Math.max(...cols) - Math.min(...cols) : 0,
+        hScroll: !!strip && strip.scrollWidth > strip.clientWidth + 1,
+        segs,
+        satHasTotal: !!satHead?.querySelector('.ds'),
+        friTotal: [...document.querySelectorAll('.dcol .dh')]
+          .find((dh) => dh.querySelector('.dd')?.textContent?.trim() === '26')
+          ?.querySelector('.ds')?.textContent?.trim() ?? null,
       };
-      const out = {
-        scrolledRight: Math.round(strip.scrollLeft) > 0,
-        gutOffset: Math.round(document.querySelector('.gut').getBoundingClientRect().left - s.left),
-        headersOnScreen: [...document.querySelectorAll('.dcol .dh')].filter(vInside).length,
-        hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
-      };
-      strip.scrollLeft = 0; // back to the at-rest position the remaining sub-facts read.
-      return out;
     });
+    await page.screenshot({ path: join(EVIDENCE, 'main-calendar-weekend.png') });
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 5);
 
     await page.hover('.entry[data-id="7"]');
     await page.waitForTimeout(250);
@@ -4551,8 +4659,7 @@ async function sceneCalendarLayout(browser) {
     });
 
     // Clicking an event body opens the unified editor (an off-hours event, so this also exercises
-    // the scroll-into-view reachability of the never-clipped 24h track). The hover changes nothing
-    // geometrically (CALENDAR_ENTRY_BLOCK guards that), so the title is where it was at rest.
+    // the scroll-into-view reachability of the never-clipped 24h track).
     await clickEventBody(page, '.entry[data-id="5"]');
     await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
     const editorOpen = await page.evaluate(
@@ -4570,7 +4677,7 @@ async function sceneCalendarLayout(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        aboveCalendar: !!bar && bar.nextElementSibling?.classList.contains('ebody'),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),
@@ -4583,44 +4690,74 @@ async function sceneCalendarLayout(browser) {
       mergeBar.goLabel === 'Merge' &&
       mergeBar.goNeutral;
 
+    // §12 R16/R22: five fit-to-width columns (Mon–Fri, weekend hidden) sharing the strip
+    // equally, NO horizontal scroll — at the 1040 default the equal share is well past any
+    // legibility concern and there is no floor to hold. "Equally" is spread < 2px, not 0:
+    // flex divides a strip that is not a multiple of the column count into fractional
+    // widths, and different Chromium builds round the fractions differently (CI measured
+    // 1.016px across seven columns where local measured ≤1). A real divergence — the old
+    // 124px floor compressing one column — is tens of pixels, far past the tolerance.
     const columnsOk =
-      structure.colCount === 7 &&
-      structure.allEqualWidth &&
-      structure.fixedWidth >= 110 &&
-      structure.fixedWidth <= 140 &&
-      structure.hScroll;
+      structure.colCount === 5 &&
+      structure.colSpread < 2 &&
+      structure.minColWidth > 60 &&
+      !structure.hScroll;
+    const tallHoursOk = structure.hourStepPx === 60 && structure.trackHeight === 1440;
     const neverClipOk =
       structure.vScroll &&
-      structure.scrollTop > 200 &&
-      structure.scrollTop < 500 &&
-      structure.trackHeight >= 1000 &&
+      structure.scrollTop > 300 &&
+      structure.scrollTop < 550 &&
+      structure.trackHeight >= 1400 &&
       structure.hasBeforeWork &&
       structure.hasAfterWork;
+    const todayOk = structure.todayCount === 1 && structure.todayText === '24' && structure.todayRing;
     // §12 R16 (issue #71): the 22nd's header carries the cross-midnight span in full (start-day
-    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h. The 23rd's
-    // header is NOT asserted here, but its total must stay off the overnight span (it shows the
-    // end segment without counting it) — pinned by crossMidnightOk + the segment/attribution
-    // rule below. The per-day header totals are the view's ONLY billable figures: the toolbar's
-    // range-total chip is retired (#264, §12 R09), so there is no week sum to read.
+    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h — and the 26th
+    // counts its weekend-crossing span whole (7.75h) though only the start segment draws. A
+    // zero-total day paints NO figure (the mockup's authored quiet header).
     const totalsOk =
       structure.dayTotals['22'] === '12.00h' &&
-      structure.dayTotals['24'] === '1.00h';
+      structure.dayTotals['24'] === '1.00h' &&
+      structure.dayTotals['26'] === '7.75h' &&
+      structure.dayHasTotal['25'] === false;
     const emptyOk = structure.emptyCols >= 1;
     // §12 R16 (issue #71): the cross-midnight entry renders as exactly TWO segments sharing id 8.
-    // The start segment sits at 22:30 (1350 min → ~990px) and runs to the track bottom (a true
-    // ~66px height, never the 18px sliver); the end segment starts at the track top (0) and runs
-    // to 06:15 (375 min → ~275px). The two blocks share the one data-id, so the span is one entry.
+    // The start segment sits at 22:30 (1350 min → 1350px at 60px hours) and runs to the track
+    // bottom (a true 90px height, never the 18px sliver); the end segment starts at the track
+    // top (0) and runs to 06:15 (375 min → 375px). The two blocks share the one data-id.
     const startSeg = structure.xmid.find((s) => /\bseg-start\b/.test(s.cls));
     const endSeg = structure.xmid.find((s) => /\bseg-end\b/.test(s.cls));
     const crossMidnightOk =
       structure.xmid.length === 2 &&
       !!startSeg &&
       !!endSeg &&
-      Math.abs(startSeg.top - 990) <= 2 && // 22:30
-      startSeg.height > 40 && // a TRUE height, not the 18px floor
+      Math.abs(startSeg.top - 1350) <= 2 && // 22:30
+      startSeg.height > 60 && // a TRUE height, not the 18px floor
       Math.abs(startSeg.top + startSeg.height - structure.trackBottomPx) <= 2 && // reaches midnight
-      endSeg.top === 0 && // starts at the day's top edge (00:00)
-      Math.abs(endSeg.height - 275) <= 2; // down to 06:15
+      endSeg.top === 0 && // starts at the day\'s top edge (00:00)
+      Math.abs(endSeg.height - 375) <= 2; // down to 06:15
+    // §12 R09/R16/§16: the Fri→Sat span draws ONLY its start-day segment while the weekend is
+    // hidden — the Sat segment is simply not drawn, never a clipped sliver in the start column.
+    const hiddenStart = structure.hiddenSegs.find((s) => /\bseg-start\b/.test(s.cls));
+    const hiddenSegOk =
+      structure.hiddenSegs.length === 1 &&
+      !!hiddenStart &&
+      Math.abs(hiddenStart.top - 1350) <= 2 &&
+      Math.abs(hiddenStart.top + hiddenStart.height - structure.trackBottomPx) <= 2;
+    // …and the toggle REVEALS it: seven fit-to-width columns (still no horizontal scroll), the
+    // Sat seg-end from the track head down to 06:15, Sat\'s header still total-less, Fri\'s
+    // unchanged — hiding/showing a segment never moves a total.
+    const wkendEnd = weekend.segs.find((s) => /\bseg-end\b/.test(s.cls));
+    const weekendRevealOk =
+      weekend.dayCols === 7 &&
+      weekend.colSpread < 2 &&
+      !weekend.hScroll &&
+      weekend.segs.length === 2 &&
+      !!wkendEnd &&
+      wkendEnd.top === 0 &&
+      Math.abs(wkendEnd.height - 375) <= 2 &&
+      !weekend.satHasTotal &&
+      weekend.friTotal === '7.75h';
     const flagsOk =
       structure.overlapBands >= 1 &&
       /overlap\s*\d+m/.test(structure.overlapTag) &&
@@ -4628,29 +4765,23 @@ async function sceneCalendarLayout(browser) {
       structure.sleptMoon;
     const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
     const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
-    // §12 R16 / G13, issue #145: the labels the calendar paints are VISIBLE at the default paint
-    // and stay visible through the scroll on either axis. `totalsOk` above reads the totals out of
-    // the DOM; this reads them off the screen — the outcome the requirement is actually about.
-    // The header COUNT is exact on the vertical axis (all seven, the axis the defect was on); the
-    // per-day totals are a floor on the horizontal one, because the strip is deliberately narrower
-    // than the week (columnsOk asserts that scroll): at the 1040px window the ~808px scrollport
-    // holds the 48px gutter plus six 124px columns, and the seventh is a scroll away.
-    // The pre-fix defect measured ZERO totals on screen and ZERO headers vertically.
+    // §12 R16 / G13, issue #145: the labels the grid paints are VISIBLE at the default paint —
+    // the header band and the hour gutter are sticky, so the working-hours scroll moves the
+    // track past them, never the labels off screen. (The horizontal half of #145 retired with
+    // the horizontal scroll itself: the columns fit the width now.)
     const labelsOnScreenOk =
       structure.dhPosition === 'sticky' &&
       structure.gutPosition === 'sticky' &&
       structure.headersOnScreen === structure.colCount &&
-      structure.dayTotalsOnScreen >= 4 &&
-      structure.hourLabelsOnScreen > 0 &&
-      axes.scrolledRight &&
-      Math.abs(axes.gutOffset) <= 1 &&
-      axes.headersOnScreen === structure.colCount &&
-      axes.hourLabelsOnScreen > 0;
+      structure.dayTotalsOnScreen === structure.dayTotalsCount &&
+      structure.hourLabelsOnScreen > 0;
     record(
       'CALENDAR_LAYOUT',
       {
         columnsOk,
+        tallHoursOk,
         neverClipOk,
+        todayOk,
         totalsOk,
         emptyOk,
         flagsOk,
@@ -4658,14 +4789,17 @@ async function sceneCalendarLayout(browser) {
         hoverOk,
         labelsOnScreenOk,
         crossMidnightOk,
+        hiddenSegOk,
+        weekendRevealOk,
         editorOpen,
         mergeHiddenBefore,
         mergeShown,
       },
-      `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
-        `labelsOnScreen=${labelsOnScreenOk} axes=${JSON.stringify(axes)}; ` +
-        `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
-        `selection bar hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
+      `week grid layout: structure=${JSON.stringify(structure)}; weekend=${JSON.stringify(weekend)}; ` +
+        `hover=${JSON.stringify(hover)}; labelsOnScreen=${labelsOnScreenOk}; ` +
+        `crossMidnight=${crossMidnightOk} hiddenSeg=${hiddenSegOk} weekendReveal=${weekendRevealOk}; ` +
+        `editorOpen=${editorOpen}; selection bar hidden-before=${mergeHiddenBefore} ` +
+        `shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
       'main-calendar.png',
     );
     await page.close();
@@ -4674,12 +4808,13 @@ async function sceneCalendarLayout(browser) {
 
 // WINDOW_GEOMETRY — §12 R22 (issue #126): the app uses the window it is given, and every
 // surface fits the window it ships in. Outcomes, not controls, at real geometry:
-//   • 1920×800 over the one-week fixture: all 7 day columns fully visible with no horizontal
-//     scroll, equal widths above the 124px floor, and every description ellipsised at the
-//     1040 default renders its full natural width — the columns share the window;
-//   • 1920×800 over the three-week fixture: the range still does not fit, so columns hold the
-//     floor and the strip still scrolls (§12 R16) — but more days are fully visible than at
-//     the default;
+//   • the week-only grid FITS TO WIDTH at every size (§12 R16): at the 1040×800 default the
+//     five shown columns share the width equally with NO horizontal scroll, and at 1920 the
+//     same columns GROW to absorb the resize — every description that ellipsised at 1040
+//     renders its full natural width at 1920;
+//   • the seven-column weekend-on grid fits the SAME 1040 window — still equal shares, still
+//     no horizontal scroll (there is no floor width and no sanctioned horizontal scroll left
+//     in this view);
 //   • WINDOW (1040×800 — the default AND the minimum): the unified add form, expander open,
 //     commits without scrolling — Save entry fully inside the viewport — and the exact-times
 //     fields sit inside their picker column with no document-level horizontal overflow
@@ -4690,25 +4825,19 @@ async function sceneWindowGeometry(browser) {
   const measureCalendar = (page) =>
     page.evaluate(() => {
       const strip = document.querySelector('.cstrip');
-      const s = strip.getBoundingClientRect();
       const cols = [...document.querySelectorAll('.dcol')];
-      const widths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
-      const fullyVisible = cols.filter((c) => {
-        const r = c.getBoundingClientRect();
-        return r.left >= s.left - 0.5 && r.right <= s.right + 0.5;
-      }).length;
+      const widths = cols.map((c) => c.getBoundingClientRect().width);
       return {
-        widths,
-        equal: widths.length > 0 && widths.every((w) => w === widths[0]),
-        fullyVisible,
-        hScroll: strip.scrollWidth > strip.clientWidth,
+        count: cols.length,
+        minWidth: widths.length ? Math.round(Math.min(...widths)) : 0,
+        spread: widths.length ? Math.max(...widths) - Math.min(...widths) : 0,
+        hScroll: strip.scrollWidth > strip.clientWidth + 1,
         truncatedDescs: [...document.querySelectorAll('.dcol .ev .bd')].filter(
           (b) => b.scrollWidth > b.clientWidth,
         ).length,
       };
     });
 
-  // One-week fixture: the columns share a wider window; the week fits whole at 1920.
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -4720,19 +4849,12 @@ async function sceneWindowGeometry(browser) {
     await page.setViewportSize({ width: 1920, height: WINDOW.height });
     const weekAtWide = await measureCalendar(page);
     await page.screenshot({ path: join(EVIDENCE, 'calendar-wide.png') });
+    // Back to the minimum, then weekend ON: seven columns must fit the SAME window.
+    await page.setViewportSize(WINDOW);
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const weekendAtDefault = await measureCalendar(page);
     await page.close();
-
-    // Three-week fixture: the floor and the horizontal scroll survive, and width still pays out.
-    const densePage = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
-    await densePage.clock.install({ time: new Date(JUDGE_NOW) });
-    await densePage.clock.pauseAt(new Date(JUDGE_NOW));
-    await densePage.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
-    await densePage.goto(fileUrl('index.html'));
-    await densePage.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
-    const denseAtDefault = await measureCalendar(densePage);
-    await densePage.setViewportSize({ width: 1920, height: WINDOW.height });
-    const denseAtWide = await measureCalendar(densePage);
-    await densePage.close();
 
     // The unified form at the 1040×800 minimum: committable without scrolling, and the
     // exact-times fields inside their column in BOTH modes (ex-issue #146).
@@ -4800,25 +4922,27 @@ async function sceneWindowGeometry(browser) {
     });
 
     const weekOk =
-      weekAtWide.fullyVisible === 7 &&
+      weekAtDefault.count === 5 &&
+      weekAtDefault.spread < 2 &&
+      !weekAtDefault.hScroll &&
+      weekAtWide.count === 5 &&
+      weekAtWide.spread < 2 &&
       !weekAtWide.hScroll &&
-      weekAtWide.equal &&
-      weekAtWide.widths[0] > weekAtDefault.widths[0] &&
+      weekAtWide.minWidth > weekAtDefault.minWidth + 100 && // the resize lands on the columns
       weekAtDefault.truncatedDescs > 0 &&
       weekAtWide.truncatedDescs === 0;
-    const denseOk =
-      denseAtWide.fullyVisible > denseAtDefault.fullyVisible &&
-      denseAtWide.equal &&
-      denseAtWide.widths[0] === denseAtDefault.widths[0] &&
-      denseAtWide.hScroll;
+    const weekendOk =
+      weekendAtDefault.count === 7 &&
+      weekendAtDefault.spread < 2 &&
+      !weekendAtDefault.hScroll;
     const addOk = addFit.scrollY === 0 && addFit.saveInViewport && addFit.fieldsInColumn && addFit.noHOverflow;
     const editOk = editFit.fieldsInColumn && editFit.noHOverflow;
     const popOk = popFit.cardInside && popFit.toggleInside && popFit.openInside && popFit.noOverflow;
     record(
       'WINDOW_GEOMETRY',
-      { weekOk, denseOk, addOk, editOk, popOk },
+      { weekOk, weekendOk, addOk, editOk, popOk },
       `week@1040=${JSON.stringify(weekAtDefault)} week@1920=${JSON.stringify(weekAtWide)} → ${weekOk}; ` +
-        `dense@1040 fullyVisible=${denseAtDefault.fullyVisible} dense@1920=${JSON.stringify(denseAtWide)} → ${denseOk}; ` +
+        `weekend-on@1040=${JSON.stringify(weekendAtDefault)} → ${weekendOk}; ` +
         `add-form@minimum=${JSON.stringify(addFit)} → ${addOk}; edit-form=${JSON.stringify(editFit)} → ${editOk}; ` +
         `popover=${JSON.stringify(popFit)} → ${popOk}`,
       'calendar-wide.png',
@@ -4827,14 +4951,15 @@ async function sceneWindowGeometry(browser) {
 }
 
 // CALENDAR_ACCENT_BUDGET — design.html D11 / §02 principles 1–2, machine-scored (issue #143).
-// The Entries calendar is the app's busiest surface, and it used to fill every entry block with
-// --accent-weak behind an accent border: the design audit measured 51 accent-tinted blocks and
-// ZERO accent-solid primaries — the colour rationed for "the one thing that matters" was the
-// wallpaper. This scene pins the budget as an OUTCOME over a realistically dense fixture
-// (denseCalendarState: three weeks, 51 blocks, the last one OPEN), because the defect is
-// invisible at toy density — a one-day fixture would show almost nothing. Driven at the app's
-// 1040×800 default window with the page pinned to UTC, and AT REST: no toolbar control is
-// touched, so what is measured is the view as it loads.
+// The Entries week grid is the app's busiest surface, and it used to fill every entry block with
+// --accent-weak behind an accent border: the design audit measured a calendar of accent-tinted
+// blocks and ZERO accent-solid primaries — the colour rationed for "the one thing that matters"
+// was the wallpaper. This scene pins the budget as an OUTCOME over a realistically dense fixture
+// (denseCalendarState: the current week's elapsed days full — 17 blocks, the last one OPEN; the
+// week-only view of §12 R09 caps the visible surface at one week, so a busy week IS the app's
+// densest screen), because the defect is invisible at toy density. Driven at the app's 1040×800
+// default window with the page pinned to UTC, and AT REST: no toolbar control is touched, so
+// what is measured is the view as it loads.
 async function sceneCalendarAccentBudget(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -4887,7 +5012,7 @@ async function sceneCalendarAccentBudget(browser) {
   await page.screenshot({ path: join(EVIDENCE, 'calendar-accent-budget.png') });
   await page.close();
 
-  const densityOk = probe.evCount >= 50;
+  const densityOk = probe.evCount >= 15;
   const noWallpaperOk = probe.tintedBlockCount === 0;
   const neutralOk = probe.notPaper === 0 && probe.notLifted === 0;
   const signalOk = probe.runningCount === 1 && probe.runningCarriesAccent;
@@ -5005,7 +5130,7 @@ async function sceneSelectionLift(browser) {
   await page.close();
 
   const stateOk =
-    probe.evCount >= 50 && probe.selectedCount === 2 && probe.editingCount === 1 && probe.editorOpen;
+    probe.evCount >= 15 && probe.selectedCount === 2 && probe.editingCount === 1 && probe.editorOpen;
   const liftOk =
     probe.chosenNotPaper === 0 && probe.chosenNotLifted === 0 && !probe.restIsFlat;
   const noAccentOk = probe.accentedSelections.length === 0 && probe.accentedChecks.length === 0;
@@ -5027,9 +5152,10 @@ async function sceneSelectionLift(browser) {
 // hover padding shoving text out of the bottom — so one scene guards both.
 //
 // The fixture (shortEntriesCalendarState) seeds the four durations the design audit measured —
-// 10 / 30 / 60 / 180 minutes. Block height is duration-driven (0.733px/min, floored at 18px) while
-// content height is fixed by text flow (~55px), so they cross at ~75 minutes and only the sub-75
-// blocks can spill. This matters more than usual: the audit first KILLED a narrower version of the
+// 10 / 30 / 45 / 180 minutes (the audit's 60-minute case became 45 when the week grid's 60px
+// hours gave a 60-minute block room for its content). Block height is duration-driven (1px/min,
+// floored at 18px) while content height is fixed by text flow (~55px), so they cross at ~55
+// minutes and only the sub-55 blocks can spill. This matters more than usual: the audit first KILLED a narrower version of the
 // finding after measuring a 132px block, and a scene seeded with hour-plus entries alone would
 // reproduce that mistake exactly. The 180-minute block is the control.
 //
@@ -5050,6 +5176,12 @@ async function sceneCalendarEntryBlock(browser) {
 
   const blocks = await page.evaluate(() => {
     const within = (el, root) => !!el && (el === root || root.contains(el));
+    // Park the scrollport on the fixture's own 08:00–16:00 span first: at the 60px hours the
+    // default working-hours scroll leaves the 13:00–16:00 control block's foot below the
+    // viewport, and an off-screen probe reads null instead of the block (a scroll, not a clip
+    // — the same reachability the layout scene asserts).
+    const strip = document.querySelector('.cstrip');
+    strip.scrollTop = 8 * 60;
     return [...document.querySelectorAll('.dcol .ev')].map((ev) => {
       const r = ev.getBoundingClientRect();
       const midX = Math.round(r.left + r.width / 2);
@@ -5108,7 +5240,7 @@ async function sceneCalendarEntryBlock(browser) {
   const byId = Object.fromEntries(blocks.map((b) => [b.id, b]));
   const liveOk = blocks.length === 4 && blocks.every((b) => b.selfHit);
   const containedOk = blocks.every((b) => b.below.every((p) => !p.intoEntry));
-  // The three sub-75-minute blocks must genuinely overflow their height — otherwise the fixture
+  // The three sub-55-minute blocks must genuinely overflow their height — otherwise the fixture
   // stopped exercising the defect and `containedOk` is proving nothing.
   const shortfallReal = ['201', '202', '203'].every((id) => {
     const b = byId[id];
@@ -5146,9 +5278,11 @@ async function sceneCalendarEntryBlock(browser) {
 // are reached with ← / → from the focused block, and `.ev:focus-within` opens the whole set — so
 // arriving at an entry is also how a keyboard user learns the controls are there.
 //
-// Driven over `denseCalendarState` (three weeks, 51 blocks, the last one open) at the app's
-// 1040×800 default window, pinned to UTC. Density is the whole guard, per the issue-#55 lesson the
-// triage cites: at one day of data the traversal cost is invisible and any stop model looks fine.
+// Driven over `denseCalendarState` (the dense current week — 17 blocks, the last one open; the
+// week-only view caps the surface at one week, so a busy week is the densest calendar the app can
+// show) at the app's 1040×800 default window, pinned to UTC. Density is the whole guard, per the
+// issue-#55 lesson the triage cites: at one day of data the traversal cost is invisible and any
+// stop model looks fine.
 // Motion is off (noMotion) so an opacity probe reads the cascade, not a frame of the 0.12s fade.
 async function sceneCalendarKeyboard(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -5231,7 +5365,7 @@ async function sceneCalendarKeyboard(browser) {
   await page.close();
 
   const calStops = walk.filter((s) => s.inCalendar);
-  const fixtureReal = fixture.blocks >= 50 && fixture.controls >= 150;
+  const fixtureReal = fixture.blocks >= 15 && fixture.controls >= 45;
   const oneStopPerBlock = calStops.length === fixture.blocks && calStops.every((s) => s.isBlock);
   // The traversal cost, stated as the ratio the fix changed: the calendar spends one stop per
   // ENTRY, not one per control, so walking past it costs well under half of what its controls
@@ -5274,12 +5408,13 @@ async function sceneCalendarKeyboard(browser) {
 }
 
 // LIVE_FILTER — §17 R11: a search / filter selection is reflected LIVE on the visible
-// entries calendar, with no getState reload during the keystroke. Hardened per the issue-#55
+// week grid, with no getState reload during the keystroke. Hardened per the issue-#55
 // triage over the MULTI-WEEK fixture (seven entries across this week / last week / last
-// month). The strict listEntries mock rejects any query missing the required `by` (exactly
-// like core), so the whole flow also proves no toolbar query throws. The toolbar's range-total
-// chip is retired (#264, §12 R09): the culled totalLiveOk fact stays culled — the day-header
-// totals keep their own guard in CALENDAR_LAYOUT's totalsOk.
+// month — the week-only view paints the current week's FIVE at rest, §12 R09). The strict
+// listEntries mock rejects any query missing the required `by` (exactly like core), so the
+// whole flow also proves no toolbar query throws. The toolbar's range-total chip is retired
+// (#264, §12 R09): the culled totalLiveOk fact stays culled — the day-header totals keep
+// their own guard in CALENDAR_LAYOUT's totalsOk.
 async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
@@ -5298,7 +5433,7 @@ async function sceneLiveFilter(browser) {
     }));
     const noReloadOnSearch = onSearch.getStateCalls === before.getStateCalls;
     await page.fill('#search', '');
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 7);
+    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 5);
     const onClear = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
     }));
@@ -5315,18 +5450,18 @@ async function sceneLiveFilter(browser) {
     }));
 
     const listLiveOk =
-      before.rowCount === 7 &&
+      before.rowCount === 5 &&
       onSearch.rowCount === 2 &&
       onSearch.descs.some((d) => /auth refactor/.test(d)) &&
       onSearch.descs.some((d) => /refactor tests/.test(d)) &&
       !onSearch.descs.some((d) => /deploy pipeline/.test(d)) &&
       !onSearch.descs.some((d) => /refactor planning/.test(d)) &&
       onSearch.listErrors === 0 && // no listEntries rejection along the way…
-      onClear.rowCount === 7; // …and clearing returns the full set
+      onClear.rowCount === 5; // …and clearing returns the week's full set
     const noMatchOk =
       noMatch.rowCount === 0 &&
       /No matching entries/.test(noMatch.text) &&
-      /Widen the range/.test(noMatch.text) &&
+      /Try another week/.test(noMatch.text) &&
       !/No entries yet/.test(noMatch.text) &&
       noMatch.listErrors === 0;
     record(
@@ -6231,12 +6366,12 @@ async function sceneFieldLabels(browser) {
   await sweep('timer (start details)');
   await page.screenshot({ path: join(EVIDENCE, 'field-labels-timer.png') });
 
+  // Entries — the week-only toolbar's filter/search fields (visible-label idiom, §12 R09)
+  // plus the unified add form (the range concept — and its custom date pair — is gone, #265).
   await page.click('.nav-item[data-view="entries"]');
   await page.click('#add-toggle');
   await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-  await page.click('#el-preset-seg .preset[data-preset="custom"]');
-  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-  await sweep('entries (add form + custom range)');
+  await sweep('entries (toolbar + add form)');
   await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
@@ -6389,12 +6524,17 @@ async function sceneFieldChrome(browser) {
   await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
   await sweep('timer (start details)');
 
+  // Entries — the week-only toolbar's filter/search fields plus the unified add form (the
+  // range concept and its custom date pair are gone, #265).
+  // Entries — the week-only toolbar's filter/search fields plus the unified add form (the
+  // range concept and its custom date pair are gone, #265). Opening the form focuses its
+  // description; drop that focus before sweeping, or the focused field's accent border reads
+  // as a chrome offender.
   await page.click('.nav-item[data-view="entries"]');
   await page.click('#add-toggle');
   await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-  await page.click('#el-preset-seg .preset[data-preset="custom"]');
-  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-  await sweep('entries (add form + custom range)');
+  await page.evaluate(() => document.activeElement?.blur());
+  await sweep('entries (toolbar + add form)');
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
   await page.click('.nav-item[data-view="clients"]');
@@ -6415,9 +6555,9 @@ async function sceneFieldChrome(browser) {
   // so the :focus-visible the D13 idiom hangs off is the one a keyboard user gets.
   await page.click('.nav-item[data-view="entries"]');
   await page.waitForSelector('#search', { state: 'attached' });
-  // The toolbar control immediately before the search label — one Tab lands on the field.
-  // (#add-toggle since #264 retired the #report-btn chip that used to sit between them.)
-  await page.evaluate(() => document.querySelector('#add-toggle').focus());
+  // The toolbar control immediately before the search label — one Tab lands on the field
+  // (#el-tag, the last filter of the week-only toolbar's right rail).
+  await page.evaluate(() => document.querySelector('#el-tag').focus());
   await page.keyboard.press('Tab');
   const focus = await page.evaluate(() => {
     const el = document.querySelector('#search');
@@ -6814,7 +6954,7 @@ const SCENES = {
   TAG_CHIPS: { items: ['TAG_CHIPS'], captures: ['main-tags.png'], run: sceneTagChips },
   REPORTS_VIEW: { items: ['REPORTS_VIEW'], captures: ['reports-list.png', 'reports-run.png', 'reports-empty.png'], run: sceneReportsView },
   ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], captures: ['entries-search.png', 'entries-calendar.png'], run: sceneEntriesCalendar },
-  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], captures: ['main-calendar.png'], run: sceneCalendarLayout },
+  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], captures: ['main-calendar.png', 'main-calendar-weekend.png'], run: sceneCalendarLayout },
   WINDOW_GEOMETRY: { items: ['WINDOW_GEOMETRY'], captures: ['calendar-wide.png', 'min-window-add.png', 'popover-fit.png'], run: sceneWindowGeometry },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], captures: ['calendar-accent-budget.png'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], captures: ['selection-lift.png', 'selection-lift-editing.png'], run: sceneSelectionLift },

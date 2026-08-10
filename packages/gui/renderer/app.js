@@ -20,21 +20,44 @@ let state = null;
 // with `tt list --search`). Kept here so load()/onChange re-apply the live query on refresh.
 let searchQuery = '';
 
-// §12 R9: the Entries TOOLBAR state — range/filter/search over the readonly entries
-// calendar (R16). `entryQuery` holds the live control values (range preset/custom,
-// client/project/tag/billable). There is NO grouping here — grouped breakdowns moved to
-// Reports (§09 R02 / `tt report --by`, G11); the toolbar only narrows which entries the
-// calendar lays into its day columns. `entryGroups` is the flat, day-laid result of the
-// last window.stint.listEntries call, or null when the toolbar is idle (This-week-or-wider
-// window, no filters) — in which case render() paints the default getState entries so the
-// existing empty-state facts hold. A control change or search keystroke re-queries + repaints.
-// §09 R01: fromDate/toDate are the custom range's two PLAIN DATES (raw `YYYY-MM-DD` field
-// strings, no time component) — main resolves them to the inclusive-end-day local window.
-/** @type {{ preset: string | null, billable: 'all' | 'billable' | 'non-billable', clientId: any, projectId: any, tag: string, fromDate: string | null, toDate: string | null }} */
-const entryQuery = { preset: 'week', billable: 'all', clientId: null, projectId: null, tag: '', fromDate: null, toDate: null };
+// §12 R9: the Entries TOOLBAR state — week/filter/search over the readonly entries
+// calendar (R16). The view is WEEK-ONLY: there is no range concept here (core and
+// `tt list --range` keep arbitrary ranges — week-only is GUI presentation, not a core
+// narrowing), and no grouping — grouped breakdowns moved to Reports (§09 R02 /
+// `tt report --by`, G11). `entryQuery` holds the live filter values; the selected week
+// lives in `selectedWeekStart` below. `entryGroups` is the flat, day-laid result of the
+// last window.stint.listEntries call, or null when the toolbar is idle (the current week,
+// no filters) — in which case render() paints the default getState entries so the
+// existing empty-state facts hold. A week/filter change or search keystroke re-queries +
+// repaints (§17 R11 — the re-query IS the live reflection).
+/** @type {{ billable: 'all' | 'billable' | 'non-billable', clientId: any, projectId: any, tag: string }} */
+const entryQuery = { billable: 'all', clientId: null, projectId: null, tag: '' };
 let entryGroups = null;
 
-// True once the user touches any control (range/filter) — the search box alone does not
+// §12 R09: the selected week — its FIRST day as a 'YYYY-MM-DD' token, aligned to the
+// weekStart setting. null means "the week containing today", resolved per read so the
+// default view follows the clock (and the setting) without stashing a stale token.
+/** @type {string | null} */
+let selectedWeekStart = null;
+
+// §12 R09: the week picker's displayed month as 'YYYY-MM'. Follows the selected week
+// until the user pages it with the picker's own month steppers; re-anchored on selection.
+/** @type {string | null} */
+let pickerMonth = null;
+
+// §12 R09: the picker's roving-grid focus — the day cell holding tabindex="0" (arrow keys
+// move it, Enter selects its week). null falls back to the selected week's first day.
+/** @type {string | null} */
+let pickerActiveDay = null;
+
+// §12 R09: entry-dot days — the day tokens carrying entries over the picker's rendered
+// grid, from one unfiltered listEntries read per displayed grid range (keyed so a repaint
+// of the same month never re-queries). Dots are unfiltered by design: they say "this day
+// has entries", not "this day matches the current filters".
+let pickerDots = new Set();
+let pickerDotsKey = '';
+
+// True once the user touches any control (week/filter) — the search box alone does not
 // flip it, so a lone search keeps the live narrowing it always had.
 let entryCtrlActive = false;
 
@@ -84,6 +107,9 @@ async function load() {
   } else {
     entryGroups = null;
   }
+  // §12 R09: a (re)load may follow a write, so the week picker's entry-dot cache is stale —
+  // drop the key and the next picker paint re-reads the dots for its rendered range.
+  pickerDotsKey = '';
   render();
 }
 
@@ -211,19 +237,20 @@ function render() {
   renderEntries();
 }
 
-// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One day column per day in range
-// — an equal share of spare window width over a comfortable floor (§12 R22, styles.css `.dcol`)
-// — over a FULL 24h track: the track is always the whole day so nothing
-// clips; the viewport scrolls to the working-hours default. HOUR_PX drives both the vertical
-// pixels-per-hour and the event positioning, so an entry's top/height is a pure function of its
-// local minutes-of-day — the SAME window math the picker uses (window.SU.timelineWindow), never
-// re-derived here.
-// 44 is NOT free to change here alone (#174): styles.css `.dt` paints the hour rules with a
-// repeating-linear-gradient hard-coded at 43px/44px — CSS cannot read this constant — so the
+// §12 R16 — the readonly entries CALENDAR geometry (G10/G16). One day column per SHOWN day of
+// the selected week — an equal share of the view width with NO horizontal scroll (§12 R22,
+// styles.css `.dcol` flexes from zero, no floor) — over a FULL 24h track: the track is always
+// the whole day so nothing clips; the viewport scrolls to the working-hours default. HOUR_PX
+// drives both the vertical pixels-per-hour and the event positioning, so an entry's top/height
+// is a pure function of its local minutes-of-day — the SAME window math the picker uses
+// (window.SU.timelineWindow), never re-derived here.
+// 60 is the TALLER hour of §12 R16 (hour legibility outranks hours-in-view; mockup main.html)
+// and is NOT free to change here alone (#174): styles.css `.dt` paints the hour rules with a
+// repeating-linear-gradient hard-coded at 59px/60px — CSS cannot read this constant — so the
 // two must move together or the painted hour lines drift off the positioned events. The value
-// itself is chosen so the 24h track (1056px) overflows `.cstrip`'s 60vh viewport at any ordinary
+// also keeps the 24h track (1440px) overflowing `.cstrip`'s 60vh viewport at any ordinary
 // window height, which is what makes the working-hours default a real SCROLL, never a clip (G16).
-const CAL_HOUR_PX = 44;
+const CAL_HOUR_PX = 60;
 const CAL_DAY_PX = CAL_HOUR_PX * 24; // the full 24h track height (scroll, never clip)
 const CAL_PX_PER_MIN = CAL_HOUR_PX / 60;
 const CAL_WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -253,7 +280,7 @@ function calAddDays(dayStr, n) {
 function calWeekBounds(dayStr) {
   const [y, m, d] = dayStr.split('-').map(Number);
   const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  const startDow = state.settings && state.settings.weekStart === 'sunday' ? 0 : 1;
+  const startDow = state && state.settings && state.settings.weekStart === 'sunday' ? 0 : 1;
   const back = (dow - startDow + 7) % 7;
   const start = calAddDays(dayStr, -back);
   return [start, calAddDays(start, 6)];
@@ -267,6 +294,56 @@ function calEnumerateDays(minDay, maxDay) {
     cur = calAddDays(cur, 1);
   }
   return out;
+}
+
+// Whether a 'YYYY-MM-DD' token is a Monday–Friday weekday (UTC math over the token, like
+// calDayParts — the token is already a resolved local day, so no zone re-derivation here).
+function calIsWeekday(dayStr) {
+  const [y, m, d] = dayStr.split('-').map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  return dow >= 1 && dow <= 5;
+}
+
+// Today's local day token in the configured zone — the one 'today' every surface of this
+// view marks (the grid's today indicator, the picker's today ring, the default week).
+function calToday() {
+  return SU.localDayOf(new Date().toISOString());
+}
+
+// §12 R09: the selected week's first day. null (the default) resolves to the week containing
+// today, per the weekStart setting, at read time — so the default view follows the clock.
+function calSelectedWeekStart() {
+  return selectedWeekStart ?? calWeekBounds(calToday())[0];
+}
+
+// The selected week's seven day tokens, and the SHOWN subset — Monday–Friday with the
+// weekend hidden (show_weekend off, the §14 default), all seven with it shown (§12 R09).
+function calWeekDays() {
+  const ws = calSelectedWeekStart();
+  return calEnumerateDays(ws, calAddDays(ws, 6));
+}
+function calShownDays() {
+  const week = calWeekDays();
+  return state && state.settings && state.settings.showWeekend ? week : week.filter(calIsWeekday);
+}
+
+// Fixed English month names for the week label and the picker's month heading (deterministic
+// across runners; the date/number-format setting governs times and numerals, not these).
+const CAL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const CAL_MONTHS_SHORT = CAL_MONTHS.map((m) => m.slice(0, 3));
+
+// §12 R09: the toolbar's week label over the SHOWN days — "Jun 22 – 26, 2026" with the
+// weekend hidden, "Jun 22 – 28, 2026" with it shown; month/year repeat only when they differ
+// across the span (a cross-month or cross-year week names both ends in full).
+function calWeekLabel() {
+  const shown = calShownDays();
+  const first = shown[0];
+  const last = shown[shown.length - 1];
+  const [fy, fm, fd] = first.split('-').map(Number);
+  const [ly, lm, ld] = last.split('-').map(Number);
+  if (fy === ly && fm === lm) return `${CAL_MONTHS_SHORT[fm - 1]} ${fd} – ${ld}, ${fy}`;
+  if (fy === ly) return `${CAL_MONTHS_SHORT[fm - 1]} ${fd} – ${CAL_MONTHS_SHORT[lm - 1]} ${ld}, ${fy}`;
+  return `${CAL_MONTHS_SHORT[fm - 1]} ${fd}, ${fy} – ${CAL_MONTHS_SHORT[lm - 1]} ${ld}, ${ly}`;
 }
 
 // §12 R16 (issue #71): the rendering SEGMENTS an entry lays onto the day columns. A same-day
@@ -307,35 +384,30 @@ function calEntrySegments(e, startDay) {
 }
 
 // §12 R16 (G13): resolve the ORDERED set of day columns to paint plus each day's entries + its
-// per-day billable total. Every in-range day is present — including EMPTY days (present-but-empty
-// `.dcol`) — so the calendar reads as a continuous range, not a sparse list. The entries come from
-// the SAME two sources render() already distinguishes: the toolbar's day-laid listEntries result
-// when active (R09), else the getState day grouping. The default view pads to the whole week (G13);
-// a custom range spans exactly its two plain dates (§09 R01), so empty in-range days still show.
+// per-day billable total. The view is WEEK-ONLY (§12 R09): the columns are exactly the selected
+// week's SHOWN days — Monday–Friday with the weekend hidden, all seven with it shown — including
+// EMPTY days (present-but-empty `.dcol`), so the week reads as a continuous surface. The entries
+// come from the SAME two sources render() already distinguishes: the toolbar's day-laid
+// listEntries result when active (R09), else the getState day grouping — either way clipped to
+// the selected week, so a snapshot day outside it paints nothing.
 function calendarModel() {
-  const present = entryGroups
+  const week = calWeekDays();
+  const shown = calShownDays();
+  const source = entryGroups
     ? entryGroups.map((g) => ({ day: g.key, entries: g.entries }))
     : state.days.map((d) => ({ day: d.day, entries: d.entries }));
+  // Only groups INSIDE the selected week feed the paint — both hidden weekend days and days
+  // outside the week keep their entries stored/reported, they are just not this view's columns.
+  const present = source.filter((p) => p.day >= week[0] && p.day <= week[week.length - 1]);
   const map = new Map(present.map((p) => [p.day, p.entries]));
-  const dayKeys = [...map.keys()].sort();
-  let minDay;
-  let maxDay;
-  if (entryGroups && entryQuery.preset === 'custom' && entryQuery.fromDate && entryQuery.toDate) {
-    minDay = entryQuery.fromDate;
-    maxDay = entryQuery.toDate;
-  } else {
-    const anchor = dayKeys.length ? dayKeys[dayKeys.length - 1] : new Date().toISOString().slice(0, 10);
-    const [ws, we] = calWeekBounds(anchor);
-    minDay = dayKeys.length && dayKeys[0] < ws ? dayKeys[0] : ws;
-    maxDay = dayKeys.length && dayKeys[dayKeys.length - 1] > we ? dayKeys[dayKeys.length - 1] : we;
-  }
-  const days = calEnumerateDays(minDay, maxDay);
-  // §12 R16 (issue #71): fan each entry out into a rendering segment per day column it touches
-  // (calEntrySegments). Keyed by day so a cross-midnight end/middle segment lands in the right
-  // column even though that column's own `entries` (its totals below) never gained the entry — the
-  // fan-out is pure rendering, attribution stays start-day. Out-of-range segments (a stop beyond
-  // maxDay) are dropped: their column is not painted.
-  const segsByDay = new Map(days.map((d) => [d, []]));
+  // §12 R16 / §16 (issue #71): fan each entry out into a rendering segment per day column it
+  // touches (calEntrySegments). Keyed by SHOWN day, so a segment landing on a day the grid does
+  // not show — a hidden weekend day, or a day outside the selected week — is simply NOT DRAWN
+  // (no bucket exists for it); hiding a segment never changes attribution or any total. A
+  // cross-midnight end/middle segment lands in the right column even though that column's own
+  // `entries` (its totals below) never gained the entry — the fan-out is pure rendering,
+  // attribution stays start-day.
+  const segsByDay = new Map(shown.map((d) => [d, []]));
   for (const p of present) {
     for (const e of p.entries) {
       for (const seg of calEntrySegments(e, p.day)) {
@@ -344,7 +416,7 @@ function calendarModel() {
       }
     }
   }
-  return days.map((day) => {
+  return shown.map((day) => {
     const entries = map.get(day) || [];
     // The day-header total is the billable-only sum (empty day → 0), matching what `tt report`
     // sums for that day — the same billableSeconds core owns; the renderer never re-derives it.
@@ -356,9 +428,15 @@ function calendarModel() {
 }
 
 // §12 R9/R16: paint the Entries view. The default (toolbar idle) and the toolbar-active query
-// both flow into the SAME readonly calendar (R16); only the never-tracked / no-match empty states
-// short-circuit to their instructive `.empty` block (so the existing empty-state facts hold).
+// both flow into the SAME readonly week grid (R16); only the never-tracked / no-match empty
+// states short-circuit to their instructive `.empty` block. A week with no entries is NOT an
+// empty state — it paints as a week of empty columns (stepping into a quiet week is normal);
+// the no-match copy is reserved for a filter/search that excluded everything.
 function renderEntries() {
+  // §12 R09: the toolbar chrome around the grid — week label, weekend switch, picker — repaints
+  // with the data so a week/setting change is reflected everywhere at once.
+  renderWeekControls();
+  renderWeekPicker();
   // Repainting the calendar closes any open edit form (its host is view-level, so it would
   // otherwise outlive the events it edited). Save/Delete/Split reloads and external refreshes all
   // funnel through here.
@@ -366,7 +444,7 @@ function renderEntries() {
   const host = $('entries');
   host.innerHTML = '';
   if (entryGroups) {
-    if (entryGroups.length === 0) {
+    if (entryGroups.length === 0 && (searchQuery || hasNarrowingFilter())) {
       host.appendChild(emptyEntries());
       renderMergeBar();
       return;
@@ -384,8 +462,9 @@ function renderEntries() {
   renderMergeBar();
 }
 
-// §12 R16: build the calendar — a strip of equal day columns over a shared hour gutter,
-// horizontally scrolling when the range does not fit at the columns' floor width, then default the viewport to the working-hours window (scroll, never clip).
+// §12 R16: build the week grid — the shown day columns sharing the view width equally over a
+// shared hour gutter (fit to width, NO horizontal scroll), then default the viewport to the
+// working-hours window (a vertical scroll over the full 24h track, never a clip).
 function renderCalendar(host) {
   const model = calendarModel();
   const wrap = document.createElement('div');
@@ -439,15 +518,20 @@ function calGutter() {
 
 // One day column: a header carrying the weekday/date + that day's billable total
 // (§12 R16 / G13), then a 24h track holding the day's positioned events + any overlap warn bands.
+// TODAY is visibly indicated on the grid — an ink ring on the date numeral (`.dd.today`,
+// matching the week picker's today ring; mockup main.html), distinct from mere selection, which
+// is the picker's week band. A zero-total day carries no figure (the mockup's authored reading
+// of "empty days render as empty columns": the header stays quiet rather than shouting 0.00h).
 function calColumn(d, isEnd) {
   const col = document.createElement('div');
   col.className = 'dcol' + (isEnd ? ' end' : '');
   const { dw, dd } = calDayParts(d.day);
+  const today = d.day === calToday() ? ' today' : '';
   const head = document.createElement('div');
   head.className = 'dh';
   head.innerHTML =
-    `<span class="dw">${dw}</span><b class="dd">${dd}</b>` +
-    `<span class="ds tnum">${fmtHours(d.billableSeconds)}</span>`;
+    `<span class="dw">${dw}</span><b class="dd${today}">${dd}</b>` +
+    (d.billableSeconds > 0 ? `<span class="ds tnum">${fmtHours(d.billableSeconds)}</span>` : '');
   col.appendChild(head);
   const track = document.createElement('div');
   track.className = 'dt';
@@ -709,15 +793,15 @@ function emptyState() {
   return div;
 }
 
-// §12 R9: the empty state when the toolbar query matches nothing (a narrow range /
-// filter / search excludes everything). Distinct from the never-tracked empty state —
-// here there IS history, just nothing in the current view — so it instructs widening.
+// §12 R9: the empty state when a filter / search excludes everything in the selected week.
+// Distinct from the never-tracked empty state — here there IS history, just nothing matching
+// — so it instructs changing the selection (the range concept is gone with the week-only view).
 function emptyEntries() {
   const div = document.createElement('div');
   div.className = 'empty';
   div.innerHTML =
     `<div class="big">No matching entries</div>` +
-    `<div>Widen the range or clear the filters to see more.</div>`;
+    `<div>Try another week or clear the filters to see more.</div>`;
   return div;
 }
 
@@ -1950,17 +2034,23 @@ if (searchInput) {
   });
 }
 
-// True when any non-search Entries toolbar control departs from its default (a non-default
-// range/preset, or a client/project/tag/billable filter). Used to decide whether clearing
-// the search box reverts to the plain default getState calendar view.
-function hasEntryFilter() {
+// True when a client/project/tag/billable filter departs from its default — the controls that
+// NARROW the week's entries (the week choice moves the window, it never narrows it). Decides
+// whether an empty query result shows the no-match copy or just an empty week grid.
+function hasNarrowingFilter() {
   return (
-    entryQuery.preset !== 'week' ||
     entryQuery.clientId != null ||
     entryQuery.projectId != null ||
     !!entryQuery.tag ||
     entryQuery.billable !== 'all'
   );
+}
+
+// True when any non-search Entries toolbar control departs from its default (a week other
+// than the current one, or a client/project/tag/billable filter). Used to decide whether
+// clearing the search box reverts to the plain default getState calendar view.
+function hasEntryFilter() {
+  return (selectedWeekStart !== null && selectedWeekStart !== calWeekBounds(calToday())[0]) || hasNarrowingFilter();
 }
 
 // ----------------------------------------------------------- §12 R9 Entries toolbar
@@ -1985,17 +2075,14 @@ async function refreshEntryGroups() {
   // Issue #55: `by` is REQUIRED on ListEntriesQuery — without it core's grouping throws and
   // the whole query rejects. The Entries calendar always lays entries into day columns, so
   // the toolbar query always asks for the 'day' grouping.
-  const q = { by: 'day', billable: entryQuery.billable };
-  if (entryQuery.preset === 'custom') {
-    if (!entryQuery.fromDate || !entryQuery.toDate) return; // wait for a complete date pair
-    // §09 R01 (G3): a custom range is a pair of PLAIN DATES — the two fields' raw
-    // `YYYY-MM-DD` strings travel verbatim; main resolves the inclusive-end-day local
-    // window (the renderer constructs no Date and derives no window).
-    q.fromDate = entryQuery.fromDate;
-    q.toDate = entryQuery.toDate;
-  } else {
-    q.preset = entryQuery.preset;
-  }
+  //
+  // §12 R09: the window is ALWAYS the selected week's seven plain-date days (fromDate/toDate,
+  // resolved to the local window in main like any date pair) — the WHOLE week even with the
+  // weekend hidden, so a weekend day's entries are fetched, reported, and one toggle away;
+  // calendarModel simply gives hidden days no column. Week-only is this query's shape, not a
+  // core narrowing: `tt list --range` keeps arbitrary ranges.
+  const ws = calSelectedWeekStart();
+  const q = { by: 'day', billable: entryQuery.billable, fromDate: ws, toDate: calAddDays(ws, 6) };
   if (entryQuery.clientId != null) q.clientId = entryQuery.clientId;
   if (entryQuery.projectId != null) q.projectId = entryQuery.projectId;
   if (entryQuery.tag) q.tag = entryQuery.tag;
@@ -2023,47 +2110,183 @@ function activateEntryQuery() {
   void applyEntryQuery();
 }
 
-// The one-active-segment helper the report controls use: flips `.on` + aria-pressed onto
-// the clicked segment and off the rest within the group.
+// The one-active-segment helper the toolbar's segmented controls use: flips `.on` +
+// aria-pressed onto the clicked segment and off the rest within the group.
 function selectSegment(group, btn) {
-  for (const b of group.querySelectorAll('.seg-btn, .preset')) {
+  for (const b of group.querySelectorAll('.seg-btn')) {
     const on = b === btn;
     b.classList.toggle('on', on);
     if (b.hasAttribute('aria-pressed')) b.setAttribute('aria-pressed', String(on));
   }
 }
 
-// Range presets (parity with `tt list --today/--week/…/--range`). A preset sends its name
-// (resolved through core's resolveRange in main); Custom reveals the two plain date
-// fields (§09 R01 / G3) which apply LIVE once both are set — there is no Apply button.
-// This-week is the default active chip.
-const elPresetSeg = $('el-preset-seg');
-const elCustomRange = $('el-custom-range');
-if (elPresetSeg) {
-  elPresetSeg.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('.preset');
-    if (!btn) return;
-    selectSegment(elPresetSeg, btn);
-    entryQuery.preset = btn.dataset.preset;
-    const custom = entryQuery.preset === 'custom';
-    if (elCustomRange) elCustomRange.hidden = !custom;
-    // A named preset queries immediately; Custom marks the bar active and waits for a
-    // complete date pair (the two date fields below apply live) — applyEntryQuery no-ops
-    // until both dates are set.
+// §12 R09: adopt a new selected week (its containing week's first day, from any day token).
+// The visible week must follow every selection path — picker click, prev/next buttons, the
+// picker's Enter — so they all land here: re-anchor the picker's month + roving cell, then
+// either re-query (a non-default week / filters / search ride listEntries) or fall back to
+// the plain default getState paint when the selection IS the default view.
+function selectWeek(dayToken) {
+  selectedWeekStart = calWeekBounds(dayToken)[0];
+  pickerMonth = selectedWeekStart.slice(0, 7);
+  pickerActiveDay = dayToken;
+  if (searchQuery || hasEntryFilter()) {
     activateEntryQuery();
-  });
+  } else {
+    entryCtrlActive = false;
+    void load();
+  }
 }
-// §09 R01: the two plain date fields. Each change stores the field's raw `YYYY-MM-DD`
-// string (no Date construction — main owns the plain-date → window rule) and re-queries
-// LIVE once both dates are populated.
-for (const id of ['el-range-from', 'el-range-to']) {
-  const field = $(id);
-  if (!field) continue;
-  field.addEventListener('change', () => {
-    entryQuery.fromDate = $('el-range-from').value || null;
-    entryQuery.toDate = $('el-range-to').value || null;
-    if (entryQuery.fromDate && entryQuery.toDate) activateEntryQuery();
+
+// §12 R09: the prev / next-week toolbar steppers — the week moves by exactly seven days,
+// weekend visibility notwithstanding (hidden days are still part of the week).
+$('el-prev-week')?.addEventListener('click', () => selectWeek(calAddDays(calSelectedWeekStart(), -7)));
+$('el-next-week')?.addEventListener('click', () => selectWeek(calAddDays(calSelectedWeekStart(), 7)));
+
+// §12 R09 / §14: the Show-weekend toggle persists the show_weekend row over the SAME
+// setSetting IPC the Settings view's control uses — one stored row, two surfaces, both
+// directions (a Settings edit reaches this switch on the next refresh via load()'s fresh
+// settings, and this switch reaches the Settings view the same way). The reload repaints
+// the grid to five or seven columns; what is stored and totalled never changes (§12 R16).
+$('el-weekend')?.addEventListener('click', async () => {
+  const next = !(state && state.settings && state.settings.showWeekend);
+  try {
+    await window.stint.setSetting({ key: 'showWeekend', value: next });
+  } catch {
+    // core refused the write (nothing stored) — the reload below repaints stored truth
+  }
+  await load();
+});
+
+// §12 R09: sync the toolbar's week label + weekend switch to the current selection/settings.
+// Called from renderEntries so every repaint (week step, toggle, external tt config write)
+// carries the toolbar with it.
+function renderWeekControls() {
+  const label = $('el-week-label');
+  if (label) label.textContent = calWeekLabel();
+  const sw = $('el-weekend');
+  if (sw) {
+    const on = !!(state && state.settings && state.settings.showWeekend);
+    sw.classList.toggle('on', on);
+    sw.setAttribute('aria-checked', String(on));
+  }
+}
+
+// ----------------------------------------------------------- §12 R09 week picker
+
+// §12 R09: the month-calendar WEEK PICKER beside the grid. Days carrying entries show a dot,
+// today carries an ink ring, and the selected week is highlighted as ONE unit (a lifted paper
+// band — design.html D12, depth not tint); clicking any day selects that day's whole week.
+// The picker renders NO live/running-timer treatment — it is a navigation surface, and the
+// running state already has its sanctioned homes (§15). Month steppers page the displayed
+// month without touching the selection.
+//
+// Keyboard (the R09 path): a ROVING GRID — the whole grid is one tab stop (exactly one cell
+// holds tabindex="0"), arrow keys move the active cell (±1 day, ±7 days — paging the month
+// when they cross the rendered grid), Enter/Space selects the active day's week.
+function renderWeekPicker() {
+  const host = $('week-picker');
+  if (!host) return;
+  const month = pickerMonth ?? calSelectedWeekStart().slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const firstOfMonth = `${month}-01`;
+  const lastOfMonth = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+  // Whole weeks covering the month — the grid runs from the week containing the 1st through
+  // the week containing the last day, so adjacent-month spill days (`.mut`) fill the rows.
+  const gridFirst = calWeekBounds(firstOfMonth)[0];
+  const gridLast = calWeekBounds(lastOfMonth)[1];
+  const weekStart = calSelectedWeekStart();
+  const weekEnd = calAddDays(weekStart, 6);
+  const today = calToday();
+  const active = pickerActiveDay && pickerActiveDay >= gridFirst && pickerActiveDay <= gridLast
+    ? pickerActiveDay
+    : weekStart >= gridFirst && weekStart <= gridLast
+      ? weekStart
+      : gridFirst;
+
+  let html =
+    `<div class="wk-hd">` +
+    `<span class="m" id="wk-month-label">${CAL_MONTHS[m - 1]} ${y}</span>` +
+    `<span class="nav2">` +
+    `<button type="button" class="wk-nav" data-page="-1" aria-label="Previous month">${SU.icon('left')}</button>` +
+    `<button type="button" class="wk-nav" data-page="1" aria-label="Next month">${SU.icon('right')}</button>` +
+    `</span></div>`;
+  html += `<div class="wkgrid" role="grid" aria-labelledby="wk-month-label">`;
+  const dowRow = [];
+  for (let i = 0; i < 7; i++) dowRow.push(calDayParts(calAddDays(gridFirst, i)).dw[0]);
+  html += `<div class="wkrow" role="row">${dowRow.map((c) => `<span class="dow" role="columnheader">${c}</span>`).join('')}</div>`;
+  for (let row = gridFirst; row <= gridLast; row = calAddDays(row, 7)) {
+    html += `<div class="wkrow" role="row">`;
+    for (let i = 0; i < 7; i++) {
+      const day = calAddDays(row, i);
+      const inWeek = day >= weekStart && day <= weekEnd;
+      const cls =
+        'd' +
+        (day.slice(0, 7) !== month ? ' mut' : '') +
+        (inWeek ? ' ws' + (i === 0 ? ' first' : i === 6 ? ' last' : '') : '') +
+        (day === today ? ' today' : '');
+      const [, , dnum] = day.split('-').map(Number);
+      html +=
+        `<span class="${cls}" role="gridcell" data-day="${day}" tabindex="${day === active ? 0 : -1}" ` +
+        `aria-selected="${inWeek}" aria-label="${CAL_MONTHS[Number(day.slice(5, 7)) - 1]} ${dnum}, ${day.slice(0, 4)}">` +
+        `<span class="tn2">${dnum}</span>${pickerDots.has(day) ? '<i class="edot" aria-hidden="true"></i>' : ''}</span>`;
+    }
+    html += `</div>`;
+  }
+  html += `</div>`;
+  host.innerHTML = html;
+
+  for (const nav of host.querySelectorAll('.wk-nav')) {
+    nav.addEventListener('click', () => {
+      const dm = Number(nav.dataset.page);
+      const d = new Date(Date.UTC(y, m - 1 + dm, 1));
+      pickerMonth = d.toISOString().slice(0, 7);
+      pickerActiveDay = null;
+      renderWeekPicker();
+    });
+  }
+  const grid = host.querySelector('.wkgrid');
+  grid.addEventListener('click', (ev) => {
+    const cell = ev.target.closest('.d[data-day]');
+    if (cell) selectWeek(cell.dataset.day);
   });
+  grid.addEventListener('keydown', (ev) => {
+    const cell = ev.target.closest('.d[data-day]');
+    if (!cell) return;
+    const step = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7 }[ev.key];
+    if (step !== undefined) {
+      ev.preventDefault();
+      const next = calAddDays(cell.dataset.day, step);
+      pickerActiveDay = next;
+      // Crossing the rendered grid pages the displayed month so the roving cell stays real.
+      if (next < gridFirst || next > gridLast) pickerMonth = next.slice(0, 7);
+      renderWeekPicker();
+      $('week-picker')?.querySelector(`.d[data-day="${next}"]`)?.focus();
+    } else if (ev.key === 'Enter' || ev.key === ' ') {
+      ev.preventDefault();
+      selectWeek(cell.dataset.day);
+    }
+  });
+
+  void refreshPickerDots(gridFirst, gridLast);
+}
+
+// §12 R09: fetch the entry-dot days for the picker's rendered grid — ONE unfiltered
+// listEntries read per displayed range (parity: the same read the toolbar queries ride),
+// cached by range so a same-month repaint costs nothing. Re-renders the picker only when
+// the dot set actually arrived for a new range, so this can never repaint-loop.
+async function refreshPickerDots(gridFirst, gridLast) {
+  const key = `${gridFirst}..${gridLast}`;
+  if (key === pickerDotsKey) return;
+  let view;
+  try {
+    view = await window.stint.listEntries({ by: 'day', billable: 'all', fromDate: gridFirst, toDate: gridLast });
+  } catch (err) {
+    console.error('listEntries failed for the week-picker dots', err);
+    return;
+  }
+  pickerDotsKey = key;
+  pickerDots = new Set(view.groups.map((g) => g.key));
+  renderWeekPicker();
 }
 
 // Billable filter (parity with `tt list` default billable / --all / --non-billable).

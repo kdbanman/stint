@@ -199,7 +199,7 @@
     <div class="eyebrow"><span class="n">06</span> Electron</div>
     <h2>Electron</h2>
     <h3>The layering rule</h3>
-    <p><strong>Core owns every decision; <code>gui/src</code> owns Electron-free projections; <code>main.ts</code> stays thin wiring; the renderer owns chrome only.</strong> The renderer never re-derives what core can compute — it imports (<code>su.ts</code> bundles <code>formatDuration</code>, <code>deriveView</code> from core) rather than hand-mirroring. Where new logic goes:</p>
+    <p><strong>Core owns every decision; <code>gui/src</code> owns Electron-free projections; <code>main.ts</code> stays thin wiring; the renderer owns chrome only.</strong> The renderer never re-derives what core can compute — it imports (<code>su.ts</code> bundles <code>formatDuration</code>, <code>tagDiff</code> from core and gui/src) rather than hand-mirroring. Where new logic goes:</p>
     <table>
       <thead><tr><th>The logic…</th><th>Home</th></tr></thead>
       <tbody>

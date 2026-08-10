@@ -496,10 +496,20 @@ s {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
   font-size: 12px;
   color: var(--muted);
 }
+/* §12 R09 / design.html D13: the toolbar filters share the search field's visible-label
+   idiom — a small muted word beside the control, one grammar for the whole right rail. */
+.filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.filter-field .report-field { min-width: 0; }
+#el-tag { width: 110px; }
 .search {
   position: relative;
   display: inline-flex;
@@ -528,22 +538,154 @@ s {
   min-width: 220px;
 }
 
-/* §12 R9: the Entries-view control bar — a quiet labelled grid of the range presets, the
-   billable segment, and client/project/tag filters (no grouping — grouping left this view
-   for Reports, G11). Sits on the warm canvas; every control is monochrome (accent stays on
-   the primary action + running state). */
-/* The control bar reads as quiet inline controls on the paper canvas, not a heavy nested card
-   (design-system: no decorative boxes; surface is signalled by elevation, and these controls
-   are flush with the list they filter). A single hairline separates them from the entries. */
-.entries-ctrl {
-  display: grid;
-  grid-template-columns: 64px 1fr;
-  gap: 12px 16px;
-  align-items: center;
-  padding: 4px 2px 16px;
-  margin-bottom: 4px;
-  border-bottom: 1px solid var(--rule);
+/* §12 R09: the week-only Entries toolbar (mockup main.html) — prev/next-week steppers + the
+   week label on the left, the filters / search / Show-weekend toggle pushed right by the
+   spacer. Quiet inline controls on the paper canvas; every control is monochrome (accent
+   stays on the primary action + running state). */
+.toolbar .sp { flex: 1; }
+.toolbar .wklabel {
+  font-size: 13px;
+  font-weight: 640;
+  margin: 0 4px;
+  white-space: nowrap;
 }
+/* The Show-weekend toggle at the toolbar's top right — the same switch idiom as the Settings
+   view's rows (.set-toggle), restated on the mockup's `.sw` vocabulary because this one is a
+   standalone toolbar control, not a settings row. 24px tall — the A03 target floor; the knob
+   keeps its 17px and centres on 3px (mockup main.html). */
+.toolbar .wkend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.sw {
+  width: 36px;
+  height: 24px;
+  border-radius: var(--r1);
+  border: none;
+  padding: 0;
+  background: var(--rule-strong);
+  position: relative;
+  flex: none;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.sw i {
+  position: absolute;
+  top: 3px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: var(--paper);
+  box-shadow: var(--sh-chip);
+  transition: left 0.12s;
+}
+.sw.on { background: var(--ink); }
+.sw.on i { left: 17px; }
+
+/* §12 R09/R16: the Entries body — the week-picker rail on the left, the week grid filling
+   the rest (mockup main.html `.ebody`). The grid host flexes and may shrink (min-width: 0),
+   which is what lets its day columns FIT the view width with no horizontal scroll. */
+.ebody { display: flex; gap: 20px; align-items: flex-start; }
+.ebody #entries { flex: 1; min-width: 0; }
+
+/* §12 R09: the month-calendar WEEK PICKER — a raised card (the one boxed surface in this
+   view: it is a distinct instrument beside the grid, not inline chrome). Entry-dot days, a
+   today RING, the selected week highlighted as ONE lifted band (design.html D12 — depth,
+   not tint). No live/running-timer treatment anywhere on it. */
+.wkpick {
+  width: 224px;
+  flex: none;
+  padding: 16px;
+  margin-top: 12px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  box-shadow: var(--sh-card);
+}
+.wk-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.wk-hd .m { font-size: 13px; font-weight: 640; }
+.wk-hd .nav2 { display: flex; gap: 4px; }
+.wk-nav {
+  cursor: pointer;
+  color: var(--muted);
+  background: var(--wash);
+  border: 1px solid var(--rule);
+  border-radius: var(--r1);
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+.wk-nav:hover { background: var(--hover); color: var(--ink); }
+.wk-nav .ic { width: 14px; height: 14px; }
+.wkgrid { display: grid; grid-template-columns: repeat(7, 1fr); }
+/* Each week row is a real row node (the ARIA grid rows the roving keyboard path walks) laid
+   out as if its cells were direct grid children. */
+.wkgrid .wkrow { display: contents; }
+.wkgrid .dow {
+  font-size: 11px;
+  color: var(--muted);
+  text-align: center;
+  padding: 4px 0;
+}
+.wkgrid .d {
+  position: relative;
+  text-align: center;
+  padding: 4px 0 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--ink);
+}
+/* Adjacent-month spill days de-emphasize with --muted, NOT the mockup's --faint: the cells
+   are readable, clickable text (a click selects that week), and design.html D04/D16 reserve
+   faint for decorative/disabled paint — the spec outranks the mockup where the two differ. */
+.wkgrid .d.mut { color: var(--muted); }
+.wkgrid .d:hover { background: var(--wash); border-radius: var(--r1); }
+/* entry-dot day — a day carrying entries (unfiltered; §12 R09 "days carrying entries show
+   a dot"). A dot is round, the same D08 entailment as run-dot. */
+.wkgrid .d .edot {
+  position: absolute;
+  left: calc(50% - 2px);
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+/* today ring — an ink ring around the numeral, never accent (design.html D11); the 20px
+   circle target the ring paints on. */
+.wkgrid .d .tn2 {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+}
+.wkgrid .d.today .tn2 {
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  font-weight: 640;
+}
+/* the selected WEEK — one lifted paper band across the row (chip lift, D12), rounded only
+   at the week's two ends so the seven cells read as ONE unit. */
+.wkgrid .d.ws {
+  background: var(--paper);
+  box-shadow: var(--sh-chip);
+  font-weight: 590;
+}
+.wkgrid .d.ws.first { border-radius: var(--r1) 0 0 var(--r1); }
+.wkgrid .d.ws.last { border-radius: 0 var(--r1) var(--r1) 0; }
 
 /* §12 R05 (core): the Timer-view "Start a new timer" panel — the GUI core-entry surface.
    A warm-paper card holding the panel title, the canonical Start / +with-details
@@ -1307,11 +1449,6 @@ button.danger:hover { background: var(--danger-weak); }
   margin-bottom: 16px;
 }
 .report-lab { font-size: 12px; color: var(--muted); text-align: right; }
-/* In the Entries control grid the segments/presets hug their options instead of stretching to
-   fill the column (the grid would otherwise justify them full-width). */
-.entries-ctrl .seg,
-.entries-ctrl .presets,
-.entries-ctrl .report-row { justify-self: start; }
 .report-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 
 .seg {
@@ -1681,8 +1818,10 @@ button.danger:hover { background: var(--danger-weak); }
   width: 30px;
   height: 30px;
   border-radius: var(--r1);
-  border: 0;
-  background: none;
+  /* The neutral button chrome (§15 R-clickability / mockup .iconbtn): the week steppers put
+     this class on the Entries toolbar, where a border-less ghost read as bare prose. */
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
   color: var(--muted);
   cursor: pointer;
   padding: 0;
@@ -2380,33 +2519,36 @@ body.popover { background: var(--paper); margin: 0; }
 }
 
 /* ============================================================================
-   §12 R16 — the readonly entries CALENDAR (ported from context/mockups/main.html
-   into the app's warm-paper tokens). One fixed comfortable-width day column per day
-   in range over a FULL 24h track: the viewport scrolls to the working-hours default
-   (app.js sets .cstrip scrollTop), it never CLIPS — every off-hours entry stays in the
-   DOM and is reachable. These rules come AFTER the legacy .entry list styles so the
-   calendar event (`.ev.entry`) overrides the old grid row cleanly while keeping the
-   `.entry` hooks the editing/merge/flag JUDGE scenes target.
+   §12 R16 — the readonly entries WEEK GRID (ported from context/mockups/main.html
+   into the app's warm-paper tokens). One day column per SHOWN day of the selected
+   week — Monday–Friday with the weekend hidden, seven with it shown (§12 R09) —
+   FIT TO THE VIEW WIDTH (no horizontal scroll, no floor width: the columns share
+   the width equally at every window size, §12 R22) over a FULL 24h track: the
+   viewport scrolls to the working-hours default (app.js sets .cstrip scrollTop),
+   it never CLIPS — every off-hours entry stays in the DOM and is reachable. These
+   rules come AFTER the legacy .entry list styles so the calendar event (`.ev.entry`)
+   overrides the old grid row cleanly while keeping the `.entry` hooks the
+   editing/merge/flag JUDGE scenes target.
    ========================================================================== */
 .calwrap { position: relative; margin-top: 12px; }
-/* Both axes scroll: horizontal for the week's columns, vertical over the 24h track.
-   A fixed max-height bounds the vertical viewport so the working-hours scroll is a real
+/* ONE axis scrolls: vertical over the 24h track (the columns fit the width, §12 R16). A
+   fixed max-height bounds the vertical viewport so the working-hours scroll is a real
    scroll (the track is taller than the viewport) — never a clip.
    `position: relative; z-index: 0` makes the strip its own STACKING CONTEXT, so the sticky
    axes below can outrank the event chrome inside (`.ck` is z-6, `.ops` z-5, `.ov` z-4) without
    those high numbers leaking out to outrank anything drawn over the calendar. Nothing inside
    needs to escape: `overflow: auto` already clips the strip's descendants to its box. */
 .cstrip { position: relative; z-index: 0; overflow: auto; max-height: 60vh; padding-bottom: 8px; }
-.cgrid { display: flex; min-width: max-content; }
+.cgrid { display: flex; }
 /* issue 145 (unhashed — the D01 scan over this file reads a hashed three-digit number as a colour
-   literal): both axes' labels STICK to the scrollport instead of scrolling out of it. The strip
-   opens scrolled to working hours (app.js) and is wider than its viewport whenever the range does
-   not fit, so a static header band and a static gutter are label rows the default view never
-   shows — the per-day billable total §12 R16/G13 requires was painted and then scrolled away.
-   The scroll is specified, so the scroll stays and the LABELS stop moving with it: `.dh` sticks to
-   the top edge, `.gut` to the left edge, and `.sp2` — the corner where the two bands cross —
-   sticks to both. Each carries an opaque `--paper` fill (the surface it already sat on) so events
-   pass behind it, and outranks the event chrome it now overlaps. */
+   literal): the labels STICK to the scrollport instead of scrolling out of it. The strip opens
+   scrolled to working hours (app.js), so a static header band is a label row the default view
+   never shows — the per-day billable total §12 R16/G13 requires was painted and then scrolled
+   away. The scroll is specified, so the scroll stays and the LABELS stop moving with it: `.dh`
+   sticks to the top edge, `.gut` to the left edge (the sticky left is inert now the columns fit
+   the width, and free), and `.sp2` — the corner where the two bands cross — sticks to both.
+   Each carries an opaque `--paper` fill (the surface it already sat on) so events pass behind
+   it, and outranks the event chrome it now overlaps. */
 .gut {
   position: sticky;
   left: 0;
@@ -2432,33 +2574,52 @@ body.popover { background: var(--paper); margin: 0; }
   transform: translateY(-6px);
   font-variant-numeric: tabular-nums;
 }
-/* §12 R16/R22: a comfortable column FLOOR — columns share spare window width equally and are
-   never compressed below it; the strip scrolls when the range does not fit at the floor
-   (the property the JUDGE scenes assert). */
-.dcol { flex: 1 0 124px; min-width: 124px; border-left: 1px solid var(--rule); }
+/* §12 R16/R22: FIT-TO-WIDTH columns — the shown days share the view width equally at every
+   window size, with NO floor and NO horizontal scroll (the property the JUDGE scenes assert).
+   `flex-basis: 0` (not auto) is what makes the shares equal regardless of content width, and
+   `min-width: 0` lets a column shrink below its longest description (which then ellipsises). */
+.dcol { flex: 1 1 0; min-width: 0; border-left: 1px solid var(--rule); }
 .dcol.end { border-right: 1px solid var(--rule); }
 .dh {
   position: sticky;
   top: 0;
   z-index: 8;
   height: 52px;
-  padding: 8px 12px 0;
+  /* 8px sides (the mockup writes 12): a seven-column header near the 1040 minimum is ~74px
+     wide, and 12px sides wrap the ringed today numeral under its weekday — the mockup keeps
+     that line whole, so the app trims where the mockup's fixed illustration never had to. */
+  padding: 8px 8px 0;
   border-bottom: 1px solid var(--rule);
   background: var(--paper);
 }
 .dh .dw { font-size: 11px; color: var(--muted); font-weight: 590; }
 .dh .dd { font-size: 13px; font-weight: 640; margin-left: 4px; }
+/* §12 R16: the grid's TODAY indicator — an ink ring on the date numeral, matching the week
+   picker's today ring (never accent, design.html D11); distinct from selection, which is the
+   picker's week band. The 22px circle keeps the two-digit date inside the ring. */
+.dh .dd.today {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+  margin-left: 2px;
+  padding: 0 2px;
+}
 .dh .ds { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
-/* The 44px hour rule below duplicates app.js's CAL_HOUR_PX, which positions every event — CSS
-   cannot read it, so the two are kept in step by hand (the why lives at that constant). */
+/* The 60px hour rule below duplicates app.js's CAL_HOUR_PX, which positions every event — CSS
+   cannot read it, so the two are kept in step by hand (the why lives at that constant). Tall
+   hours are §12 R16's explicit trade: hour legibility outranks hours-in-view. */
 .dt {
   position: relative;
   background: repeating-linear-gradient(
     to bottom,
     transparent 0,
-    transparent 43px,
-    var(--rule) 43px,
-    var(--rule) 44px
+    transparent 59px,
+    var(--rule) 59px,
+    var(--rule) 60px
   );
 }
 /* A calendar event: the positioned block, overriding the legacy .entry grid row. Its inner
@@ -2487,7 +2648,7 @@ body.popover { background: var(--paper); margin: 0; }
   cursor: pointer;
   /* design.html D09 — a region is signalled by its surface, so an event's content NEVER paints
      outside its own block. A block's height comes from its duration while its text height is fixed
-     by text flow, so anything under ~75 minutes has less block than content; clipping makes that
+     by text flow, so anything under ~55 minutes has less block than content; clipping makes that
      shortfall DELIBERATE TRUNCATION (§4) — the description first, then client/project, then the
      time label, each dropping as the block shortens — instead of a spill into the hour rows below,
      which belong to other entries (issue 187). The per-line ellipsis on .bd/.bc handles the
@@ -2722,6 +2883,24 @@ body.popover { background: var(--paper); margin: 0; }
 .ev:focus-within .ops .op-btn { opacity: 1; }
 .ev .ops .op-btn:hover { background: var(--hover); color: var(--ink); }
 .ev .ops .op-btn .ic { width: 13px; height: 13px; }
+/* §12 R16/R22 — the chip in a FIT-TO-WIDTH column. The comment above ("78 + 24 … leaves the
+   two 2px apart") holds only down to a ~110px block; the week grid's columns now share the
+   view width with no floor, so near the 1040 minimum a five-day block is ~90px and the
+   top-row chip would cover the corner checkbox — two 24px targets fighting for one lane
+   (the mockup draws exactly this collision at its min width; the app must keep both
+   CLICKABLE). Sized by the day track, the chip steps down a rung at a time:
+     • under ~118px of column, it drops below the checkbox lane (top: 30px) — both stay
+       whole and hittable; a very short block clips the dropped chip, where the
+       click-anywhere/keyboard path into the editor (footer Split + Delete) remains;
+     • under ~82px (seven columns near the minimum window), it also stacks vertically so
+       the three buttons keep their full 24px width inside the block. */
+.dt { container-type: inline-size; }
+@container (max-width: 118px) {
+  .dt .ev .ops { top: 30px; }
+}
+@container (max-width: 82px) {
+  .dt .ev .ops { flex-direction: column; right: 2px; }
+}
 /* Running/open event: fades into the future, no bottom edge (G8). */
 .dt .ev.run {
   border: 0;

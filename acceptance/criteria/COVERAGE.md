@@ -1484,11 +1484,14 @@ renderer, each byte-bound to `tt report` /`tt export` by
 presets/grouping/filters/rounding ride inside the existing `report` payload (no
 new row), and the export adds `exportEntries` →`tt export`
 (`parity-matrix.json`). The §12 R8 report builder & export is thus fully
-covered. **R9 Entries range, filters & search** (the Entries toolbar narrows the
-readonly entries calendar (§12 R16) by a range preset / custom plain-date range
-+ client/project/tag/billable filters + free-text search — there is NO grouping
-in this view; grouped breakdowns moved entirely to Reports, §09 R02 /
-`tt report --by` , G11): the model is core's `store.listEntries`
+covered. **R9 Entries week, filters & search (REWRITTEN — issue #265, the week-only
+view)** (the Entries view shows exactly ONE week — a month-calendar week picker,
+prev/next-week steppers and a Show-weekend toggle replace the range concept in
+this view (core and `tt list --range` keep arbitrary ranges: week-only is GUI
+presentation, not a core narrowing) — plus client/project/tag/billable filters
++ free-text search to the toolbar's right; there is NO grouping in this view;
+grouped breakdowns moved entirely to Reports, §09 R02 / `tt report --by`,
+G11): the model is core's `store.listEntries`
 (`packages/core/src/store.ts`) applying the one case-insensitive `matchesQuery`
 substring rule over description/client/project/tag (shared with the `search`
 path) to the already range/billable/client/project/tag-filtered set — ONE flat,
@@ -1506,95 +1509,119 @@ compared on the identical flat set, §17 R8) and `features/search.feature` (the
 case-insensitive, blank-returns-all — the query the toolbar composes into the
 live entries-calendar read), pinned by GOLD (`cli/test/gold/cli.test.ts`
 `tt list --json` flat row contract; `core/test/entrylist.test.ts` `matchesQuery`
-field-coverage/case-insensitivity/empty-matches-all). The GUI toolbar
-(`gui/renderer/index.html` `#entries-ctrl` — range presets + the two plain
-`type="date"` custom fields `#el-range-from` /`#el-range-to`, `#el-billable-seg`
-, `#el-client` /`#el-project`/`#el-tag` filters, the `#search` box +
-`gui/renderer/app.js` ) drives the calendar live: every control change / search
-keystroke re-runs the read-only **`listEntries` IPC** (`gui/src/main.ts` →
-`resolveRange` /explicit plain-date range + `store.listEntries` , no
-`refreshAll` ) whose flat, day-laid result the readonly calendar (§12 R16) lays
-into its day columns; the group-by segmented control was REMOVED (no
-`#el-by-seg` , no `by` in the query — grouping is Reports' job, §12 R08 /
-`tt report --by` ). The toolbar carries NO range-total chip and NO Reports
-shortcut (issue #264: `#week-total` and `#report-btn` retired — per-day billable
-totals live in the calendar's day headers, R16, and Reports is reached by its
-sidebar item only, R03); the live reflection (§17 R11) is the repaint of the
-calendar and those day-header totals. The controls are inked (monochrome), never accented (§15 —
-the `ACCENT_DISCIPLINE` /`CLICKABILITY` judge scenes stay green). JUDGE
+field-coverage/case-insensitivity/empty-matches-all). The GUI toolbar + picker
+(`gui/renderer/index.html` — the `#el-prev-week`/`#el-next-week` steppers +
+`#el-week-label`, `#el-billable-seg`, the visibly-labelled `#el-client`/
+`#el-project`/`#el-tag` filters, the `#search` box, the `#el-weekend`
+`role="switch"` toggle, and the `#week-picker` month calendar beside the grid;
+`gui/renderer/app.js` `renderWeekPicker`/`selectWeek`) drives the week grid
+live: every week/filter change / search keystroke re-runs the read-only
+**`listEntries` IPC** (`gui/src/main.ts` → `resolveDateRange` over the selected
+week's plain-date pair + `store.listEntries`, no `refreshAll`) whose flat,
+day-laid result the week grid (§12 R16) lays into its shown day columns — the
+query always spans the WHOLE seven-day week, so a hidden weekend day's entries
+are fetched and one toggle away. The picker shows entry-dot days (one
+unfiltered `listEntries` read per displayed month grid), an ink today ring, and
+the selected week highlighted as one seven-cell band (no live/running-timer
+treatment); clicking any day selects its week, and a roving grid (arrow keys
+move the active cell, Enter selects) is the keyboard path. The Show-weekend
+toggle persists the SAME `show_weekend` row the Settings view edits over the
+one `setSetting` IPC (both directions — either surface flips both); off, the
+grid shows Monday–Friday, and a hidden day's entries stay stored, reported, and
+reachable. The range presets, the custom date pair, and the group-by segment
+are all REMOVED from this view (no `#el-preset-seg`, no `#el-range-from`/
+`#el-range-to`, no `#el-by-seg`), as are the #264 retirements (`#week-total`,
+`#report-btn` — per-day billable totals live in the grid's day headers, R16,
+and Reports is reached by its sidebar item only, R03); the live reflection
+(§17 R11) is the re-query + repaint of the grid and those day-header totals.
+The controls are inked (monochrome), never accented (§15 — the
+`ACCENT_DISCIPLINE`/`CLICKABILITY` judge scenes stay green). JUDGE
 `ENTRIES_CALENDAR` (`packages/gui/judge/`, `entries-search.png` /
-`entries-calendar.png` — `#el-by-seg`, `#week-total` and `#report-btn` ABSENT
-while the range presets /
-`#el-billable-seg` / `#el-client` / `#el-project` / `#el-tag` / `#search` are
-present, the two custom fields `type="date"` with no `#el-range-apply` ;
-hardened per issue #55 over a multi-week, multi-client, mixed-billable fixture:
-EACH toolbar control (every preset, the billable toggle, client, project, tag,
-search) is driven and the visible `.dcol .ev` COUNT is asserted
-to move to the expected subset, a "refactor" search narrows to the two IN-WEEK matches (range + search
-compose), a Custom… plain-date pair drives raw `{fromDate, toDate}` (no
-`fromUtc` /`toUtc`, no `T` ) that narrows the calendar, and across the whole
-drive zero `listEntries` calls reject with EVERY query carrying the required
-`by:'day'` (`ListEntriesQuery.by`; the mock is strict exactly like core); R16
-supplies the calendar-structure half of the scene). Parity row `listEntries`
-→`tt list` (`parity-matrix.json`, asserted by `gui/test/parity.test.ts` ; its
-notes lose grouping). The §12 R9 Entries toolbar over the readonly entries
-calendar is thus fully covered. **R16 Readonly entries calendar (NEW,
-G10/G13/G16)**: the Entries view content is a readonly calendar — one day
-column per in-range day, sharing spare window width equally over a 124px
-floor (§12 R22), never compressed below it, over a full 24h track, with
+`entries-calendar.png` — the retired controls ABSENT while the steppers /
+picker / filters / search / weekend switch are present with the filters right
+of the week label; hardened per issue #55 over a multi-week, multi-client,
+mixed-billable fixture: EACH control (prev/next week, a picker day click, the
+picker's arrow+Enter keyboard path, the billable toggle, client, project, tag,
+search, the weekend toggle) is driven and the visible `.dcol .ev` COUNT is
+asserted to move to the expected subset, a "refactor" search narrows to the two
+IN-WEEK matches (week + search compose), the weekend toggle's captured
+`setSetting {key:'showWeekend'}` payloads prove the persisted row is the
+mechanism while the grid flips 5↔7 columns, and across the whole drive zero
+`listEntries` calls reject with EVERY query carrying the required `by:'day'`
+AND the week's raw plain-date `{fromDate, toDate}` pair (no `fromUtc`/`toUtc`,
+no `T`); R16 supplies the grid-structure half of the scene). Parity row
+`listEntries` →`tt list` (`parity-matrix.json`, asserted by
+`gui/test/parity.test.ts`; its notes lose grouping). The §12 R9 week-only
+Entries toolbar over the week grid is thus fully covered. **R16 Week grid (MODIFIED — issue #265,
+G10/G13/G16)**: the Entries view content is the week grid — one day column per
+SHOWN day of the selected week (Monday–Friday with the weekend hidden, seven
+with it shown, §12 R09), FIT TO THE VIEW WIDTH with no horizontal scroll and no
+floor width (§12 R22 — the columns share the width equally at every window
+size), over a full 24h track with TALL 60px hour rows (hour legibility
+outranks hours-in-view; the viewport scrolls, resting on the working hours),
+a today indicator (an ink ring on the date numeral, matching the picker's),
 per-day billable header totals (the view's only billable figures — the
-toolbar's range-total chip is retired, issue #264 / §12 R09), empty columns, a cross-midnight
-span shown as one `.ev` segment per touched day column (all sharing the entry
-`data-id` , counted only under its start day — issue #71), hover
+toolbar's range-total chip is retired, issue #264 / §12 R09; a zero-total day
+paints no figure), empty columns, a cross-midnight
+span shown as one `.ev` segment per SHOWN day column it touches (all sharing
+the entry `data-id`, counted only under its start day — issue #71; a segment
+on a hidden weekend day or outside the selected week is simply not drawn, and
+hiding it never changes attribution or any total), hover
 Delete/Split/Edit + a corner checkbox, a click that opens the unified editor,
 the running future-fade, overlap warn bands + slept hatch, and the multi-select
 merge entry point (§06 R3). Renderer-only (`gui/renderer/app.js` calendar
 renderer + `styles.css` ); it reuses the existing `getState` /`listEntries`
 reads and the §14 timeline-window settings, so **no new IPC channel** (no parity
 row). Headless-pinned by JUDGE `CALENDAR_LAYOUT` (`packages/gui/judge/`,
-`main-calendar.png` over `entriesCalendarState` under a UTC-pinned page): 7
-equal floor-width columns + horizontal scroll at the default window (`.cstrip`
-scrollWidth > clientWidth; the spare-width share at a wider window is JUDGE
-`WINDOW_GEOMETRY`, §12 R22); a full 24h `.dt` track whose default scroll lands on
-working hours with the off-hours (pre-07:00 / post-18:00) entries present and
-reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
-Wed 1.00h), read ON SCREEN at the
-post-render scroll position rather than merely present in the DOM — all seven
-`.dh` measured inside the `.cstrip` scrollport, the totals visible with the hour
-labels beside them, and both bands still there once the strip is scrolled fully
-right — because the `.dh` band and the `.gut` gutter are sticky, so the scroll
-on either axis moves the CONTENT past the labels instead of carrying the labels
-off with it (issue #145: the header band was painted and then scrolled away by
-the same render, and the presence-only assertion here passed straight through
-it); an empty present-but-empty `.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
+`main-calendar.png` / `main-calendar-weekend.png` over `entriesCalendarState`
+under a UTC-pinned page): 5 equal fit-to-width columns (spread ≤1px) with NO
+horizontal scroll at the default window, and 7 equal columns still without one
+once the weekend toggle flips (the resize half is JUDGE `WINDOW_GEOMETRY`, §12
+R22); 60px hour rows over a full 1440px 24h `.dt` track whose default scroll
+lands on working hours with the off-hours (pre-07:00 / post-18:00) entries
+present and reachable — a scroll, never a clip; exactly one `.dd.today` ink
+ring (today, distinct from selection); the per-day `.dh .ds` totals (Mon
+12.00h, Wed 1.00h, Fri 7.75h; a zero day figure-less), read ON SCREEN at the
+post-render scroll position rather than merely present in the DOM — every
+`.dh` measured inside the `.cstrip` scrollport, the totals visible with the
+hour labels beside them — because the `.dh` band and the `.gut` gutter are
+sticky, so the working-hours scroll moves the CONTENT past the labels instead
+of carrying the labels off with it (issue #145; the horizontal half of that
+issue retired with the horizontal scroll itself); an empty present-but-empty
+`.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
 `.ev` segments sharing its `data-id` — a `.seg-start` reaching the track foot at
 a true height (never the 18px sliver) and a `.seg-end` from the track head —
 with its 7.75h counted ONLY on its start day (Mon reads 12.00h = 4.25h same-day
-+ 7.75h overnight; Tue's header stays off it); hover reveals the ops + `.ck` ; a
++ 7.75h overnight; Tue's header stays off it); the weekend-crossing span (id 9,
+Fri 22:30→Sat 06:15) drawing ONLY its start-day segment while the weekend is
+hidden, its Sat `seg-end` appearing whole on the toggle with Sat's header still
+total-less and Fri's unchanged (§16 — hiding a segment never moves a total);
+hover reveals the ops + `.ck` ; a
 click opens `.edit-form.entry-form` inline; the `.ev.run` future-fade with no
 end edge; the `.ov` overlap band + `.zz` slept hatch; and checking two `.ck`
 boxes reveals `#merge-bar` . How the calendar PAINTS a chosen block is pinned
 separately by JUDGE `SELECTION_LIFT` (`selection-lift.png` /
-`selection-lift-editing.png`, issue 144 — over the same three-week
+`selection-lift-editing.png`, issue 144 — over the same dense-week
 `denseCalendarState` the accent-budget guard uses: two `.ck`-selected blocks and
 one `.editing` block each keep the `--paper` fill and compute a box-shadow a
-rung above the resting one their forty-eight untouched neighbours carry, none of
+rung above the resting one their untouched neighbours carry, none of
 the three and neither checked checkbox paints an accent-family colour, the
 checked box is a paper box with an ink tick, and the strip still holds zero
 `--accent-weak` fills — design.html D12, "a chosen thing lifts, it does not turn
 accent"). The per-day + range **billable totals** the
-calendar's headers/chip present are proven TWICE (core + tt) by BDD
+grid's day headers present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
-— including an empty day"), and the never-clip / floor-width / working-hours-default / empty-column
+— including an empty day"), and the never-clip / fit-to-width / working-hours-default / empty-column
 behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **The event BLOCK
 itself** — that an event contains its own content, and that hovering one moves
 nothing — is JUDGE
 `CALENDAR_ENTRY_BLOCK` (`main-calendar-short.png` over
-`shortEntriesCalendarState` , the design audit's own 10 / 30 / 60 / 180-minute
-durations under a UTC-pinned page): a block's height is duration-driven
-(0.733px/min, floored at 18px) while its content height is fixed by text flow
-(~55px), so the two cross at ~75 minutes and every shorter entry has more
-content than block. The block **clips** (design.html D09) so a short entry
+`shortEntriesCalendarState` , 10 / 30 / 45 / 180-minute durations under a
+UTC-pinned page — the design audit's set, its 60-minute case re-cut to 45 when
+the 60px hours gave a 60-minute block room for its content): a block's height
+is duration-driven (1px/min, floored at 18px) while its content height is
+fixed by text flow (~55px), so the two cross at ~55 minutes and every shorter
+entry has more content than block. The block **clips** (design.html D09) so a short entry
 truncates deliberately (description first, dropping client/project then the
 time) instead of painting into the hour rows beneath, which belong to other
 entries; and the hover ops chip is a pure **overlay** reserving no flow space,
@@ -1605,7 +1632,7 @@ issue-161 measuring error again, one scene over). Containment is
 asserted by **hit-testing**, not by comparing layout rects — `overflow: hidden`
 clips paint, not layout, and the defect lived in the clip chain (the first
 non-visible-overflow ancestor was `.cstrip` , three levels up). The scene also
-asserts its own **fixture realism**: the three sub-75-minute blocks must
+asserts its own **fixture realism**: the three sub-55-minute blocks must
 genuinely lay out more content than they have height for, so reseeding the
 scene with comfortable entries reddens it rather than quietly greening it — the
 audit's retracted first kill of this finding was taken on a 132px block, very
@@ -2016,21 +2043,19 @@ the explicit confirm, so **no entry is destroyed on a stray click**, and
 archive-when-referenced runs through the same gate from the Clients view's
 Archive control; (b) the **live-reflection** half: a week / filter / search
 change in the Entries toolbar re-queries the read-only `listEntries` IPC and
-repaints the entries calendar and its **day-header totals** live (§12 R09/R16;
+repaints the week grid and its **day-header totals** live (§12 R09/R16;
 the toolbar's range-total chip — the old `#week-total` `updateLiveTotal` /
-`liveSelection` snapshot repaint — is retired, issue #264, so the calendar and
+`liveSelection` snapshot repaint — is retired, issue #264, so the grid and
 its day headers ARE the reflection surface). The day-header figures sum the
 snapshot's core-owned `billableSeconds` , so they equal what `tt report --by
 day` produces for the same selection — no money arithmetic in the renderer
-(GOLD/PROP/BDD own the report math). The pure derivation `deriveView(state,
-sel)` (`gui/src/liveview.ts`, shipped as `window.SU.deriveView` via
-`gui/renderer/su.ts` — no hand-mirror since issue #83;
-`gui/test/renderer-bundle.test.ts` asserts the shipped bundle IS this
-derivation) remains the pinned snapshot-side narrowing rule. **GOLD/unit**
-covers the live half only — `gui/test/liveview.test.ts` (search/client/billable
-narrow rows; group switches grouping; list + report totals recompute to the
-filtered set and equal the full total when no selection is active). The confirm
-half has NO unit leg by design: the rule is a DOM gate in the shipped renderer,
+(GOLD/PROP/BDD own the report math). The re-query path IS the whole of the
+live reflection: the snapshot-side narrowing rule (`deriveView`, the retired
+gui/src liveview module) was RETIRED with the week-only view (issue #265) —
+nothing consumed it since #264 removed the chip repaint, core's `matchesQuery`
+owns the one search rule (GOLD-pinned in `core/test/entrylist.test.ts`), and a
+pinned twin of a rule with no consumer is drift waiting to be believed. The
+confirm half has NO unit leg by design: the rule is a DOM gate in the shipped renderer,
 and a pure model of it would stay green while the shipped gate rotted, so it is
 proven on the real surface — the routing `acceptance.html` §05 gives R11 (JUDGE
 + BDD). **JUDGE** (primary) `CONFIRM_DESTRUCTIVE` (`packages/gui/judge/`,
@@ -2047,7 +2072,7 @@ shipped gate carries; **BDD** `features/overlap_and_editing.feature` "Deleting
 an entry without confirmation is refused (the entry survives)" (run TWICE over
 core + tt) holds the surface-neutral half — an unconfirmed destroy destroys
 nothing. Plus `LIVE_FILTER` (`main-filtered.png` — over the multi-week
-seven-entry fixture a `refactor` keystroke narrows the
+seven-entry fixture (five in the shown week) a `refactor` keystroke narrows the
 visible rows to the two IN-WEEK matches (range + search compose) with no
 `getState` during the keystroke and zero
 `listEntries` rejections (the mock is strict about the required `by` , like
@@ -2093,21 +2118,23 @@ production strings and `packages/core/test/gold/contracts.test.ts` sweeps core's
 refusals for CLI flags; JUDGE `WRITE_REJECTION_FEEDBACK` / `FUTURE_START_GUARD`
 / `POPOVER_REJECT` / `REPORTS_VIEW` now reject through mocks in Electron's REAL
 wrapped shape and score each region's rendered text as the reason ALONE.
-**R22 window sizing (NEW — issue #126, "the window can grow, the app can't")**:
-the main window opens at 1040×800 and that is also its minimum
+**R22 window sizing (MODIFIED — issues #126/#265, "the window can grow, the app
+can't")**: the main window opens at 1040×800 and that is also its minimum
 (`gui/src/main.ts` `minWidth` /`minHeight` — 840×600 was a permitted size that
 could not render the unified form's commit button); above it the content is
 fluid — `gui/renderer/styles.css` carries no `.app` width cap, `.dcol` flexes
-from its 124px floor, and only `.settings-panel` / `.reports-view` keep local
-line-length maxima. The tray popover window auto-sizes to its rendered card on
+from zero (fit-to-width, no floor — the 124px floor and its horizontal scroll
+retired with the week-only view), and only `.settings-panel` / `.reports-view`
+keep local line-length maxima. The tray popover window auto-sizes to its rendered card on
 every show: `togglePopover` measures `#pop` and sizes the window through
 `popoverWindowSize` (`gui/src/popoversize.ts`, clamped to `POPOVER_MAX`), and
 the judge/record harnesses import that same clamp so popover evidence renders
 at the window the user gets. Renderer + main-process only, **no new IPC
 channel** (the measurement rides `webContents.executeJavaScript`). Proven by
-JUDGE `WINDOW_GEOMETRY` (outcomes, not controls: the week whole at 1920 with
-no horizontal scroll and no truncated description; the three-week range still
-scrolling at the floor with more days visible than at 1040; Save entry inside
+JUDGE `WINDOW_GEOMETRY` (outcomes, not controls: the shown week whole with no
+horizontal scroll at 1040 AND at 1920, its equal columns growing to absorb the
+resize with every 1040-truncated description at natural width by 1920; the
+seven-column weekend-on grid fitting the same 1040 minimum; Save entry inside
 the 1040×800 viewport with the exact-times fields inside their column in both
 form modes — the overflow transferred from issue #146; the popover card + both
 actions inside the auto-sized window) beside `NAV_SHELL` 's
@@ -2352,12 +2379,16 @@ detected on open, never written to, quarantined to a `.corrupted` sibling,
 restored from the latest good backup, the user informed, and the pre-corruption
 data is intact afterward (zero data loss). The **entry-spans-local-midnight**
 row (§16 / §12 R16 / issue #71 — a span crossing local midnight renders
-unflattened as one calendar segment per touched day column, all sharing the
-entry, grouped and totalled under its start day only, matching
-`tt report --by day`) is pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
+unflattened as one calendar segment per SHOWN day column it touches, all
+sharing the entry, grouped and totalled under its start day only, matching
+`tt report --by day`; a segment on a hidden day — the weekend off, or outside
+the selected week — is simply not drawn, and hiding it changes no total) is
+pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
 22:30→06:15 cross-midnight fixture: two `.ev` segments sharing a `data-id`, the
 start-day header counting the span, the end day showing the segment without
-counting it). The **DST** row is the PROP pair in `prop/invariants.test.ts`
+counting it; and the id-9 Fri→Sat span drawing only its start segment with the
+weekend hidden, its Sat segment appearing on the Show-weekend toggle with no
+total moving). The **DST** row is the PROP pair in `prop/invariants.test.ts`
 described under §04 above (the 2026 spring-forward and fall-back spans, each
 rendered across five named zones, with the real elapsed seconds and every wall
 clock taken from the calendar). The wall-clock-skew row (`now < start` never yields
