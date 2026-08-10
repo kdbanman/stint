@@ -426,6 +426,15 @@ function calendarModel() {
   });
 }
 
+// §12 R16: the grid's vertical scroll position, held across repaints. renderCalendar builds a
+// FRESH strip on every paint, so assigning the default window on each one meant every external
+// write (a tt edit, the DB file watcher) yanked the user's view back to working hours mid-look
+// — and mid-drag it shifted the track under the rect the press captured, bending the
+// cursor→minute mapping with no visible cause. null means "nothing to restore" and the next
+// build lands on its computed default; it is cleared only where a retarget IS the intent — an
+// explicit week change (selectWeek) and a form open (which centres on the edited interval).
+let calScrollTop = null;
+
 // §12 R9/R16: paint the Entries view. The default (toolbar idle) and the toolbar-active query
 // both flow into the SAME readonly week grid (R16); only the never-tracked / no-match empty
 // states short-circuit to their instructive `.empty` block. A week with no entries is NOT an
@@ -442,6 +451,13 @@ function renderEntries() {
   // pre-R24 renderEntries closed the form here, which was exactly the silent discard the
   // pending-changes gate exists to prevent; onChange below owns the refresh-time gating.
   const host = $('entries');
+  // §12 R16: carry the live viewport over the rebuild below. Read off the DOM here rather than
+  // recorded by a scroll listener: Chromium dispatches `scroll` at frame time, and a repaint
+  // driven by an awaited IPC read reaches this line first, so the listener's value would be one
+  // frame stale exactly when it matters. A null calScrollTop is a pending retarget (a week
+  // change, a form open) and is left alone — the next build lands on its computed default.
+  const liveStrip = host.querySelector('.cstrip');
+  if (liveStrip && calScrollTop !== null) calScrollTop = liveStrip.scrollTop;
   host.innerHTML = '';
   if (entryGroups) {
     if (entryGroups.length === 0 && (searchQuery || hasNarrowingFilter())) {
@@ -511,11 +527,16 @@ function renderCalendar(host) {
   // user is dragging, so the viewport lands on IT (a little context above its start) rather
   // than the working-hours default — otherwise editing an off-hours entry opens onto empty grid.
   const iv = calMode === 'form' ? openFormInterval() : null;
-  strip.scrollTop = Math.round(
+  const defaultTop = Math.round(
     iv
       ? Math.max(localMinuteOfDay(iv.startIso) - 60, 0) * CAL_PX_PER_MIN
       : win.startMin * CAL_PX_PER_MIN,
   );
+  // The default is for the FIRST build and for the retargets that cleared calScrollTop; every
+  // other paint restores where the user was. Read back rather than stored verbatim, so a
+  // position clamped to the track's maximum is the one carried on.
+  strip.scrollTop = calScrollTop ?? defaultTop;
+  calScrollTop = strip.scrollTop;
 }
 
 // The fixed hour gutter: a header spacer aligned with the day headers, then 00:00–24:00 labels
@@ -762,7 +783,14 @@ function paintPendingOverlay(explicit) {
   }
 }
 
-// The one in-flight grid drag (document-level move/up listeners while a button is held).
+// The one in-flight grid drag (window-level pointermove/pointerup while the button is held).
+//
+// The gestures below run under POINTER CAPTURE, taken on the press by wireGridDrag. That is
+// what makes a release the page would otherwise never hear still END the drag: let the button
+// go outside the window and no `mouseup` is delivered at all, so a mouse-event drag stays live
+// forever — the interval trailing a cursor with no button held, Escape dead (its handler is
+// guarded on no drag in flight), and the next click anywhere firing the stale release. The
+// start-only picker (timepicker.js) has always used this pattern; the grid now shares it.
 let gridDrag = null;
 
 // Begin a press-drag that PLACES an interval: the select-interval gesture (release enters
@@ -790,8 +818,8 @@ function startNewDrag(pt, { openOnRelease = false, live = false } = {}) {
     else paintPendingOverlay(iv);
   };
   const onUp = (ev) => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     const moved = gridDrag.moved;
     gridDrag = null;
     if (!openOnRelease) return;
@@ -804,8 +832,8 @@ function startNewDrag(pt, { openOnRelease = false, live = false } = {}) {
         };
     void openUnifiedForm({ mode: 'add', startIso: iv.startIso, stopIso: iv.stopIso });
   };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // §12 R06/R07: drag ONE edge of the pending/selected interval. Only the dragged edge snaps;
@@ -837,12 +865,12 @@ function startEdgeDrag(which) {
     }
   };
   const onUp = () => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     gridDrag = null;
   };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // §12 R06/R07: drag the interval's BODY — both edges move together, the exact span preserved
@@ -867,12 +895,12 @@ function startMoveDrag(pressEv) {
     writeFormInterval(snapped, new Date(snapped.getTime() + spanMs));
   };
   const onUp = () => {
-    document.removeEventListener('mousemove', onMove);
-    document.removeEventListener('mouseup', onUp);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
     gridDrag = null;
   };
-  document.addEventListener('mousemove', onMove);
-  document.addEventListener('mouseup', onUp);
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
 }
 
 // §12 R07: the select-interval start handle — a snapped accent line following the cursor
@@ -1006,12 +1034,18 @@ function wireGridDrag(wrap) {
   wrap.addEventListener('mouseleave', () => {
     if (calMode === 'select' && !gridDrag) hideSelectHandle();
   });
-  wrap.addEventListener('mousedown', (ev) => {
+  // The press is a POINTER event so the gesture can take capture (see gridDrag): the wrap then
+  // receives pointermove/pointerup for the whole drag, including a release outside the window,
+  // which no mouse event reports. Capture is taken here rather than inside each starter — it
+  // belongs to the press, not to which of the three drags the press turns out to be.
+  wrap.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0 || gridDrag) return;
+    const capture = () => wrap.setPointerCapture?.(ev.pointerId);
     if (calMode === 'select') {
       const pt = gridPointAt(ev.clientX, ev.clientY);
       if (!pt || !ev.target.closest('.dt')) return;
       ev.preventDefault();
+      capture();
       startNewDrag(pt, { openOnRelease: true });
       return;
     }
@@ -1019,12 +1053,14 @@ function wireGridDrag(wrap) {
     const grip = ev.target.closest('.grip');
     if (grip) {
       ev.preventDefault();
+      capture();
       startEdgeDrag(grip.dataset.grip);
       return;
     }
     const me = ev.target.closest('.ev.me');
     if (me) {
       ev.preventDefault();
+      capture();
       startMoveDrag(ev);
       return;
     }
@@ -1036,6 +1072,7 @@ function wireGridDrag(wrap) {
     if (openForm.mode === 'add') {
       // R07: the pending interval stays adjustable by dragging anywhere on the grid.
       ev.preventDefault();
+      capture();
       startNewDrag(pt, { live: true });
     } else {
       // R06: an empty spot mid-edit starts a create — a subject swap, gated when dirty (R24).
@@ -2489,6 +2526,9 @@ async function openUnifiedForm(opts) {
   host.appendChild(form);
   calMode = 'form';
   fineSnap = false; // §12 R23: coarse on every open
+  // The one repaint that SHOULD move the viewport: it lands on the pending/edited interval
+  // (renderCalendar's `iv` branch), so editing an off-hours entry never opens onto empty grid.
+  calScrollTop = null;
   renderEntries();
   host.scrollIntoView({
     block: 'nearest',
@@ -2767,6 +2807,9 @@ function selectSegment(group, btn) {
 // the plain default getState paint when the selection IS the default view.
 function selectWeek(dayToken) {
   selectedWeekStart = calWeekBounds(dayToken)[0];
+  // A different week is a different set of days, so the viewport retargets to the working-hours
+  // default rather than restoring a position that belonged to the week just left (§12 R16).
+  calScrollTop = null;
   pickerMonth = selectedWeekStart.slice(0, 7);
   pickerActiveDay = dayToken;
   if (searchQuery || hasEntryFilter()) {
@@ -3126,6 +3169,12 @@ $('merge-go').addEventListener('click', () => void mergeSelected());
 let activeView = 'entries';
 
 function route(view) {
+  // §12 R07: select-interval is a mode of the ENTRIES GRID, so it cannot outlive the view.
+  // Left armed, a return to Entries finds a dead end: the + is hidden (the fine-snap toggle
+  // holds its spot), `.sel-mode .dt .ev` makes every entry unclickable, and the only exit is
+  // Escape — which nothing on screen mentions. Resolve it on the way out, exactly as Escape
+  // would (an open form keeps the grid in 'form' mode; only select-interval is transient).
+  if (view !== 'entries' && calMode === 'select') exitToRest();
   activeView = view;
   // Each view is a self-contained <section class="view" data-view="…">; toggling `hidden`
   // on the whole section is enough — the inner forms/banners/merge-bar keep their own state
@@ -3762,29 +3811,43 @@ new MutationObserver(syncStandingPrimary).observe(document.body, {
   attributeFilter: ['hidden'],
 });
 
-// §07/§12: an external change (a tt write) repaints whichever view is active.
+// §07/§12: an external change (a tt write) repaints whichever view is active. route() serves
+// FIVE views, so the split is spelled out per view rather than left to a catch-all `else`:
+// the tail used to cover Entries, Reports AND Settings alike, and the form re-seed below fired
+// on all three — raising the R24 modal over the Settings view, about a form mounted inside the
+// hidden Entries section, with "Keep editing" focusing a field the user could not see.
 window.stint.onChange(() => {
-  if (activeView === 'clients') void renderClients();
-  // §12 R14: on the Timer view a tt write repaints both the favorites rail AND the
-  // Active-Timer card + live-edit strip (a tt start/stop/edit changes the running state), so
-  // the in-window timer surface tracks the other surface (parity). load() refreshes `state`
-  // (→ render() repaints the card + live-edit strip); renderFavorites repaints the rail.
-  else if (activeView === 'timer') void load().then(() => renderFavorites());
-  // §12 R24: on the Entries view the grid always repaints to the fresh truth (the reload no
-  // longer closes the form — renderEntries), and the OPEN form's fate follows the rule:
-  //   · no form / an add-mode draft — nothing to re-seed; the reload repaints beneath it.
-  //   · a CLEAN edit form — silently re-seed from the fresh snapshot (swap in place; closes
-  //     only if the entry is gone — nothing typed, nothing lost).
-  //   · a DIRTY edit form — the refresh wants to re-seed the subject, and that is a subject
-  //     swap: the keep-editing / discard gate arms. Keep editing preserves every pending
-  //     field over the refreshed grid; only the explicit Discard adopts the fresh seed.
-  else {
-    void load().then(() => {
-      if (!openForm || openForm.mode !== 'edit') return;
-      if (formIsDirty()) openPendingGate(() => reseedFromSnapshot());
-      else reseedFromSnapshot();
-    });
+  // §07: the Clients view paints from its own reference-data reads, not from `state`.
+  if (activeView === 'clients') {
+    void renderClients();
+    return;
   }
+  // Every other view repaints off a fresh snapshot: load() re-reads `state` and render()
+  // repaints the shared surfaces (the Active-Timer card, the compact strip, the entries grid),
+  // so a view is never left painting stale truth — including Reports and Settings, whose own
+  // panels refresh themselves but whose next visit to Entries reads this `state`.
+  void load().then(() => {
+    // §12 R14: the Timer view also owns the favorites rail (load() has already repainted the
+    // card + live-edit strip). No form lives here, so nothing is re-seeded.
+    if (activeView === 'timer') {
+      void renderFavorites();
+      return;
+    }
+    // §12 R24: the OPEN form's fate — only while the Entries view is the one on screen, since
+    // that is where the form is and the gate is a prompt about what the user is looking at:
+    //   · no form / an add-mode draft — nothing to re-seed; the reload repaints beneath it.
+    //   · a CLEAN edit form — silently re-seed from the fresh snapshot (swap in place; closes
+    //     only if the entry is gone — nothing typed, nothing lost).
+    //   · a DIRTY edit form — the refresh wants to re-seed the subject, and that is a subject
+    //     swap: the keep-editing / discard gate arms. Keep editing preserves every pending
+    //     field over the refreshed grid; only the explicit Discard adopts the fresh seed.
+    // On Reports/Settings the grid still repaints; the form keeps its pending fields untouched
+    // and unswapped until the user comes back to it.
+    if (activeView !== 'entries') return;
+    if (!openForm || openForm.mode !== 'edit') return;
+    if (formIsDirty()) openPendingGate(() => reseedFromSnapshot());
+    else reseedFromSnapshot();
+  });
 });
 setInterval(tick, 1000);
 // §12 R3: open on the Entries view (the default active route) so the nav highlight and the
