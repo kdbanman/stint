@@ -61,33 +61,12 @@ export function buildUiState(
     },
     days,
     sleepFlaggedIds: store.listSleepFlagged().map((e) => e.id),
-    settings: {
-      rounding: settings.rounding,
-      roundingIncrementMin: settings.roundingIncrementMin,
-      weekStart: settings.weekStart,
-      firstCheckinMin: settings.firstCheckinMin,
-      checkinIntervalMin: settings.checkinIntervalMin,
-      globalHotkey: settings.globalHotkey,
-      // §12 R11: the editable date-format mode the Settings view edits.
-      dateFormat: settings.dateFormat,
-      // §04 R06 / §14: the configured time zone ('system' or an IANA zone). The renderer
-      // applies it to SU (display, field parsing, day/minute geometry) on every render.
-      timeZone: settings.timeZone,
-      // §14: the timeline-window settings the Settings → Timeline group edits and the
-      // picker/calendar default viewports read (via SU.timelineWindow, G16).
-      workingHoursStart: settings.workingHoursStart,
-      workingHoursEnd: settings.workingHoursEnd,
-      pickerWindowMode: settings.pickerWindowMode,
-      pickerAroundHours: settings.pickerAroundHours,
-      // §14 / §12 R23: the snap pair every week-grid drag consumes, and §12 R09's persisted
-      // show-weekend row — the Entries view reads all three off this one snapshot.
-      snapFineMinutes: settings.snapFineMinutes,
-      snapCoarseMinutes: settings.snapCoarseMinutes,
-      showWeekend: settings.showWeekend,
-      // §20 R04: the current backup-retention count the Settings → Backups picker paints; it
-      // changes over the same setSetting channel `tt config set backup_retention` drives.
-      backupRetention: settings.backupRetention,
-    },
+    // §14: the whole settings row, not a field-by-field re-copy. Every row used to be named
+    // three times — core's interface, UiState's restatement, and this projection — with
+    // nothing binding them, which is how `showWeekend` reached core and `tt` while the GUI
+    // snapshot silently lacked it. UiState.settings IS core's Settings now, so a new row
+    // reaches the renderer with no edit here and none is possible to forget.
+    settings,
     // §19 R06 — the date/build version (the shared @stint/core APP_VERSION constant, the SAME
     // one `tt --version` prints). Carried on getState so the Settings → Software Update view
     // shows it without a new round-trip; read-only display (the check/download flow is R03/R04).

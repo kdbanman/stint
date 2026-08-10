@@ -21,6 +21,7 @@ import {
   type LiveEditStripInput,
 } from '../src/timerview.js';
 import type { UiState, FavoriteView } from '../src/ipc.js';
+import { DEFAULT_SETTINGS } from '@stint/core';
 
 const NOW = new Date('2026-06-24T23:00:00Z');
 // A running entry started exactly 01:24:07 (5047s) before NOW — the JUDGE harness's pinned
@@ -28,24 +29,10 @@ const NOW = new Date('2026-06-24T23:00:00Z');
 const RUNNING_ELAPSED_S = 5047;
 const RUNNING_START = new Date(NOW.getTime() - RUNNING_ELAPSED_S * 1000).toISOString();
 
-const baseSettings = {
-  rounding: false,
-  roundingIncrementMin: 15,
-  weekStart: 'monday',
-  firstCheckinMin: 60,
-  checkinIntervalMin: 30,
-  globalHotkey: 'CommandOrControl+Alt+T',
-  dateFormat: 'system',
-  timeZone: 'system',
-  workingHoursStart: '07:00',
-  workingHoursEnd: '18:00',
-  pickerWindowMode: 'working_hours',
-  pickerAroundHours: 8,
-  snapFineMinutes: 5,
-  snapCoarseMinutes: 15,
-  showWeekend: false,
-  backupRetention: 7,
-};
+// The snapshot's §14 settings — core's own defaults, never a re-typed field list. Nothing in
+// this file reads a settings value (timerview projects the running entry), so a hand-written
+// copy here would only be one more list to keep in step with core's.
+const baseSettings = DEFAULT_SETTINGS;
 
 function runningSnapshot(
   over: Partial<NonNullable<UiState['status']['entry']> & { excludedSeconds?: number }> = {},

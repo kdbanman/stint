@@ -9,35 +9,12 @@
 import { UPDATE_CHECK_FAILED } from '../dist/ipc.js';
 export { UPDATE_CHECK_FAILED };
 
-const DEFAULT_SETTINGS = {
-  rounding: false,
-  roundingIncrementMin: 15,
-  weekStart: 'monday',
-  firstCheckinMin: 60,
-  checkinIntervalMin: 30,
-  globalHotkey: 'CommandOrControl+Alt+T',
-  // §12 R11 / §14 — the date-format setting the GUI Settings view's control edits.
-  dateFormat: 'system',
-  // §04 R06 / §14 — the configured time zone ('system' follows the OS at read time); the
-  // Settings view's Time zone select edits it over the same setSetting channel.
-  timeZone: 'system',
-  // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
-  // default-window mode, and the around-now span. The Settings → Timeline group edits them;
-  // SU.timelineWindow derives the picker/calendar default viewport from them (G16).
-  workingHoursStart: '07:00',
-  workingHoursEnd: '18:00',
-  pickerWindowMode: 'working_hours',
-  pickerAroundHours: 8,
-  // §14 / §12 R09/R23 — the Entries-calendar settings: the two drag-snap resolutions
-  // (whole minutes 1–30, fine ≤ coarse) and the show-weekend boolean. The Settings →
-  // Entries calendar group edits them over the same setSetting channel.
-  snapFineMinutes: 5,
-  snapCoarseMinutes: 15,
-  showWeekend: false,
-  // §20 R04 — how many automatic backups to keep; the Settings → Backups retention picker
-  // paints this and changes it over the same setSetting channel `tt config set backup_retention`.
-  backupRetention: 5,
-};
+// §14 — the settings every snapshot below carries: CORE's defaults, by the same import
+// discipline UPDATE_CHECK_FAILED states above. A re-typed field list here is a fixture that
+// keeps passing after the thing it stands for has moved — every scene would go on rendering a
+// settings block core no longer serves. Core is electron-free, so plain node reads it (the
+// same route the vitest suites take).
+import { DEFAULT_SETTINGS } from '@stint/core';
 
 // A pinned wall clock so the captured evidence is byte-for-byte reproducible: the
 // harness installs this as the page clock, the running fixture starts a fixed
