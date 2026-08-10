@@ -742,7 +742,7 @@ export function clientsState() {
 // mixed-billable set (issue #55: a single-context fixture cannot tell "filtered" from
 // "shows everything", which is exactly how the dead-toolbar regression slipped), so the
 // ENTRIES_CALENDAR / LIVE_FILTER scenes can drive EVERY toolbar control and watch the
-// visible set + #week-total move to the expected subset. Shaped as the flat row list the
+// visible event set move to the expected subset. Shaped as the flat row list the
 // listEntries mock filters + groups (mirroring core) — clientId/projectId carried so the
 // client/project filters narrow like production. Relative to the pinned JUDGE clock
 // (Wed 2026-06-24, weekStart monday):
@@ -751,8 +751,9 @@ export function clientsState() {
 //   LAST WEEK — id 5 'refactor planning' (2.00h; also a "refactor" match, so a default-
 //     week search proves range + search COMPOSE by excluding it);
 //   LAST MONTH — id 6 'may retro' (1.00h).
-// All-time billable is 8.00h — visibly DIFFERENT from the 5.00h week, so a week-total
-// chip that regresses to the all-time sum fails the scenes.
+// The multi-week shape (all-time 8.00h vs the 5.00h week) predates #264's retirement of
+// the toolbar's range-total chip; it still earns its keep by making every narrowing move
+// a visibly different event count.
 const LIST_ENTRIES = [
   { id: 1, description: 'auth refactor', clientLabel: 'Acme / API', client: 'Acme', project: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
   { id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-24T11:00:00Z', endUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['ci'] },
@@ -789,11 +790,10 @@ export function listState() {
 /**
  * §17 R11 — the LIVE_FILTER fixture. The same multi-week / multi-client / tagged set as
  * the Entries-view list (listState), reused so a search keystroke / client selection
- * narrows BOTH the visible rows AND the report total (#week-total). Idle, the chip is the
- * WEEK-BOUNDED billable sum (issue #55): this week's ids 1–4 = 18000s = 5.00h, NOT the
- * all-time 8.00h. A "refactor" search keeps the two IN-WEEK refactor rows (7200 + 5400 =
- * 12600s = 3.50h — last week's 'refactor planning' stays excluded, range + search
- * compose), so the total visibly moves 5.00h → 3.50h with the narrowing list.
+ * narrows the visible rows live. A "refactor" search keeps the two IN-WEEK refactor rows
+ * (last week's 'refactor planning' stays excluded — range + search compose), so the
+ * narrowing is visibly a subset, never "shows everything". (The toolbar's range-total
+ * chip this fixture also fed is retired — #264, §12 R09.)
  */
 export function liveState() {
   return listState();

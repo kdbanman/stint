@@ -6,7 +6,7 @@
 const SU = window.SU;
 const {
   fmtDur, fmtHours, elapsed, localTime, friendlyHotkey, localInputValue, parseLocalInput,
-  tagDiff, deriveView, errMessage, escapeHtml, localMinuteOfDay,
+  tagDiff, errMessage, escapeHtml, localMinuteOfDay,
 } = window.SU;
 
 // Element lookup. Typed `any` (not HTMLElement) under checkJs: the call sites use
@@ -204,22 +204,10 @@ function render() {
   toggle.setAttribute('aria-pressed', String(!!running));
   toggle.setAttribute('aria-label', running ? 'Stop timer' : 'Start timer');
 
-  // §17 R11 / §12 R16 (issue #55): the report total reflects the active selection LIVE.
-  // When the toolbar is active and the queried set is in hand (entryGroups), the total is
-  // that result's billable-only sum — the SELECTED RANGE's billable total, exactly what the
-  // calendar shows; while a query is still in flight it is the snapshot-derived estimate
-  // for the selection (deriveView — instant, but unbounded by the range). Idle, it is the
-  // week-bounded billable total (weekTotal, the "This week" default). The estimate + idle
-  // figures come from the in-memory snapshot — no IPC round-trip — so the figure tracks
-  // the selection on every keystroke, then settles on the authoritative range sum.
-  $('week-total').textContent = fmtHours(
-    entryCtrlActive
-      ? entryGroups
-        ? entryGroupsTotal()
-        : deriveView(state, liveSelection()).reportTotalSeconds
-      : weekTotal(),
-  );
-
+  // §12 R09 (issue #264): NO range-total chip repaint here — the toolbar carries no report
+  // total. The billable figures this view shows are the per-day day-header totals the
+  // calendar paints (§12 R16, renderEntries below), live per §17 R11; report totals are
+  // Reports' job, reached by its sidebar item (§12 R03).
   renderEntries();
 }
 
@@ -1841,26 +1829,6 @@ async function openEntryForm(row, e) {
   });
 }
 
-// Today as a 'YYYY-MM-DD' day string in the CONFIGURED zone (SU.localDayOf, §04 R06) —
-// the same local-day vocabulary core's localDay gives the snapshot's day keys, so the two
-// compare directly.
-function localTodayDay() {
-  return SU.localDayOf(new Date());
-}
-
-function weekTotal() {
-  // §12 R16 / §17 R11 (issue #55): the "This week" chip is the CURRENT WEEK's billable
-  // sum — bounded to the week containing today by the weekStart setting (calWeekBounds,
-  // the same rule the calendar's default view pads to), never the whole in-memory window.
-  // The renderer's at-a-glance figure; the report builder owns the authoritative one.
-  const [ws, we] = calWeekBounds(localTodayDay());
-  return state.days
-    .filter((d) => d.day >= ws && d.day <= we)
-    .flatMap((d) => d.entries)
-    .filter((e) => e.billable)
-    .reduce((s, e) => s + e.billableSeconds, 0);
-}
-
 // Live count-up on the running entry (display tick, independent of data changes). It
 // advances the compact summary glance line, the Timer-view Active-Timer card clock and the
 // Entries-view compact strip clock (§12 R04), and the running entry's row duration — all
@@ -1997,61 +1965,14 @@ function hasEntryFilter() {
 
 // ----------------------------------------------------------- §12 R9 Entries toolbar
 
-// §17 R11: the live toolbar selection as a ViewSelection the pure deriveView consumes.
-// Built from the SAME live control values entryQuery/searchQuery hold, mapped to the
-// snapshot's row shape: the search query, the chosen client by its row label (the
-// #el-client option text is the client name, the prefix of the row's "Name / Project"
-// label), and the billable narrowing. There is no user grouping in the entries calendar
-// (grouping moved to Reports, G11), so the selection is always day-laid — the range-total
-// chip + per-day header totals need only day layout. Used only to keep the totals live off
-// the in-memory snapshot — the authoritative flat rows still come from listEntries (parity
-// with tt), but the totals never wait on that round-trip.
-function liveSelection() {
-  /** @type {import('../src/liveview.js').ViewSelection} */
-  const sel = { billable: entryQuery.billable, group: 'day' };
-  if (searchQuery) sel.search = searchQuery;
-  if (entryQuery.clientId != null && elClient) {
-    const opt = elClient.options[elClient.selectedIndex];
-    const name = opt ? opt.textContent.trim() : '';
-    // The snapshot row labels read "Client / Project"; match the chosen client's name as the
-    // leading segment so the live total narrows to that client without resolving names itself.
-    const row = state.days.flatMap((d) => d.entries).find((e) => e.clientLabel && e.clientLabel.split(' / ')[0] === name);
-    if (row) sel.clientLabel = row.clientLabel;
-  }
-  return sel;
-}
-
-// §17 R11: repaint #week-total LIVE from the in-memory snapshot for the current selection,
-// with NO IPC round-trip (no getState) — so a search keystroke / filter / group change is
-// reflected in the report total the instant it is made, alongside the list rows. The total
-// is the billable-only reportTotalSeconds the pure deriveView sums from the snapshot's
-// core-owned billableSeconds (equal to what `tt report` produces for the same selection).
-function updateLiveTotal() {
-  if (!state) return;
-  const derived = deriveView(state, liveSelection());
-  $('week-total').textContent = fmtHours(derived.reportTotalSeconds);
-}
-
-// §12 R16 / §17 R11 (issue #55): the billable-only sum of the LAST AUTHORITATIVE
-// listEntries result — the selected range's report total (what `tt report` sums for the
-// same selection). Only meaningful while entryGroups holds a queried set; render() falls
-// back to the live snapshot estimate (or the idle week total) otherwise.
-function entryGroupsTotal() {
-  return entryGroups
-    .flatMap((g) => g.entries)
-    .filter((e) => e.billable)
-    .reduce((s, e) => s + e.billableSeconds, 0);
-}
-
 // Run the current toolbar query through window.stint.listEntries (the read-only entries
 // calendar read, parity with `tt list --range/--client/--project/--tag/--search`), store the
 // flat, day-laid result, and repaint. Pure read — no write, no refreshAll. The search box
 // rides inside the same query so range + filters + search all compose in one core call; the
 // calendar (R16) lays the returned entries into its day columns intrinsically — no grouping.
+// §17 R11's live reflection is the repaint itself: the queried set lands on the calendar and
+// its day-header totals (§12 R16) — there is no range-total chip to move (§12 R09, issue #264).
 async function applyEntryQuery() {
-  // §17 R11: reflect the selection in the report total LIVE off the snapshot first, so the
-  // total updates on the same keystroke/selection — it never waits on the async list query.
-  updateLiveTotal();
   await refreshEntryGroups();
   render();
 }
@@ -2216,12 +2137,6 @@ async function populateEntryClients() {
   elClient.value = current;
 }
 void populateEntryClients();
-
-// §12 R08 (G7): the Entries toolbar's "This week" opens the in-shell Reports view — the
-// saved-reports surface (reports.js owns it). It routes client-side via the shell router
-// (route('reports')); the standalone report.html page is retired, so this never navigates
-// out of the window shell. No new IPC, so no new parity row.
-$('report-btn').addEventListener('click', () => route('reports'));
 
 // §12 R05 (core): the GUI core-entry surface — the Start form (no separate Switch; issue #34).
 // It lives in the Timer view (relocated from the Entries toolbar); the ids are unchanged, so
