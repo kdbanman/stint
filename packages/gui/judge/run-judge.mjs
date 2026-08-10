@@ -1300,8 +1300,9 @@ async function sceneAccentDiscipline(browser) {
 // one" would fight the next restyle (process.html §02) and would not have caught this bug anyway,
 // since both buttons matched their own selector. The states are the audit's own reproduction list
 // (Timer idle + Details expanded, Timer + pin-as-favourite, Clients + inline rename), extended to
-// the rest of the surfaces the same structure reaches: the Entries add form, the Clients add
-// fields, the Reports builder, the RUNNING Timer view (whose standing primary is the other face of
+// the rest of the surfaces the same structure reaches: the Entries add form, the Reports builder in
+// BOTH its accordion placements (view-level for New, nested in the edited card — §12 R08), the
+// Clients add fields, the RUNNING Timer view (whose standing primary is the other face of
 // the same standing action, Stop), and the app's one modal — the merge-conflict prompt, which mounts
 // outside the views and would otherwise leave the Entries primary lit behind its backdrop.
 async function scenePrimaryHandoff(browser) {
@@ -1372,6 +1373,15 @@ async function scenePrimaryHandoff(browser) {
     await page.waitForSelector('#rep-builder:not([hidden])');
     await page.screenshot({ path: join(EVIDENCE, 'primary-handoff-reports.png') });
     await at(page, 'reports · builder open');
+    // §12 R08 (issue #268): the SAME builder opened nested inside a card via Edit — the
+    // accordion moves the commit surface into the card's subtree, and the handoff must still
+    // reach it (syncStandingPrimary reads the active VIEW, wherever the form sits in it).
+    await page.click('#rep-cancel');
+    await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
+    await page.waitForSelector('#rep-defs .def .def-edit');
+    await page.click('#rep-defs .def:first-child .def-edit');
+    await page.waitForSelector('#rep-builder:not([hidden])');
+    await at(page, 'reports · builder nested in its card (edit)');
   });
 
   // The RUNNING Timer view, on its own fixture: the same view's standing primary is Stop while a
@@ -1403,10 +1413,10 @@ async function scenePrimaryHandoff(browser) {
   const offenders = states.filter((s) => s.lit.length !== 1);
   record(
     'PRIMARY_HANDOFF',
-    { everyStateExactlyOneFill: offenders.length === 0, allThirteenStatesWalked: states.length === 13 },
+    { everyStateExactlyOneFill: offenders.length === 0, allFourteenStatesWalked: states.length === 14 },
     `exactly one visible --accent-solid fill in every state (D11): ` +
       states.map((s) => `${s.state}=[${s.lit.join(', ') || 'none'}]`).join('; ') +
-      `; states measured=${states.length}/13 offending states=` +
+      `; states measured=${states.length}/14 offending states=` +
       `[${offenders.map((s) => `${s.state}:${s.lit.length}`).join(', ') || 'none'}]`,
     'primary-handoff-timer.png',
   );
@@ -3706,11 +3716,18 @@ async function sceneTagChips(browser) {
 
 // REPORTS_VIEW — §12 R08 / §09 R08–R09 (G11): the in-shell Reports view is the PRIMARY
 // surface for SAVED report definitions (it replaces the retired standalone report.html, so
-// the sidebar is present). This one scene drives the REAL index.html Reports view under the
-// pinned JUDGE clock with the savedReportsState fixture, plus a second page with ZERO saved
-// defs (the savedReports:[] fixture knob) for STATES.md Reports × empty.
+// the sidebar is present). The view is an ACCORDION (issue #268): run-output and the EDIT
+// builder expand INSIDE the card they belong to, exactly one card expanded at a time,
+// collapse discards the results; only the New-report builder (no card yet) and the
+// run-independent Export All Data block live at view level. This one scene drives the REAL
+// index.html Reports view under the pinned JUDGE clock with the savedReportsState fixture,
+// plus a second page with ZERO saved defs (the savedReports:[] fixture knob) for STATES.md
+// Reports × empty.
 async function sceneReportsView(browser) {
   await withPage(browser, savedReportsState(), 'index.html', async (page) => {
+    // The accordion's 0fr→1fr expand rides a real transition (~160ms); the probes and the
+    // evidence frames must read the settled layout, not a mid-expand slice.
+    await noMotion(page);
     await page.click('.nav-item[data-view="reports"]');
     await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def').length > 0);
 
@@ -3757,9 +3774,39 @@ async function sceneReportsView(browser) {
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-list.png'), fullPage: true });
 
+    // (a2) §09 R06 / §12 R08 — PRE-RUN, COMPUTED state (issue #262). Before ANY report has
+    // run: the run-scoped FILTERED export row is genuinely invisible (computed style, not the
+    // hidden attribute — `.report-export { display:flex }` once outspecified the UA's
+    // `[hidden] { display:none }`, so the row rendered while its markup said hidden and its
+    // buttons silently no-oped), while Export All Data is VISIBLE and WORKING: it is standing
+    // chrome with no disarmed state — clicking it pre-run fires a real exportEntries call with
+    // scope 'all' and NO saved ref (the whole record needs no report), and the status paints
+    // the honest "(all data)" ack.
+    const preRun = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      return {
+        runVisible: visible(document.querySelector('#rep-run')),
+        filteredVisible: visible(document.querySelector('#rep-run-export')),
+        allVisible: visible(document.querySelector('#rep-run-export-all')),
+        allCsvVisible: visible(document.querySelector('#rep-export-all-csv')),
+      };
+    });
+    await page.click('#rep-export-all-csv');
+    await page.waitForFunction(() => window.__EXPORTED__?.scope === 'all' && window.__EXPORTED__?.format === 'csv');
+    await page.waitForFunction(
+      () => /all data/.test(document.querySelector('#rep-export-all-status')?.textContent || ''),
+    );
+    const preRunExport = await page.evaluate(() => ({
+      payload: { ...window.__EXPORTED__ },
+      status: document.querySelector('#rep-export-all-status')?.textContent.trim() ?? '',
+    }));
+
     await page.click('#rep-new');
     await page.waitForSelector('#rep-builder:not([hidden])', { state: 'attached' });
     const builder = await page.evaluate(() => ({
+      // §12 R08: a NEW report has no card yet, so its builder opens at view level — nested
+      // under no .def (Edit's builder nests; that is editOpen's probe below).
+      nestedIn: document.querySelector('#rep-builder')?.closest('.def')?.dataset.name ?? null,
       name: !!document.querySelector('#rep-name'),
       range: !!document.querySelector('#rep-preset-seg'),
       custom: !!document.querySelector('#rep-custom-range'),
@@ -3863,6 +3910,10 @@ async function sceneReportsView(browser) {
       title: document.querySelector('#rep-builder-title')?.textContent.trim() ?? '',
       name: document.querySelector('#rep-name')?.value ?? '',
       deleteVisible: !document.querySelector('#rep-delete')?.hidden,
+      // §12 R08: EDIT joins the accordion — the builder nests inside the edited card's
+      // subtree, and that card is the one expanded card.
+      nestedIn: document.querySelector('#rep-builder')?.closest('.def')?.dataset.name ?? null,
+      openCards: [...document.querySelectorAll('#rep-defs .def.open')].map((c) => c.dataset.name),
     }));
     await page.click('#rep-cancel');
     await page.waitForSelector('#rep-builder[hidden]', { state: 'attached' });
@@ -3885,21 +3936,39 @@ async function sceneReportsView(browser) {
         flagRows,
         flagInTable: document.querySelectorAll('#rep-run-rows .report-flag').length,
         flagOutside,
+        // §12 R08 (issue #268) — the accordion: the run-output (and its filtered export row)
+        // sit INSIDE the ran card's subtree, that card is the ONLY expanded one, the filtered
+        // row carries no scope label (the nesting states the scope), and the run-independent
+        // Export All Data block stays view-level — inside no card.
+        inCard: document.querySelector('#rep-run')?.closest('.def')?.dataset.name ?? null,
+        exportInCard: document.querySelector('#rep-run-export')?.closest('.def')?.dataset.name ?? null,
+        openCards: [...document.querySelectorAll('#rep-defs .def.open')].map((c) => c.dataset.name),
+        scopeLabelGone: !document.querySelector('#rep-run-export .report-export-scope'),
+        allDataInCard: document.querySelector('#rep-run-export-all')?.closest('.def')?.dataset.name ?? null,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'reports-run.png'), fullPage: true });
 
-    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run) carry
-    // scope 'filtered' + the saved ref — the rows the report shows (byte-identical to
-    // `tt report run <name> --csv|--json`).
+    // (d) issue #72: TWO export scopes. The report's OWN Export CSV/JSON (beside Run, revealed
+    // by the run) carry scope 'filtered' + the saved ref — the rows the report shows
+    // (byte-identical to `tt report run <name> --csv|--json`). The run also makes the filtered
+    // row COMPUTED-visible (the pre-run probe above proved it computed-invisible before).
+    const postRunVisible = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      return {
+        filteredVisible: visible(document.querySelector('#rep-run-export')),
+        allVisible: visible(document.querySelector('#rep-run-export-all')),
+      };
+    });
     await page.click('#rep-export-csv');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'filtered');
     const afterCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
     await page.click('#rep-export-json');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'json' && window.__EXPORTED__?.scope === 'filtered');
     const afterJson = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
-    // …and Export All Data (set apart at the bottom) carries scope 'all' + the saved ref — every
-    // raw entry in the range (byte-identical to `tt export`), its status the honest "(all data)".
+    // …and Export All Data (set apart at the bottom) carries scope 'all' and NO saved ref even
+    // with a run on screen — the whole record (byte-identical to no-flag `tt export`), its
+    // status the honest "(all data)".
     await page.click('#rep-export-all-csv');
     await page.waitForFunction(() => window.__EXPORTED__?.format === 'csv' && window.__EXPORTED__?.scope === 'all');
     const afterAllCsv = await page.evaluate(() => ({ ...window.__EXPORTED__ }));
@@ -3913,6 +3982,39 @@ async function sceneReportsView(browser) {
       allJson: document.querySelector('#rep-export-all-json')?.textContent.trim(),
       allStatus: document.querySelector('#rep-export-all-status')?.textContent.trim(),
     }));
+
+    // (d2) §12 R08 (issue #268) — ONE report "run" at a time, and collapse DISCARDS. Running
+    // a SECOND report moves the run-output into ITS card: the first card collapses (its body
+    // empties — the results were adopted away, not copied), the second is the only .open
+    // card. Then the close control collapses the accordion entirely and the results are
+    // discarded — the run-output is computed-invisible again, its rows GONE (a re-view costs
+    // a re-run), the filtered export row disarmed with it, Export All Data still standing.
+    await page.click('.def[data-name="Monthly — all clients by client"] .def-run');
+    await page.waitForFunction(
+      () => document.querySelector('#rep-run')?.closest('.def')?.dataset.name === 'Monthly — all clients by client',
+    );
+    const secondRun = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      const firstBody = document.querySelector('.def[data-name="Weekly billables — Globex"] .def-body-inner');
+      return {
+        openCards: [...document.querySelectorAll('#rep-defs .def.open')].map((c) => c.dataset.name),
+        inCard: document.querySelector('#rep-run')?.closest('.def')?.dataset.name ?? null,
+        runVisible: visible(document.querySelector('#rep-run')),
+        firstCardBodyEmpty: !!firstBody && firstBody.childElementCount === 0,
+      };
+    });
+    await page.click('#rep-run-close');
+    await page.waitForFunction(() => document.querySelectorAll('#rep-defs .def.open').length === 0);
+    const collapsed = await page.evaluate(() => {
+      const { visible } = window.__probe;
+      return {
+        openCount: document.querySelectorAll('#rep-defs .def.open').length,
+        runVisible: visible(document.querySelector('#rep-run')),
+        filteredVisible: visible(document.querySelector('#rep-run-export')),
+        rowsDiscarded: document.querySelectorAll('#rep-run-rows tr').length === 0,
+        allVisible: visible(document.querySelector('#rep-run-export-all')),
+      };
+    });
 
     await page.click('.def[data-name="June window"] .def-kebab');
     await page.waitForSelector('.def .def-menu');
@@ -3973,7 +4075,8 @@ async function sceneReportsView(browser) {
       builder.name && builder.range && builder.custom && builder.by && builder.client &&
       builder.project && builder.tag && builder.billable && builder.rounding && builder.increment &&
       ['today', 'week', 'last-week', 'month', 'last-month', 'custom'].every((p) => builder.presets.includes(p)) &&
-      ['client', 'project', 'day', 'tag'].every((b) => builder.bys.includes(b));
+      ['client', 'project', 'day', 'week', 'month', 'tag'].every((b) => builder.bys.includes(b)) &&
+      builder.nestedIn === null; // a NEW report's builder opens at view level (no card yet)
     const savedSpec = customSave.payload && customSave.payload.rangeSpec;
     const customOk =
       builder.fromType === 'date' && builder.toType === 'date' && builder.datetimeLocals === 0 &&
@@ -3985,7 +4088,11 @@ async function sceneReportsView(browser) {
       customSave.cards.some(
         (c) => c.name === 'June window' && c.spec.includes('2026-06-01') && c.spec.includes('2026-06-07'),
       );
-    const editOk = /Weekly billables/.test(editOpen.title) && /Weekly billables/.test(editOpen.name) && editOpen.deleteVisible;
+    const editOk =
+      /Weekly billables/.test(editOpen.title) && /Weekly billables/.test(editOpen.name) && editOpen.deleteVisible &&
+      // §12 R08: Edit's builder nests inside the edited card — the one expanded card.
+      editOpen.nestedIn === 'Weekly billables — Globex' &&
+      editOpen.openCards.length === 1 && editOpen.openCards[0] === 'Weekly billables — Globex';
     const runOk =
       !!run.ranReport && /Weekly billables/.test(String(run.ranReport.ref)) && // Run sent the card's name
       run.rangeHeader.length > 0 && // the resolved-range header paints
@@ -3994,19 +4101,55 @@ async function sceneReportsView(browser) {
       run.flagInTable >= 2 &&
       run.flagOutside === 0 && // flags IN CONTEXT (none in a separate list)
       run.flagRows.some((r) => /Q3 Strategy/.test(r.label) && r.flags.includes('overlap')) &&
-      run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep'));
+      run.flagRows.some((r) => /Market research/.test(r.label) && r.flags.includes('unreviewed sleep')) &&
+      // §12 R08 (issue #268): the results are visually scoped to the report that ran them —
+      // run-output + filtered exports inside the ran card's subtree, exactly one card open,
+      // no scope label (the nesting states it), Export All Data outside every card.
+      run.inCard === 'Weekly billables — Globex' &&
+      run.exportInCard === 'Weekly billables — Globex' &&
+      run.openCards.length === 1 && run.openCards[0] === 'Weekly billables — Globex' &&
+      run.scopeLabelGone &&
+      run.allDataInCard === null;
+    const preRunExportOk =
+      // Computed OUTCOME, not attribute (the issue-262 false green): pre-run, no run-output
+      // and no filtered exports are actually painted…
+      !preRun.runVisible && !preRun.filteredVisible &&
+      // …while Export All Data is standing chrome — laid out, and a click WORKS: a real
+      // exportEntries call, scope 'all', whole record (no saved ref), honest "(all data)" ack.
+      preRun.allVisible && preRun.allCsvVisible &&
+      preRunExport.payload.scope === 'all' && preRunExport.payload.format === 'csv' &&
+      preRunExport.payload.savedReportRef === undefined &&
+      /all data/.test(preRunExport.status);
     const exportOk =
+      // The run reveals the filtered row as a computed outcome (Export All stays standing).
+      postRunVisible.filteredVisible && postRunVisible.allVisible &&
       afterCsv.format === 'csv' && afterCsv.scope === 'filtered' &&
       afterJson.format === 'json' && afterJson.scope === 'filtered' &&
       afterCsv.savedReportRef === 'Weekly billables — Globex' && // export FROM the saved report (its ref)
       afterJson.savedReportRef === 'Weekly billables — Globex' &&
       afterAllCsv.format === 'csv' && afterAllCsv.scope === 'all' &&
       afterAllJson.format === 'json' && afterAllJson.scope === 'all' &&
-      afterAllCsv.savedReportRef === 'Weekly billables — Globex' &&
-      afterAllJson.savedReportRef === 'Weekly billables — Globex' &&
+      afterAllCsv.savedReportRef === undefined && // the whole record consults no report, run or not
+      afterAllJson.savedReportRef === undefined &&
       /Export All Data/.test(exportLabels.allCsv || '') &&
       /Export All Data/.test(exportLabels.allJson || '') &&
       /all data/.test(exportLabels.allStatus || '');
+    const oneOpenOk =
+      // Running a second report moves the results into ITS card — the first card collapses
+      // and its body is genuinely empty (adopted away, not copied)…
+      secondRun.openCards.length === 1 &&
+      secondRun.openCards[0] === 'Monthly — all clients by client' &&
+      secondRun.inCard === 'Monthly — all clients by client' &&
+      secondRun.runVisible &&
+      secondRun.firstCardBodyEmpty &&
+      // …and closing collapses the accordion entirely, DISCARDING the results: no open card,
+      // run-output + filtered exports computed-invisible, the painted rows gone (a re-view
+      // costs a re-run), while Export All Data stands untouched.
+      collapsed.openCount === 0 &&
+      !collapsed.runVisible &&
+      !collapsed.filteredVisible &&
+      collapsed.rowsDiscarded &&
+      collapsed.allVisible;
     const kebabOk =
       !!renamed.payload &&
       renamed.payload.name === 'June window' &&
@@ -4048,12 +4191,14 @@ async function sceneReportsView(browser) {
         customOk,
         editOk,
         runOk,
+        preRunExportOk,
         exportOk,
+        oneOpenOk,
         kebabOk,
         refusalOk,
         emptyOk,
       },
-      `reports view: list=${JSON.stringify(list)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} pre-run=${JSON.stringify(preRun)} pre-run all-data export=${JSON.stringify(preRunExport)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} post-run visibility=${JSON.stringify(postRunVisible)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} second run=${JSON.stringify(secondRun)} collapsed=${JSON.stringify(collapsed)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
 }
@@ -5268,7 +5413,8 @@ async function sceneSettingsView(browser) {
           has('firstCheckinMin') &&
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
-          has('dateFormat'),
+          has('dateFormat') &&
+          has('timeZone'),
         offenders,
         segChip,
       };
@@ -5290,7 +5436,7 @@ async function sceneSettingsView(browser) {
     record(
       'SETTINGS_VIEW',
       { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all seven §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });

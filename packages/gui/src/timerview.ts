@@ -161,7 +161,7 @@ export interface LiveEditStripInput {
  * an unparseable half-typed instant contributes nothing (the NaN guard), while a change resolving
  * to the SAME stored instant is dropped by the double-guard.
  */
-export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
+export function liveEditStripPatch(input: LiveEditStripInput, timeZone?: string): EditPatch {
   const changed: LiveEditInput = {};
   // Description: normalise both sides (a blank field is a cleared label = null) and compare, so an
   // untouched field — where the seed already equals the running description — yields no key.
@@ -172,7 +172,9 @@ export function liveEditStripPatch(input: LiveEditStripInput): EditPatch {
   // and is skipped WITHOUT parsing, so a DST-ambiguous wall-clock never reparses to the wrong
   // instant. Only a genuinely edited, parseable value resolving to a DIFFERENT stored instant rides.
   if (input.start && input.start !== input.seedStart) {
-    const parsed = parseLocalInput(input.start);
+    // §04 R06: an edited wall-clock start parses in the CONFIGURED zone, the same zone the
+    // seed rendered in.
+    const parsed = parseLocalInput(input.start, timeZone);
     if (!isNaN(parsed.getTime())) {
       const nextIso = parsed.toISOString();
       if (nextIso !== new Date(input.startUtc).toISOString()) changed.startUtc = nextIso;

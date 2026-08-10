@@ -55,7 +55,12 @@ export function statusLine(e: EntryView): string {
   return `▸ running ${formatDuration(e.billableSeconds)} · ${desc}${tail}`;
 }
 
-/** Short ISO without milliseconds for compact tables. */
+/**
+ * Short UTC ISO without milliseconds. Deliberately NOT the §04 R06 configured-zone
+ * rendering: its one consumer is `reportRangeSpecLine` below, which echoes a saved
+ * report's STORED absolute bounds — stored truth, like `--json`. Every wall-clock
+ * timestamp a human table shows goes through core's `formatStamp` instead.
+ */
 export function shortUtc(iso: string | null): string {
   if (!iso) return '—';
   return iso.replace(/\.\d{3}Z$/, 'Z');

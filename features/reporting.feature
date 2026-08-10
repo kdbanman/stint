@@ -1,11 +1,12 @@
-Feature: Report grouping (group by client / project / day / tag)
+Feature: Report grouping (group by client / project / day / week / month / tag)
   # PRD §09 R2 — the report's Group by control. The same range of this-week entries can be
-  # regrouped by client, project, day, or tag; each grouping sums the SAME underlying
-  # billable time into different buckets, so the grand total is grouping-invariant. This
+  # regrouped by client, project, day, week, month, or tag; each grouping sums the SAME
+  # underlying billable time into different buckets, so the grand total is grouping-
+  # invariant. This
   # locks the grouping CONTRACT the GUI Group-by segment drives (gui/renderer/reports.js
   # #by-seg → window.stint.report({ by })). It runs TWICE — once over @stint/core
   # (store.report with the chosen `by`) and once over tt (`tt report --by <client|project|
-  # day|tag> --json`) — so the grouping engine the GUI control drives is proven identical on
+  # day|week|month|tag> --json`) — so the grouping engine the GUI control drives is proven identical on
   # both logic surfaces (§17 R8). The fixed clock is a Wednesday (2026-06-24); the entries
   # below all fall in that week, on two distinct days, under two clients/projects, with tags.
 
@@ -57,13 +58,16 @@ Feature: Report grouping (group by client / project / day / tag)
 
   Scenario: The grand total is grouping-invariant
     # Regrouping never changes the underlying time: the same week's entries total the same
-    # number of billable hours whether grouped by client, project, day, or tag — the property
-    # the GUI Group-by control relies on (switching the segment regroups the SAME totals).
+    # number of billable hours under every grouping — client, project, day, week, month, or
+    # tag — the property the GUI Group-by control relies on (switching the segment regroups
+    # the SAME totals). Week and month attribute by the entry's START day, like day.
     Given a closed entry "build" for "Acme" / "API" tagged "deep,urgent" this week on day 1 lasting 2 hours
     And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours
     Then a report for this week totals 5 billable hours grouped by client
     And a report for this week totals 5 billable hours grouped by project
     And a report for this week totals 5 billable hours grouped by day
+    And a report for this week totals 5 billable hours grouped by week
+    And a report for this week totals 5 billable hours grouped by month
     And a report for this week totals 5 billable hours grouped by tag
 
   # PRD §09 R1 — a CUSTOM range is a pair of PLAIN DATES, no time component (G3): the GUI's
@@ -112,13 +116,14 @@ Feature: Report grouping (group by client / project / day / tag)
     And a closed entry "call" for "Acme" / "API" tagged "meeting" this week on day 1 lasting 3 hours
     Then a report covering this week flags 2 overlapping entries
 
-  # PRD §09 R06 — the ALL-DATA export scope: every RAW entry for a range via core's
-  # toCsv/toJsonEntries (byte-identical to `tt export --csv/--json` and the GUI report's
-  # "Export All Data" button — the renderer cannot touch fs, so the GUI rounds the bytes through
-  # main). This locks the raw export SHAPE surface-neutrally — it runs TWICE, over @stint/core
-  # (the core exporters) and over tt (`tt export --range … --csv|--json`). The other scope — a
-  # saved report's FILTERED export (`tt report run <name> --csv|--json`) — is proven in
-  # features/saved_reports.feature, where an off-filter row inside the range tells them apart.
+  # PRD §09 R06 — a RANGE-NARROWED raw export: every RAW entry for a range via core's
+  # toCsv/toJsonEntries (byte-identical to `tt export --range … --csv/--json` — the range
+  # flags narrow the raw exporter when asked). This locks the raw export SHAPE surface-
+  # neutrally — it runs TWICE, over @stint/core (the core exporters) and over tt
+  # (`tt export --range … --csv|--json`). The other scope — a saved report's FILTERED export
+  # (`tt report run <name> --csv|--json`) — is proven in features/saved_reports.feature,
+  # where an off-filter row inside the range tells them apart; the UNSCOPED whole-record
+  # export (no-flag `tt export` / the GUI "Export All Data") is the next scenario.
   Scenario: CSV and JSON export the raw entries for the range with the same shape
     Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours
@@ -132,3 +137,24 @@ Feature: Report grouping (group by client / project / day / tag)
     And the export has a row "build" for "Acme" of 7200 seconds
     And the export has a row "ops sync" for "Globex" of 10800 seconds
     And every exported row carries its billable flag
+
+  # PRD §09 R06 — the UNSCOPED, whole-record export: with no range at all, the export is
+  # EVERY raw entry ever — billable and non-billable, this week and months past. This is the
+  # durability / data-out escape hatch: no-flag `tt export`, byte-identical to the GUI's
+  # always-on "Export All Data" buttons (which need no report run and consult none). Runs
+  # TWICE over the World exportAllRows capability — @stint/core (unbounded listEntries →
+  # toCsv/toJsonEntries) and tt (`tt export --csv|--json`, no range flag) — so a silently
+  # reintroduced default window fails on both surfaces (§17 R8).
+  Scenario: Exporting everything covers the whole record, not an implicit window
+    Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
+    And a closed non-billable entry "filing" for "Acme" last week lasting 3 hours
+    And a closed entry "january audit" for "Globex" on local day 2026-01-05 at 09:00 lasting 60 minutes
+    When I export everything as csv
+    Then the export has 3 rows
+    And the export has a row "build" for "Acme" of 7200 seconds
+    And the export has a row "filing" for "Acme" of 10800 seconds
+    And the export has a row "january audit" for "Globex" of 3600 seconds
+    And every exported row carries its billable flag
+    When I export everything as json
+    Then the export has 3 rows
+    And the export has a row "january audit" for "Globex" of 3600 seconds

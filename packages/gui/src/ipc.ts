@@ -47,9 +47,10 @@ export const CHANNELS = [
   'runReport',
   // §09 R06/R09: the Reports view's exports — the report's own Export CSV/JSON (scope
   // 'filtered', parity with `tt report run <name> --csv|--json`) and Export All Data (scope
-  // 'all', parity with `tt export`). The renderer cannot touch Node/fs, so the export round-
-  // trips through main: it lists the scoped entries, renders the bytes via core's
-  // toCsv/toJsonEntries, and writes the file through Electron's save dialog.
+  // 'all' — the whole record, every raw entry ever, parity with no-flag `tt export`). The
+  // renderer cannot touch Node/fs, so the export round-trips through main: it lists the
+  // scoped entries, renders the bytes via core's toCsv/toJsonEntries, and writes the file
+  // through Electron's save dialog.
   'exportEntries',
   // §05 R09: pinned timer favorites — the Timer view's favorites rail. CRUD over the SAME
   // @stint/core Store the tt `fav add|ls|rename|rm` verbs drive, so favorites are reachable
@@ -209,6 +210,13 @@ export interface UiState {
     /** §12 R11 — date rendering mode ('system' | 'iso'). */
     dateFormat: string;
     /**
+     * §04 R06 / §14 — the configured time zone: the literal 'system' (follow the OS at
+     * read time) or an IANA zone (pins display/parsing/day-bucketing). The renderer
+     * applies it to SU on every render; persists over the existing `setSetting` channel
+     * (key `timeZone`), parity with `tt config set time_zone`.
+     */
+    timeZone: string;
+    /**
      * §14 — the timeline-window settings (G15) the Settings → Timeline group edits and
      * `SU.timelineWindow` derives the picker/calendar default viewport from (G16). Strict
      * zero-padded HH:MM pair (start<end, core-validated), the picker's default-window mode
@@ -308,7 +316,7 @@ export interface SavedReportView {
   id: number;
   name: string;
   rangeSpec: SavedReportRangeView;
-  by: 'client' | 'project' | 'day' | 'tag';
+  by: GroupBy;
   billableFilter: 'billable' | 'all' | 'non-billable';
   clientId?: number;
   projectId?: number;
@@ -327,7 +335,7 @@ export interface SavedReportView {
 export interface SavedReportInputView {
   name: string;
   rangeSpec: SavedReportRangeView;
-  by: 'client' | 'project' | 'day' | 'tag';
+  by: GroupBy;
   billableFilter: 'billable' | 'all' | 'non-billable';
   clientId?: number;
   projectId?: number;

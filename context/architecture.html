@@ -149,7 +149,7 @@
         <tr><td class="m" data-l="Module">db</td><td data-l="Owns">Opens the DB; defines the schema; asserts the durability pragmas, the at-most-one-open index, and the triggers on every open; runs migrations.</td></tr>
         <tr><td class="m" data-l="Module">store</td><td data-l="Owns">The only writer — atomic state transitions, favorites and saved-report CRUD, reporting and list reads, backup/recovery. The façade both surfaces call.</td></tr>
         <tr><td class="m" data-l="Module">types</td><td data-l="Owns">The domain types — entry (open when its end is null), client, project, tag, favorite, sleep span, status.</td></tr>
-        <tr><td class="m" data-l="Module">time</td><td data-l="Owns">Time parsing/formatting and the duration primitives, including the never-negative elapsed guard.</td></tr>
+        <tr><td class="m" data-l="Module">time</td><td data-l="Owns">Time parsing/formatting and the duration primitives, including the never-negative elapsed guard and the configured-zone wall-clock pair (<code>wallClockOf</code>/<code>wallClockToUtc</code>, §04 R06) every zone-sensitive derivation resolves through.</td></tr>
         <tr><td class="m" data-l="Module">report</td><td data-l="Owns">Grouping, display-only rounding, and the one overlap rule shared by write-time checks and report scans.</td></tr>
         <tr><td class="m" data-l="Module">savedreport</td><td data-l="Owns">Saved report definitions and range resolution (relative preset or absolute bounds).</td></tr>
         <tr><td class="m" data-l="Module">entrylist</td><td data-l="Owns">The Entries-view list model — filter, search, group.</td></tr>
@@ -195,7 +195,7 @@
   <section id="s5">
     <div class="eyebrow"><span class="n">05</span> Derived elapsed</div>
     <h2>Time is computed, not kept</h2>
-    <p>No process holds or increments a timer (<a href="prd.html#s4">§04 R03</a>). Open-entry elapsed is <code>now − start</code>, clamped to non-negative so a backward wall-clock jump never yields garbage (<a href="prd.html#s20">§20 R06</a>). Stored <code>start_utc</code>/<code>end_utc</code> are never mutated by rounding or sleep subtraction — both apply to derived duration only, and both reverse (<a href="prd.html#s17">§17 R04</a>). Times are stored UTC, rendered local, so durations are DST-safe (<a href="prd.html#s4">§04 R06</a>).</p>
+    <p>No process holds or increments a timer (<a href="prd.html#s4">§04 R03</a>). Open-entry elapsed is <code>now − start</code>, clamped to non-negative so a backward wall-clock jump never yields garbage (<a href="prd.html#s20">§20 R06</a>). Stored <code>start_utc</code>/<code>end_utc</code> are never mutated by rounding or sleep subtraction — both apply to derived duration only, and both reverse (<a href="prd.html#s17">§17 R04</a>). Times are stored UTC and rendered in the configured time zone (§14 <code>time_zone</code> — 'system' follows the OS at read time; wall-clock input parses in the same zone), so durations are DST-safe (<a href="prd.html#s4">§04 R06</a>).</p>
   </section>
 
   <section id="s6">

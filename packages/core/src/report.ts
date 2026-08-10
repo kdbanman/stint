@@ -8,16 +8,16 @@
  */
 import type { EntryView } from './types.js';
 import type { WeekStart } from './settings.js';
-import { toUtc } from './time.js';
+import { toUtc, resolveTimeZone, wallClockOf, wallClockToUtc } from './time.js';
 
 /**
  * The ONE grouping vocabulary (PRD §09 R2), shared by the report, the Entries-view list
  * (entrylist.ts), saved reports, `tt report --by` and the GUI's list query. One canonical
- * term, no synonyms (glossary.html) — a second declaration of the same four groupings under
- * a second name is what issue #170 removed: adding a fifth grouping used to compile clean
+ * term, no synonyms (glossary.html) — a second declaration of the same groupings under
+ * a second name is what issue #170 removed: adding a grouping used to compile clean
  * and leave the Entries view unable to express it. It is now a compile error everywhere.
  */
-export type GroupBy = 'client' | 'project' | 'day' | 'tag';
+export type GroupBy = 'client' | 'project' | 'day' | 'week' | 'month' | 'tag';
 export type BillableFilter = 'billable' | 'all' | 'non-billable';
 
 // The placeholder bucket labels for entries a grouping cannot key: no client, no project, no
@@ -153,14 +153,68 @@ export function detectOverlaps(entries: EntryView[], now: Date = new Date()): Se
   return new Set(describeOverlaps(entries, now).keys());
 }
 
-/** Local calendar day (YYYY-MM-DD) of an instant, in the given zone. */
+/**
+ * Local calendar day (YYYY-MM-DD) of an instant, in the given zone — the day-bucket key
+ * behind every by-day grouping (glossary "Group key"). `timeZone` is an IANA zone or the
+ * `'system'` sentinel/absent → the OS zone at read time (§04 R06/§14).
+ */
 export function localDay(iso: string, timeZone?: string): string {
   return new Intl.DateTimeFormat('en-CA', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone,
+    timeZone: resolveTimeZone(timeZone),
   }).format(new Date(iso));
+}
+
+/**
+ * Days back from a civil date's day-of-week (0=Sun) to the configured week start — the ONE
+ * week-start arithmetic, shared by the "this week" range presets (resolveRange below) and
+ * the by-week group keys, so a report's week buckets can never disagree with the window
+ * "this week" resolves to.
+ */
+function daysBackToWeekStart(dow: number, weekStart: WeekStart): number {
+  return weekStart === 'monday' ? (dow + 6) % 7 : dow;
+}
+
+/**
+ * The start day (YYYY-MM-DD) of the configured week containing an instant: the instant's
+ * local day in the given zone, walked back to the configured week-start day — the week
+ * group key (§09 R02, glossary "Group key"). Zone-free calendar arithmetic once the local
+ * day is known (a plain date has no DST).
+ */
+function localWeekStart(iso: string, weekStart: WeekStart, timeZone?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDay(iso, timeZone));
+  if (!m) throw new Error(`localDay produced a non-date: ${localDay(iso, timeZone)}`);
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  d.setUTCDate(d.getUTCDate() - daysBackToWeekStart(d.getUTCDay(), weekStart));
+  return d.toISOString().slice(0, 10);
+}
+
+// Fixed month abbreviations for the week/month group-key labels below. A table, not
+// Intl month names, so the rendered label — which reaches the drift-gated CLI transcript —
+// cannot shift with the host's ICU data.
+const MONTH_SHORT = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+] as const;
+
+/**
+ * The human label for a report line's group key (§09 R02): a week key (`YYYY-MM-DD`, the
+ * week's start day) reads "Week of Jul 27", a month key (`YYYY-MM`) reads "Jul 2026", and
+ * every other grouping's key IS its label. Display only — the key stays the machine value
+ * (it sorts the lines and rides `--json`); both surfaces label through this one function
+ * (`tt`'s renderReport, the GUI via window.SU), so the label cannot fork per surface.
+ */
+export function groupKeyLabel(key: string, by: GroupBy): string {
+  if (by === 'week') {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+    // MONTH_SHORT[..]: the regex holds the month to 01–12.
+    if (m) return `Week of ${MONTH_SHORT[Number(m[2]) - 1]!} ${Number(m[3])}`;
+  } else if (by === 'month') {
+    const m = /^(\d{4})-(\d{2})$/.exec(key);
+    if (m) return `${MONTH_SHORT[Number(m[2]) - 1]!} ${m[1]}`;
+  }
+  return key;
 }
 
 function filterByBillable(entries: EntryView[], filter: BillableFilter): EntryView[] {
@@ -197,15 +251,20 @@ export function buildReport(
   opts: ReportOptions,
   range: { fromUtc: string; toUtc: string },
   now: Date = new Date(),
+  timeZone?: string,
+  weekStart?: WeekStart,
 ): Report {
   const overlapped = detectOverlaps(allInRange, now);
   const entries = filterByBillable(allInRange, opts.billableFilter);
 
   // 'client' is the only NESTED grouping (client → project children); every other grouping is
   // flat and keyed by the one `groupKeysOf` derivation, so there is no second switch over the
-  // vocabulary to keep in step with it (issue #170).
+  // vocabulary to keep in step with it (issue #170). `timeZone` reaches only the day/week/month
+  // keys — client/project/tag keys are zone-free — and `weekStart` only the week keys.
   const lines =
-    opts.by === 'client' ? groupByClientProject(entries, opts) : groupByKeys(entries, opts, opts.by);
+    opts.by === 'client'
+      ? groupByClientProject(entries, opts)
+      : groupByKeys(entries, opts, opts.by, timeZone, weekStart);
 
   const grandTotalSeconds = entries.reduce((s, e) => s + e.billableSeconds, 0);
   const grandRoundedSeconds = lines.reduce((s, l) => s + l.roundedSeconds, 0);
@@ -272,10 +331,29 @@ export function sortedGroups<T>(map: Map<string, T[]>): [string, T[]][] {
  * Tags FAN OUT: an entry with multiple tags lands in each of its tag groups, and an untagged
  * one lands in `UNTAGGED` exactly once.
  */
-export function groupKeysOf(e: EntryView, by: GroupBy): string[] {
+export function groupKeysOf(
+  e: EntryView,
+  by: GroupBy,
+  timeZone?: string,
+  weekStart?: WeekStart,
+): string[] {
   switch (by) {
     case 'day':
-      return [localDay(e.startUtc)];
+      // §04 R06 / §14: the day bucket is the CONFIGURED zone's calendar day of the start
+      // ('system'/absent → the OS zone at read time).
+      return [localDay(e.startUtc, timeZone)];
+    case 'week':
+      // §09 R02: attribution by the entry's START day — the same rule as by-day — walked
+      // back to the configured week-start day. `weekStart` must be threaded from settings;
+      // grouping by week without it is a caller bug, so fail loudly (the issue #55
+      // pattern) rather than silently assuming a start day the setting may contradict.
+      if (weekStart === undefined) {
+        throw new Error("grouping by week requires the week_start setting threaded in");
+      }
+      return [localWeekStart(e.startUtc, weekStart, timeZone)];
+    case 'month':
+      // §09 R02: the configured zone's calendar month of the START day, keyed YYYY-MM.
+      return [localDay(e.startUtc, timeZone).slice(0, 7)];
     case 'client':
       return [e.clientName ?? NO_CLIENT];
     case 'project':
@@ -288,15 +366,21 @@ export function groupKeysOf(e: EntryView, by: GroupBy): string[] {
       // undefined — which used to surface as an opaque "keysOf … is not iterable"
       // TypeError deep inside groupInto.
       throw new Error(
-        `unknown entry grouping '${String(by)}' — expected 'day', 'client', 'project' or 'tag'`,
+        `unknown entry grouping '${String(by)}' — expected 'day', 'week', 'month', 'client', 'project' or 'tag'`,
       );
   }
 }
 
 /** One flat line per group key, ordered by key — the report shape of `groupKeysOf`. */
-function groupByKeys(entries: EntryView[], opts: ReportOptions, by: GroupBy): ReportLine[] {
-  return sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by))).map(([k, es]) =>
-    makeLine(k, es, opts),
+function groupByKeys(
+  entries: EntryView[],
+  opts: ReportOptions,
+  by: GroupBy,
+  timeZone?: string,
+  weekStart?: WeekStart,
+): ReportLine[] {
+  return sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by, timeZone, weekStart))).map(
+    ([k, es]) => makeLine(k, es, opts),
   );
 }
 
@@ -318,51 +402,54 @@ function groupByClientProject(entries: EntryView[], opts: ReportOptions): Report
     });
 }
 
-/** Resolve a named preset or explicit range to UTC bounds. */
+/**
+ * Resolve a named preset to UTC bounds — the configured zone's calendar (§04 R06/§14,
+ * glossary "Range preset"): "today"/"this week"/"this month" are the days the configured
+ * zone's clock says they are, bounded by that zone's midnights. `timeZone` is an IANA
+ * zone or the `'system'` sentinel/absent → the OS zone at read time. All day/month
+ * stepping is CALENDAR arithmetic through `wallClockToUtc` (never `+ n*24h`), so a
+ * DST-transition day of 23/25 local hours still bounds at true local midnights — and a
+ * zone whose midnight does not exist on a transition day resolves compatibly (shifted
+ * past the gap).
+ */
 export function resolveRange(
   preset: 'today' | 'week' | 'last-week' | 'month' | 'last-month',
   weekStart: WeekStart,
   now: Date = new Date(),
+  timeZone?: string,
 ): { fromUtc: string; toUtc: string } {
-  const startOfDay = (d: Date) => {
-    const x = new Date(d);
-    x.setHours(0, 0, 0, 0);
-    return x;
-  };
-  const addDays = (d: Date, n: number) => {
-    const x = new Date(d);
-    x.setDate(x.getDate() + n);
-    return x;
-  };
-  const weekStartOf = (d: Date) => {
-    const sd = startOfDay(d);
-    const dow = sd.getDay(); // 0=Sun
-    const offset = weekStart === 'monday' ? (dow + 6) % 7 : dow;
-    return addDays(sd, -offset);
-  };
+  const tz = resolveTimeZone(timeZone);
+  const today = wallClockOf(now, tz);
+  // The zone's midnight of a civil date; out-of-range day/month carry over as calendar
+  // arithmetic (Date.UTC normalisation inside wallClockToUtc).
+  const midnight = (month: number, day: number) =>
+    wallClockToUtc({ year: today.year, month, day }, tz);
+  // Day-of-week of the civil date (zone-free once the date is known).
+  const dow = new Date(Date.UTC(today.year, today.month - 1, today.day)).getUTCDay(); // 0=Sun
+  const back = daysBackToWeekStart(dow, weekStart);
 
   let from: Date;
   let to: Date;
   switch (preset) {
     case 'today':
-      from = startOfDay(now);
-      to = addDays(from, 1);
+      from = midnight(today.month, today.day);
+      to = midnight(today.month, today.day + 1);
       break;
     case 'week':
-      from = weekStartOf(now);
-      to = addDays(from, 7);
+      from = midnight(today.month, today.day - back);
+      to = midnight(today.month, today.day - back + 7);
       break;
     case 'last-week':
-      to = weekStartOf(now);
-      from = addDays(to, -7);
+      from = midnight(today.month, today.day - back - 7);
+      to = midnight(today.month, today.day - back);
       break;
     case 'month':
-      from = new Date(now.getFullYear(), now.getMonth(), 1);
-      to = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      from = midnight(today.month, 1);
+      to = midnight(today.month + 1, 1);
       break;
     case 'last-month':
-      from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      to = new Date(now.getFullYear(), now.getMonth(), 1);
+      from = midnight(today.month - 1, 1);
+      to = midnight(today.month, 1);
       break;
   }
   return { fromUtc: from.toISOString(), toUtc: to.toISOString() };
@@ -370,49 +457,54 @@ export function resolveRange(
 
 // ----------------------------------------------- plain-date custom ranges (§09 R01 / G3)
 
-/** A local midnight, `plusDays` calendar days after the given `YYYY-MM-DD` plain date. */
-function localMidnight(date: string, plusDays = 0): Date {
+/** The configured zone's midnight, `plusDays` calendar days after a `YYYY-MM-DD` date. */
+function localMidnight(date: string, plusDays: number, timeZone?: string): Date {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
   if (!m) throw new Error(`invalid plain date (expected YYYY-MM-DD): ${date}`);
-  // Local Date(y, m-1, d) construction: the day-after arithmetic is CALENDAR arithmetic
-  // (never `+ 24h`), so a DST-transition day of 23/25 local hours still resolves to the
-  // true next local midnight.
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + plusDays);
-}
-
-/** The local `YYYY-MM-DD` calendar day an instant falls on. */
-function localDateOf(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  // wallClockToUtc: the day-after arithmetic is CALENDAR arithmetic (never `+ 24h`), so a
+  // DST-transition day of 23/25 local hours still resolves to the true next local midnight.
+  return wallClockToUtc(
+    { year: Number(m[1]), month: Number(m[2]), day: Number(m[3]) + plusDays },
+    resolveTimeZone(timeZone),
+  );
 }
 
 /**
  * §09 R01 — a custom range is a PAIR OF PLAIN DATES, no time component (G3). Resolve the
- * two date-field values (`YYYY-MM-DD`) to the half-open local window
- * [from 00:00 local, day-after-to 00:00 local): the to-day is included IN FULL (an entry
- * late that evening still counts) and the next day is excluded — the same inclusive-end-
- * day, half-open convention the resolveRange presets above produce. This is the ONE home
- * of the plain-date → window rule (both surfaces route through it: the GUI's listEntries
- * handler and saved-report rangeSpec conversions via reportview.ts; the renderer only
- * ever carries the raw date strings).
+ * two date-field values (`YYYY-MM-DD`) to the half-open window
+ * [from 00:00, day-after-to 00:00) in the configured zone (§04 R06/§14): the to-day is
+ * included IN FULL (an entry late that evening still counts) and the next day is
+ * excluded — the same inclusive-end-day, half-open convention the resolveRange presets
+ * above produce. This is the ONE home of the plain-date → window rule (both surfaces
+ * route through it: the GUI's listEntries handler and saved-report rangeSpec conversions
+ * via reportview.ts; the renderer only ever carries the raw date strings).
  */
-export function resolveDateRange(fromDate: string, toDate: string): { fromUtc: string; toUtc: string } {
-  return { fromUtc: toUtc(localMidnight(fromDate)), toUtc: toUtc(localMidnight(toDate, 1)) };
+export function resolveDateRange(
+  fromDate: string,
+  toDate: string,
+  timeZone?: string,
+): { fromUtc: string; toUtc: string } {
+  return {
+    fromUtc: toUtc(localMidnight(fromDate, 0, timeZone)),
+    toUtc: toUtc(localMidnight(toDate, 1, timeZone)),
+  };
 }
 
 /**
  * §09 R01 — the inverse of resolveDateRange: paint a stored absolute window back into the
- * two plain date fields. The stored to-bound is EXCLUSIVE, so the inclusive to-day is the
- * local day of the instant just before it. Tolerant of LEGACY arbitrary-instant windows
- * (a saved def whose bounds are not local midnights): the pair rounds OUTWARD to the
- * covering day pair, so re-saving such a def normalises it to plain-date bounds.
+ * two plain date fields, in the configured zone. The stored to-bound is EXCLUSIVE, so the
+ * inclusive to-day is the local day of the instant just before it. Tolerant of LEGACY
+ * arbitrary-instant windows (a saved def whose bounds are not local midnights): the pair
+ * rounds OUTWARD to the covering day pair, so re-saving such a def normalises it to
+ * plain-date bounds.
  */
 export function utcWindowToDatePair(
   fromUtc: string,
   toUtcBound: string,
+  timeZone?: string,
 ): { fromDate: string; toDate: string } {
   return {
-    fromDate: localDateOf(new Date(fromUtc)),
-    toDate: localDateOf(new Date(Date.parse(toUtcBound) - 1)),
+    fromDate: localDay(fromUtc, timeZone),
+    toDate: localDay(new Date(Date.parse(toUtcBound) - 1).toISOString(), timeZone),
   };
 }

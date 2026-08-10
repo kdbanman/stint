@@ -1,17 +1,26 @@
 /**
  * The exact-times FIELD VOCABULARY (PRD §12 R14/R15/R17, G1) — the one format the raw
- * Start/Stop text fields render, and the one parse that reads them back. Electron-free and
- * collaborator-free, mirroring tags.ts / liveview.ts / timerview.ts.
+ * Start/Stop text fields render, and the one parse that reads them back. Electron-free,
+ * mirroring tags.ts / liveview.ts / timerview.ts; its only collaborator is core's
+ * wall-clock pair (wallClockOf / wallClockToUtc), the same primitives `tt`'s parseTime
+ * uses, so the two surfaces read a wall-clock string identically (§04 R06).
  *
  * These two functions are INVERSES and must stay so, which is why they share a file rather
  * than sitting one in `renderer/su.ts` and one wherever a parse happened to be needed. The
- * renderer reaches them through `window.SU` (su.ts imports and re-exports, the same way it
- * imports core's formatDuration and timerview's countUpSeconds); `timerview.ts`'s
- * `liveEditStripPatch` and the `add` IPC handler reach them directly. One definition,
- * three consumers — the #168 rule, one level deeper so the unit-pinned layer shares it too.
+ * renderer reaches them through `window.SU` (su.ts binds the configured zone and
+ * re-exports, the same way it imports core's formatDuration and timerview's
+ * countUpSeconds); `timerview.ts`'s `liveEditStripPatch` and the `add` IPC handler reach
+ * them directly. One definition, three consumers — the #168 rule, one level deeper so the
+ * unit-pinned layer shares it too.
  *
- * WHAT THE FIELD SHOWS (issue #159). `YYYY-MM-DD HH:mm:ss` in *local* time, no timezone
- * suffix. Two deliberate choices:
+ * WHOSE WALL CLOCK (§04 R06 / §14). Both functions take the configured time zone —
+ * an IANA zone, or the `'system'` sentinel/absent for the OS zone at read time — so the
+ * fields render AND parse in the zone the user configured, symmetric by construction.
+ * Parsing resolves DST compatibly (core wallClockToUtc): a nonexistent wall time shifts
+ * forward past the gap; an ambiguous one takes the earlier offset.
+ *
+ * WHAT THE FIELD SHOWS (issue #159). `YYYY-MM-DD HH:mm:ss` in the configured zone's wall
+ * clock, no timezone suffix. Two deliberate choices:
  *
  *   - SPACE, not `T`. The `T` is a wire separator from ISO-8601 serialization; this string is
  *     not wire, it is the text a user selects and retypes to adjust a start time. The mockups
@@ -32,20 +41,23 @@
  * mid-keystroke value into a committable instant, silently moving a start while the user was
  * still typing it. Anything neither regex matches is an Invalid Date, as before.
  */
+import { resolveTimeZone, wallClockOf, wallClockToUtc } from '@stint/core';
 
 /**
- * Render a Date as the field's local wall-clock string: `YYYY-MM-DD HH:mm:ss`, no zone.
+ * Render a Date as the field's wall-clock string in the configured zone:
+ * `YYYY-MM-DD HH:mm:ss`, no zone suffix.
  *
  * Load-bearing beyond appearance: this string is also the SEED the live-edit strip and the
  * unified form byte-compare an untouched field against (§12 R14/R15, issue #68), so a change
  * here moves what "untouched" means. `renderer-bundle.test.ts` pins the output directly for
  * exactly that reason.
  */
-export function localInputValue(date: Date): string {
+export function localInputValue(date: Date, timeZone?: string): string {
+  const w = wallClockOf(date, resolveTimeZone(timeZone));
   const pad = (n: number) => String(n).padStart(2, '0');
   return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
+    `${w.year}-${pad(w.month)}-${pad(w.day)} ` +
+    `${pad(w.hour)}:${pad(w.minute)}:${pad(w.second)}`
   );
 }
 
@@ -64,28 +76,35 @@ const ZONED_INSTANT_RE =
   /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/;
 
 /**
- * Parse a Start/Stop field's text into a local Date — the inverse of {@link localInputValue}.
+ * Parse a Start/Stop field's text into a Date — the inverse of {@link localInputValue},
+ * reading the wall clock in the same configured zone the seed rendered in.
  *
  * Returns a Date, INVALID (NaN) when unreadable, rather than null: every call site already
  * guards with `isNaN(d.getTime())` or lets `toISOString()` throw its RangeError into the §12
  * R21 message region, and keeping that shape means adopting this parser changes no behaviour
  * on a half-typed value.
  *
- * A local match is built through the Date *constructor*, so the fields become the local wall
- * clock they claim to be; a zone-bearing instant goes to the engine and lands on the instant it
- * names; everything else — including every prefix of a value still being typed — is Invalid.
+ * A local match resolves through core's `wallClockToUtc` (compatible DST resolution — §04
+ * R06), so the fields become the configured zone's wall clock they claim to be; a
+ * zone-bearing instant goes to the engine and lands on the instant it names; everything
+ * else — including every prefix of a value still being typed — is Invalid.
  */
-export function parseLocalInput(value: string): Date {
+export function parseLocalInput(value: string, timeZone?: string): Date {
   const s = String(value ?? '').trim();
   const m = LOCAL_INPUT_RE.exec(s);
   if (!m) return ZONED_INSTANT_RE.test(s) ? new Date(s) : new Date(NaN);
-  return new Date(
-    Number(m[1]),
-    Number(m[2]) - 1,
-    Number(m[3]),
-    Number(m[4]),
-    Number(m[5]),
-    m[6] ? Number(m[6]) : 0,
-    m[7] ? Number(m[7].padEnd(3, '0')) : 0,
+  const base = wallClockToUtc(
+    {
+      year: Number(m[1]),
+      month: Number(m[2]),
+      day: Number(m[3]),
+      hour: Number(m[4]),
+      minute: Number(m[5]),
+      second: m[6] ? Number(m[6]) : 0,
+    },
+    resolveTimeZone(timeZone),
   );
+  // A typed millisecond fraction rides on top of the second-resolution wall clock.
+  const ms = m[7] ? Number(m[7].padEnd(3, '0')) : 0;
+  return ms === 0 ? base : new Date(base.getTime() + ms);
 }

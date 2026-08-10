@@ -70,6 +70,9 @@ export function buildUiState(
       globalHotkey: settings.globalHotkey,
       // §12 R11: the editable date-format mode the Settings view edits.
       dateFormat: settings.dateFormat,
+      // §04 R06 / §14: the configured time zone ('system' or an IANA zone). The renderer
+      // applies it to SU (display, field parsing, day/minute geometry) on every render.
+      timeZone: settings.timeZone,
       // §14: the timeline-window settings the Settings → Timeline group edits and the
       // picker/calendar default viewports read (via SU.timelineWindow, G16).
       workingHoursStart: settings.workingHoursStart,

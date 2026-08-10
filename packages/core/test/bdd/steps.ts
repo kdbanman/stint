@@ -4,6 +4,7 @@
  */
 import { expect } from 'vitest';
 import type { World, EntryRec, ExportRowRec, ListFilterReq, FavoriteRec } from './world.js';
+import type { GroupBy } from '@stint/core';
 
 /** Scenario-scoped scratch shared across steps. */
 export interface Ctx {
@@ -204,8 +205,9 @@ export const steps: StepDef[] = [
   },
   // §09 R2 — place a closed, client/project-attributed, tagged entry on a chosen day of
   // this week, for the group-by scenarios. The tags (comma-separated) and the project let
-  // one set of entries be regrouped by client / project / day / tag; the day selector
-  // (1 or 2 → THIS_WEEK_DAYS) puts entries on distinct days so by-day grouping is observable.
+  // one set of entries be regrouped by client / project / day / week / month / tag; the day
+  // selector (1 or 2 → THIS_WEEK_DAYS) puts entries on distinct days so by-day grouping is
+  // observable.
   {
     pattern:
       /^a closed entry "([^"]*)" for "([^"]*)" \/ "([^"]*)" tagged "([^"]*)" this week on day (\d) lasting (\d+) hours?$/,
@@ -988,7 +990,7 @@ export const steps: StepDef[] = [
   // #by-seg segment sends over window.stint.report.
   {
     pattern:
-      /^a report for this week grouped by (client|project|day|tag) groups (\d+) billable hours? under "([^"]*)"$/,
+      /^a report for this week grouped by (client|project|day|week|month|tag) groups (\d+) billable hours? under "([^"]*)"$/,
     run: (w, _c, by, hours, key) => {
       const r = w.report({ preset: 'week', by: groupBy(by), billableFilter: 'billable' });
       const line = r.lines.find((l) => l.key === key);
@@ -997,7 +999,7 @@ export const steps: StepDef[] = [
     },
   },
   {
-    pattern: /^a report for this week grouped by (client|project|day|tag) has (\d+) group lines?$/,
+    pattern: /^a report for this week grouped by (client|project|day|week|month|tag) has (\d+) group lines?$/,
     run: (w, _c, by, count) => {
       const r = w.report({ preset: 'week', by: groupBy(by), billableFilter: 'billable' });
       expect(r.lines.length).toBe(Number(count));
@@ -1005,7 +1007,7 @@ export const steps: StepDef[] = [
   },
   {
     pattern:
-      /^a report for this week grouped by (client|project|day|tag) totals (\d+) billable hours?$/,
+      /^a report for this week grouped by (client|project|day|week|month|tag) totals (\d+) billable hours?$/,
     run: (w, _c, by, hours) => {
       const r = w.report({ preset: 'week', by: groupBy(by), billableFilter: 'billable' });
       expect(r.grandTotalSeconds).toBe(Number(hours) * 3600);
@@ -1013,10 +1015,10 @@ export const steps: StepDef[] = [
   },
   // §09 R2 — the grouping-invariance fact: the grand total is the same no matter the
   // grouping (regrouping never changes the underlying time). Phrased per-grouping so a
-  // scenario can assert it across client / project / day / tag with the one expected total.
+  // scenario can assert it across all six groupings with the one expected total.
   {
     pattern:
-      /^a report for this week totals (\d+) billable hours? grouped by (client|project|day|tag)$/,
+      /^a report for this week totals (\d+) billable hours? grouped by (client|project|day|week|month|tag)$/,
     run: (w, _c, hours, by) => {
       const r = w.report({ preset: 'week', by: groupBy(by), billableFilter: 'billable' });
       expect(r.grandTotalSeconds).toBe(Number(hours) * 3600);
@@ -1030,7 +1032,7 @@ export const steps: StepDef[] = [
   // core roundSeconds either way (the GUI #rounding toggle / increment picker only choose it).
   {
     pattern:
-      /^a report for this week grouped by (client|project|day|tag) rounded to (\d+) minutes? groups (\d+) seconds under "([^"]*)"$/,
+      /^a report for this week grouped by (client|project|day|week|month|tag) rounded to (\d+) minutes? groups (\d+) seconds under "([^"]*)"$/,
     run: (w, _c, by, inc, seconds, key) => {
       const r = w.report({
         preset: 'week',
@@ -1048,7 +1050,7 @@ export const steps: StepDef[] = [
     // The same line's EXACT (unrounded) total is unchanged — rounding is display-only, so
     // the stored billable seconds the report sums still read the exact figure.
     pattern:
-      /^a report for this week grouped by (client|project|day|tag) has an exact (\d+) seconds under "([^"]*)"$/,
+      /^a report for this week grouped by (client|project|day|week|month|tag) has an exact (\d+) seconds under "([^"]*)"$/,
     run: (w, _c, by, seconds, key) => {
       const r = w.report({ preset: 'week', by: groupBy(by), billableFilter: 'billable' });
       const line = r.lines.find((l) => l.key === key);
@@ -1098,12 +1100,31 @@ export const steps: StepDef[] = [
   },
   {
     // §14 — an INVALID setting write is rejected on this surface (a malformed HH:MM, an
-    // inverted working-hours pair, an out-of-range around span), storing nothing. Runs over
-    // the World attemptSetConfig capability so the strictness is proven identical on core
-    // AND tt (§17 R8); a follow-up "the configured … is …" step asserts the default survived.
+    // inverted working-hours pair, an out-of-range around span, an unknown time zone),
+    // storing nothing. Runs over the World attemptSetConfig capability so the strictness is
+    // proven identical on core AND tt (§17 R8); a follow-up "the configured … is …" step
+    // asserts the default survived.
     pattern: /^setting (?:the )?(.+?) to "([^"]*)" is rejected$/,
     run: (w, _c, setting, value) => {
       expect(w.attemptSetConfig(settingKey(setting), value).rejected).toBe(true);
+    },
+  },
+  {
+    // §04 R06 / §14 — seed a closed entry at EXPLICIT UTC instants, so a zone scenario can
+    // pin exactly which wall clock the configured zone must render them as.
+    pattern: /^a closed entry "([^"]*)" from (\S+) to (\S+)$/,
+    run: (w, _c, desc, fromIso, toIso) => {
+      w.backfillAt({ desc, fromIso, toIso });
+    },
+  },
+  {
+    // §04 R06 / §14 — BOTH surfaces render stored UTC in the ONE configured zone: CoreWorld
+    // through core's formatStamp over the store's settings (what the GUI stamp labels
+    // paint), CliWorld off the human `tt list` table's START cell — the recorded behavior
+    // change away from raw UTC ISO. Run twice, the two surfaces are proven to show one zone.
+    pattern: /^the entry "([^"]*)" renders a start of "([^"]*)"$/,
+    run: (w, _c, desc, stamp) => {
+      expect(w.renderedStart(desc)).toBe(stamp);
     },
   },
 
@@ -1117,6 +1138,15 @@ export const steps: StepDef[] = [
     pattern: /^I export the range (\S+) to (\S+) as (csv|json)$/,
     run: (w, ctx, from, to, format) => {
       ctx.exportRows = w.exportRows({ fromUtc: from, toUtc: to, format: format as 'csv' | 'json' });
+    },
+  },
+  {
+    // §09 R06 — the UNSCOPED export: the whole record, every raw entry ever (billable and
+    // non-billable, no range) — what the GUI's always-on "Export All Data" buttons and
+    // no-flag `tt export` write. Distinct from the ranged step above, which narrows.
+    pattern: /^I export everything as (csv|json)$/,
+    run: (w, ctx, format) => {
+      ctx.exportRows = w.exportAllRows(format as 'csv' | 'json');
     },
   },
   {
@@ -1152,7 +1182,7 @@ export const steps: StepDef[] = [
   // identical on @stint/core and tt (§17 R8/R14).
   {
     pattern:
-      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time$/,
     run: (w, _c, name, preset, by, filter) => {
       w.saveReport({
         name,
@@ -1164,7 +1194,7 @@ export const steps: StepDef[] = [
   },
   {
     pattern:
-      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time rounded to (\d+) minutes$/,
+      /^I save a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time rounded to (\d+) minutes$/,
     run: (w, _c, name, preset, by, filter, inc) => {
       w.saveReport({
         name,
@@ -1183,7 +1213,7 @@ export const steps: StepDef[] = [
     // save` exits non-zero), and — paired with a follow-up list assertion — that a refused save
     // persists nothing. Mirrors the "setting … is rejected" §14 rejection step.
     pattern:
-      /^saving a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|tag) over (billable|all|non-billable) time is rejected$/,
+      /^saving a report "([^"]*)" for (this week|last week|today|this month|last month) grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time is rejected$/,
     run: (w, _c, name, preset, by, filter) => {
       expect(
         w.attemptSaveReport({
@@ -1201,7 +1231,7 @@ export const steps: StepDef[] = [
     // and runnable. Surface-neutral (CoreWorld store.saveReport{absolute} / CliWorld `tt report
     // save --range FROM TO`).
     pattern:
-      /^I save a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+      /^I save a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time$/,
     run: (w, _c, name, fromUtc, toUtc, by, filter) => {
       w.saveReportRange({
         name,
@@ -1219,7 +1249,7 @@ export const steps: StepDef[] = [
     // this proves the CONTRACT holds on BOTH surfaces (store.saveReport throws / `tt report save`
     // exits non-zero), and — paired with a list assertion — that a refused save persists nothing.
     pattern:
-      /^saving a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|tag) over (billable|all|non-billable) time is rejected$/,
+      /^saving a report "([^"]*)" for the custom range (\S+) to (\S+) grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time is rejected$/,
     run: (w, _c, name, fromUtc, toUtc, by, filter) => {
       expect(
         w.attemptSaveReportRange({
@@ -1266,7 +1296,7 @@ export const steps: StepDef[] = [
     // resolved preset window: the saved relative spec and the ad-hoc preset resolve through
     // the one core resolveRange, so they can never diverge. Asserted on both surfaces.
     pattern:
-      /^the saved report run total equals an ad-hoc (this week|last week|today|this month|last month) report grouped by (client|project|day|tag) over (billable|all|non-billable) time$/,
+      /^the saved report run total equals an ad-hoc (this week|last week|today|this month|last month) report grouped by (client|project|day|week|month|tag) over (billable|all|non-billable) time$/,
     run: (w, ctx, preset, by, filter) => {
       const adhoc = w.report({
         preset: presetKeyFull(preset),
@@ -1285,7 +1315,7 @@ export const steps: StepDef[] = [
     // §09 R08 — amend a saved def's group-by. Captures the current run total first so a
     // subsequent re-run can assert the regrouped total is unchanged (grouping is invariant
     // on the grand total). Proven on both surfaces (store.editReport / `tt report edit --by`).
-    pattern: /^I change the saved report "([^"]*)" grouping to (client|project|day|tag)$/,
+    pattern: /^I change the saved report "([^"]*)" grouping to (client|project|day|week|month|tag)$/,
     run: (w, ctx, name, by) => {
       ctx.priorRunTotalSeconds = ctx.runTotalSeconds;
       w.editReportBy(name, groupBy(by));
@@ -1608,8 +1638,8 @@ export const steps: StepDef[] = [
 ];
 
 /** Map the spoken group-by word to the report() `by` option (the GUI #by-seg value). */
-function groupBy(spoken: string): 'client' | 'project' | 'day' | 'tag' {
-  return spoken as 'client' | 'project' | 'day' | 'tag';
+function groupBy(spoken: string): GroupBy {
+  return spoken as GroupBy;
 }
 
 /** Map the spoken "this week"/"last week" to core's resolveRange preset key. */
@@ -1652,6 +1682,8 @@ function settingKey(spoken: string): string {
     'check-in interval': 'checkin_interval_min',
     'global hotkey': 'global_hotkey',
     'date format': 'date_format',
+    // §04 R06 / §14 — the configured time zone ('system' or an IANA zone).
+    'time zone': 'time_zone',
     // §14 — the timeline-window settings (G15): the working-hours pair, the picker's
     // default-window mode, and the around-now span.
     'working hours start': 'working_hours_start',

@@ -19,6 +19,8 @@ import {
   roundSeconds,
   secondsBetween,
   renderLocal,
+  formatStamp,
+  localDay,
 } from '@stint/core';
 import { mutableClock } from '../support/clock.js';
 
@@ -352,6 +354,38 @@ describe('PROP: duration is UTC math, zone-/DST-safe (§04, §16)', () => {
   // elapsed seconds, and each zone's literal local rendering. Nothing here is recomputed
   // the way the code computes it, and the zone drives live assertions: a duration derived
   // from the endpoints' local hours, or a rendering that ignored the transition, reddens.
+  //
+  // Each zone additionally drives the CONFIGURED time_zone setting (§04 R06/§14) through a
+  // real store: with `time_zone` set to the zone and `date_format` iso, core's ONE display
+  // path (formatStamp — what `tt list` and the GUI stamps render) must show the SAME
+  // literal wall clocks, and localDay must bucket the start under the zone's calendar day.
+
+  // The literal wall clock formatStamp must render for a fixture stamp ('YYYY-MM-DD, HH:MM:SS'
+  // → formatStamp's iso 'YYYY-MM-DD HH:MM:SS'), read off the same calendar fixtures.
+  const asStamp = (s: string) => s.replace(',', '');
+  const dayOf = (s: string) => s.slice(0, 10);
+  // Assert the configured setting drives the display path + the day bucket for a span.
+  function expectConfiguredZone(
+    tz: string,
+    span: { startUtc: string; endUtc: string },
+    startsAt: string,
+    endsAt: string,
+  ): void {
+    const store = Store.openMemory();
+    try {
+      store.setSetting('timeZone', tz);
+      store.setSetting('dateFormat', 'iso');
+      const settings = store.settings();
+      expect(settings.timeZone).toBe(tz);
+      expect(formatStamp(span.startUtc, settings)).toBe(asStamp(startsAt));
+      expect(formatStamp(span.endUtc, settings)).toBe(asStamp(endsAt));
+      // The day bucket (glossary "Group key") is the configured zone's calendar day of the
+      // start — the same localDay groupKeysOf keys by-day reports and the entries list with.
+      expect(localDay(span.startUtc, settings.timeZone)).toBe(dayOf(startsAt));
+    } finally {
+      store.close();
+    }
+  }
 
   // 2026-03-08 spring forward: America/New_York jumps 02:00 EST (UTC-5) → 03:00 EDT
   // (UTC-4). 06:00Z is 01:00 EST and 08:00Z is 04:00 EDT, so the New York wall clock
@@ -371,6 +405,8 @@ describe('PROP: duration is UTC math, zone-/DST-safe (§04, §16)', () => {
       expect(secondsBetween(SPRING_FORWARD.startUtc, SPRING_FORWARD.endUtc)).toBe(2 * 3600);
       expect(renderLocal(SPRING_FORWARD.startUtc, { timeZone: tz })).toBe(startsAt);
       expect(renderLocal(SPRING_FORWARD.endUtc, { timeZone: tz })).toBe(endsAt);
+      // §04 R06/§14: the same wall clocks through the CONFIGURED zone, driven as a setting.
+      expectConfiguredZone(tz, SPRING_FORWARD, startsAt, endsAt);
     },
   );
 
@@ -392,6 +428,8 @@ describe('PROP: duration is UTC math, zone-/DST-safe (§04, §16)', () => {
       expect(secondsBetween(FALL_BACK.startUtc, FALL_BACK.endUtc)).toBe(3600);
       expect(renderLocal(FALL_BACK.startUtc, { timeZone: tz })).toBe(startsAt);
       expect(renderLocal(FALL_BACK.endUtc, { timeZone: tz })).toBe(endsAt);
+      // §04 R06/§14: the same wall clocks through the CONFIGURED zone, driven as a setting.
+      expectConfiguredZone(tz, FALL_BACK, startsAt, endsAt);
     },
   );
 });

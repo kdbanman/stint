@@ -25,7 +25,7 @@
       "required": ["by", "billable_filter", "rounding", "rounding_increment_min"],
       "additionalProperties": false,
       "properties": {
-        "by": { "enum": ["client", "project", "day", "tag"] },
+        "by": { "enum": ["client", "project", "day", "week", "month", "tag"] },
         "billable_filter": { "enum": ["billable", "all", "non-billable"] },
         "rounding": { "type": "boolean" },
         "rounding_increment_min": { "type": "integer" }

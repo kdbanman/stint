@@ -16,7 +16,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { copyFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDb, Store } from '@stint/core';
+import { openDb, SCHEMA_VERSION, Store } from '@stint/core';
 
 const NOW = new Date('2026-06-24T12:00:00Z');
 const clock = () => NOW;
@@ -60,7 +60,7 @@ describe('INTEGRATION: restoring a pre-v4 backup (§20 R05, #180)', () => {
       const store = Store.open({ path: dbPath, clock });
 
       // The §20 R05 seam: restore the old backup by name. This must NOT throw — the
-      // reopen migrates the restored file to v4 instead of rejecting it.
+      // reopen migrates the restored file to the current version instead of rejecting it.
       store.restoreFromBackup(backupName);
 
       // The restored store serves the old data: the in-union span is untouched, the
@@ -72,10 +72,11 @@ describe('INTEGRATION: restoring a pre-v4 backup (§20 R05, #180)', () => {
       ]);
       store.close();
 
-      // And the restored file is a real v4 database: version stamped forward, CHECK live.
+      // And the restored file is a real current-version database: version stamped forward,
+      // CHECK live.
       const raw = new DatabaseSync(dbPath);
       const v = raw.prepare('PRAGMA user_version').get() as { user_version: number };
-      expect(v.user_version).toBe(4);
+      expect(v.user_version).toBe(SCHEMA_VERSION);
       expect(() =>
         raw.exec(
           "INSERT INTO sleep_span(entry_id, sleep_utc, wake_utc, source) " +

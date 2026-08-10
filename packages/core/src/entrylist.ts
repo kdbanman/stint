@@ -9,6 +9,7 @@
  * one match rule and the bucketing of an already-filtered set by the chosen grouping.
  */
 import type { EntryView } from './types.js';
+import type { WeekStart } from './settings.js';
 import { groupInto, sortedGroups, groupKeysOf, type GroupBy } from './report.js';
 
 /** One grouped bucket: the group key and the entries that fall under it. */
@@ -36,24 +37,35 @@ export function matchesQuery(e: EntryView, query: string): boolean {
 }
 
 /**
- * Bucket entries by the chosen grouping. Day groups sort DESC (newest day first,
- * matching the current renderer's day-grouped list); client / project / tag sort ASC
- * (locale-aware), reusing the report's sorted-group helper so the ordering rule lives
- * in one place. Keys come from the report's one `groupKeysOf` derivation, so the Entries
- * view and the Reports view can never disagree on a bucket's name (issue #170) — tag
- * grouping puts an entry under each of its tags, and untagged ones under `UNTAGGED`.
+ * Bucket entries by the chosen grouping. The chronological groupings (day / week / month)
+ * sort DESC (newest first, matching the current renderer's day-grouped list); client /
+ * project / tag sort ASC (locale-aware), reusing the report's sorted-group helper so the
+ * ordering rule lives in one place. Keys come from the report's one `groupKeysOf`
+ * derivation, so the Entries view and the Reports view can never disagree on a bucket's
+ * name (issue #170) — tag grouping puts an entry under each of its tags, and untagged
+ * ones under `UNTAGGED`.
  */
-export function groupEntries(entries: EntryView[], by: GroupBy): EntryGroup[] {
-  const sorted = sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by)));
-  if (by === 'day') sorted.reverse(); // newest day first
+export function groupEntries(
+  entries: EntryView[],
+  by: GroupBy,
+  timeZone?: string,
+  weekStart?: WeekStart,
+): EntryGroup[] {
+  const sorted = sortedGroups(groupInto(entries, (e) => groupKeysOf(e, by, timeZone, weekStart)));
+  if (by === 'day' || by === 'week' || by === 'month') sorted.reverse(); // newest first
   return sorted.map(([key, es]) => ({ key, entries: es }));
 }
 
 /**
  * Build the Entries-view list from a filtered set of entries: bucket them by the chosen
- * grouping. Every filter — search included — is already applied by store.listEntries, so
+ * grouping — day/week/month buckets keyed in the configured zone (§04 R06/§14; `timeZone`
+ * and `weekStart` as `groupKeysOf` takes them; the Entries view itself only ever asks for
+ * day, G11). Every filter — search included — is already applied by store.listEntries, so
  * this never re-filters (issue #176: a second query pass here would double-filter).
  */
-export function buildEntryList(entries: EntryView[], opts: { by: GroupBy }): EntryList {
-  return { groups: groupEntries(entries, opts.by) };
+export function buildEntryList(
+  entries: EntryView[],
+  opts: { by: GroupBy; timeZone?: string; weekStart?: WeekStart },
+): EntryList {
+  return { groups: groupEntries(entries, opts.by, opts.timeZone, opts.weekStart) };
 }

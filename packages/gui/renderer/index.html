@@ -355,9 +355,18 @@
               <button type="button" id="rep-new" class="primary" data-standing-primary><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>New report</button>
             </div>
 
+            <!-- §12 R08: the saved-definition ACCORDION. reports.js paints one .def card per
+                 saved report (head row + an empty .def-body expansion host); the builder and
+                 the run-output below are SINGLE view-level elements that move — expanding a
+                 card adopts them into its .def-body, so "exactly one card expanded at a time"
+                 is structural. Collapsing discards results (a re-view costs a re-run). -->
             <div class="defs" id="rep-defs"></div>
             <div class="defs-empty" id="rep-defs-empty" hidden>No saved reports yet.</div>
 
+            <!-- §09 R08 / §12 R08: the ONE inline builder. This slot is its parked home and the
+                 spot where a New report opens (below the list — a fresh def has no card yet);
+                 Edit adopts it into the edited card's .def-body, the same nested pattern the
+                 run-output follows. -->
             <form class="builder" id="rep-builder" hidden>
               <div class="builder-head">
                 <h3 class="builder-title" id="rep-builder-title">New report</h3>
@@ -396,6 +405,8 @@
                     <button type="button" class="seg-btn on" data-by="client">Client</button>
                     <button type="button" class="seg-btn" data-by="project">Project</button>
                     <button type="button" class="seg-btn" data-by="day">Day</button>
+                    <button type="button" class="seg-btn" data-by="week">Week</button>
+                    <button type="button" class="seg-btn" data-by="month">Month</button>
                     <button type="button" class="seg-btn" data-by="tag">Tag</button>
                   </div>
                 </div>
@@ -450,10 +461,15 @@
               </div>
             </form>
 
+            <!-- §12 R08: the run-output. Parked here hidden; a run adopts it (with the filtered
+                 export row below) into the ran card's .def-body, so the results are visually
+                 scoped to the report that produced them (issue #268). The close control
+                 collapses the card and DISCARDS the results. -->
             <div class="report-summary" id="rep-run" hidden>
               <div class="report-head">
                 <span id="rep-run-caption">Run</span>
-                <span>Total <b id="rep-run-total" class="tnum">0h 00m</b></span>
+                <span class="report-head-total">Total <b id="rep-run-total" class="tnum">0h 00m</b></span>
+                <button type="button" id="rep-run-close" class="iconbtn" aria-label="Collapse this report's results"><svg class="ic" aria-hidden="true"><use href="#i-x" /></svg></button>
               </div>
               <div class="report-range" id="rep-run-range"></div>
               <table class="report-table">
@@ -474,18 +490,22 @@
             </div>
             <!-- §09 R06/R09: the report's OWN export — the FILTERED rows it shows (its range
                  narrowed by the def's client/project/tag + billable filter), byte-identical to
-                 `tt report run <name> --csv|--json`. Belongs to the run-output, beside Run. -->
+                 `tt report run <name> --csv|--json`. Lives INSIDE the expanded card with the
+                 run-output it exports (the nesting states the scope, so no label names it);
+                 hidden until a run paints rows for it to export. -->
             <div class="report-export" id="rep-run-export" hidden>
-              <span class="report-export-scope">This report</span>
               <button type="button" id="rep-export-csv" class="report-export-btn">Export CSV</button>
               <button type="button" id="rep-export-json" class="report-export-btn">Export JSON</button>
               <span id="rep-export-status" class="report-export-status" role="status" aria-live="polite"></span>
             </div>
-            <!-- §09 R06: the raw data-out escape hatch, set apart at the BOTTOM of the view and
-                 distinct from the filtered export above — every raw entry in the resolved range
-                 (billable AND non-billable, unfiltered), byte-identical to `tt export`. -->
-            <div class="report-export report-export-all" id="rep-run-export-all" hidden>
-              <span class="report-export-scope">All data in range</span>
+            <!-- §09 R06: the raw data-out escape hatch, set apart at the BOTTOM of the view —
+                 VIEW-LEVEL, never inside a card, distinct from the in-card filtered export —
+                 the WHOLE RECORD, every raw entry ever (billable AND non-billable, no range),
+                 byte-identical to no-flag `tt export`. Standing chrome: always visible, always
+                 clickable, no run required (it is run-independent, so it stays outside the
+                 accordion). -->
+            <div class="report-export report-export-all" id="rep-run-export-all">
+              <span class="report-export-scope">All data</span>
               <button type="button" id="rep-export-all-csv" class="report-export-btn ghost">Export All Data (CSV)</button>
               <button type="button" id="rep-export-all-json" class="report-export-btn ghost">Export All Data (JSON)</button>
               <span id="rep-export-all-status" class="report-export-status" role="status" aria-live="polite"></span>

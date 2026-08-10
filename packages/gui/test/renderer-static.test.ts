@@ -154,16 +154,93 @@ describe('renderer static contract', () => {
   });
 
   it('local minutes-of-day is derived in exactly one place (issue #168)', () => {
-    // The expression `getHours() * 60 + getMinutes()` positions every timeline surface — the
-    // picker's seeds, the entries calendar's event geometry, SU.timelineWindow's own math. It
-    // was written four times. A timezone or DST fix must have ONE site to find, so count the
-    // arithmetic itself across the renderer rather than trusting the helper's name.
+    // The minute-of-day derivation positions every timeline surface — the picker's seeds,
+    // the entries calendar's event geometry, SU.timelineWindow's own math. It was written
+    // four times as `getHours() * 60 + getMinutes()`. The one derivation is now su.ts's
+    // localMinuteOfDay over core's wallClockOf in the CONFIGURED zone (§04 R06), so the
+    // OS-zone getter arithmetic must appear NOWHERE in the renderer — any recurrence is a
+    // second, zone-ignorant derivation by construction.
     const dir = fileURLToPath(new URL('../renderer/', import.meta.url));
     const files = readdirSync(dir).filter((f) => /\.(js|ts)$/.test(f));
     const sites = files.flatMap((f) =>
       [...read(f).matchAll(/getHours\(\)\s*\*\s*60/g)].map(() => f),
     );
-    expect(sites, 'minutes-of-day must be derived only by su.ts localMinuteOfDay').toEqual(['su.ts']);
+    expect(sites, 'minutes-of-day must be derived only by su.ts localMinuteOfDay (wallClockOf)').toEqual([]);
+  });
+
+  it('every display-setting hideable block carries a [hidden] companion — hidden must actually hide (issue #262)', () => {
+    // The literal issue-262 root cause: `.report-export { display: flex }` is an AUTHOR rule,
+    // and author rules beat the UA stylesheet's `[hidden] { display: none }` regardless of
+    // specificity — so both Reports-view export rows rendered while their markup said hidden,
+    // and the filtered row's buttons sat on screen as silent no-ops before any run (§12 R21's
+    // forbidden dead click). Every other hideable block in styles.css carried a
+    // `.cls[hidden] { display: none }` companion; this one didn't, and nothing checked.
+    // A driven scene cannot catch the class (each scene probes the states someone thought to
+    // drive), so the CLASS is decided statically here: for every element the renderer can
+    // hide — a `hidden` attribute in the markup, or an `$('id').hidden =` toggle in the
+    // scripts — each of its classes whose CSS sets a non-none `display` must also have a
+    // `[hidden] { display: none }` companion (or ride a tag-level one like `button[hidden]`).
+    const cssDir = fileURLToPath(new URL('../renderer/', import.meta.url));
+    const css = read('styles.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    const displaySetters = new Set<string>();
+    const classCompanions = new Set<string>();
+    const tagCompanions = new Set<string>();
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      const display = /(?:^|;)\s*display\s*:\s*([a-z-]+)/.exec(rule[2]!);
+      if (!display) continue;
+      for (const sel of rule[1]!.split(',')) {
+        // The selector's SUBJECT (last compound) is the element the display lands on.
+        const subject = sel.trim().split(/[\s>+~]+/).pop() ?? '';
+        if (display[1] === 'none') {
+          const cls = /^\.([A-Za-z0-9_-]+)\[hidden\]$/.exec(subject);
+          if (cls) classCompanions.add(cls[1]!);
+          const tag = /^([a-z0-9]+)\[hidden\]$/.exec(subject);
+          if (tag) tagCompanions.add(tag[1]!);
+        } else if (!sel.includes('[hidden]')) {
+          const cls = /^\.([A-Za-z0-9_-]+)$/.exec(subject);
+          if (cls) displaySetters.add(cls[1]!);
+        }
+      }
+    }
+    expect(displaySetters.size, 'the CSS parse sees display-setting classes').toBeGreaterThan(0);
+    expect(classCompanions.size, 'the CSS parse sees [hidden] companions').toBeGreaterThan(0);
+
+    // Hideable elements: carried `hidden` in the markup of either document…
+    const hideables: { where: string; tag: string; classes: string[] }[] = [];
+    for (const f of ['index.html', 'popover.html']) {
+      const html = read(f).replace(/<!--[\s\S]*?-->/g, '');
+      for (const el of html.matchAll(/<([a-z0-9]+)((?:\s+[^<>]*?)?)>/gi)) {
+        const attrs = el[2] ?? '';
+        if (!/(^|\s)hidden(=|\s|$)/.test(attrs)) continue;
+        const classes = /class="([^"]*)"/.exec(attrs)?.[1]?.split(/\s+/).filter(Boolean) ?? [];
+        hideables.push({ where: `${f} <${el[1]!.toLowerCase()}>`, tag: el[1]!.toLowerCase(), classes });
+      }
+    }
+    // …or toggled hidden by id in any renderer script (variable-held toggles are out of a
+    // static regex's reach; their elements overwhelmingly also start hidden in the markup).
+    const jsIds = new Set<string>();
+    for (const f of readdirSync(cssDir).filter((f) => f.endsWith('.js'))) {
+      for (const m of read(f).matchAll(/\$\('([^']+)'\)\.hidden\s*=/g)) jsIds.add(m[1]!);
+    }
+    for (const id of jsIds) {
+      for (const f of ['index.html', 'popover.html']) {
+        const el = new RegExp(`<([a-z0-9]+)\\s+[^<>]*id="${id}"[^<>]*>`, 'i').exec(read(f));
+        if (!el) continue;
+        const classes = /class="([^"]*)"/.exec(el[0])?.[1]?.split(/\s+/).filter(Boolean) ?? [];
+        hideables.push({ where: `${f} #${id}`, tag: el[1]!.toLowerCase(), classes });
+      }
+    }
+    expect(hideables.length, 'the markup scan sees hideable elements').toBeGreaterThan(0);
+
+    const uncovered = hideables.flatMap((el) =>
+      el.classes
+        .filter((c) => displaySetters.has(c) && !classCompanions.has(c) && !tagCompanions.has(el.tag))
+        .map((c) => `${el.where} class .${c}`),
+    );
+    expect(
+      uncovered,
+      'display-setting classes on hideable elements without a `[hidden] { display: none }` companion',
+    ).toEqual([]);
   });
 
   it('the renderer never calls window.prompt or window.confirm — Electron implements neither (issue #52)', () => {

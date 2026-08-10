@@ -13,6 +13,7 @@ acceptance/evidence/tmp/
 # the recordings index are tracked.
 acceptance/evidence/recordings/*.gif
 acceptance/evidence/recordings/*.webm
+acceptance/evidence/recordings/*.pal.png
 acceptance/evidence/recordings/.stage-*/
 # The recorder's one-per-host pid lockfile (record.mjs, issue #250) and its reclaim graves.
 acceptance/evidence/recordings/.lock*

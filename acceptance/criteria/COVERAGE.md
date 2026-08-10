@@ -67,7 +67,23 @@ advances 01:00 → 04:00 (02:00 never happened that day), and the 2026-11-01
 fall-back span `05:00Z → 06:00Z` is 3600 real seconds though BOTH ends read
 `01:00` in New York. The expected seconds and every per-zone wall clock are
 calendar literals, so the timezone arbitrary drives live assertions and the
-duration is never recomputed the way `secondsBetween` computes it. The
+duration is never recomputed the way `secondsBetween` computes it. The same
+five-zone arbitrary additionally drives the **configured `time_zone` setting**
+(§04 R06 / §14) through a real store: with `time_zone` set to the zone and
+`date_format` iso, core's one display path (`formatStamp` — what `tt list` and
+the GUI stamps render) must show those literal wall clocks and `localDay` must
+bucket the start under that zone's calendar day. The R06 display/input clause is
+further pinned by GOLD `core/test/gold/contracts.test.ts` "the configured time
+zone drives resolution and parsing (§04 R06, §14)" (zone-pinned `resolveRange`
+windows with absolute `Z` literals including a 167-hour DST week; bare-clock and
+zoneless-datetime `parseTime` in the configured zone with compatible DST
+resolution — gap shifts forward, ambiguity takes the earlier offset;
+`formatStamp`; the `time_zone` validation), by GOLD
+`cli/test/gold/cli.test.ts` (the `tt` surface: `time_zone` round-trip +
+rejection, the zone-rendered `tt list` human table with no raw UTC ISO, the
+zone-parsed bare-clock `tt add`, and the two DST input cases), and
+surface-neutrally by BDD `features/settings.feature` ("Both surfaces render
+timestamps in the configured time zone", run TWICE over core + `tt`). The
 durability/integrity guarantees the badge labels are **hardened
 in §20** — open-time pragmas (§20 R01, now asserted-and-verified on every open:
 GOLD `core/test/gold/contracts.test.ts` "DB open durability pragmas (§20 R01)" +
@@ -510,7 +526,14 @@ rollback and the 31st-of-March case (no day-of-month leaks into a bound; last
 month lands on a short February), and today including a DST-transition day whose
 end bound is the true next local midnight rather than `+24h`. None of those
 expected values is a second call of `resolveRange` , so flipping the week-start
-offset or the month arithmetic reddens them. The plain-date
+offset or the month arithmetic reddens them. `resolveRange` resolves in the
+**configured time zone** (§04 R06 / §14 — `timeZone` argument, `'system'`/absent
+= the OS zone at read time), pinned with absolute `Z` literals by the GOLD block
+"the configured time zone drives resolution and parsing (§04 R06, §14)"
+(zone-pinned today/week/month windows, the day-disagreement case where Edmonton
+and UTC name different calendar days, and a 167-hour DST week in
+America/New_York) — strictly stronger than the host-floating cases above, which
+remain the `'system'`-default proof. The plain-date
 pair → window rule lives GUI-side in exactly ONE place: `gui/src/reportview.ts`
 `resolveDateRange(fromDate, toDate)` resolves the two `YYYY-MM-DD` field strings
 to the half-open LOCAL window [from-day 00:00, day-after-to-day 00:00) — the
@@ -556,19 +579,26 @@ R8);
 parity `report` →`tt [report, export]` (the preset/date pair travel inside
 existing payloads — no new channel/parity row). The GUI picker is thus fully
 covered (no longer a gap). **R2 group-by control** (the report's
-Client/Project/Day/Tag selector): the grouping engine is core's `store.report`
-keyed by `by` , proven surface-neutral on core AND tt by
+Client/Project/Day/Week/Month/Tag selector): the grouping engine is core's
+`store.report` keyed by `by` , proven surface-neutral on core AND tt by
 `features/reporting.feature` (grouping by project/tag/day sums each bucket, an
 entry fans out under every one of its tags, and the grand total is
-GROUPING-INVARIANT across client/project/day/tag — run TWICE via the World
+GROUPING-INVARIANT across all six groupings — run TWICE via the World
 `report` capability: CoreWorld `store.report` with the `by` , CliWorld
-`tt report --by <client|project|day|tag> --json` ). The GUI `#by-seg` segment
+`tt report --by <client|project|day|week|month|tag> --json` ). Week/month
+bucket keys and labels — the configured week-start day (both `weekStart`
+settings), start-day attribution in the configured zone, `YYYY-MM` month keys,
+and core's `groupKeyLabel` ("Week of Jul 27" / "Jul 2026") — are pinned by GOLD
+`core/test/gold/contracts.test.ts` "GOLD: week/month grouping buckets (§09
+R02)"; the v4→v5 `report.group_by` CHECK widening by GOLD
+`core/test/gold/migration.test.ts` . The GUI `#by-seg` segment
 (`gui/renderer/index.html` (Reports view) + `reports.js` ) is the
-discoverability surface — exactly the four `data-by` groupings (default Client),
+discoverability surface — exactly the six `data-by` groupings (default Client),
 each click sending the `by` field over the same `report` IPC, the renderer
-painting `line.key` + the core-owned seconds and re-deriving no buckets/totals
+painting core's `groupKeyLabel(line.key, by)` + the core-owned seconds and
+re-deriving no buckets/totals
 (§09 R4 rounding/grouping owned by core). JUDGE `REPORTS_VIEW`
-(`packages/gui/judge/`, `reports-list.png` / `reports-list.png` — four group-by
+(`packages/gui/judge/`, `reports-list.png` / `reports-list.png` — six group-by
 options labelled, default Client, switching to Day regroups the rows while the
 grand total stays invariant). The GUI grouping control is thus fully covered.
 **R3 client/project/tag filters** (the report's client/project/tag filter set,
@@ -634,38 +664,53 @@ contract (§09 R06)" + "GOLD: JSON export shape (§09 R06)" lock header ==
 `client,project,tags,description,start_utc,end_utc,raw_duration_s,excluded_s,billable,overlapped`
 , the fixed-fixture row verbatim, comma/quote/newline quoting, and
 `export-entry.schema.json` validation; `cli/test/gold/cli.test.ts` "GOLD: tt
-export (§09 R06)" proves the CLI surface is byte-identical to core), proven by
+export (§09 R06)" proves the CLI surface is byte-identical to core, and pins
+the no-flag default: `tt export` alone is the WHOLE RECORD — every entry ever,
+a months-old row included — while the range flags still narrow), proven by
 GOLD (`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` , `schemas/*` ), by
 surface-neutral BDD (`features/reporting.feature` "CSV and JSON export the raw
 entries for the range with the same shape" — run TWICE over core `toCsv`
 /`toJsonEntries` + `tt export --range … --csv|--json` via the World `exportRows`
-capability, so the GUI export bytes reach nothing tt cannot), and reused
-verbatim by `tt export` . The GUI report view (`gui/renderer/index.html`
-(Reports view) + `reports.js` ) is the discoverability surface over it — the
-on-screen grouped summary surfaces the **overlap / unreviewed-sleep flags in
-context on the affected rows** (via the pure `window.SU.lineFlags` over the core
-Report's `overlappedEntryIds` /`unreviewedSleepEntryIds`, not a separate list),
-and the **Export CSV / Export JSON** buttons write the raw entries for the shown
-range to a file. Because the renderer cannot touch `fs` , the export round-trips
-through a new `exportEntries` IPC channel: `gui/src/reportview.ts`
-(Electron-free, unit-tested) resolves the same range via core's `resolveRange`
-and renders the bytes via `exportPayload` (byte-identical to
-`tt export --csv/--json` ), and `gui/src/main.ts` writes them through Electron's
-`dialog.showSaveDialog` + `node:fs writeFileSync` (no network).
-`gui/test/reportview.test.ts` (GOLD) proves `exportPayload` matches `toCsv`
-/`toJsonEntries` byte-for-byte, the preset/custom range resolution mirrors core,
-and `buildReportView` is a faithful preset-resolving pass-through; JUDGE
-`REPORTS_VIEW` (`packages/gui/judge/`, `reports-run.png` — grouped summary with
-per-line + grand totals, both flags on their affected rows (none outside the
-table), both export buttons present + non-accented, each driving a real
-`exportEntries` call); GOLD `gui/test/reportview.test.ts` (`exportPayload` and both
+capability, so the GUI export bytes reach nothing tt cannot — and "Exporting
+everything covers the whole record, not an implicit window" — the UNSCOPED
+export keeps billable, non-billable, and long-past entries, run TWICE via the
+World `exportAllRows` capability over core's unbounded `listEntries` and
+no-flag `tt export` ), and reused verbatim by `tt export` . The GUI Reports
+view (`gui/renderer/index.html` + `reports.js` ) is the discoverability
+surface over it — the on-screen grouped summary surfaces the **overlap /
+unreviewed-sleep flags in context on the affected rows** (via the pure
+`window.SU.lineFlags` over the core Report's `overlappedEntryIds`
+/`unreviewedSleepEntryIds`, not a separate list), the run-output — and its
+filtered **Export CSV / Export JSON**, which write the rows the report
+shows — expands inside the card of the definition that ran it (the §12 R08
+accordion), and the standing view-level **Export All Data** buttons — always
+visible, always clickable, no run required, inside no card — write the whole
+record. Because the renderer cannot touch `fs` ,
+the export round-trips through the `exportEntries` IPC channel:
+`gui/src/reportview.ts` (Electron-free, unit-tested) resolves the scope via
+`resolveExportDefinition` and renders the bytes via `exportPayload`
+(byte-identical to `tt export --csv/--json` ), and `gui/src/main.ts` writes
+them through Electron's `dialog.showSaveDialog` + `node:fs writeFileSync` (no
+network). `gui/test/reportview.test.ts` (GOLD) proves `exportPayload` matches
+`toCsv` /`toJsonEntries` byte-for-byte and `buildReportView` is a faithful
+preset-resolving pass-through; JUDGE `REPORTS_VIEW` (`packages/gui/judge/`,
+`reports-run.png` — grouped summary with per-line + grand totals, both flags
+on their affected rows (none outside the table), both export blocks
+non-accented, each driving a real `exportEntries` call; PRE-RUN computed
+facts: the filtered row genuinely invisible, Export All Data visible AND
+working with scope 'all' and no ref before any run — issue #262's dead
+buttons); the `[hidden]`-companion static gate in
+`gui/test/renderer-static.test.ts` (every display-setting hideable block in
+`styles.css` carries a `[hidden] { display: none }` companion, so an author
+display rule can never silently defeat the hidden attribute again); GOLD
+`gui/test/reportview.test.ts` (`exportPayload` and both
 `resolveExportDefinition` scopes byte-identical to `tt report run --csv/--json`
-and `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (the
+and no-flag `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (the
 `exportEntries` write path — each scope's bytes landing at the path the save
-dialog returned, cancel writing nothing). New parity row
-`exportEntries` →`tt export` (`parity-matrix.json`; the `report` row now maps to
-`tt report` alone). The GUI summary + export is thus fully covered (no longer a
-gap). **R7 free-text search** (a query narrows the entry list to those whose
+dialog returned, the 'all' file keeping an out-of-window row, cancel writing
+nothing). Parity row `exportEntries` →`tt export` (`parity-matrix.json`; the
+`report` row maps to `tt report` alone). The GUI summary + export is thus
+fully covered (no longer a gap). **R7 free-text search** (a query narrows the entry list to those whose
 description, client name, project name, or any tag contains it —
 case-insensitive substring): the matching engine is core's
 `listEntries({ search })` (applied post-`toView`, like the `tag` post-filter, so
@@ -755,9 +800,9 @@ client/project/tag/search + billable filter), rendered by
 `store.exportSavedReport(ref, 'csv'|'json', now)` via the SAME core `toCsv`
 /`toJsonEntries` — the report's OWN filtered export (byte-identical to
 `tt report run <name> --csv|--json` and the GUI report's Export CSV/JSON);
-`store.resolveReportRange(ref, now)` bounds the separate ALL-DATA scope — every
-RAW entry in the range (billable='all', no narrowing, byte-identical to
-`tt export` / the GUI "Export All Data"). `tt report run <name>` : default
+the separate ALL-DATA scope is the WHOLE RECORD — every raw entry ever
+(billable='all', no range, no narrowing, no report consulted — byte-identical
+to no-flag `tt export` / the GUI "Export All Data"). `tt report run <name>` : default
 renders the grouped `Report` (human) with the saved grouping/rounding, while
 `--csv|--json` EXPORT THE FILTERED SET the report shows (the rows behind the
 totals, `--json` validated against `export-entry.schema.json` ) via
@@ -790,8 +835,8 @@ raw `tt export` ; human `run` prints the renderReport totals; a range edit
 re-resolves which rows the export carries; unknown name exits non-zero); GUI
 `gui/test/reportview.test.ts` (`resolveExportDefinition` 's two scopes —
 'filtered' == the report's rows (byte-identical to `exportSavedReport` ), 'all'
-== the raw range (byte-identical to `tt export` ), and a 'filtered' request
-without a saved ref is rejected). **GUI parity** — the Reports view's
+== the whole record, a saved ref ignored (byte-identical to no-flag
+`tt export` ), and a 'filtered' request without a saved ref is rejected). **GUI parity** — the Reports view's
 saved-definitions rail drives seven new IPC channels
 (`saveReport`/`listReports`/`showReport`/`renameReport`/`editReport`/`removeReport`/`runReport`)
 over the SAME core Store the tt verbs use; each gets a `parity-matrix.json` row
@@ -899,7 +944,7 @@ group_by, filters, rounding); `ls --json` validates against
 non-zero with `unknown --by grouping` and writes no def; `run --json` validates
 against `report.schema.json` and re-resolves the relative range to the same
 window/totals as the equivalent ad-hoc `tt report --week …` ; `run --csv` is
-byte-identical to `tt export` over the resolved range; `rm` then `ls` /`run` is
+byte-identical to `tt export --range` over the resolved window; `rm` then `ls` /`run` is
 a clean unknown-name round trip; the ad-hoc `tt report …` query form still works
 alongside the saved verbs. Cross-noted with §09 R08–R09 above. **`tt fav
 add|ls|rm|rename|start` + `tt start --fav` (favorites — §11 parity for §05
@@ -1400,20 +1445,29 @@ saved-reports coverage folds into one JUDGE item tagged **§12 R08 / §09
 R08–R09** in `judge-rubric.md` : `REPORTS_VIEW` (`reports-list.png` /
 `reports-run.png` — the saved-definition list paints one card per def with name
 + spec summary + Run/Edit; + New report / Edit opens the inline builder with the
-range presets (incl Custom), the four group-bys, the client/project/tag filters,
+range presets (incl Custom), the six group-bys, the client/project/tag filters,
 the billable segment, and the rounding toggle + 6/10/15/30 increment; clicking
-Run paints the grouped run-output with per-line + grand totals and the
-overlap/unreviewed-sleep flags surfaced in context on the affected rows, plus
-the resolved-range header; and Export CSV / Export JSON each drive a real
-`exportEntries` call carrying the saved report's ref, byte-identical to
-`tt report run <name> --csv|--json` ; at rest only the standing + New report
-primary carries the accent, and once the builder is open it hands off to the
+Run expands the ran card around the grouped run-output — per-line + grand
+totals, the overlap/unreviewed-sleep flags surfaced in context on the affected
+rows, the resolved-range header — the §12 R08 accordion: results inside the
+card that ran them, exactly one card expanded at a time (running a second
+report collapses the first, its body emptied), collapse discarding the results
+(`oneOpenOk`, issue #268); the filtered Export CSV / Export JSON — inside the
+expanded card, revealed by the run, computed-invisible before it, no scope
+label — each drive a real `exportEntries` call carrying the saved report's
+ref, byte-identical to `tt report run <name> --csv|--json` , while the
+standing view-level Export All Data buttons (inside no card) work BEFORE any
+run (computed-visible, a pre-run click fires scope 'all' with no ref — the
+whole record, byte-identical to no-flag `tt export` , issue #262); the Edit
+builder nests inside its card while New report's opens below the list; at
+rest only the standing + New report primary carries the accent, and once the
+builder is open — in either accordion placement — it hands off to the
 builder's own Save — the commit, not the control that merely opened the form,
 which `PRIMARY_HANDOFF` gates, §15 / G10 / D11).
 Supporting BDD/GOLD all surface-neutral
 and shared with tt: `features/reports.feature` + `features/reporting.feature` +
 `features/search.feature` (range presets/custom, grouping by
-client/project/day/tag with the grand total grouping-invariant, the
+client/project/day/week/month/tag with the grand total grouping-invariant, the
 client/project/tag/billable filters, nearest-not-up rounding, and the CSV/JSON
 export bytes — each run TWICE over core + `tt report` /`tt export`), GOLD
 `core/test/gold/contracts.test.ts` + `cli/test/gold/cli.test.ts` +
@@ -2112,7 +2166,10 @@ path. Re-introducing a Windows path or changing the data-dir suffix fails
 `features/settings.feature` , `gui/judge/run-judge.mjs` . The settings
 (rounding, rounding increment, week start, first check-in, check-in interval,
 global hotkey, the §12 R11 **date/number format** (`dateFormat:
-'system'|'iso'`), and the **§14 timeline-window settings** — four key-value rows
+'system'|'iso'`), the §04 R06 **time zone** (`time_zone` — the `'system'`
+sentinel resolved against the OS at read time, or a platform-supported IANA
+zone; an unknown name rejected with nothing stored), and the **§14
+timeline-window settings** — four key-value rows
 realizing G15's three settings: `working_hours_start` /`working_hours_end`
 (strict zero-padded HH:MM, defaults 07:00/18:00, cross-field start<end),
 `picker_window_mode` (`working_hours`|`around_now`), `picker_around_hours`
@@ -2121,9 +2178,9 @@ realizing G15's three settings: `working_hours_start` /`working_hours_end`
 owns its snake_case key, parse, and validation), so `readSettings`
 /`writeSetting`/`tt config ls/set` and the GUI `setSetting` channel all derive
 from the one list — the timeline keys reached `tt config` with **zero CLI
-edits** (§17 R8 parity by construction). GOLD pins the fresh-database defaults
-table + `--json` object (`cli/test/gold/cli.test.ts` — 12 rows incl. the four
-timeline keys in descriptor order; the raw camelCase `config ls --json` object
+edits** (§17 R8 parity by construction) — as did `time_zone`. GOLD pins the
+fresh-database defaults table + `--json` object (`cli/test/gold/cli.test.ts` —
+13 rows incl. `time_zone` and the four timeline keys in descriptor order; the raw camelCase `config ls --json` object
 validates against `schemas/settings.schema.json` , the one schema over
 `store.settings()` 's verbatim shape — defaults and a non-default in-domain
 value both pass), the `store.settings()` snapshot
@@ -2134,11 +2191,16 @@ leaving the default stored: malformed HH:MM (`7:00`, `25:00` , `7am` ), a
 start>=end pair (either key), `picker_around_hours` 0/25/2.5, an unknown mode —
 on core (`writeSetting` throws) AND tt (`config set` exits non-zero with a
 diagnostic), plus the `picker_window_mode around_now` round-trip through
-`config ls --json` . BDD `features/settings.feature` proves each setting —
-including all four timeline keys — round-trips and reads back, the fresh-DB
-timeline defaults, and the rejection scenarios (`working_hours_end 06:00`,
-`picker_around_hours 25` ) on BOTH core AND tt via the World `setConfig`
-/`getConfig`/`attemptSetConfig` (§17 R8). JUDGE `TIMELINE_WINDOW`
+`config ls --json` and the `time_zone` round-trip + unknown-zone rejection (the
+`tt` half of the §04 R06 coverage cross-noted under PRD §04). BDD
+`features/settings.feature` proves each setting — including all four timeline
+keys and `time_zone` — round-trips and reads back, the fresh-DB defaults, and
+the rejection scenarios (`working_hours_end 06:00`, `picker_around_hours 25`,
+`time_zone Mars/Olympus_Mons` ) on BOTH core AND tt via the World `setConfig`
+/`getConfig`/`attemptSetConfig` (§17 R8), plus "Both surfaces render timestamps
+in the configured time zone" over the World `renderedStart` capability
+(CoreWorld `formatStamp` over the store's settings; CliWorld the human
+`tt list` START cell). JUDGE `TIMELINE_WINDOW`
 (`timeline-window.png`, `acceptance/evidence/judge-report.json` ) proves the
 Settings → Timeline group renders/persists all four keys over the existing
 `setSetting` channel (Around disabled while the mode is `working_hours` ; the
@@ -2751,10 +2813,12 @@ BDD** (`features/reporting.feature`, run TWICE over core + tt via
 always up (97m → nearest 15 = 90m) while the stored billable seconds are
 untouched (CoreWorld `store.report` rounding-on / CliWorld
 `tt report --round 15 --json`); a report FLAGS two overlapping entries in range
-(`overlappedEntryIds` / `tt report --json overlapped_entry_ids`); and CSV + JSON
+(`overlappedEntryIds` / `tt report --json overlapped_entry_ids`); CSV + JSON
 export the RAW entries for a range with the same row shape (CoreWorld core
-`toCsv`/`toJsonEntries` / CliWorld `tt export --range … --csv|--json`), backed
-by the World `report`/`reportOverlaps`/`exportRows` capabilities
+`toCsv`/`toJsonEntries` / CliWorld `tt export --range … --csv|--json`); and the
+UNSCOPED export covers the whole record (CoreWorld unbounded `listEntries` /
+CliWorld no-flag `tt export`), backed by the World
+`report`/`reportOverlaps`/`exportRows`/`exportAllRows` capabilities
 
 ### §17 R8
 

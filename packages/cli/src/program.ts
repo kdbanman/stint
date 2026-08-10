@@ -14,11 +14,14 @@ import {
   parseTime,
   formatDuration,
   formatHours,
+  formatStamp,
   resolveRange,
+  resolveTimeZone,
   joinClientProject,
   toCsv,
   toJsonEntries,
   detectOverlaps,
+  groupKeyLabel,
   SETTING_DESCRIPTORS,
   settingDescriptor,
   type EntryView,
@@ -34,7 +37,6 @@ import {
   statusLine,
   clientProjectLabel,
   entryFlags,
-  shortUtc,
   reportRangeSpecLine,
   reportDefDetail,
   favoriteRow,
@@ -99,18 +101,20 @@ function resolveRangeOpts(
   now: Date,
   fallback?: 'week' | 'today',
 ): { fromUtc: string; toUtc: string } | undefined {
+  // §04 R06 / §14: wall-clock --range bounds parse, and presets resolve, in the configured zone.
+  const tz = resolveTimeZone(settings.timeZone);
   if (opts.range) {
     return {
-      fromUtc: parseTime(opts.range[0], now),
-      toUtc: parseTime(opts.range[1], now),
+      fromUtc: parseTime(opts.range[0], now, tz),
+      toUtc: parseTime(opts.range[1], now, tz),
     };
   }
-  if (opts.today) return resolveRange('today', settings.weekStart, now);
-  if (opts.week) return resolveRange('week', settings.weekStart, now);
-  if (opts.lastWeek) return resolveRange('last-week', settings.weekStart, now);
-  if (opts.month) return resolveRange('month', settings.weekStart, now);
-  if (opts.lastMonth) return resolveRange('last-month', settings.weekStart, now);
-  if (fallback) return resolveRange(fallback, settings.weekStart, now);
+  if (opts.today) return resolveRange('today', settings.weekStart, now, tz);
+  if (opts.week) return resolveRange('week', settings.weekStart, now, tz);
+  if (opts.lastWeek) return resolveRange('last-week', settings.weekStart, now, tz);
+  if (opts.month) return resolveRange('month', settings.weekStart, now, tz);
+  if (opts.lastMonth) return resolveRange('last-month', settings.weekStart, now, tz);
+  if (fallback) return resolveRange(fallback, settings.weekStart, now, tz);
   return undefined;
 }
 
@@ -232,7 +236,7 @@ export function buildProgram(deps: Deps): Command {
           }
           if (attrs.billable !== undefined) overrides.billable = attrs.billable;
           if (opts.tag && opts.tag.length) overrides.tags = attrs.tags;
-          if (opts.at) overrides.atUtc = parseTime(opts.at, now());
+          if (opts.at) overrides.atUtc = parseTime(opts.at, now(), store.timeZone());
           const res = store.startFromFavorite(opts.fav, overrides);
           printWarnings(io, res.warnings);
           io.out(statusLine(res.value));
@@ -245,7 +249,7 @@ export function buildProgram(deps: Deps): Command {
           projectId: attrs.projectId,
           tags: attrs.tags,
           ...(attrs.billable !== undefined ? { billable: attrs.billable } : {}),
-          ...(opts.at ? { atUtc: parseTime(opts.at, now()) } : {}),
+          ...(opts.at ? { atUtc: parseTime(opts.at, now(), store.timeZone()) } : {}),
         });
         printWarnings(io, res.warnings);
         io.out(statusLine(res.value));
@@ -259,7 +263,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--at <time>', 'stop time (default: now)')
     .action((opts) => {
       withStore((store) => {
-        const res = store.stop(opts.at ? { atUtc: parseTime(opts.at, now()) } : {});
+        const res = store.stop(opts.at ? { atUtc: parseTime(opts.at, now(), store.timeZone()) } : {});
         printWarnings(io, res.warnings);
         const e = res.value;
         io.out(`stopped ${formatDuration(e.billableSeconds)} · ${clientProjectLabel(e)}`);
@@ -315,8 +319,8 @@ export function buildProgram(deps: Deps): Command {
         const attrs = resolveAttributes(store, opts);
         const res = store.add({
           description,
-          fromUtc: parseTime(opts.from, now()),
-          toUtc: parseTime(opts.to, now()),
+          fromUtc: parseTime(opts.from, now(), store.timeZone()),
+          toUtc: parseTime(opts.to, now(), store.timeZone()),
           clientId: attrs.clientId,
           projectId: attrs.projectId,
           tags: attrs.tags,
@@ -345,8 +349,8 @@ export function buildProgram(deps: Deps): Command {
       withStore((store) => {
         const patch: Parameters<Store['edit']>[1] = {};
         if (opts.desc !== undefined) patch.description = opts.desc;
-        if (opts.from) patch.startUtc = parseTime(opts.from, now());
-        if (opts.to) patch.endUtc = parseTime(opts.to, now());
+        if (opts.from) patch.startUtc = parseTime(opts.from, now(), store.timeZone());
+        if (opts.to) patch.endUtc = parseTime(opts.to, now(), store.timeZone());
         if (opts.project) {
           // Resolving a project also fixes the client (project⇒client); the entry's
           // current client is the fallback when --client is not given.
@@ -377,7 +381,7 @@ export function buildProgram(deps: Deps): Command {
     .requiredOption('--at <time>', 'split point')
     .action((id: string, opts) => {
       withStore((store) => {
-        const [a, b] = store.split(Number(id), parseTime(opts.at, now()));
+        const [a, b] = store.split(Number(id), parseTime(opts.at, now(), store.timeZone()));
         io.out(`split entry ${id} into ${a.id} and ${b.id}`);
       });
     });
@@ -495,10 +499,12 @@ export function buildProgram(deps: Deps): Command {
         }
         const overlaps = detectOverlaps(entries, now());
         const headers = ['ID', 'START', 'END', 'DUR', 'CLIENT/PROJECT', 'DESCRIPTION', 'BILL', 'FLAGS'];
+        // §04 R06: START/END render in the configured zone through core's one formatting
+        // path (formatStamp honors time_zone + date_format) — never raw UTC ISO.
         const toRow = (e: EntryView): string[] => [
           String(e.id),
-          shortUtc(e.startUtc),
-          shortUtc(e.endUtc),
+          formatStamp(e.startUtc, settings),
+          formatStamp(e.endUtc, settings),
           formatDuration(e.billableSeconds),
           clientProjectLabel(e),
           descriptionCell(e.description),
@@ -522,7 +528,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'custom range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag', 'client')
+    .option('--by <grouping>', 'client | project | day | week | month | tag', 'client')
     .option('--round [minutes]', 'round grouped totals (default increment from settings)')
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
@@ -537,7 +543,7 @@ export function buildProgram(deps: Deps): Command {
         const settings = store.settings();
         const range = resolveRangeOpts(normalizeRange(opts), settings, now(), 'week')!;
         const by = opts.by as GroupBy;
-        if (!['client', 'project', 'day', 'tag'].includes(by)) {
+        if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(by)) {
           throw new CliError(`unknown --by grouping "${by}"`);
         }
         let rounding = settings.rounding;
@@ -585,7 +591,7 @@ export function buildProgram(deps: Deps): Command {
           io.out(toCsv(entries, now()).replace(/\n$/, ''));
           return;
         }
-        io.out(renderReport(built, rounding));
+        io.out(renderReport(built, rounding, settings));
       });
     });
 
@@ -603,7 +609,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'absolute range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag', 'client')
+    .option('--by <grouping>', 'client | project | day | week | month | tag', 'client')
     .option('--round [minutes]', 'round grouped totals (default increment from settings)')
     .option('--client <name>', 'filter by client')
     .option('--project <name>', 'filter by project')
@@ -667,7 +673,7 @@ export function buildProgram(deps: Deps): Command {
     .option('--month', 'this month')
     .option('--last-month', 'last month')
     .option('--range <from...>', 'absolute range: FROM TO')
-    .option('--by <grouping>', 'client | project | day | tag')
+    .option('--by <grouping>', 'client | project | day | week | month | tag')
     .option('--round [minutes]', 'round grouped totals')
     .option('--no-round', 'turn rounding off')
     .option('--client <name>', 'filter by client')
@@ -731,14 +737,17 @@ export function buildProgram(deps: Deps): Command {
           io.out(JSON.stringify(store.exportSavedReport(name, 'json', now()), null, 2));
           return;
         }
-        io.out(renderReport(store.runReport(name, now()), def.rounding));
+        io.out(renderReport(store.runReport(name, now()), def.rounding, store.settings()));
       }),
     );
 
   // ---------------------------------------------------------------- export
+  // §09 R06: with no range flag the export is the WHOLE RECORD — every entry ever, the
+  // durability / data-out escape hatch (byte-identical to the GUI's "Export All Data").
+  // A range flag narrows when asked; there is no implicit default window.
   program
     .command('export')
-    .description('Raw entries for a range')
+    .description('Raw entries — the whole record by default; range flags narrow')
     .option('--today', 'today')
     .option('--week', 'this week')
     .option('--last-week', 'last week')
@@ -751,10 +760,9 @@ export function buildProgram(deps: Deps): Command {
     .action((opts) => {
       withStore((store) => {
         const settings = store.settings();
-        const range = resolveRangeOpts(normalizeRange(opts), settings, now(), 'week')!;
+        const range = resolveRangeOpts(normalizeRange(opts), settings, now());
         const entries = store.listEntries({
-          fromUtc: range.fromUtc,
-          toUtc: range.toUtc,
+          ...(range ? { fromUtc: range.fromUtc, toUtc: range.toUtc } : {}),
           billable: 'all',
         });
         const payload = opts.json
@@ -1067,7 +1075,8 @@ export function buildProgram(deps: Deps): Command {
         io.out(
           table(
             ['NAME', 'CREATED', 'SIZE'],
-            backups.map((b) => [b.name, shortUtc(b.createdUtc), `${b.sizeBytes}`]),
+            // §04 R06: CREATED renders in the configured zone (the name keeps its UTC stamp).
+            backups.map((b) => [b.name, formatStamp(b.createdUtc, store.settings()), `${b.sizeBytes}`]),
           ),
         );
       }),
@@ -1230,7 +1239,7 @@ function buildSavedReportInput(
   nowDate: Date,
 ): SavedReportInput {
   const by = (opts.by ?? 'client') as GroupBy;
-  if (!['client', 'project', 'day', 'tag'].includes(by)) {
+  if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(by)) {
     throw new CliError(`unknown --by grouping "${by}"`);
   }
   let rangeSpec: RangeSpec;
@@ -1238,8 +1247,8 @@ function buildSavedReportInput(
     rangeSpec = {
       kind: 'absolute',
       // range[0]/[1]: present by the length guard — variadic `--range` can arrive short.
-      fromUtc: parseTime(opts.range[0]!, nowDate),
-      toUtc: parseTime(opts.range[1]!, nowDate),
+      fromUtc: parseTime(opts.range[0]!, nowDate, store.timeZone()),
+      toUtc: parseTime(opts.range[1]!, nowDate, store.timeZone()),
     };
   } else {
     const preset = opts.today
@@ -1316,8 +1325,8 @@ function buildSavedReportPatch(
     patch.rangeSpec = {
       kind: 'absolute',
       // range[0]/[1]: present by the length guard — variadic `--range` can arrive short.
-      fromUtc: parseTime(opts.range[0]!, nowDate),
-      toUtc: parseTime(opts.range[1]!, nowDate),
+      fromUtc: parseTime(opts.range[0]!, nowDate, store.timeZone()),
+      toUtc: parseTime(opts.range[1]!, nowDate, store.timeZone()),
     };
   } else if (opts.today) patch.rangeSpec = { kind: 'preset', preset: 'today' };
   else if (opts.week) patch.rangeSpec = { kind: 'preset', preset: 'week' };
@@ -1325,7 +1334,7 @@ function buildSavedReportPatch(
   else if (opts.month) patch.rangeSpec = { kind: 'preset', preset: 'month' };
   else if (opts.lastMonth) patch.rangeSpec = { kind: 'preset', preset: 'last-month' };
   if (opts.by !== undefined) {
-    if (!['client', 'project', 'day', 'tag'].includes(opts.by)) {
+    if (!['client', 'project', 'day', 'week', 'month', 'tag'].includes(opts.by)) {
       throw new CliError(`unknown --by grouping "${opts.by}"`);
     }
     patch.by = opts.by as GroupBy;
@@ -1375,18 +1384,28 @@ function applySetting(store: Store, key: string, value: string): void {
   }
 }
 
-function renderReport(report: ReturnType<Store['report']>, rounding: boolean): string {
+function renderReport(
+  report: ReturnType<Store['report']>,
+  rounding: boolean,
+  settings: Settings,
+): string {
   const dur = (s: number) => `${formatDuration(s)}  (${formatHours(s)}h)`;
   const lines: string[] = [];
+  // §04 R06: the resolved window's bounds render in the configured zone through core's one
+  // formatting path (the --json range keeps the raw UTC bounds for scripting).
   const head =
-    `Report  ${shortUtc(report.rangeFromUtc)} → ${shortUtc(report.rangeToUtc)}  ` +
+    `Report  ${formatStamp(report.rangeFromUtc, settings)} → ${formatStamp(report.rangeToUtc, settings)}  ` +
     `(${report.options.billableFilter}, by ${report.options.by}` +
     (rounding ? `, rounded ${report.options.roundingIncrementMin}m` : '') +
     ')';
   lines.push(head);
   lines.push('');
   for (const line of report.lines) {
-    lines.push(`${line.key.padEnd(28)}${dur(rounding ? line.roundedSeconds : line.totalSeconds)}`);
+    // §09 R02: a week/month line renders its human label ("Week of Jul 27" / "Jul 2026")
+    // through core's one groupKeyLabel — the same derivation the GUI paints — while every
+    // other grouping's key IS its label. Children are always project names (raw).
+    const label = groupKeyLabel(line.key, report.options.by);
+    lines.push(`${label.padEnd(28)}${dur(rounding ? line.roundedSeconds : line.totalSeconds)}`);
     for (const child of line.children) {
       lines.push(
         `  ${child.key.padEnd(26)}${dur(rounding ? child.roundedSeconds : child.totalSeconds)}`,

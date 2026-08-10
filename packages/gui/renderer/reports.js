@@ -14,7 +14,7 @@
 // on the shell + the global router, but it owns the Reports section entirely (app.js never
 // renders it).
 (function () {
-  const { rangeLabel, lineFlags, icon, errMessage, escapeHtml } = window.SU;
+  const { rangeLabel, lineFlags, icon, errMessage, escapeHtml, groupKeyLabel } = window.SU;
   const $ = (id) => document.getElementById(id);
 
   // §12 R21: the builder's inline message region (#rep-warning) — a refused Save is surfaced
@@ -46,7 +46,7 @@
     'last-month': 'Last month',
   };
   const BILLABLE_LABEL = { billable: 'billable only', all: 'all entries', 'non-billable': 'non-billable' };
-  const BY_LABEL = { client: 'client', project: 'project', day: 'day', tag: 'tag' };
+  const BY_LABEL = { client: 'client', project: 'project', day: 'day', week: 'week', month: 'month', tag: 'tag' };
 
   // Hours + minutes, matching the on-screen summary in the mockup ("21h 35m"). The exact
   // seconds come from core; this is display-only formatting (never stored, never billed).
@@ -77,9 +77,52 @@
     roundingIncrementMin: 15,
   };
 
-  // The saved definition whose run-output is currently shown (so the Export buttons carry
-  // its ref — main exports the definition's range, byte-identical to `tt report run --csv`).
+  // The saved definition whose run-output is currently shown (so the FILTERED Export buttons
+  // carry its ref — main exports the definition's rows, byte-identical to `tt report run
+  // --csv`). Export All Data never reads it: the whole-record export depends on no run.
   let runningRef = null;
+
+  // ----------------------------------------------------------------- accordion (§12 R08)
+
+  // The builder and the run-output are SINGLE elements that MOVE (issue #268): expanding a
+  // card adopts them into that card's .def-body, so "exactly one card expanded at a time" is
+  // structural — there is only one panel of each kind to adopt, and adopting collapses
+  // whatever held it before. Home markers let renderDefs reclaim the panels before repainting
+  // the list (host.innerHTML would destroy anything nested in a card), then re-nest them into
+  // the repainted card; the builder's home is also where a New report opens (below the list —
+  // a fresh def has no card yet). Export All Data never nests: run-independent, view-level.
+  const HOMES = new Map();
+  function initHomes() {
+    for (const id of ['rep-builder', 'rep-run', 'rep-run-export']) {
+      const marker = document.createComment(id);
+      $(id).before(marker);
+      HOMES.set(id, marker);
+    }
+  }
+  function goHome(id) {
+    const el = $(id);
+    const marker = HOMES.get(id);
+    if (el && marker && el.previousSibling !== marker) marker.after(el);
+  }
+  function cardOf(name) {
+    return document.querySelector(`#rep-defs .def[data-name="${CSS.escape(name)}"]`);
+  }
+  function collapseCards(except) {
+    for (const c of document.querySelectorAll('#rep-defs .def.open')) {
+      if (c !== except) c.classList.remove('open');
+    }
+  }
+  // Expand `name`'s card around the named panels. The card's .def-body animates 0fr → 1fr in
+  // CSS (~120ms, design.html D10; prefers-reduced-motion collapses it to instant).
+  function adopt(name, ids) {
+    const card = cardOf(name);
+    if (!card) return false;
+    const inner = card.querySelector('.def-body-inner');
+    for (const id of ids) inner.appendChild($(id));
+    collapseCards(card);
+    card.classList.add('open');
+    return true;
+  }
 
   // ----------------------------------------------------------------- spec summary
 
@@ -106,10 +149,12 @@
   // ----------------------------------------------------------------- defs list (§09 R08)
 
   // Paint the saved-definition list (window.stint.listReports, parity with `tt report ls`).
-  // Each card carries the name + spec summary and the Run / Edit / kebab affordances; the
-  // kebab opens Rename / Delete in place. The renderer holds no state beyond the painted
-  // dataset — every action re-reads through core. Best-effort: a read failure leaves the
-  // empty state and never blocks the builder.
+  // Each card carries a head row (name + spec summary and the Run / Edit / kebab affordances;
+  // the kebab opens Rename / Delete in place) over an empty .def-body accordion host. The
+  // movable panels are reclaimed to their home slots before the repaint (innerHTML would
+  // destroy them nested) and re-nested after it, so the expanded card survives a repaint.
+  // The renderer holds no state beyond the painted dataset — every action re-reads through
+  // core. Best-effort: a read failure leaves the empty state and never blocks the builder.
   async function renderDefs() {
     const host = $('rep-defs');
     const empty = $('rep-defs-empty');
@@ -120,9 +165,13 @@
     } catch {
       /* the saved-defs list is best-effort; the builder still opens */
     }
+    goHome('rep-builder');
+    goHome('rep-run');
+    goHome('rep-run-export');
     if (!defs.length) {
       host.innerHTML = '';
       if (empty) empty.hidden = false;
+      if (runningRef !== null) hideRun(); // the def behind the results is gone
       return;
     }
     if (empty) empty.hidden = true;
@@ -131,16 +180,25 @@
         const sel = draft.editing === d.name ? ' sel' : '';
         return (
           `<div class="def${sel}" data-name="${escapeHtml(d.name)}">` +
+          `<div class="def-head">` +
           `<div class="di"><div class="dname">${escapeHtml(d.name)}</div>` +
           `<div class="dspec">${specSummary(d)}</div></div>` +
           `<div class="dactions">` +
           `<button type="button" class="def-run" data-act="run">${icon('play')}Run</button>` +
           `<button type="button" class="def-edit" data-act="edit">${icon('edit')}Edit</button>` +
           `<button type="button" class="def-kebab" data-act="menu" aria-label="Rename or delete">${icon('dots')}</button>` +
-          `</div></div>`
+          `</div></div>` +
+          `<div class="def-body"><div class="def-body-inner"></div></div></div>`
         );
       })
       .join('');
+    // Re-nest whatever was expanded: the open EDIT builder into its card, else the run-output
+    // into the card that ran it (dropping the results if that def vanished underneath them).
+    if (draft.editing !== null && !$('rep-builder').hidden) {
+      adopt(draft.editing, ['rep-builder']);
+    } else if (runningRef !== null && !adopt(runningRef, ['rep-run', 'rep-run-export'])) {
+      hideRun();
+    }
   }
 
   // ----------------------------------------------------------------- builder (§09 R08)
@@ -234,8 +292,12 @@
   }
 
   // Open the inline builder (filling the client/project filter selects first so they are
-  // usable immediately) and reveal it. `forName` edits that def; null opens a New report.
+  // usable immediately) and reveal it. `forName` edits that def — the builder nests into that
+  // card's .def-body (the same accordion slot the run-output uses); null opens a New report
+  // at the builder's view-level home below the list. Either way any showing run-output is
+  // discarded first: exactly one thing is expanded at a time (§12 R08).
   async function openBuilder(forName) {
+    hideRun();
     if (forName) {
       let def = null;
       try {
@@ -253,12 +315,16 @@
     await populateProjects();
     clearWarn(); // §12 R21: a fresh open starts with no stale refusal message
     $('rep-builder').hidden = false;
+    if (draft.editing !== null) adopt(draft.editing, ['rep-builder']);
+    else goHome('rep-builder');
     $('rep-name').focus();
-    void renderDefs(); // re-mark the selected card
+    void renderDefs(); // re-mark the selected card (and re-nest into the repainted card)
   }
 
   function closeBuilder() {
     $('rep-builder').hidden = true;
+    collapseCards();
+    goHome('rep-builder');
     clearWarn();
     resetDraft();
     void renderDefs();
@@ -362,7 +428,10 @@
     }
     await window.stint.renameReport({ name, newName: trimmed });
     if (draft.editing === name) draft.editing = trimmed;
-    if (runningRef === name) runningRef = trimmed;
+    if (runningRef === name) {
+      runningRef = trimmed;
+      $('rep-run-caption').textContent = `Run · ${trimmed}`;
+    }
     await renderDefs();
   }
 
@@ -428,11 +497,20 @@
 
   // ----------------------------------------------------------------- run-output (§09 R09)
 
+  // Collapse the expanded card and DISCARD its results (§12 R08: re-viewing a report costs a
+  // re-run — no stale totals survive off screen). The run-output and its FILTERED export row
+  // (a filtered export belongs to a run) hide, empty, and return to their parked home slots.
+  // The Export All Data block is untouched — it is standing chrome, never run-armed.
   function hideRun() {
     runningRef = null;
+    collapseCards();
     $('rep-run').hidden = true;
     $('rep-run-export').hidden = true;
-    $('rep-run-export-all').hidden = true;
+    $('rep-run-caption').textContent = 'Run';
+    $('rep-run-rows').innerHTML = '';
+    $('rep-export-status').textContent = '';
+    goHome('rep-run');
+    goHome('rep-run-export');
   }
 
   // §09 R09: the flags a grouped line carries, shown IN CONTEXT on the affected row (not in
@@ -449,8 +527,12 @@
     // (.report-sub td), not an inline style, so the table reads from one place.
     const cls = depth === 0 ? 'report-grp' : 'report-sub';
     const secs = rounding ? line.roundedSeconds : line.totalSeconds;
+    // §09 R02: a depth-0 week/month line renders core's human label ("Week of Jul 27" /
+    // "Jul 2026") via SU.groupKeyLabel — the same derivation `tt report` prints. Sub-rows
+    // are always project names (raw keys), and every other grouping's key IS its label.
+    const label = depth === 0 ? groupKeyLabel(line.key, report.options.by) : line.key;
     return (
-      `<tr class="${cls}"><td>${escapeHtml(line.key)}${flagsHtml(line, report)}</td>` +
+      `<tr class="${cls}"><td>${escapeHtml(label)}${flagsHtml(line, report)}</td>` +
       `<td class="num">${fmtHM(secs)}</td></tr>` +
       (line.children || []).map((c) => rowHtml(c, depth + 1, report, rounding)).join('')
     );
@@ -459,7 +541,8 @@
   // Paint the run-output panel from the core Report runReport returned. The saved def's own
   // rounding rides report.options.rounding (so the displayed line is the rounded total when
   // the def rounds, the exact total otherwise) — the renderer chooses which core-owned
-  // seconds to show and re-derives no total.
+  // seconds to show and re-derives no total. The caller nests the painted panel into the ran
+  // card (adopt) so the results are visually scoped to the report that produced them.
   function paintRun(name, report) {
     runningRef = name;
     const rounding = report.options.rounding;
@@ -473,17 +556,19 @@
     $('rep-run-range').textContent = rangeLabel(report.rangeFromUtc, report.rangeToUtc);
     $('rep-run').hidden = false;
     $('rep-run-export').hidden = false;
-    $('rep-run-export-all').hidden = false;
     $('rep-export-status').textContent = '';
-    $('rep-export-all-status').textContent = '';
   }
 
   // Run a saved definition by name. core resolves its stored range-spec and totals it
   // (window.stint.runReport, parity with `tt report run`) — no renderer-side math — and the
-  // returned core Report is painted.
+  // returned core Report is painted INSIDE the ran card (the accordion, §12 R08): any open
+  // builder closes and any previous results are discarded first, then this card expands.
   async function runDef(name) {
     const report = await window.stint.runReport({ ref: name });
+    if (!$('rep-builder').hidden) closeBuilder();
+    hideRun();
     paintRun(name, report);
+    adopt(name, ['rep-run', 'rep-run-export']);
   }
 
   // §09 R09 / R06: the report's OWN export — the FILTERED rows it shows. The request carries the
@@ -506,16 +591,16 @@
     }
   }
 
-  // §09 R06: Export All Data — the raw escape hatch. Scope 'all' with the run's ref, so main
-  // exports EVERY raw entry in the resolved range (billable + non-billable, unfiltered — byte-
-  // identical to `tt export`), NOT the filtered report. The status says "all data" so the scope
-  // is never mistaken for the report's rows.
+  // §09 R06: Export All Data — the raw escape hatch. Scope 'all' with NO ref: main exports
+  // the WHOLE RECORD — every raw entry ever, billable + non-billable, no range (byte-
+  // identical to `tt export` with no flags), NOT any report. Always armed — it needs no run
+  // and has no disarmed state (a disarmed silent return was the §12 R21 dead click of issue
+  // #262). The status says "all data" so the scope is never mistaken for a report's rows.
   async function exportAllData(format) {
-    if (runningRef === null) return;
     const status = $('rep-export-all-status');
     status.textContent = '';
     try {
-      const res = await window.stint.exportEntries({ format, scope: 'all', savedReportRef: runningRef });
+      const res = await window.stint.exportEntries({ format, scope: 'all' });
       if (!res || res.canceled) {
         status.textContent = 'Export canceled.';
         return;
@@ -669,10 +754,14 @@
     $('rep-cancel').addEventListener('click', () => closeBuilder());
     $('rep-delete').addEventListener('click', () => armDeleteBuilder());
 
+    // §12 R08: the run-output's close control — collapse the card, discard the results.
+    $('rep-run-close').addEventListener('click', () => hideRun());
+
     // §09 R06 / R09: the report's own Export CSV / JSON (the FILTERED rows it shows).
     $('rep-export-csv').addEventListener('click', () => void exportRun('csv'));
     $('rep-export-json').addEventListener('click', () => void exportRun('json'));
-    // §09 R06: Export All Data — the raw escape hatch, set apart at the bottom of the view.
+    // §09 R06: Export All Data — the whole-record escape hatch, set apart at the bottom of
+    // the view and always clickable (no run required).
     $('rep-export-all-csv').addEventListener('click', () => void exportAllData('csv'));
     $('rep-export-all-json').addEventListener('click', () => void exportAllData('json'));
   }
@@ -686,6 +775,7 @@
   }
 
   function init() {
+    initHomes();
     wire();
     const navItem = document.querySelector('.nav-item[data-view="reports"]');
     if (navItem) navItem.addEventListener('click', () => void renderDefs());
