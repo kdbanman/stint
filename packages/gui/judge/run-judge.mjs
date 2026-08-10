@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -4849,9 +4849,9 @@ async function sceneCalendarLayout(browser) {
 //   • the seven-column weekend-on grid fits the SAME 1040 window — still equal shares, still
 //     no horizontal scroll (there is no floor width and no sanctioned horizontal scroll left
 //     in this view);
-//   • WINDOW (1040×800 — the default AND the minimum): the unified add form, expander open,
+//   • WINDOW (1040×800 — the default AND the minimum): the unified add form
 //     commits without scrolling — Save entry fully inside the viewport — and the exact-times
-//     fields sit inside their picker column with no document-level horizontal overflow
+//     Start/Stop fields sit inside the form's time column with no document-level horizontal overflow
 //     (ex-issue #146: #add-to ran 14px past the window); the edit form's same row likewise;
 //   • the popover at its auto-sized window (the shipped clamp): card and both actions fully
 //     inside, nothing to scroll.
@@ -5753,9 +5753,13 @@ async function sceneHotkeyNoTrap(browser) {
 // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
 // and the ONE viewport derivation they drive. SU.timelineWindow is the single source of the
 // window math (G16; §12 R15's picker and §12 R16's calendar must consume it, never re-derive
-// it) and is evaluated in-page under the pinned JUDGE_NOW clock. The timeline consumers mark
-// their scroll container with the `data-timeline-track` hook; this scene drives Settings only,
-// where no consumer mounts, so `consumerTrack` reports "pending" WITHOUT failing.
+// it) and is evaluated in-page under the pinned JUDGE_NOW clock. The timeline consumer marks
+// its scroll container with the `data-timeline-track` hook — the Timer view's start-only
+// picker, driven here on a second page because it only mounts for a RUNNING entry. §12 R16's
+// week grid is the other consumer and carries its own, stronger guard: CALENDAR_LAYOUT's
+// `neverClipOk` measures the same scroll-not-clip outcome on the grid's own `.cstrip` (full
+// 24h track, default scroll at working hours, off-hours entries present and reachable), so
+// duplicating the hook there would add a second name for a fact already scored.
 async function sceneTimelineWindow(browser) {
   await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -5866,15 +5870,58 @@ async function sceneTimelineWindow(browser) {
       };
     });
 
-    const track = await page.evaluate(() => {
-      const el = document.querySelector('[data-timeline-track]');
-      if (!el) return { present: false, ok: false };
-      const scrollable = el.scrollHeight > el.clientHeight;
-      // The scroll window sits at the configured start: scrollTop/scrollHeight ≈ startMin/1440.
-      const expected = window.SU.timelineWindow(window.__STATE__.settings, window.__JUDGE_NOW__, null);
-      const frac = el.scrollTop / el.scrollHeight;
-      const ok = scrollable && Math.abs(frac - expected.startMin / 1440) < 0.02;
-      return { present: true, ok, scrollable, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    // The CONSUMER half (§12 R15 / G16), on its own page because the picker only mounts for a
+    // RUNNING entry: the Timer view's start-only picker, seeded with the same 09:00–15:00
+    // working hours the Settings half above renders, must open as a FULL-24h SCROLLABLE track
+    // positioned at the configured window — a scroll default, never a clipped one. Until the
+    // redesign landed §12 R15/R16 no consumer mounted anywhere this scene drove, so this fact
+    // passed vacuously on `!el`; the fixture now guarantees the element exists, and `present`
+    // is asserted rather than tolerated so the stub cannot come back by the element going away.
+    const track = await withPage(browser, timelineConsumerState(), 'index.html', async (cpage) => {
+      await cpage.click('.nav-item[data-view="timer"]');
+      await cpage.click('#le-start-pick');
+      await cpage.waitForSelector('#le-start-disc:not([hidden]) [data-timeline-track]', { state: 'attached' });
+      return cpage.evaluate(() => {
+        const el = document.querySelector('#le-start-disc [data-timeline-track]');
+        if (!el) return { present: false, ok: false };
+        const scrollable = el.scrollHeight > el.clientHeight;
+        // The expected window is SU.timelineWindow's OWN answer for what this picker is
+        // editing — the configured 09:00–15:00 span re-centered on the running interval
+        // (§12 R15's picker opens on the entry it adjusts). Passing `null` here instead
+        // would score the picker against a window it is not supposed to use, and a probe
+        // that expects the wrong thing is worse than none: scrollTop/scrollHeight ≈
+        // startMin/1440 over the full-24h track.
+        const running = window.__STATE__.status?.entry ?? null;
+        const expected = window.SU.timelineWindow(
+          window.__STATE__.settings,
+          window.__JUDGE_NOW__,
+          running ? { startUtc: running.startUtc, endUtc: null } : null,
+        );
+        // Geometry comes from the shipped `STP.minutesToY` rather than a re-derived
+        // px-per-minute here (the same never-re-derive rule the window math follows), and the
+        // target is CLAMPED: a window whose start sits late in the day cannot be put at the top
+        // of a 24h track, and the browser pins scrollTop to its maximum. Asserting the raw
+        // startMin fraction would demand a scroll position no browser can produce and fail a
+        // correct picker — so the fact is "scrolled to the window, or as far as the track
+        // allows", plus the outcome that makes the centering worth doing: the interval being
+        // edited is actually INSIDE the viewport.
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        const target = Math.min(window.STP.minutesToY(expected.startMin), maxScroll);
+        const editedY = running ? window.STP.minutesToY(window.SU.localMinuteOfDay(running.startUtc)) : null;
+        const editedVisible =
+          editedY !== null && editedY >= el.scrollTop && editedY <= el.scrollTop + el.clientHeight;
+        const ok = scrollable && Math.abs(el.scrollTop - target) <= 2 && editedVisible;
+        return {
+          present: true,
+          ok,
+          scrollable,
+          editedVisible,
+          scrollTop: Math.round(el.scrollTop),
+          scrollHeight: Math.round(el.scrollHeight),
+          target: Math.round(target),
+          expectedStartMin: expected.startMin,
+        };
+      });
     });
 
     const groupSeeded = probe.allFour && probe.startValue === '09:00' && probe.endValue === '15:00';
@@ -5890,7 +5937,9 @@ async function sceneTimelineWindow(browser) {
       afterFlip.aroundEnabled &&
       !afterFlip.rowOff;
     const windowMath = windows.workingOk && windows.aroundOk && windows.calendarOk;
-    const consumerTrack = track.present ? track.ok : true;
+    // No longer `present ? ok : true` — §12 R15's picker has landed, so a missing track is a
+    // regression, not a not-yet.
+    const consumerTrack = track.present && track.ok;
     record(
       'TIMELINE_WINDOW',
       { groupSeeded, aroundDisabledUndimmed, modeFlipEnablesAround, windowMath, consumerTrack },
@@ -5903,9 +5952,10 @@ async function sceneTimelineWindow(browser) {
         `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
         `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
         `(${windows.aroundOk}), calendar-forced-working-hours ok=${windows.calendarOk}; ` +
-        (track.present
-          ? `consumer track scrollable+positioned=${track.ok} (scrollTop=${track.scrollTop}/${track.scrollHeight})`
-          : `consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)`),
+        `§12 R15 consumer track (the Timer view's start-only picker, same 09:00–15:00 config) ` +
+        `present=${track.present} scrollable+positioned-at-the-window=${track.ok} ` +
+        `(scrollTop=${track.scrollTop}→target ${track.target} of ${track.scrollHeight}, ` +
+        `window start ${track.expectedStartMin}min, edited interval visible=${track.editedVisible})`,
       'timeline-window.png',
     );
   });

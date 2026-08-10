@@ -30,7 +30,7 @@ Feature: GUI ↔ tt parity (§17 R8)
     When I edit the entry "draft spec" description to "final spec"
     Then the entry "final spec" is for "Acme / API"
 
-  # §07 / §12 R10 — the Clients view's client lifecycle: create, rename, archive. Reaches the
+  # §07 / §12 R11 — the Clients view's client lifecycle: create, rename, archive. Reaches the
   # addClient / renameClient / archiveClient IPC channels, parity with `tt client add/rename/archive`.
   Scenario: Creating, renaming then archiving a client runs identically on both surfaces
     When I add a client "Acme Corp"
@@ -41,7 +41,7 @@ Feature: GUI ↔ tt parity (§17 R8)
     When I archive client "Acme Inc"
     Then client "Acme Inc" is not in the active client list
 
-  # §07 / §12 R10 — the Clients view's per-project lifecycle: create under a client, rename,
+  # §07 / §12 R11 — the Clients view's per-project lifecycle: create under a client, rename,
   # archive. Reaches the addProject / renameProject / archiveProject IPC channels, parity with
   # `tt project add/rename/archive`.
   Scenario: Creating, renaming then archiving a project runs identically on both surfaces
@@ -54,7 +54,7 @@ Feature: GUI ↔ tt parity (§17 R8)
     When I archive project "Core Platform"
     Then project "Core Platform" is not in the active project list
 
-  # §12 R11 / §14 — the Settings view's edit + read-back over the SAME config capability `tt
+  # §12 R12 / §14 — the Settings view's edit + read-back over the SAME config capability `tt
   # config set` / `tt config ls` use. A chosen value persists and reads back on both surfaces.
   Scenario: Changing a setting and reading it back behaves identically on both surfaces
     When I set week start to "sunday"

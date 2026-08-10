@@ -51,9 +51,9 @@ Feature: Tracking and backfill
   # PRD §05 R05 (core: core data entry) — manual backfill creates a COMPLETED entry from
   # explicit from/to. Runs twice (CoreWorld.backfill = store.add, CliWorld.backfill =
   # `tt add --from --to`), proving the core-entry behaviour is identical and reachable on
-  # both surfaces. In the GUI the from/to span is chosen on the unified entry form's
-  # inline interval picker (§12 R07/R15) — or typed exactly in the collapsed Start/Stop
-  # expander (§12 R17), the overnight path — both writing the same shared form values that
+  # both surfaces. In the GUI the from/to span is dragged on the entries week grid
+  # (drag-to-create, §12 R07/R16) — or typed exactly in the unified form's Start/Stop
+  # fields (§12 R17), the overnight path — both writing the same shared form values that
   # "Save entry" commits over the same add capability; this surface-neutral scenario stays
   # the core-entry AC regardless of which input drove the values.
   Scenario: Backfill creates a completed entry
@@ -65,9 +65,9 @@ Feature: Tracking and backfill
   # existing span is WARNED, not blocked: the completed entry still PERSISTS. Runs TWICE
   # (CoreWorld.backfill = store.add, CliWorld.backfill = `tt add --from --to`), proving the
   # core-entry behaviour is identical and reachable on both surfaces. In the GUI the
-  # overlapping from/to is chosen on the unified entry form's inline interval picker — whose
-  # yellow overlap band is advisory, never a block — or typed exactly in the collapsed
-  # Start/Stop expander (§12 R07/R15/R17), both writing the same shared form values that
+  # overlapping from/to is dragged on the entries week grid — whose yellow overlap band
+  # is advisory, never a block — or typed exactly in the unified form's Start/Stop
+  # fields (§12 R07/R16/R17), both writing the same shared form values that
   # "Save entry" commits over this same add capability. This surface-neutral scenario is the
   # core-entry AC whichever GUI input drove the values. Fails if add BLOCKS on overlap, leaves
   # an entry open, or the two surfaces diverge — the exact regressions a warn-not-block
@@ -80,26 +80,26 @@ Feature: Tracking and backfill
     And the entry "spec review" has a billable duration of 90 minutes
     And both entries are flagged overlapped in a report covering the day
 
-  # PRD §12 R17 (core: core data entry) — the unified form's collapsed Start/Stop expander is the
-  # ONLY path for an OVERNIGHT span: the single-day interval picker can't drag across midnight, so a
-  # stop dated a later day is typed exactly into the expander's raw text fields. This scenario is the
+  # PRD §12 R17 (core: core data entry) — the unified form's raw Start/Stop text fields are the
+  # ONLY path for an OVERNIGHT span: a week-grid drag can't cross midnight, so a stop dated a
+  # later day is typed exactly into the fields. This scenario is the
   # surface-neutral core-entry AC for that overnight-capable add: backfilling a span from 22:00 on
   # DAY to 02:00 the NEXT day yields exactly ONE closed entry crossing midnight — a 240-minute
   # billable duration — and leaves nothing open. Runs TWICE (CoreWorld.backfillAt = store.add,
   # CliWorld.backfillAt = `tt add --from --to`), so the cross-midnight span commits identically on
   # both surfaces. Fails if either surface REJECTS, BLOCKS, or FLATTENS a cross-midnight span to the
   # same day (a 240-minute duration proves the stop landed on the next day, not wrapped or negative)
-  # — the exact capability the collapsed Start/Stop expander is the GUI path for.
+  # — the exact capability the Start/Stop fields are the GUI path for.
   Scenario: Backfill creates a completed overnight entry
     When I backfill an entry "overnight deploy" from 22:00 to 02:00 the next day
     Then exactly zero entries are open
     And there are exactly 1 entries
     And the entry "overnight deploy" has a billable duration of 240 minutes
 
-  # PRD §12 R15 — the inline interval picker's 5-minute-snap CONTRACT: every value the picker writes
-  # back to the form is aligned to the 5-minute grid, and both surfaces store that picked span
+  # PRD §12 R23 — the snap CONTRACT behind every drag on a time surface: a dragged handle lands
+  # on the configured snap grid (fine snap default 5 minutes), and both surfaces store that span
   # VERBATIM — no extra rounding, no drift. Runs TWICE (CoreWorld.backfill = store.add,
-  # CliWorld.backfill = `tt add --from --to`), so the values the picker guarantees are honoured
+  # CliWorld.backfill = `tt add --from --to`), so the values a snapped drag writes are honoured
   # identically by core and tt. The exact end (10:45) plus the exact billable duration (90 minutes)
   # pin the stored span to 09:15–10:45 to the minute. Fails if a 5-minute-aligned span is rounded,
   # shifted, or dropped on save on either surface.

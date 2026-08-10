@@ -155,8 +155,9 @@ stop left an entry open / did not set `end=now` on either surface), reinforced
 by the PROP at-most-one-open invariant in `prop/invariants.test.ts` (whose
 `opArb` includes the `stop` op). **R05 Manual add (backfill) — now classified
 `core`** (core data entry per §03): badge-only on the core/CLI behaviour
-(unchanged); the GUI's from/to move onto the unified form's inline interval
-picker + collapsed Start/Stop expander. The named cross-surface anchor is BDD
+(unchanged); the GUI's from/to are dragged on the entries week grid
+(drag-to-create, §12 R07/R16) or typed in the unified form's Start/Stop
+fields (§12 R17). The named cross-surface anchor is BDD
 `features/tracking.feature` "Backfill creates a completed entry" (backfilling
 "spec review" from 13:00 to 14:30 yields exactly zero open entries and a
 billable duration of 90 minutes — run TWICE over core `store.add` + `tt add` via
@@ -454,7 +455,7 @@ same-name-different-client allowed, run TWICE over core + tt), GOLD
 `assertNameFree`/`assertRenameFree` widened from favorites/saved reports, so no
 surface can drift on how a duplicate reference-data name is detected. **R
 restore / reversible hide** (archive is reversible — a client/project/tag can be
-un-archived back into every picker; §12 R13): surface-neutral BDD
+un-archived back into every picker; §12 R11): surface-neutral BDD
 `features/reference_data.feature` ("Archiving then restoring a
 {client,project,tag} round-trips it back to the active list", plus the edge
 "Restoring a project whose client is still archived is refused", each run TWICE
@@ -555,17 +556,19 @@ round-trip + legacy outward rounding, malformed-date rejection, and the
 saved-report rangeSpec view round-trip — the renderer-safe absolute arm is
 `{kind:'absolute', fromDate, toDate}` while core's `RangeSpec` keeps UTC
 instants). The GUI surfaces (`gui/renderer/index.html` + `reports.js` for the
-Reports builder, `app.js` for the Entries toolbar) are thin discoverability
+Reports builder) are thin discoverability
 shells over it — five labelled preset chips (default This week) each sending the
 preset NAME so the **main process resolves it through core's `resolveRange` **
 (`gui/src/main.ts`), plus a Custom mode whose **two plain `type="date"` fields**
-(`#rep-range-from`/`#rep-range-to`; `#el-range-from` /`#el-range-to`) carry
+(`#rep-range-from`/`#rep-range-to`) carry
 their raw strings verbatim: the saved-report `rangeSpec` travels as the
 plain-date absolute arm (converted through `rangeSpecFromView` /`ToView` →
-`resolveDateRange` /`utcWindowToDatePair`), and the Entries toolbar's
-`listEntries` query carries `{fromDate, toDate}` (resolved in the `listEntries`
-handler) and applies LIVE once both dates are set — there is NO Apply button,
-and the renderer constructs no Date and derives no window. JUDGE `REPORTS_VIEW`
+`resolveDateRange` /`utcWindowToDatePair`). The **Entries view carries no range
+controls at all** (§12 R09, issue #265 — no presets, no date pair): `app.js`
+sends the **selected week** as the same raw plain-date pair, `{fromDate, toDate}`
+spanning the week's seven days (resolved in the `listEntries` handler), so that
+view's window follows the week picker alone. On both surfaces the renderer
+constructs no Date and derives no window. JUDGE `REPORTS_VIEW`
 (`reports-list.png` — the two builder date fields are `input[type="date"]` ,
 Custom… reveals them, saving 2026-06-01/2026-06-07 fires a captured `saveReport`
 whose `rangeSpec` is exactly
@@ -1253,12 +1256,12 @@ patches no time key, only the dragged edge snaps, issue #49) joins the existing
 delete, delete-without-confirmation refused) prove each field persists, the
 Split tiles the span, and the two-step Delete removes — over core AND `tt`. The edit/split/merge *arithmetic* is
 the §06 BDD/GOLD coverage above. The §12 R06 unified-form edit mode is thus
-covered by JUDGE `UNIFIED_FORM` (the readonly entries calendar that
+covered by JUDGE `UNIFIED_FORM` (the entries week grid that
 hosts the hover-Edit / click-to-open is §12 R16; add mode is §12 R07). **Flags
 in context** now also include the **at-write-time overlap banner** (a
 non-blocking inline advisory raised when a write creates an overlap, alongside
 the durable flags — which, now the entries list is gone, render as MARKERS on
-the readonly calendar + DETAIL in the unified editor per §12 R10): JUDGE
+the calendar events + DETAIL in the unified editor per §12 R10): JUDGE
 `OVERLAP_BANNER` (`main-overlap-banner.png`) for the at-write-time advisory +
 `CALENDAR_LAYOUT` (`main-calendar.png`, the `.ov` warn band + `.zz` slept hatch)
 + `UNIFIED_FORM` (`main-edit.png`, the editor's overlap detail + reversible subtract) — see §06
@@ -1683,7 +1686,7 @@ Settings nav renders a control for every §14 setting, changing the date-format
 select fires `setSetting` , and the panel stays accent-disciplined), plus
 `HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
 field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
-(issue 135). The §12 R11 Settings view is thus fully covered.
+(issue 135). The §12 R12 Settings view is thus fully covered.
 **R13 Confirm destructive actions** (now
 **`core`** — the in-window destructive-action confirmation is a §03
 loss-protection affordance, so it carries the `core` badge; the classification
@@ -1702,7 +1705,7 @@ the row Delete click through a generic in-window confirm gate
 monochrome `.danger` button, never the accent, §15) and `window.stint.remove` is
 reachable ONLY from inside the confirm callback; Cancel restores the button
 untouched. The same gate carries the archive-when-referenced confirm the
-Clients management view (§12 R10) offers: `armArchiveClient` /
+Clients management view (§12 R11) offers: `armArchiveClient` /
 `armArchiveProject` route a REFERENCED record's Archive through `confirmInline`
 (an UNREFERENCED record archives directly — R13's exact scope), proven by JUDGE
 `CONFIRM_ARCHIVE` (`main-confirm-archive.png`, detailed in the §07 row). JUDGE
@@ -2198,7 +2201,7 @@ path. Re-introducing a Windows path or changing the data-dir suffix fails
 `gold/contracts.test.ts` , `cli/test/gold/cli.test.ts` ,
 `features/settings.feature` , `gui/judge/run-judge.mjs` . The settings
 (rounding, rounding increment, week start, first check-in, check-in interval,
-global hotkey, the §12 R11 **date/number format** (`dateFormat:
+global hotkey, the §12 R12 **date/number format** (`dateFormat:
 'system'|'iso'`), the §04 R06 **time zone** (`time_zone` — the `'system'`
 sentinel resolved against the OS at read time, or a platform-supported IANA
 zone; an unknown name rejected with nothing stored), and the **§14
