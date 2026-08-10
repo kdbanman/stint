@@ -28,6 +28,12 @@ const DEFAULT_SETTINGS = {
   workingHoursEnd: '18:00',
   pickerWindowMode: 'working_hours',
   pickerAroundHours: 8,
+  // §14 / §12 R09/R23 — the Entries-calendar settings: the two drag-snap resolutions
+  // (whole minutes 1–30, fine ≤ coarse) and the show-weekend boolean. The Settings →
+  // Entries calendar group edits them over the same setSetting channel.
+  snapFineMinutes: 5,
+  snapCoarseMinutes: 15,
+  showWeekend: false,
   // §20 R04 — how many automatic backups to keep; the Settings → Backups retention picker
   // paints this and changes it over the same setSetting channel `tt config set backup_retention`.
   backupRetention: 5,
@@ -1023,8 +1029,8 @@ export function shortEntriesCalendarState() {
 }
 
 /**
- * §12 R11 — the Settings-view fixture. The panel renders from getState().settings (the
- * eight §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
+ * §12 R12 — the Settings-view fixture. The panel renders from getState().settings (the
+ * §14 settings), so the empty-state snapshot's DEFAULT_SETTINGS is enough; the
  * SETTINGS_VIEW scene opens the panel, asserts a control for every setting, and screenshots
  * the editable controls (main-settings.png) for rubric/human review.
  */

@@ -17,6 +17,9 @@
     "workingHoursEnd",
     "pickerWindowMode",
     "pickerAroundHours",
+    "snapFineMinutes",
+    "snapCoarseMinutes",
+    "showWeekend",
     "backupRetention"
   ],
   "additionalProperties": false,
@@ -37,6 +40,14 @@
     "workingHoursEnd": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$" },
     "pickerWindowMode": { "enum": ["working_hours", "around_now"] },
     "pickerAroundHours": { "type": "integer", "minimum": 1, "maximum": 24 },
+    "snapFineMinutes": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 30,
+      "description": "§14/§12 R23 — the fine drag-snap resolution in whole minutes; core additionally enforces the cross-field fine ≤ coarse pair rule, which JSON Schema cannot express per-key."
+    },
+    "snapCoarseMinutes": { "type": "integer", "minimum": 1, "maximum": 30 },
+    "showWeekend": { "type": "boolean" },
     "backupRetention": { "type": "integer", "minimum": 0 }
   }
 }

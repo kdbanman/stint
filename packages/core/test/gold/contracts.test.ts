@@ -84,6 +84,9 @@ describe('GOLD: settings defaults (§14)', () => {
         "pickerWindowMode": "working_hours",
         "rounding": false,
         "roundingIncrementMin": 15,
+        "showWeekend": false,
+        "snapCoarseMinutes": 15,
+        "snapFineMinutes": 5,
         "timeZone": "system",
         "weekStart": "monday",
         "workingHoursEnd": "18:00",
@@ -160,6 +163,63 @@ describe('GOLD: settings defaults (§14)', () => {
     writeSetting(db, 'pickerWindowMode', 'around_now');
     writeSetting(db, 'pickerAroundHours', 12);
     expect(readSettings(db)).toMatchObject({ pickerWindowMode: 'around_now', pickerAroundHours: 12 });
+    db.close();
+  });
+
+  // §14 / §12 R09/R23 — the Entries-calendar keys: writeSetting is exactly as strict as the
+  // CLI's `config set` because both run the SAME descriptor validation; each rejection
+  // leaves the stored value at its documented default. These fail if a key, a default, or
+  // any validation rule (the 1–30 whole-minute snap domain, the cross-field fine ≤ coarse
+  // pair, the strict show_weekend boolean) regresses.
+  it('writeSetting rejects out-of-range and fractional snap values, keeping the defaults', () => {
+    const db = openDb(':memory:');
+    expect(() => writeSetting(db, 'snapFineMinutes', 0)).toThrow(/1 to 30/);
+    expect(() => writeSetting(db, 'snapCoarseMinutes', 31)).toThrow(/1 to 30/);
+    expect(() => writeSetting(db, 'snapFineMinutes', 7.5)).toThrow(/whole number/);
+    const s = readSettings(db);
+    expect(s.snapFineMinutes).toBe(DEFAULT_SETTINGS.snapFineMinutes);
+    expect(s.snapCoarseMinutes).toBe(DEFAULT_SETTINGS.snapCoarseMinutes);
+    db.close();
+  });
+
+  it('writeSetting rejects a fine>coarse snap pair (cross-field, either key)', () => {
+    const db = openDb(':memory:');
+    // Against the default coarse 15, a larger fine inverts the pair.
+    expect(() => writeSetting(db, 'snapFineMinutes', 20)).toThrow(/at most snap_coarse_minutes/);
+    // Against the default fine 5, a smaller coarse inverts it too.
+    expect(() => writeSetting(db, 'snapCoarseMinutes', 3)).toThrow(/at most snap_coarse_minutes/);
+    const s = readSettings(db);
+    expect(s.snapFineMinutes).toBe(DEFAULT_SETTINGS.snapFineMinutes);
+    expect(s.snapCoarseMinutes).toBe(DEFAULT_SETTINGS.snapCoarseMinutes);
+    // A valid pair still writes — and fine == coarse is legal (the rule is ≤, not <).
+    writeSetting(db, 'snapCoarseMinutes', 10);
+    writeSetting(db, 'snapFineMinutes', 10);
+    expect(readSettings(db)).toMatchObject({ snapFineMinutes: 10, snapCoarseMinutes: 10 });
+    db.close();
+  });
+
+  it('show_weekend is a strict boolean: non-boolean writes and corrupt stored values reject/fall back', () => {
+    const db = openDb(':memory:');
+    // The write layer rejects a non-boolean outright (the IPC channel is untyped at runtime).
+    expect(() => writeSetting(db, 'showWeekend', 'banana' as never)).toThrow(/boolean/);
+    // A hand-corrupted stored token parses to nothing and falls back to the default (off).
+    db.prepare("INSERT INTO setting(key, value) VALUES('show_weekend', 'banana')").run();
+    expect(readSettings(db).showWeekend).toBe(false);
+    // The valid domain round-trips.
+    writeSetting(db, 'showWeekend', true);
+    expect(readSettings(db).showWeekend).toBe(true);
+    db.close();
+  });
+
+  it('an inconsistent stored snap pair (fine > coarse) falls back to BOTH defaults on read', () => {
+    const db = openDb(':memory:');
+    // Individually valid values that violate the cross-field fine ≤ coarse rule, injected
+    // straight into the table (the write path would have rejected the pair).
+    db.prepare("INSERT INTO setting(key, value) VALUES('snap_fine_minutes', '20')").run();
+    db.prepare("INSERT INTO setting(key, value) VALUES('snap_coarse_minutes', '10')").run();
+    const s = readSettings(db);
+    expect(s.snapFineMinutes).toBe(DEFAULT_SETTINGS.snapFineMinutes);
+    expect(s.snapCoarseMinutes).toBe(DEFAULT_SETTINGS.snapCoarseMinutes);
     db.close();
   });
 

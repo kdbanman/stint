@@ -5386,7 +5386,7 @@ async function sceneSettingsView(browser) {
       return {
         visible: !document.querySelector('.view[data-view="settings"]').hidden,
         keys,
-        allSeven:
+        allControls:
           has('rounding') &&
           has('roundingIncrementMin') &&
           has('weekStart') &&
@@ -5394,7 +5394,13 @@ async function sceneSettingsView(browser) {
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
           has('dateFormat') &&
-          has('timeZone'),
+          has('timeZone') &&
+          // §14 / §12 R09/R23 — the Entries-calendar group: the show-weekend toggle and
+          // the fine/coarse snap-minutes inputs (the Timeline group's four keys are
+          // asserted by the dedicated TIMELINE_WINDOW scene).
+          has('showWeekend') &&
+          has('snapFineMinutes') &&
+          has('snapCoarseMinutes'),
         offenders,
         segChip,
       };
@@ -5410,13 +5416,13 @@ async function sceneSettingsView(browser) {
       probe.segChip.chipInk &&
       probe.segChip.chipLifted &&
       probe.segChip.peersFlat;
-    const allControlsPresent = probe.visible && probe.allSeven;
+    const allControlsPresent = probe.visible && probe.allControls;
     const accentDiscipline = probe.offenders.length === 0;
     const editFiresSetSetting = !!set && set.key === 'dateFormat' && set.value === 'iso';
     record(
       'SETTINGS_VIEW',
       { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      `settings panel exposes all eleven §14 controls incl. the Entries-calendar group (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
       'main-settings.png',
     );
   });

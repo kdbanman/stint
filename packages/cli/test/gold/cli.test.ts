@@ -450,6 +450,56 @@ describe('GOLD: config set validates (§14)', () => {
     expect(JSON.parse(tt(['config', 'ls', '--json']).out).pickerAroundHours).toBe(8);
   });
 
+  // §14 / §12 R09/R23 — the Entries-calendar keys: like the timeline keys, tt parity arrived
+  // automatically from the descriptor list, so the CLI must expose AND validate the snap
+  // pair (whole minutes 1–30, fine ≤ coarse) and the strict show_weekend boolean exactly as
+  // core does. Each rejection exits non-zero with a diagnostic and leaves `config ls --json`
+  // reading the documented default.
+  it('rejects out-of-range and fractional snap values', () => {
+    for (const bad of ['0', '31']) {
+      const r = tt(['config', 'set', 'snap_coarse_minutes', bad]);
+      expect(r.code).not.toBe(0);
+      expect(r.err).toMatch(/1 to 30/);
+    }
+    const frac = tt(['config', 'set', 'snap_fine_minutes', '7.5']);
+    expect(frac.code).not.toBe(0);
+    expect(frac.err).toMatch(/whole number/);
+    const json = JSON.parse(tt(['config', 'ls', '--json']).out);
+    expect(json.snapFineMinutes).toBe(5);
+    expect(json.snapCoarseMinutes).toBe(15);
+  });
+
+  it('rejects a snap pair with fine above coarse (cross-field, either key)', () => {
+    // Against the default coarse 15, a fine of 20 inverts the pair…
+    const fine = tt(['config', 'set', 'snap_fine_minutes', '20']);
+    expect(fine.code).not.toBe(0);
+    expect(fine.err).toMatch(/at most snap_coarse_minutes/);
+    // …and against the default fine 5, a coarse of 3 inverts it too.
+    const coarse = tt(['config', 'set', 'snap_coarse_minutes', '3']);
+    expect(coarse.code).not.toBe(0);
+    expect(coarse.err).toMatch(/at most snap_coarse_minutes/);
+    const json = JSON.parse(tt(['config', 'ls', '--json']).out);
+    expect(json.snapFineMinutes).toBe(5);
+    expect(json.snapCoarseMinutes).toBe(15);
+    // A valid pair still round-trips through config set / ls --json.
+    expect(tt(['config', 'set', 'snap_coarse_minutes', '30']).code).toBe(0);
+    expect(tt(['config', 'set', 'snap_fine_minutes', '10']).code).toBe(0);
+    const updated = JSON.parse(tt(['config', 'ls', '--json']).out);
+    expect(updated.snapFineMinutes).toBe(10);
+    expect(updated.snapCoarseMinutes).toBe(30);
+  });
+
+  it('rejects a non-boolean show_weekend and round-trips the boolean domain', () => {
+    const bad = tt(['config', 'set', 'show_weekend', 'banana']);
+    expect(bad.code).not.toBe(0);
+    expect(bad.err).toMatch(/invalid value for show_weekend/);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).showWeekend).toBe(false);
+    expect(tt(['config', 'set', 'show_weekend', 'true']).code).toBe(0);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).showWeekend).toBe(true);
+    expect(tt(['config', 'set', 'show_weekend', 'off']).code).toBe(0);
+    expect(JSON.parse(tt(['config', 'ls', '--json']).out).showWeekend).toBe(false);
+  });
+
   // #169 — a rejected setting exits 2 with a bare message, not 1 with an `error: ` prefix.
   // core rejects a bad value with a plain `Error` (settings.ts), which bin.ts's default arm
   // maps to `error: <msg>` / exit 1; applySetting normalises it to the usage-level 2 that the
@@ -594,6 +644,9 @@ describe('GOLD: settings defaults (§14)', () => {
       working_hours_end       18:00
       picker_window_mode      working_hours
       picker_around_hours     8
+      snap_fine_minutes       5
+      snap_coarse_minutes     15
+      show_weekend            false
       backup_retention        5"
     `);
   });
@@ -613,6 +666,9 @@ describe('GOLD: settings defaults (§14)', () => {
       workingHoursEnd: '18:00',
       pickerWindowMode: 'working_hours',
       pickerAroundHours: 8,
+      snapFineMinutes: 5,
+      snapCoarseMinutes: 15,
+      showWeekend: false,
       backupRetention: 5,
     });
   });
