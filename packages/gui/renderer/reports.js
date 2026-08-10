@@ -82,6 +82,48 @@
   // --csv`). Export All Data never reads it: the whole-record export depends on no run.
   let runningRef = null;
 
+  // ----------------------------------------------------------------- accordion (§12 R08)
+
+  // The builder and the run-output are SINGLE elements that MOVE (issue #268): expanding a
+  // card adopts them into that card's .def-body, so "exactly one card expanded at a time" is
+  // structural — there is only one panel of each kind to adopt, and adopting collapses
+  // whatever held it before. Home markers let renderDefs reclaim the panels before repainting
+  // the list (host.innerHTML would destroy anything nested in a card), then re-nest them into
+  // the repainted card; the builder's home is also where a New report opens (below the list —
+  // a fresh def has no card yet). Export All Data never nests: run-independent, view-level.
+  const HOMES = new Map();
+  function initHomes() {
+    for (const id of ['rep-builder', 'rep-run', 'rep-run-export']) {
+      const marker = document.createComment(id);
+      $(id).before(marker);
+      HOMES.set(id, marker);
+    }
+  }
+  function goHome(id) {
+    const el = $(id);
+    const marker = HOMES.get(id);
+    if (el && marker && el.previousSibling !== marker) marker.after(el);
+  }
+  function cardOf(name) {
+    return document.querySelector(`#rep-defs .def[data-name="${CSS.escape(name)}"]`);
+  }
+  function collapseCards(except) {
+    for (const c of document.querySelectorAll('#rep-defs .def.open')) {
+      if (c !== except) c.classList.remove('open');
+    }
+  }
+  // Expand `name`'s card around the named panels. The card's .def-body animates 0fr → 1fr in
+  // CSS (~120ms, design.html D10; prefers-reduced-motion collapses it to instant).
+  function adopt(name, ids) {
+    const card = cardOf(name);
+    if (!card) return false;
+    const inner = card.querySelector('.def-body-inner');
+    for (const id of ids) inner.appendChild($(id));
+    collapseCards(card);
+    card.classList.add('open');
+    return true;
+  }
+
   // ----------------------------------------------------------------- spec summary
 
   // A one-line human summary of a saved definition's spec, painted on its card. The range
@@ -107,10 +149,12 @@
   // ----------------------------------------------------------------- defs list (§09 R08)
 
   // Paint the saved-definition list (window.stint.listReports, parity with `tt report ls`).
-  // Each card carries the name + spec summary and the Run / Edit / kebab affordances; the
-  // kebab opens Rename / Delete in place. The renderer holds no state beyond the painted
-  // dataset — every action re-reads through core. Best-effort: a read failure leaves the
-  // empty state and never blocks the builder.
+  // Each card carries a head row (name + spec summary and the Run / Edit / kebab affordances;
+  // the kebab opens Rename / Delete in place) over an empty .def-body accordion host. The
+  // movable panels are reclaimed to their home slots before the repaint (innerHTML would
+  // destroy them nested) and re-nested after it, so the expanded card survives a repaint.
+  // The renderer holds no state beyond the painted dataset — every action re-reads through
+  // core. Best-effort: a read failure leaves the empty state and never blocks the builder.
   async function renderDefs() {
     const host = $('rep-defs');
     const empty = $('rep-defs-empty');
@@ -121,9 +165,13 @@
     } catch {
       /* the saved-defs list is best-effort; the builder still opens */
     }
+    goHome('rep-builder');
+    goHome('rep-run');
+    goHome('rep-run-export');
     if (!defs.length) {
       host.innerHTML = '';
       if (empty) empty.hidden = false;
+      if (runningRef !== null) hideRun(); // the def behind the results is gone
       return;
     }
     if (empty) empty.hidden = true;
@@ -132,16 +180,25 @@
         const sel = draft.editing === d.name ? ' sel' : '';
         return (
           `<div class="def${sel}" data-name="${escapeHtml(d.name)}">` +
+          `<div class="def-head">` +
           `<div class="di"><div class="dname">${escapeHtml(d.name)}</div>` +
           `<div class="dspec">${specSummary(d)}</div></div>` +
           `<div class="dactions">` +
           `<button type="button" class="def-run" data-act="run">${icon('play')}Run</button>` +
           `<button type="button" class="def-edit" data-act="edit">${icon('edit')}Edit</button>` +
           `<button type="button" class="def-kebab" data-act="menu" aria-label="Rename or delete">${icon('dots')}</button>` +
-          `</div></div>`
+          `</div></div>` +
+          `<div class="def-body"><div class="def-body-inner"></div></div></div>`
         );
       })
       .join('');
+    // Re-nest whatever was expanded: the open EDIT builder into its card, else the run-output
+    // into the card that ran it (dropping the results if that def vanished underneath them).
+    if (draft.editing !== null && !$('rep-builder').hidden) {
+      adopt(draft.editing, ['rep-builder']);
+    } else if (runningRef !== null && !adopt(runningRef, ['rep-run', 'rep-run-export'])) {
+      hideRun();
+    }
   }
 
   // ----------------------------------------------------------------- builder (§09 R08)
@@ -235,8 +292,12 @@
   }
 
   // Open the inline builder (filling the client/project filter selects first so they are
-  // usable immediately) and reveal it. `forName` edits that def; null opens a New report.
+  // usable immediately) and reveal it. `forName` edits that def — the builder nests into that
+  // card's .def-body (the same accordion slot the run-output uses); null opens a New report
+  // at the builder's view-level home below the list. Either way any showing run-output is
+  // discarded first: exactly one thing is expanded at a time (§12 R08).
   async function openBuilder(forName) {
+    hideRun();
     if (forName) {
       let def = null;
       try {
@@ -254,12 +315,16 @@
     await populateProjects();
     clearWarn(); // §12 R21: a fresh open starts with no stale refusal message
     $('rep-builder').hidden = false;
+    if (draft.editing !== null) adopt(draft.editing, ['rep-builder']);
+    else goHome('rep-builder');
     $('rep-name').focus();
-    void renderDefs(); // re-mark the selected card
+    void renderDefs(); // re-mark the selected card (and re-nest into the repainted card)
   }
 
   function closeBuilder() {
     $('rep-builder').hidden = true;
+    collapseCards();
+    goHome('rep-builder');
     clearWarn();
     resetDraft();
     void renderDefs();
@@ -363,7 +428,10 @@
     }
     await window.stint.renameReport({ name, newName: trimmed });
     if (draft.editing === name) draft.editing = trimmed;
-    if (runningRef === name) runningRef = trimmed;
+    if (runningRef === name) {
+      runningRef = trimmed;
+      $('rep-run-caption').textContent = `Run · ${trimmed}`;
+    }
     await renderDefs();
   }
 
@@ -429,12 +497,20 @@
 
   // ----------------------------------------------------------------- run-output (§09 R09)
 
-  // Tear down the run-output and its FILTERED export row (a filtered export belongs to a
-  // run). The Export All Data block is untouched — it is standing chrome, never run-armed.
+  // Collapse the expanded card and DISCARD its results (§12 R08: re-viewing a report costs a
+  // re-run — no stale totals survive off screen). The run-output and its FILTERED export row
+  // (a filtered export belongs to a run) hide, empty, and return to their parked home slots.
+  // The Export All Data block is untouched — it is standing chrome, never run-armed.
   function hideRun() {
     runningRef = null;
+    collapseCards();
     $('rep-run').hidden = true;
     $('rep-run-export').hidden = true;
+    $('rep-run-caption').textContent = 'Run';
+    $('rep-run-rows').innerHTML = '';
+    $('rep-export-status').textContent = '';
+    goHome('rep-run');
+    goHome('rep-run-export');
   }
 
   // §09 R09: the flags a grouped line carries, shown IN CONTEXT on the affected row (not in
@@ -465,7 +541,8 @@
   // Paint the run-output panel from the core Report runReport returned. The saved def's own
   // rounding rides report.options.rounding (so the displayed line is the rounded total when
   // the def rounds, the exact total otherwise) — the renderer chooses which core-owned
-  // seconds to show and re-derives no total.
+  // seconds to show and re-derives no total. The caller nests the painted panel into the ran
+  // card (adopt) so the results are visually scoped to the report that produced them.
   function paintRun(name, report) {
     runningRef = name;
     const rounding = report.options.rounding;
@@ -484,10 +561,14 @@
 
   // Run a saved definition by name. core resolves its stored range-spec and totals it
   // (window.stint.runReport, parity with `tt report run`) — no renderer-side math — and the
-  // returned core Report is painted.
+  // returned core Report is painted INSIDE the ran card (the accordion, §12 R08): any open
+  // builder closes and any previous results are discarded first, then this card expands.
   async function runDef(name) {
     const report = await window.stint.runReport({ ref: name });
+    if (!$('rep-builder').hidden) closeBuilder();
+    hideRun();
     paintRun(name, report);
+    adopt(name, ['rep-run', 'rep-run-export']);
   }
 
   // §09 R09 / R06: the report's OWN export — the FILTERED rows it shows. The request carries the
@@ -673,6 +754,9 @@
     $('rep-cancel').addEventListener('click', () => closeBuilder());
     $('rep-delete').addEventListener('click', () => armDeleteBuilder());
 
+    // §12 R08: the run-output's close control — collapse the card, discard the results.
+    $('rep-run-close').addEventListener('click', () => hideRun());
+
     // §09 R06 / R09: the report's own Export CSV / JSON (the FILTERED rows it shows).
     $('rep-export-csv').addEventListener('click', () => void exportRun('csv'));
     $('rep-export-json').addEventListener('click', () => void exportRun('json'));
@@ -691,6 +775,7 @@
   }
 
   function init() {
+    initHomes();
     wire();
     const navItem = document.querySelector('.nav-item[data-view="reports"]');
     if (navItem) navItem.addEventListener('click', () => void renderDefs());

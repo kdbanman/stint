@@ -1421,7 +1421,8 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .report-head {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   padding: 12px 16px;
   background: var(--wash);
   border-bottom: 1px solid var(--rule);
@@ -1429,6 +1430,9 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--muted);
 }
 .report-head b { color: var(--ink); font-weight: 640; }
+/* caption left, total right, then the §12 R08 close control (collapse + discard). */
+#rep-run-caption { margin-right: auto; }
+#rep-run-close { flex: none; }
 .report-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--paper); }
 .report-table td,
 .report-table th { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--rule); }
@@ -1533,16 +1537,34 @@ button.danger:hover { background: var(--danger-weak); }
   margin-bottom: 8px;
 }
 .defs:empty { display: none; }
-.def {
+.def { border-bottom: 1px solid var(--rule); }
+.def:last-child { border-bottom: 0; }
+/* The card's head row — the old flat .def row, now sitting over the accordion body. */
+.def-head {
   display: flex;
   align-items: center;
   gap: 16px;
   padding: 16px 16px;
-  border-bottom: 1px solid var(--rule);
 }
-.def:last-child { border-bottom: 0; }
 /* SELECTION != ELEVATION: a selected row is signalled by a sunken fill, not a lift. */
-.def.sel { background: var(--wash); }
+.def.sel > .def-head { background: var(--wash); }
+/* §12 R08 (issue #268) — the accordion body each card carries. Empty (zero height) until
+   reports.js adopts the builder or the run-output into .def-body-inner and marks the card
+   .open; the 0fr → 1fr grid row is the snappy expand (design.html D10: ~state-change speed,
+   meaningful motion only). A transition (not an animation) so the global
+   prefers-reduced-motion block collapses it to instant. */
+.def-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.16s ease;
+}
+.def.open > .def-body { grid-template-rows: 1fr; }
+.def-body-inner { overflow: hidden; min-height: 0; }
+/* The adopted panels breathe inside the card (the builder/run-output margins below are the
+   view-level ones; nested, the card's own frame provides the separation). */
+.def-body-inner > .builder { margin: 0 16px 16px; }
+.def-body-inner > .report-summary { margin: 0 16px; }
+.def-body-inner > .report-export { margin: 12px 16px 16px; }
 .def .di { flex: 1; min-width: 0; }
 .def .dname { font-size: 13px; font-weight: 590; margin-bottom: 4px; }
 .def .dspec { font-size: 12px; color: var(--muted); }
