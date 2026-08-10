@@ -64,9 +64,8 @@ interface Window {
     onSave: (name: string) => void | Promise<void>,
     opts?: { onCancel?: () => void; commitLabel?: string },
   ): HTMLFormElement;
-  /** The inline interval picker (timepicker.js) — declared for app.js's call sites. */
+  /** The start-only interval picker (timepicker.js) — declared for app.js's call sites. */
   STP: {
-    openInline(opts: Record<string, unknown>): void;
     openStartOnly(opts: Record<string, unknown>): void;
     snapTo5(min: number): number;
     minutesToY(min: number, startMin: number, endMin: number, height: number): number;

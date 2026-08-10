@@ -158,7 +158,7 @@
         "timerSpendsExactlyOne": true,
         "everyStandingViewSpendsIt": true
       },
-      "justification": "exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): timer=[#timer-stop]; entries=[#add-toggle]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; every standing-primary view spends it=true; running Timer view carries exactly its Stop primary=true (count 1)",
+      "justification": "exactly one accent-solid fill per view with a standing primary, ≤1 everywhere (D11): timer=[#timer-stop]; entries=[button.fab primary]; clients=[#add-client-btn]; reports=[#rep-new]; settings=[none]; every view within budget=true; every standing-primary view spends it=true; running Timer view carries exactly its Stop primary=true (count 1)",
       "screenshot": "main-running.png"
     },
     {
@@ -168,7 +168,7 @@
         "everyStateExactlyOneFill": true,
         "allFourteenStatesWalked": true
       },
-      "justification": "exactly one visible --accent-solid fill in every state (D11): timer · idle at rest=[#toggle]; timer · Details expanded=[#start-go]; timer · pin-as-favourite field=[button.small primary]; entries · at rest=[#add-toggle]; entries · add form open=[#add-go]; clients · at rest=[#add-client-btn]; clients · inline rename open=[button.small primary]; clients · add-client field open=[button.small primary]; reports · at rest=[#rep-new]; reports · builder open=[#rep-save]; reports · builder nested in its card (edit)=[#rep-save]; timer · running at rest=[#timer-stop]; timer · running + pin-as-favourite field=[button.small primary]; entries · merge-conflict modal up=[button.small primary mc-merge]; states measured=14/14 offending states=[none]",
+      "justification": "exactly one visible --accent-solid fill in every state (D11): timer · idle at rest=[#toggle]; timer · Details expanded=[#start-go]; timer · pin-as-favourite field=[button.small primary]; entries · at rest=[button.fab primary]; entries · unified form open=[button.small primary]; clients · at rest=[#add-client-btn]; clients · inline rename open=[button.small primary]; clients · add-client field open=[button.small primary]; reports · at rest=[#rep-new]; reports · builder open=[#rep-save]; reports · builder nested in its card (edit)=[#rep-save]; timer · running at rest=[#timer-stop]; timer · running + pin-as-favourite field=[button.small primary]; entries · merge-conflict modal up=[button.small primary mc-merge]; states measured=14/14 offending states=[none]",
       "screenshot": "primary-handoff-timer.png"
     },
     {
@@ -216,36 +216,29 @@
       "item": "UNIFIED_FORM_ADD",
       "pass": true,
       "facts": {
-        "layoutOk": true,
-        "paintOk": true,
-        "liveUpdate": true,
+        "fabRest": true,
+        "selectMode": true,
+        "createBlank": true,
+        "liveDrag": true,
+        "fineSnapOk": true,
+        "overnightTyped": true,
         "savePatch": true,
         "formCloses": true,
-        "overlapBanner": true
+        "overlapBanner": true,
+        "keyboardPath": true
       },
-      "justification": "unified add form: layout={\"visible\":true,\"unified\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"clientTag\":\"SELECT\",\"projectTag\":\"SELECT\",\"hasTagChips\":true,\"hasBill\":true,\"pickerCal\":true,\"pickerTrack\":true,\"pickerHours\":25,\"pickerMe\":true,\"expanderCollapsed\":true,\"startText\":\"text\",\"stopText\":\"text\",\"noDatetimeLocal\":true}; picker paint={\"others\":2,\"overlaps\":1,\"overlapInert\":true,\"meWeakFill\":true,\"meAccentBorder\":true,\"meInkLabels\":true,\"saveSolid\":true}; live drag seed={\"from\":\"2026-06-24 22:00:00\",\"to\":\"2026-06-24 23:00:00\"}→{\"from\":\"2026-06-24 20:00:00\",\"to\":\"2026-06-24 21:00:00\"} (live=true); Save sole commit added={\"fromLocal\":\"2026-06-24 20:00:00\",\"toLocal\":\"2026-06-24 21:00:00\",\"billable\":true,\"description\":\"design review\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (patchOk=true); form closed=true, overlap banner=true \"This entry overlaps 1 other entry — allowed, but flagged in reports.\"",
+      "justification": "+ button → select-interval → create on the week grid: rest={\"visible\":true,\"label\":\"Add entry\",\"accentSolid\":true,\"capsule\":true,\"bottomRight\":true,\"glyphLeft\":868,\"noToolbarAdd\":true,\"snapCtlHidden\":true} hover={\"glyphLeft\":868,\"labelText\":\"Add entry\"}; select={\"fabHidden\":true,\"snapCtl\":true,\"coarseOff\":true,\"onCoarseGrid\":true,\"inTrack\":true}; create={\"hosted\":true,\"aboveGrid\":true,\"noModal\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"blank\":true,\"startText\":true,\"stopText\":true,\"noDatetimeLocal\":true,\"onCoarse\":true,\"span\":true,\"grayed\":true,\"fabHidden\":true,\"snapCtl\":true,\"me\":1,\"grips\":2,\"pills\":[\"07:45\",\"09:15\"],\"start\":\"2026-06-24 07:45:00\",\"stop\":\"2026-06-24 09:15:00\"} meAccent={\"weakFill\":true,\"accentBorder\":true,\"saveSolid\":true}; bodyDrag=\"2026-06-24 07:45:00\"→{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:15:00\"} (liveDrag=true); fine={\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:40:00\"} (fineSnapOk=true); overnight={\"segs\":[{\"day\":\"2026-06-24\",\"cls\":\"ev me seg seg-start\",\"top\":\"405px\"},{\"day\":\"2026-06-25\",\"cls\":\"ev me seg seg-end\",\"top\":\"0px\"}],\"stopField\":\"2026-06-25 02:00:00\"}; Save sole commit added={\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (savePatch=true); closed={\"added\":{\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]},\"formClosed\":true,\"fabBack\":true,\"ungrayed\":true,\"bannerVisible\":true,\"bannerText\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\"}; keyboard={\"start\":\"2026-06-24 07:00:00\",\"stop\":\"2026-06-24 08:00:00\",\"focusInForm\":true} (ok=true)",
       "screenshot": "unified-add.png"
-    },
-    {
-      "item": "UNIFIED_FORM_EXPANDER",
-      "pass": true,
-      "facts": {
-        "collapsedOk": true,
-        "fieldsOk": true,
-        "reflectedOk": true,
-        "savedOk": true
-      },
-      "justification": "collapsed Start/Stop expander drives the shared interval: collapsed={\"toggleCollapsed\":true,\"fieldsHidden\":true,\"echoPresent\":true,\"echoTabular\":true} (ok=true); expand→fields={\"fieldsShown\":true,\"fromText\":\"text\",\"toText\":\"text\"} (ok=true); typed overnight reflected={\"echo\":\"22:00 – 02:00\",\"meStartMin\":1320,\"fromValue\":\"2026-06-24T22:00\",\"toValue\":\"2026-06-25T02:00\"} (ok=true); Save sole commit added={\"fromLocal\":\"2026-06-24T22:00\",\"toLocal\":\"2026-06-25T02:00\",\"billable\":true,\"description\":\"overnight deploy\"} (ok=true)",
-      "screenshot": "unified-form-expander.png"
     },
     {
       "item": "UNIFIED_FORM",
       "pass": true,
       "facts": {
-        "hostShared": true,
         "clickOpens": true,
         "seeded": true,
-        "pickerOk": true,
+        "edgeDrag": true,
+        "typedSync": true,
+        "cleanSwap": true,
         "footer": true,
         "savePatch": true,
         "deleteGate": true,
@@ -253,8 +246,21 @@
         "sleptOk": true,
         "exactTimesOk": true
       },
-      "justification": "unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in flow), seeded, INLINE picker (in-flow, no backdrop/apply, month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, gray others + inert yellow overlap), footer Split + two-step Delete, save patch, §12 R10 flags (overlap detail + reversible subtract), §12 R15 exact times (stored start/stop shown to the second, no-drag Save patches no time, only the dragged stop grip snaps to :05): hostShared=true clickOpens=true probe={\"inContext\":true,\"noBackdrop\":true,\"noDialog\":true,\"hostStatic\":true,\"descTag\":\"TEXTAREA\",\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"projectSeeded\":\"11\",\"tagChips\":[\"deep\"],\"billSeeded\":true,\"startSeeded\":true,\"endPresent\":true,\"endSeeded\":true,\"hasSplit\":true,\"hasDelete\":true,\"footAccent\":1} picker={\"inFlow\":true,\"noBackdrop\":true,\"noApply\":true,\"hasCal\":true,\"hasTrack\":true,\"hours\":25,\"others\":4,\"overlaps\":1,\"overlapInert\":true} seed={\"from\":\"2026-06-24 14:00:00\",\"to\":\"2026-06-24 15:30:00\"}→body={\"from\":\"2026-06-24 12:00:00\",\"to\":\"2026-06-24 13:30:00\"}(bodyOk=true)→resize={\"from\":\"2026-06-24 12:00:00\",\"to\":\"2026-06-24 14:30:00\"}(resizeOk=true) edited={\"id\":80,\"patch\":{\"description\":\"final draft\"}} armed={\"confirmShown\":true,\"question\":\"Confirm delete?\",\"removedYet\":false} removed={\"removed\":true,\"calls\":[{\"id\":80}]} overlapDetail=\"Overlap: 30m with previous entry\" sleptBefore={\"subtractLabel\":\"Subtract slept\",\"struckBefore\":false} sleptAfter={\"subtractLabel\":\"Restore\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"} sleptRestored=true exactTimes: seed={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 11:03:00\"} noDragSave={\"id\":84,\"patch\":{}} snapDrag={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 12:00:00\"} (shown=true roundTrip=true snap=true)",
+      "justification": "unified form (edit mode) above the grid, the selected event the draggable accent interval: clickOpens=true probe={\"descTag\":\"TEXTAREA\",\"descSeeded\":\"design review\",\"clientSeeded\":\"1\",\"projectSeeded\":\"11\",\"tagChips\":[\"deep\"],\"billSeeded\":\"true\",\"startSeeded\":\"2026-06-24 14:00:00\",\"endSeeded\":\"2026-06-24 15:30:00\",\"hasSplit\":true,\"hasDelete\":true,\"footAccent\":1}; edge={\"start\":\"2026-06-24 14:00:00\",\"stop\":\"2026-06-24 16:00:00\"} (edgeDrag=true); typedSync=true; cleanSwap=true; edited={\"id\":81,\"patch\":{\"description\":\"final draft\"}}; armed={\"confirmShown\":true,\"question\":\"Confirm delete?\",\"removedYet\":false} removed={\"removed\":true,\"calls\":[{\"id\":80}],\"formClosed\":true}; overlapDetail=\"Overlap: 30m with previous entry\"; slept={\"subtractLabel\":\"Subtract slept\",\"struckBefore\":false}→{\"subtractLabel\":\"Restore\",\"struckText\":\"04:00:00\",\"struckLineThrough\":true,\"durText\":\"04:00:00 03:00:00\"} restored=true; exactTimes: seed={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 11:03:00\"} noDragSave={\"id\":84,\"patch\":{}} snapDrag={\"from\":\"2026-06-24 09:07:33\",\"to\":\"2026-06-24 11:30:00\"} (shown=true roundTrip=true snap=true)",
       "screenshot": "main-edit.png"
+    },
+    {
+      "item": "PENDING_CHANGES_GATE",
+      "pass": true,
+      "facts": {
+        "gateArms": true,
+        "keepPreserves": true,
+        "discardSwaps": true,
+        "emptySpotGated": true,
+        "refreshGated": true
+      },
+      "justification": "the §12 R24 keep-editing / discard gate: arm={\"dialog\":true,\"heading\":\"Discard unsaved changes?\",\"keepFocused\":true,\"subjectHeld\":true,\"nothingWritten\":true} (gateArms=true); keep={\"id\":\"80\",\"desc\":\"typed but unsaved\"} (preserves=true); discard={\"id\":\"82\",\"desc\":\"deep work\",\"gateGone\":true} (swaps=true); emptySpotGated=true; refreshGated=true",
+      "screenshot": "main-pending-gate.png"
     },
     {
       "item": "MULTILINE_DESC",
@@ -321,12 +327,12 @@
         "refusalAnnounced": true,
         "reasonAlone": true,
         "refusalReadsDanger": true,
-        "advisoryChromeIntact": true,
+        "inputClears": true,
         "advisoryShown": true,
         "advisoryReadsFlag": true,
         "palettesDiffer": true
       },
-      "justification": "refused save={\"erred\":true,\"color\":\"rgb(206, 44, 49)\",\"background\":\"rgb(254, 235, 236)\",\"border\":\"rgb(206, 44, 49)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"],\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"stop time must be after start time\",\"notWritten\":true} (danger=true); reopened={\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag base intact=true); overlap advisory={\"shown\":true,\"written\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag=true); palettes differ=true",
+      "justification": "refused save={\"formOpen\":true,\"shown\":true,\"announced\":true,\"message\":\"stop time must be after start time\",\"notWritten\":true,\"color\":\"rgb(206, 44, 49)\",\"background\":\"rgb(254, 235, 236)\",\"border\":\"rgb(206, 44, 49)\",\"danger\":[\"rgb(206, 44, 49)\",\"rgb(254, 235, 236)\",\"rgb(206, 44, 49)\"],\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (danger=true, clears on input=true); overlap advisory={\"shown\":true,\"written\":true,\"formClosed\":true,\"text\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\",\"erred\":false,\"color\":\"rgb(79, 52, 34)\",\"background\":\"rgb(255, 247, 194)\",\"border\":\"rgb(243, 214, 115)\",\"flag\":[\"rgb(79, 52, 34)\",\"rgb(255, 247, 194)\",\"rgb(243, 214, 115)\"]} (flag=true); palettes differ=true",
       "screenshot": "add-refusal-palette.png"
     },
     {
@@ -526,7 +532,7 @@
         "editOk": true,
         "popOk": true
       },
-      "justification": "week@1040={\"count\":5,\"minWidth\":103,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":8} week@1920={\"count\":5,\"minWidth\":279,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":74,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":11} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":732,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
+      "justification": "week@1040={\"count\":5,\"minWidth\":103,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":8} week@1920={\"count\":5,\"minWidth\":279,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":74,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":11} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":371,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
@@ -552,7 +558,7 @@
         "checkOk": true,
         "budgetOk": true
       },
-      "justification": "calendar selection over the dense fixture: {\"evCount\":18,\"stripFound\":true,\"selectedCount\":2,\"editingCount\":1,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":0,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
+      "justification": "calendar selection over the dense fixture: {\"evCount\":17,\"stripFound\":true,\"selectedCount\":2,\"meCount\":1,\"meOutline\":true,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":1,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
       "screenshot": "selection-lift.png"
     },
     {
@@ -697,7 +703,7 @@
         "everyFieldNamed": true,
         "noPlaceholderOnly": true
       },
-      "justification": "D13 sweep over 35 visible controls, 30 of them fields (timer (start details)=5, entries (toolbar + add form)=11, clients=0, reports (builder + custom range)=8, settings=11): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "justification": "D13 sweep over 34 visible controls, 32 of them fields (timer (start details)=5, entries (toolbar + unified form)=10, clients=0, reports (builder + custom range)=8, settings=11): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[#rep-client → 'Filters'; #rep-project → 'Filters'; #rep-tag → 'Filters'; #rep-rounding-increment → 'Rounding'; select.set-field → 'Rounding increment'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; input.set-field set-hhmm tnum → 'Working hoursEntries and the picker open to these hours'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
       "screenshot": "field-labels-timer.png"
     },
     {
@@ -709,7 +715,7 @@
         "oneBorderWidth": true,
         "focusOk": true
       },
-      "justification": "D13/D07 sweep over 30 visible fields (timer (start details)=4, entries (toolbar + add form)=8, clients=0, reports (builder + custom range)=7, settings=11): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
+      "justification": "D13/D07 sweep over 32 visible fields (timer (start details)=4, entries (toolbar + unified form)=10, clients=0, reports (builder + custom range)=7, settings=11): not one solid --rule-strong border + --r1 radius + on-grid padding=[none]; border widths in use across every field=[1px]; #search under keyboard focus: on the field=true, accent border on all four sides=true, 3px ring=true, radius=8px, wrapper paints nothing=true",
       "screenshot": "field-chrome-search-focus.png"
     },
     {
@@ -720,7 +726,7 @@
         "noUndersizedTargets": true,
         "noneAbsent": true
       },
-      "justification": "A03 sweep over 329 visible targets across 10 surfaces (entries=23, timer=20, clients=26, reports=14, settings=26, entries (add form)=71, entries (unified editor)=88, timer (start details)=20, reports (builder)=39, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
+      "justification": "A03 sweep over 254 visible targets across 10 surfaces (entries=23, timer=20, clients=26, reports=14, settings=26, entries (unified form, create)=32, entries (unified editor)=52, timer (start details)=20, reports (builder)=39, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
       "screenshot": "main-target-size.png"
     },
     {

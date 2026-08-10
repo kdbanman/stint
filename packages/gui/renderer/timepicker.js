@@ -1,30 +1,23 @@
-// §12 R15 (G5/G7) — the inline interval picker (window.STP). A pure renderer affordance that
-// binds a pair of authoritative local-time text inputs (`YYYY-MM-DD HH:mm:ss`) and lets the user
-// DRAG a span on a single-day calendar column instead of typing it. It exposes two INLINE forms
-// (there is NO modal — the picker only ever renders IN FLOW, never over a backdrop):
-//   • STP.openInline — the unified entry form's INLINE start+stop picker (mounted in flow into
-//     the form's picker host over the raw Start/Stop text fields, add mode §12 R07 / edit mode R06);
-//   • STP.openStartOnly — the running entry's INLINE start-only disclosure (#le-start, §05 R06).
-// It adds ZERO capabilities: it only ever writes localInputValue-formatted strings BACK into those
-// existing text inputs (and dispatches `input`/`change`), so the unchanged add/edit IPC paths stay
-// the single source of truth and the text fields stay authoritative. No new IPC channel, no parity
-// row — the picker never talks to core, the DB, or the network.
+// §12 R15 (G8) — the START-ONLY interval picker (window.STP): the running entry's
+// start-adjustment surface where no week grid exists — the Timer view's inline start-only
+// disclosure below the Start field (#le-start, §05 R06). It renders IN FLOW (there is NO
+// modal, no backdrop, no Apply) and binds ONE authoritative local-time text input
+// (`YYYY-MM-DD HH:mm:ss`), letting the user DRAG the running block's start grip on a
+// single-day hour column instead of typing. The Entries view mounts NO picker (§12 R15):
+// closed entries' spans are adjusted on the week grid itself (R06/R16) or typed in the
+// unified form's Start/Stop fields (R17) — the two-ended STP.openInline variant left with
+// that redesign (issue #266).
+//
+// It adds ZERO capabilities: it only ever writes localInputValue-formatted strings BACK into
+// the existing text input (and dispatches `input`/`change`), so the unchanged edit IPC path
+// stays the single source of truth and the text field stays authoritative. No new IPC
+// channel, no parity row — the picker never talks to core, the DB, or the network.
 //
 // Classic script (window.STP) loaded alongside the bundled SU entry (dist/su.js) and
 // app.js. Pure DOM: no Node imports, no core-package import, no network (the renderer-static
-// guard asserts this). Accent discipline (design.html D11 / V3): the dragged "me" block is
-// accent-OUTLINED over the weak accent fill with ink labels (solid accent is reserved for
-// primary actions; the accent signal rides the block's outline and grips), and the selected
-// calendar day is a raised paper chip (design.html D12); every other control is monochrome.
-// There is no primary "Apply" button — the picker writes live and the surrounding form's
-// "Save entry" is the sole commit (G7).
-//
-// Mirrors context/mockups/edit-entry.html: a month calendar (pick the day) + a single-day
-// column with hour lines; the edited entry is a draggable accent-outlined rectangle (drag the BODY
-// moves start+stop together, drag the BOTTOM handle resizes the stop, both 5-min snap);
-// other entries render gray, overlap regions render yellow (warn-only, never blocks the save).
-// Overnight (stop on a later day) is handled only via the text fields / the Start/Stop expander —
-// the visual column is single-day.
+// guard asserts this). Accent discipline (design.html D11 / V3): the running "me" block is
+// accent-OUTLINED over the weak accent fill (solid accent is reserved for primary actions);
+// every other control is monochrome.
 //
 // §05 R06 / §12 R14 (G8) — the START-ONLY variant for the RUNNING entry. Opened with no end
 // binding, the picker renders the running block with a START drag grip ONLY: no bottom
@@ -103,14 +96,6 @@ window.STP = (function () {
   function dateAtMinute(day, minute) {
     return window.SU.dateAtMinute(day, minute);
   }
-  // The configured zone's civil {y, m (0-based), d} of an instant — the mini calendar's
-  // month arithmetic works in civil numbers (via localDayOf), never OS-zone Date getters,
-  // so a pinned zone across the dateline from the OS still selects the right cells.
-  function civilParts(date) {
-    const [y, m, d] = localDayOf(date).split('-').map(Number);
-    return { y, m: m - 1, d };
-  }
-
   // Other entries clamped to `day`, as [from,to] minute pairs (drawn gray, warn-only).
   // Shared by the popover column and the inline start-only disclosure.
   function othersOnDayFor(day, others) {
@@ -171,12 +156,6 @@ window.STP = (function () {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // §12 R17 — guard so the picker's OWN write-backs don't re-trigger openInline's expander-reflect
-  // listeners (which watch the same bound fields for EXTERNAL edits). True only for the synchronous
-  // span of a writeBack dispatch; the reseed listener ignores events fired while it is set, so a
-  // drag never feeds itself back through the reflect path.
-  let writingBack = false;
-
   // Write a Date back into a bound text input as a local YYYY-MM-DD HH:mm:ss string, and fire an
   // `input` event so the surrounding form's listeners (e.g. the running live-edit's change /
   // the add form's submit read) see it exactly as if the user typed it. The text stays
@@ -184,10 +163,8 @@ window.STP = (function () {
   function writeBack(input, date) {
     if (!input) return;
     input.value = localInputValue(date);
-    writingBack = true;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
-    writingBack = false;
   }
 
   /**
@@ -290,345 +267,6 @@ window.STP = (function () {
     return box;
   }
 
-  /**
-   * §12 R07 / §12 R15 (G5/G7) — STP.openInline({ host, startInput, endInput, otherEntries,
-   * settings, onChange }) — the UNIFIED ENTRY FORM's inline interval picker (add + edit modes).
-   * Renders a month calendar + a scrollable single-day column IN FLOW into `host` (no backdrop,
-   * no dialog/modal chrome, no Apply): the edited span is a draggable accent "me" rectangle —
-   * drag the BODY moves start+stop together, drag the BOTTOM grip resizes the stop, both 5-min
-   * snap. Other entries paint gray; the overlapping span paints yellow (warn-only, never blocks).
-   *
-   * §12 R15 (issue #49) — EXACT stored times: the picker seeds from the bound inputs WITHOUT
-   * snapping (seconds preserved) and never writes back on mount, so opening an editor shows the
-   * entry's stored start/stop to the second and Save with no drag round-trips them unchanged.
-   * Snapping applies ONLY to a handle the user actively drags: a body drag snaps the start and
-   * preserves the exact duration; a bottom-grip drag snaps the stop the user is dragging.
-   *
-   * Every drag AND every calendar day-pick writes the picked LOCAL instants BACK into the bound
-   * start+stop text inputs LIVE (writeBack fires input+change) AND calls onChange — so the form's
-   * start/stop state tracks the picker live (G7) and "Save entry" (which reads those inputs) is
-   * the sole commit. Text stays authoritative: the picker only ever sets the inputs' `.value`.
-   * Overnight spans can't be dragged on the single-day column — the collapsed Start/Stop expander
-   * (§12 R17) is the exact/overnight path, and it drives the SAME bound inputs. No IPC, no network.
-   *
-   * The default scroll viewport comes from SU.timelineWindow (§14/G16 — the ONE window derivation,
-   * never re-derived here), centered on the seeded interval; the viewport carries the
-   * `data-timeline-track` hook the TIMELINE_WINDOW judge scene probes.
-   */
-  function openInline(opts = {}) {
-    const host = opts.host || null;
-    const startInput = opts.startInput || null;
-    const endInput = opts.endInput || null;
-    if (!host || !startInput) return null;
-    const onChange = typeof opts.onChange === 'function' ? opts.onChange : () => {};
-    const others = Array.isArray(opts.otherEntries) ? opts.otherEntries : [];
-    host.innerHTML = '';
 
-    // Seed the span from the bound inputs, else last-stop→now (the same default open() uses).
-    // Remember which inputs were BLANK: mounting may seed those, but a POPULATED field is stored
-    // truth — the mount never rewrites it (issue #49); only a user drag / day-pick writes back.
-    const now = new Date();
-    let startDate = parseInput(startInput);
-    let endDate = parseInput(endInput);
-    const startWasBlank = !startDate;
-    const endWasBlank = !endDate;
-    if (!startDate) {
-      let lastStop = null;
-      for (const e of others) {
-        if (!e || e.endUtc == null) continue;
-        const t = new Date(e.endUtc);
-        if (!lastStop || t > lastStop) lastStop = t;
-      }
-      startDate = lastStop && lastStop < now ? lastStop : new Date(now.getTime() - 60 * MS_PER_MIN);
-    }
-    if (!endDate) endDate = new Date(Math.max(startDate.getTime() + 30 * MS_PER_MIN, now.getTime()));
-
-    // EXACT seed, never snapped (issue #49): the column paints the bound fields' instants to the
-    // second (seconds ride the minute fraction). snapTo5 fires only inside the drag handlers.
-    let columnDay = startOfLocalDay(startDate);
-    let startMin = exactMinuteOfDay(startDate);
-    let endMin = exactMinuteOfDay(endDate);
-    // §12 R17 — a stop on a LATER local day than the start is an OVERNIGHT span. The single-day
-    // drag column can't draw it, so it stays on the START's day (endMin painted to the column foot)
-    // and the bound stop TEXT field — the collapsed Start/Stop expander — stays authoritative for the
-    // real cross-midnight stop. `overnightActive` tracks that state; commit() then leaves the stop
-    // field untouched (never flattening it to same-day), and a drag (inherently same-day) clears it.
-    let overnightActive = false;
-    if (!sameLocalDay(startDate, endDate)) {
-      endMin = DAY_MIN;
-      overnightActive = true;
-    }
-    if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
-
-    const box = document.createElement('div');
-    box.className = 'stp stp-inline stp-range';
-    box.innerHTML =
-      `<div class="stp-body">` +
-      `<div class="stp-cal">` +
-      `<div class="stp-cal-head"><span class="stp-month"></span>` +
-      `<span class="stp-nav">` +
-      `<button type="button" class="stp-prev" aria-label="Previous month"><svg class="ic" aria-hidden="true"><use href="#i-left" /></svg></button>` +
-      `<button type="button" class="stp-next" aria-label="Next month"><svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></button>` +
-      `</span></div>` +
-      `<div class="stp-grid"></div>` +
-      `</div>` +
-      `<div class="stp-day">` +
-      `<div class="stp-day-lbl"></div>` +
-      `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
-      `</div>` +
-      `</div>` +
-      `<div class="stp-snaphint"><span class="stp-snap">snap · 5 min</span>` +
-      `<span>Drag the span to set start &amp; stop — or type exact times below</span></div>`;
-    host.appendChild(box);
-    const track = box.querySelector('.stp-track');
-    const viewport = box.querySelector('.stp-dayview');
-
-    // §12 R17 — a tabular ECHO of the current shared interval, mounted beneath the calendar in the
-    // calcol (mockup edit-entry.html .xp): "HH:MM – HH:MM", or "HH:MM –" when the stop is empty (an
-    // open/running entry). It is a passive readout of the ONE shared interval — the SAME values the
-    // collapsed Start/Stop expander's raw text fields and the drag both drive — refreshed by
-    // updateEcho() on every render (below) and on every external edit of the bound fields, so the
-    // collapsed echo, the picker column, and the expander text never disagree.
-    const echoEl = document.createElement('div');
-    echoEl.className = 'stp-echo tnum';
-    box.querySelector('.stp-cal').appendChild(echoEl);
-    function updateEcho() {
-      const startTxt = hhmm(startMin);
-      let stopTxt = '';
-      if (overnightActive) {
-        // The real stop lives in the bound field (a later day than the column); echo it verbatim.
-        const e = parseInput(endInput);
-        stopTxt = e ? hhmm(localMinuteOfDay(e)) : '';
-      } else if (endInput && parseInput(endInput)) {
-        stopTxt = hhmm(endMin);
-      }
-      echoEl.textContent = stopTxt ? `${startTxt} – ${stopTxt}` : `${startTxt} –`;
-    }
-
-    // The sole write path: push the picked instants into the bound inputs LIVE and notify the
-    // form. Called on every drag and on a calendar day change — NEVER on mount (issue #49):
-    // mounting must not rewrite the entry's exact stored times (a day-pick preserves the exact
-    // time-of-day, seconds included; only the dragged handle itself lands on the 5-min grid).
-    function commit() {
-      writeBack(startInput, dateAtMinute(columnDay, startMin));
-      // §12 R17: while an OVERNIGHT stop stands in the bound field, the column's same-day endMin is
-      // only a paint — writing it back would flatten the cross-midnight stop, so the stop field is
-      // left untouched (authoritative). A drag clears overnightActive first, so a dragged span
-      // writes BOTH ends and commits identically to a same-day one.
-      if (endInput && !overnightActive) writeBack(endInput, dateAtMinute(columnDay, endMin));
-      onChange({ startMin, endMin });
-    }
-
-    // ---- month calendar (pick the day) --------------------------------------------
-    // The calendar works in CIVIL {y, m} numbers of the CONFIGURED zone (civilParts —
-    // never OS-zone Date getters, which read the wrong civil day when the configured zone
-    // sits across midnight from the OS). Cell dates render/compare through UTC-anchored
-    // civil math and become instants only on click, via SU.dateAtMinute's day mapping.
-    let calMonth = (({ y, m }) => ({ y, m }))(civilParts(columnDay));
-    // A representative instant of a civil day, for the zone-free label/dow math below.
-    const civilUtc = (y, m, d) => new Date(Date.UTC(y, m, d));
-    const dayToken = (y, m, d) =>
-      `${y}-${pad(m + 1)}-${pad(d)}`;
-    function renderCalendar() {
-      box.querySelector('.stp-month').textContent = civilUtc(calMonth.y, calMonth.m, 1)
-        .toLocaleDateString(undefined, { month: 'long', year: 'numeric', timeZone: 'UTC' });
-      const grid = box.querySelector('.stp-grid');
-      grid.innerHTML = '';
-      for (const dow of ['M', 'T', 'W', 'T', 'F', 'S', 'S']) {
-        const h = document.createElement('span');
-        h.className = 'stp-dow';
-        h.textContent = dow;
-        grid.appendChild(h);
-      }
-      const lead = (civilUtc(calMonth.y, calMonth.m, 1).getUTCDay() + 6) % 7;
-      const daysInMonth = civilUtc(calMonth.y, calMonth.m + 1, 0).getUTCDate();
-      for (let i = 0; i < lead; i++) {
-        const blank = document.createElement('span');
-        blank.className = 'stp-d stp-mut';
-        grid.appendChild(blank);
-      }
-      const todayToken = localDayOf(new Date());
-      const selectedToken = localDayOf(columnDay);
-      for (let day = 1; day <= daysInMonth; day++) {
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        cell.className = 'stp-d';
-        const token = dayToken(calMonth.y, calMonth.m, day);
-        if (token === selectedToken) cell.classList.add('stp-sel');
-        if (token === todayToken) cell.classList.add('stp-today');
-        cell.textContent = String(day);
-        cell.addEventListener('click', () => {
-          // The clicked civil day's configured-zone midnight becomes the new column anchor.
-          columnDay = window.SU.dayStartOfToken(token);
-          renderCalendar();
-          renderTrack();
-          commit(); // moving the span to another day is a live form-state change
-        });
-        grid.appendChild(cell);
-      }
-    }
-    box.querySelector('.stp-prev').addEventListener('click', () => {
-      calMonth = calMonth.m === 0 ? { y: calMonth.y - 1, m: 11 } : { y: calMonth.y, m: calMonth.m - 1 };
-      renderCalendar();
-    });
-    box.querySelector('.stp-next').addEventListener('click', () => {
-      calMonth = calMonth.m === 11 ? { y: calMonth.y + 1, m: 0 } : { y: calMonth.y, m: calMonth.m + 1 };
-      renderCalendar();
-    });
-
-    // ---- single-day column --------------------------------------------------------
-    function overlapsOnDay() {
-      const out = [];
-      for (const o of othersOnDayFor(columnDay, others)) {
-        const from = Math.max(startMin, o.from);
-        const to = Math.min(endMin, o.to);
-        if (to > from) out.push({ from, to });
-      }
-      return out;
-    }
-    function renderTrack() {
-      box.querySelector('.stp-day-lbl').textContent = columnDay.toLocaleDateString(undefined, {
-        weekday: 'long',
-        month: 'long',
-        day: 'numeric',
-        timeZone: window.SU.currentZone(), // the column IS a configured-zone day (§04 R06)
-      });
-      track.innerHTML = '';
-      paintHourLabels(track);
-      paintOtherBlocks(track, columnDay, others);
-      const me = document.createElement('div');
-      me.className = 'stp-block me';
-      me.style.top = `${minutesToY(startMin)}px`;
-      me.style.height = `${Math.max(6, minutesToY(endMin) - minutesToY(startMin))}px`;
-      me.innerHTML =
-        `<span class="stp-lab-top">${hhmm(startMin)}</span>` +
-        `<span class="stp-lab-bot">${hhmm(endMin)}</span>` +
-        `<span class="stp-resize" aria-label="Resize stop"><i></i></span>`;
-      track.appendChild(me);
-      for (const ov of overlapsOnDay()) {
-        const o = document.createElement('div');
-        o.className = 'stp-overlap';
-        o.style.top = `${minutesToY(ov.from)}px`;
-        o.style.height = `${Math.max(2, minutesToY(ov.to) - minutesToY(ov.from))}px`;
-        o.innerHTML = `<span class="stp-otag">overlap ${Math.round(ov.to - ov.from)}m</span>`;
-        track.appendChild(o);
-      }
-      wireDrag(me);
-      updateEcho(); // keep the collapsed echo in lockstep with the column on every repaint
-    }
-
-    // ---- dragging (5-min snap, live commit) ---------------------------------------
-    function pointerMinutes(clientY) {
-      return yToMinutes(clientY - track.getBoundingClientRect().top);
-    }
-    function wireDrag(me) {
-      const resize = me.querySelector('.stp-resize');
-      const startDrag = (ev) => {
-        if (resize && (ev.target === resize || resize.contains(ev.target))) return;
-        ev.preventDefault();
-        const grabMin = pointerMinutes(ev.clientY);
-        const span = endMin - startMin;
-        const baseStart = startMin;
-        me.setPointerCapture?.(ev.pointerId);
-        const onMove = (mv) => {
-          const delta = pointerMinutes(mv.clientY) - grabMin;
-          let nextStart = snapTo5(baseStart + delta);
-          nextStart = Math.max(0, Math.min(DAY_MIN - span, nextStart));
-          startMin = nextStart;
-          endMin = nextStart + span;
-          overnightActive = false; // a drag is inherently same-day — it supersedes any typed overnight stop
-          renderTrack();
-          commit(); // §12 R07 (G7): the form's start/stop state updates on every drag step
-        };
-        const onUp = () => {
-          window.removeEventListener('pointermove', onMove);
-          window.removeEventListener('pointerup', onUp);
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onUp);
-      };
-      me.addEventListener('pointerdown', startDrag);
-      if (resize) {
-        resize.addEventListener('pointerdown', (ev) => {
-          ev.preventDefault();
-          ev.stopPropagation();
-          resize.setPointerCapture?.(ev.pointerId);
-          const onMove = (mv) => {
-            let nextEnd = snapTo5(pointerMinutes(mv.clientY));
-            nextEnd = Math.max(startMin + SNAP_MIN, Math.min(DAY_MIN, nextEnd));
-            endMin = nextEnd;
-            overnightActive = false; // resizing the stop on the single-day column makes it same-day
-            renderTrack();
-            commit();
-          };
-          const onUp = () => {
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onUp);
-          };
-          window.addEventListener('pointermove', onMove);
-          window.addEventListener('pointerup', onUp);
-        });
-      }
-    }
-
-    renderCalendar();
-    renderTrack();
-    // §12 R15 (issue #49): mounting is NOT an edit. A field that arrived POPULATED holds the
-    // entry's exact stored instant (to the second) and stays byte-untouched — so Save with no
-    // drag round-trips start/stop unchanged. Only a field that arrived BLANK is seeded, from the
-    // same derived default span the column paints. The form is still notified either way.
-    if (startWasBlank) writeBack(startInput, dateAtMinute(columnDay, startMin));
-    if (endInput && endWasBlank && !overnightActive) writeBack(endInput, dateAtMinute(columnDay, endMin));
-    onChange({ startMin, endMin });
-
-    // §12 R17 — reflect an EXTERNAL edit of the bound Start/Stop fields (the collapsed expander's raw
-    // text inputs) back into the picker: re-anchor the single-day column + span on the typed start,
-    // detect an overnight stop (a later local day), and repaint — WITHOUT writing back, so the typed
-    // text stays authoritative and a cross-midnight stop is never flattened. This is the ONE shared
-    // interval state the drag also mutates — there is no second source of truth. A half-typed /
-    // unparseable value contributes nothing (the column simply holds its last valid state).
-    function reseedFromInputs() {
-      const s = parseInput(startInput);
-      if (!s) return; // need a valid start to anchor the single-day column
-      // EXACT, never snapped (issue #49): the typed text is authoritative and the column paints
-      // it as-is — snapping a typed 09:12:44 to the grid would misrepresent the field.
-      columnDay = startOfLocalDay(s);
-      startMin = exactMinuteOfDay(s);
-      const e = parseInput(endInput);
-      if (!e) {
-        overnightActive = false;
-        endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
-      } else if (!sameLocalDay(s, e)) {
-        overnightActive = true; // stop on a later day → overnight; column stays on the start's day
-        endMin = DAY_MIN;
-      } else {
-        overnightActive = false;
-        endMin = exactMinuteOfDay(e);
-        if (endMin <= startMin) endMin = Math.min(DAY_MIN, startMin + SNAP_MIN);
-      }
-      calMonth = (({ y, m }) => ({ y, m }))(civilParts(columnDay));
-      renderCalendar();
-      renderTrack(); // repaints the column AND refreshes the echo (updateEcho at its foot)
-    }
-    // The picker's own writeBack fires input/change (guarded by `writingBack`); only a GENUINE
-    // external edit — the user typing in the expander — reseeds the column + echo.
-    for (const input of [startInput, endInput]) {
-      if (!input) continue;
-      const reflect = () => {
-        if (!writingBack) reseedFromInputs();
-      };
-      input.addEventListener('input', reflect);
-      input.addEventListener('change', reflect);
-    }
-
-    // Default scroll window (§14/G16): SU.timelineWindow centered on the seeded interval.
-    const win = timelineWindow(opts.settings || null, new Date().toISOString(), {
-      startUtc: dateAtMinute(columnDay, startMin).toISOString(),
-      endUtc: dateAtMinute(columnDay, endMin).toISOString(),
-    });
-    viewport.scrollTop = Math.round(minutesToY(win.startMin));
-    return box;
-  }
-
-  return { openStartOnly, openInline, snapTo5, minutesToY, yToMinutes, TRACK_H };
+  return { openStartOnly, snapTo5, minutesToY, yToMinutes, TRACK_H };
 })();

@@ -228,6 +228,21 @@ export interface UiState {
     pickerWindowMode: string;
     pickerAroundHours: number;
     /**
+     * §14 / §12 R23 — the two drag-snap resolutions every grid drag lands on (coarse is the
+     * active resolution on every entry into a drag mode; the fine-snap toggle is ephemeral
+     * renderer state, deliberately not a setting). Whole minutes 1–30, fine ≤ coarse,
+     * core-validated; persist over the existing `setSetting` channel — parity with
+     * `tt config set snap_fine_minutes` / `snap_coarse_minutes`.
+     */
+    snapFineMinutes: number;
+    snapCoarseMinutes: number;
+    /**
+     * §14 / §12 R09 — the persisted show-weekend row both the Entries-toolbar switch and the
+     * Settings control edit (one stored fact, two surfaces) over the existing `setSetting`
+     * channel — parity with `tt config set show_weekend`.
+     */
+    showWeekend: boolean;
+    /**
      * §20 R04 — how many automatic timestamped backups to keep beside the database. The
      * Settings → Backups retention picker paints this and changes it over the existing
      * `setSetting` channel (key `backupRetention`), parity with `tt config set backup_retention`.
