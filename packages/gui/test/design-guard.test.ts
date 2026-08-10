@@ -859,7 +859,7 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
    *  in the two merge mockups. The SHIPPED checkbox is absent on purpose: since issue #148 gave it
    *  a 24×24 target it reaches the same painted 4px corner as `var(--r1)` minus a 4px transparent
    *  border, so it declares a trio value and never needs this list. */
-  const EXEMPT_4PX = new Set<string>(['.step .bar', '.prog .bar', '.row .ck']);
+  const EXEMPT_4PX = new Set<string>(['.step .bar', '.prog .bar', '.ev .ck']);
 
   /** Circles, judged one at a time. Issue #164 proposed a blanket "circles are a fourth D08
    *  exemption" and was withdrawn for exactly the reason a blanket is tempting: it would license
@@ -885,6 +885,13 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
     // this issue's five populations.
     '.set-toggle i',
     '.sw i',
+    // The week picker's day cells and the grid's today marker. PRD §12 R09 names the shapes —
+    // "days carrying entries show a dot" (a dot is round, the same entailment as `run-dot`) and
+    // "today carries a ring" (a ring is round); the 20px day target is the circle that ring
+    // paints on.
+    '.wkgrid .d .edot',
+    '.wkgrid .d .tn2',
+    '.dh .dd.today',
     // Not a Stint element at all: the mockups draw a host window titlebar to establish context,
     // and its traffic lights are round because the OS draws them round. D08 governs Stint's own
     // controls, cards and windows — not a picture of someone else's.
@@ -908,7 +915,10 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
     '.stp-overlap .stp-otag', // the same tag inside the interval picker
     // the mockups
     '.tag',
-    '.overlap .otag',
+    // The + Add-entry button: D14 admits it by name — PRD §12 R07's circle-to-lozenge hover
+    // expansion ("expands rightward into + Add entry without the + glyph moving") entails the
+    // capsule, and its accent-solid colour is semantic.
+    '.fab',
   ]);
 
   /** Every radius longhand and the shorthand. NOT global: `.test()` on a /g regex carries
@@ -1054,6 +1064,10 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
     ['inset 0 0 0 1.5px var(--rule-strong)', new Set(['.ev .ck', '.ev .ck:checked', '.ev .ck.on'])],
     ['inset 0 0 0 1px var(--accent)', new Set(['.stp-d.stp-today'])],
     ['inset 0 0 0 1px var(--rule)', new Set(['.timefield .cal.on'])],
+    // The week picker's today ring and the day header's today marker — PRD §12 R09/R16's "today
+    // carries a ring", drawn inset so the ring never moves the day number it circles. A boundary
+    // in the ink colour, not a rung.
+    ['inset 0 0 0 1.5px var(--ink)', new Set(['.wkgrid .d.today .tn2', '.dh .dd.today'])],
   ];
 
   /** Split a `box-shadow` value into its comma-separated layers, ignoring the commas inside
