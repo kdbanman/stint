@@ -1690,6 +1690,11 @@ function settingKey(spoken: string): string {
     'working hours end': 'working_hours_end',
     'picker window mode': 'picker_window_mode',
     'picker around hours': 'picker_around_hours',
+    // §14 / §12 R09/R23 — the Entries-calendar settings: the two drag-snap resolutions
+    // (whole minutes 1–30, fine ≤ coarse) and the show-weekend boolean.
+    'fine snap': 'snap_fine_minutes',
+    'coarse snap': 'snap_coarse_minutes',
+    'show weekend': 'show_weekend',
   };
   const key = KEYS[spoken.trim().toLowerCase()];
   if (!key) throw new Error(`unknown setting name "${spoken}"`);

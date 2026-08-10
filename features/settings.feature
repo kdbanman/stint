@@ -1,5 +1,5 @@
-Feature: Settings round-trip (§12 R11, §14)
-  # PRD §12 R11 — the GUI Settings view exposes editable controls for every §14 setting,
+Feature: Settings round-trip (§12 R12, §14)
+  # PRD §12 R12 — the GUI Settings view exposes editable controls for every §14 setting,
   # each persisting over the SAME setSetting capability `tt config set` uses. This locks the
   # CONFIG round-trip the view's controls drive: a chosen value is saved and reads back. It
   # runs TWICE — once over @stint/core (store.setSetting / store.settings()) and once over
@@ -34,6 +34,9 @@ Feature: Settings round-trip (§12 R11, §14)
     And the configured working hours end is "18:00"
     And the configured picker window mode is "working_hours"
     And the configured picker around hours is "8"
+    And the configured fine snap is "5"
+    And the configured coarse snap is "15"
+    And the configured show weekend is "false"
 
   # §04 R06 / §14 — the configured time zone: 'system' (the OS zone, resolved at read time)
   # by default; an explicit IANA zone pins display, wall-clock parsing, day buckets, and
@@ -83,3 +86,38 @@ Feature: Settings round-trip (§12 R11, §14)
   Scenario: An out-of-range picker around span is rejected and stores nothing
     Then setting the picker around hours to "25" is rejected
     And the configured picker around hours is "8"
+
+  # §14 / §12 R09/R23 — the Entries-calendar settings: the two drag-snap resolutions
+  # (whole minutes 1–30 with fine ≤ coarse — out-of-range, fractional, and fine-above-coarse
+  # values are rejected rather than stored) and the show-weekend boolean (a non-boolean is
+  # rejected). Each round-trips over the SAME setSetting capability the GUI Entries-calendar
+  # group edits and `tt config set` drives, and each rejection is exactly as strict on both
+  # surfaces (§17 R8).
+  Scenario: Fine snap is editable and reads back
+    When I set fine snap to "10"
+    Then the configured fine snap is "10"
+
+  Scenario: Coarse snap is editable and reads back
+    When I set coarse snap to "30"
+    Then the configured coarse snap is "30"
+
+  Scenario: Show weekend is editable and reads back
+    When I set show weekend to "true"
+    Then the configured show weekend is "true"
+
+  Scenario: An out-of-range snap value is rejected and stores nothing
+    Then setting the coarse snap to "0" is rejected
+    And setting the coarse snap to "31" is rejected
+    And the configured coarse snap is "15"
+
+  Scenario: A fractional snap value is rejected and stores nothing
+    Then setting the fine snap to "7.5" is rejected
+    And the configured fine snap is "5"
+
+  Scenario: A fine snap above the coarse snap is rejected and stores nothing
+    Then setting the fine snap to "20" is rejected
+    And the configured fine snap is "5"
+
+  Scenario: A non-boolean show-weekend value is rejected and stores nothing
+    Then setting the show weekend to "banana" is rejected
+    And the configured show weekend is "false"

@@ -2093,6 +2093,17 @@ body.popover { background: var(--paper); margin: 0; }
   font-feature-settings: "tnum";
 }
 .set-hhmm-sep { color: var(--muted); font-size: 13px; }
+/* §14 / §12 R23 — the Entries-calendar group's snap-minutes inputs: a compact whole-minutes
+   value with a muted "min" suffix beside it (mockup settings.html's field + .meta pair). They
+   reuse the .set-field chrome via the shared class, like the working-hours pair above. */
+.set-min {
+  min-width: 0;
+  width: 52px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+.set-min-suffix { color: var(--muted); font-size: 13px; }
 /* §14 — a row whose control is inapplicable under the current mode (the Around span while the
    picker window is working_hours) marks the state on the row and stops its control interacting,
    but the DIM rides on the `disabled` control alone (the .set-field:disabled rule above) — never

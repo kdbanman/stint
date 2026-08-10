@@ -56,6 +56,20 @@ export interface Settings {
    */
   pickerAroundHours: number;
   /**
+   * §14 / §12 R23 — the two drag-snap resolutions every time-surface drag lands on: fine
+   * (with the ephemeral fine-snap toggle on) and coarse (the default on every open). Whole
+   * minutes from 1 to 30 with fine ≤ coarse. Input preferences, not core (§03): the snap
+   * never rewrites a value that isn't actively dragged.
+   */
+  snapFineMinutes: number;
+  snapCoarseMinutes: number;
+  /**
+   * §14 / §12 R09 — whether the Entries week grid shows Saturday/Sunday. One row driven by
+   * BOTH the Entries-toolbar toggle and the Settings-view control. A display preference,
+   * not core (§03): a hidden weekend day changes nothing stored or reported.
+   */
+  showWeekend: boolean;
+  /**
    * §20 R04 — how many automatic timestamped backups to keep beside the database. On launch
    * the store writes a fresh backup if the DB changed since the last one, then prunes the
    * oldest so at most this many remain. Default 5; 0 disables retention pruning entirely.
@@ -76,6 +90,9 @@ export const DEFAULT_SETTINGS: Settings = {
   workingHoursEnd: '18:00',
   pickerWindowMode: 'working_hours',
   pickerAroundHours: 8,
+  snapFineMinutes: 5,
+  snapCoarseMinutes: 15,
+  showWeekend: false,
   backupRetention: 5,
 };
 
@@ -93,6 +110,13 @@ function requireHhmm(name: string, v: string): void {
 function requirePositiveMinutes(name: string, v: number): void {
   if (!Number.isInteger(v) || v <= 0) {
     throw new Error(`${name} must be a positive whole number of minutes`);
+  }
+}
+
+/** §14 — a snap resolution: whole minutes from 1 to 30 (a fraction or 0/31 is rejected). */
+function requireSnapMinutes(name: string, v: number): void {
+  if (!Number.isInteger(v) || v < 1 || v > 30) {
+    throw new Error(`${name} must be a whole number of minutes from 1 to 30`);
   }
 }
 
@@ -205,6 +229,39 @@ export const SETTING_DESCRIPTORS: SettingDescriptor[] = [
       }
     },
   },
+  // §14 / §12 R09/R23 — the Entries-calendar settings: the two drag-snap resolutions and
+  // show_weekend. Key-value rows in the existing `setting` table (no schema migration); the
+  // descriptor list is what puts them on `tt config ls/set` and the GUI setSetting channel
+  // automatically. The fine ≤ coarse pair rule is cross-field, so it lives in
+  // writeSetting/readSettings, not a single descriptor.
+  {
+    key: 'snapFineMinutes',
+    snake: 'snap_fine_minutes',
+    parse: (r) => Number(r),
+    validate: (v) => requireSnapMinutes('snap_fine_minutes', v),
+  },
+  {
+    key: 'snapCoarseMinutes',
+    snake: 'snap_coarse_minutes',
+    parse: (r) => Number(r),
+    validate: (v) => requireSnapMinutes('snap_coarse_minutes', v),
+  },
+  {
+    key: 'showWeekend',
+    snake: 'show_weekend',
+    // §14 — a strict boolean: a value outside the recognized true/false tokens is rejected
+    // rather than stored (unlike `rounding`, whose looser coercion predates the rule), so
+    // `tt config set show_weekend banana` diagnoses instead of silently meaning "off".
+    parse: (r) =>
+      r === 'true' || r === 'on' || r === '1'
+        ? true
+        : r === 'false' || r === 'off' || r === '0'
+          ? false
+          : undefined,
+    validate: (v) => {
+      if (typeof v !== 'boolean') throw new Error('show_weekend must be a boolean (on or off)');
+    },
+  },
   {
     key: 'backupRetention',
     snake: 'backup_retention',
@@ -257,6 +314,13 @@ export function readSettings(db: Db): Settings {
     out.workingHoursStart = DEFAULT_SETTINGS.workingHoursStart;
     out.workingHoursEnd = DEFAULT_SETTINGS.workingHoursEnd;
   }
+  // §14 — the snap pair rule (fine ≤ coarse) is likewise cross-field: a hand-corrupted
+  // stored pair with fine above coarse resets BOTH keys to their documented defaults
+  // rather than leaking an inverted pair through.
+  if (out.snapFineMinutes > out.snapCoarseMinutes) {
+    out.snapFineMinutes = DEFAULT_SETTINGS.snapFineMinutes;
+    out.snapCoarseMinutes = DEFAULT_SETTINGS.snapCoarseMinutes;
+  }
   return out;
 }
 
@@ -273,6 +337,15 @@ export function writeSetting<K extends keyof Settings>(db: Db, key: K, value: Se
     const start = key === 'workingHoursStart' ? (value as string) : current.workingHoursStart;
     const end = key === 'workingHoursEnd' ? (value as string) : current.workingHoursEnd;
     if (start >= end) throw new Error('working hours start must be before end');
+  }
+  // §14 — cross-field fine ≤ coarse: writing either snap key checks the resulting pair
+  // against the stored counterpart, so a pair with fine above coarse is rejected rather
+  // than stored (readSettings already sanitizes what it reads).
+  if (key === 'snapFineMinutes' || key === 'snapCoarseMinutes') {
+    const current = readSettings(db);
+    const fine = key === 'snapFineMinutes' ? (value as number) : current.snapFineMinutes;
+    const coarse = key === 'snapCoarseMinutes' ? (value as number) : current.snapCoarseMinutes;
+    if (fine > coarse) throw new Error('snap_fine_minutes must be at most snap_coarse_minutes');
   }
   db.prepare(
     'INSERT INTO setting(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',

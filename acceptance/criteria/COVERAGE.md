@@ -1681,14 +1681,18 @@ already existed; `gui/src/main.ts` delegates each straight to the Store and
 Add/Save confirms (.primary) accented (§15). New parity rows `listTags` →`tt tag
 ls`, `addTag` →`tt tag add`, `renameTag` →`tt tag rename`, `archiveTag` →`tt tag
 archive` (`parity-matrix.json`, asserted by `gui/test/parity.test.ts` ). The §12
-R10 reference-data management is thus fully covered. **R11 Settings view** (the
+R10 reference-data management is thus fully covered. **R12 Settings view** (the
 main window ships an in-window Settings view with editable controls for every
 §14 setting): the GUI Settings view (`gui/renderer/index.html` `#settings-panel`
 + `gui/renderer/settings.js` , modelled on `context/mockups/settings.html` )
 renders a control per §14 setting — a rounding toggle, a rounding-increment
 select (6/10/15/30), a Monday/Sunday week-start segment, first-check-in and
-check-in-interval selects, a global-hotkey capture field, and the NEW §14
-date/number format select (System/ISO) — each persisting its value over the SAME
+check-in-interval selects, a global-hotkey capture field, the §14
+date/number format select (System/ISO), and the **Entries calendar** group
+(§14 / §12 R09/R23): a show-weekend toggle (editing the SAME `show_weekend`
+row the §12 R09 Entries-toolbar toggle drives) and the fine/coarse snap
+whole-minute inputs (the settings half of §12 R23 — the drag surfaces that
+consume them are R23's own coverage) — each persisting its value over the SAME
 `setSetting` IPC `tt config set` uses (no new channel/parity row; a
 global-hotkey edit additionally re-registers the OS shortcut live in
 `gui/src/main.ts` 's setSetting handler). Because the AC method is **BDD** —
@@ -2176,30 +2180,47 @@ timeline-window settings** — four key-value rows
 realizing G15's three settings: `working_hours_start` /`working_hours_end`
 (strict zero-padded HH:MM, defaults 07:00/18:00, cross-field start<end),
 `picker_window_mode` (`working_hours`|`around_now`), `picker_around_hours`
-(integer 1–24, default 8)) with their defaults are descriptor-driven in
+(integer 1–24, default 8), and the **§14 / §12 R09/R23 Entries-calendar
+settings** — the two drag-snap resolutions `snap_fine_minutes` /
+`snap_coarse_minutes` (whole minutes 1–30, defaults 5/15, cross-field fine ≤
+coarse) and `show_weekend` (a STRICT boolean, default off — a non-boolean token
+is rejected rather than stored, unlike `rounding`'s looser pre-rule coercion))
+with their defaults are descriptor-driven in
 `packages/core/src/settings.ts` (`SETTING_DESCRIPTORS` — one row per setting
 owns its snake_case key, parse, and validation), so `readSettings`
 /`writeSetting`/`tt config ls/set` and the GUI `setSetting` channel all derive
 from the one list — the timeline keys reached `tt config` with **zero CLI
-edits** (§17 R8 parity by construction) — as did `time_zone`. GOLD pins the
+edits** (§17 R8 parity by construction) — as did `time_zone` and the three
+Entries-calendar keys. GOLD pins the
 fresh-database defaults table + `--json` object (`cli/test/gold/cli.test.ts` —
-13 rows incl. `time_zone` and the four timeline keys in descriptor order; the raw camelCase `config ls --json` object
+16 rows incl. `time_zone`, the four timeline keys, and the three
+Entries-calendar keys in descriptor order; the raw camelCase `config ls --json` object
 validates against `schemas/settings.schema.json` , the one schema over
 `store.settings()` 's verbatim shape — defaults and a non-default in-domain
 value both pass), the `store.settings()` snapshot
 (`core/test/gold/contracts.test.ts`), the read-as-strict-as-writes fallback for
 corrupt stored values (a `99:99` start AND an inverted stored start/end pair
-both reset to the documented defaults on read), and every timeline rejection
+both reset to the documented defaults on read — as do a corrupt stored
+`show_weekend` token and an inconsistent stored snap pair with fine above
+coarse, which resets BOTH snap keys), and every timeline rejection
 leaving the default stored: malformed HH:MM (`7:00`, `25:00` , `7am` ), a
 start>=end pair (either key), `picker_around_hours` 0/25/2.5, an unknown mode —
 on core (`writeSetting` throws) AND tt (`config set` exits non-zero with a
 diagnostic), plus the `picker_window_mode around_now` round-trip through
 `config ls --json` and the `time_zone` round-trip + unknown-zone rejection (the
-`tt` half of the §04 R06 coverage cross-noted under PRD §04). BDD
+`tt` half of the §04 R06 coverage cross-noted under PRD §04). The same GOLD
+pair pins every Entries-calendar rejection the same way: snap values 0/31
+(out of range), 7.5 (fractional), a fine-above-coarse pair (either key — fine
+20 against coarse 15, coarse 3 against fine 5, with fine == coarse proven
+legal), and a non-boolean `show_weekend`, on core AND tt, each leaving the
+documented default stored. BDD
 `features/settings.feature` proves each setting — including all four timeline
-keys and `time_zone` — round-trips and reads back, the fresh-DB defaults, and
+keys, `time_zone`, and the three Entries-calendar keys — round-trips and reads
+back, the fresh-DB defaults, and
 the rejection scenarios (`working_hours_end 06:00`, `picker_around_hours 25`,
-`time_zone Mars/Olympus_Mons` ) on BOTH core AND tt via the World `setConfig`
+`time_zone Mars/Olympus_Mons`, `snap_coarse_minutes 0/31`,
+`snap_fine_minutes 7.5` and `20`-above-coarse, `show_weekend banana` ) on BOTH
+core AND tt via the World `setConfig`
 /`getConfig`/`attemptSetConfig` (§17 R8), plus "Both surfaces render timestamps
 in the configured time zone" over the World `renderedStart` capability
 (CoreWorld `formatStamp` over the store's settings; CliWorld the human
@@ -2236,7 +2257,13 @@ validated settings"): it is unreachable, since the window's span is always ≥ 6
 minutes and its center always inside [0, 1440], so no input produces
 `endMin <= startMin` ; the tt-side transcript section "§14 — timeline-window
 settings" in `acceptance/evidence/cli-transcript.md` is the CLI-parity evidence
-(§W: CLI evidence is transcript, no GIF). The **backup-retention edge** §14
+(§W: CLI evidence is transcript, no GIF). JUDGE `SETTINGS_VIEW`
+(`main-settings.png`) extends its control-coverage fact over the
+Entries-calendar keys: routing to Settings must render a `data-key` control for
+`showWeekend`, `snapFineMinutes`, and `snapCoarseMinutes` (the Settings →
+Entries calendar group — show-weekend toggle + the two snap whole-minute
+inputs) alongside the eight it already asserted, all over the existing
+`setSetting` channel. The **backup-retention edge** §14
 fixes — a retention of 0 means "keep all" (pruning disabled) and a negative
 value behaves as 0 — is pinned by GOLD `core/test/gold/backup-retention.test.ts`
 (0 and a negative value prune nothing; a positive cap still prunes to the N
