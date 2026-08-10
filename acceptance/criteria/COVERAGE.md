@@ -1350,7 +1350,7 @@ exists — the Timer view's inline start-only disclosure below the Start field):
 classic file:// script — no ES module / Node import / `@stint/core` / network,
 guarded by `renderer-static.test.ts`'s no-import + no-network file lists)
 exposing the ONE inline mount form `STP.openStartOnly({host, startInput,
-otherEntries, settings})` plus the pure geometry/snap helpers `snapTo5` /
+otherEntries, settings})` plus the pure geometry/snap helpers `snapToStep` /
 `minutesToY` / `yToMinutes`. The two-ended `STP.openInline` variant and the
 shared `mountIntervalPicker` helper were DELETED with the entries-view redesign:
 closed entries' spans are adjusted on the week grid itself (R06/R16) or typed in
@@ -1359,7 +1359,12 @@ view and dead code does not linger. What remains renders IN FLOW only (no modal,
 no `.stp-backdrop`, no Apply — `#le-start-pick` expands it into `#le-start-disc`
 below the Timer view's Start field): the running block with a START drag grip
 only, fading into the future, structurally incapable of writing an end (§05
-R06/G8); every grip drag snaps and writes the bound `#le-start` text LIVE
+R06/G8); every grip drag snaps per the §12 R23 settings-driven resolution —
+`snapCoarseMinutes` on every open, `snapFineMinutes` while the ephemeral
+fine-snap toggle beside the track (`.stp-snapctl`, the shared `.sw` switch —
+the picker's ONLY snap chrome: the `snap · 5 min` pill and drag-hint copy are
+retired) is on; the toggle is per-mount state, so reopening the disclosure
+always starts coarse — and writes the bound `#le-start` text LIVE
 (`writeBack` fires input+change, riding the debounced live-edit commit whose
 patch never carries `endUtc`). Opening renders the EXACT stored start, to the
 second — the snap applies only to a handle the user actively drags (issue #49;
@@ -1371,8 +1376,11 @@ neutral over core + tt). The one field format stays `YYYY-MM-DD HH:mm:ss` local
 (space-separated, seconds always — issue #159) with `parseLocalInput` its one
 inverse, both in `gui/src/localtime.ts`, pinned by GOLD `gui/test/renderer-bundle.test.ts`. It adds ZERO capabilities — no IPC, no parity row. Primary AC:
 JUDGE `TIMER_VIEW` (`timer-view-full.png` — the in-flow disclosure, start grip
-only, no end grip/label/echo, the future-fade mask, the live snapped write, the
-endUtc-free patch); `gui/test/renderer-static.test.ts`'s isolation walk
+only, no end grip/label/echo, the future-fade mask, the live coarse-snapped
+write, the endUtc-free patch, plus the R23 Timer-half probes: the toggle as the
+only snap chrome opening coarse, the fine drag landing on the fine grid off the
+coarse one, and a collapse/reopen resetting the toggle while round-tripping the
+shown start byte-for-byte); `gui/test/renderer-static.test.ts`'s isolation walk
 additionally pins `timepicker.js` as IPC-free (never `window.stint.*`). The §12
 R15 start-only picker is thus fully covered. **R8 Report builder &
 export** (the Reports view's range preset/custom picker, group-by selector,
@@ -2096,9 +2104,15 @@ value a surface merely shows is never rewritten. AC: JUDGE `UNIFIED_FORM_ADD`
 drag on the fine 5 grid ∉ the coarse one, coarse restored on every open) +
 `UNIFIED_FORM` (the edge drag landing coarse while the untouched edge keeps its
 seconds; the exact-times probe); the settings pair's storage/validation/parity
-is the §14 row (GOLD + BDD over core and `tt config`). The Timer-view picker's
-own toggle-beside-the-track is future work outside this row's scope — its drag
-currently keeps the 5-min snap (`snapTo5`).
+is the §14 row (GOLD + BDD over core and `tt config`). The **Timer half** ships
+the same system in the start-only picker: `timepicker.js`'s per-mount
+`snapStepMin` consumes the identical settings pair off the `openStartOnly`
+`settings` snapshot, its own ephemeral `fineSnap` resets on every mount (every
+open of the disclosure starts coarse), and the toggle beside the track
+(`.stp-snapctl`) is the only snap chrome — the `snap · 5 min` pill and
+drag-hint copy are retired. AC: JUDGE `TIMER_VIEW` (the coarse drag on the 15
+grid, the fine drag landing ∉ the coarse grid, reopen resetting the toggle
+while the shown start round-trips) — see the §12 R15 row.
 
 **R24 pending-changes gate (NEW — `core`, loss protection per §03)**: the
 unified form tracks whether its fields differ from their seed (`app.js`

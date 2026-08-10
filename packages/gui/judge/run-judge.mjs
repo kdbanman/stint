@@ -821,6 +821,12 @@ async function sceneTimerView(browser) {
         noEndEcho: !host.querySelector('.stp-echo-end'),
         fade: /gradient/.test(mask),
         others: host.querySelectorAll('.stp-block.other').length,
+        // §12 R23: the fine-snap toggle beside the track is the picker's ONLY snap chrome —
+        // present, coarse on open (aria-checked=false), with the retired snap-value pill and
+        // drag-hint copy absent (their classes gone from the mount, not merely hidden).
+        snapCtl: window.__probe.visible(host.querySelector('.stp-snapctl .sw')),
+        coarseOnOpen: host.querySelector('.stp-snapctl .sw')?.getAttribute('aria-checked') === 'false',
+        noSnapPill: !host.querySelector('.stp-snaphint') && !host.querySelector('.stp-snap'),
         startBefore: document.querySelector('#le-start')?.value ?? null,
         // issue #159: the field the user reads and RETYPES carries no `T` wire separator, and
         // its placeholder describes the very shape it renders — the two agreed on nothing before.
@@ -829,9 +835,10 @@ async function sceneTimerView(browser) {
     });
     await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
 
-    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, 5-min
-    // snapped): the raw #le-start text must advance LIVE from the exact 21:35:53 to the
-    // snapped 20:35 (UTC page) — the drag is the user's edit, so the dragged handle snaps.
+    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, snapped
+    // at the DEFAULT COARSE resolution — the fixture's snapCoarseMinutes=15, §12 R23): the raw
+    // #le-start text must advance LIVE from the exact 21:35:53 to the coarse-snapped 20:30
+    // (UTC page) — the drag is the user's edit, so the dragged handle snaps.
     const grip = page.locator('#le-start-disc .stp-grip');
     await grip.scrollIntoViewIfNeeded();
     const g = await grip.boundingBox();
@@ -853,6 +860,39 @@ async function sceneTimerView(browser) {
     await page.clock.fastForward(600);
     await page.waitForFunction(() => !!window.__EDITED__);
     const edited = await page.evaluate(() => window.__EDITED__);
+
+    // §12 R23 — the FINE half: flip the toggle beside the track and drag UP by 5px (−10min
+    // from the coarse-landed 20:30). At the fixture's snapFineMinutes=5 the drag lands on
+    // 20:20 — a minute ON the fine grid but OFF the coarse one (1220 % 15 = 5), so a picker
+    // still snapping coarse (or still at the retired hard-coded resolution's arithmetic
+    // against a different base) cannot fake the value.
+    await page.evaluate(() => { window.__EDITED__ = null; });
+    await page.click('#le-start-disc .stp-snapctl .sw');
+    const fineOn = await page.evaluate(
+      () => document.querySelector('#le-start-disc .stp-snapctl .sw')?.getAttribute('aria-checked') === 'true',
+    );
+    const grip2 = page.locator('#le-start-disc .stp-grip');
+    await grip2.scrollIntoViewIfNeeded();
+    const g2 = await grip2.boundingBox();
+    const g2x = Math.round(g2.x + g2.width / 2);
+    const g2y = Math.round(g2.y + g2.height / 2);
+    await page.mouse.move(g2x, g2y);
+    await page.mouse.down();
+    await page.mouse.move(g2x, g2y - 5, { steps: 3 });
+    await page.mouse.up();
+    const fineDragged = await page.evaluate(() => document.querySelector('#le-start')?.value ?? null);
+
+    // §12 R23 — EPHEMERAL: collapse the disclosure and reopen it. The toggle must be back at
+    // coarse (aria-checked=false — the state is per-mount, never persisted), and the shown
+    // start must round-trip untouched: 20:20:00 sits OFF the coarse grid, so a reopen that
+    // re-snapped or rewrote the shown value could not preserve it (issue #49).
+    await page.click('#le-start-pick'); // collapse
+    await page.click('#le-start-pick'); // reopen — a fresh mount
+    await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+    const reopened = await page.evaluate(() => ({
+      coarseAgain: document.querySelector('#le-start-disc .stp-snapctl .sw')?.getAttribute('aria-checked') === 'false',
+      startPreserved: document.querySelector('#le-start')?.value ?? null,
+    }));
     const toSec = (s) => { const [h, m, sec] = s.split(':').map(Number); return h * 3600 + m * 60 + sec; };
     const delta = toSec(t2) - toSec(t1);
     const clockLive = t1 === '01:24:07' && delta === 3;
@@ -885,7 +925,7 @@ async function sceneTimerView(browser) {
       disc.startPlaceholder === 'YYYY-MM-DD HH:mm:ss' &&
       new RegExp(`^${disc.startPlaceholder.replace(/[A-Za-z]/g, '\\d')}$`).test(disc.startBefore);
     const dragWritesLive =
-      dragged.startLive === '2026-06-24 20:35:00' &&
+      dragged.startLive === '2026-06-24 20:30:00' &&
       !/\d{4}-\d{2}-\d{2}T/.test(dragged.startLive) &&
       dragged.stillNoEndChrome &&
       dragged.noBackdrop;
@@ -894,7 +934,13 @@ async function sceneTimerView(browser) {
       typeof edited.id === 'number' &&
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
-      edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
+      edited.patch.startUtc === '2026-06-24T20:30:00.000Z';
+    // §12 R23 — the Timer half of the snap rule, scored as three facts: the toggle is the
+    // only snap chrome and opens coarse; the fine drag lands on the fine grid OFF the coarse
+    // one; and a collapse/reopen both resets the toggle and round-trips the shown start.
+    const snapChrome = disc.snapCtl && disc.coarseOnOpen && disc.noSnapPill;
+    const fineToggleDrag = fineOn && fineDragged === '2026-06-24 20:20:00';
+    const reopenCoarse = reopened.coarseAgain && reopened.startPreserved === '2026-06-24 20:20:00';
     await page.close();
 
     // design.html D04/D14 (issue #160) — AN ATTRIBUTE IS NOT AN ADVISORY. The same running card,
@@ -971,11 +1017,15 @@ async function sceneTimerView(browser) {
         startSeededExactly,
         dragWritesLive,
         patchStartOnly,
+        snapChrome,
+        fineToggleDrag,
+        reopenCoarse,
         attrVsFlag,
       },
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
-        `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
+        `start-only disclosure ${JSON.stringify(disc)}; coarse grip drag → ${JSON.stringify(dragged)}; ` +
         `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'}); ` +
+        `fine toggle on=${fineOn}, fine drag → ${fineDragged}; reopen → ${JSON.stringify(reopened)}; ` +
         `attribute-vs-advisory paint ${JSON.stringify(paint)}`,
       'timer-view-full.png',
     );

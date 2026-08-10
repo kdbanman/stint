@@ -28,23 +28,28 @@
 // binding, no end minute is ever computed, defaulted to "now", or written — drags move only
 // the bound start. STP.openStartOnly() is the Timer view's inline disclosure form of the same
 // variant (in flow below the Start field — no backdrop, no modal chrome, no Apply): every
-// grip drag 5-min-snaps and writes the bound start input LIVE, riding the surrounding form's
-// existing input/change listeners.
+// grip drag snaps per the §12 R23 settings-driven resolution — coarse on every open, fine
+// with the ephemeral toggle beside the track — and writes the bound start input LIVE,
+// riding the surrounding form's existing input/change listeners.
 window.STP = (function () {
   // ---- pure geometry / snap helpers (deterministic, no DOM) ------------------------
   // Exposed on window.STP so the renderer-static guard and JUDGE can drive them directly.
   const MS_PER_MIN = 60 * 1000;
-  const SNAP_MIN = 5;
   const DAY_MIN = 24 * 60;
+  // Paint floor for the running block's visible edge (runningEdgeMin) — never a snap
+  // resolution: it only keeps a just-started block from collapsing to a zero-height sliver.
+  const EDGE_FLOOR_MIN = 5;
   // The single-day column geometry: TRACK_H px tall, top = 00:00, bottom = 24:00.
   const TRACK_H = 24 * 30; // 720px = 30px/hour, so 1 minute = 0.5px (deterministic).
 
-  // Round a minute-of-day to the nearest 5-minute grid step, clamped to [0, 1440].
-  // §12 R15 (issue #49): snapTo5 applies ONLY to a handle the user is actively dragging (and to
-  // drag clamps) — NEVER to a seeded/stored value. Opening the picker over an entry must paint
-  // (and leave in the bound fields) the entry's exact stored times, to the second.
-  function snapTo5(minutes) {
-    const snapped = Math.round(minutes / SNAP_MIN) * SNAP_MIN;
+  // Round a minute-of-day to the nearest `stepMin` grid step, clamped to [0, 1440]. The step
+  // is the §12 R23 settings-driven resolution the caller resolved (coarse by default, fine
+  // with the ephemeral toggle). §12 R15 (issue #49): snapToStep applies ONLY to a handle the
+  // user is actively dragging (and to drag clamps) — NEVER to a seeded/stored value. Opening
+  // the picker over an entry must paint (and leave in the bound fields) the entry's exact
+  // stored times, to the second.
+  function snapToStep(minutes, stepMin) {
+    const snapped = Math.round(minutes / stepMin) * stepMin;
     return Math.max(0, Math.min(DAY_MIN, snapped));
   }
   // Minute-of-day → y pixel on the track (linear; 00:00 at the top).
@@ -120,7 +125,7 @@ window.STP = (function () {
   // start-only paths carry no end binding, so no end can be computed, defaulted, or written.
   function runningEdgeMin(day, startMin) {
     const now = new Date();
-    if (sameLocalDay(now, day)) return Math.max(startMin + SNAP_MIN, localMinuteOfDay(now));
+    if (sameLocalDay(now, day)) return Math.max(startMin + EDGE_FLOOR_MIN, localMinuteOfDay(now));
     return DAY_MIN;
   }
 
@@ -172,9 +177,13 @@ window.STP = (function () {
    * — the Timer view's INLINE start-only disclosure. Renders the single-day track IN FLOW
    * into `host` (no backdrop, no dialog/modal chrome, no Apply): the running entry is the
    * accent-outlined block fading into the future (`.stp-block.me.open`), with a START drag grip only
-   * — no bottom resize grip, no end label, no end echo field. Every grip drag 5-min-snaps
-   * and writes the bound start input LIVE (writeBack fires input+change, so the live-edit
-   * strip's existing debounced commit path picks it up). This path is STRUCTURALLY incapable
+   * — no bottom resize grip, no end label, no end echo field. Every grip drag snaps per the
+   * §12 R23 settings-driven resolution — `snapCoarseMinutes` on every open, `snapFineMinutes`
+   * while the ephemeral fine-snap toggle beside the track is on (the toggle is per-mount UI
+   * state, never persisted: reopening the disclosure remounts and starts coarse) — and writes
+   * the bound start input LIVE (writeBack fires input+change, so the live-edit strip's
+   * existing debounced commit path picks it up). The toggle is the picker's ONLY snap chrome
+   * (§12 R23: no snap-value pill, no drag-hint copy). This path is STRUCTURALLY incapable
    * of producing an end value: it takes no end binding and computes no end minute — the
    * running block's painted extent is the wall clock, never a value.
    *
@@ -189,22 +198,45 @@ window.STP = (function () {
     const others = Array.isArray(opts.otherEntries) ? opts.otherEntries : [];
     host.innerHTML = '';
 
+    // §12 R23: the ephemeral fine-snap toggle — deliberately NOT a setting (§14): never
+    // persisted, and scoped to this mount so every open of the disclosure starts coarse
+    // (the same idiom the week grid's `fineSnap` ships in app.js).
+    let fineSnap = false;
+    // The active snap step in minutes — coarse by default, fine with the toggle on. Values
+    // come from the §14 settings snapshot the caller passes; the defaults only shield a
+    // stale/partial snapshot (core owns validation, 1–30, fine ≤ coarse) — same derivation
+    // as app.js's snapStepMin, duplicated because this classic script imports nothing.
+    function snapStepMin() {
+      const s = opts.settings || {};
+      const fine = Number(s.snapFineMinutes) >= 1 ? Number(s.snapFineMinutes) : 5;
+      const coarse = Number(s.snapCoarseMinutes) >= 1 ? Number(s.snapCoarseMinutes) : 15;
+      return fineSnap ? fine : coarse;
+    }
+
     // Seed from the bound start input (the running entry's start); drags stay on its day.
     // EXACT, never snapped (issue #49): the painted block shows the stored start as-is; the
-    // 5-min snap applies only once the user actually drags the grip.
+    // snap applies only once the user actually drags the grip.
     const startDate = parseInput(startInput) || new Date();
     const columnDay = startOfLocalDay(startDate);
     let startMin = exactMinuteOfDay(startDate);
 
     const box = document.createElement('div');
     box.className = 'stp stp-inline stp-start-only';
+    // §12 R23 (mockups/timer.html .snapctl): the fine-snap toggle beside the track is the
+    // only snap chrome — no snap-value pill, no drag-hint copy. The shared .sw switch idiom.
     box.innerHTML =
       `<div class="stp-dayview" data-timeline-track><div class="stp-track"></div></div>` +
-      `<div class="stp-snaphint"><span class="stp-snap">snap · 5 min</span>` +
-      `<span>Drag the grip to adjust the start — the running entry has no end until you stop it</span></div>`;
+      `<div class="stp-snapctl"><button type="button" class="sw" role="switch" ` +
+      `aria-checked="false" aria-label="Fine snap"><i aria-hidden="true"></i></button> Fine snap</div>`;
     host.appendChild(box);
     const viewport = box.querySelector('.stp-dayview');
     const track = box.querySelector('.stp-track');
+    const sw = box.querySelector('.stp-snapctl .sw');
+    sw.addEventListener('click', () => {
+      fineSnap = !fineSnap;
+      sw.classList.toggle('on', fineSnap);
+      sw.setAttribute('aria-checked', String(fineSnap));
+    });
 
     function pointerMin(clientY) {
       return yToMinutes(clientY - track.getBoundingClientRect().top);
@@ -216,7 +248,7 @@ window.STP = (function () {
         const base = startMin;
         grip.setPointerCapture?.(ev.pointerId);
         const onMove = (mv) => {
-          const next = snapTo5(base + (pointerMin(mv.clientY) - grabMin));
+          const next = snapToStep(base + (pointerMin(mv.clientY) - grabMin), snapStepMin());
           startMin = Math.max(0, Math.min(runningEdgeMin(columnDay, 0), next));
           // LIVE write-back of the START only — the sole write this variant can make.
           writeBack(startInput, dateAtMinute(columnDay, startMin));
@@ -268,5 +300,5 @@ window.STP = (function () {
   }
 
 
-  return { openStartOnly, snapTo5, minutesToY, yToMinutes, TRACK_H };
+  return { openStartOnly, snapToStep, minutesToY, yToMinutes, TRACK_H };
 })();

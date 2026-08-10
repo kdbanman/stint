@@ -67,7 +67,7 @@ interface Window {
   /** The start-only interval picker (timepicker.js) — declared for app.js's call sites. */
   STP: {
     openStartOnly(opts: Record<string, unknown>): void;
-    snapTo5(min: number): number;
+    snapToStep(min: number, stepMin: number): number;
     minutesToY(min: number, startMin: number, endMin: number, height: number): number;
     yToMinutes(y: number, startMin: number, endMin: number, height: number): number;
     TRACK_H: number;
