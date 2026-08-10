@@ -4692,10 +4692,14 @@ async function sceneCalendarLayout(browser) {
 
     // §12 R16/R22: five fit-to-width columns (Mon–Fri, weekend hidden) sharing the strip
     // equally, NO horizontal scroll — at the 1040 default the equal share is well past any
-    // legibility concern and there is no floor to hold.
+    // legibility concern and there is no floor to hold. "Equally" is spread < 2px, not 0:
+    // flex divides a strip that is not a multiple of the column count into fractional
+    // widths, and different Chromium builds round the fractions differently (CI measured
+    // 1.016px across seven columns where local measured ≤1). A real divergence — the old
+    // 124px floor compressing one column — is tens of pixels, far past the tolerance.
     const columnsOk =
       structure.colCount === 5 &&
-      structure.colSpread <= 1 &&
+      structure.colSpread < 2 &&
       structure.minColWidth > 60 &&
       !structure.hScroll;
     const tallHoursOk = structure.hourStepPx === 60 && structure.trackHeight === 1440;
@@ -4746,7 +4750,7 @@ async function sceneCalendarLayout(browser) {
     const wkendEnd = weekend.segs.find((s) => /\bseg-end\b/.test(s.cls));
     const weekendRevealOk =
       weekend.dayCols === 7 &&
-      weekend.colSpread <= 1 &&
+      weekend.colSpread < 2 &&
       !weekend.hScroll &&
       weekend.segs.length === 2 &&
       !!wkendEnd &&
@@ -4919,17 +4923,17 @@ async function sceneWindowGeometry(browser) {
 
     const weekOk =
       weekAtDefault.count === 5 &&
-      weekAtDefault.spread <= 1 &&
+      weekAtDefault.spread < 2 &&
       !weekAtDefault.hScroll &&
       weekAtWide.count === 5 &&
-      weekAtWide.spread <= 1 &&
+      weekAtWide.spread < 2 &&
       !weekAtWide.hScroll &&
       weekAtWide.minWidth > weekAtDefault.minWidth + 100 && // the resize lands on the columns
       weekAtDefault.truncatedDescs > 0 &&
       weekAtWide.truncatedDescs === 0;
     const weekendOk =
       weekendAtDefault.count === 7 &&
-      weekendAtDefault.spread <= 1 &&
+      weekendAtDefault.spread < 2 &&
       !weekendAtDefault.hScroll;
     const addOk = addFit.scrollY === 0 && addFit.saveInViewport && addFit.fieldsInColumn && addFit.noHOverflow;
     const editOk = editFit.fieldsInColumn && editFit.noHOverflow;
