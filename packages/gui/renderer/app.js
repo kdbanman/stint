@@ -622,19 +622,12 @@ let fineSnap = false;
 //   billTouched — §05 R07: add mode's billable stays core-derived until the user touches it
 let openForm = null;
 
-// §12 R23: the active snap step in minutes — coarse by default on every entry into a drag
-// mode, fine with the ephemeral toggle on. Values come from the §14 settings snapshot;
-// the defaults only shield a stale/partial snapshot (core owns validation, 1–30, fine ≤ coarse).
-function snapStepMin() {
-  const s = (state && state.settings) || {};
-  const fine = Number(s.snapFineMinutes) >= 1 ? Number(s.snapFineMinutes) : 5;
-  const coarse = Number(s.snapCoarseMinutes) >= 1 ? Number(s.snapCoarseMinutes) : 15;
-  return fineSnap ? fine : coarse;
-}
 // Snap a minute-of-day onto the active grid, clamped to the 24h track. Applied ONLY to a
 // value the user is actively dragging (issue #49): a shown value is never rewritten.
+// The step itself is SU.snapStepMin (§12 R23, src/snap.ts) — the same resolution the Timer
+// view's picker reads, off the §14 settings snapshot with core's defaults behind it.
 function snapMin(minutes) {
-  const step = snapStepMin();
+  const step = SU.snapStepMin(state && state.settings, fineSnap);
   return Math.max(0, Math.min(1440, Math.round(minutes / step) * step));
 }
 
@@ -787,7 +780,7 @@ function startNewDrag(pt, { openOnRelease = false, live = false } = {}) {
     const cur = snapMin((clientY - rect.top) / CAL_PX_PER_MIN);
     let lo = Math.min(anchor, cur);
     let hi = Math.max(anchor, cur);
-    if (hi === lo) hi = Math.min(lo + snapStepMin(), 1440);
+    if (hi === lo) hi = Math.min(lo + SU.snapStepMin(state && state.settings, fineSnap), 1440);
     return { startIso: wallDateAt(day, lo).toISOString(), stopIso: wallDateAt(day, hi).toISOString() };
   };
   const onMove = (ev) => {

@@ -71,10 +71,13 @@ window.STP = (function () {
   // parseLocalInput is its ONE inverse — the same pair the byte gate and the add IPC use — so the
   // picker, the raw Start/Stop fields, and the split instant agree byte-for-byte; localMinuteOfDay
   // / exactMinuteOfDay are the ONE minutes-of-day derivation every timeline surface positions
-  // against, so a timezone or DST fix has a single site to find (issue #168).
+  // against, so a timezone or DST fix has a single site to find (issue #168); snapStepMin is
+  // that same rule for §12 R23's drag resolution — this picker and the week grid resolve their
+  // active step through it, with core's DEFAULT_SETTINGS (not a re-typed 5/15) behind the
+  // stale-snapshot fallback.
   const {
     localInputValue, parseLocalInput, localMinuteOfDay, exactMinuteOfDay, timelineWindow,
-    localDayOf, startOfDay,
+    localDayOf, startOfDay, snapStepMin,
   } = window.SU;
   function hhmm(minutes) {
     // Floor, not round: an exact seed carries fractional minutes (seconds ride the fraction,
@@ -202,16 +205,6 @@ window.STP = (function () {
     // persisted, and scoped to this mount so every open of the disclosure starts coarse
     // (the same idiom the week grid's `fineSnap` ships in app.js).
     let fineSnap = false;
-    // The active snap step in minutes — coarse by default, fine with the toggle on. Values
-    // come from the §14 settings snapshot the caller passes; the defaults only shield a
-    // stale/partial snapshot (core owns validation, 1–30, fine ≤ coarse) — same derivation
-    // as app.js's snapStepMin, duplicated because this classic script imports nothing.
-    function snapStepMin() {
-      const s = opts.settings || {};
-      const fine = Number(s.snapFineMinutes) >= 1 ? Number(s.snapFineMinutes) : 5;
-      const coarse = Number(s.snapCoarseMinutes) >= 1 ? Number(s.snapCoarseMinutes) : 15;
-      return fineSnap ? fine : coarse;
-    }
 
     // Seed from the bound start input (the running entry's start); drags stay on its day.
     // EXACT, never snapped (issue #49): the painted block shows the stored start as-is; the
@@ -248,7 +241,7 @@ window.STP = (function () {
         const base = startMin;
         grip.setPointerCapture?.(ev.pointerId);
         const onMove = (mv) => {
-          const next = snapToStep(base + (pointerMin(mv.clientY) - grabMin), snapStepMin());
+          const next = snapToStep(base + (pointerMin(mv.clientY) - grabMin), snapStepMin(opts.settings, fineSnap));
           startMin = Math.max(0, Math.min(runningEdgeMin(columnDay, 0), next));
           // LIVE write-back of the START only — the sole write this variant can make.
           writeBack(startInput, dateAtMinute(columnDay, startMin));
