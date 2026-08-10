@@ -4206,11 +4206,12 @@ async function sceneReportsView(browser) {
 // ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
 // readonly entries calendar. Hardened per the issue-#55 triage: over the MULTI-WEEK,
 // multi-client, mixed-billable fixture, EACH toolbar control (range preset, billable toggle,
-// client, project, tag, search) is driven in turn and the VISIBLE EVENT COUNT + #week-total are
-// asserted to move to the expected subset — counts, not just pixels — with NO listEntries call
+// client, project, tag, search) is driven in turn and the VISIBLE EVENT COUNT is asserted to
+// move to the expected subset — counts, not just pixels — with NO listEntries call
 // rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
-// Deterministic sub-facts are machine-scored under the pinned JUDGE clock (Wed 2026-06-24,
-// weekStart monday).
+// The toolbar carries NO range-total chip (#264: §12 R09 retired it — day-header totals are
+// CALENDAR_LAYOUT's, report totals are Reports'). Deterministic sub-facts are machine-scored
+// under the pinned JUDGE clock (Wed 2026-06-24, weekStart monday).
 async function sceneEntriesCalendar(browser) {
   await withPage(browser, listState(), 'index.html', async (page) => {
     const probe = () =>
@@ -4218,22 +4219,18 @@ async function sceneEntriesCalendar(browser) {
         req: { ...(window.__LIST_REQ__ || {}) },
         evCount: document.querySelectorAll('.dcol .ev').length,
         evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
-        weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       }));
-    const waitCountAndTotal = (n, total) =>
-      page.waitForFunction(
-        ({ n, total }) =>
-          document.querySelectorAll('.dcol .ev').length === n &&
-          document.querySelector('#week-total')?.textContent.trim() === total,
-        { n, total },
-      );
+    const waitCount = (n) =>
+      page.waitForFunction((n) => document.querySelectorAll('.dcol .ev').length === n, n);
 
     // The default load paints the readonly entries calendar (R16) — no toolbar control touched
-    // yet. All SEVEN fixture entries lay into their day columns, and the idle chip is the
-    // WEEK-BOUNDED billable sum (issue #55 Part B): this week's 5.00h — NOT the all-time 8.00h.
+    // yet. All SEVEN fixture entries lay into their day columns. The retired range chip and its
+    // Reports shortcut must be GONE (#264): no #week-total, no #report-btn.
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
     const before = await page.evaluate(() => ({
       hasByControl: !!document.querySelector('#el-by-seg'),
+      hasRangeChip: !!document.querySelector('#week-total'),
+      hasReportShortcut: !!document.querySelector('#report-btn'),
       hasPresets: !!document.querySelector('#el-preset-seg'),
       hasBillable: !!document.querySelector('#el-billable-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
@@ -4244,85 +4241,83 @@ async function sceneEntriesCalendar(browser) {
       toType: document.querySelector('#el-range-to')?.type ?? '',
       hasApply: !!document.querySelector('#el-range-apply'),
       evCount: document.querySelectorAll('.dcol .ev').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
     // SEARCH — matches three "refactor" descriptions in the fixture, but only the TWO inside
     // the default week window survive (range + search COMPOSE): last week's 'refactor planning'
-    // stays excluded. The events narrow to 2 and #week-total drops to their 3.50h.
+    // stays excluded. The events narrow to 2.
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
-    await waitCountAndTotal(2, '3.50h');
+    await waitCount(2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
     const onSearch = await probe();
 
     await page.fill('#search', '');
-    await waitCountAndTotal(7, '5.00h');
+    await waitCount(7);
 
-    // RANGE PRESETS — each chip re-queries and the visible subset + chip move with it:
-    // month (June: 6 events, 7.00h billable) → last-week (1 event, 2.00h) → last-month
-    // (1 event, 1.00h) → today (3 events, 3.00h) → week (5 events, 5.00h).
+    // RANGE PRESETS — each preset re-queries and the visible subset moves with it:
+    // month (June: 6 events) → last-week (1) → last-month (1) → today (3) → week (5).
     await page.click('#el-preset-seg .preset[data-preset="month"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'month');
-    await waitCountAndTotal(6, '7.00h');
+    await waitCount(6);
     const onMonth = await probe();
     await page.click('#el-preset-seg .preset[data-preset="last-week"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-week');
-    await waitCountAndTotal(1, '2.00h');
+    await waitCount(1);
     const onLastWeek = await probe();
     await page.click('#el-preset-seg .preset[data-preset="last-month"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-month');
-    await waitCountAndTotal(1, '1.00h');
+    await waitCount(1);
     const onLastMonth = await probe();
     await page.click('#el-preset-seg .preset[data-preset="today"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'today');
-    await waitCountAndTotal(3, '3.00h');
+    await waitCount(3);
     const onToday = await probe();
     await page.click('#el-preset-seg .preset[data-preset="week"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'week');
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events, 5.00h);
-    // non-billable keeps ONLY it (1 event, a 0.00h billable sum); all restores the 5.
+    // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events);
+    // non-billable keeps ONLY it (1 event); all restores the 5.
     await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'billable');
-    await waitCountAndTotal(4, '5.00h');
+    await waitCount(4);
     const onBillable = await probe();
     await page.click('#el-billable-seg .seg-btn[data-billable="non-billable"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'non-billable');
-    await waitCountAndTotal(1, '0.00h');
+    await waitCount(1);
     const onNonBillable = await probe();
     await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'all');
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    // CLIENT FILTER — Acme (id 1) keeps this week's three Acme entries (2.50h billable)…
+    // CLIENT FILTER — Acme (id 1) keeps this week's three Acme entries…
     await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
     await page.selectOption('#el-client', '1');
     await page.waitForFunction(() => window.__LIST_REQ__?.clientId === 1);
-    await waitCountAndTotal(3, '2.50h');
+    await waitCount(3);
     const onClient = await probe();
-    // …PROJECT FILTER — its API project (id 11) narrows to the single 'auth refactor' (2.00h).
+    // …PROJECT FILTER — its API project (id 11) narrows to the single 'auth refactor'.
     await page.waitForSelector('#el-project option[value="11"]', { state: 'attached' });
     await page.selectOption('#el-project', '11');
     await page.waitForFunction(() => window.__LIST_REQ__?.projectId === 11);
-    await waitCountAndTotal(1, '2.00h');
+    await waitCount(1);
     const onProject = await probe();
     // Reset the client (project resets with it) — the week's 5 return.
     await page.selectOption('#el-client', '');
     await page.waitForFunction(
       () => window.__LIST_REQ__?.clientId === undefined && window.__LIST_REQ__?.projectId === undefined,
     );
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    // TAG FILTER — 'ci' keeps the week's two ci-tagged entries (2.50h billable), then clears.
+    // TAG FILTER — 'ci' keeps the week's two ci-tagged entries, then clears.
     await page.fill('#el-tag', 'ci');
     await page.waitForFunction(() => window.__LIST_REQ__?.tag === 'ci');
-    await waitCountAndTotal(2, '2.50h');
+    await waitCount(2);
     const onTag = await probe();
     await page.fill('#el-tag', '');
     await page.waitForFunction(() => window.__LIST_REQ__?.tag === undefined);
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
     await page.click('#el-preset-seg .preset[data-preset="custom"]');
     await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
@@ -4331,7 +4326,7 @@ async function sceneEntriesCalendar(browser) {
     await page.waitForFunction(
       () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
     );
-    await waitCountAndTotal(2, '2.00h');
+    await waitCount(2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
     const onCustom = await probe();
 
@@ -4345,10 +4340,11 @@ async function sceneEntriesCalendar(browser) {
 
     const controlsOk =
       !before.hasByControl &&
+      // #264 / §12 R09: the range-total chip and its Reports shortcut are RETIRED — absent.
+      !before.hasRangeChip && !before.hasReportShortcut &&
       before.hasPresets && before.hasBillable && before.hasClientFilter &&
       before.hasProjectFilter && before.hasTagFilter && before.hasSearch;
-    // Issue #55 Part B: the idle chip is the WEEK's billable sum, not the all-time 8.00h.
-    const defaultOk = before.evCount === 7 && before.weekTotal === '5.00h';
+    const defaultOk = before.evCount === 7;
     const searchOk =
       onSearch.req.search === 'refactor' &&
       onSearch.req.by === 'day' && // the query carries the REQUIRED grouping (issue #55)
@@ -4356,27 +4352,26 @@ async function sceneEntriesCalendar(browser) {
       onSearch.evText.some((t) => /auth refactor/.test(t)) &&
       onSearch.evText.some((t) => /refactor tests/.test(t)) &&
       !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded…
-      !onSearch.evText.some((t) => /refactor planning/.test(t)) && // …range + search compose
-      onSearch.weekTotal === '3.50h'; // #week-total moved to the matching subset's sum
+      !onSearch.evText.some((t) => /refactor planning/.test(t)); // …range + search compose
     const presetsOk =
-      onMonth.evCount === 6 && onMonth.weekTotal === '7.00h' &&
-      onLastWeek.evCount === 1 && onLastWeek.weekTotal === '2.00h' &&
+      onMonth.evCount === 6 &&
+      onLastWeek.evCount === 1 &&
       onLastWeek.evText.some((t) => /refactor planning/.test(t)) &&
-      onLastMonth.evCount === 1 && onLastMonth.weekTotal === '1.00h' &&
+      onLastMonth.evCount === 1 &&
       onLastMonth.evText.some((t) => /may retro/.test(t)) &&
-      onToday.evCount === 3 && onToday.weekTotal === '3.00h';
+      onToday.evCount === 3;
     const billableOk =
-      onBillable.evCount === 4 && onBillable.weekTotal === '5.00h' &&
+      onBillable.evCount === 4 &&
       !onBillable.evText.some((t) => /team lunch/.test(t)) &&
-      onNonBillable.evCount === 1 && onNonBillable.weekTotal === '0.00h' &&
+      onNonBillable.evCount === 1 &&
       onNonBillable.evText.some((t) => /team lunch/.test(t));
     const clientProjectOk =
-      onClient.evCount === 3 && onClient.weekTotal === '2.50h' &&
+      onClient.evCount === 3 &&
       !onClient.evText.some((t) => /deploy pipeline|refactor tests/.test(t)) && // Globex excluded
-      onProject.evCount === 1 && onProject.weekTotal === '2.00h' &&
+      onProject.evCount === 1 &&
       onProject.evText.some((t) => /auth refactor/.test(t));
     const tagOk =
-      onTag.evCount === 2 && onTag.weekTotal === '2.50h' &&
+      onTag.evCount === 2 &&
       onTag.evText.some((t) => /deploy pipeline/.test(t)) &&
       onTag.evText.some((t) => /refactor tests/.test(t));
     const customRangeOk =
@@ -4384,7 +4379,7 @@ async function sceneEntriesCalendar(browser) {
       onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
       onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
       !String(onCustom.req.fromDate).includes('T') &&
-      onCustom.evCount === 2 && onCustom.weekTotal === '2.00h' &&
+      onCustom.evCount === 2 &&
       onCustom.evText.some((t) => /standup/.test(t)) &&
       onCustom.evText.some((t) => /refactor tests/.test(t)) &&
       !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
@@ -4393,11 +4388,11 @@ async function sceneEntriesCalendar(browser) {
       'ENTRIES_CALENDAR',
       { controlsOk, defaultOk, searchOk, presetsOk, billableOk, clientProjectOk, tagOk, customRangeOk, wireOk },
       `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} ` +
-        `-> presets month=${onMonth.evCount}/${onMonth.weekTotal} lastWeek=${onLastWeek.evCount}/${onLastWeek.weekTotal} ` +
-        `lastMonth=${onLastMonth.evCount}/${onLastMonth.weekTotal} today=${onToday.evCount}/${onToday.weekTotal} ` +
-        `-> billable=${onBillable.evCount}/${onBillable.weekTotal} nonBillable=${onNonBillable.evCount}/${onNonBillable.weekTotal} ` +
-        `-> client=${onClient.evCount}/${onClient.weekTotal} project=${onProject.evCount}/${onProject.weekTotal} ` +
-        `-> tag=${onTag.evCount}/${onTag.weekTotal} -> custom dates=${JSON.stringify(onCustom)} ` +
+        `-> presets month=${onMonth.evCount} lastWeek=${onLastWeek.evCount} ` +
+        `lastMonth=${onLastMonth.evCount} today=${onToday.evCount} ` +
+        `-> billable=${onBillable.evCount} nonBillable=${onNonBillable.evCount} ` +
+        `-> client=${onClient.evCount} project=${onProject.evCount} ` +
+        `-> tag=${onTag.evCount} -> custom dates=${JSON.stringify(onCustom)} ` +
         `-> wire=${JSON.stringify(wire)}`,
       'entries-calendar.png',
     );
@@ -4488,7 +4483,6 @@ async function sceneCalendarLayout(browser) {
           hasBeforeWork: evs.some((el) => evTop(el) < workStartPx),
           hasAfterWork: evs.some((el) => evTop(el) > workEndPx),
           dayTotals,
-          weekTotal: document.querySelector('#week-total')?.textContent?.trim() ?? null,
           emptyCols,
           overlapBands: document.querySelectorAll('.dcol .ov').length,
           overlapTag: document.querySelector('.dcol .ov .otag')?.textContent?.trim() ?? '',
@@ -4603,14 +4597,14 @@ async function sceneCalendarLayout(browser) {
       structure.hasBeforeWork &&
       structure.hasAfterWork;
     // §12 R16 (issue #71): the 22nd's header carries the cross-midnight span in full (start-day
-    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h — and the week
-    // chip sums to 17.00h. The 23rd's header is NOT asserted here, but its total must stay off the
-    // overnight span (it shows the end segment without counting it) — pinned by crossMidnightOk +
-    // the segment/attribution rule below.
+    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h. The 23rd's
+    // header is NOT asserted here, but its total must stay off the overnight span (it shows the
+    // end segment without counting it) — pinned by crossMidnightOk + the segment/attribution
+    // rule below. The per-day header totals are the view's ONLY billable figures: the toolbar's
+    // range-total chip is retired (#264, §12 R09), so there is no week sum to read.
     const totalsOk =
       structure.dayTotals['22'] === '12.00h' &&
-      structure.dayTotals['24'] === '1.00h' &&
-      structure.weekTotal === '17.00h';
+      structure.dayTotals['24'] === '1.00h';
     const emptyOk = structure.emptyCols >= 1;
     // §12 R16 (issue #71): the cross-midnight entry renders as exactly TWO segments sharing id 8.
     // The start segment sits at 22:30 (1350 min → ~990px) and runs to the track bottom (a true
@@ -5279,29 +5273,25 @@ async function sceneCalendarKeyboard(browser) {
   );
 }
 
-// LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
-// visible list AND the report total, with no getState reload during the keystroke. Hardened
-// per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
-// week / last month, all-time billable 8.00h). The strict listEntries mock rejects any query
-// missing the required `by` (exactly like core), so the whole flow also proves no toolbar query
-// throws.
+// LIVE_FILTER — §17 R11: a search / filter selection is reflected LIVE on the visible
+// entries calendar, with no getState reload during the keystroke. Hardened per the issue-#55
+// triage over the MULTI-WEEK fixture (seven entries across this week / last week / last
+// month). The strict listEntries mock rejects any query missing the required `by` (exactly
+// like core), so the whole flow also proves no toolbar query throws. The toolbar's range-total
+// chip is retired (#264, §12 R09): the culled totalLiveOk fact stays culled — the day-header
+// totals keep their own guard in CALENDAR_LAYOUT's totalsOk.
 async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
     const before = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
     }));
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
-    await page.waitForFunction(
-      () => document.querySelector('#week-total')?.textContent.trim() === '3.50h',
-    );
     await page.screenshot({ path: join(EVIDENCE, 'main-filtered.png'), fullPage: true });
     const onSearch = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
       listErrors: window.__LIST_ERRORS__ || 0, // no listEntries call rejected (issue #55)
@@ -5309,13 +5299,8 @@ async function sceneLiveFilter(browser) {
     const noReloadOnSearch = onSearch.getStateCalls === before.getStateCalls;
     await page.fill('#search', '');
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 7);
-    await page.waitForFunction(
-      (t) => document.querySelector('#week-total')?.textContent.trim() === t,
-      before.weekTotal,
-    );
     const onClear = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
     await page.fill('#search', 'no-such-entry-xyzzy');
@@ -5335,13 +5320,9 @@ async function sceneLiveFilter(browser) {
       onSearch.descs.some((d) => /auth refactor/.test(d)) &&
       onSearch.descs.some((d) => /refactor tests/.test(d)) &&
       !onSearch.descs.some((d) => /deploy pipeline/.test(d)) &&
-      !onSearch.descs.some((d) => /refactor planning/.test(d));
-    const totalLiveOk =
-      before.weekTotal === '5.00h' && // WEEK-BOUNDED by default — never the all-time 8.00h
-      onSearch.weekTotal === '3.50h' && // the total moved to the selection's billable sum…
-      onSearch.listErrors === 0 && // …with no listEntries rejection along the way
-      onClear.rowCount === 7 &&
-      onClear.weekTotal === '5.00h'; // …and returns with the full set when cleared
+      !onSearch.descs.some((d) => /refactor planning/.test(d)) &&
+      onSearch.listErrors === 0 && // no listEntries rejection along the way…
+      onClear.rowCount === 7; // …and clearing returns the full set
     const noMatchOk =
       noMatch.rowCount === 0 &&
       /No matching entries/.test(noMatch.text) &&
@@ -5350,10 +5331,9 @@ async function sceneLiveFilter(browser) {
       noMatch.listErrors === 0;
     record(
       'LIVE_FILTER',
-      { listLiveOk, totalLiveOk, noReloadOnSearch, noMatchOk },
-      `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
-        `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
-        `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
+      { listLiveOk, noReloadOnSearch, noMatchOk },
+      `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows ` +
+        `(range+search compose; getState unchanged during the keystroke: ` +
         `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors}); ` +
         `no-match empty state ${JSON.stringify(noMatch)}`,
       'main-filtered.png',
@@ -6430,7 +6410,8 @@ async function sceneFieldChrome(browser) {
   await page.click('.nav-item[data-view="entries"]');
   await page.waitForSelector('#search', { state: 'attached' });
   // The toolbar control immediately before the search label — one Tab lands on the field.
-  await page.evaluate(() => document.querySelector('#report-btn').focus());
+  // (#add-toggle since #264 retired the #report-btn chip that used to sit between them.)
+  await page.evaluate(() => document.querySelector('#add-toggle').focus());
   await page.keyboard.press('Tab');
   const focus = await page.evaluate(() => {
     const el = document.querySelector('#search');

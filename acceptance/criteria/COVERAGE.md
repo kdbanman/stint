@@ -1516,18 +1516,21 @@ keystroke re-runs the read-only **`listEntries` IPC** (`gui/src/main.ts` →
 `refreshAll` ) whose flat, day-laid result the readonly calendar (§12 R16) lays
 into its day columns; the group-by segmented control was REMOVED (no
 `#el-by-seg` , no `by` in the query — grouping is Reports' job, §12 R08 /
-`tt report --by` ). `#week-total` tracks the selection live off the in-memory
-snapshot (§17 R11). The controls are inked (monochrome), never accented (§15 —
+`tt report --by` ). The toolbar carries NO range-total chip and NO Reports
+shortcut (issue #264: `#week-total` and `#report-btn` retired — per-day billable
+totals live in the calendar's day headers, R16, and Reports is reached by its
+sidebar item only, R03); the live reflection (§17 R11) is the repaint of the
+calendar and those day-header totals. The controls are inked (monochrome), never accented (§15 —
 the `ACCENT_DISCIPLINE` /`CLICKABILITY` judge scenes stay green). JUDGE
 `ENTRIES_CALENDAR` (`packages/gui/judge/`, `entries-search.png` /
-`entries-calendar.png` — `#el-by-seg` ABSENT while the range presets /
+`entries-calendar.png` — `#el-by-seg`, `#week-total` and `#report-btn` ABSENT
+while the range presets /
 `#el-billable-seg` / `#el-client` / `#el-project` / `#el-tag` / `#search` are
 present, the two custom fields `type="date"` with no `#el-range-apply` ;
 hardened per issue #55 over a multi-week, multi-client, mixed-billable fixture:
 EACH toolbar control (every preset, the billable toggle, client, project, tag,
-search) is driven and the visible `.dcol .ev` COUNT + `#week-total` are asserted
-to move to the expected subset (idle = week-bounded 5.00h, never the all-time
-8.00h), a "refactor" search narrows to the two IN-WEEK matches (range + search
+search) is driven and the visible `.dcol .ev` COUNT is asserted
+to move to the expected subset, a "refactor" search narrows to the two IN-WEEK matches (range + search
 compose), a Custom… plain-date pair drives raw `{fromDate, toDate}` (no
 `fromUtc` /`toUtc`, no `T` ) that narrows the calendar, and across the whole
 drive zero `listEntries` calls reject with EVERY query carrying the required
@@ -1539,7 +1542,8 @@ calendar is thus fully covered. **R16 Readonly entries calendar (NEW,
 G10/G13/G16)**: the Entries view content is a readonly calendar — one day
 column per in-range day, sharing spare window width equally over a 124px
 floor (§12 R22), never compressed below it, over a full 24h track, with
-per-day billable header totals, a range chip, empty columns, a cross-midnight
+per-day billable header totals (the view's only billable figures — the
+toolbar's range-total chip is retired, issue #264 / §12 R09), empty columns, a cross-midnight
 span shown as one `.ev` segment per touched day column (all sharing the entry
 `data-id` , counted only under its start day — issue #71), hover
 Delete/Split/Edit + a corner checkbox, a click that opens the unified editor,
@@ -1554,7 +1558,7 @@ scrollWidth > clientWidth; the spare-width share at a wider window is JUDGE
 `WINDOW_GEOMETRY`, §12 R22); a full 24h `.dt` track whose default scroll lands on
 working hours with the off-hours (pre-07:00 / post-18:00) entries present and
 reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
-Wed 1.00h) + the `#week-total` range chip (17.00h), read ON SCREEN at the
+Wed 1.00h), read ON SCREEN at the
 post-render scroll position rather than merely present in the DOM — all seven
 `.dh` measured inside the `.cstrip` scrollport, the totals visible with the hour
 labels beside them, and both bands still there once the strip is scrolled fully
@@ -1866,7 +1870,7 @@ buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
 top-level stops of their own (issue 140, the roving focus below),
 `index.html` /`popover.html` give `#toggle` an `aria-label` +
-`aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
+`aria-pressed` , and `app.js` /`popover.js`
 keep `aria-pressed` /`aria-label` current on every render so the running/idle
 state is announced, with each dynamic action button carrying a discernible
 `aria-label` . JUDGE `KEYBOARD_FOCUS` (`packages/gui/judge/`, `main-focus.png` —
@@ -2006,20 +2010,19 @@ one home for which actions are destructive; a single Delete click only ARMS the
 in-window `.confirm` affordance and `window.stint.remove` is reachable ONLY from
 the explicit confirm, so **no entry is destroyed on a stray click**, and
 archive-when-referenced runs through the same gate from the Clients view's
-Archive control; (b) the **live-reflection** half is the new pure derivation
-`deriveView(state, sel)` (`gui/src/liveview.ts`, IMPORTED by
-the bundled SU entry `gui/renderer/su.ts` as `window.SU.deriveView` — no
-hand-mirror since issue #83; `gui/test/renderer-bundle.test.ts` asserts the
-shipped bundle IS this derivation) that recomputes the Entries view's visible
-groups + BOTH totals (`listTotalSeconds`, the billable-only `reportTotalSeconds`
-) from the in-memory `UiState` snapshot alone — so a search keystroke / client /
-billable / group selection narrows the list **and** moves `#week-total` in
-lockstep with **no IPC round-trip** (`app.js` `updateLiveTotal` /`liveSelection`
-repaint the total off the snapshot; the authoritative grouped rows still come
-from `listEntries` for tt parity but the totals never wait on it). Because it
-sums the snapshot's core-owned `billableSeconds` , the live total equals what
-`tt report` produces for the same selection — no new core query, and no money
-arithmetic in the renderer (GOLD/PROP/BDD own the report math). **GOLD/unit**
+Archive control; (b) the **live-reflection** half: a week / filter / search
+change in the Entries toolbar re-queries the read-only `listEntries` IPC and
+repaints the entries calendar and its **day-header totals** live (§12 R09/R16;
+the toolbar's range-total chip — the old `#week-total` `updateLiveTotal` /
+`liveSelection` snapshot repaint — is retired, issue #264, so the calendar and
+its day headers ARE the reflection surface). The day-header figures sum the
+snapshot's core-owned `billableSeconds` , so they equal what `tt report --by
+day` produces for the same selection — no money arithmetic in the renderer
+(GOLD/PROP/BDD own the report math). The pure derivation `deriveView(state,
+sel)` (`gui/src/liveview.ts`, shipped as `window.SU.deriveView` via
+`gui/renderer/su.ts` — no hand-mirror since issue #83;
+`gui/test/renderer-bundle.test.ts` asserts the shipped bundle IS this
+derivation) remains the pinned snapshot-side narrowing rule. **GOLD/unit**
 covers the live half only — `gui/test/liveview.test.ts` (search/client/billable
 narrow rows; group switches grouping; list + report totals recompute to the
 filtered set and equal the full total when no selection is active). The confirm
@@ -2040,12 +2043,12 @@ shipped gate carries; **BDD** `features/overlap_and_editing.feature` "Deleting
 an entry without confirmation is refused (the entry survives)" (run TWICE over
 core + tt) holds the surface-neutral half — an unconfirmed destroy destroys
 nothing. Plus `LIVE_FILTER` (`main-filtered.png` — over the multi-week
-seven-entry fixture (all-time billable 8.00h) the idle `#week-total` reads the
-WEEK-BOUNDED 5.00h (issue #55 Part B), a `refactor` keystroke narrows the
-visible rows to the two IN-WEEK matches (range + search compose) and moves
-`#week-total` 5.00h → 3.50h with no `getState` during the keystroke and zero
+seven-entry fixture a `refactor` keystroke narrows the
+visible rows to the two IN-WEEK matches (range + search compose) with no
+`getState` during the keystroke and zero
 `listEntries` rejections (the mock is strict about the required `by` , like
-core), both returning to the full set on clear). BDD `features/overlap_and_editing.feature` "Deleting an entry without
+core), returning to the full set on clear; the day-header totals' own guard is
+`CALENDAR_LAYOUT` `totalsOk` ). BDD `features/overlap_and_editing.feature` "Deleting an entry without
 confirmation is refused" pins the refusal surface-neutrally beside those two
 scenes. No new IPC channel (the live view derives off the existing
 `getState` snapshot; confirm gates the existing `remove` client-side), so

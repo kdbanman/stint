@@ -196,7 +196,10 @@
                    hands the accent to the unified form's Save entry for as long as the form is open
                    (app.js's syncStandingPrimary), so the budget is spent once either way. -->
               <button id="add-toggle" class="primary" data-standing-primary aria-expanded="false" aria-controls="add-form"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add entry</button>
-              <button id="report-btn" class="ghost" aria-label="Open this week's report">This week <span id="week-total">0.00h</span></button>
+              <!-- §12 R09 (issue #264): NO range-total chip and NO Reports shortcut here — per-day
+                   billable totals live in the calendar's day headers (§12 R16), and Reports is
+                   reached by its sidebar item only (§12 R03). -->
+
               <!-- design.html D13 (issue 136): the search box's only name was its placeholder plus an
                    invisible aria-label — D13 asks for a VISIBLE one, so the field chrome now sits
                    inside a label that says so on screen. The aria-label is gone with it: a visible

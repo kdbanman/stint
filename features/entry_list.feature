@@ -80,9 +80,11 @@ Feature: Entry list — range, filtering & search (§11)
 
   Scenario: Per-day and range billable totals over the week — including an empty day
     # §12 R16 / §17 R8 — the readonly entries calendar presents, per in-range day, that day's
-    # billable total (an empty in-range day totals zero) and a range chip equal to the week's
-    # billable sum. The data the day-headers / range chip present is the flat listed set laid by
-    # day here — proven identical on both surfaces (core store.listEntries + tt list --json). The
+    # billable total in its day header (an empty in-range day totals zero); the range's billable
+    # sum is what a report over the same selection totals (§09 / tt report — the toolbar's
+    # range-total chip that used to present it is retired, #264 / §12 R09). Both figures are
+    # facts of the flat listed set laid by day here — proven identical on both surfaces (core
+    # store.listEntries + tt list --json), independent of any one widget. The
     # Background places day 1 (Jun 24) = "auth refactor" 2h; day 2 (Jun 23) = "deploy pipeline" 1h
     # + "standup" 1h; Jun 22 has no entries → an empty in-range day.
     When I list entries this week

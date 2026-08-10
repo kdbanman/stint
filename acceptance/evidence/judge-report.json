@@ -38,7 +38,7 @@
         "runningRingsVisible": true,
         "runningNoTrap": true
       },
-      "justification": "Tab-walk reached 20/20 controls (empty) and 21/21 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
+      "justification": "Tab-walk reached 19/19 controls (empty) and 20/20 (running); ring misses empty=[none] running=[none]; trapped-on-body empty=false running=false",
       "screenshot": "main-focus.png"
     },
     {
@@ -486,7 +486,7 @@
         "customRangeOk": true,
         "wireOk": true
       },
-      "justification": "entries calendar: default={\"hasByControl\":false,\"hasPresets\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":7,\"weekTotal\":\"5.00h\"} -> search={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"preset\":\"week\",\"search\":\"refactor\"},\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"],\"weekTotal\":\"3.50h\"} -> presets month=6/7.00h lastWeek=1/2.00h lastMonth=1/1.00h today=3/3.00h -> billable=4/5.00h nonBillable=1/0.00h -> client=3/2.50h project=1/2.00h -> tag=2/2.50h -> custom dates={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"],\"weekTotal\":\"2.00h\"} -> wire={\"errors\":0,\"reqCount\":15,\"allCarryBy\":true}",
+      "justification": "entries calendar: default={\"hasByControl\":false,\"hasRangeChip\":false,\"hasReportShortcut\":false,\"hasPresets\":true,\"hasBillable\":true,\"hasClientFilter\":true,\"hasProjectFilter\":true,\"hasTagFilter\":true,\"hasSearch\":true,\"fromType\":\"date\",\"toType\":\"date\",\"hasApply\":false,\"evCount\":7} -> search={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"preset\":\"week\",\"search\":\"refactor\"},\"evCount\":2,\"evText\":[\"refactor testsGlobex / Ops13:00–14:30ci\",\"auth refactorAcme / API09:00–11:00deep\"]} -> presets month=6 lastWeek=1 lastMonth=1 today=3 -> billable=4 nonBillable=1 -> client=3 project=1 -> tag=2 -> custom dates={\"req\":{\"by\":\"day\",\"billable\":\"all\",\"fromDate\":\"2026-06-23\",\"toDate\":\"2026-06-23\"},\"evCount\":2,\"evText\":[\"standupAcme / Web09:00–09:30meetingdeep\",\"refactor testsGlobex / Ops13:00–14:30ci\"]} -> wire={\"errors\":0,\"reqCount\":15,\"allCarryBy\":true}",
       "screenshot": "entries-calendar.png"
     },
     {
@@ -506,7 +506,7 @@
         "mergeHiddenBefore": true,
         "mergeShown": true
       },
-      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":308,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"weekTotal\":\"17.00h\",\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true,\"headerCount\":7,\"headersOnScreen\":7,\"dayTotalsOnScreen\":6,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":11}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true axes={\"scrolledRight\":true,\"gutOffset\":0,\"headersOnScreen\":7,\"hourLabelsOnScreen\":11}; crossMidnight=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
+      "justification": "entries calendar layout: structure={\"colCount\":7,\"colWidths\":[124,124,124,124,124,124,124],\"allEqualWidth\":true,\"fixedWidth\":124,\"hScroll\":true,\"vScroll\":true,\"scrollTop\":308,\"trackHeight\":1056,\"evCount\":9,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":\"0.00h\",\"26\":\"0.00h\",\"27\":\"0.00h\",\"28\":\"0.00h\"},\"emptyCols\":4,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":990,\"height\":66},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":275}],\"trackBottomPx\":1056,\"runNoEnd\":true,\"headerCount\":7,\"headersOnScreen\":7,\"dayTotalsOnScreen\":6,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":11}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true axes={\"scrolledRight\":true,\"gutOffset\":0,\"headersOnScreen\":7,\"hourLabelsOnScreen\":11}; crossMidnight=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
       "screenshot": "main-calendar.png"
     },
     {
@@ -573,7 +573,7 @@
         "escapeOk": true,
         "tabLeavesOk": true
       },
-      "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 71 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
+      "justification": "dense calendar: 51 blocks holding 202 hover-revealed controls; one Tab cycle = 70 stops (wrapped back to body: true), 51 of them in the calendar, all of them blocks: true; stops focused at zero opacity or with no ring: [none]; roving on block 4 reached [select, delete, split, edit] (expected [select, delete, split, edit]), ArrowLeft -> \"split\", Escape -> block=true, Tab out -> block 5; fixture-real=true one-stop-per-block=true traversable=true roving=true escape=true tab-leaves=true",
       "screenshot": "calendar-keyboard-focus.png"
     },
     {
@@ -581,11 +581,10 @@
       "pass": true,
       "facts": {
         "listLiveOk": true,
-        "totalLiveOk": true,
         "noReloadOnSearch": true,
         "noMatchOk": true
       },
-      "justification": "live filter: list 7→2→7 rows, report total 5.00h→3.50h→5.00h (week-bounded idle, range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
+      "justification": "live filter: list 7→2→7 rows (range+search compose; getState unchanged during the keystroke: true; listEntries rejections: 0); no-match empty state {\"rowCount\":0,\"text\":\"No matching entriesWiden the range or clear the filters to see more.\",\"listErrors\":0}",
       "screenshot": "main-filtered.png"
     },
     {
@@ -714,7 +713,7 @@
         "noUndersizedTargets": true,
         "noneAbsent": true
       },
-      "justification": "A03 sweep over 329 visible targets across 10 surfaces (entries=24, timer=20, clients=26, reports=14, settings=23, entries (add form)=72, entries (unified editor)=89, timer (start details)=20, reports (builder)=39, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
+      "justification": "A03 sweep over 326 visible targets across 10 surfaces (entries=23, timer=20, clients=26, reports=14, settings=23, entries (add form)=71, entries (unified editor)=88, timer (start details)=20, reports (builder)=39, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
       "screenshot": "main-target-size.png"
     },
     {

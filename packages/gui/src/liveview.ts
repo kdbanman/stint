@@ -1,10 +1,12 @@
 /**
  * The pure live-view derivation (PRD §12 R9 / §17 R11) — recompute the Entries view's
- * visible list AND its report totals from the in-memory `UiState` snapshot alone, so a
- * search / filter / group selection reflects LIVE in both the list and the totals
- * without an IPC round-trip. Extracted (like toggle.ts) so the derivation
- * is unit-testable without an Electron host; the renderer (app.js) mirrors it to repaint
- * `#entries` + `#week-total` on every keystroke, and the actual DOM wiring stays MANUAL.
+ * visible list AND its totals from the in-memory `UiState` snapshot alone, so a
+ * search / filter / group selection reflects LIVE without an IPC round-trip. Extracted
+ * (like toggle.ts) so the derivation is unit-testable without an Electron host, and
+ * shipped to the renderer as `window.SU.deriveView` (su.ts). Since issue #264 retired the
+ * toolbar's range-total chip (§12 R09), app.js no longer calls it — the calendar's day-header
+ * totals (§12 R16) ride the repaint itself — but the derivation stays the asserted, pinned
+ * rule for snapshot-side narrowing (liveview.test.ts, renderer-bundle.test.ts).
  *
  * No new core query is needed: the snapshot's per-entry `billableSeconds` is the
  * core-owned value `tt report` already sums, so reusing it here keeps the live totals
