@@ -10,7 +10,6 @@
  *                  parity with `tt` (the old mirror clamped to 0 and masked the state).
  *   - fmtHours   → core `formatHours` + the view's `h` suffix (view chrome, not a rule).
  *   - elapsed    → timerview.ts `countUpSeconds` — the ONE live count-up rule (§12 R2).
- *   - deriveView → src/liveview.ts — the asserted, unit-tested §12 R9 / §17 R11 derivation.
  *   - tagDiff    → src/tags.ts — the asserted, unit-tested §07 tag-edit decision.
  *   - localInputValue / parseLocalInput
  *                → src/localtime.ts — the exact-times FIELD vocabulary (§12 R14/R15/R17).
@@ -28,7 +27,6 @@
  */
 import { DEFAULT_SETTINGS, formatDuration, formatHours, groupKeyLabel, localDay, resolveTimeZone, wallClockOf, wallClockToUtc } from '@stint/core';
 import { countUpSeconds } from '../src/timerview.js';
-import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
 import { localInputValue, parseLocalInput } from '../src/localtime.js';
 
@@ -411,7 +409,6 @@ const SU = {
   errMessage,
   escapeHtml,
   tagDiff,
-  deriveView,
   ICON_SPRITE,
   ICON_IDS,
   icon,

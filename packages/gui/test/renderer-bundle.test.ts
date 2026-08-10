@@ -6,7 +6,7 @@
  * imports, and that no Node-touching core module survives into the browser bundle.
  *
  * Two kinds of fact live here, and the difference matters (issue #178):
- *   - EQUIVALENCE — fmtDur/fmtHours/deriveView/tagDiff/elapsed are core's or gui/src's rules
+ *   - EQUIVALENCE — fmtDur/fmtHours/tagDiff/elapsed are core's or gui/src's rules
  *     reached through the bundle, so the assertion is "IS the imported rule". Since #83 that
  *     mostly proves esbuild preserved semantics; the rules themselves are proven at home.
  *   - GUI-OWNED DECISIONS — timelineWindow, lineFlags, rangeLabel, localInputValue,
@@ -19,10 +19,8 @@ import { describe, it, expect, beforeAll } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types needed.
 import { buildRendererBundle } from '../../../scripts/build-renderer.mjs';
 import { DEFAULT_SETTINGS, formatDuration, formatHours } from '@stint/core';
-import { deriveView } from '../src/liveview.js';
 import { tagDiff } from '../src/tags.js';
 import { countUpSeconds } from '../src/timerview.js';
-import type { UiState } from '../src/ipc.js';
 
 let bundleText: string;
 let SU: any;
@@ -56,28 +54,6 @@ describe('GOLD: renderer bundle is core, not a dialect (issue #83)', () => {
   it("fmtHours IS core formatHours plus the view's 'h' suffix", () => {
     for (const s of [0, 1, 5400, 3600, 86400]) {
       expect(SU.fmtHours(s)).toBe(formatHours(s) + 'h');
-    }
-  });
-
-  it('deriveView IS the liveview.ts derivation (§12 R9)', () => {
-    const state = {
-      days: [
-        {
-          entries: [
-            { id: 1, description: 'alpha', clientName: 'Acme', projectName: 'Site', clientLabel: 'Acme / Site', tags: ['deep'], billable: true, billableSeconds: 3600, startUtc: '2026-06-22T09:00:00.000Z' },
-            { id: 2, description: 'beta', clientName: null, projectName: null, clientLabel: null, tags: [], billable: false, billableSeconds: 1800, startUtc: '2026-06-23T09:00:00.000Z' },
-          ],
-        },
-      ],
-    } as unknown as UiState;
-    for (const sel of [
-      {},
-      { search: 'alp' },
-      { billable: 'billable' as const },
-      { clientLabel: null },
-      { group: 'client' as const },
-    ]) {
-      expect(SU.deriveView(state, sel)).toEqual(deriveView(state, sel));
     }
   });
 
