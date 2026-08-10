@@ -2034,23 +2034,6 @@ button.danger:hover { background: var(--danger-weak); }
   gap: 8px; font-size: 12px; color: var(--ink);
 }
 
-/* §12 R07 / §12 R15 (G5/G7) — the unified entry form's INLINE interval picker (start+stop):
-   a month calendar beside a scrollable single-day column, rendered in flow (no modal chrome).
-   Reuses the popover's .stp-cal / .stp-track / .stp-block visuals; the .stp-dayview is the
-   scroll window (G16: a scroll window over the full 24h track, never a clipped one). */
-.stp-range { max-width: none; padding: 12px 16px 12px; }
-/* 204px, not 196px: the calendar column has to hold seven 24px day cells plus their six 2px
-   gutters plus its own 16px right padding and 1px rule (issue 148 — at 196px each cell came out
-   23.84px, missing A03's floor by the kind of rounding error only a measurement finds). */
-.stp-range .stp-body { display: grid; grid-template-columns: 204px 1fr; gap: 0; }
-.stp-range .stp-cal { border-right: 1px solid var(--rule); padding: 4px 16px 4px 0; }
-.stp-range .stp-day { padding: 0 0 0 16px; }
-.stp-range .stp-dayview {
-  position: relative; height: 300px; overflow-y: auto; overscroll-behavior: contain;
-  padding: 8px 4px 8px 0;
-}
-.stp-range .stp-day-lbl { margin-left: 52px; }
-
 /* overlap region — warn hatch, never blocks Apply */
 .stp-overlap {
   position: absolute; left: 8px; right: 14px; z-index: 4; pointer-events: none;

@@ -3103,13 +3103,17 @@ function closeLeStartDisc() {
         leStart.focus(); // picker unavailable — text entry is always reachable
         return;
       }
+      // Unhide BEFORE mounting: openStartOnly positions its scroll window by assigning
+      // `scrollTop` (§14/G16 — the SU.timelineWindow default viewport), and an element still
+      // carrying `hidden` has no laid-out overflow to scroll, so the assignment clamps to 0
+      // and the picker opens at 00:00 instead of the configured window.
+      leStartDisc.hidden = false;
       window.STP.openStartOnly({
         host: leStartDisc,
         startInput: leStart, // the ONLY binding — this variant takes no end input at all
         otherEntries: snapshotEntries(state?.status?.entry?.id ?? null),
         settings: state?.settings ?? null,
       });
-      leStartDisc.hidden = false;
       leStartPick.setAttribute('aria-expanded', 'true');
     });
   }

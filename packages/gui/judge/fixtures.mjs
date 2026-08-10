@@ -424,7 +424,7 @@ export function multilineDescState() {
  * field, whose client/project match the canned reference data (Acme / API → CLIENTS id 1,
  * PROJECTS 11) so the unified entry form opens INLINE (not a modal) in edit mode with its Client
  * + Project selects pre-selectable, the description textarea, the tag chips, the billable toggle
- * and the Start/Stop expander all seeded from the entry. Closed (it has an endUtc), so the form
+ * and the Start/Stop fields all seeded from the entry. Closed (it has an endUtc), so the form
  * carries End and the footer offers Split (only a bounded span can be cut).
  *
  * §12 R10 — plus an OVERLAPPED entry (81, 30m with the previous entry) and a SLEPT entry (82, raw
@@ -1075,6 +1075,27 @@ export function timelineWindowState() {
 export function timelineAroundState() {
   const s = timelineWindowState();
   s.settings = { ...s.settings, pickerWindowMode: 'around_now', pickerAroundHours: 8 };
+  return s;
+}
+
+/**
+ * §14 / §12 R15 / G16 — the timeline-window CONSUMER fixture: the canonical running entry (so the
+ * Timer view's start-only picker mounts, which is where the `data-timeline-track` scroll window
+ * actually lives) carrying the same non-default 09:00–15:00 working hours the Settings half of
+ * TIMELINE_WINDOW seeds. The two halves therefore read ONE configuration: whatever the Settings
+ * group shows is the window the picker opens at. Before the redesign landed §12 R15/R16 there was
+ * no mounted consumer at all and the scene's `consumerTrack` fact passed vacuously; this fixture
+ * is what retires that stub (the post-wave AC pass the rubric deferred it to).
+ */
+export function timelineConsumerState() {
+  const s = timerViewRunningState();
+  s.settings = {
+    ...s.settings,
+    workingHoursStart: '09:00',
+    workingHoursEnd: '15:00',
+    pickerWindowMode: 'working_hours',
+    pickerAroundHours: 8,
+  };
   return s;
 }
 

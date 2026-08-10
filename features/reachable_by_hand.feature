@@ -35,9 +35,10 @@ Feature: Every capability reachable by hand
 
   Scenario: Backfill a completed past entry by hand (the Manual-add form)
     # §12 R07 — the unified entry form in ADD mode creates a completed past entry from an explicit
-    # span plus attributes, with no terminal. GUI: the two-column unified form (inline interval
-    # picker + collapsed Start/Stop expander drive the span; "Save entry" is the sole commit) →
-    # `add` IPC → core store.add; tt: `tt add`. This surface-neutral scenario runs twice (core
+    # span plus attributes, with no terminal. GUI: the reduced form above the week grid (the round
+    # + button or drag-to-create opens it; grid drags + the Start/Stop fields drive the span;
+    # "Save entry" is the sole commit) → `add` IPC → core store.add; tt: `tt add`. This
+    # surface-neutral scenario runs twice (core
     # store.add + tt add) and fails if the `add` capability the form's Save commits regresses.
     When I backfill an entry "design review" for "Acme" / "Billing" from 13:00 to 14:00
     Then the backfill succeeds
@@ -69,14 +70,15 @@ Feature: Every capability reachable by hand
     Then there is one entry from 09:00 to 11:00
     And the merged entry is for "Acme / Billing"
 
-  Scenario: Browse, search and filter the readonly entries calendar by hand (the Entries view)
-    # §12 R16 / §12 R9 / §11 — the Entries view content is a READONLY calendar the freelancer
-    # browses, searches and filters from the window; there is NO grouping here (it left for Reports,
-    # G11). The calendar's day-headers + range chip present per-day and range billable totals, and
-    # the toolbar's search/filter narrow which entries the calendar lays out. GUI: the readonly
-    # calendar over `getState`/`listEntries` IPC; tt: `tt list --search`. (The calendar's on-screen
-    # affordances — hover Delete/Split/Edit, click-opens-editor, corner-checkbox merge — reach the
-    # edit/split/merge capabilities covered by the scenarios above; this asserts the read/narrow set
+  Scenario: Browse, search and filter the entries week grid by hand (the Entries view)
+    # §12 R16 / §12 R09 / §11 — the Entries view content is a week-only calendar grid the
+    # freelancer browses, searches and filters from the window; there is NO grouping here (it left
+    # for Reports, G11). The grid's day headers present per-day billable totals (the range-total
+    # chip is retired, #264 / §12 R09), and the toolbar's search/filter narrow which entries the
+    # grid lays out live. GUI: the week grid over `getState`/`listEntries` IPC; tt: `tt list
+    # --search`. (The grid's on-screen affordances — hover Delete/Split/Edit, click-opens-editor,
+    # corner-checkbox merge, + / drag-to-create, edge drags — reach the add/edit/split/merge
+    # capabilities covered by the scenarios above; this asserts the read/narrow set
     # behind the view is whole and identical on both surfaces.)
     Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
@@ -109,7 +111,7 @@ Feature: Every capability reachable by hand
     And every exported row carries its billable flag
 
   Scenario: Create reference data by hand (the Clients view's Add)
-    # §12 R10 — create a client, a project under it, and a tag from the window. GUI: Clients
+    # §12 R11 — create a client, a project under it, and a tag from the window. GUI: Clients
     # view → `addClient` / `addProject` / `addTag` IPC; tt: `tt client add` / `tt project add`
     # / `tt tag add`.
     When I add a client "Acme Corp"
@@ -120,7 +122,7 @@ Feature: Every capability reachable by hand
     Then tag "billing" is in the active tag list
 
   Scenario: Rename and archive reference data by hand (the Clients view)
-    # §12 R10 — rename + archive a client/project/tag from the window; archived records drop
+    # §12 R11 — rename + archive a client/project/tag from the window; archived records drop
     # out of the active picker lists but keep their history. GUI: Clients view →
     # `renameClient`/`archiveClient`/`renameProject`/`archiveProject`/`renameTag`/`archiveTag`;
     # tt: the `tt client`/`tt project`/`tt tag` rename/archive subcommands.
@@ -133,7 +135,7 @@ Feature: Every capability reachable by hand
     And the entry "spec" is for "Acme Global / Platform"
 
   Scenario: Tag lifecycle by hand (the Clients view's Tags strip)
-    # §12 R10 — create → rename → archive a tag end to end from the window. GUI: Tags strip →
+    # §12 R11 — create → rename → archive a tag end to end from the window. GUI: Tags strip →
     # `addTag`/`renameTag`/`archiveTag`; tt: `tt tag add/rename/archive`.
     Given I add a tag "draft"
     When I rename tag "draft" to "drafts"
@@ -142,7 +144,7 @@ Feature: Every capability reachable by hand
     Then tag "drafts" is not in the active tag list
 
   Scenario: Change a setting by hand (the Settings view)
-    # §12 R11 / §14 — every §14 setting is editable from the window over the same capability
+    # §12 R12 / §14 — every §14 setting is editable from the window over the same capability
     # `tt config set` uses. GUI: Settings view → `setSetting` IPC → core store.setSetting; tt:
     # `tt config set`.
     When I set week start to "sunday"
