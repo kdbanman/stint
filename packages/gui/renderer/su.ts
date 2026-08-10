@@ -16,6 +16,8 @@
  *                  The format and its inverse parse live together one level deeper because
  *                  `timerview.ts`'s byte gate and the `add` IPC handler need them too, and a
  *                  renderer-only home would fork the pair the moment they did (issue #159).
+ *   - snapStepMin → src/snap.ts — the §12 R23 drag-snap resolution both time surfaces read,
+ *                  reading core's DEFAULT_SETTINGS for the fallback rather than re-typing it.
  *
  * Everything below those imports is renderer-only display chrome with no other home.
  * Display only: elapsed is always derived (now − start), never stored.
@@ -29,6 +31,7 @@ import { DEFAULT_SETTINGS, formatDuration, formatHours, groupKeyLabel, localDay,
 import { countUpSeconds } from '../src/timerview.js';
 import { tagDiff } from '../src/tags.js';
 import { localInputValue, parseLocalInput } from '../src/localtime.js';
+import { snapStepMin } from '../src/snap.js';
 
 /** Format a duration in seconds as HH:MM:SS — core's rule verbatim (signed negatives). */
 const fmtDur = formatDuration;
@@ -397,6 +400,9 @@ const SU = {
   parseLocalInput: (value: string) => parseLocalInput(value, timeZoneSetting),
   localMinuteOfDay,
   exactMinuteOfDay,
+  // §12 R23: the one drag-snap step (src/snap.ts) — the week grid and the start-only picker
+  // both resolve their active resolution here instead of each keeping a copy.
+  snapStepMin,
   localDayOf,
   startOfDay,
   dayStartOfToken,

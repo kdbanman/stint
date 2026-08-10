@@ -221,16 +221,18 @@
       "facts": {
         "fabRest": true,
         "selectMode": true,
+        "selectModeExits": true,
         "createBlank": true,
         "liveDrag": true,
         "fineSnapOk": true,
+        "dragCaptureOk": true,
         "overnightTyped": true,
         "savePatch": true,
         "formCloses": true,
         "overlapBanner": true,
         "keyboardPath": true
       },
-      "justification": "+ button → select-interval → create on the week grid: rest={\"visible\":true,\"label\":\"Add entry\",\"accentSolid\":true,\"capsule\":true,\"bottomRight\":true,\"glyphLeft\":868,\"noToolbarAdd\":true,\"snapCtlHidden\":true} hover={\"glyphLeft\":868,\"labelText\":\"Add entry\"}; select={\"fabHidden\":true,\"snapCtl\":true,\"coarseOff\":true,\"onCoarseGrid\":true,\"inTrack\":true}; create={\"hosted\":true,\"aboveGrid\":true,\"noModal\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"blank\":true,\"startText\":true,\"stopText\":true,\"noDatetimeLocal\":true,\"onCoarse\":true,\"span\":true,\"grayed\":true,\"fabHidden\":true,\"snapCtl\":true,\"me\":1,\"grips\":2,\"pills\":[\"07:45\",\"09:15\"],\"start\":\"2026-06-24 07:45:00\",\"stop\":\"2026-06-24 09:15:00\"} meAccent={\"weakFill\":true,\"accentBorder\":true,\"saveSolid\":true}; bodyDrag=\"2026-06-24 07:45:00\"→{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:15:00\"} (liveDrag=true); fine={\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:40:00\"} (fineSnapOk=true); overnight={\"segs\":[{\"day\":\"2026-06-24\",\"cls\":\"ev me seg seg-start\",\"top\":\"405px\"},{\"day\":\"2026-06-25\",\"cls\":\"ev me seg seg-end\",\"top\":\"0px\"}],\"stopField\":\"2026-06-25 02:00:00\"}; Save sole commit added={\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (savePatch=true); closed={\"added\":{\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]},\"formClosed\":true,\"fabBack\":true,\"ungrayed\":true,\"bannerVisible\":true,\"bannerText\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\"}; keyboard={\"start\":\"2026-06-24 07:00:00\",\"stop\":\"2026-06-24 08:00:00\",\"focusInForm\":true} (ok=true)",
+      "justification": "+ button → select-interval → create on the week grid: rest={\"visible\":true,\"label\":\"Add entry\",\"accentSolid\":true,\"capsule\":true,\"bottomRight\":true,\"glyphLeft\":868,\"noToolbarAdd\":true,\"snapCtlHidden\":true} hover={\"glyphLeft\":868,\"labelText\":\"Add entry\"}; select={\"fabHidden\":true,\"snapCtl\":true,\"coarseOff\":true,\"onCoarseGrid\":true,\"inTrack\":true}; reroute={\"wrapPresent\":true,\"selMode\":false,\"fabBack\":true,\"snapCtlHidden\":true,\"eventPresent\":true,\"eventPointerEvents\":\"auto\"} (selectModeExits=true); create={\"hosted\":true,\"aboveGrid\":true,\"noModal\":true,\"descTag\":\"TEXTAREA\",\"descRows\":3,\"blank\":true,\"startText\":true,\"stopText\":true,\"noDatetimeLocal\":true,\"onCoarse\":true,\"span\":true,\"grayed\":true,\"fabHidden\":true,\"snapCtl\":true,\"me\":1,\"grips\":2,\"pills\":[\"07:45\",\"09:15\"],\"start\":\"2026-06-24 07:45:00\",\"stop\":\"2026-06-24 09:15:00\"} meAccent={\"weakFill\":true,\"accentBorder\":true,\"saveSolid\":true}; bodyDrag=\"2026-06-24 07:45:00\"→{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:15:00\"} (liveDrag=true); fine={\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:40:00\"} (fineSnapOk=true); release-off-window={\"beforeRelease\":{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 08:40:00\"},\"midDrag\":{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 07:55:00\"},\"afterRelease\":{\"start\":\"2026-06-24 06:45:00\",\"stop\":\"2026-06-24 07:55:00\"},\"captures\":4} (dragCaptureOk=true); overnight={\"segs\":[{\"day\":\"2026-06-24\",\"cls\":\"ev me seg seg-start\",\"top\":\"405px\"},{\"day\":\"2026-06-25\",\"cls\":\"ev me seg seg-end\",\"top\":\"0px\"}],\"stopField\":\"2026-06-25 02:00:00\"}; Save sole commit added={\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]} (savePatch=true); closed={\"added\":{\"fromLocal\":\"2026-06-24 06:45:00\",\"toLocal\":\"2026-06-25 02:00:00\",\"description\":\"late deploy\",\"client\":\"Acme\",\"project\":\"API\",\"tags\":[\"deep\"]},\"formClosed\":true,\"fabBack\":true,\"ungrayed\":true,\"bannerVisible\":true,\"bannerText\":\"This entry overlaps 1 other entry — allowed, but flagged in reports.\"}; keyboard={\"start\":\"2026-06-24 07:00:00\",\"stop\":\"2026-06-24 08:00:00\",\"focusInForm\":true} (ok=true)",
       "screenshot": "unified-add.png"
     },
     {
@@ -260,9 +262,10 @@
         "keepPreserves": true,
         "discardSwaps": true,
         "emptySpotGated": true,
-        "refreshGated": true
+        "refreshGated": true,
+        "gateStaysOnEntries": true
       },
-      "justification": "the §12 R24 keep-editing / discard gate: arm={\"dialog\":true,\"heading\":\"Discard unsaved changes?\",\"keepFocused\":true,\"subjectHeld\":true,\"nothingWritten\":true} (gateArms=true); keep={\"id\":\"80\",\"desc\":\"typed but unsaved\"} (preserves=true); discard={\"id\":\"82\",\"desc\":\"deep work\",\"gateGone\":true} (swaps=true); emptySpotGated=true; refreshGated=true",
+      "justification": "the §12 R24 keep-editing / discard gate: arm={\"dialog\":true,\"heading\":\"Discard unsaved changes?\",\"keepFocused\":true,\"subjectHeld\":true,\"nothingWritten\":true} (gateArms=true); keep={\"id\":\"80\",\"desc\":\"typed but unsaved\"} (preserves=true); discard={\"id\":\"82\",\"desc\":\"deep work\",\"gateGone\":true} (swaps=true); emptySpotGated=true; refreshGated=true; off-Entries refresh: {\"gatesOffEntries\":0,\"formHeld\":true} desc=\"still unsaved\" (gateStaysOnEntries=true)",
       "screenshot": "main-pending-gate.png"
     },
     {
@@ -508,6 +511,7 @@
         "columnsOk": true,
         "tallHoursOk": true,
         "neverClipOk": true,
+        "scrollHeldOk": true,
         "todayOk": true,
         "totalsOk": true,
         "emptyOk": true,
@@ -522,7 +526,7 @@
         "mergeHiddenBefore": true,
         "mergeShown": true
       },
-      "justification": "week grid layout: structure={\"colCount\":5,\"colSpread\":1,\"minColWidth\":103,\"hScroll\":false,\"vScroll\":true,\"scrollTop\":420,\"trackHeight\":1440,\"hourStepPx\":60,\"evCount\":10,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":null,\"26\":\"7.75h\"},\"dayHasTotal\":{\"22\":true,\"23\":true,\"24\":true,\"25\":false,\"26\":true},\"emptyCols\":1,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"todayCount\":1,\"todayText\":\"24\",\"todayRing\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"hiddenSegs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90}],\"trackBottomPx\":1440,\"runNoEnd\":true,\"headerCount\":5,\"headersOnScreen\":5,\"dayTotalsOnScreen\":4,\"dayTotalsCount\":4,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":7}; weekend={\"dayCols\":7,\"colSpread\":1,\"hScroll\":false,\"segs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"satHasTotal\":false,\"friTotal\":\"7.75h\"}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true; crossMidnight=true hiddenSeg=true weekendReveal=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
+      "justification": "week grid layout: structure={\"colCount\":5,\"colSpread\":1,\"minColWidth\":103,\"hScroll\":false,\"vScroll\":true,\"scrollTop\":420,\"trackHeight\":1440,\"hourStepPx\":60,\"evCount\":10,\"hasBeforeWork\":true,\"hasAfterWork\":true,\"dayTotals\":{\"22\":\"12.00h\",\"23\":\"4.00h\",\"24\":\"1.00h\",\"25\":null,\"26\":\"7.75h\"},\"dayHasTotal\":{\"22\":true,\"23\":true,\"24\":true,\"25\":false,\"26\":true},\"emptyCols\":1,\"overlapBands\":2,\"overlapTag\":\"overlap 30m\",\"sleptHatch\":1,\"sleptMoon\":true,\"runPresent\":true,\"runFade\":true,\"todayCount\":1,\"todayText\":\"24\",\"todayRing\":true,\"xmid\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"hiddenSegs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90}],\"trackBottomPx\":1440,\"runNoEnd\":true,\"headerCount\":5,\"headersOnScreen\":5,\"dayTotalsOnScreen\":4,\"dayTotalsCount\":4,\"dhPosition\":\"sticky\",\"gutPosition\":\"sticky\",\"hourLabelsOnScreen\":7}; weekend={\"dayCols\":7,\"colSpread\":1,\"hScroll\":false,\"segs\":[{\"cls\":\"ev entry seg seg-start\",\"top\":1350,\"height\":90},{\"cls\":\"ev entry seg seg-end\",\"top\":0,\"height\":375}],\"satHasTotal\":false,\"friTotal\":\"7.75h\"}; hover={\"opsRevealed\":true,\"hasDelete\":true,\"hasSplit\":true,\"hasEdit\":true,\"hasCheckbox\":true}; labelsOnScreen=true; scroll={\"parkedTop\":900,\"topAfterRefresh\":900,\"topAfterWeek\":420} (scrollHeldOk=true); crossMidnight=true hiddenSeg=true weekendReveal=true; editorOpen=true; selection bar hidden-before=true shown-after-2=true {\"shown\":true,\"aboveCalendar\":true,\"countText\":\"2 selected\",\"goLabel\":\"Merge\",\"goNeutral\":true}",
       "screenshot": "main-calendar.png"
     },
     {

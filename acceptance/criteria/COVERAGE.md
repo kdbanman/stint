@@ -1337,6 +1337,15 @@ fanning the pending interval into per-day segments (R17), Save as the sole
 commit over the single unchanged `add` IPC (raw field text verbatim, no
 `billable` key when untouched), the form closing + rest chrome returning + the
 overlap banner raising, and the keyboard path seeding the working-hours default.
+Two mode/gesture guards ride the same scene: `selectModeExits` — select-interval
+is a mode of the GRID, so routing to another view and back leaves it at rest
+(a stranded mode hides the + that cancels it and makes every entry inert via
+`.sel-mode .dt .ev`, leaving only an unsignposted Escape); and `dragCaptureOk` —
+every grid gesture takes POINTER CAPTURE on the press (counted from the
+platform's own `gotpointercapture`), so a release the page would otherwise never
+hear still ENDS the drag: a button let go outside the window delivers no
+`mouseup` at all, and the pre-capture drag went on following a button-less
+cursor with Escape dead and the next click firing its stale release.
 BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
 hand (the Manual-add form)" + `features/tracking.feature` ("Backfill creates a
 completed entry" + "Backfill creates a completed overnight entry") prove the
@@ -1536,7 +1545,12 @@ once the weekend toggle flips (the resize half is JUDGE `WINDOW_GEOMETRY`, §12
 R22); 60px hour rows over a full 1440px 24h `.dt` track whose default scroll
 lands on working hours with the off-hours (pre-07:00 / post-18:00) entries
 present and reachable — a scroll, never a clip; exactly one `.dd.today` ink
-ring (today, distinct from selection); the per-day `.dh .ds` totals (Mon
+ring (today, distinct from selection); the viewport HELD across a repaint
+(`scrollHeldOk` — parked off the default, an external `changed` broadcast
+rebuilds the grid and leaves the scroll alone, while a week change retargets it:
+each build made a fresh strip and assigned the default to it, so every `tt`
+write yanked the view back mid-look and mid-drag shifted the track under the
+rect the press had captured); the per-day `.dh .ds` totals (Mon
 12.00h, Wed 1.00h, Fri 7.75h; a zero day figure-less), read ON SCREEN at the
 post-render scroll position rather than merely present in the DOM — every
 `.dh` measured inside the `.cstrip` scrollport, the totals visible with the
@@ -2092,9 +2106,12 @@ carry rows in `STATES.md` (Entries × edge, Tray popover × edge).
 is the §14 Entries-calendar row)**: every drag on the week grid — select-
 interval's cursor handle and press-drag (R07), the pending/selected interval's
 body and edge drags (R06/R07/R16) — lands on the snap grid set by the two §14
-settings, consumed off the one `getState` snapshot (`gui/src/uistate.ts` now
-projects `snapFineMinutes`/`snapCoarseMinutes` — and the `showWeekend` row the
-toolbar switch reads — into `UiState.settings`; no new IPC channel). **Coarse is
+settings, consumed off the one `getState` snapshot (`UiState.settings` IS core's
+`Settings`, and `gui/src/uistate.ts` passes the whole row through, so
+`snapFineMinutes`/`snapCoarseMinutes` — and the `showWeekend` row the toolbar
+switch reads — reach the renderer with no per-field copy to forget; the compiler
+is the guard, which is why `showWeekend` could go missing while the field list
+was respelled at each home. No new IPC channel). **Coarse is
 the active resolution on every entry into a drag mode** (`app.js` `fineSnap`
 resets on `enterSelectInterval` and every form open); the **fine-snap toggle**
 (`calSnapCtl`, the shared `.sw` switch) sits at the bottom-right of the grid —
@@ -2115,7 +2132,15 @@ open of the disclosure starts coarse), and the toggle beside the track
 (`.stp-snapctl`) is the only snap chrome — the `snap · 5 min` pill and
 drag-hint copy are retired. AC: JUDGE `TIMER_VIEW` (the coarse drag on the 15
 grid, the fine drag landing ∉ the coarse grid, reopen resetting the toggle
-while the shown start round-trips) — see the §12 R15 row.
+while the shown start round-trips) — see the §12 R15 row. **Both surfaces resolve
+the step through ONE helper**, `gui/src/snap.ts`'s `snapStepMin(settings, fine)`
+re-exported as `window.SU.snapStepMin`: it was written once per surface, and both
+copies re-typed core's defaults as bare 5 / 15, so a moved
+`snap_fine_minutes` reached the settings path and not the fallbacks (the #168
+class). AC: unit `gui/test/snap.test.ts` (the coarse/fine read, the
+stale-snapshot fallback, and that the fallback TRACKS core's row — asserted by
+moving `DEFAULT_SETTINGS.snapCoarseMinutes`, the one assertion a hardcoded copy
+cannot satisfy), plus the duplicate-helper census below.
 
 **R24 pending-changes gate (NEW — `core`, loss protection per §03)**: the
 unified form tracks whether its fields differ from their seed (`app.js`
@@ -2141,7 +2166,11 @@ it is proven on the real surface). AC: JUDGE `PENDING_CHANGES_GATE` (`main-
 pending-gate.png` — arm on a dirty event-click with the subject unswapped and
 nothing written; Keep editing preserving every pending field byte-for-byte;
 Discard performing the swap; the empty-spot create and the external-refresh
-broadcast gating identically) with the clean-swap half in `UNIFIED_FORM`
+broadcast gating identically; and `gateStaysOnEntries` — the gate is a prompt
+about the form the user is looking at, so the same broadcast raises NO dialog
+while another view is on screen and still arms once Entries is back, `route()`
+serving five views where the re-seed once hung off a catch-all `else` that
+covered Reports and Settings too) with the clean-swap half in `UNIFIED_FORM`
 (`cleanSwap`); STATES.md carries the Entries × edge row.
 
 ### PRD §12 (UI states)
@@ -3076,8 +3105,8 @@ isolation on, no node integration, preload bridge, renderer speaks only
 `ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35). The same
 static file walk also pins the renderer's ONE-HOME rule (#168): `su.ts` is the
 sole definition of a helper more than one page needs — no other renderer file
-may define `escapeHtml`, `errMessage`, `localMinuteOfDay` or
-`exactMinuteOfDay`, and the minutes-of-day arithmetic
+may define `escapeHtml`, `errMessage`, `localMinuteOfDay`, `exactMinuteOfDay` or
+`snapStepMin`, and the minutes-of-day arithmetic
 (`getHours() * 60 + getMinutes()`) appears exactly once across
 `gui/renderer/`. Static-only by construction: a duplicated helper renders fine
 on a driven page right up until the copies diverge, which they had —
@@ -3085,7 +3114,9 @@ on a driven page right up until the copies diverge, which they had —
 `app.js` one spared `'` across 20 call sites) and `popover.js` escaped nothing,
 while `errMessage` was re-typed at four sites, one dropping the `.message`
 unwrap. `popover.html` is a second document that can reach nothing `app.js`
-defines, so `su.ts` is the only home serving every page. The behavior of the
+defines, so `su.ts` is the only home serving every page — either by defining the
+helper or by re-exporting the `gui/src` module that owns it (`localtime.ts`,
+`snap.ts`), which is one home in both shapes. The behavior of the
 hoisted helpers (the single-quote escape, the unwrap-then-strip message rule,
 the exact minute's seconds fraction) is GOLD
 `gui/test/renderer-bundle.test.ts`, run through the bundle the pages load.

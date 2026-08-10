@@ -1790,6 +1790,14 @@ async function sceneUnifiedFormAdd(browser) {
     await page.waitForSelector('.entry', { state: 'attached' });
     await noMotion(page);
 
+    // Every grid gesture below must take POINTER CAPTURE on press (R07/R06). Counted from the
+    // platform's own `gotpointercapture`, so this reads what the browser granted rather than
+    // what the source appears to ask for.
+    await page.evaluate(() => {
+      window.__CAPTURES__ = 0;
+      document.addEventListener('gotpointercapture', () => { window.__CAPTURES__++; }, true);
+    });
+
     // (a) REST — the + button sits bottom-right of the grid wrap, accent-filled, and its hover
     // expansion unfolds the label rightward WITHOUT the + glyph moving (R07's exact sentence:
     // the corner reserves room for the expansion).
@@ -1855,6 +1863,39 @@ async function sceneUnifiedFormAdd(browser) {
     await page.screenshot({ path: join(EVIDENCE, 'entries-select-interval.png') });
     const selectMode =
       select.fabHidden && select.snapCtl && select.coarseOff && select.onCoarseGrid && select.inTrack;
+
+    // (b2) SELECT-INTERVAL CANNOT OUTLIVE THE VIEW — it is a mode of the grid, so routing away
+    // resolves it to rest. A stranded mode is a dead-end: the + it replaced is hidden, `.sel-mode
+    // .dt .ev` sets pointer-events:none so no entry can be clicked, and the only way out is
+    // Escape, which nothing on screen mentions. Routed to the Timer view and back, the grid is
+    // at rest: + visible, toggle gone, `.sel-mode` off, and an event clickable again.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('.view[data-view="timer"]:not([hidden])');
+    await page.click('.nav-item[data-view="entries"]');
+    await page.waitForSelector('#entries .calwrap', { state: 'attached' });
+    const rerouted = await page.evaluate(() => {
+      const wrap = document.querySelector('#entries .calwrap');
+      const ev = document.querySelector('#entries .dt .ev');
+      return {
+        wrapPresent: !!wrap,
+        selMode: !!wrap?.classList.contains('sel-mode'),
+        fabBack: window.__probe.visible(document.querySelector('#entries .fab')),
+        snapCtlHidden: !window.__probe.visible(document.querySelector('#entries .snapctl')),
+        eventPresent: !!ev,
+        eventPointerEvents: ev ? getComputedStyle(ev).pointerEvents : null,
+      };
+    });
+    const selectModeExits =
+      rerouted.wrapPresent && !rerouted.selMode && rerouted.fabBack && rerouted.snapCtlHidden &&
+      rerouted.eventPresent && rerouted.eventPointerEvents !== 'none';
+    // Back into select mode, where (c) picks up. Escape first: a no-op at rest, and the
+    // stranded mode's only exit — without it a regression here would surface as this scene
+    // timing out on a hidden +, instead of the false fact above.
+    await page.keyboard.press('Escape');
+    await page.click('#entries .fab');
+    await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+    await page.mouse.move(aim.x, aim.y);
+    await page.waitForSelector('#entries .shandle', { state: 'attached' });
 
     // (c) PRESS-DRAG → CREATE — releasing opens the unified form ABOVE the grid, BLANK except
     // the dragged interval: description empty, client/project unseeded (no last-used), no tags,
@@ -1955,6 +1996,45 @@ async function sceneUnifiedFormAdd(browser) {
       fineDragged.stop !== bodyDragged.stop &&
       minOf(fineDragged.stop) % 5 === 0 && minOf(fineDragged.stop) % 15 !== 0; // landed on the FINE grid
 
+    // (d2) THE DRAG ENDS ON THE RELEASE, EVEN OFF-WINDOW. A button let go outside the window
+    // delivers no mouseup to the page at all; pointer capture is what makes the browser deliver
+    // `pointerup` anyway — which is why the sibling picker (timepicker.js) has always used it.
+    // Without it the drag never ends: the interval keeps following a cursor with no button held,
+    // Escape stays dead (its handler is guarded on no drag in flight), and the next click
+    // anywhere fires the stale release. Driven as the browser delivers it — a pointerup at the
+    // window while the button is still physically down — then the cursor is moved a long way:
+    // the fields must be frozen. The mid-drag reading proves the drag was live first, so a
+    // gesture that never started could not pass this.
+    const beforeRelease = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    const holdBox = await page.evaluate(() => {
+      const r = document.querySelector('#entries .grip.b').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(holdBox.x, holdBox.y);
+    await page.mouse.down();
+    await page.mouse.move(holdBox.x, holdBox.y - 45, { steps: 5 });
+    const midDrag = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+    await page.mouse.move(holdBox.x, holdBox.y - 200, { steps: 8 });
+    const afterRelease = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.mouse.up();
+    const captures = await page.evaluate(() => window.__CAPTURES__);
+    const dragRelease = { beforeRelease, midDrag, afterRelease, captures };
+    const dragCaptureOk =
+      midDrag.stop !== beforeRelease.stop && // the drag was genuinely live
+      afterRelease.stop === midDrag.stop && // and stopped dead on the release
+      afterRelease.start === midDrag.start && // the untouched edge never moved either
+      captures >= 3; // the press → drag → release path captured on each of the three gestures
+
     // (e) §12 R17 — the raw fields are the ONLY overnight path and drive the grid live: a stop
     // typed onto the NEXT day repaints the pending interval as one segment per shown day
     // (seg-start on Wed 24 to the column foot, seg-end on Thu 25 from the head), never a
@@ -2027,11 +2107,14 @@ async function sceneUnifiedFormAdd(browser) {
 
     record(
       'UNIFIED_FORM_ADD',
-      { fabRest, selectMode, createBlank, liveDrag, fineSnapOk, overnightTyped, savePatch, formCloses, overlapBanner, keyboardPath },
+      { fabRest, selectMode, selectModeExits, createBlank, liveDrag, fineSnapOk, dragCaptureOk, overnightTyped, savePatch, formCloses, overlapBanner, keyboardPath },
       `+ button → select-interval → create on the week grid: rest=${JSON.stringify(rest)} hover=${JSON.stringify(hover)}; ` +
-        `select=${JSON.stringify(select)}; create=${JSON.stringify(create)} meAccent=${JSON.stringify(meAccent)}; ` +
+        `select=${JSON.stringify(select)}; reroute=${JSON.stringify(rerouted)} (selectModeExits=${selectModeExits}); ` +
+        `create=${JSON.stringify(create)} meAccent=${JSON.stringify(meAccent)}; ` +
         `bodyDrag=${JSON.stringify(create.start)}→${JSON.stringify(bodyDragged)} (liveDrag=${liveDrag}); ` +
-        `fine=${JSON.stringify(fineDragged)} (fineSnapOk=${fineSnapOk}); overnight=${JSON.stringify(overnight)}; ` +
+        `fine=${JSON.stringify(fineDragged)} (fineSnapOk=${fineSnapOk}); ` +
+        `release-off-window=${JSON.stringify(dragRelease)} (dragCaptureOk=${dragCaptureOk}); ` +
+        `overnight=${JSON.stringify(overnight)}; ` +
         `Save sole commit added=${JSON.stringify(a)} (savePatch=${savePatch}); closed=${JSON.stringify(commit)}; ` +
         `keyboard=${JSON.stringify(keyed)} (ok=${keyboardPath})`,
       'unified-add.png',
@@ -2387,12 +2470,50 @@ async function scenePendingChangesGate(browser) {
         document.querySelector('.entry-form .edit-desc')?.value === 'still unsaved',
     );
 
+    // (f) THE GATE BELONGS TO THE ENTRIES VIEW. It guards a subject swap on the form the user
+    // is looking at, so a refresh arriving while another view is on screen must not raise a
+    // modal about a form that is not visible — Keep editing would focus a field inside the
+    // hidden Entries section. A watcher records any gate that appears while Entries is hidden
+    // (durable, so no polling window can miss one), then the same broadcast is fired again with
+    // Entries back on screen: the gate must arm THERE. Both halves are asserted, so a gate that
+    // simply stopped working could not pass this.
+    await page.evaluate(() => {
+      window.__GATE_OFF_ENTRIES__ = 0;
+      new MutationObserver(() => {
+        const entries = document.querySelector('.view[data-view="entries"]');
+        if (document.querySelector('.gate-backdrop') && entries?.hidden) window.__GATE_OFF_ENTRIES__++;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('.view[data-view="settings"]:not([hidden])');
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    // Routed back by activating the nav item directly rather than by a hit-tested click: a
+    // stray gate over Settings is a full-screen backdrop, and a real click would be swallowed
+    // by it — the defect would surface as a timeout instead of the false fact it is.
+    await page.$eval('.nav-item[data-view="entries"]', (el) => el.click());
+    await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
+    // The settings-view broadcast's own reload was queued first and its mock getState resolves
+    // immediately, so its continuation has already run by the time this second gate is up.
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    await page.waitForSelector('.gate-backdrop', { state: 'attached' });
+    const crossView = await page.evaluate(() => ({
+      gatesOffEntries: window.__GATE_OFF_ENTRIES__,
+      formHeld: document.querySelector('.entry-form')?.dataset.id === '82',
+    }));
+    await page.click('.gatecard .gate-keep');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const heldDesc = await page.evaluate(() => document.querySelector('.entry-form .edit-desc')?.value);
+    const gateStaysOnEntries =
+      crossView.gatesOffEntries === 0 && crossView.formHeld && heldDesc === 'still unsaved';
+
     record(
       'PENDING_CHANGES_GATE',
-      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated },
+      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries },
       `the §12 R24 keep-editing / discard gate: arm=${JSON.stringify(gate)} (gateArms=${gateArms}); ` +
         `keep=${JSON.stringify(kept)} (preserves=${keepPreserves}); discard=${JSON.stringify(discarded)} ` +
-        `(swaps=${discardSwaps}); emptySpotGated=${emptySpotGated}; refreshGated=${refreshGated}`,
+        `(swaps=${discardSwaps}); emptySpotGated=${emptySpotGated}; refreshGated=${refreshGated}; ` +
+        `off-Entries refresh: ${JSON.stringify(crossView)} desc=${JSON.stringify(heldDesc)} ` +
+        `(gateStaysOnEntries=${gateStaysOnEntries})`,
       'main-pending-gate.png',
     );
   });
@@ -4673,6 +4794,48 @@ async function sceneCalendarLayout(browser) {
     await page.click('#el-weekend');
     await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 5);
 
+    // §12 R16 — the grid's SCROLL POSITION SURVIVES A REPAINT. renderCalendar assigned
+    // strip.scrollTop on every build, so any external write (a tt edit, the DB file watcher)
+    // yanked the viewport back to working hours mid-look — and mid-drag it shifted the track
+    // under the rect a press captured, silently bending the cursor→minute mapping. Parked well
+    // off the default, a `changed` broadcast must rebuild the grid and LEAVE the viewport where
+    // the user put it; an explicit week change is what legitimately retargets it. Both halves
+    // are scored, so a build that simply stopped scrolling could not pass. The rebuild is
+    // awaited by tagging the live strip and waiting for an untagged one — the repaint replaces
+    // the node, so this is the repaint itself, not a timer.
+    const parkedTop = await page.evaluate(() => {
+      const strip = document.querySelector('.cstrip');
+      strip.scrollTop = 900;
+      strip.dataset.gen = 'pre-refresh';
+      return Math.round(strip.scrollTop);
+    });
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    await page.waitForFunction(() => {
+      const s = document.querySelector('.cstrip');
+      return !!s && s.dataset.gen !== 'pre-refresh';
+    });
+    const topAfterRefresh = await page.evaluate(() =>
+      Math.round(document.querySelector('.cstrip').scrollTop),
+    );
+    await page.evaluate(() => {
+      document.querySelector('.cstrip').dataset.gen = 'pre-week';
+    });
+    await page.click('#el-next-week');
+    await page.waitForFunction(() => {
+      const s = document.querySelector('.cstrip');
+      return !!s && s.dataset.gen !== 'pre-week';
+    });
+    const topAfterWeek = await page.evaluate(() =>
+      Math.round(document.querySelector('.cstrip').scrollTop),
+    );
+    await page.click('#el-prev-week');
+    await page.waitForSelector('.dcol .ev', { state: 'attached' });
+    const scroll = { parkedTop, topAfterRefresh, topAfterWeek };
+    const scrollHeldOk =
+      parkedTop > 600 && // genuinely parked off the working-hours default
+      topAfterRefresh === parkedTop && // the external repaint left it alone
+      topAfterWeek > 300 && topAfterWeek < 550; // a week change retargets to working hours
+
     await page.hover('.entry[data-id="7"]');
     await page.waitForTimeout(250);
     const hover = await page.evaluate(() => {
@@ -4815,6 +4978,7 @@ async function sceneCalendarLayout(browser) {
         columnsOk,
         tallHoursOk,
         neverClipOk,
+        scrollHeldOk,
         todayOk,
         totalsOk,
         emptyOk,
@@ -4831,6 +4995,7 @@ async function sceneCalendarLayout(browser) {
       },
       `week grid layout: structure=${JSON.stringify(structure)}; weekend=${JSON.stringify(weekend)}; ` +
         `hover=${JSON.stringify(hover)}; labelsOnScreen=${labelsOnScreenOk}; ` +
+        `scroll=${JSON.stringify(scroll)} (scrollHeldOk=${scrollHeldOk}); ` +
         `crossMidnight=${crossMidnightOk} hiddenSeg=${hiddenSegOk} weekendReveal=${weekendRevealOk}; ` +
         `editorOpen=${editorOpen}; selection bar hidden-before=${mergeHiddenBefore} ` +
         `shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
