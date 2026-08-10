@@ -79,6 +79,11 @@ export function buildUiState(
       workingHoursEnd: settings.workingHoursEnd,
       pickerWindowMode: settings.pickerWindowMode,
       pickerAroundHours: settings.pickerAroundHours,
+      // §14 / §12 R23: the snap pair every week-grid drag consumes, and §12 R09's persisted
+      // show-weekend row — the Entries view reads all three off this one snapshot.
+      snapFineMinutes: settings.snapFineMinutes,
+      snapCoarseMinutes: settings.snapCoarseMinutes,
+      showWeekend: settings.showWeekend,
       // §20 R04: the current backup-retention count the Settings → Backups picker paints; it
       // changes over the same setSetting channel `tt config set backup_retention` drives.
       backupRetention: settings.backupRetention,

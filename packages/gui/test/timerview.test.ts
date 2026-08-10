@@ -41,6 +41,9 @@ const baseSettings = {
   workingHoursEnd: '18:00',
   pickerWindowMode: 'working_hours',
   pickerAroundHours: 8,
+  snapFineMinutes: 5,
+  snapCoarseMinutes: 15,
+  showWeekend: false,
   backupRetention: 7,
 };
 

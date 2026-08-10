@@ -151,17 +151,16 @@ function clearOverlapBanner() {
   }
 }
 
-// §12 R21: paint a refused write into an INLINE message region at the point of action (the add
-// form's #add-warning is the seed pattern). The region is announced (role=status/aria-live) and
-// stays until the next input on that form clears it. `showFormError`/`clearFormError` are the
-// shared primitives the edit form, split confirm and inline rename all use; the report builder
-// and the popover own their own regions but read the message through the same SU.errMessage.
+// §12 R21: paint a refused write into an INLINE message region at the point of action. The
+// region is announced (role=status/aria-live) and stays until the next input on that form
+// clears it. `showFormError`/`clearFormError` are the shared primitives the unified form,
+// split confirm and inline rename all use; the report builder and the popover own their own
+// regions but read the message through the same SU.errMessage.
 //
 // design.html D15: a refusal is a BLOCK, so the region it lands in must read in the --danger
 // palette — never the --flag advisory one. The dedicated `.form-error` regions are danger by
-// construction; a region that serves BOTH kinds (the add form's #add-warning, whose base chrome is
-// the warn advisory) takes danger from the `error` state class these two set and clear, the same
-// modifier showWriteError puts on #overlap-banner. Setting it on an always-danger region is inert.
+// construction; #overlap-banner serves BOTH kinds and takes danger from the `error` state
+// class (showWriteError sets it, load() clears it). Setting it on an always-danger region is inert.
 function showFormError(el, err) {
   if (!el) return;
   el.textContent = errMessage(err);
@@ -437,15 +436,18 @@ function renderEntries() {
   // with the data so a week/setting change is reflected everywhere at once.
   renderWeekControls();
   renderWeekPicker();
-  // Repainting the calendar closes any open edit form (its host is view-level, so it would
-  // otherwise outlive the events it edited). Save/Delete/Split reloads and external refreshes all
-  // funnel through here.
-  closeEntryForm();
+  // §12 R24: a repaint NEVER closes the open unified form — it lives in the view-level
+  // #entry-form-host outside this repainted host, so a week change or external refresh
+  // repaints the grid beneath while the form (and its unsaved fields) stays mounted. The
+  // pre-R24 renderEntries closed the form here, which was exactly the silent discard the
+  // pending-changes gate exists to prevent; onChange below owns the refresh-time gating.
   const host = $('entries');
   host.innerHTML = '';
   if (entryGroups) {
     if (entryGroups.length === 0 && (searchQuery || hasNarrowingFilter())) {
       host.appendChild(emptyEntries());
+      host.appendChild(calFab());
+      refreshCalendarChrome();
       renderMergeBar();
       return;
     }
@@ -454,7 +456,12 @@ function renderEntries() {
     return;
   }
   if (state.days.length === 0) {
+    // §12 R07 / §05 R05: even the never-tracked empty state keeps manual add reachable — the
+    // + button rides the empty block (no grid to drag, so BOTH activation paths open the form
+    // directly with the working-hours default interval; see calFab's no-grid degradation).
     host.appendChild(emptyState());
+    host.appendChild(calFab());
+    refreshCalendarChrome();
     renderMergeBar();
     return;
   }
@@ -477,7 +484,16 @@ function renderCalendar(host) {
   model.forEach((d, i) => grid.appendChild(calColumn(d, i === model.length - 1)));
   strip.appendChild(grid);
   wrap.appendChild(strip);
+  // §12 R07/R23: the grid's corner pair — the round + button at rest, the fine-snap toggle
+  // in its spot during select-interval/create/edit — anchored to the non-scrolling wrap so
+  // they hold the corner while the hour track scrolls beneath.
+  wrap.appendChild(calFab());
+  wrap.appendChild(calSnapCtl());
+  // §12 R16: the grid is also a drag surface — select-interval + create gestures (R07) and
+  // the selected event's edge/body drags (R06), all snapping per R23.
+  wireGridDrag(wrap);
   host.appendChild(wrap);
+  refreshCalendarChrome();
   // §14 / G16: the entries calendar ALWAYS defaults to working hours — pass the shared window
   // helper the picker uses, forcing working_hours mode, and scroll the 24h track to that start.
   // A scroll, never a clip: every off-hours entry stays in the DOM and is reachable by scrolling.
@@ -491,7 +507,15 @@ function renderCalendar(host) {
   // BELOW it, not behind it. The strip's content is the 52px header band followed by the 24h
   // track, so scrolling by the track offset ALONE puts working-start at the band's bottom edge —
   // adding the band's own height back would hide the first 52px of the working day behind it.
-  strip.scrollTop = Math.round(win.startMin * CAL_PX_PER_MIN);
+  // §12 R06/R07: while the unified form is open its pending/selected interval is the thing the
+  // user is dragging, so the viewport lands on IT (a little context above its start) rather
+  // than the working-hours default — otherwise editing an off-hours entry opens onto empty grid.
+  const iv = calMode === 'form' ? openFormInterval() : null;
+  strip.scrollTop = Math.round(
+    iv
+      ? Math.max(localMinuteOfDay(iv.startIso) - 60, 0) * CAL_PX_PER_MIN
+      : win.startMin * CAL_PX_PER_MIN,
+  );
 }
 
 // The fixed hour gutter: a header spacer aligned with the day headers, then 00:00–24:00 labels
@@ -536,6 +560,9 @@ function calColumn(d, isEnd) {
   const track = document.createElement('div');
   track.className = 'dt';
   track.style.height = CAL_DAY_PX + 'px';
+  // §12 R07/R16: the day token the drag surface resolves pointer positions against
+  // (gridPointAt) and the pending-interval overlay keys its segments by (paintPendingOverlay).
+  track.dataset.day = d.day;
   // §06 R4 / §12 R10: overlap renders as a yellow warn BAND behind the events (detail lives in
   // the editor). Painted first so the events sit above it. Overlap is a same-day concept, so the
   // band iterates the column's own start-day entries.
@@ -543,7 +570,14 @@ function calColumn(d, isEnd) {
   // §12 R16 (issue #71): paint one calendar event per SEGMENT — a same-day entry has exactly one,
   // a cross-midnight span has a segment in each touched column (all sharing the entry id, so
   // selection/click/hover act on the one entry). calEvent positions from the segment's bounds.
-  for (const seg of d.segments) track.appendChild(calEvent(seg.entry, seg));
+  // §12 R06: the entry being EDITED paints as the accent-outlined pending interval instead
+  // (paintPendingOverlay, off the form's live Start/Stop values — mockup edit-entry.html), so
+  // its stored segments are skipped here rather than drawn twice.
+  const editingId = calMode === 'form' && openForm?.mode === 'edit' ? openForm.entry.id : null;
+  for (const seg of d.segments) {
+    if (editingId !== null && seg.entry.id === editingId) continue;
+    track.appendChild(calEvent(seg.entry, seg));
+  }
   col.appendChild(track);
   return col;
 }
@@ -558,6 +592,474 @@ function calOverlapBand(e) {
   band.innerHTML = `<span class="otag">overlap ${mins}m</span>`;
   return band;
 }
+
+// ─────────────────────────────────────────── §12 R07/R16/R23 — the grid as drag surface
+
+// §12 R07: the Entries view's interaction mode over the week grid.
+//   'rest'   — readonly calendar; the round + button sits bottom-right (R07).
+//   'select' — select-interval: a start handle follows the cursor at the coarse snap;
+//              pressing and dragging sets the interval length; release enters create mode.
+//   'form'   — the unified form is open above the grid (add or edit, `openForm` below);
+//              the grid is the drag surface adjusting the form's interval (R06/R07/R16).
+// Outside these modes nothing on the grid mutates an entry directly (R16).
+let calMode = 'rest';
+
+// §12 R23: the ephemeral fine-snap toggle — deliberately NOT a setting (§14): never
+// persisted, reset to coarse on every entry into select-interval mode or a form open.
+let fineSnap = false;
+
+// §12 R06/R07/R24: the open unified form, or null. One form ever (add or edit); the grid
+// chrome (gray-out, + button, fine-snap toggle, the pending/selected interval overlay) is a
+// pure function of this + calMode, re-derived on every repaint (refreshCalendarChrome).
+//   mode     — 'add' | 'edit'
+//   entry    — the edited entry (edit mode) / null (add mode)
+//   running  — edit mode on the open row (no Stop field, start grip only — §05 R06)
+//   form     — the mounted <form> element in #entry-form-host
+//   seed     — the field snapshot dirty-tracking compares against (R24); the select halves
+//              are patched in once the async reference data resolves, so a keystroke landing
+//              before the selects populate still reads dirty against the true seed
+//   tags     — the live tag working set (the chips mutate it; Save reads it)
+//   billTouched — §05 R07: add mode's billable stays core-derived until the user touches it
+let openForm = null;
+
+// §12 R23: the active snap step in minutes — coarse by default on every entry into a drag
+// mode, fine with the ephemeral toggle on. Values come from the §14 settings snapshot;
+// the defaults only shield a stale/partial snapshot (core owns validation, 1–30, fine ≤ coarse).
+function snapStepMin() {
+  const s = (state && state.settings) || {};
+  const fine = Number(s.snapFineMinutes) >= 1 ? Number(s.snapFineMinutes) : 5;
+  const coarse = Number(s.snapCoarseMinutes) >= 1 ? Number(s.snapCoarseMinutes) : 15;
+  return fineSnap ? fine : coarse;
+}
+// Snap a minute-of-day onto the active grid, clamped to the 24h track. Applied ONLY to a
+// value the user is actively dragging (issue #49): a shown value is never rewritten.
+function snapMin(minutes) {
+  const step = snapStepMin();
+  return Math.max(0, Math.min(1440, Math.round(minutes / step) * step));
+}
+
+// Resolve a viewport point to the day column under it. The minute is clamped to the track
+// (a cursor above/below still resolves), so a drag can overshoot without losing its column.
+function gridPointAt(clientX, clientY) {
+  for (const track of document.querySelectorAll('#entries .dt')) {
+    const r = track.getBoundingClientRect();
+    if (clientX >= r.left && clientX < r.right) {
+      const minute = Math.max(0, Math.min(1440, (clientY - r.top) / CAL_PX_PER_MIN));
+      return { day: track.dataset.day, minute, track };
+    }
+  }
+  return null;
+}
+
+// The wall-clock instant of (local day token, minute-of-day) in the CONFIGURED zone — built
+// through the ONE parse rule (SU.parseLocalInput), so grid geometry and typed fields resolve
+// through identical zone math. Whole minutes only: drag output is always on a snap grid.
+function wallDateAt(day, minute) {
+  const h = String(Math.floor(minute / 60)).padStart(2, '0');
+  const m = String(Math.round(minute % 60)).padStart(2, '0');
+  return parseLocalInput(`${day} ${h}:${m}:00`);
+}
+
+// §12 R17: the open form's interval as parsed from its raw Start/Stop fields — the fields
+// are the authoritative form state (grid and fields drive the SAME values), so the overlay
+// and every drag read through here. A half the user has typed unparseable text into reads
+// null and the overlay simply doesn't paint it; Save surfaces the parse error (R21).
+function openFormInterval() {
+  if (!openForm) return null;
+  const form = openForm.form;
+  const startRaw = form.querySelector('.edit-start')?.value ?? '';
+  const endRaw = openForm.running ? '' : (form.querySelector('.edit-end')?.value ?? '');
+  let start = null;
+  let stop = null;
+  try { if (startRaw) start = parseLocalInput(startRaw); } catch { start = null; }
+  try { if (endRaw) stop = parseLocalInput(endRaw); } catch { stop = null; }
+  if (!start || Number.isNaN(start.getTime())) return null;
+  if (stop && Number.isNaN(stop.getTime())) stop = null;
+  return { startIso: start.toISOString(), stopIso: stop ? stop.toISOString() : null };
+}
+
+// §12 R06/R07: write a dragged interval back into the form's Start/Stop fields LIVE (R17 —
+// a grid drag updates them live) and repaint the overlay. Only the actively dragged handle
+// arrives snapped; an untouched half is passed through verbatim by the callers.
+function writeFormInterval(startDate, stopDate) {
+  if (!openForm) return;
+  const form = openForm.form;
+  const startInput = form.querySelector('.edit-start');
+  const endInput = form.querySelector('.edit-end');
+  if (startDate && startInput) startInput.value = localInputValue(startDate);
+  if (stopDate && endInput) endInput.value = localInputValue(stopDate);
+  clearFormError(form.querySelector('.ef-warning'));
+  paintPendingOverlay();
+}
+
+// §12 R16 (issue #71): the shown-day rendering segments of an arbitrary local span — the
+// same fan-out calEntrySegments applies to stored entries, over the form's live interval:
+// one 'full' block same-day, else start segment → the column foot, a full-height slice per
+// whole middle day, an end segment from the column head. A null stop is the open row's
+// start-only block (capped like calEvent's future fade).
+function calSpanSegments(startIso, stopIso) {
+  const startDay = calLocalDayOf(startIso);
+  const startMinute = localMinuteOfDay(startIso);
+  if (!stopIso) {
+    return [{ day: startDay, topMin: startMinute, botMin: Math.min(startMinute + 180, 1440), part: 'open' }];
+  }
+  const endDay = calLocalDayOf(stopIso);
+  const endMinute = localMinuteOfDay(stopIso);
+  if (endDay <= startDay) {
+    return [{ day: startDay, topMin: startMinute, botMin: Math.max(endMinute, startMinute + 1), part: 'full' }];
+  }
+  const segs = [{ day: startDay, topMin: startMinute, botMin: 1440, part: 'seg-start' }];
+  for (let mid = calAddDays(startDay, 1); mid < endDay; mid = calAddDays(mid, 1)) {
+    segs.push({ day: mid, topMin: 0, botMin: 1440, part: 'seg-mid' });
+  }
+  if (endMinute > 0) segs.push({ day: endDay, topMin: 0, botMin: endMinute, part: 'seg-end' });
+  return segs;
+}
+
+// §12 R06/R07 (mockup edit-entry.html): paint the pending/selected interval — the ONE vivid
+// block on the drag surface: an accent-outlined `.ev.me` per shown-day segment, edge grips on
+// the outer edges (top grip on the start segment, bottom grip on the end segment — the only
+// handles an edge drag grabs), and the start/stop time pills beside them. Re-derived from the
+// form's raw fields on every call, so a typed field updates the grid live (R17) and a week
+// change simply doesn't draw segments whose day isn't shown (the form itself stays). An
+// `explicit` interval paints the select-mode provisional drag before any form exists.
+function paintPendingOverlay(explicit) {
+  document.querySelectorAll('#entries .ev.me, #entries .tlabel').forEach((el) => el.remove());
+  const iv = explicit ?? (calMode === 'form' ? openFormInterval() : null);
+  if (!iv || !iv.startIso) return;
+  const segs = calSpanSegments(iv.startIso, iv.stopIso);
+  const last = segs[segs.length - 1];
+  for (const seg of segs) {
+    const track = document.querySelector(`#entries .dt[data-day="${seg.day}"]`);
+    if (!track) continue; // a hidden day's segment is simply not drawn (R16)
+    const block = document.createElement('div');
+    const first = seg === segs[0];
+    block.className =
+      'ev me' +
+      (seg.part === 'seg-start' || seg.part === 'seg-mid' || seg.part === 'seg-end' ? ` seg ${seg.part}` : '') +
+      (seg.part === 'open' ? ' open' : '');
+    block.style.top = seg.topMin * CAL_PX_PER_MIN + 'px';
+    block.style.height = Math.max((seg.botMin - seg.topMin) * CAL_PX_PER_MIN, 6) + 'px';
+    let inner = '';
+    // Grips only on the outer edges: dragging one edge never moves the other (issue #49 —
+    // the untouched half keeps its stored value to the second).
+    if (first && (seg.part === 'full' || seg.part === 'seg-start' || seg.part === 'open')) {
+      inner += '<span class="grip t" data-grip="start" aria-hidden="true"></span>';
+    }
+    if (seg === last && (seg.part === 'full' || seg.part === 'seg-end') && iv.stopIso) {
+      inner += '<span class="grip b" data-grip="stop" aria-hidden="true"></span>';
+    }
+    block.innerHTML = inner;
+    track.appendChild(block);
+    // The time pills ride beside the outer edges (mockup: start above, stop below).
+    if (first) {
+      const lab = document.createElement('span');
+      lab.className = 'tlabel tnum';
+      lab.style.top = Math.max(seg.topMin * CAL_PX_PER_MIN - 24, 0) + 'px';
+      lab.textContent = localTime(iv.startIso);
+      track.appendChild(lab);
+    }
+    if (seg === last && iv.stopIso && (seg.part === 'full' || seg.part === 'seg-end')) {
+      const lab = document.createElement('span');
+      lab.className = 'tlabel tnum';
+      lab.style.top = Math.min(seg.botMin * CAL_PX_PER_MIN + 4, CAL_DAY_PX - 20) + 'px';
+      lab.textContent = localTime(iv.stopIso);
+      track.appendChild(lab);
+    }
+  }
+}
+
+// The one in-flight grid drag (document-level move/up listeners while a button is held).
+let gridDrag = null;
+
+// Begin a press-drag that PLACES an interval: the select-interval gesture (release enters
+// create mode) and add mode's re-place-anywhere gesture (`live` writes the form fields on
+// every move, R07). The interval grows from the snapped anchor toward the cursor; a bare
+// click (no movement) falls back to a 60-minute default from the anchor.
+function startNewDrag(pt, { openOnRelease = false, live = false } = {}) {
+  const track = pt.track;
+  const rect = track.getBoundingClientRect();
+  const day = pt.day;
+  const anchor = snapMin(pt.minute);
+  hideSelectHandle();
+  gridDrag = { kind: 'new', moved: false };
+  const intervalAt = (clientY) => {
+    const cur = snapMin((clientY - rect.top) / CAL_PX_PER_MIN);
+    let lo = Math.min(anchor, cur);
+    let hi = Math.max(anchor, cur);
+    if (hi === lo) hi = Math.min(lo + snapStepMin(), 1440);
+    return { startIso: wallDateAt(day, lo).toISOString(), stopIso: wallDateAt(day, hi).toISOString() };
+  };
+  const onMove = (ev) => {
+    gridDrag.moved = true;
+    const iv = intervalAt(ev.clientY);
+    if (live && openForm) writeFormInterval(new Date(iv.startIso), new Date(iv.stopIso));
+    else paintPendingOverlay(iv);
+  };
+  const onUp = (ev) => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    const moved = gridDrag.moved;
+    gridDrag = null;
+    if (!openOnRelease) return;
+    // Release enters create mode (R07); an un-dragged click seeds a default-length interval.
+    const iv = moved
+      ? intervalAt(ev.clientY)
+      : {
+          startIso: wallDateAt(day, anchor).toISOString(),
+          stopIso: wallDateAt(day, Math.min(anchor + 60, 1440)).toISOString(),
+        };
+    void openUnifiedForm({ mode: 'add', startIso: iv.startIso, stopIso: iv.stopIso });
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// §12 R06/R07: drag ONE edge of the pending/selected interval. Only the dragged edge snaps;
+// the other keeps its value verbatim — to the second (issue #49). Edge drags stay within the
+// edge's own day column (the typed Start/Stop fields are the only overnight path, R17), and
+// the span stays strictly positive by clamping against the fixed edge.
+function startEdgeDrag(which) {
+  const iv = openFormInterval();
+  if (!iv) return;
+  const edgeIso = which === 'start' ? iv.startIso : iv.stopIso;
+  if (!edgeIso) return;
+  const day = calLocalDayOf(edgeIso);
+  const track = document.querySelector(`#entries .dt[data-day="${day}"]`);
+  if (!track) return;
+  const rect = track.getBoundingClientRect();
+  const startMs = Date.parse(iv.startIso);
+  const stopMs = iv.stopIso ? Date.parse(iv.stopIso) : null;
+  gridDrag = { kind: 'edge' };
+  const onMove = (ev) => {
+    const minute = snapMin(Math.max(0, Math.min(1440, (ev.clientY - rect.top) / CAL_PX_PER_MIN)));
+    let cand = wallDateAt(day, minute).getTime();
+    const minSpanMs = 60 * 1000; // the span stays strictly positive (§05 R05)
+    if (which === 'start') {
+      if (stopMs !== null && cand > stopMs - minSpanMs) cand = stopMs - minSpanMs;
+      writeFormInterval(new Date(cand), null);
+    } else {
+      if (cand < startMs + minSpanMs) cand = startMs + minSpanMs;
+      writeFormInterval(null, new Date(cand));
+    }
+  };
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    gridDrag = null;
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// §12 R06/R07: drag the interval's BODY — both edges move together, the exact span preserved
+// (both handles are actively dragged, so the snapped start plus the verbatim span is the
+// whole write). The cursor's column sets the day, so a body drag can carry the interval to
+// another shown day.
+function startMoveDrag(pressEv) {
+  const iv = openFormInterval();
+  if (!iv || !iv.stopIso) return; // the open row moves by its start grip only (§05 R06)
+  const pt = gridPointAt(pressEv.clientX, pressEv.clientY);
+  if (!pt) return;
+  const startMs = Date.parse(iv.startIso);
+  const spanMs = Date.parse(iv.stopIso) - startMs;
+  const grabMs = wallDateAt(pt.day, pt.minute).getTime() - startMs;
+  gridDrag = { kind: 'move' };
+  const onMove = (ev) => {
+    const at = gridPointAt(ev.clientX, ev.clientY);
+    if (!at) return;
+    const tentative = new Date(wallDateAt(at.day, at.minute).getTime() - grabMs);
+    const tentIso = tentative.toISOString();
+    const snapped = wallDateAt(calLocalDayOf(tentIso), snapMin(localMinuteOfDay(tentIso)));
+    writeFormInterval(snapped, new Date(snapped.getTime() + spanMs));
+  };
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup', onUp);
+    gridDrag = null;
+  };
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup', onUp);
+}
+
+// §12 R07: the select-interval start handle — a snapped accent line following the cursor
+// with a time pill, moved between day tracks as the cursor crosses columns.
+function moveSelectHandle(pt) {
+  /** @type {any} */
+  let handle = document.querySelector('#entries .shandle');
+  if (!handle) {
+    handle = document.createElement('div');
+    handle.className = 'shandle';
+    handle.innerHTML = '<span class="st tnum"></span>';
+  }
+  const minute = snapMin(pt.minute);
+  if (handle.parentElement !== pt.track) pt.track.appendChild(handle);
+  handle.style.top = minute * CAL_PX_PER_MIN + 'px';
+  handle.hidden = false;
+  const h = String(Math.floor(minute / 60)).padStart(2, '0');
+  const m = String(minute % 60).padStart(2, '0');
+  handle.querySelector('.st').textContent = `${h}:${m}`;
+}
+function hideSelectHandle() {
+  document.querySelector('#entries .shandle')?.remove();
+}
+
+// §12 R07: enter select-interval mode — the + button's pointer path. Coarse snap on every
+// entry (fineSnap resets); Escape returns to rest.
+function enterSelectInterval() {
+  calMode = 'select';
+  fineSnap = false;
+  refreshCalendarChrome();
+}
+function exitToRest() {
+  calMode = openForm ? 'form' : 'rest';
+  hideSelectHandle();
+  refreshCalendarChrome();
+}
+
+// §12 R07: the keyboard path's default interval — aligned to the configured working hours
+// (§14): one hour from the working-day start, on today when today is shown, else the shown
+// week's first day.
+function workingHoursDefaultInterval() {
+  const win = window.SU.timelineWindow(
+    { ...((state && state.settings) || {}), pickerWindowMode: 'working_hours' },
+    new Date().toISOString(),
+    null,
+  );
+  const shown = calShownDays();
+  const day = shown.includes(calToday()) ? calToday() : shown[0];
+  const startMin = Math.min(win.startMin, 1440 - 60);
+  return {
+    startIso: wallDateAt(day, startMin).toISOString(),
+    stopIso: wallDateAt(day, startMin + 60).toISOString(),
+  };
+}
+
+// §12 R07 (mockup main.html): the round + Add-entry button — bottom-right of the week grid,
+// the view's standing accent-filled primary (design.html D11/D14; syncStandingPrimary hands
+// the accent to an open commit surface). On hover it expands rightward into "+ Add entry"
+// without the + glyph moving (CSS .fab .fl). Activation splits by input: a keyboard
+// activation (click with detail 0) opens the form DIRECTLY with the working-hours default
+// interval — every field tabbable — while a pointer click enters select-interval mode as
+// the pointer enhancement. Hidden outside rest mode (the fine-snap toggle takes its spot).
+function calFab() {
+  const fab = document.createElement('button');
+  fab.type = 'button';
+  fab.className = 'fab primary';
+  fab.setAttribute('data-standing-primary', '');
+  fab.setAttribute('aria-label', 'Add entry');
+  fab.innerHTML = '<svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg><span class="fl">Add entry</span>';
+  fab.addEventListener('click', (ev) => {
+    // Keyboard activation (a click with detail 0), or no grid to drag on (the empty states
+    // still carry the + button so manual add stays reachable, §05 R05): open the form
+    // directly. A pointer click over a real grid enters select-interval mode.
+    if (ev.detail === 0 || !document.querySelector('#entries .dt')) {
+      const iv = workingHoursDefaultInterval();
+      void openUnifiedForm({ mode: 'add', startIso: iv.startIso, stopIso: iv.stopIso });
+    } else {
+      enterSelectInterval();
+    }
+  });
+  return fab;
+}
+
+// §12 R23: the fine-snap toggle — drawn in the + button's spot (bottom-right of the grid)
+// while select-interval mode or the form is up. Ephemeral by design: flipping it never
+// persists anything, and every mode entry resets to coarse.
+function calSnapCtl() {
+  const ctl = document.createElement('span');
+  ctl.className = 'snapctl';
+  ctl.innerHTML =
+    `<button type="button" class="sw${fineSnap ? ' on' : ''}" role="switch" ` +
+    `aria-checked="${fineSnap}" aria-label="Fine snap"><i aria-hidden="true"></i></button> Fine snap`;
+  const sw = ctl.querySelector('.sw');
+  sw.addEventListener('click', () => {
+    fineSnap = !fineSnap;
+    sw.classList.toggle('on', fineSnap);
+    sw.setAttribute('aria-checked', String(fineSnap));
+  });
+  return ctl;
+}
+
+// §12 R07/R16/R23: sync the grid chrome to the current mode — called after every calendar
+// repaint and on every mode change, so the chrome is a pure function of (calMode, openForm)
+// rather than per-transition bookkeeping. Gray-out is CREATE mode only (R07); the + button
+// shows only at rest; the fine-snap toggle holds its spot in the other modes.
+function refreshCalendarChrome() {
+  const wrap = document.querySelector('#entries .calwrap');
+  if (wrap) {
+    wrap.classList.toggle('sel-mode', calMode === 'select');
+    wrap.classList.toggle('grayed', calMode === 'form' && openForm?.mode === 'add');
+    wrap.classList.toggle('edit-mode', calMode === 'form' && openForm?.mode === 'edit');
+  }
+  // The + button and the fine-snap toggle trade the same bottom-right spot (R07/R23); the
+  // empty states carry a + button with no calwrap, so these resolve against the view host.
+  const fab = document.querySelector('#entries .fab');
+  if (fab) fab.hidden = calMode !== 'rest';
+  const ctl = document.querySelector('#entries .snapctl');
+  if (ctl) ctl.hidden = calMode === 'rest';
+  if (calMode !== 'select') hideSelectHandle();
+  paintPendingOverlay();
+}
+
+// The grid's press/hover wiring — one delegated pair per calendar build (renderCalendar).
+function wireGridDrag(wrap) {
+  wrap.addEventListener('mousemove', (ev) => {
+    if (calMode !== 'select' || gridDrag) return;
+    const pt = gridPointAt(ev.clientX, ev.clientY);
+    if (pt && ev.target.closest('.dt')) moveSelectHandle(pt);
+    else hideSelectHandle();
+  });
+  wrap.addEventListener('mouseleave', () => {
+    if (calMode === 'select' && !gridDrag) hideSelectHandle();
+  });
+  wrap.addEventListener('mousedown', (ev) => {
+    if (ev.button !== 0 || gridDrag) return;
+    if (calMode === 'select') {
+      const pt = gridPointAt(ev.clientX, ev.clientY);
+      if (!pt || !ev.target.closest('.dt')) return;
+      ev.preventDefault();
+      startNewDrag(pt, { openOnRelease: true });
+      return;
+    }
+    if (calMode !== 'form') return;
+    const grip = ev.target.closest('.grip');
+    if (grip) {
+      ev.preventDefault();
+      startEdgeDrag(grip.dataset.grip);
+      return;
+    }
+    const me = ev.target.closest('.ev.me');
+    if (me) {
+      ev.preventDefault();
+      startMoveDrag(ev);
+      return;
+    }
+    // A press on another event is the click-to-swap path (wire(), gated by R24) — not a drag.
+    if (ev.target.closest('.ev')) return;
+    if (!ev.target.closest('.dt')) return;
+    const pt = gridPointAt(ev.clientX, ev.clientY);
+    if (!pt) return;
+    if (openForm.mode === 'add') {
+      // R07: the pending interval stays adjustable by dragging anywhere on the grid.
+      ev.preventDefault();
+      startNewDrag(pt, { live: true });
+    } else {
+      // R06: an empty spot mid-edit starts a create — a subject swap, gated when dirty (R24).
+      guardedSwap(() => {
+        closeUnifiedForm();
+        enterSelectInterval();
+      });
+    }
+  });
+}
+
+// Escape leaves select-interval mode (rest is a keystroke away, matching the gate's
+// non-destructive default). Bound once at the document: the handle/overlay live inside a
+// repainted host, so a per-build binding would leak one listener per repaint.
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && calMode === 'select' && !gridDrag) exitToRest();
+});
 
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
 // the Timer view (R14). When a timer runs it paints the live count-up (derived now − start,
@@ -886,7 +1388,7 @@ function calEvent(e, seg) {
   // readonly calendar — see the `.ev > .chips` rule). §12 R10 (G12): the flags themselves are NOT
   // text on the event — overlap paints as the `.ov` warn band (calColumn) and sleep as the `.zz`
   // hatch below; the amount/neighbour detail, the reversible sleep subtract/restore control and the
-  // struck raw-vs-trimmed duration all live in the unified editor (openEntryForm), not on the
+  // struck raw-vs-trimmed duration all live in the unified editor (openUnifiedForm), not on the
   // calendar, so the readonly calendar stays a calm at-a-glance surface.
   html += tagsHtml(e);
   // §12 R10 (G12): a slept span carries a hatched marker at its foot on the calendar.
@@ -995,7 +1497,7 @@ function actionButtons(e) {
   // §06 R2: Split only makes sense on a CLOSED entry (it needs an instant strictly inside a
   // bounded span). The open/running entry has no end, so it exposes no Split.
   if (e.endUtc !== null) actions.push('<button class="op-btn" type="button" tabindex="-1" data-act="split" title="Split" aria-label="Split entry"><svg class="ic" aria-hidden="true"><use href="#i-split" /></svg></button>');
-  // §12 R06: Edit opens the UNIFIED ENTRY FORM in edit mode (openEntryForm) inline in the Entries
+  // §12 R06: Edit opens the UNIFIED ENTRY FORM in edit mode (openUnifiedForm) inline in the Entries
   // view — one form surfacing EVERY tt-editable field plus the footer Split + two-step Delete, the
   // GUI counterpart to `tt edit` / `tt split` / `tt rm`. A click anywhere on the entry opens the
   // same form (wired below); tags edit inside it (§12 R06/G6), so no separate per-row Edit-tags
@@ -1004,13 +1506,21 @@ function actionButtons(e) {
   return actions.join('');
 }
 
+// §12 R06/R24: every path that opens the unified form on an entry runs through the
+// pending-changes gate — a clean form swaps its subject in place with no animation; a dirty
+// one blocks on keep-editing / discard. Opening the entry ALREADY under edit is a no-op.
+function requestEdit(e) {
+  if (openForm?.mode === 'edit' && openForm.entry.id === e.id) return;
+  guardedSwap(() => void openUnifiedForm({ mode: 'edit', entry: e }));
+}
+
 function wire(row, e) {
   row.querySelectorAll('[data-act]').forEach((btn) => {
     btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const act = btn.dataset.act;
       if (act === 'select') return toggleSelect(e.id, btn.checked); // multi-select for merge
-      else if (act === 'edit') return openEntryForm(row, e); // §12 R06: unified form (edit mode), inline
+      else if (act === 'edit') return requestEdit(e); // §12 R06: unified form (edit mode), gated (R24)
       else if (act === 'split') return openSplitForm(btn, e); // inline; resolves on Split
       else if (act === 'delete') return armDelete(btn, e); // two-step; first click only arms
       else return;
@@ -1019,11 +1529,11 @@ function wire(row, e) {
   // §12 R06 (R16 wiring): a click anywhere on the entry — not on one of its action controls —
   // opens the unified entry form in edit mode INLINE, the same form the Edit affordance opens.
   // The action buttons/inputs above stopPropagation, so a click on them never also opens the
-  // form; a click on the inert body (time / description / duration) does.
+  // form; a click on the inert body (time / description / duration) does — gated per R24 when
+  // another subject's form is dirty.
   row.addEventListener('click', (ev) => {
     if (ev.target.closest('[data-act], input, button, a, .confirm, .split-at')) return;
-    if (row.classList.contains('editing')) return; // already the form
-    void openEntryForm(row, e);
+    requestEdit(e);
   });
   blockKeys(row, e);
 }
@@ -1067,7 +1577,7 @@ function blockKeys(row, e) {
       row.focus();
     } else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === row) {
       ev.preventDefault(); // Space on a focusable div scrolls the track otherwise
-      if (!row.classList.contains('editing')) void openEntryForm(row, e);
+      requestEdit(e); // gated per R24, like the click-anywhere path
     }
   });
 }
@@ -1430,6 +1940,9 @@ function armDelete(btn, e) {
     confirmLabel: 'Delete',
     onConfirm: async () => {
       await window.stint.remove({ id: e.id });
+      // A repaint no longer closes the form (§12 R24), so deleting the form's own subject —
+      // the footer Delete — must close it explicitly (an explicit destroy, not a silent one).
+      if (openForm?.mode === 'edit' && openForm.entry.id === e.id) closeUnifiedForm();
       await load();
     },
   });
@@ -1514,6 +2027,9 @@ function openSplitForm(btn, e) {
       // Splitting a span in place cannot create a NEW overlap, so the ack carries no
       // warning; routing it through applyAck keeps every write path one uniform shape.
       const ack = await window.stint.split({ id: e.id, atUtc });
+      // Splitting the form's own subject (the footer Split) replaces one span with two —
+      // the form's seed no longer exists, so close it explicitly (§12 R24: repaints never do).
+      if (openForm?.mode === 'edit' && openForm.entry.id === e.id) closeUnifiedForm();
       await load();
       applyAck(ack);
     } catch (err) {
@@ -1536,151 +2052,259 @@ function openSplitForm(btn, e) {
   });
 }
 
-// §12 R06 (G5): tear down the open edit-mode form. It lives in the view-level #entry-form-host
-// (not inside the calendar event), so closing it means removing the mounted form and dropping the
-// .editing selection state from whichever calendar event carried it. Called on Cancel, whenever the
-// calendar repaints (renderEntries — a Save/Delete/Split reload, or an external refresh, replaces
-// the form), and before opening a new form so only one unified form (add or edit) is ever on
-// screen. Idempotent when nothing is open.
-function closeEntryForm() {
+// §12 R06/R07 (G5): tear down the open unified form (either mode) and return the grid to
+// rest. It lives in the view-level #entry-form-host (not inside a calendar event), so closing
+// means removing the mounted form, clearing the form state, and repainting the grid chrome
+// (un-gray, + button back, overlay gone). Explicit paths only — Cancel, a successful Save,
+// and the gate's Discard; a repaint NEVER lands here (R24). Idempotent when nothing is open.
+function closeUnifiedForm() {
   const host = $('entry-form-host');
   const form = host?.querySelector('.entry-form');
   if (form) form.remove();
+  openForm = null;
+  calMode = 'rest';
+  fineSnap = false;
   document.querySelectorAll('.entry.editing').forEach((el) => el.classList.remove('editing'));
+  // The edited entry's stored segments were suppressed while the form was open — repaint so
+  // they return (and the mode chrome drops) without waiting for a data reload.
+  if (state) renderEntries();
 }
 
-// §12 R06 (G5/G6/G7): the UNIFIED ENTRY FORM in EDIT MODE — the single in-window editor for
-// an existing entry, opened INLINE in the Entries view (no modal, no backdrop, position:static
-// in flow) from an entry's Edit affordance OR a click on the entry itself. It is the same form
-// the manual-add uses (add mode is §12 R07), so editing an entry is identical to creating one.
-// It seeds EVERY tt-editable field from the entry — the multiline description (a 3-line
-// textarea, §05 R10), client + project selects (pre-selected), the tag chips (G6), the billable
-// toggle, and the start/stop instants via the inline interval picker (§12 R15) over the collapsed
-// Start/Stop expander (§12 R17, the exact / overnight path). On Save it sends ONLY the changed
-// fields as { id, patch } over the same `edit` IPC tt uses — the sole commit (G7). The edit-mode
-// FOOTER carries a Split control (window.stint.split) and a two-step Delete gate (confirmInline
-// → window.stint.remove), so split + delete are reachable from the form itself (§06 R1/R2);
-// merge stays the corner-checkbox multi-select path (§06 R3). Editing the RUNNING entry must NOT
-// stop it: the open row's form omits End (start-only), so the patch never carries endUtc and the
-// row stays open (§05 R6).
-async function openEntryForm(row, e) {
-  const running = e.endUtc === null;
-  // The current client / project (the two halves of "Client / Project") so the selects can
-  // pre-select them without the renderer ever resolving names itself.
-  const currentClient = e.clientLabel ? e.clientLabel.split(' / ')[0] : '';
+// §12 R24: does the open form's current field state differ from its seed? The seed is the
+// snapshot taken at open (edit: the entry's stored values; add: the blank form + the dragged
+// interval), so a fresh form reads CLEAN and any typed/ dragged change reads DIRTY until
+// saved or discarded. Tags compare as ordered lists — the chips only ever append/remove.
+function formIsDirty() {
+  if (!openForm) return false;
+  const f = openForm.form;
+  const s = openForm.seed;
+  if ((f.querySelector('.edit-desc')?.value ?? '') !== s.desc) return true;
+  if ((f.querySelector('.edit-client')?.value ?? '') !== s.client) return true;
+  if ((f.querySelector('.edit-project')?.value ?? '') !== s.project) return true;
+  if ((f.querySelector('.edit-bill-box')?.getAttribute('aria-checked') === 'true') !== s.bill) return true;
+  if ((f.querySelector('.edit-start')?.value ?? '') !== s.start) return true;
+  if (!openForm.running && (f.querySelector('.edit-end')?.value ?? '') !== s.stop) return true;
+  if (JSON.stringify(openForm.tags) !== JSON.stringify(s.tags)) return true;
+  return false;
+}
+
+// §12 R24 — the pending-changes gate. Swapping the form's subject (clicking another event,
+// an empty spot / the + button to start a create, or an external refresh re-seeding the
+// form) runs through here: a CLEAN form swaps in place — no prompt, no animation — while a
+// dirty form blocks on the keep-editing / discard-changes dialog. Keep editing returns to
+// the form untouched; only the explicit Discard abandons the pending fields and performs
+// the swap. No path replaces or closes a dirty form silently.
+function guardedSwap(perform) {
+  if (!openForm || !formIsDirty()) {
+    perform();
+    return;
+  }
+  openPendingGate(perform);
+}
+
+// The gate dialog itself (mockup edit-entry.html .gatecard): the app's second modal, riding
+// the same backdrop idiom as the merge-conflict prompt so design.html D11's accent handoff
+// (syncStandingPrimary reads .editor-backdrop) covers it. Keep editing is the primary — the
+// non-destructive default, also what Escape and a backdrop click resolve to; Discard changes
+// wears the danger text idiom (it destroys typed work).
+function openPendingGate(perform) {
+  if (document.querySelector('.gate-backdrop')) return; // one gate at a time
+  const backdrop = document.createElement('div');
+  backdrop.className = 'editor-backdrop gate-backdrop';
+  backdrop.innerHTML =
+    `<div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="gate-h">` +
+    `<h3 id="gate-h">Discard unsaved changes?</h3>` +
+    `<p>This entry has edits that haven't been saved. Keep editing to stay here, or discard them to open the other entry.</p>` +
+    `<div class="gate-row">` +
+    `<button type="button" class="small danger gate-discard">Discard changes</button>` +
+    `<button type="button" class="small primary gate-keep">Keep editing</button>` +
+    `</div></div>`;
+  const dismiss = () => {
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey, true);
+  };
+  const keep = () => {
+    dismiss();
+    openForm?.form.querySelector('.edit-desc')?.focus();
+  };
+  const onKey = (ev) => {
+    if (ev.key === 'Escape') {
+      ev.stopPropagation();
+      keep();
+    }
+  };
+  backdrop.querySelector('.gate-keep').addEventListener('click', keep);
+  backdrop.querySelector('.gate-discard').addEventListener('click', () => {
+    dismiss();
+    perform();
+  });
+  backdrop.addEventListener('click', (ev) => {
+    if (ev.target === backdrop) keep(); // outside click = the non-destructive default
+  });
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(backdrop);
+  backdrop.querySelector('.gate-keep').focus();
+}
+
+// §12 R24: an external refresh (a tt write) arrived while an EDIT form is open — re-seed the
+// form's subject from the fresh snapshot. A clean form adopts the fresh truth silently (or
+// closes if the entry is gone — nothing typed, nothing lost); the DIRTY case only lands here
+// from the gate's explicit Discard.
+function reseedFromSnapshot() {
+  if (!openForm || openForm.mode !== 'edit') return;
+  const id = openForm.entry.id;
+  const fresh = (state?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === id);
+  if (!fresh) {
+    closeUnifiedForm();
+    return;
+  }
+  void openUnifiedForm({ mode: 'edit', entry: fresh });
+}
+
+// §12 R06/R07 (G5/G6/G7): the ONE unified entry form — built once here for BOTH modes and
+// mounted in the view-level #entry-form-host ABOVE the week grid, inline in the Entries view
+// (no modal; the upward expansion leaves the grid in position). The REDUCED field set — the
+// form holds exactly: a 3-line multiline description (§05 R10), client, project below client,
+// tags, billable, the raw Start/Stop fields (R17 — the exact-entry escape hatch and the only
+// path for overnight; a grid drag updates them live and they drive the grid block back), and
+// Save entry / Cancel — nothing else, every `tt add`/`tt edit` attribute reachable (§05 R05).
+//
+// ADD mode (R07) opens BLANK: no last-used client/project seeding, description empty,
+// billable per its §05 R07 client-keyed default (untouched → omitted from the payload so core
+// derives it), start/stop seeded ONLY from the dragged interval (or the working-hours
+// default). Save entry is the sole commit over the unchanged `add` IPC.
+//
+// EDIT mode (R06) seeds EVERY tt-editable field from the entry; start/stop adjust by
+// dragging the selected event's edges on the grid (snapping per R23) or by typing — same
+// form values either way — and Save sends a changed-fields-only patch over the same `edit`
+// IPC tt uses. The footer adds Split (§06 R02) and the two-step Delete (R13). Editing the
+// RUNNING entry must not stop it: the open row's form omits Stop, so the patch never
+// carries endUtc (§05 R06).
+async function openUnifiedForm(opts) {
+  const mode = opts.mode;
+  const e = opts.entry ?? null;
+  const running = mode === 'edit' && e.endUtc === null;
+  closeUnifiedForm(); // one form ever (add or edit)
+
+  const currentClient = e?.clientLabel ? e.clientLabel.split(' / ')[0] : '';
   const currentProject =
-    e.clientLabel && e.clientLabel.includes(' / ')
+    e?.clientLabel && e.clientLabel.includes(' / ')
       ? e.clientLabel.split(' / ').slice(1).join(' / ')
       : '';
 
   const form = document.createElement('form');
-  // §12 R06 (G5): ONE unified entry form — edit mode uses the SAME two-column `.uf-body`
-  // structure add mode does (mockup edit-entry.html shows the two-column card for BOTH modes),
-  // so the form carries `unified-form` and reuses its `.uf-*` layout CSS verbatim. `edit-form`
-  // + `entry-form` stay as the behavioural hooks the JUDGE UNIFIED_FORM scene and the tests
-  // target; the per-field `.edit-*`/`.ef-*` hooks ride alongside the shared `.uf-*` styling
-  // classes, so the two modes are one layout with two seedings.
-  form.className = 'entry-form unified-form edit-form';
-  form.dataset.mode = 'edit';
-  // The edited entry's id, so the JUDGE/tests can target this form (only one is ever open) and
-  // closeEntryForm can tie it back to the calendar event carrying the .editing selection state.
-  form.dataset.id = String(e.id);
-  // End is omitted for the open entry (§05 R6/§12 R06): editing the running entry's start must
-  // not require an end, so the open row stays open. The Start/Stop expander is the exact /
-  // overnight path (§12 R17); it holds RAW text fields (localInputValue format, NOT native
-  // datetime-local, G1) — the same fields the inline picker writes and a typed overnight span uses.
-  const endField = running
+  // `entry-form unified-form` are the shared behavioural hooks (one form, two modes); the
+  // per-mode class rides alongside for the tests/JUDGE scenes that target a mode.
+  form.className = 'entry-form unified-form ' + (mode === 'edit' ? 'edit-form' : 'add-form');
+  form.dataset.mode = mode;
+  if (mode === 'edit') form.dataset.id = String(e.id);
+  const stopField = running
     ? ''
     : `<label class="uf-field"><span>Stop</span>` +
-      `<input type="text" class="edit-end edit-time uf-time" autocomplete="off" spellcheck="false" ` +
+      `<input type="text" class="edit-end edit-time uf-time tnum" autocomplete="off" spellcheck="false" ` +
       `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry stop time" /></label>`;
   form.innerHTML =
-    // §12 R06 (G5): the two-column body — LEFT column = the attribute fields, RIGHT column = the
-    // inline interval picker over the collapsed Start/Stop expander. Identical shape to add mode.
-    `<div class="uf-body">` +
-    `<div class="uf-fields">` +
-    // §05 R10 — the description is a 3-line scrollable textarea, so a multiline description is
-    // shown (and edited) with its newlines intact. The submit reads .value.trim(), which strips
-    // only the OUTER whitespace and preserves every interior newline, so the stored record stays
-    // verbatim. design.html D13 (issue 136): it carries the same visible `.uf-field` label its
-    // Client / Project / Tags siblings below do — edit mode had the add form's exact defect, the
-    // one unlabelled field in an otherwise labelled column. The placeholder stays: "(no
-    // description)" describes the EMPTY state, it does not repeat the label.
+    // The mockup's three-column body: description + tags · client/project/billable · the
+    // Start/Stop pair (edit-entry.html .eform). Every field carries a visible label (D13).
+    `<div class="ef-cols">` +
+    `<div class="ef-fcol">` +
+    // §05 R10 — a 3-line scrollable textarea keeps interior newlines verbatim (the submit
+    // trims only outer whitespace).
     `<label class="uf-field uf-desc"><span>Description</span>` +
-    `<textarea class="edit-desc desc-field" rows="3" placeholder="(no description)"></textarea></label>` +
-    `<label class="uf-field"><span>Client</span>` +
-    `<select class="edit-client uf-select"></select></label>` +
-    // §12 R06 (G6): project is editable in the same form; it is populated for the chosen client
-    // and pre-selected to the entry's project. Disabled until a client is chosen.
-    `<label class="uf-field"><span>Project</span>` +
-    `<select class="edit-project uf-select" disabled></select></label>` +
-    // §12 R06 (G6): tags edit in the unified form as removable chips + an add input.
+    `<textarea class="edit-desc desc-field" rows="3" autocomplete="off" placeholder="${mode === 'add' ? 'What were you doing?' : '(no description)'}"></textarea></label>` +
     `<label class="uf-field uf-tags"><span>Tags</span>` +
     `<span class="chips uf-tag-chips ef-tag-chips"></span></label>` +
-    `<label class="uf-bill"><input type="checkbox" class="edit-bill-box" /> Billable</label>` +
-    // §12 R10 (G12): the in-context flags region — the overlap detail (amount + neighbour) and the
-    // reversible sleep subtract/restore control + struck raw-vs-trimmed billable. Always in the DOM
-    // (hidden when the entry carries neither flag); filled + rewired by renderFlags() below.
-    `<div class="ef-flags" hidden></div>` +
+    // §12 R10 (G12): the in-context flags region (edit mode) — overlap detail + the
+    // reversible sleep subtract/restore. Hidden when the entry carries neither flag.
+    (mode === 'edit' ? `<div class="ef-flags" hidden></div>` : '') +
     `</div>` +
-    `<div class="uf-picker">` +
-    // §12 R15 (G5/G7): the inline interval picker — the primary picking surface. Mounted in flow
-    // into this host (below), bound to THIS form's raw Start/Stop fields (in the expander below).
-    `<div class="edit-picker uf-picker-mount"></div>` +
-    // §12 R17: the collapsed Start/Stop expander — the exact-time escape hatch and the only path
-    // for overnight spans. Collapsed by default; the raw fields it holds are the SAME values the
-    // inline picker above writes, so expander and picker drive one set of form values.
-    `<div class="uf-times ef-times">` +
-    `<button type="button" class="ef-times-toggle" aria-expanded="false">Start / Stop (exact times)</button>` +
-    `<div class="ef-times-body" hidden>` +
+    `<div class="ef-acol">` +
+    `<label class="uf-field"><span>Client</span>` +
+    `<select class="edit-client uf-select"></select></label>` +
+    `<label class="uf-field"><span>Project</span>` +
+    `<select class="edit-project uf-select" disabled></select></label>` +
+    // The billable control is the shared switch idiom (.sw — the Show-weekend / fine-snap
+    // control), with its visible label riding beside it (mockup edit-entry.html .toggle).
+    `<span class="uf-bill"><button type="button" class="sw edit-bill-box" role="switch" ` +
+    `aria-checked="false" aria-label="Billable"><i aria-hidden="true"></i></button> Billable</span>` +
+    `</div>` +
+    `<div class="ef-tcol">` +
+    // §12 R17: raw text fields — the format the user reads and retypes (localInputValue,
+    // seconds always shown, no `T`, issue #159), NEVER datetime-local (G1). A stop dated a
+    // later day makes an OVERNIGHT span; the grid drag writes these live and typing here
+    // moves the grid block — one set of form values (R06/R07/R17).
     `<label class="uf-field"><span>Start</span>` +
-    `<input type="text" class="edit-start edit-time uf-time" autocomplete="off" spellcheck="false" ` +
+    `<input type="text" class="edit-start edit-time uf-time tnum" autocomplete="off" spellcheck="false" ` +
     `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Entry start time" /></label>` +
-    endField +
-    `</div></div>` +
+    stopField +
     `</div>` +
     `</div>` +
     // §12 R21: a refused Save is surfaced HERE, inline at the point of action — a core
-    // StoreError (Stop-before-Start, split-in-span, etc.) or a locally-thrown parse error
-    // (unparseable Start/Stop text). Announced (role=status/aria-live); the form stays open
-    // and the message persists until the next input on it (see the .ef-warning input wiring).
+    // StoreError over the add/edit IPC or a locally-thrown parse error. Announced; the form
+    // stays open and the message persists until the next input on it.
     `<div class="ef-warning form-error" role="status" aria-live="polite" hidden></div>` +
-    // §12 R06: the edit-mode footer, laid out by the shared `.uf-foot` grid. Only Save entry
-    // carries the accent (§15); Split, Cancel and the two-step Delete are quiet. Split leads, then
-    // a flexible spacer pushes Save / Cancel / Delete to the trailing edge.
+    // The footer (mockup): Split + Delete lead in edit mode, then Cancel and the one
+    // accent-solid Save entry (§15 / design.html D11).
     `<div class="uf-foot edit-foot">` +
-    (running
-      ? ''
-      : `<button type="button" class="small ghost ef-split" data-act="split">Split</button>`) +
+    (mode === 'edit' && !running
+      ? `<button type="button" class="small ghost ef-split" data-act="split">Split</button>`
+      : '') +
+    // Delete carries the standard .danger text treatment (mockup edit-entry.html .btn.danger),
+    // never the accent; the two-step confirm gate still arms before anything destroys (R13).
+    (mode === 'edit'
+      ? `<button type="button" class="small danger ef-delete" data-act="delete">Delete</button>`
+      : '') +
     `<span class="uf-foot-spacer ef-foot-spacer"></span>` +
-    `<button type="submit" class="small primary">Save entry</button>` +
     `<button type="button" class="small ghost edit-cancel">Cancel</button>` +
-    `<button type="button" class="small ghost ef-delete" data-act="delete">Delete</button>` +
+    `<button type="submit" class="small primary">Save entry</button>` +
     `</div>`;
-  form.querySelector('.edit-desc').value = e.description ?? '';
-  // §12 R15 (issue #49): seed the raw Start/Stop fields with the entry's EXACT stored instants —
-  // localInputValue always renders seconds, so a 09:07:33 start reads 09:07:33, never a 5-min-
-  // snapped 09:05 (and never a `T` the user has to edit around, issue #159). Keep the seeded
-  // strings: the submit handler treats a byte-identical
-  // field as UNTOUCHED and sends no time patch, so open-then-Save round-trips start/stop unchanged.
-  const seededStart = localInputValue(new Date(e.startUtc));
-  form.querySelector('.edit-start').value = seededStart;
-  const seededEnd = running ? '' : localInputValue(new Date(e.endUtc));
-  if (!running) form.querySelector('.edit-end').value = seededEnd;
-  form.querySelector('.edit-bill-box').checked = !!e.billable;
+
+  // ---- seed the fields --------------------------------------------------------------
+  const descField = form.querySelector('.edit-desc');
+  const startInput = form.querySelector('.edit-start');
+  const endInput = form.querySelector('.edit-end');
+  // The billable switch state lives on aria-checked (a button.sw, not a checkbox) — one
+  // place read by the dirty check, the submit, and the §05 R07 client-follow below.
+  const bill = form.querySelector('.edit-bill-box');
+  const billOn = () => bill.getAttribute('aria-checked') === 'true';
+  const setBill = (on) => {
+    bill.setAttribute('aria-checked', String(on));
+    bill.classList.toggle('on', on);
+  };
+  let seededStart = '';
+  let seededEnd = '';
+  if (mode === 'edit') {
+    descField.value = e.description ?? '';
+    // §12 R17 (issue #49): seed the raw Start/Stop with the EXACT stored instants —
+    // localInputValue always renders seconds, so a 09:07:33 start reads 09:07:33, never a
+    // snapped 09:05. The submit treats a byte-identical field as UNTOUCHED (no time patch),
+    // so open-then-Save round-trips stored times to the second.
+    seededStart = localInputValue(new Date(e.startUtc));
+    startInput.value = seededStart;
+    if (!running) {
+      seededEnd = localInputValue(new Date(e.endUtc));
+      endInput.value = seededEnd;
+    }
+    setBill(!!e.billable);
+  } else {
+    // §12 R07: the form opens BLANK — only the interval is seeded (from the drag, or the
+    // working-hours default). Whole-minute values: this is a fresh suggestion, not stored
+    // truth, so clean :00 seconds are honest.
+    seededStart = opts.startIso ? localInputValue(new Date(opts.startIso)) : '';
+    seededEnd = opts.stopIso ? localInputValue(new Date(opts.stopIso)) : '';
+    startInput.value = seededStart;
+    endInput.value = seededEnd;
+    setBill(false); // §05 R07: tracks the client select until touched (below)
+  }
 
   const select = form.querySelector('.edit-client');
   const projectSelect = form.querySelector('.edit-project');
-  // currentClientId/currentProjectId are filled once the reference data resolves; they stay
-  // null until then, and the save handler reads them lazily (the user cannot submit before the
-  // selects populate).
   let currentClientId = null;
   let currentProjectId = null;
 
-  // §12 R06 (G6): the in-form tag chip editor. `nextTags` is the working set the chips mutate;
-  // Save diffs it against the entry's original tags via the pure window.SU.tagDiff and sends the
-  // minimal { addTags, removeTags } inside the one patch — the renderer holds no tag logic.
-  const originalTags = (e.tags ?? []).slice();
+  // §12 R06/R07 (G6): the in-form tag chip editor — `nextTags` is the working set the chips
+  // mutate; edit-mode Save diffs it via the pure window.SU.tagDiff, add-mode Save sends it whole.
+  const originalTags = mode === 'edit' ? (e.tags ?? []).slice() : [];
   const nextTags = originalTags.slice();
   const chipHost = form.querySelector('.ef-tag-chips');
   const tagInput = document.createElement('input');
@@ -1718,154 +2342,169 @@ async function openEntryForm(row, e) {
   });
   renderTagChips();
 
-  // §12 R17: the Start/Stop expander toggle reveals / hides the raw exact-time fields in flow.
-  const timesToggle = form.querySelector('.ef-times-toggle');
-  const timesBody = form.querySelector('.ef-times-body');
-  timesToggle.addEventListener('click', () => {
-    const open = timesBody.hidden;
-    timesBody.hidden = !open;
-    timesToggle.setAttribute('aria-expanded', String(open));
+  // §05 R07 (add mode): billable defaults off the one client-keyed rule — the checkbox
+  // tracks the Client select until the user touches it, and an UNTOUCHED box is omitted
+  // from the payload so core derives the default (the same tri-state the Start form uses).
+  let billTouched = mode === 'edit';
+  bill.addEventListener('click', () => {
+    billTouched = true;
+    setBill(!billOn());
   });
 
-  // §12 R10 (G12): paint the in-context flags region and (re)bind its reversible sleep control.
-  // Subtracting excludes the recorded slept span from billable; subtracting again restores it —
-  // core owns the toggle (store.subtractSleep, reached over the existing subtractSleep IPC, NO new
-  // channel). After the write we re-read the entry off the fresh snapshot and repaint the region in
-  // place so the editor stays open: the button flips Subtract slept ↔ Restore and durHtml's struck
-  // raw-vs-trimmed billable appears / disappears. Called once on open, then after each toggle.
-  const flagsRow = form.querySelector('.ef-flags');
-  function renderFlags() {
-    flagsRow.innerHTML = editorFlagsInnerHtml(e);
-    flagsRow.hidden = flagsRow.innerHTML === '';
-    const subtractBtn = flagsRow.querySelector('.ef-subtract');
-    if (subtractBtn) {
-      subtractBtn.addEventListener('click', async (ev) => {
+  // ---- form state (R24 seed) ----------------------------------------------------------
+  // The select halves are patched once the async reference data pre-selects them, so the
+  // seed always reflects what the user actually saw (openForm doc-comment above).
+  openForm = {
+    mode,
+    entry: e,
+    running,
+    form,
+    tags: nextTags,
+    seed: {
+      desc: descField.value,
+      client: select.value,
+      project: projectSelect.value,
+      bill: billOn(),
+      start: startInput.value,
+      stop: endInput ? endInput.value : '',
+      tags: nextTags.slice(),
+    },
+  };
+
+  // §12 R10 (G12): the in-context flags region + its reversible sleep control (edit mode).
+  if (mode === 'edit') {
+    const flagsRow = form.querySelector('.ef-flags');
+    const renderFlags = () => {
+      flagsRow.innerHTML = editorFlagsInnerHtml(e);
+      flagsRow.hidden = flagsRow.innerHTML === '';
+      const subtractBtn = flagsRow.querySelector('.ef-subtract');
+      if (subtractBtn) {
+        subtractBtn.addEventListener('click', async (ev) => {
+          ev.stopPropagation();
+          await window.stint.subtractSleep({ id: e.id });
+          // Re-read the toggled entry off core's snapshot — the editor owns no sleep math.
+          const st = await window.stint.getState();
+          const fresh = (st?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === e.id);
+          if (fresh) {
+            e.excludedSeconds = fresh.excludedSeconds;
+            e.billableSeconds = fresh.billableSeconds;
+            e.rawSeconds = fresh.rawSeconds;
+          }
+          renderFlags();
+        });
+      }
+    };
+    renderFlags();
+    // §06 R2 / §12 R13: the footer Split + the two-step Delete gate.
+    const splitBtn = form.querySelector('.ef-split');
+    if (splitBtn) {
+      splitBtn.addEventListener('click', (ev) => {
         ev.stopPropagation();
-        await window.stint.subtractSleep({ id: e.id });
-        // Re-read the toggled entry off core's snapshot (subtractSleep returns nothing; refreshAll
-        // pushes new state in production, getState reads it here) — the editor owns no sleep math.
-        const st = await window.stint.getState();
-        const fresh = (st?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === e.id);
-        if (fresh) {
-          e.excludedSeconds = fresh.excludedSeconds;
-          e.billableSeconds = fresh.billableSeconds;
-          e.rawSeconds = fresh.rawSeconds;
-        }
-        renderFlags();
+        openSplitForm(ev.currentTarget, e);
       });
     }
-  }
-  renderFlags();
-
-  form.querySelector('.edit-cancel').addEventListener('click', () => closeEntryForm());
-  // §12 R06 / §06 R2: the footer Split control cuts a closed span in two. It reuses the same
-  // inline instant picker + `split` IPC the (retiring) row affordance used — offered only on a
-  // closed entry (an open row has no end to cut). Absent for the running entry.
-  const splitBtn = form.querySelector('.ef-split');
-  if (splitBtn) {
-    splitBtn.addEventListener('click', (ev) => {
+    form.querySelector('.ef-delete').addEventListener('click', (ev) => {
       ev.stopPropagation();
-      openSplitForm(ev.currentTarget, e);
+      armDelete(ev.currentTarget, e);
     });
   }
-  // §12 R06 / §06 R1 / §12 R13: the footer's two-step Delete gate. The first click ARMS an
-  // explicit confirm affordance; only the explicit confirm removes the entry (window.stint.remove).
-  form.querySelector('.ef-delete').addEventListener('click', (ev) => {
-    ev.stopPropagation();
-    armDelete(ev.currentTarget, e);
-  });
+
+  form.querySelector('.edit-cancel').addEventListener('click', () => closeUnifiedForm());
+
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     addTypedTag(); // fold any half-typed tag still in the add input
-    const desc = form.querySelector('.edit-desc').value.trim();
-    const startLocal = form.querySelector('.edit-start').value;
-    const endLocal = running ? '' : form.querySelector('.edit-end').value;
-    const billable = form.querySelector('.edit-bill-box').checked;
-    const clientSel = select.value === '' ? null : Number(select.value);
-    const projectSel = projectSelect.value === '' ? null : Number(projectSelect.value);
-
-    // §12 R21: catch BOTH failure modes so a refused Save is surfaced, never silently swallowed —
-    // (a) a locally-thrown parse error (unparseable Start/Stop text makes `new Date(...).toISOString()`
-    // throw a RangeError while the patch is assembled) and (b) a core StoreError forwarded over the
-    // `edit` IPC (Stop-before-Start, §05 R11). On either, the form stays open and the message region
-    // shows the reason; the entry is unchanged. Only the success path reloads + closes.
     const warn = form.querySelector('.ef-warning');
+    // §12 R21: catch BOTH failure modes — a locally-thrown parse error and a core
+    // StoreError forwarded over the IPC. On either, the form stays open with the reason.
     try {
-      // §12 R06 (G7): Save is the sole commit — send ONLY the changed fields. For the open entry
-      // the form has no End input, so the patch never carries endUtc and editing cannot close it.
-      // §12 R15 (issue #49): a Start/Stop field whose text is byte-identical to what the form
-      // seeded is UNTOUCHED — it contributes nothing to the patch, so Save after merely opening
-      // the editor (no drag, no typing) preserves the stored start/stop exactly, to the second.
+      if (mode === 'add') {
+        // §12 R07 (G7): Save entry is the sole commit over the UNCHANGED `add` IPC — the
+        // raw field text travels verbatim (both spellings parse in the handler), the
+        // selects contribute NAMES so core resolves them through the same rule tt add uses.
+        const desc = descField.value.trim();
+        const clientName =
+          select.value === '' ? '' : (select.options[select.selectedIndex]?.textContent || '').trim();
+        const projectName =
+          projectSelect.value === ''
+            ? ''
+            : (projectSelect.options[projectSelect.selectedIndex]?.textContent || '').trim();
+        const payload = {
+          fromLocal: startInput.value,
+          toLocal: endInput.value,
+        };
+        if (desc) payload.description = desc;
+        if (clientName) payload.client = clientName;
+        if (projectName) payload.project = projectName;
+        if (nextTags.length) payload.tags = nextTags.slice();
+        if (billTouched) payload.billable = billOn(); // §05 R07: untouched → core derives
+        const ack = await window.stint.add(payload);
+        closeUnifiedForm();
+        await load();
+        applyAck(ack); // §06 R4: an overlapping backfill saves, warned in the banner
+        return;
+      }
+      // §12 R06 (G7): edit mode — send ONLY the changed fields. A Start/Stop field whose
+      // text is byte-identical to the seed is UNTOUCHED and contributes no time patch, so
+      // open-then-Save round-trips stored times to the second (issue #49).
+      const desc = descField.value.trim();
       const patch = {};
       const nextDesc = desc || null;
       if (nextDesc !== (e.description ?? null)) patch.description = nextDesc;
+      const startLocal = startInput.value;
       if (startLocal && startLocal !== seededStart) {
         const nextStart = parseLocalInput(startLocal).toISOString();
         if (nextStart !== new Date(e.startUtc).toISOString()) patch.startUtc = nextStart;
       }
+      const endLocal = running ? '' : endInput.value;
       if (!running && endLocal && endLocal !== seededEnd) {
         const nextEnd = parseLocalInput(endLocal).toISOString();
         if (nextEnd !== new Date(e.endUtc).toISOString()) patch.endUtc = nextEnd;
       }
-      if (billable !== !!e.billable) patch.billable = billable;
+      if (billOn() !== !!e.billable) patch.billable = billOn();
+      const clientSel = select.value === '' ? null : Number(select.value);
+      const projectSel = projectSelect.value === '' ? null : Number(projectSelect.value);
       if (clientSel !== currentClientId) patch.clientId = clientSel;
-      // Project only rides along when the client is unchanged or the project actually differs;
-      // a null clears it. (Changing the client resets the project select, so a stale id never leaks.)
       if (projectSel !== currentProjectId) patch.projectId = projectSel;
       const { addTags, removeTags } = tagDiff(originalTags, nextTags);
       if (addTags.length) patch.addTags = addTags;
       if (removeTags.length) patch.removeTags = removeTags;
 
-      // §06 R4: an edit can move the entry onto an overlapping span; capture the WriteAck, reload
-      // to repaint the per-row flags, then raise the inline banner (after load(), which clears it).
-      // The write already committed — the banner is advisory.
+      // §06 R4: an edit can move the entry onto an overlapping span; the write already
+      // committed — the banner is advisory.
       const ack = await window.stint.edit({ id: e.id, patch });
+      closeUnifiedForm();
       await load();
       applyAck(ack);
     } catch (err) {
       showFormError(warn, err);
     }
   });
-  // §12 R21: the message persists until the next input on the form — any keystroke / field
-  // change clears it, so a corrected value starts from a clean slate (the add-form pattern).
-  form.addEventListener('input', () => clearFormError(form.querySelector('.ef-warning')));
+  // §12 R21: the message persists until the next input on the form. §12 R17: typing in the
+  // raw Start/Stop fields moves the grid block live — grid and fields drive the same values.
+  form.addEventListener('input', (ev) => {
+    clearFormError(form.querySelector('.ef-warning'));
+    if (ev.target === startInput || ev.target === endInput) paintPendingOverlay();
+  });
 
-  // §12 R06 (G5): mount the form in the SAME view-level host add mode uses (#entry-form-host), in
-  // the view flow — NOT inside the clicked calendar event (a ~124px day column would crush the
-  // wide two-column card and push its footer under the neighbouring columns). The event keeps its
-  // content and gains a subtle .editing selection state; only ONE form (add or edit) shows at a
-  // time, so close any open add/edit form first. Scroll the card into view on open. The form is in
-  // the DOM before the async reference-data fetch, so the seeded fields (description/tags/billable/
-  // times) are visible immediately while the selects are still populating.
-  closeAddForm();
-  closeEntryForm();
-  row.classList.add('editing');
+  // ---- mount ---------------------------------------------------------------------------
+  // §12 R06/R07 (G5): the ONE view-level host above the week grid — the quick upward
+  // expansion leaves the grid in position (CSS .entry-form animation; instant under
+  // reduced motion). Mode chrome (gray-out, hidden +, fine-snap toggle, the interval
+  // overlay) resolves off the new state on the repaint below.
   const host = $('entry-form-host');
   host.appendChild(form);
-  // design.html D10/A06: the courtesy scroll is motion, so reduced-motion collapses it to a jump
-  // (the CSS half — the reduced-motion media block in styles.css — cannot reach a JS scroll).
+  calMode = 'form';
+  fineSnap = false; // §12 R23: coarse on every open
+  renderEntries();
   host.scrollIntoView({
     block: 'nearest',
     behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
   });
-  form.querySelector('.edit-desc').focus();
+  descField.focus();
 
-  // §12 R15 (G5/G7): mount the inline interval picker into the form's picker host, bound to THIS
-  // form's Start/Stop fields (the §12 R17 expander inputs) — mounted AFTER the form is in the DOM
-  // so the column geometry measures correctly. A closed entry binds both fields (body-drag moves
-  // the whole span, the bottom grip resizes the stop); the running (open) entry — whose form has
-  // only a Start field — gets the START-ONLY variant, structurally unable to write a stop, so
-  // editing it cannot close the row (§05 R06). The picker writes the fields LIVE; Save entry stays
-  // the sole commit (G7). Text stays authoritative — the picker only ever sets the inputs' value.
-  mountIntervalPicker({
-    host: form.querySelector('.edit-picker'),
-    startInput: form.querySelector('.edit-start'),
-    endInput: running ? null : form.querySelector('.edit-end'),
-    excludeId: e.id,
-  });
-
-  // §12 R06 (G6): populate the project select from the same source tt uses, for the given
-  // client id, and pre-select the entry's project by name. "(no project)" maps to null.
+  // §12 R06 (G6): populate the selects from the same source tt uses; pre-select the entry's
+  // client/project (edit) or leave them blank (add — no last-used seeding, R07).
   async function fillProjects(clientId, preselectName) {
     projectSelect.innerHTML = '';
     const none = document.createElement('option');
@@ -1890,10 +2529,7 @@ async function openEntryForm(row, e) {
     projectSelect.value = currentProjectId === null ? '' : String(currentProjectId);
   }
 
-  // Populate the client select from the same source tt uses; pre-select the current client by
-  // name. "(no client)" maps to a null clientId on save. Changing the client repopulates the
-  // project select (dropping any stale pre-selection).
-  const clients = await window.stint.listClients();
+  const clients = (await window.stint.listClients()) || [];
   const none = document.createElement('option');
   none.value = '';
   none.textContent = '(no client)';
@@ -1902,13 +2538,22 @@ async function openEntryForm(row, e) {
     const opt = document.createElement('option');
     opt.value = String(c.id);
     opt.textContent = c.name;
-    if (c.name === currentClient) currentClientId = c.id;
+    if (mode === 'edit' && c.name === currentClient) currentClientId = c.id;
     select.appendChild(opt);
   }
   select.value = currentClientId === null ? '' : String(currentClientId);
-  await fillProjects(currentClientId, currentProject);
+  await fillProjects(currentClientId, mode === 'edit' ? currentProject : null);
+  // R24: the async pre-selection is part of the SEED, not a user edit — patch it in (the
+  // guard keeps a subject swap that closed this form from resurrecting a stale seed).
+  if (openForm && openForm.form === form) {
+    openForm.seed.client = select.value;
+    openForm.seed.project = projectSelect.value;
+  }
   select.addEventListener('change', () => {
     const cid = select.value === '' ? null : Number(select.value);
+    // §05 R07 (add mode): an untouched Billable box follows the client — set once a client
+    // is chosen, cleared when none — until the user's own click wins.
+    if (mode === 'add' && !billTouched) setBill(select.value !== '');
     void fillProjects(cid, null); // a client change resets the project (no stale pre-selection)
   });
 }
@@ -1970,11 +2615,13 @@ $('toggle').addEventListener('click', async () => {
   // the timer (§05 R6). One click from the Timer live-edit strip lands the user in the editor
   // with tags/project editable.
   const openRunningEditor = () => {
-    const e = state?.status?.running ? state.status.entry : null;
-    if (!e) return;
+    const running = state?.status?.running ? state.status.entry : null;
+    if (!running) return;
     route('entries'); // render() repaints the Entries calendar, including the running event
-    const row = document.querySelector(`.entry[data-id="${e.id}"]`);
-    if (row) void openEntryForm(row, e);
+    // The unified form seeds from the DAY-GROUPED row shape (endUtc and the flag fields the
+    // status glance omits), so resolve the open row through the snapshot by id.
+    const e = (state?.days ?? []).flatMap((d) => d.entries).find((x) => x.id === running.id);
+    if (e) guardedSwap(() => void openUnifiedForm({ mode: 'edit', entry: e }));
   };
   const leTags = $('le-tags');
   const leProject = $('le-project');
@@ -2413,261 +3060,6 @@ startForm.addEventListener('submit', async (ev) => {
   await load();
   applyAck(ack);
 });
-
-// §12 R07 (G5/G7) — manual backfill through the ONE unified entry form in ADD mode: an inline,
-// two-column form (no modal) in the Entries view. The left column holds the same attributes
-// `tt add` accepts (multiline description, client/project, tags, billable); the right column
-// mounts the inline interval picker (§12 R15) over the collapsed Start/Stop expander (§12 R17).
-// The picker updates the form's start/stop state LIVE and "Save entry" is the SOLE commit. The
-// renderer stays a thin shell — it resolves nothing itself; client/project names and the
-// local→UTC conversion happen in the `add` IPC handler over core, exactly like tt.
-const addForm = $('add-form');
-
-// §12 R07 (G5/G6): the add form's live tag working set — the chips mutate this array and Save
-// reads it (parity with the edit form's in-form chip editor). Reset on each open so a fresh form
-// never inherits a prior draft's tags.
-let addFormTags = [];
-
-function renderAddTagChips() {
-  const host = $('add-tag-chips');
-  if (!host) return;
-  host.innerHTML = '';
-  for (const t of addFormTags) {
-    host.insertAdjacentHTML('beforeend', editableChipHtml(t));
-    host.lastElementChild.querySelector('.chip-x').addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const i = addFormTags.indexOf(t);
-      if (i >= 0) addFormTags.splice(i, 1);
-      renderAddTagChips();
-      $('add-tag-input')?.focus();
-    });
-  }
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.id = 'add-tag-input';
-  input.className = 'tag-add-input uf-tag-add';
-  input.placeholder = 'add a tag…';
-  input.autocomplete = 'off';
-  input.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter' || ev.key === ',') {
-      ev.preventDefault();
-      const name = input.value.trim();
-      input.value = '';
-      if (name && !addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
-      renderAddTagChips();
-      $('add-tag-input')?.focus();
-    }
-  });
-  host.appendChild(input);
-}
-
-// §12 R06 (G6): fill the add form's project select for the chosen client, from the same source
-// tt uses (window.stint.listProjects). Disabled with a "(no project)" default until a client is
-// chosen — the renderer resolves no names itself; Save sends the chosen project NAME.
-async function fillAddProjects(clientId) {
-  const sel = $('add-project');
-  sel.innerHTML = '';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = '(no project)';
-  sel.appendChild(none);
-  if (clientId == null) {
-    sel.disabled = true;
-    sel.value = '';
-    return;
-  }
-  sel.disabled = false;
-  const projects = (await window.stint.listProjects({ clientId })) || [];
-  for (const p of projects) {
-    const opt = document.createElement('option');
-    opt.value = String(p.id);
-    opt.textContent = p.name;
-    sel.appendChild(opt);
-  }
-}
-
-// §12 R15 (G5/G7): the ONE inline-interval-picker mount both unified-form modes (add + edit) and
-// the running variant consume. It renders the picker IN FLOW into `host`, bound to the form's raw
-// Start/Stop text fields — the authoritative form state "Save entry" reads — and writes them back
-// LIVE on every drag (no Apply, no commit of its own). A closed span binds both inputs via
-// STP.openInline (body-drag moves start+stop together; the bottom grip resizes only the stop, both
-// 5-min snap); the running/open case passes endInput null and gets STP.openStartOnly — the
-// START-ONLY variant, structurally incapable of computing or writing a stop (§05 R06 / G8), so it
-// paints the future-fade block with a start grip only. `excludeId` drops the edited entry from the
-// gray other-entry blocks (its own span is the "me" rectangle). Settings feed the ONE window
-// derivation (SU.timelineWindow). Degrades to plain text entry when the picker script is absent.
-function mountIntervalPicker({ host, startInput, endInput, excludeId }) {
-  if (!host || !startInput || typeof window.STP === 'undefined') return;
-  const common = {
-    host,
-    startInput,
-    otherEntries: snapshotEntries(excludeId ?? null),
-    settings: state?.settings ?? null,
-  };
-  if (!endInput) {
-    if (typeof window.STP.openStartOnly === 'function') window.STP.openStartOnly(common);
-    return;
-  }
-  if (typeof window.STP.openInline === 'function') window.STP.openInline({ ...common, endInput, onChange: () => {} });
-}
-
-// §12 R07 / §12 R15 (G7): mount the inline interval picker into the add form's right column. It
-// reads the raw Start/Stop text fields (#add-from/#add-to) as its seed and writes them back LIVE on
-// every drag — those fields are the authoritative form state "Save entry" reads, so the picker
-// updating them IS the form-state update (no separate model). The collapsed Start/Stop expander
-// drives the same fields (§12 R17). Consumes the shared mountIntervalPicker helper.
-function mountAddPicker() {
-  mountIntervalPicker({
-    host: $('add-picker'),
-    startInput: $('add-from'),
-    endInput: $('add-to'),
-    excludeId: null,
-  });
-}
-
-async function openAddForm() {
-  // One unified form at a time — close any open edit-mode form sharing this host (§12 R06/G5).
-  closeEntryForm();
-  // Populate the client select from the same source tt uses; a "(no client)" default keeps the
-  // clientless-internal path reachable (§05 R3).
-  const clients = (await window.stint.listClients()) || [];
-  const clientSel = $('add-client');
-  clientSel.innerHTML = '';
-  const none = document.createElement('option');
-  none.value = '';
-  none.textContent = '(no client)';
-  clientSel.appendChild(none);
-  for (const c of clients) {
-    const opt = document.createElement('option');
-    opt.value = String(c.id);
-    opt.textContent = c.name;
-    clientSel.appendChild(opt);
-  }
-  clientSel.value = '';
-  await fillAddProjects(null);
-  // A fresh attribute draft each open.
-  addFormTags = [];
-  renderAddTagChips();
-  $('add-bill').checked = true;
-  // Default the span to a sensible recent hour the user can adjust by dragging or typing.
-  // Seconds are zeroed: this is a fresh DEFAULT (there is no stored truth to preserve), and the
-  // picker no longer rewrites seeded fields on mount (§12 R15 / issue #49), so the default should
-  // read as a clean whole-minute suggestion.
-  const now = new Date();
-  now.setSeconds(0, 0);
-  const hourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-  $('add-from').value = localInputValue(hourAgo);
-  $('add-to').value = localInputValue(now);
-  // Through the shared primitive, so a refusal's `error` state class cannot outlive the message
-  // and leave the next OVERLAP ADVISORY wearing the block palette (design.html D15, issue 139).
-  clearFormError($('add-warning'));
-  // Collapse the Start/Stop expander — the inline picker is the primary picking surface (G2).
-  const timesBody = $('add-times-body');
-  if (timesBody) timesBody.hidden = true;
-  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
-  addForm.hidden = false;
-  $('add-toggle').setAttribute('aria-expanded', 'true');
-  // Mount the inline picker AFTER the form is visible so its column geometry measures correctly.
-  mountAddPicker();
-  $('add-desc').focus();
-}
-
-function closeAddForm() {
-  addForm.hidden = true;
-  $('add-toggle').setAttribute('aria-expanded', 'false');
-  $('add-desc').value = '';
-  $('add-from').value = '';
-  $('add-to').value = '';
-  $('add-bill').checked = true;
-  addFormTags = [];
-  const chips = $('add-tag-chips');
-  if (chips) chips.innerHTML = '';
-  const picker = $('add-picker');
-  if (picker) picker.innerHTML = ''; // drop the mounted inline picker
-  const timesBody = $('add-times-body');
-  if (timesBody) timesBody.hidden = true;
-  $('add-times-toggle')?.setAttribute('aria-expanded', 'false');
-  clearFormError($('add-warning'));
-}
-
-async function submitAddForm() {
-  const desc = $('add-desc').value.trim();
-  const clientSel = $('add-client');
-  const projectSel = $('add-project');
-  // The selects carry the entity id as value + the NAME as option text; Save sends the NAME, so
-  // core resolves it through the SAME single rule tt add uses (the renderer resolves nothing).
-  const clientName =
-    clientSel.value === '' ? '' : (clientSel.options[clientSel.selectedIndex]?.textContent || '').trim();
-  const projectName =
-    projectSel.value === '' ? '' : (projectSel.options[projectSel.selectedIndex]?.textContent || '').trim();
-  // Fold any half-typed tag still in the add input into the working set before Save.
-  const pending = $('add-tag-input');
-  if (pending && pending.value.trim()) {
-    const name = pending.value.trim();
-    pending.value = '';
-    if (!addFormTags.some((t) => t.toLowerCase() === name.toLowerCase())) addFormTags.push(name);
-    renderAddTagChips();
-  }
-  const payload = {
-    // §12 R07 (G7): Save entry is the SOLE commit — the from/to come from the raw Start/Stop
-    // fields the inline picker (and the expander) keep in sync, so the `add` IPC payload shape
-    // is unchanged (fromLocal/toLocal + attributes), exactly what `tt add` sends.
-    fromLocal: $('add-from').value,
-    toLocal: $('add-to').value,
-    billable: $('add-bill').checked,
-  };
-  if (desc) payload.description = desc;
-  if (clientName) payload.client = clientName;
-  if (projectName) payload.project = projectName;
-  if (addFormTags.length) payload.tags = addFormTags.slice();
-
-  const warn = $('add-warning');
-  try {
-    // §06 R4: a backfill that lands on an overlapping span is warned, not blocked — the
-    // entry still saves. The `add` IPC returns the uniform WriteAck (overlap warnings as
-    // {kind,message,overlapsWith} objects, exactly like start/edit), so we close the form,
-    // reload to repaint the durable per-row flags, then raise the SAME non-blocking inline
-    // overlap banner the other write paths use (load() clears it, so applyAck runs after).
-    const ack = await window.stint.add(payload);
-    closeAddForm();
-    await load();
-    applyAck(ack);
-  } catch (err) {
-    // Validation rejection from core (e.g. "stop time must be after start time"): show it in
-    // the form rather than throwing, so the user can correct the times. This is a
-    // BLOCK (the entry did not save), distinct from the overlap WARNING above — so
-    // showFormError flips the region to the --danger block palette (design.html D15).
-    showFormError(warn, err);
-  }
-}
-
-$('add-toggle').addEventListener('click', () => {
-  if (addForm.hidden) void openAddForm();
-  else closeAddForm();
-});
-$('add-cancel').addEventListener('click', () => closeAddForm());
-addForm.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  await submitAddForm();
-});
-// §12 R06 (G6): the client select drives the project options for the chosen client (same source
-// tt uses); changing the client refills the projects and clears any stale selection.
-$('add-client').addEventListener('change', () =>
-  void fillAddProjects($('add-client').value === '' ? null : Number($('add-client').value)),
-);
-// §12 R17: the collapsed Start/Stop expander toggle reveals / hides the raw exact-time fields in
-// flow — the exact / overnight escape hatch. Both the picker and these fields drive the same span.
-{
-  const toggle = $('add-times-toggle');
-  const body = $('add-times-body');
-  if (toggle && body) {
-    toggle.addEventListener('click', () => {
-      const open = body.hidden;
-      body.hidden = !open;
-      toggle.setAttribute('aria-expanded', String(open));
-    });
-  }
-}
 
 // §12 R15: the snapshot's CLOSED entries (other than the one being edited) so the picker can
 // paint them gray on its day column and flag overlaps yellow (warn-only). The running/open
@@ -3381,13 +3773,21 @@ window.stint.onChange(() => {
   // the in-window timer surface tracks the other surface (parity). load() refreshes `state`
   // (→ render() repaints the card + live-edit strip); renderFavorites repaints the rail.
   else if (activeView === 'timer') void load().then(() => renderFavorites());
-  // §12 R10 / §06 R06: on the Entries view, don't blow away an OPEN unified editor on a refresh.
-  // The form's own writes repaint the affected region in place — the reversible sleep subtract/
-  // restore (§12 R10) re-reads the toggled entry and repaints its flags region without leaving the
-  // editor — and a mid-edit reload would also discard the user's unsaved field edits. Once the form
-  // closes (Cancel / Save / Delete each reload themselves), the next refresh repaints normally.
-  else if (document.querySelector('.entry.editing')) return;
-  else void load();
+  // §12 R24: on the Entries view the grid always repaints to the fresh truth (the reload no
+  // longer closes the form — renderEntries), and the OPEN form's fate follows the rule:
+  //   · no form / an add-mode draft — nothing to re-seed; the reload repaints beneath it.
+  //   · a CLEAN edit form — silently re-seed from the fresh snapshot (swap in place; closes
+  //     only if the entry is gone — nothing typed, nothing lost).
+  //   · a DIRTY edit form — the refresh wants to re-seed the subject, and that is a subject
+  //     swap: the keep-editing / discard gate arms. Keep editing preserves every pending
+  //     field over the refreshed grid; only the explicit Discard adopts the fresh seed.
+  else {
+    void load().then(() => {
+      if (!openForm || openForm.mode !== 'edit') return;
+      if (formIsDirty()) openPendingGate(() => reseedFromSnapshot());
+      else reseedFromSnapshot();
+    });
+  }
 });
 setInterval(tick, 1000);
 // §12 R3: open on the Entries view (the default active route) so the nav highlight and the

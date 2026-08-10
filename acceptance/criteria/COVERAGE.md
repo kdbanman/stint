@@ -182,25 +182,25 @@ R01/R08)" (`add()` rejects both an inverted span and a zero-length `to == from`
 span with `stop time must be after start time` — SURFACE-NEUTRAL wording, pinned
 alongside a sweep asserting no core refusal names a CLI flag, issue 138); this is
 the deliberate strict-**<** twin of §09 R01's **≤**-for-report-ranges rule (a same-day report range is valid, a
-zero-length entry is not). In the GUI the manual-add from/to are set on the
-unified form's inline interval picker (§12 R15, `#add-picker` via
-`window.STP.openInline`) over the collapsed Start/Stop expander (§12 R17, the
-raw-text `#add-from`/`#add-to` fields behind `#add-times-toggle`), and the
-picked/typed from/to are what submit over the unchanged `add` IPC.
+zero-length entry is not). In the GUI the manual-add from/to arrive from a drag on the entries week grid
+(§12 R07/R16 — select-interval, then the pending interval's body/edge drags,
+snapping per R23) or are typed into the unified form's raw Start/Stop fields
+(§12 R17, the exact / overnight path) — grid and fields drive the SAME form
+values, and that raw field text is what submits over the unchanged `add` IPC.
 `features/tracking.feature` (edit-open + "Backfill creates a completed entry"
 scenarios), `features/overlap_and_editing.feature` ("Editing amends a field
 without disturbing the open state", "Editing the running entry's start does not
 stop it"), `prop/editing.test.ts`, `cli/test/gold/cli.test.ts` (edit/add),
 `gui/test/start.test.ts` (GUI start carries all attributes), JUDGE
-`START_ATTRIBUTES` (`main-start-attributes.png`) + `UNIFIED_FORM_ADD`
-(`unified-add.png` — the unified entry form in ADD mode: the two-column form
-with the left attribute fields + the right inline interval picker over the
-collapsed Start/Stop expander (no `datetime-local`); dragging the picker "me"
-block updates the raw `#add-from`/`#add-to` form state LIVE, and Save entry is
-the sole commit — the picked `fromLocal`/`toLocal` +
-description/client/project/tags/billable ride the single `add` IPC, the
-overlapping backfill still saves and raises the non-blocking overlap banner, §12
-R7/§12 R15/§06 R4 — the GUI face of the now-`core` §12 R7), parity
+`START_ATTRIBUTES` (`main-start-attributes.png`) + `UNIFIED_FORM_ADD` (`unified-add.png` — the unified entry form in CREATE mode on
+the week grid: the + button → select-interval → press-drag path opens the
+reduced form BLANK except the dragged interval (no `datetime-local`); dragging
+the pending interval rewrites the raw Start/Stop fields LIVE and a typed next-
+day stop makes the overnight span; Save entry is the sole commit — the raw
+`fromLocal`/`toLocal` text + description/client/project/tags ride the single
+`add` IPC (billable omitted when untouched, so core derives the §05 R07
+default), the overlapping backfill still saves and raises the non-blocking
+overlap banner, §12 R7/R16/R17/§06 R4 — the GUI face of the now-`core` §12 R7), parity
 `add`→`tt add` and `edit`→`tt edit` (`parity-matrix.json`); the running-entry
 start edit is covered under **R06** below (JUDGE `TIMER_VIEW` + BDD `features/tracking.feature` "Editing the running entry
 start never closes it and never synthesizes an end"). **R06 Running entry
@@ -1217,14 +1217,20 @@ snapshot **hides the start panel** — no visible `#start-form`
 visible Description field, `#le-desc` — with `noSwitch:true` ) plus
 `EMPTY_STATE` (`main-empty.png` — the empty window names "press Ctrl+Alt+T" and
 "run `tt start` "). No new IPC channel/parity row — the attributes travel inside
-the existing `start` payload. **R6 entry editor UI** (the consolidated
-edit/split/merge surface): the GUI ships the inline **unified entry form**
-(`gui/renderer/app.js` `openEntryForm` ) as the one edit surface — a click /
-Edit affordance on a calendar event opens it INLINE (no modal), surfacing
-**every `tt` -editable field** (description / client / project / start / end /
-tags / billable) in one place, the GUI counterpart to `tt edit` , with the
-edit-mode **footer** carrying a **Split** control (`window.stint.split`,
-plain-text instant) and a two-step **Delete** (`window.stint.remove`); **merge**
+the existing `start` payload. **R6 entry editor UI** (MODIFIED — the edit surface merged onto the week grid,
+issue #266): the GUI ships the inline **unified entry form**
+(`gui/renderer/app.js` `openUnifiedForm` — ONE builder serving add and edit) as
+the one edit surface — a click / Edit affordance on a calendar event opens it in
+the view-level `#entry-form-host` ABOVE the grid (no modal), surfacing **every
+`tt`-editable field** (description / client / project / start / stop / tags /
+billable) in the reduced three-column card; the entry's stored block leaves the
+grid for the accent-outlined **pending interval** (`.ev.me`), whose **edges drag
+on the grid itself** (only the actively dragged edge snaps, per the R23
+settings) while the raw Start/Stop fields drive the block back — one set of form
+values both ways (R17). A CLEAN form swaps its subject in place; a DIRTY swap
+blocks on the §12 R24 pending-changes gate (its own row below). The edit-mode
+**footer** carries a **Split** control (`window.stint.split`, plain-text
+instant) and a two-step **Delete** (`window.stint.remove`); **merge**
 is reached from the calendar's corner-checkbox multi-select + merge bar, which
 fires `window.stint.merge` directly when the selection agrees and raises the
 `app.js` -hosted **conflict prompt** (pick the winning client/project +
@@ -1233,11 +1239,15 @@ billable, sending `winnerId` , never a resolved name) when it disagrees
 renderer over the existing `edit` /`split`/`merge`/`remove` IPC channels — **no
 new channel/parity row** — and resolves no names (the selects carry the entity
 id; the tag delta goes through the pure `window.SU.tagDiff` ); editing the
-open/running entry omits End so the patch never carries `endUtc` (§05 R6). JUDGE
-`UNIFIED_FORM` (`packages/gui/judge/`, `main-edit.png` — a click / Edit
-affordance opens the unified form INLINE, no modal, every tt-editable field
-seeded, the footer Split + a two-step Delete, and a changed-fields-only Save
-patch) joins the existing `MERGE_CONFLICT` + `MERGE_NOCONFLICT`
+open/running entry omits End so the patch never carries `endUtc` (§05 R6). JUDGE `UNIFIED_FORM` (`packages/gui/judge/`, `main-edit.png` + `main-edit-exact-
+times.png` — a click / Edit affordance opens the unified form above the grid, no
+modal, every tt-editable field seeded; a bottom-grip drag on the grid rewrites
+only the stop onto the coarse grid while the start stays byte-identical; a typed
+stop repositions the grid block live; a clean subject swap is instant; the
+footer Split + a two-step Delete; a changed-fields-only Save patch; and the
+exact-times probe — the off-grid entry opens to the second, a no-drag Save
+patches no time key, only the dragged edge snaps, issue #49) joins the existing
+`MERGE_CONFLICT` + `MERGE_NOCONFLICT`
 (`main-merge-conflict.png`, see §06 R3); BDD `features/reachable_by_hand.feature` (edit / split by hand) +
 `features/overlap_and_editing.feature` (amend without disturbing the open state,
 delete, delete-without-confirmation refused) prove each field persists, the
@@ -1281,155 +1291,90 @@ duration (04:00:00) beside the trimmed billable (03:00:00) after the slept
 entry's reversible subtract — the flag DETAIL moved into the unified editor now
 the entries list is gone (§12 R10), while the calendar shows only the `.ov` warn
 band + `.zz` hatch markers (JUDGE `CALENDAR_LAYOUT` , `main-calendar.png` ).
-**R7 Manual-add (backfill) form — now classified `core` ** (core data entry per
-§03; badge-only on the existing behaviour, plus the unified-form inline
-interval-picker + Start/Stop expander wiring, G5/G2) (the main window offers a
-discoverable form that creates a *completed* past entry from explicit from/to
-times plus the same attributes `tt add` accepts — description / client / project
-/ tags / billable — and treats an overlapping span as warned, not blocked): the
-form (`gui/renderer/index.html` `#add-form` with `#add-from` /`#add-to` +
-`#add-desc` /`#add-client`/`#add-project`/`#add-tags`/`#add-bill`, behind the
-`#add-toggle` disclosure) routes through the new **`add` IPC channel**
-(`gui/src/main.ts` → `store.resolveClientProjectByName` + `store.add` ,
-converting each local datetime to UTC and returning the uniform `WriteAck` so an
-overlapping backfill raises the SAME non-blocking inline `#overlap-banner` the
-edit/start paths use — the entry still saves, §06 R4; a core validation reject
-(`stop time must be after start time`) shows in `#add-warning` as a block, read
-through the one `SU.errMessage` mapping site that strips Electron's IPC wrapper
-and the exception class — issue 138 — and **painted as one**: `#add-warning` is
-the region that serves BOTH message kinds, so `showFormError` sets the `error`
-state class that flips its `--flag` advisory base chrome to the `--danger` block
-palette (design.html D15). Until issue 139 it had no such state and a refusal
-wore the amber advisory chrome — colour saying "saved with a caveat" over a
-sentence saying "nothing was written", D15 exactly inverted; JUDGE
-`ADD_REFUSAL_PALETTE` (`add-refusal-palette.png`) now scores both states of the
-one region on COMPUTED colour — a refused Save is the `--danger` triple with the
-form open and `__ADDED__` null, Cancel-and-reopen returns the region to the
-`--flag` triple, and the same form's committing overlapping backfill raises its
-"allowed, but flagged" banner in `--flag` — plus that the two triples differ, so
-a token collapse cannot pass the split vacuously). The
-warned-not-blocked behaviour is proven surface-neutral on core AND tt by
-`features/overlap_and_editing.feature` ("Backfill that overlaps an existing
-entry is warned, not blocked" + the attribute-bearing "Attribute-bearing
-backfill that overlaps is warned, not blocked" — run TWICE via the World
-`backfill` capability: CoreWorld `store.add` , CliWorld `tt add … --from/--to`
-); AC = **BDD · JUDGE**. The manual-add surface is the **one unified
-entry form in ADD mode** (G5), inline in the Entries view (no modal) — the same
-form edit mode uses (§12 R06). JUDGE `UNIFIED_FORM_ADD` (`unified-add.png`)
-drives the real renderer end to end: the two-column
-`.unified-form[data-mode=add]` shows the LEFT attribute fields (a 3-line
-multiline description `<textarea>` , client + project `<select>` s populated
-from `listClients` /`listProjects`, a tag chip host, the billable toggle) and
-the RIGHT inline interval picker (`#add-picker`: a month calendar + a single-day
-column with the draggable accent "me" rectangle) over the collapsed Start/Stop
-expander (`#add-times-toggle` over the hidden raw text fields `#add-from`
-/`#add-to`), and carries **no `type=datetime-local` ** anywhere (G1); other
-picker entries paint gray and an overlapping span paints a yellow warn-only
-band; **dragging the "me" block updates the raw `#add-from` /`#add-to` form
-state LIVE** (span preserved on a body drag) before any Save (G7); and **Save
-entry is the sole commit** — `window.__ADDED__` carries the picked (post-drag)
-`fromLocal` /`toLocal` + description/client/project/tags/billable over the
-single `add` IPC, the overlapping backfill still saves (form closes) and raises
-the non-blocking overlap banner (§06 R4). BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
-hand (the Manual-add form)" + `features/overlap_and_editing.feature`
-"Attribute-bearing backfill that overlaps is warned, not blocked" prove the same
-flow surface-neutrally over core AND `tt`. The `add` →`tt add` parity row (`parity-matrix.json`, asserted by
-`gui/test/parity.test.ts` ) is unchanged — the unified form adds no capability
-and no new IPC channel (the inline picker only writes back into the existing
-text fields; the picker component itself is the §12 R15 addition, R07 only
-consumes it). The §12 R7 Manual-add form is thus fully covered (no longer TODO).
-**R15 inline interval picker (G5/G7)** (NEW — the picker component R07/R05 only
-consumed before now ships): `gui/renderer/timepicker.js` is the pure renderer
-component `window.STP` (a classic file:// script — no ES module / Node import /
-`@stint/core` / network, guarded by `renderer-static.test.ts` 's no-import +
-no-network file lists, which include `timepicker.js` ) exposing the two
-**INLINE** mount forms
-`STP.openInline({host, startInput, endInput, otherEntries, settings, onChange})`
-and `STP.openStartOnly({host, startInput, otherEntries, settings})` plus the
-pure geometry/snap helpers `snapTo5` / `minutesToY` / `yToMinutes` so the static
-guard + JUDGE can drive the math deterministically. There is **no modal** — the
-picker renders only IN FLOW (no `.stp-backdrop` , no `.stp-apply` ; the
-`.stp-inline` host is `position:static` ) and writes the picked span **LIVE** on
-every drag. It renders a month calendar (pick the day) + a single-day hour-line
-track where the edited entry is a draggable accent rectangle: drag the BODY =
-move start+stop together (5-min snap); drag the BOTTOM grip (`.stp-resize`) =
-resize the stop (5-min snap); other entries render gray (`.stp-block.other`);
-overlap regions render yellow (`.stp-overlap`, **warn-only**,
-`pointer-events:none` — never blocks the save, §06 R4). Default span = the bound
-inputs' value, else last-stop→now; the default scroll viewport comes from the
-ONE window derivation `SU.timelineWindow` (§14/G16) centered on the edited
-interval (full 24h track, never clipped); overnight (stop on a later day) is
-handled only via the collapsed Start/Stop expander (§12 R17, the exact/overnight
-path). It adds **ZERO capabilities** — it only writes `localInputValue`
--formatted strings back into the EXISTING authoritative text inputs and fires
-`input` /`change`. That ONE field format is `YYYY-MM-DD HH:mm:ss` in local time:
-space-separated (this value is the string a user selects and RETYPES, not a wire
-serialization) with the seconds ALWAYS rendered, so the field's own placeholder
-describes the shape it shows and a stored 09:07:33 still round-trips to the
-second (issue #159 corrected both halves of the old lie — a `T` separator and a
-placeholder promising `HH:mm` over a value that appended seconds behind its
-back). Its ONE inverse, `parseLocalInput`, accepts BOTH spellings, so nothing a
-user learned to type breaks; it is regex-driven with no bare `new Date(text)`
-fallback, because the engine's legacy parser reads the half-typed
-`2026-06-24 08:` as 08:00 where the old `T` spelling was Invalid — a fallback
-would have made every mid-keystroke value committable. Both live in
-`gui/src/localtime.ts` (one home, reached by the renderer through `window.SU`,
-by `timerview.ts` 's byte gate, and by the `add` IPC handler) and the pair is
-pinned directly by GOLD `gui/test/renderer-bundle.test.ts` — format, both-spelling
-parse, and the invalid-on-partial rule — so a format drift fails there instead of
-silently un-matching the byte gate `timerview.test.ts` exercises against a literal
-seed (the issue #68 regression), and JUDGE `TIMER_VIEW` asserts the rendered
-`#le-start` matches no `T`-separated pattern and matches its own placeholder.
-The unchanged add/edit IPC paths stay the single source of truth (**no new
-IPC channel, no parity-matrix row**; `parity.test.ts` is per-channel and none is
-added). `gui/renderer/index.html` loads `timepicker.js` BEFORE `app.js` ;
-`app.js` mounts the picker IN FLOW on EVERY R15 surface through ONE shared
-helper `mountIntervalPicker` : the add form (`#add-picker` over `#add-from`
-/`#add-to`, with the snapshot's closed entries as `otherEntries` ), the inline
-edit form (`.edit-picker` over `.edit-start` /`.edit-end`), and the
-running-entry start (`#le-start-pick` → the inline start-only disclosure via
-`openStartOnly` , no end binding, so editing the open row never writes a stop,
-§05 R6). Text entry stays authoritative everywhere (the picker only sets
-`.value` ); Save entry is the sole commit (G7). Accent discipline (§15) holds:
-only the dragged **me** rectangle (`.stp-block.me`) and the selected calendar
-day (`.stp-d.stp-sel`) carry the accent, sanctioned in the JUDGE accent scan.
-Primary AC: JUDGE `UNIFIED_FORM` (`main-edit.png` — the edit-mode inline picker:
-renders IN FLOW with no `.stp-backdrop` /`.stp-apply` and a `position:static`
-host; a month calendar + `.stp-track` + hour lines; a known BODY drag advances
-BOTH `.edit-start` /`.edit-end` by the snapped 5-min amount (span preserved)
-while a `.stp-resize` drag advances only the stop; ≥1 gray `.stp-block.other` +
-≥1 inert yellow `.stp-overlap` paint; no commit until Save entry; and the **§12
-R15 exact-times probe (issue #49)**: opening the deliberately non-5-min-aligned
-entry 84 (09:07:33→11:03:00Z) renders its stored start/stop EXACTLY, to the
-second — never snapped on open — a Save entry with NO drag sends a patch
-carrying no `startUtc` /`endUtc` at all (the store's times round-trip
-unchanged), and a bottom-grip drag lands the stop on the :05 grid while the
-untouched start keeps its seconds), with the ADD-mode picker +
-authoritative-Save path proven by `UNIFIED_FORM_ADD` (`unified-add.png` —
-body-drag live-writes `#add-from` /`#add-to`, Save sends the picked span over
-`add` ) and the running start-only variant (`.stp-block.me.open` mask + start
-grip only, no `.stp-resize` /end label/echo, no end value) by `TIMER_VIEW`
-(`timer-view-full.png`). BDD `features/tracking.feature` runs TWICE (core + tt):
-a 5-minute-aligned backfill span is stored exactly, and an overlapping span
-warns but still saves — the values the picker writes honored identically by both
-surfaces. BDD `features/overlap_and_editing.feature` "Editing an entry without
-touching the times preserves them to the second" (issue #49 — a
-09:07:33→11:03:07 span survives an unrelated description edit byte-for-byte, run
-TWICE over core + tt) and PROP `prop/editing.test.ts` "an edit that changes no
-field is the identity on start/end, to the second" (second-granular fast-check
-spans; an empty patch plus an unrelated-field patch leave start/end
-byte-identical) pin the surface-neutral half of the same contract: stored truth
-is never rewritten by an edit that did not touch it (glossary "Stored truth").
-JUDGE `UNIFIED_FORM` + `UNIFIED_FORM_ADD` + `TIMER_VIEW` drive the add /
-edit-closed / edit-running-start surfaces through the real renderer — body-drag moves the whole
-interval, the bottom grip resizes only the stop (both 5-min snap), others gray,
-overlap yellow warn-only, the form fields update live on every drag with Save
-entry the only commit, and the running entry shows a start grip only + future
-fade with no end. `gui/test/renderer-static.test.ts` 's isolation walk
-additionally pins `timepicker.js` as IPC-free (never `window.stint.*` ); the
-inline-mount behavior (openInline/openStartOnly in flow, no modal chrome,
-drag-writes-live) is JUDGE `TIMER_VIEW` + `UNIFIED_FORM` + `UNIFIED_FORM_ADD` .
-The §12 R15 inline interval picker is thus fully covered. **R8 Report builder &
+**R7 Manual-add (backfill) form — `core`** (MODIFIED — add merged onto the week
+grid, issue #266) (adding an entry lives on the entries calendar itself: a round
+**+ button** at the bottom-right of the grid, drag-to-create, and one reduced
+form above the grid — creating a *completed* past entry from explicit from/to
+times plus the same attributes `tt add` accepts, an overlapping span warned, not
+blocked): the **+ button** (`app.js` `calFab`, the view's standing accent
+primary — design.html D14 admits its 999px capsule by name; the interim toolbar
+Add button is retired) hover-expands rightward into "+ Add entry" with the **+
+glyph pinned** (the corner reserves room for the expansion — the spec sentence
+outranks the mockup's sliding glyph); a **pointer click enters select-interval
+mode** (`enterSelectInterval`): a start handle follows the cursor over the grid
+at the **coarse snap** (R23), press-drag sets the length, release opens **create
+mode** — the unified form (`openUnifiedForm`, the same builder edit mode uses,
+G5) in `#entry-form-host` above the grid, **BLANK except the dragged interval**
+(no last-used client/project seeding; billable per its §05 R07 client-keyed
+default — the checkbox follows the Client select until touched, and an untouched
+box is OMITTED from the payload so core derives it); the grid **grays**
+(`.calwrap.grayed`), the + hides, the **fine-snap toggle** holds its spot, and
+the pending interval stays adjustable by dragging anywhere on the grid
+(`startNewDrag`/`startMoveDrag`/`startEdgeDrag`, all writing the raw Start/Stop
+fields LIVE); **keyboard activation** of the + opens the form directly with the
+**working-hours default interval** (§14). A core validation reject (`stop time
+must be after start time`) shows in the form's announced `.ef-warning` as a
+`--danger` block persisting until the next input (§12 R21 / design.html D15),
+read through the one `SU.errMessage` mapping site (issue 138); the committing
+overlapping backfill raises the separate `--flag` `#overlap-banner` advisory —
+JUDGE `ADD_REFUSAL_PALETTE` (`add-refusal-palette.png`) scores both on COMPUTED
+colour plus the palettes-differ pin. The warned-not-blocked behaviour is proven
+surface-neutral on core AND tt by `features/overlap_and_editing.feature`
+("Backfill that overlaps an existing entry is warned, not blocked" + "Attribute-
+bearing backfill that overlaps is warned, not blocked" — run TWICE via the World
+`backfill` capability); AC = **BDD · JUDGE**. JUDGE `UNIFIED_FORM_ADD`
+(`entries-select-interval.png` + `unified-add.png`) drives the whole path end to
+end over the real renderer: the + at rest (accent capsule, pinned glyph, no
+toolbar Add), select-interval (grid inert to events, handle on the coarse grid,
+toggle reading coarse), create (form blank except the coarse-snapped interval,
+grid grayed, accent-outlined me block with two grips + time pills, Save the one
+accent-solid fill), the live body drag (both fields, span preserved), the fine-
+snap toggle re-landing an edge drag on the fine grid, the typed overnight stop
+fanning the pending interval into per-day segments (R17), Save as the sole
+commit over the single unchanged `add` IPC (raw field text verbatim, no
+`billable` key when untouched), the form closing + rest chrome returning + the
+overlap banner raising, and the keyboard path seeding the working-hours default.
+BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
+hand (the Manual-add form)" + `features/tracking.feature` ("Backfill creates a
+completed entry" + "Backfill creates a completed overnight entry") prove the
+same flow surface-neutrally over core AND `tt`. The `add`→`tt add` parity row
+(`parity-matrix.json`, asserted by `gui/test/parity.test.ts`) is unchanged — the
+grid drag adds no capability and **no new IPC channel** (a drag only ever writes
+the existing raw text fields; §05 R05 / §17 R8 parity holds because every `tt
+add` field stays reachable in the reduced form). The §12 R7 Manual-add form is
+thus fully covered.
+**R15 start-only interval picker (MODIFIED — the Entries view mounts NO picker,
+issue #266)** (the running entry's start-adjustment surface where no week grid
+exists — the Timer view's inline start-only disclosure below the Start field):
+`gui/renderer/timepicker.js` is the pure renderer component `window.STP` (a
+classic file:// script — no ES module / Node import / `@stint/core` / network,
+guarded by `renderer-static.test.ts`'s no-import + no-network file lists)
+exposing the ONE inline mount form `STP.openStartOnly({host, startInput,
+otherEntries, settings})` plus the pure geometry/snap helpers `snapTo5` /
+`minutesToY` / `yToMinutes`. The two-ended `STP.openInline` variant and the
+shared `mountIntervalPicker` helper were DELETED with the entries-view redesign:
+closed entries' spans are adjusted on the week grid itself (R06/R16) or typed in
+the unified form's Start/Stop fields (R17), so no picker mounts in the Entries
+view and dead code does not linger. What remains renders IN FLOW only (no modal,
+no `.stp-backdrop`, no Apply — `#le-start-pick` expands it into `#le-start-disc`
+below the Timer view's Start field): the running block with a START drag grip
+only, fading into the future, structurally incapable of writing an end (§05
+R06/G8); every grip drag snaps and writes the bound `#le-start` text LIVE
+(`writeBack` fires input+change, riding the debounced live-edit commit whose
+patch never carries `endUtc`). Opening renders the EXACT stored start, to the
+second — the snap applies only to a handle the user actively drags (issue #49;
+the un-dragged round-trip is pinned by BDD
+`features/overlap_and_editing.feature` "Editing an entry without touching the
+times preserves them to the second" + PROP `prop/editing.test.ts` "an edit that
+changes no field is the identity on start/end, to the second", both surface-
+neutral over core + tt). The one field format stays `YYYY-MM-DD HH:mm:ss` local
+(space-separated, seconds always — issue #159) with `parseLocalInput` its one
+inverse, both in `gui/src/localtime.ts`, pinned by GOLD `gui/test/renderer-bundle.test.ts`. It adds ZERO capabilities — no IPC, no parity row. Primary AC:
+JUDGE `TIMER_VIEW` (`timer-view-full.png` — the in-flow disclosure, start grip
+only, no end grip/label/echo, the future-fade mask, the live snapped write, the
+endUtc-free patch); `gui/test/renderer-static.test.ts`'s isolation walk
+additionally pins `timepicker.js` as IPC-free (never `window.stint.*`). The §12
+R15 start-only picker is thus fully covered. **R8 Report builder &
 export** (the Reports view's range preset/custom picker, group-by selector,
 client/project/tag/billable filters, rounding toggle, and Export CSV / Export
 JSON buttons — the GUI counterpart to `tt report` /`tt export`): the report
@@ -1641,41 +1586,31 @@ keyboard** — one tab stop per entry, its four hover-revealed controls on a
 roving ← / → focus, and none of them focusable while invisible — is JUDGE
 `CALENDAR_KEYBOARD` (`calendar-keyboard-focus.png` over the same three-week
 `denseCalendarState` , issue 140); the model and its guard are detailed in the
-§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry (NEW, `core` — the
-overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
-expander** — raw start/stop **text** fields beneath the inline interval picker
-(§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT
-span** (the single-day picker can't be dragged across midnight). Expander and
-picker drive the **same shared interval**, with no second source of truth: the
-picker's `openInline` (`gui/renderer/timepicker.js`) listens to its bound
-Start/Stop fields and reflects an EXTERNAL edit back into the column —
-re-anchoring the day, detecting a later-day stop as **overnight**
-(`overnightActive`: column stays on the start's day, echo authoritative for the
-cross-midnight stop), and refreshing the tabular echo (`.stp-echo`) —
-**without** writing back, so a typed cross-midnight stop is never flattened; a
-drag clears the overnight state and writes both ends (so a typed overnight span
-commits identically to a dragged same-day one). The edit form's expander fields
-are raw text too (`.edit-start`/`.edit-end`, the entry-time half of the
-native-`datetime-local` deletion, G1). Renderer-only (`timepicker.js` +
-`gui/renderer/app.js` ), **no new IPC channel** (Save reads the same `fromLocal`
-/`toLocal` fields `tt add` /`tt edit` do — no parity row). **BDD**
-`features/tracking.feature` "Backfill creates a completed overnight entry" (a
-22:00→02:00-next-day span → exactly one closed entry, zero open, a 240-minute
-billable duration — run TWICE over core `store.add` + `tt add --from --to` via
-`run.test.ts` ; it FAILS if either surface rejects, blocks, or flattens a
-cross-midnight span, the exact capability the expander is the GUI path for).
-**JUDGE** `UNIFIED_FORM_EXPANDER` (`packages/gui/judge/run-judge.mjs` + rubric
-row / `unified-form-expander.png` ): the expander collapsed by default (raw
-fields hidden, tabular echo shown); clicking it reveals the two raw text fields;
-typing an overnight span (start `2026-06-24T22:00` , stop `2026-06-25T02:00` )
-updates the shared interval so the echo reads `22:00 – 02:00` and the
-`.stp-block.me` block sits at minute 1320 (22:00) while `#add-to` keeps the
-next-day value; Save sends those exact overnight `fromLocal` /`toLocal` over the
-single `add` IPC (`window.__ADDED__`). **BDD** `features/tracking.feature` "Backfill creates a completed overnight
-entry" (a 22:00 → 02:00-next-day span → one closed entry, zero open, 240
-billable minutes, run over core AND `tt`). Recording `§12 R17` (`record.mjs`)
-drives the add form, expands the expander, types the overnight span, and Saves
-the persisted overnight backfill. **R10 Reference-data management** (the Clients
+§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry (MODIFIED, `core` — the overnight-backfill path; the
+Start/Stop expander is retired, issue #266)**: the unified form's raw
+**Start/Stop text fields** (`.edit-start`/`.edit-end` — always visible in the
+reduced form's own column, no disclosure to open) — the exact-entry escape hatch
+and the **only path for an OVERNIGHT span** (edge drags are clamped to their day
+column). Fields and week-grid drag drive the **same form values**, with no
+second source of truth: every drag writes the fields LIVE (`writeFormInterval`)
+and typing in a field repositions the grid's pending interval
+(`paintPendingOverlay` off the form 'input' event) — a stop typed onto a later
+day fans the interval into one segment per shown day (`calSpanSegments`, the
+same issue-#71 fan-out stored entries use), never flattened to same-day, and the
+typed text stays verbatim in the field. The fields are raw text (`type=text`,
+localInputValue format, G1 — never `datetime-local`); Save commits either way
+over the unchanged `add`/`edit` IPC (§05 R05 — no new channel, no parity row).
+**BDD** `features/tracking.feature` "Backfill creates a completed overnight
+entry" (a 22:00→02:00-next-day span → exactly one closed entry, zero open, a
+240-minute billable duration — run TWICE over core `store.add` + `tt add --from
+--to` via `run.test.ts`; it FAILS if either surface rejects, blocks, or flattens
+a cross-midnight span, the exact capability the fields are the GUI path for).
+**JUDGE** `UNIFIED_FORM_ADD` (`overnightTyped` + `savePatch` — the typed
+next-day stop repaints the pending interval as a `seg-start` + `seg-end` pair on
+the shown days and Save sends the exact typed `toLocal` verbatim over the single
+`add` IPC) + `UNIFIED_FORM` (`typedSync` + `edgeDrag` — a typed stop moves the
+grid block to the exact minute geometry, and a grid drag updates the fields live
+in the other direction). **R10 Reference-data management** (the Clients
 view creates / renames / archives clients & projects, and creates / renames /
 archives tags; archived records drop out of the active picker lists but keep
 their history): the reference-data mutations live in core — `store.addClient`
@@ -2142,6 +2077,56 @@ actions inside the auto-sized window) beside `NAV_SHELL` 's
 resize, rail byte-identical 168) — the sub-fact the pre-fix `.app` cap held at
 views=872/872/872 → false. The minimum-window and auto-sized-popover states
 carry rows in `STATES.md` (Entries × edge, Tray popover × edge).
+**R23 snap resolution & fine-snap toggle (NEW — the grid half; the settings half
+is the §14 Entries-calendar row)**: every drag on the week grid — select-
+interval's cursor handle and press-drag (R07), the pending/selected interval's
+body and edge drags (R06/R07/R16) — lands on the snap grid set by the two §14
+settings, consumed off the one `getState` snapshot (`gui/src/uistate.ts` now
+projects `snapFineMinutes`/`snapCoarseMinutes` — and the `showWeekend` row the
+toolbar switch reads — into `UiState.settings`; no new IPC channel). **Coarse is
+the active resolution on every entry into a drag mode** (`app.js` `fineSnap`
+resets on `enterSelectInterval` and every form open); the **fine-snap toggle**
+(`calSnapCtl`, the shared `.sw` switch) sits at the bottom-right of the grid —
+the + button's spot, present in select-interval mode and while the form is open
+— and is **ephemeral by design** (§14): flipping it persists nothing, and no
+snap chrome beyond the toggle exists. The snap applies ONLY to a handle the user
+actively drags (`snapMin` fires inside the drag handlers alone; issue #49): a
+value a surface merely shows is never rewritten. AC: JUDGE `UNIFIED_FORM_ADD`
+(the handle + press-drag on the coarse 15 grid, the toggle re-landing an edge
+drag on the fine 5 grid ∉ the coarse one, coarse restored on every open) +
+`UNIFIED_FORM` (the edge drag landing coarse while the untouched edge keeps its
+seconds; the exact-times probe); the settings pair's storage/validation/parity
+is the §14 row (GOLD + BDD over core and `tt config`). The Timer-view picker's
+own toggle-beside-the-track is future work outside this row's scope — its drag
+currently keeps the 5-min snap (`snapTo5`).
+
+**R24 pending-changes gate (NEW — `core`, loss protection per §03)**: the
+unified form tracks whether its fields differ from their seed (`app.js`
+`formIsDirty` over the `openForm.seed` snapshot — the async select pre-
+population patches the seed, not the fields, so an early keystroke still reads
+dirty). With NO pending changes a subject swap — clicking a different event, an
+empty spot / the + button to start a create, an external refresh re-seeding the
+form — replaces the fields in place, no animation, no prompt (R06/R07); with
+pending changes the swap is **blocked by the keep-editing / discard-changes
+dialog** (`guardedSwap` → `openPendingGate`, the mockup's `.gatecard` on the
+same `.editor-backdrop` idiom the merge prompt uses, so the D11 accent handoff
+covers it): **Keep editing** (focused — the non-destructive default, also what
+Escape and a backdrop click resolve to) returns to the form untouched; only the
+explicit **Discard changes** abandons the edits and performs the swap. **No path
+replaces or closes a dirty form silently** — `renderEntries` no longer closes
+the form on repaint (the pre-R24 silent discard), the `onChange` refresh path
+re-seeds a clean edit form from the fresh snapshot but GATES a dirty one, and
+the form's own footer Delete/Split close it explicitly (a confirmed destroy, not
+a repaint). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
+row — no BDD leg can see it** (the same routing the R11/R13 confirm gate
+records: a pure model of a DOM gate stays green while the shipped gate rots, so
+it is proven on the real surface). AC: JUDGE `PENDING_CHANGES_GATE` (`main-
+pending-gate.png` — arm on a dirty event-click with the subject unswapped and
+nothing written; Keep editing preserving every pending field byte-for-byte;
+Discard performing the swap; the empty-spot create and the external-refresh
+broadcast gating identically) with the clean-swap half in `UNIFIED_FORM`
+(`cleanSwap`); STATES.md carries the Entries × edge row.
+
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×
@@ -2400,7 +2385,14 @@ rather than stored, §05 R06/R01 / §03) are pinned by BDD
 and never wedges Stop" + "Starting a new entry backdated before the running one
 is refused", each run TWICE over core + tt), PROP `prop/editing.test.ts` +
 `prop/invariants.test.ts` (the span-validity law), and headless JUDGE
-`FUTURE_START_GUARD` (the refusal surfaced on the Timer view with no wedge)
+`FUTURE_START_GUARD` (the refusal surfaced on the Timer view with no wedge) The
+**subject-swap-with-unsaved-edits** row (§16 / §12 R24 — clicking another
+event or an empty spot mid-edit with pending changes blocks on the keep-editing
+/ discard dialog; Keep editing preserves every pending field, only the explicit
+Discard abandons them; a clean form swaps in place with no prompt) is pinned
+headless by JUDGE `PENDING_CHANGES_GATE` (+ `UNIFIED_FORM`'s `cleanSwap`) — a
+DOM-only gate, so no BDD leg exists by the DOM-gate routing recorded under §12
+R24.
 
 ### PRD §19
 

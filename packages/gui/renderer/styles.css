@@ -772,34 +772,28 @@ s {
 }
 .start-form button.primary { align-self: flex-start; }
 
-/* §12 R07 (G5): the ONE unified entry form in ADD mode — a two-column card (attribute fields
-   on the left, the inline interval picker + collapsed Start/Stop expander on the right). It sits
-   in flow in the Entries view (no modal), and only "Save entry" carries the accent (§15). */
-.unified-form {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 16px;
-  margin-bottom: 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--r2);
-  background: var(--wash);
-}
+/* §12 R06/R07 (G5, mockup edit-entry.html .eform): the ONE unified entry form's REDUCED
+   three-column body — description + tags · client / project / billable · the raw Start/Stop
+   pair. It sits in flow above the week grid (no modal), and only "Save entry" carries the
+   accent (§15). The columns keep the mockup's weighting (the description column widest, the
+   times column sized to its 19-char fields) and wrap at the 1040px minimum window (§12 R22)
+   so Save entry stays inside the viewport. */
 .unified-form[hidden] { display: none; }
-.unified-form .uf-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; }
-.unified-form .uf-fields { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.unified-form .uf-picker { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.unified-form .ef-cols { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; padding: 20px; }
+.unified-form .ef-fcol { flex: 1.3; min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
+.unified-form .ef-acol { flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 12px; }
+.unified-form .ef-tcol { flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 12px; }
+/* Stacked labels (mockup edit-entry.html .lab: the 12px muted label ABOVE its field), the
+   same visible-label discipline design.html D13 asks for. */
 .unified-form .uf-field {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
   font-size: 12px;
   color: var(--muted);
 }
 .unified-form .uf-field > span { white-space: nowrap; }
-/* design.html D13 (issue 136): the description row's label sits at the TOP of its 3-line
-   textarea rather than centred against it — the .uf-tags treatment, for the same reason. */
-.unified-form .uf-desc { align-items: flex-start; }
 .unified-form .uf-select,
 .unified-form .uf-time {
   flex: 1;
@@ -830,22 +824,24 @@ s {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 24px; /* the label is the target (A03, issue 148) */
+  min-height: 24px; /* the switch is the 24px target (A03) */
   font-size: 13px;
   color: var(--ink);
 }
-/* §12 R17: the collapsed Start/Stop expander under the picker — a quiet disclosure over the raw
-   exact-time fields (the exact / overnight escape hatch). Monochrome; no accent. */
-.unified-form .uf-times { display: flex; flex-direction: column; gap: 8px; }
-/* Stacked, per the edit-entry mockup: side by side the two 19-char exact-times fields ran
-   63px past their column and 14px past the window (ex-issue 146, folded into issue 126),
-   and narrowing them trades overflow for clipped seconds on wider font metrics. */
-.unified-form .uf-times .ef-times-body { display: flex; flex-direction: column; gap: 8px; }
-/* The [hidden] companion (issue #262's bug class): without it the display rule above defeats
-   the hidden attribute and the §12 R17 expander body renders expanded while collapsed. */
-.unified-form .uf-times .ef-times-body[hidden] { display: none; }
-.unified-form .uf-foot { display: flex; gap: 8px; align-items: center; }
+/* The footer band (mockup edit-entry.html .foot): a wash strip under the fields, Save the
+   one accent fill at its trailing edge. Bleeds to the card edges (the card owns no padding). */
+.unified-form .uf-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 20px;
+  border-top: 1px solid var(--rule);
+  background: var(--wash);
+  border-radius: 0 0 var(--r2) var(--r2);
+}
 .unified-form .uf-foot-spacer { flex: 1; }
+/* §12 R21: the inline refusal region sits between the fields and the footer band. */
+.unified-form .ef-warning { margin: 0 20px 12px; }
 
 /* Legacy add-form range-field chrome (kept for other surfaces that still pair a text input with
    a picker trigger). */
@@ -873,26 +869,6 @@ s {
   cursor: pointer;
 }
 .range-pick-btn:hover { background: var(--hover); color: var(--ink); }
-
-/* design.html D15: the add form's one message region carries BOTH message kinds, so it carries
-   BOTH palettes. Its BASE chrome is the warn advisory (--flag) — allowed-but-flagged, the write
-   saved; a REFUSED write flips it to the --danger block via the .error state class showFormError
-   sets, exactly the .banner.error idiom below. Without the modifier a hard block painted in the
-   advisory palette, which is the inversion D15's two-palette split exists to prevent (issue 139). */
-.add-warning {
-  font-size: 12px;
-  color: var(--flag);
-  background: var(--flag-bg);
-  border: 1px solid var(--flag-line);
-  border-radius: var(--r1);
-  padding: 8px 12px;
-}
-.add-warning.error {
-  color: var(--danger);
-  background: var(--danger-weak);
-  border-color: var(--danger);
-}
-.add-warning[hidden] { display: none; }
 
 /* §12 R21: the inline error-message component — a refused core write surfaced at the point of
    action (unified editor Save, split confirm, inline rename, the report builder, the popover
@@ -1158,34 +1134,25 @@ textarea:focus-visible {
 .entry-form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px 16px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   border: 1px solid var(--rule);
   border-radius: var(--r2);
-  background: var(--wash);
+  background: var(--paper);
+  box-shadow: var(--sh-card);
 }
-/* §12 R06 (G5): the edit form carries `unified-form`, so the two-column `.uf-body` grid and the
-   shared `.uf-*` field / select / tag / billable / expander / footer rules style it identically
-   to add mode — one layout, two seedings. The `.edit-*`/`.ef-*` hooks the JUDGE + tests target
-   ride alongside those `.uf-*` styling classes. The only edit-specific layout that remains is the
-   quiet Start/Stop disclosure toggle (§12 R17) — a monochrome text button, no accent. */
-.entry-form .ef-times-toggle {
-  align-self: flex-start;
-  font-family: var(--sans);
-  font-size: 12px;
-  color: var(--muted);
-  background: transparent;
-  border: 0;
-  /* A03 target size: with the expander body genuinely collapsing (its [hidden] companion,
-     issue #262), the toggle sits 12px above the footer buttons — the on-grid vertical
-     padding + min-height keep the quiet text-button look while lifting the hit target to
-     the 24px floor. */
-  padding: 4px 0;
-  min-height: 24px;
-  cursor: pointer;
+/* §12 R06/R07 (G5): one form, two seedings — both modes carry `unified-form`, so the shared
+   three-column `.ef-cols` body and the `.uf-*` field / select / tag / billable / footer rules
+   style add and edit identically; the `.edit-*`/`.ef-*` hooks the JUDGE + tests target ride
+   alongside. The card appears in a QUICK UPWARD EXPANSION that leaves the grid in position
+   (R07; design.html D10 — a snappy state change, collapsed to nothing under reduced motion). */
+.entry-form {
+  transform-origin: bottom;
+  animation: ef-expand 0.12s ease;
 }
-.entry-form .ef-times-toggle:hover { color: var(--ink); }
+@keyframes ef-expand {
+  from { transform: scaleY(0.92); opacity: 0; }
+  to { transform: scaleY(1); opacity: 1; }
+}
 
 /* §06 R1 / §12 R13: the in-window confirm gate for a destructive action. Monochrome —
    danger is conveyed by weight/label and the .danger button, NOT by stealing the accent. */
@@ -1935,10 +1902,6 @@ button.danger:hover { background: var(--danger-weak); }
 }
 
 .stp-body { display: grid; grid-template-columns: 236px 1fr; gap: 0; }
-
-/* §12 R06/R15: the inline interval picker mounted inside the unified edit form's right column
-   (`.uf-picker`) — the same two-column body add mode uses; the mount takes its column's full width. */
-.entry-form .edit-picker { width: 100%; }
 
 /* month calendar */
 .stp-cal { border-right: 1px solid var(--rule); padding: 16px; }
@@ -2967,9 +2930,177 @@ body.popover { background: var(--paper); margin: 0; }
   padding: 0 8px;
   white-space: nowrap;
 }
-/* §12 R06: the event being edited carries a selection state on the calendar (the unified form
-   itself opens in the view-level #entry-form-host, not inside the event). It is styled with the
-   merge selection lift, beside `.ev.on` above — one selection idiom for the calendar, D12's. */
+/* ── §12 R07 (mockup main.html): the round + Add-entry button — bottom-right of the week grid,
+   the view's ONE standing accent-filled primary (design.html D11; D14 admits its capsule by
+   name). Anchored to the non-scrolling .calwrap (or the empty-state host) so it holds the
+   corner while the hour track scrolls. On hover it expands RIGHTWARD into "+ Add entry"
+   without the + glyph moving — the CORNER RESERVES ROOM for the expansion (§12 R07): at rest
+   the button sits 84px in from the corner anchor, and on hover the label's fixed 76px + 8px
+   gap unfolds rightward while the right offset shrinks by the same 84px, so the + glyph
+   holds its exact spot and the capsule grows toward the corner. (The mockup's own hover
+   state lets the glyph slide left; the spec sentence outranks it, so the glyph is pinned.)
+   Base paint is the neutral secondary so the D11 accent handoff (syncStandingPrimary
+   stripping `primary`) has a real demoted face to fall back to. */
+.fab {
+  position: absolute;
+  right: 104px;
+  bottom: 20px;
+  z-index: 10;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 999px;
+  border: 1px solid var(--rule-strong);
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--sh-raise);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0 12px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 590;
+}
+.fab.primary {
+  border: 0;
+  background: var(--accent-solid);
+  color: var(--on-accent);
+}
+.fab { transition: right 0.12s ease, background 0.12s ease, box-shadow 0.12s ease; }
+.fab .ic { width: 16px; height: 16px; color: currentColor; }
+/* Fixed 76px (not max-width): the right-offset shift and the label growth must cancel
+   exactly (76 + 8 = 84) or the + glyph drifts during the transition. */
+.fab .fl { overflow: hidden; width: 0; white-space: nowrap; transition: width 0.12s ease, margin-left 0.12s ease; margin-left: 0; text-align: left; }
+.fab:hover,
+.fab:focus-visible { right: 20px; }
+.fab:hover .fl,
+.fab:focus-visible .fl { width: 76px; margin-left: 8px; }
+.fab[hidden] { display: none; }
+/* The empty states carry the + button too (§05 R05 — manual add stays reachable with no grid);
+   their host has no .calwrap, so they anchor against the view host. */
+#entries { position: relative; }
+
+/* §12 R23 (mockup edit-entry.html .snapctl): the fine-snap toggle — the + button's spot,
+   present in select-interval mode and while the form is open. Ephemeral chrome: a raised
+   paper chip holding the shared switch idiom (.sw) and its visible label. */
+.snapctl {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: var(--r1);
+  padding: 8px 12px;
+  box-shadow: var(--sh-raise);
+}
+.snapctl[hidden] { display: none; }
+
+/* §12 R07 (mockup edit-entry.html): select-interval mode — the grid takes the gestures, so
+   the events beneath go inert (a press always lands on the track) and the cursor says
+   "pick a spot". The start handle follows the cursor at the active snap with a time pill. */
+.sel-mode .dt { cursor: crosshair; }
+.sel-mode .dt .ev { pointer-events: none; }
+.shandle {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  height: 0;
+  border-top: 2px solid var(--accent);
+  z-index: 6;
+  pointer-events: none;
+}
+.shandle .st {
+  position: absolute;
+  right: 0;
+  top: -22px;
+  font-size: 11px;
+  font-weight: 640;
+  color: var(--ink);
+  background: var(--paper);
+  padding: 2px 8px;
+  border-radius: var(--r1);
+  box-shadow: var(--sh-chip);
+}
+
+/* §12 R07: create mode GRAYS the grid — the pending interval stays the one vivid thing
+   (the events dim but stay clickable: clicking one is the gated subject swap, R24). The
+   hover ops / merge checkboxes fold away so the dimmed surface stays calm. */
+.grayed .dt > .ev:not(.me) { opacity: 0.45; }
+.grayed .dh { opacity: 0.6; }
+.grayed .ev .ops,
+.grayed .ev .ck { display: none; }
+
+/* §12 R06/R07 (mockup edit-entry.html .ev.me): the pending / selected interval — the
+   accent-OUTLINED block (accent-weak fill + accent border, ink labels; solid accent stays
+   reserved for primary actions, design.html D11/V3). Body drag moves it; the edge grips
+   resize; z above the paper blocks and warn bands, below the sticky axes. */
+.dt .ev.me {
+  background: var(--accent-weak);
+  border: 1.5px solid var(--accent);
+  box-shadow: var(--sh-card);
+  cursor: grab;
+  z-index: 6;
+  overflow: visible;
+  padding: 4px 8px;
+}
+.dt .ev.me:active { cursor: grabbing; }
+/* An open (running) subject keeps the future-fade read while staying the accent outline. */
+.dt .ev.me.open { border-bottom: 0; }
+/* The edge grips (mockup .grip): a 32×6 paper pill on the accent border. The visible mark
+   stays the mockup's 6px; the ::before pad widens the hit area to the 24px floor (A03). */
+.grip {
+  position: absolute;
+  left: calc(50% - 16px);
+  width: 32px;
+  height: 6px;
+  border-radius: var(--r1);
+  background: var(--paper);
+  border: 1.5px solid var(--accent);
+  box-shadow: var(--sh-chip);
+  cursor: ns-resize;
+  z-index: 7;
+}
+.grip::before { content: ''; position: absolute; left: -4px; right: -4px; top: -9px; bottom: -9px; }
+.grip.t { top: -4px; }
+.grip.b { bottom: -4px; }
+/* The start/stop time pills riding the outer edges (mockup .tlabel). */
+.tlabel {
+  position: absolute;
+  left: 6px;
+  font-size: 11px;
+  font-weight: 640;
+  color: var(--ink);
+  background: var(--paper);
+  padding: 2px 8px;
+  border-radius: var(--r1);
+  z-index: 7;
+  box-shadow: var(--sh-chip);
+  pointer-events: none;
+}
+
+/* ── §12 R24 (mockup edit-entry.html .gatecard): the pending-changes gate — the keep-editing /
+   discard-changes dialog blocking a dirty subject swap. Rides the same backdrop idiom as the
+   merge-conflict prompt (the accent handoff reads .editor-backdrop), with the mockup's card:
+   17px/640 heading, 13px muted body, Discard in the danger text idiom, Keep editing primary. */
+.gatecard {
+  width: 440px;
+  max-width: calc(100vw - 48px);
+  background: var(--paper);
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r2);
+  box-shadow: var(--sh-modal);
+  padding: 20px;
+}
+.gatecard h3 { margin: 0 0 8px; font-size: 17px; font-weight: 640; color: var(--ink); }
+.gatecard p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+.gatecard .gate-row { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* design.html D10/A06 — under prefers-reduced-motion every transition collapses to instant.
    A near-zero duration (not `none`) keeps transitionend firing for any listener while removing
@@ -2981,4 +3112,7 @@ body.popover { background: var(--paper); margin: 0; }
     transition-duration: 0.01ms !important;
     transition-delay: 0s !important;
   }
+  /* The unified form's upward expansion (§12 R07 / design.html D10) is the one keyframe
+     animation; it collapses to an instant appearance the same way. */
+  .entry-form { animation: none; }
 }
