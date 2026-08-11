@@ -105,6 +105,16 @@ function resolveChromium() {
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 const wait = (page, ms) => page.waitForTimeout(ms);
 
+// §12 R24 (issue #323): Cancel is GATED now — a form holding typed work asks before it closes.
+// A recipe that only wants the form gone has to answer the prompt; a clean form never raises one,
+// so this is safe everywhere. The gate is appended synchronously inside the click handler, so it
+// is already there (or never coming) by the time the click resolves.
+const cancelForm = async (page, sel = '.entry-form') => {
+  await page.click(`${sel} .edit-cancel`);
+  if (await page.$('.gate-backdrop')) await page.click('.gatecard [data-gate="confirm"]');
+  await page.waitForSelector(sel, { state: 'detached' });
+};
+
 // ASCII-only output slug from a requirement/recipe id, so the committed GIF name is filesystem-
 // and PR-image safe: "§12 R15" → "12-r15", "§05 R01" → "05-r01", "favorites-rail" → "favorites-rail".
 // Strips the section glyph, lowercases, and collapses any non-[a-z0-9] run to a single hyphen.
@@ -862,7 +872,9 @@ const RECIPES = {
       // Lengthen the stop by dragging the pending interval's bottom grip — only the dragged edge
       // moves, and the raw Stop field is written live (R06/R17/R23).
       const grip = await page.evaluate(() => {
-        const r = document.querySelector('#entries .grip.b').getBoundingClientRect();
+        const el = document.querySelector('#entries .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
         return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       });
       await page.mouse.move(grip.x, grip.y, { steps: 14 });
@@ -955,7 +967,9 @@ const RECIPES = {
       // The pending interval is still adjustable: a body drag carries start and stop together,
       // both raw fields written live (R07/R17).
       const me = await page.evaluate(() => {
-        const r = document.querySelector('#entries .ev.me').getBoundingClientRect();
+        const el = document.querySelector('#entries .ev.me');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
         return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       });
       // Downward, so the committed span genuinely runs across the seeded 19:00–20:00 entry —
@@ -1205,7 +1219,9 @@ const RECIPES = {
       await wait(page, 1300);
 
       const g1 = await page.evaluate(() => {
-        const r = document.querySelector('#entries .ev.me .grip.b').getBoundingClientRect();
+        const el = document.querySelector('#entries .ev.me .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
         return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       });
       await page.mouse.move(g1.x, g1.y, { steps: 12 });
@@ -1224,8 +1240,7 @@ const RECIPES = {
         `The accent grip resizes the stop alone — ${t1.end} → ${t2.end}`,
       );
       await wait(page, 1500);
-      await page.click('.entry-form .edit-cancel');
-      await page.waitForSelector('.entry-form', { state: 'detached' });
+      await cancelForm(page, '.entry-form');
       await wait(page, 500);
 
       // ===== The RUNNING variant: the same idiom with no end edge (§05 R06) =====
@@ -2050,7 +2065,9 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Drag the stop grip on the grid — only the dragged handle snaps to the grid'));
       const gripBox = await page.evaluate(() => {
-        const r = document.querySelector('#entries .ev.me .grip.b').getBoundingClientRect();
+        const el = document.querySelector('#entries .ev.me .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
         return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       });
       await page.mouse.move(gripBox.x, gripBox.y, { steps: 14 });
@@ -2149,8 +2166,7 @@ const RECIPES = {
       await wait(page, 1250);
 
       // ===== (2) DIRTY SWAP → KEEP EDITING — the typed work comes back untouched =====
-      await page.click('.entry-form .edit-cancel');
-      await page.waitForSelector('.entry-form', { state: 'detached' });
+      await cancelForm(page, '.entry-form');
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Now the same swap, with unsaved edits on the form'));
       await openEdit(80);
@@ -2244,8 +2260,7 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Open the entry → the overlap detail: amount + which neighbour'));
       await wait(page, 1300);
-      await page.click('.edit-form .edit-cancel');
-      await page.waitForSelector('.edit-form', { state: 'detached' });
+      await cancelForm(page, '.edit-form');
       await page.hover('.entry[data-id="12"]');
       await page.click('.entry[data-id="12"] [data-act="edit"]');
       await page.waitForSelector('.edit-form .ef-subtract');
