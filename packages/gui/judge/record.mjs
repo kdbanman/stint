@@ -1119,9 +1119,15 @@ const RECIPES = {
           const v = (sel) => document.querySelector(sel)?.value || '';
           return { start: v('.entry-form .edit-start').slice(11, 16), end: v('.entry-form .edit-end').slice(11, 16) };
         });
+      // Centre the block in the scrollport before measuring it. Its rect is in viewport space
+      // whether or not the strip is showing it, so a clipped block hands back coordinates that
+      // land above the grid and the drag does nothing (issue #323, when the head band shortened
+      // the visible grid). A take whose subject is off-screen is also a take nobody can read.
       const meBox = () =>
         page.evaluate(() => {
-          const r = document.querySelector('#entries .ev.me').getBoundingClientRect();
+          const me = document.querySelector('#entries .ev.me');
+          me.scrollIntoView({ block: 'center' });
+          const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
         });
 
