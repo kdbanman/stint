@@ -3359,7 +3359,18 @@ async function sceneMergeConflict(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.classList.contains('ebody'),
+        // "Above the calendar" is a position, not a sibling adjacency: the unified form's host
+        // sits between the two now (it belongs directly above the grid it edits), and reading
+        // nextElementSibling made that a failure of the SELECTION BAR, which had not moved.
+        aboveCalendar: (() => {
+          const body = document.querySelector('.ebody');
+          if (!bar || !body) return false;
+          return (
+            !body.contains(bar) &&
+            !!(bar.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            bar.getBoundingClientRect().bottom <= body.getBoundingClientRect().top + 0.5
+          );
+        })(),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),
@@ -5183,7 +5194,18 @@ async function sceneCalendarLayout(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.classList.contains('ebody'),
+        // "Above the calendar" is a position, not a sibling adjacency: the unified form's host
+        // sits between the two now (it belongs directly above the grid it edits), and reading
+        // nextElementSibling made that a failure of the SELECTION BAR, which had not moved.
+        aboveCalendar: (() => {
+          const body = document.querySelector('.ebody');
+          if (!bar || !body) return false;
+          return (
+            !body.contains(bar) &&
+            !!(bar.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            bar.getBoundingClientRect().bottom <= body.getBoundingClientRect().top + 0.5
+          );
+        })(),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),

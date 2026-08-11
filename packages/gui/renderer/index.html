@@ -189,17 +189,6 @@
               <span class="strip-open">Open Timer<svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></span>
             </button>
             <div id="overlap-banner" class="banner" hidden role="status" aria-live="polite"></div>
-            <!-- §12 R22: the form host sits ABOVE the toolbar so the open form's Save entry
-                 stays inside the 1040×800 minimum window without scrolling — the week-only
-                 toolbar wraps to two rows at that width (as the mockup's own does), and
-                 stacking the form under it pushed the commit past the fold. R06's "above the
-                 week grid" holds either way. -->
-            <!-- §12 R06/R07 (G5): the ONE view-level host for the unified entry form. BOTH modes
-                 mount here, in the view flow (no modal): app.js openUnifiedForm builds the one
-                 reduced form (description · client · project · tags · billable · Start/Stop ·
-                 Save/Cancel) for add and edit alike, in a quick upward expansion above the week
-                 grid — the grid beneath is the drag surface that adjusts its interval (R16/R23). -->
-            <div id="entry-form-host"></div>
             <!-- §12 R09: the week-only Entries toolbar. LEFT — the prev/next-week steppers and
                  the week label (the week picker rail below owns week choice; these step it).
                  RIGHT (after the spacer) — the billable segment, client/project/tag filters,
@@ -273,6 +262,21 @@
               <span class="cap"></span>
               <button id="merge-go" type="button" class="small"><svg class="ic" aria-hidden="true"><use href="#i-swap" /></svg>Merge</button>
             </div>
+            <!-- §12 R06/R07 (G5): the ONE view-level host for the unified entry form. BOTH modes
+                 mount here, in the view flow (no modal): app.js openUnifiedForm builds the one
+                 reduced form (description · client · project · tags · billable · Start/Stop ·
+                 Save/Cancel) for add and edit alike, in a quick upward expansion above the week
+                 grid — the grid beneath is the drag surface that adjusts its interval (R16/R23).
+
+                 It sits DIRECTLY above the grid, under the head band, which is R06's "above the
+                 week grid" read literally: the form and the block it is editing are neighbours,
+                 with nothing between the fields and the surface those fields draw on. It used to
+                 sit above the toolbar instead, to keep Save inside the 1040×800 minimum window
+                 without scrolling (§12 R22) — that constraint still binds and is still met here,
+                 because the head band pairs the picker with the toolbar rather than stacking
+                 them, so the form starts higher up the page than the old toolbar-plus-rail
+                 stack would have put it. WINDOW_GEOMETRY's saveInViewport is what holds it. -->
+            <div id="entry-form-host"></div>
             <!-- §12 R09/R16: the Entries body — the week grid, now spanning the FULL view
                  width (mockup main.html windows 1–3). The month calendar that used to sit to its
                  left moved into .eband above; see app.js renderWeekPicker for what it draws

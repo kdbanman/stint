@@ -556,7 +556,7 @@
         "editOk": true,
         "popOk": true
       },
-      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":371,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
+      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":613,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
