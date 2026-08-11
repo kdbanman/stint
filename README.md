@@ -57,11 +57,12 @@ npm run gui     # needs an Electron binary (see Install)
 A tray timer counts up; one click starts or stops. The glyph itself says whether a
 timer is running — two stacked bars idle, one fused block running — so the state is
 visible at a glance on macOS and Linux alike, without hovering. `Ctrl+Alt+T`
-toggles it from anywhere. The main window groups the day's entries, shows flags
-in context, and builds reports with CSV/JSON export. Anything the window does,
-`tt` does too.
+toggles it from anywhere. The main window lays one week of entries on a calendar
+grid — a month calendar picks the week, drag the grid to add, click a block to
+edit, flags show in place — and builds reports with CSV/JSON export. Anything the
+window does, `tt` does too.
 
-![The main window with a running timer and the day's entries](https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/screenshots/main-running.png)
+![The main window with a running timer and the week's entries on the calendar grid](https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/screenshots/main-running.png)
 
 ![The report builder grouping billable time by client, with overlap and sleep flags and CSV/JSON export](https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/screenshots/reports-summary.png)
 
