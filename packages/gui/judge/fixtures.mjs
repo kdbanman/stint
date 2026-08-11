@@ -1056,6 +1056,38 @@ export function timelineAroundState() {
 }
 
 /**
+ * §14 / §12 R23 — the SNAP_RESOLUTION fixtures: the drag-snap pair at a NON-DEFAULT resolution.
+ *
+ * Every other fixture carries `DEFAULT_SETTINGS`' 5/15, and every snap assertion in the harness
+ * is a literal default (`% 15 === 0`, `=== '2026-06-24 20:20:00'`). So nothing anywhere proved
+ * the two §14 rows are CONSUMED: core/CLI/BDD prove they store and validate, and the renderer
+ * could have gone on hardcoding 5 and 15 with all 57 machine-scored items green — which is
+ * exactly what the reviewer's mutation showed. A settings pair that is read by no acceptance
+ * criterion is a preference the user can set and the app can ignore.
+ *
+ * 2/20 rather than another multiple pair, because 15 is a multiple of 5 and 5/15 is therefore a
+ * poor discriminator: a coarse landing on the 15-grid is often on the 5-grid too. At 2/20 the
+ * grids separate — a coarse drag lands ≡ 0 mod 20 but OFF the 15-grid, and a fine drag lands
+ * ≡ 0 mod 2 but off the 5-grid — so neither hardcoded default can produce either value.
+ * Both surfaces §12 R23 names get one: the Entries week grid (app.js) and the Timer view's
+ * start-only picker (timepicker.js). Core validates the pair (whole 1–30, fine ≤ coarse); 2/20
+ * is inside that domain, so this is a configuration a user can really hold.
+ */
+const SNAP_NON_DEFAULT = { snapFineMinutes: 2, snapCoarseMinutes: 20 };
+
+export function snapGridState() {
+  const s = addFormState();
+  s.settings = { ...DEFAULT_SETTINGS, ...SNAP_NON_DEFAULT };
+  return s;
+}
+
+export function snapPickerState() {
+  const s = timerViewRunningState();
+  s.settings = { ...s.settings, ...SNAP_NON_DEFAULT };
+  return s;
+}
+
+/**
  * §14 / §12 R15 / G16 — the timeline-window CONSUMER fixture: the canonical running entry (so the
  * Timer view's start-only picker mounts, which is where the `data-timeline-track` scroll window
  * actually lives) carrying the same non-default 09:00–15:00 working hours the Settings half of

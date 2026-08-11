@@ -1392,7 +1392,9 @@ only, no end grip/label/echo, the future-fade mask, the live coarse-snapped
 write, the endUtc-free patch, plus the R23 Timer-half probes: the toggle as the
 only snap chrome opening coarse, the fine drag landing on the fine grid off the
 coarse one, and a collapse/reopen resetting the toggle while round-tripping the
-shown start byte-for-byte); `gui/test/renderer-static.test.ts`'s isolation walk
+shown start byte-for-byte — all at the default pair, with `SNAP_RESOLUTION`
+driving this same picker at a non-default one so the resolution is proven to come
+from the §14 rows rather than from a literal); `gui/test/renderer-static.test.ts`'s isolation walk
 additionally pins `timepicker.js` as IPC-free (never `window.stint.*`). The §12
 R15 start-only picker is thus fully covered. **R8 Report builder &
 export** (the Reports view's range preset/custom picker, group-by selector,
@@ -1696,8 +1698,9 @@ parity-preserving, §17 R8). The renderer honours the mode through the pure
 `window.SU.applyDateFormat` (drives `localTime` ) helper, and the panel controls
 are inked/monochrome so the §15 `ACCENT_DISCIPLINE` scan stays green. JUDGE
 `SETTINGS_VIEW` (`packages/gui/judge/`, `main-settings.png` — opening the
-Settings nav renders a control for every §14 setting, changing the date-format
-select fires `setSetting` , and the panel stays accent-disciplined), plus
+Settings nav renders a control for every §14 setting, one control of EVERY kind
+the panel builds — select, toggle, segment, hhmm, minutes, hotkey — persists its
+exact key/value over `setSetting` , and the panel stays accent-disciplined), plus
 `HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
 field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
 (issue 135). The §12 R12 Settings view is thus fully covered.
@@ -2123,8 +2126,15 @@ value a surface merely shows is never rewritten. AC: JUDGE `UNIFIED_FORM_ADD`
 (the handle + press-drag on the coarse 15 grid, the toggle re-landing an edge
 drag on the fine 5 grid ∉ the coarse one, coarse restored on every open) +
 `UNIFIED_FORM` (the edge drag landing coarse while the untouched edge keeps its
-seconds; the exact-times probe); the settings pair's storage/validation/parity
-is the §14 row (GOLD + BDD over core and `tt config`). The **Timer half** ships
+seconds; the exact-times probe) — both at the DEFAULT pair — and JUDGE
+`SNAP_RESOLUTION` (`snap-resolution-grid.png`) at a **non-default** one, which is
+what makes those two evidence about the SETTING rather than about the number 15:
+at fine 2 / coarse 20 the handle and both created edges land ≡ 0 mod 20 and ∉ 0
+mod 15, and a fine edge drag lands ≡ 0 mod 2 and ∉ 0 mod 5, so neither hardcoded
+default can produce any of them (issue #301 — until it existed, replacing both
+surfaces' settings read with bare 5 / 15 kept all 57 machine-scored items green).
+The settings pair's storage/validation/parity is the §14 row (GOLD + BDD over
+core and `tt config`). The **Timer half** ships
 the same system in the start-only picker: `timepicker.js`'s per-mount
 `snapStepMin` consumes the identical settings pair off the `openStartOnly`
 `settings` snapshot, its own ephemeral `fineSnap` resets on every mount (every
@@ -2132,7 +2142,11 @@ open of the disclosure starts coarse), and the toggle beside the track
 (`.stp-snapctl`) is the only snap chrome — the `snap · 5 min` pill and
 drag-hint copy are retired. AC: JUDGE `TIMER_VIEW` (the coarse drag on the 15
 grid, the fine drag landing ∉ the coarse grid, reopen resetting the toggle
-while the shown start round-trips) — see the §12 R15 row. **Both surfaces resolve
+while the shown start round-trips) — see the §12 R15 row — and the picker half of
+`SNAP_RESOLUTION` (`snap-resolution-picker.png`), which drives the SAME pair
+through this surface's different arithmetic (a pointer DELTA off the stored start
+on a 720px/24h track, where the grid snaps the absolute minute): one helper, two
+independent call sites, either of which can stop passing the settings through. **Both surfaces resolve
 the step through ONE helper**, `gui/src/snap.ts`'s `snapStepMin(settings, fine)`
 re-exported as `window.SU.snapStepMin`: it was written once per surface, and both
 copies re-typed core's defaults as bare 5 / 15, so a moved
@@ -2154,17 +2168,28 @@ dialog** (`guardedSwap` → `openPendingGate`, the mockup's `.gatecard` on the
 same `.editor-backdrop` idiom the merge prompt uses, so the D11 accent handoff
 covers it): **Keep editing** (focused — the non-destructive default, also what
 Escape and a backdrop click resolve to) returns to the form untouched; only the
-explicit **Discard changes** abandons the edits and performs the swap. **No path
-replaces or closes a dirty form silently** — `renderEntries` no longer closes
-the form on repaint (the pre-R24 silent discard), the `onChange` refresh path
-re-seeds a clean edit form from the fresh snapshot but GATES a dirty one, and
-the form's own footer Delete/Split close it explicitly (a confirmed destroy, not
-a repaint). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
+explicit **Discard changes** abandons the edits and performs the swap. **No SUBJECT SWAP
+replaces a dirty form silently** — `renderEntries` no longer closes the form on
+repaint (the pre-R24 silent discard), the `onChange` refresh path re-seeds a
+clean edit form from the fresh snapshot but GATES a dirty one, and the form's own
+footer Delete/Split close it explicitly (a confirmed destroy, not a repaint).
+The gate's PROVEN scope is exactly those three swap paths: a **Cancel** on a
+dirty form, a **week change** and a **route away** are not driven by the JUDGE
+scene, and neither this row nor the rubric claims anything about them in either
+direction (issue #301 — the prose used to promise "no path", which is a wider
+claim than the facts). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
 row — no BDD leg can see it** (the same routing the R11/R13 confirm gate
 records: a pure model of a DOM gate stays green while the shipped gate rots, so
-it is proven on the real surface). AC: JUDGE `PENDING_CHANGES_GATE` (`main-
+it is proven on the real surface). `formIsDirty` compares **seven** fields, so the
+scene arms the gate **once per field kind** — description, client, project, tags,
+billable, start, stop — each confirming the dialog rose, the subject held and
+nothing was written, and that Keep editing returned all seven byte-identical.
+Every dirty state used to be a `.edit-desc` fill, which proved one field of seven
+and left the other six comparisons deletable with the whole suite green (#301).
+AC: JUDGE `PENDING_CHANGES_GATE` (`main-
 pending-gate.png` — arm on a dirty event-click with the subject unswapped and
-nothing written; Keep editing preserving every pending field byte-for-byte;
+nothing written; Keep editing preserving every pending field byte-for-byte, read
+as the WHOLE seven-field snapshot rather than the description alone;
 Discard performing the swap; the empty-spot create and the external-refresh
 broadcast gating identically; and `gateStaysOnEntries` — the gate is a prompt
 about the form the user is looking at, so the same broadcast raises NO dialog
@@ -2321,7 +2346,17 @@ Entries-calendar keys: routing to Settings must render a `data-key` control for
 `showWeekend`, `snapFineMinutes`, and `snapCoarseMinutes` (the Settings →
 Entries calendar group — show-weekend toggle + the two snap whole-minute
 inputs) alongside the eight it already asserted, all over the existing
-`setSetting` channel. The **backup-retention edge** §14
+`setSetting` channel. Rendering is not wiring, so the same scene now DRIVES one
+control of each KIND the panel builds — select, toggle, segment, hhmm, minutes
+and hotkey — asserting each fires `setSetting` with the exact key/value, and
+holds that driven set against the kinds actually rendered (issue #301: with only
+the date-format select driven, deleting the `input.set-min` change listener left
+`SETTINGS_VIEW` and `TIMELINE_WINDOW` both green while the two snap fields
+persisted nothing). And what the two snap rows are FOR is proven by JUDGE
+`SNAP_RESOLUTION`, the one scene driven from a non-default pair (fine 2 / coarse
+20) — before it, every fixture carried the 5/15 defaults and every assertion was
+a literal default, so the pair was proven to store and validate and proven by
+nothing to be consumed by either drag surface. The **backup-retention edge** §14
 fixes — a retention of 0 means "keep all" (pruning disabled) and a negative
 value behaves as 0 — is pinned by GOLD `core/test/gold/backup-retention.test.ts`
 (0 and a negative value prune nothing; a positive cap still prunes to the N
@@ -2966,6 +3001,43 @@ create/rename/archive → every §14 setting) **with the terminal closed**,
 confirming the real desktop app threads them all together. The per-view UI
 coverage detail lives in the §12 row (R3–R14); this row is the end-to-end
 completeness claim those views jointly satisfy
+
+### §17 R11
+
+R11 is GUI-only by construction: core and `tt` have no dialog and re-query per
+command, so both halves are renderer facts, and the detailed proof map lives in
+the §12 row above (the §12 R13 confirm gate + the §12 R09/R16 control bar) — this
+row is the §17 acceptance framing of it. **(a) Destructive GUI actions confirm
+before acting, the pending-changes discard included.** The shipped gate is
+`confirmInline` in `gui/renderer/app.js` (entered through
+`armDelete` / `armArchiveClient` / `armArchiveProject`), plus the §12 R24
+keep-editing / discard dialog over a dirty unified form. **Primary JUDGE**
+`CONFIRM_DESTRUCTIVE` (`main-confirm.png` — the entry is present pre-confirm with
+zero `remove` calls, then gone post-confirm with exactly one `remove({ id })`),
+with `CONFIRM_DELETE` (`main-confirm-delete.png`) and `CONFIRM_ARCHIVE`
+(`main-confirm-archive.png`) covering the entry and reference-data actions the one
+gate carries, and `PENDING_CHANGES_GATE` (`main-pending-gate.png`) the
+typed-but-unsaved discard — a dirty subject swap raises the dialog, nothing is
+written while it is up, and only the explicit Discard abandons the pending work.
+**BDD** `features/overlap_and_editing.feature` "Deleting an entry without
+confirmation is refused (the entry survives)" (run TWICE over core + tt) holds the
+surface-neutral half — an unconfirmed destroy destroys nothing. The confirm half
+has NO unit leg by design: it is a DOM gate in the shipped renderer, and a pure
+model of it would stay green while the shipped gate rotted (issue #167), so it is
+proven on the real surface. **(b) Entries week/filter/search selections reflect
+live on the calendar and its day-header totals; Reports grouping selections
+reflect live in the grouped totals.** A toolbar change re-queries the read-only
+`listEntries` IPC and repaints the grid + day headers — the retired range-total
+chip is not the reflection surface (issue #264), the grid and its headers are.
+**JUDGE** `LIVE_FILTER` (`main-filtered.png` — a keystroke narrows to the in-week
+matches, range + search composing, and clearing restores the full set),
+`ENTRIES_CALENDAR` (`entries-search.png` — the week/filter/search re-query),
+`CALENDAR_LAYOUT` `totalsOk` (the day-header figures sum the snapshot's core-owned
+`billableSeconds`, so they equal `tt report --by day` over the same selection — no
+money arithmetic in the renderer), and `REPORTS_VIEW` for the grouping half. No
+new IPC channel: the confirm gate is client-side over the existing `remove`, and
+the live reflection rides the existing `listEntries` / `getState`, so
+`parity-matrix.json` is intentionally untouched
 
 ### §17 R12
 

@@ -2123,7 +2123,11 @@ function formIsDirty() {
 // form) runs through here: a CLEAN form swaps in place — no prompt, no animation — while a
 // dirty form blocks on the keep-editing / discard-changes dialog. Keep editing returns to
 // the form untouched; only the explicit Discard abandons the pending fields and performs
-// the swap. No path replaces or closes a dirty form silently.
+// the swap. No SUBJECT SWAP replaces a dirty form silently — which is the gate's proven
+// scope, and deliberately narrower than "no path": the footer's own Cancel calls
+// closeUnifiedForm directly, so whether Cancel IS the explicit discard or should itself
+// gate is an open §12 R24 reading (issue #301), and neither this comment nor the rubric
+// claims it in either direction.
 function guardedSwap(perform) {
   if (!openForm || !formIsDirty()) {
     perform();

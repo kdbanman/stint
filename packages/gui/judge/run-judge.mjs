@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -2392,10 +2392,44 @@ async function scenePendingChangesGate(browser) {
     // (a) Dirty the form on entry 80, then click entry 82 — the gate ARMS: a dialog with the
     // keep/discard pair, Keep editing focused (the non-destructive default), the form's
     // subject unswapped beneath it, and nothing written.
-    await page.hover('.entry[data-id="80"]');
-    await page.click('.entry[data-id="80"] [data-act="edit"]');
-    await page.waitForSelector(`${editForm}[data-id="80"]`, { state: 'attached' });
+    // The WHOLE pending state, as the user sees it — all seven fields `formIsDirty` compares,
+    // not a sample of one. `keepPreserves` used to read `{id, .edit-desc}`, which is a claim
+    // about the description and nothing else; "every pending field byte-for-byte" is only a
+    // fact if every pending field is read.
+    const snapForm = () =>
+      page.evaluate(() => {
+        const f = document.querySelector('.entry-form');
+        if (!f) return null;
+        const q = (s) => f.querySelector(s);
+        return {
+          id: f.dataset.id ?? null,
+          desc: q('.edit-desc')?.value ?? null,
+          client: q('.edit-client')?.value ?? null,
+          project: q('.edit-project')?.value ?? null,
+          billable: q('.edit-bill-box')?.getAttribute('aria-checked') ?? null,
+          start: q('.edit-start')?.value ?? null,
+          stop: q('.edit-end')?.value ?? null,
+          tags: [...f.querySelectorAll('.ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+        };
+      });
+    // The reference data arrives async and the seed's select halves are patched in when it
+    // does, so both the dirty comparison and the snapshot below wait for the options to land.
+    const openClean80 = async () => {
+      if (await page.$('.entry-form')) {
+        await page.click('.entry-form .edit-cancel');
+        await page.waitForSelector('.entry-form', { state: 'detached' });
+      }
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      await page.hover('.entry[data-id="80"]');
+      await page.click('.entry[data-id="80"] [data-act="edit"]');
+      await page.waitForSelector(`${editForm}[data-id="80"]`, { state: 'attached' });
+      await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+      await page.waitForSelector(`${editForm} .edit-project option[value="11"]`, { state: 'attached' });
+    };
+
+    await openClean80();
     await page.fill('.entry-form .edit-desc', 'typed but unsaved');
+    const pending = await snapForm();
     await page.hover('.entry[data-id="82"]');
     await clickEventBody(page, '.entry[data-id="82"]');
     await page.waitForSelector('.gate-backdrop .gatecard', { state: 'attached' });
@@ -2414,14 +2448,15 @@ async function scenePendingChangesGate(browser) {
       gate.dialog && /discard/i.test(gate.heading) && gate.keepFocused && gate.subjectHeld && gate.nothingWritten;
 
     // (b) KEEP EDITING — the dialog closes, the form stays on entry 80 with EVERY pending
-    // field preserved (the typed description survives byte-for-byte).
+    // field preserved: the whole seven-field snapshot taken before the gate, compared
+    // byte-for-byte after it, not the description alone.
     await page.click('.gatecard .gate-keep');
     await page.waitForSelector('.gate-backdrop', { state: 'detached' });
-    const kept = await page.evaluate(() => ({
-      id: document.querySelector('.entry-form')?.dataset.id,
-      desc: document.querySelector('.entry-form .edit-desc')?.value,
-    }));
-    const keepPreserves = kept.id === '80' && kept.desc === 'typed but unsaved';
+    const kept = await snapForm();
+    const keepPreserves =
+      kept?.id === '80' &&
+      kept.desc === 'typed but unsaved' &&
+      JSON.stringify(kept) === JSON.stringify(pending);
 
     // (c) DISCARD — the same swap attempted again, but the explicit Discard abandons the
     // typed edits and performs it: the form re-seeds to entry 82, the typed text gone.
@@ -2506,14 +2541,91 @@ async function scenePendingChangesGate(browser) {
     const gateStaysOnEntries =
       crossView.gatesOffEntries === 0 && crossView.formHeld && heldDesc === 'still unsaved';
 
+    // (g) EVERY FIELD KIND ARMS IT, AND EVERY FIELD SURVIVES KEEP EDITING (issue #301, review
+    // round 2). `formIsDirty()` compares SEVEN fields; every scene above dirties the same one.
+    // Deleting the six non-description comparisons left this item — and UNIFIED_FORM,
+    // UNIFIED_FORM_ADD and 311/311 GUI tests — entirely green, so a user who had only retyped a
+    // client, dragged an edge, flipped billable or added a tag would have lost that work
+    // silently to the next click. The rubric's own words are "every pending field": one arm per
+    // field kind, each asserting the gate raised, the subject held, nothing written, and the
+    // WHOLE seven-field snapshot returned byte-identical by Keep editing.
+    //
+    // Isolation is per-line where the product allows it. Changing the client necessarily
+    // re-derives the project select (the cascade is real behaviour, not a test artifact), so
+    // that arm covers the client+project pair; the project arm below moves to a SIBLING project
+    // of the same client, so it moves `.edit-project` and nothing else.
+    const DIRTY_KINDS = [
+      { kind: 'description', dirty: () => page.fill('.entry-form .edit-desc', 'retyped, unsaved') },
+      { kind: 'client', dirty: async () => {
+          await page.selectOption('.entry-form .edit-client', { label: 'Globex' });
+          await page.waitForFunction(() => document.querySelector('.entry-form .edit-client')?.value === '2');
+        } },
+      { kind: 'project', dirty: () => page.selectOption('.entry-form .edit-project', { label: 'Web' }) },
+      { kind: 'tags', dirty: async () => {
+          await page.click('.entry-form .ef-tag-add');
+          await page.fill('.entry-form .ef-tag-add', 'urgent');
+          await page.press('.entry-form .ef-tag-add', 'Enter');
+          await page.waitForFunction(
+            () => [...document.querySelectorAll('.entry-form .ef-tag-chips .chip')].length === 2,
+          );
+        } },
+      { kind: 'billable', dirty: async () => {
+          await page.click('.entry-form .edit-bill-box');
+          await page.waitForFunction(
+            () => document.querySelector('.entry-form .edit-bill-box')?.getAttribute('aria-checked') === 'false',
+          );
+        } },
+      { kind: 'start', dirty: () => page.fill('.entry-form .edit-start', '2026-06-24 13:15:00') },
+      { kind: 'stop', dirty: () => page.fill('.entry-form .edit-end', '2026-06-24 16:45:00') },
+    ];
+    const arms = [];
+    for (const { kind, dirty } of DIRTY_KINDS) {
+      await openClean80();
+      const seed = await snapForm();
+      await dirty();
+      const before = await snapForm();
+      await page.hover('.entry[data-id="82"]');
+      await clickEventBody(page, '.entry[data-id="82"]');
+      // Short, and CAUGHT: a gate that fails to arm must be recorded as a false fact, not a
+      // scene that throws — the swap it failed to block has already happened by then.
+      const armed = await page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2500 })
+        .then(() => true)
+        .catch(() => false);
+      const held = await page.evaluate(() => ({
+        subject: document.querySelector('.entry-form')?.dataset.id ?? null,
+        nothingWritten: !window.__EDITED__ && !window.__ADDED__,
+      }));
+      let after = null;
+      if (armed) {
+        await page.click('.gatecard .gate-keep');
+        await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+        after = await snapForm();
+      }
+      arms.push({
+        kind,
+        // The dirtying actually moved the field it names — so a no-op "edit" cannot make the
+        // arm below look like a gate that works.
+        dirtied: JSON.stringify(before) !== JSON.stringify(seed),
+        armed,
+        subjectHeld: held.subject === '80',
+        nothingWritten: held.nothingWritten,
+        preserved: !!after && JSON.stringify(after) === JSON.stringify(before),
+      });
+    }
+    const everyFieldArms = arms.every(
+      (a) => a.dirtied && a.armed && a.subjectHeld && a.nothingWritten && a.preserved,
+    );
+
     record(
       'PENDING_CHANGES_GATE',
-      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries },
+      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries, everyFieldArms },
       `the §12 R24 keep-editing / discard gate: arm=${JSON.stringify(gate)} (gateArms=${gateArms}); ` +
         `keep=${JSON.stringify(kept)} (preserves=${keepPreserves}); discard=${JSON.stringify(discarded)} ` +
         `(swaps=${discardSwaps}); emptySpotGated=${emptySpotGated}; refreshGated=${refreshGated}; ` +
         `off-Entries refresh: ${JSON.stringify(crossView)} desc=${JSON.stringify(heldDesc)} ` +
-        `(gateStaysOnEntries=${gateStaysOnEntries})`,
+        `(gateStaysOnEntries=${gateStaysOnEntries}); per-field arms=${JSON.stringify(arms)} ` +
+        `(everyFieldArms=${everyFieldArms})`,
       'main-pending-gate.png',
     );
   });
@@ -5752,9 +5864,80 @@ async function sceneSettingsView(browser) {
       };
     });
 
-    await page.selectOption('.set-field[data-key="dateFormat"]', 'iso');
-    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'dateFormat');
-    const set = await page.evaluate(() => window.__SET_SETTING__);
+    // EVERY CONTROL KIND PERSISTS (issue #301, review round 2). `allControlsPresent` above is a
+    // has(key) presence check, and only the date-format SELECT was ever driven — so the two
+    // snap inputs (and the working-hours pair, and the toggles) could render and persist
+    // NOTHING with this item still green: deleting the `input.set-min` change listener in
+    // settings.js left SETTINGS_VIEW and TIMELINE_WINDOW both passing. Presence is not wiring.
+    //
+    // The fix generalizes past the snap pair rather than special-casing it: settings.js's
+    // fieldControl() builds SIX control kinds, each with its own listener in wire(), and the
+    // defect is per-KIND (one missing loop silently unwires every field of that kind). So one
+    // control of each kind is driven end to end — the interaction a user makes, then the
+    // setSetting payload it produced — and `everyKindDriven` below holds the DRIVEN set against
+    // the kinds actually RENDERED in the panel, so a seventh kind added to FIELDS fails here
+    // until it is driven too.
+    const KIND_DRIVES = [
+      { kind: 'select', selector: '#settings-panel select.set-field',
+        drive: () => page.selectOption('#settings-panel .set-field[data-key="dateFormat"]', 'iso'),
+        key: 'dateFormat', value: 'iso' },
+      { kind: 'toggle', selector: '#settings-panel .set-toggle',
+        drive: () => page.click('#settings-panel .set-toggle[data-key="showWeekend"]'),
+        key: 'showWeekend', value: true },
+      { kind: 'segment', selector: '#settings-panel .set-seg .seg-btn',
+        drive: () => page.click('#settings-panel .set-seg[data-key="weekStart"] .seg-btn[data-value="sunday"]'),
+        key: 'weekStart', value: 'sunday' },
+      // A text input persists on `change`, which fires on commit — fill() alone does not, so
+      // each of these is typed and then blurred exactly as a user leaves the field.
+      { kind: 'hhmm', selector: '#settings-panel input.set-hhmm',
+        drive: async () => {
+          await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', '09:00');
+          await page.locator('#settings-panel input.set-hhmm[data-key="workingHoursStart"]').blur();
+        },
+        key: 'workingHoursStart', value: '09:00' },
+      // The §12 R23 snap pair — the kind the shipped bug unwired. 20 is a whole 1–30 minute
+      // value core accepts beside the fine default (fine ≤ coarse), and NOT the 15 it replaces,
+      // so a field that persisted nothing leaves the spy on the previous kind's payload.
+      { kind: 'minutes', selector: '#settings-panel input.set-min',
+        drive: async () => {
+          await page.fill('#settings-panel input.set-min[data-key="snapCoarseMinutes"]', '20');
+          await page.locator('#settings-panel input.set-min[data-key="snapCoarseMinutes"]').blur();
+        },
+        key: 'snapCoarseMinutes', value: 20 },
+      // Last: persist() re-renders the panel and replaces the capture field's node.
+      { kind: 'hotkey', selector: '#settings-panel .set-hotkey',
+        drive: async () => {
+          await page.focus('#settings-panel .set-hotkey');
+          await page.keyboard.press('Control+Shift+J');
+        },
+        key: 'globalHotkey', value: 'CommandOrControl+Shift+J' },
+    ];
+    // Which kinds the panel actually RENDERS, read off the DOM before anything is driven — the
+    // roster `everyKindDriven` is held against, so this cannot pass by the controls being absent.
+    const kindsPresent = await page.evaluate(
+      (sels) => sels.filter(({ selector }) => !!document.querySelector(selector)).map(({ kind }) => kind),
+      KIND_DRIVES.map(({ kind, selector }) => ({ kind, selector })),
+    );
+    const drives = [];
+    for (const { kind, key, value, drive } of KIND_DRIVES) {
+      // Cleared first, so each kind's fact is about the payload IT produced — an unwired
+      // control would otherwise inherit the previous kind's write and read as a pass.
+      await page.evaluate(() => { window.__SET_SETTING__ = null; });
+      await drive();
+      // Caught: a kind that persists nothing must record `wrote: null`, not time the scene out.
+      await page.waitForFunction((k) => window.__SET_SETTING__?.key === k, key).catch(() => {});
+      const wrote = await page.evaluate(() => window.__SET_SETTING__ ?? null);
+      drives.push({ kind, expected: { key, value }, wrote });
+    }
+    // The date-format payload the row's justification has always printed.
+    const set = drives.find((d) => d.kind === 'select').wrote;
+    const everyKindPersists = drives.every(
+      (d) => !!d.wrote && d.wrote.key === d.expected.key && d.wrote.value === d.expected.value,
+    );
+    const everyKindDriven =
+      kindsPresent.length >= 5 &&
+      kindsPresent.every((k) => KIND_DRIVES.some((d) => d.kind === k)) &&
+      KIND_DRIVES.every((d) => kindsPresent.includes(d.kind));
 
     const segChipOk =
       probe.segChip.present &&
@@ -5767,8 +5950,10 @@ async function sceneSettingsView(browser) {
     const editFiresSetSetting = !!set && set.key === 'dateFormat' && set.value === 'iso';
     record(
       'SETTINGS_VIEW',
-      { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all eleven §14 controls incl. the Entries-calendar group (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting, everyKindPersists, everyKindDriven },
+      `settings panel exposes all eleven §14 controls incl. the Entries-calendar group (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}; ` +
+        `every control kind persists=${everyKindPersists} ${JSON.stringify(drives)}; ` +
+        `kinds rendered=${JSON.stringify(kindsPresent)} all driven=${everyKindDriven}`,
       'main-settings.png',
     );
   });
@@ -6156,6 +6341,144 @@ async function sceneTimelineWindowAround(browser) {
       'timeline-window.png',
     );
   });
+}
+
+// SNAP_RESOLUTION — §12 R23 / §14: the two stored snap resolutions are actually CONSUMED by both
+// drag surfaces. Every other fixture carries the 5/15 defaults and every other snap assertion is
+// a literal default, so a renderer that hardcoded 5 and 15 passed all 57 machine-scored items —
+// the settings pair was proven to store and validate, and proven by nothing to be read. This
+// scene is the only one driven from a NON-DEFAULT pair (2/20, fixtures.mjs SNAP_NON_DEFAULT).
+//
+// The discriminator is modular, and deliberately two-sided: a coarse landing must be ≡ 0 mod 20
+// AND ∉ 0 mod 15, a fine landing ≡ 0 mod 2 AND ∉ 0 mod 5. Either default therefore produces a
+// value the assertion rejects — 15-stepping cannot land on the 20-grid-but-off-15 minutes, and
+// 5-stepping cannot land on an off-5 even minute. Asserting `% 20 === 0` alone would not do it:
+// 60-minute boundaries sit on both grids, which is the same trap that made 5/15 a weak pair.
+async function sceneSnapResolution(browser) {
+  // (A) THE ENTRIES WEEK GRID (app.js). The track is 1px per minute and snapMin() snaps the
+  // ABSOLUTE minute under the cursor, so the landings below are computed from the track's own
+  // rect rather than assumed: press at minute 503 → 500, release at 623 → 620. Both are on the
+  // 20-grid and off the 15-grid; a hardcoded coarse 15 would land 495/615 and 630, failing.
+  const grid = await withPage(browser, snapGridState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.waitForSelector('#entries .fab', { state: 'attached' });
+    // Aim from the track rect. The viewport opens on working hours, so both points are computed
+    // and then CHECKED to be inside the visible strip — an off-screen aim would hit nothing and
+    // is a broken scene, not a passing one.
+    const aim = await page.evaluate(() => {
+      const t = document.querySelector('#entries .dt[data-day="2026-06-24"]');
+      const r = t.getBoundingClientRect();
+      const strip = document.querySelector('.cstrip').getBoundingClientRect();
+      const at = (minute) => ({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + minute) });
+      const press = at(503);
+      const release = at(623);
+      const inStrip = (p) => p.y > strip.top && p.y < strip.bottom;
+      return { press, release, onScreen: [press, release].every(inStrip) };
+    });
+
+    // SELECT-INTERVAL: the start handle follows the cursor snapped at the stored COARSE step.
+    await page.click('#entries .fab');
+    await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+    await page.mouse.move(aim.press.x, aim.press.y);
+    await page.waitForSelector('#entries .shandle', { state: 'attached' });
+    const handleMin = await page.evaluate(() => {
+      const [hh, mm] = document.querySelector('#entries .shandle .st').textContent.split(':').map(Number);
+      return hh * 60 + mm;
+    });
+
+    // PRESS-DRAG → CREATE: both raw fields carry the coarse-snapped span.
+    await page.mouse.down();
+    await page.mouse.move(aim.release.x, aim.release.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    const minOf = (v) => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16));
+    const coarse = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+
+    // FINE: flip the toggle beside the grid and drag the stop edge. The step is now the stored
+    // fine 2, so the landing is even but off the 5-grid — unreachable at either default.
+    // The target is recomputed against the track's CURRENT rect: opening the form above the grid
+    // shifts it, so an aim measured before the form opened would land somewhere else entirely.
+    await page.click('#entries .snapctl .sw');
+    const fineAim = await page.evaluate(() => {
+      const r = document.querySelector('#entries .dt[data-day="2026-06-24"]').getBoundingClientRect();
+      const g = document.querySelector('#entries .grip.b').getBoundingClientRect();
+      return {
+        grip: { x: Math.round(g.left + g.width / 2), y: Math.round(g.top + g.height / 2) },
+        target: { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 634) },
+      };
+    });
+    await page.mouse.move(fineAim.grip.x, fineAim.grip.y);
+    await page.mouse.down();
+    await page.mouse.move(fineAim.target.x, fineAim.target.y, { steps: 6 });
+    await page.mouse.up();
+    const fine = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'snap-resolution-grid.png') });
+    return {
+      onScreen: aim.onScreen,
+      handleMin,
+      coarse: { ...coarse, startMin: minOf(coarse.start), stopMin: minOf(coarse.stop) },
+      fine: { ...fine, stopMin: minOf(fine.stop) },
+    };
+  });
+  const onCoarse = (m) => m % 20 === 0 && m % 15 !== 0;
+  const onFine = (m) => m % 2 === 0 && m % 5 !== 0;
+  const gridCoarseFromSettings =
+    grid.onScreen && onCoarse(grid.handleMin) && onCoarse(grid.coarse.startMin) && onCoarse(grid.coarse.stopMin);
+  const gridFineFromSettings =
+    onFine(grid.fine.stopMin) &&
+    grid.fine.stopMin !== grid.coarse.stopMin && // the drag actually moved the edge
+    grid.fine.start === grid.coarse.start; // and only the dragged edge moved
+
+  // (B) THE TIMER VIEW'S START-ONLY PICKER (timepicker.js). Its grip drag is RELATIVE — the
+  // step is applied to (stored start + pointer delta) on a 720px/24h track, 0.5px per minute —
+  // so the same pair is exercised through different arithmetic, which is the point of covering
+  // both surfaces: one shared helper, two independent call sites, either of which can stop
+  // passing the settings through.
+  const picker = await withPage(browser, snapPickerState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="timer"]');
+    await page.click('#le-start-pick');
+    await page.waitForSelector('#le-start-disc .stp-grip', { state: 'attached' });
+    const dragGrip = async (dy) => {
+      const grip = page.locator('#le-start-disc .stp-grip');
+      await grip.scrollIntoViewIfNeeded();
+      const g = await grip.boundingBox();
+      const x = Math.round(g.x + g.width / 2);
+      const y = Math.round(g.y + g.height / 2);
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x, y + dy, { steps: 6 });
+      await page.mouse.up();
+      return page.evaluate(() => document.querySelector('#le-start')?.value ?? null);
+    };
+    // −30px = −60min off the stored 21:35:53 → 20:35:53 → the coarse 20 grid lands 20:40.
+    const coarse = await dragGrip(-30);
+    await page.click('#le-start-disc .stp-snapctl .sw');
+    // −13px = −26min off 20:40 → 20:14 on the fine 2 grid (even, and off the 5 grid).
+    const fine = await dragGrip(-13);
+    await page.screenshot({ path: join(EVIDENCE, 'snap-resolution-picker.png') });
+    return { coarse, fine };
+  });
+  const minOf = (v) => (v ? Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16)) : NaN);
+  const pickerCoarseFromSettings = onCoarse(minOf(picker.coarse)) && /:00$/.test(picker.coarse);
+  const pickerFineFromSettings = onFine(minOf(picker.fine)) && minOf(picker.fine) !== minOf(picker.coarse);
+
+  record(
+    'SNAP_RESOLUTION',
+    { gridCoarseFromSettings, gridFineFromSettings, pickerCoarseFromSettings, pickerFineFromSettings },
+    `§12 R23 at the NON-DEFAULT stored pair (fine 2 / coarse 20): entries grid ${JSON.stringify(grid)} ` +
+      `— coarse landings ≡0 mod 20 and ∉0 mod 15 (${gridCoarseFromSettings}), fine stop ≡0 mod 2 and ` +
+      `∉0 mod 5 with the start edge untouched (${gridFineFromSettings}); timer start-only picker ` +
+      `${JSON.stringify(picker)} — coarse ${pickerCoarseFromSettings}, fine ${pickerFineFromSettings}. ` +
+      `Neither hardcoded default (5 or 15) can produce any of these minutes.`,
+    'snap-resolution-grid.png',
+  );
 }
 
 // SOFTWARE_UPDATE — §19 R03/R04/R06 (G3): the Settings → Software Update group, driven with
@@ -7234,6 +7557,7 @@ const SCENES = {
   HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], captures: ['settings-hotkey-focus.png'], run: sceneHotkeyNoTrap },
   TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], captures: ['timeline-window.png'], run: sceneTimelineWindow },
   TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], captures: [], run: sceneTimelineWindowAround },
+  SNAP_RESOLUTION: { items: ['SNAP_RESOLUTION'], captures: ['snap-resolution-grid.png', 'snap-resolution-picker.png'], run: sceneSnapResolution },
   SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], captures: ['main-software-update.png', 'main-software-update-error.png', 'main-software-update-check-error.png'], run: sceneSoftwareUpdate },
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], captures: ['main-backups.png', 'main-backups-empty.png'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], captures: ['main-recovery.png'], run: sceneRecoveryNotice },
