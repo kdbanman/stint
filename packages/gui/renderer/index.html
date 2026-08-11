@@ -209,49 +209,59 @@
                  (issue #264; per-day billable totals live in the calendar's day headers, §12
                  R16). Adding an entry is NOT a toolbar affordance: the round + button lives on
                  the week grid itself (§12 R07, app.js renderCalendar), per mockup main.html. -->
-            <div class="toolbar">
-              <button type="button" id="el-prev-week" class="iconbtn" aria-label="Previous week"><svg class="ic" aria-hidden="true"><use href="#i-left" /></svg></button>
-              <button type="button" id="el-next-week" class="iconbtn" aria-label="Next week"><svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></button>
-              <span class="wklabel" id="el-week-label"></span>
-              <span class="sp"></span>
+            <!-- §12 R09/R16: the Entries HEAD BAND. The month-calendar week picker sits
+                 ABOVE the grid, not beside it, sharing this band with the toolbar so the band's
+                 width is spent rather than wasted — a 224px rail beside the grid cost every day
+                 column 244px of the width it needs for description + client + range (issue #323).
+                 Sharing the band with the toolbar is what keeps the vertical price down: the band
+                 is as tall as the TALLER of the two, not the sum. The picker lives OUTSIDE the
+                 repainted #entries host so a calendar repaint never rebuilds it mid-interaction. -->
+            <div class="eband">
+                <aside id="week-picker" class="wkpick" aria-label="Week picker"></aside>
+              <div class="toolbar">
+                <button type="button" id="el-prev-week" class="iconbtn" aria-label="Previous week"><svg class="ic" aria-hidden="true"><use href="#i-left" /></svg></button>
+                <button type="button" id="el-next-week" class="iconbtn" aria-label="Next week"><svg class="ic" aria-hidden="true"><use href="#i-right" /></svg></button>
+                <span class="wklabel" id="el-week-label"></span>
+                <span class="sp"></span>
 
-              <div class="seg" id="el-billable-seg" role="group" aria-label="Billable filter">
-                <button type="button" class="seg-btn on" data-billable="all" aria-pressed="true">All</button>
-                <button type="button" class="seg-btn" data-billable="billable" aria-pressed="false">Billable</button>
-                <button type="button" class="seg-btn" data-billable="non-billable" aria-pressed="false">Non-billable</button>
+                <div class="seg" id="el-billable-seg" role="group" aria-label="Billable filter">
+                  <button type="button" class="seg-btn on" data-billable="all" aria-pressed="true">All</button>
+                  <button type="button" class="seg-btn" data-billable="billable" aria-pressed="false">Billable</button>
+                  <button type="button" class="seg-btn" data-billable="non-billable" aria-pressed="false">Non-billable</button>
+                </div>
+                <!-- design.html D13: each filter carries a VISIBLE label (the same wrapping idiom
+                     the Search field uses — the mockup's bare selects lean on their option text,
+                     but the spec's rule is a visible label, and the spec outranks the mockup). -->
+                <label class="filter-field"><span>Client</span>
+                  <select id="el-client" class="report-field">
+                    <option value="">All clients</option>
+                  </select></label>
+                <label class="filter-field"><span>Project</span>
+                  <select id="el-project" class="report-field" disabled>
+                    <option value="">All projects</option>
+                  </select></label>
+                <label class="filter-field"><span>Tag</span>
+                  <input id="el-tag" class="report-field" type="text" autocomplete="off" /></label>
+
+                <!-- design.html D13 (issue 136): the search box's only name was its placeholder plus an
+                     invisible aria-label — D13 asks for a VISIBLE one, so the field chrome now sits
+                     inside a label that says so on screen. The aria-label is gone with it: a visible
+                     label IS the accessible name, and a second, different one only invites the two to
+                     disagree (WCAG 2.5.3). -->
+                <label class="search-field"><span class="search-lab">Search</span>
+                  <span class="search">
+                    <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
+                    <input type="search" id="search" autocomplete="off" />
+                  </span>
+                </label>
+
+                <!-- §12 R09 / §14: the Show-weekend toggle at the toolbar's top right, driving the
+                     PERSISTED show_weekend row over the same setSetting IPC the Settings view's
+                     control edits — the two are one stored fact, so either surface flips both.
+                     Off: the grid shows Monday–Friday; a hidden day's entries stay stored,
+                     reported, and reachable by turning it on. -->
+                <label class="wkend" for="el-weekend"><button type="button" id="el-weekend" class="sw" role="switch" aria-checked="false" aria-label="Show weekend"><i aria-hidden="true"></i></button> Show weekend</label>
               </div>
-              <!-- design.html D13: each filter carries a VISIBLE label (the same wrapping idiom
-                   the Search field uses — the mockup's bare selects lean on their option text,
-                   but the spec's rule is a visible label, and the spec outranks the mockup). -->
-              <label class="filter-field"><span>Client</span>
-                <select id="el-client" class="report-field">
-                  <option value="">All clients</option>
-                </select></label>
-              <label class="filter-field"><span>Project</span>
-                <select id="el-project" class="report-field" disabled>
-                  <option value="">All projects</option>
-                </select></label>
-              <label class="filter-field"><span>Tag</span>
-                <input id="el-tag" class="report-field" type="text" autocomplete="off" /></label>
-
-              <!-- design.html D13 (issue 136): the search box's only name was its placeholder plus an
-                   invisible aria-label — D13 asks for a VISIBLE one, so the field chrome now sits
-                   inside a label that says so on screen. The aria-label is gone with it: a visible
-                   label IS the accessible name, and a second, different one only invites the two to
-                   disagree (WCAG 2.5.3). -->
-              <label class="search-field"><span class="search-lab">Search</span>
-                <span class="search">
-                  <svg class="ic" aria-hidden="true"><use href="#i-search" /></svg>
-                  <input type="search" id="search" autocomplete="off" />
-                </span>
-              </label>
-
-              <!-- §12 R09 / §14: the Show-weekend toggle at the toolbar's top right, driving the
-                   PERSISTED show_weekend row over the same setSetting IPC the Settings view's
-                   control edits — the two are one stored fact, so either surface flips both.
-                   Off: the grid shows Monday–Friday; a hidden day's entries stay stored,
-                   reported, and reachable by turning it on. -->
-              <label class="wkend" for="el-weekend"><button type="button" id="el-weekend" class="sw" role="switch" aria-checked="false" aria-label="Show weekend"><i aria-hidden="true"></i></button> Show weekend</label>
             </div>
             <!-- §06 R3 (design.html D11 / V5): the merge SELECTION BAR — above the calendar,
                  mock main.html's .selbar: the "N selected" raised-chip count pill, a flex
@@ -263,13 +273,12 @@
               <span class="cap"></span>
               <button id="merge-go" type="button" class="small"><svg class="ic" aria-hidden="true"><use href="#i-swap" /></svg>Merge</button>
             </div>
-            <!-- §12 R09/R16: the Entries body — the month-calendar WEEK PICKER rail on the left
-                 (app.js renderWeekPicker: entry-dot days, today ring, the selected week as one
-                 lifted band, a roving grid keyboard path; NO live-timer treatment), the week grid
-                 filling the rest (mockup main.html windows 1–3). The picker lives OUTSIDE the
-                 repainted #entries host so a calendar repaint never rebuilds it mid-interaction. -->
+            <!-- §12 R09/R16: the Entries body — the week grid, now spanning the FULL view
+                 width (mockup main.html windows 1–3). The month calendar that used to sit to its
+                 left moved into .eband above; see app.js renderWeekPicker for what it draws
+                 (entry-dot days, today ring, the selected week as one lifted band, a roving grid
+                 keyboard path; NO live-timer treatment). -->
             <div class="ebody">
-              <aside id="week-picker" class="wkpick" aria-label="Week picker"></aside>
               <main id="entries"></main>
             </div>
           </section>

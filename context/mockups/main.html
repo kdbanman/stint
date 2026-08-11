@@ -115,12 +115,17 @@
   .selbar .cap{flex:1}
 
   /* ── the Entries body: week picker rail on the left, week grid filling the rest ── */
-  .ebody{display:flex;gap:20px;align-items:flex-start}
+  /* §12 R09/R16 (issue #323): the head band — the month-calendar picker and the toolbar side by
+     side ABOVE the grid, so every day column keeps the 244px the rail used to take, and the band
+     costs the height of the taller of the two rather than the sum. */
+  .eband{display:flex;gap:20px;align-items:flex-start}
+  .eband .toolbar{flex:1;min-width:0;align-self:center;margin-bottom:0}
+  .ebody{display:block}
 
   /* week picker (§12 R09): a month calendar — entry-dot days, a today RING, the selected
      week highlighted as ONE unit (a lifted paper band, D12 — depth, not tint). Clicking any
      day selects its week; arrow keys rove the grid, Enter selects. No running-timer treatment. */
-  .wkpick{width:224px;flex:none;padding:16px}
+  .wkpick{width:224px;flex:none;padding:12px}
   .wk-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
   .wk-hd .m{font-size:13px;font-weight:640}
   .wk-hd .nav2{display:flex;gap:4px}
@@ -270,32 +275,33 @@
         <h2 class="vtitle">Entries</h2>
       </div>
 
-      <div class="toolbar">
-        <button class="iconbtn" aria-label="Previous week"><svg class="ic"><use href="#i-left"/></svg></button>
-        <button class="iconbtn" aria-label="Next week"><svg class="ic"><use href="#i-right"/></svg></button>
-        <span class="wklabel">Jun 22 – 26, 2026</span>
-        <span class="sp"></span>
-        <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
-        <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
-        <select class="field"><option>All tags</option></select>
-        <label class="srchf"><span>Search</span><span class="srch"><svg class="ic"><use href="#i-search"/></svg><input></span></label>
-        <label class="wkend"><span class="sw" role="switch" aria-checked="false"><i></i></span> Show weekend</label>
+      <div class="eband">
+        <div class="wkpick card">
+            <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
+            <div class="wkgrid">
+              <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
+              <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
+              <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
+              <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
+              <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span></span><span class="d ws last"><span class="tn2">28</span></span>
+              <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
+            </div>
+          </div>
+        <div class="toolbar">
+          <button class="iconbtn" aria-label="Previous week"><svg class="ic"><use href="#i-left"/></svg></button>
+          <button class="iconbtn" aria-label="Next week"><svg class="ic"><use href="#i-right"/></svg></button>
+          <span class="wklabel">Jun 22 – 26, 2026</span>
+          <span class="sp"></span>
+          <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
+          <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
+          <select class="field"><option>All tags</option></select>
+          <label class="srchf"><span>Search</span><span class="srch"><svg class="ic"><use href="#i-search"/></svg><input></span></label>
+          <label class="wkend"><span class="sw" role="switch" aria-checked="false"><i></i></span> Show weekend</label>
+        </div>
       </div>
 
       <div class="ebody">
-        <div class="wkpick card">
-          <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-          <div class="wkgrid">
-            <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-            <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
-            <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
-            <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
-            <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span></span><span class="d ws last"><span class="tn2">28</span></span>
-            <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
-          </div>
-        </div>
-
-        <div class="calwrap">
+                <div class="calwrap">
           <div class="cgrid">
             <div class="gut"><div class="sp2"></div><div class="gtr">
               <span class="hlab" style="top:0">07:00</span><span class="hlab" style="top:60px">08:00</span><span class="hlab" style="top:120px">09:00</span><span class="hlab" style="top:180px">10:00</span><span class="hlab" style="top:240px">11:00</span><span class="hlab" style="top:300px">12:00</span><span class="hlab" style="top:360px">13:00</span><span class="hlab" style="top:420px">14:00</span><span class="hlab" style="top:480px">15:00</span><span class="hlab" style="top:540px">16:00</span><span class="hlab" style="top:600px">17:00</span><span class="hlab" style="top:660px">18:00</span>
@@ -380,20 +386,21 @@
         <button class="btn sm"><svg class="ic"><use href="#i-swap"/></svg> Merge</button>
       </div>
 
-      <div class="ebody">
+      <div class="eband">
         <div class="wkpick card">
-          <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-          <div class="wkgrid">
-            <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-            <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
-            <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
-            <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
-            <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span></span><span class="d ws last"><span class="tn2">28</span></span>
-            <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
+            <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
+            <div class="wkgrid">
+              <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
+              <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
+              <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
+              <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
+              <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span></span><span class="d ws last"><span class="tn2">28</span></span>
+              <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
+            </div>
           </div>
-        </div>
-
-        <div class="calwrap">
+      </div>
+      <div class="ebody">
+                <div class="calwrap">
           <div class="cgrid">
             <div class="gut"><div class="sp2"></div><div class="gtr">
               <span class="hlab" style="top:0">07:00</span><span class="hlab" style="top:60px">08:00</span><span class="hlab" style="top:120px">09:00</span><span class="hlab" style="top:180px">10:00</span><span class="hlab" style="top:240px">11:00</span><span class="hlab" style="top:300px">12:00</span><span class="hlab" style="top:360px">13:00</span><span class="hlab" style="top:420px">14:00</span><span class="hlab" style="top:480px">15:00</span><span class="hlab" style="top:540px">16:00</span><span class="hlab" style="top:600px">17:00</span><span class="hlab" style="top:660px">18:00</span>
@@ -465,32 +472,33 @@
         <h2 class="vtitle">Entries</h2>
       </div>
 
-      <div class="toolbar">
-        <button class="iconbtn" aria-label="Previous week"><svg class="ic"><use href="#i-left"/></svg></button>
-        <button class="iconbtn" aria-label="Next week"><svg class="ic"><use href="#i-right"/></svg></button>
-        <span class="wklabel">Jun 22 – 28, 2026</span>
-        <span class="sp"></span>
-        <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
-        <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
-        <select class="field"><option>All tags</option></select>
-        <label class="srchf"><span>Search</span><span class="srch"><svg class="ic"><use href="#i-search"/></svg><input></span></label>
-        <label class="wkend"><span class="sw on" role="switch" aria-checked="true"><i></i></span> Show weekend</label>
+      <div class="eband">
+        <div class="wkpick card">
+            <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
+            <div class="wkgrid">
+              <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
+              <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
+              <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
+              <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
+              <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span><i class="edot"></i></span><span class="d ws last"><span class="tn2">28</span></span>
+              <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
+            </div>
+          </div>
+        <div class="toolbar">
+          <button class="iconbtn" aria-label="Previous week"><svg class="ic"><use href="#i-left"/></svg></button>
+          <button class="iconbtn" aria-label="Next week"><svg class="ic"><use href="#i-right"/></svg></button>
+          <span class="wklabel">Jun 22 – 28, 2026</span>
+          <span class="sp"></span>
+          <span class="seg"><button class="on">All</button><button>Billable</button><button>Non-billable</button></span>
+          <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
+          <select class="field"><option>All tags</option></select>
+          <label class="srchf"><span>Search</span><span class="srch"><svg class="ic"><use href="#i-search"/></svg><input></span></label>
+          <label class="wkend"><span class="sw on" role="switch" aria-checked="true"><i></i></span> Show weekend</label>
+        </div>
       </div>
 
       <div class="ebody">
-        <div class="wkpick card">
-          <div class="wk-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-          <div class="wkgrid">
-            <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-            <span class="d"><span class="tn2">1</span><i class="edot"></i></span><span class="d"><span class="tn2">2</span><i class="edot"></i></span><span class="d"><span class="tn2">3</span></span><span class="d"><span class="tn2">4</span><i class="edot"></i></span><span class="d"><span class="tn2">5</span><i class="edot"></i></span><span class="d"><span class="tn2">6</span></span><span class="d"><span class="tn2">7</span></span>
-            <span class="d"><span class="tn2">8</span><i class="edot"></i></span><span class="d"><span class="tn2">9</span><i class="edot"></i></span><span class="d"><span class="tn2">10</span><i class="edot"></i></span><span class="d"><span class="tn2">11</span></span><span class="d"><span class="tn2">12</span><i class="edot"></i></span><span class="d"><span class="tn2">13</span></span><span class="d"><span class="tn2">14</span></span>
-            <span class="d"><span class="tn2">15</span><i class="edot"></i></span><span class="d"><span class="tn2">16</span><i class="edot"></i></span><span class="d"><span class="tn2">17</span><i class="edot"></i></span><span class="d"><span class="tn2">18</span><i class="edot"></i></span><span class="d"><span class="tn2">19</span></span><span class="d"><span class="tn2">20</span></span><span class="d"><span class="tn2">21</span></span>
-            <span class="d ws first"><span class="tn2">22</span><i class="edot"></i></span><span class="d ws"><span class="tn2">23</span><i class="edot"></i></span><span class="d ws"><span class="tn2">24</span><i class="edot"></i></span><span class="d ws today"><span class="tn2">25</span><i class="edot"></i></span><span class="d ws"><span class="tn2">26</span><i class="edot"></i></span><span class="d ws"><span class="tn2">27</span><i class="edot"></i></span><span class="d ws last"><span class="tn2">28</span></span>
-            <span class="d"><span class="tn2">29</span></span><span class="d"><span class="tn2">30</span></span><span class="d mut"><span class="tn2">1</span></span><span class="d mut"><span class="tn2">2</span></span><span class="d mut"><span class="tn2">3</span></span><span class="d mut"><span class="tn2">4</span></span><span class="d mut"><span class="tn2">5</span></span>
-          </div>
-        </div>
-
-        <div class="calwrap">
+                <div class="calwrap">
           <div class="cgrid">
             <div class="gut"><div class="sp2"></div><div class="gtr">
               <span class="hlab" style="top:0">07:00</span><span class="hlab" style="top:60px">08:00</span><span class="hlab" style="top:120px">09:00</span><span class="hlab" style="top:180px">10:00</span><span class="hlab" style="top:240px">11:00</span><span class="hlab" style="top:300px">12:00</span><span class="hlab" style="top:360px">13:00</span><span class="hlab" style="top:420px">14:00</span><span class="hlab" style="top:480px">15:00</span><span class="hlab" style="top:540px">16:00</span><span class="hlab" style="top:600px">17:00</span><span class="hlab" style="top:660px">18:00</span>

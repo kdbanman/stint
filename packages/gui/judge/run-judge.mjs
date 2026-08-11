@@ -116,6 +116,17 @@ const readsClean = (message) => typeof message === 'string' && message.length > 
 // frame happened to catch. With motion off, every paint assertion reads the cascade directly and
 // the same interaction gives the same colour every run. Only motion is suppressed: that it exists,
 // and collapses under prefers-reduced-motion, is A06's own static check.
+// §12 R24 (issue #323): Cancel is GATED now — a form holding typed work asks before it closes,
+// so a scene that only wants the form gone has to answer the prompt. A clean form never raises
+// one, which is why this is safe to use everywhere rather than only where the form is dirty.
+// The gate is appended synchronously inside the click handler, so it is already there (or
+// never coming) by the time the click resolves.
+async function cancelForm(page, sel = '.entry-form') {
+  await page.click(`${sel} .edit-cancel`);
+  if (await page.$('.gate-backdrop')) await page.click('.gatecard [data-gate="confirm"]');
+  await page.waitForSelector(sel, { state: 'detached' });
+}
+
 const noMotion = (page) =>
   page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
 
@@ -1409,8 +1420,7 @@ async function scenePrimaryHandoff(browser) {
     await page.keyboard.press('Enter'); // the keyboard path opens the form directly (R07)
     await page.waitForSelector('.entry-form[data-mode="add"]');
     await at(page, 'entries · unified form open');
-    await page.click('.entry-form .edit-cancel');
-    await page.waitForFunction(() => !document.querySelector('.entry-form'));
+    await cancelForm(page);
 
     await page.click('.nav-item[data-view="clients"]');
     await page.waitForSelector('#clients:not([hidden]) .client[data-id]');
@@ -1962,7 +1972,13 @@ async function sceneUnifiedFormAdd(browser) {
     // FINE grid (5 min default) — the settings pair consumed, the toggle ephemeral (R23).
     const spanMin = (a, b) => Math.round((Date.parse(b.replace(' ', 'T')) - Date.parse(a.replace(' ', 'T'))) / 60000);
     const meBox = await page.evaluate(() => {
-      const r = document.querySelector('#entries .ev.me').getBoundingClientRect();
+      // Bring the pending block into the scrollport before aiming at it. Its rect is in viewport
+      // space whether or not the strip is showing it, so a clipped block hands back coordinates
+      // that land on whatever sits above the grid — and the drag silently does nothing. What is
+      // under test is that a body drag moves both fields, not where the strip happens to sit.
+      const me = document.querySelector('#entries .ev.me');
+      me.scrollIntoView({ block: 'center' });
+      const r = me.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
     await page.mouse.move(meBox.x, meBox.y);
@@ -1980,7 +1996,10 @@ async function sceneUnifiedFormAdd(browser) {
       minOf(bodyDragged.start) % 15 === 0;
     await page.click('#entries .snapctl .sw');
     const gripBox = await page.evaluate(() => {
-      const r = document.querySelector('#entries .grip.b').getBoundingClientRect();
+      // Same reason as meBox: the body drag just moved this block, so re-centre before aiming.
+      const grip = document.querySelector('#entries .grip.b');
+      grip.scrollIntoView({ block: 'center' });
+      const r = grip.getBoundingClientRect();
       return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
     await page.mouse.move(gripBox.x, gripBox.y);
@@ -2223,8 +2242,7 @@ async function sceneUnifiedForm(browser) {
 
     // (d) A CLEAN form swaps its subject in place — Cancel (discarding the drag), reopen 80,
     // then click entry 82: the form re-seeds to 82 instantly, no prompt, no animation gate.
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
+    await cancelForm(page, editForm); // the drag dirtied it, so Cancel asks — answer it
     await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
     await page.hover(editRow);
     await page.click(`${editRow} [data-act="edit"]`);
@@ -2348,8 +2366,7 @@ async function sceneUnifiedForm(browser) {
       from: document.querySelector('.entry-form .edit-start')?.value ?? '',
       to: document.querySelector('.entry-form .edit-end')?.value ?? '',
     }));
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
+    await cancelForm(page, editForm); // the drag dirtied it, so Cancel asks — answer it
     const exactShown =
       /:33$/.test(exactSeed.from) && // the start renders its stored seconds (…09:07:33)
       exactSeed.to === '2026-06-24 11:03:00'; // the stop shows :00 seconds, OFF the snap grid
@@ -2415,10 +2432,7 @@ async function scenePendingChangesGate(browser) {
     // The reference data arrives async and the seed's select halves are patched in when it
     // does, so both the dirty comparison and the snapshot below wait for the options to land.
     const openClean80 = async () => {
-      if (await page.$('.entry-form')) {
-        await page.click('.entry-form .edit-cancel');
-        await page.waitForSelector('.entry-form', { state: 'detached' });
-      }
+      if (await page.$('.entry-form')) await cancelForm(page);
       await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
       await page.hover('.entry[data-id="80"]');
       await page.click('.entry[data-id="80"] [data-act="edit"]');
@@ -2617,16 +2631,199 @@ async function scenePendingChangesGate(browser) {
       (a) => a.dirtied && a.armed && a.subjectHeld && a.nothingWritten && a.preserved,
     );
 
+    // (f) THE TWO WAYS OUT OF THE FORM (issue #323). Cancel used to close the form outright —
+    // every other route to losing pending work was gated and the likeliest one was not. Escape
+    // is the cheap way out that gating Cancel demands, and it is gated the same. Both legs run
+    // from a re-established, known state rather than whatever the arms loop left behind.
+    // A RELOAD is the honest reset between legs: tearing the form node out by hand would leave
+    // the renderer's openForm pointing at a detached node, and every leg after it would be
+    // measuring a state the app can never actually be in. The init script re-applies on reload.
+    const openDirtyEdit = async (dirty) => {
+      await page.reload();
+      await noMotion(page);
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      // The edit control lives in the hover-revealed .ops, so click it the way the other
+      // scenes do rather than relying on a hover landing first.
+      await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
+      await page.waitForSelector(editForm, { state: 'attached' });
+      if (dirty) await page.fill('.entry-form .edit-desc', 'typed work that must not vanish');
+      return snapForm();
+    };
+    const gateUp = () =>
+      page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2500 })
+        .then(() => true)
+        .catch(() => false);
+
+    const dirtyBefore = await openDirtyEdit(true);
+    await page.click('.entry-form .edit-cancel');
+    const cancelArmed = await gateUp();
+    let cancelKept = null;
+    if (cancelArmed) {
+      await page.click('.gatecard [data-gate="cancel"]');
+      await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+      cancelKept = await snapForm();
+    }
+    // ...and the confirm half really does close it, so the gate is not merely obstructive.
+    await page.click('.entry-form .edit-cancel');
+    await gateUp();
+    await page.click('.gatecard [data-gate="confirm"]');
+    await page.waitForSelector('.entry-form', { state: 'detached' });
+    const cancelDiscardCloses = await page.evaluate(() => !document.querySelector('.entry-form'));
+
+    await openDirtyEdit(false); // CLEAN form: Escape just closes, nothing to ask about
+    await page.keyboard.press('Escape');
+    const escapeClean = await page
+      .waitForSelector('.entry-form', { state: 'detached', timeout: 2500 })
+      .then(() => true)
+      .catch(() => false);
+
+    const escDirtyBefore = await openDirtyEdit(true); // DIRTY form: Escape asks
+    await page.keyboard.press('Escape');
+    const escapeArmed = await gateUp();
+    let escapeKept = null;
+    if (escapeArmed) {
+      await page.click('.gatecard [data-gate="cancel"]');
+      await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+      escapeKept = await snapForm();
+    }
+    const cancelGated =
+      cancelArmed && !!cancelKept && JSON.stringify(cancelKept) === JSON.stringify(dirtyBefore) && cancelDiscardCloses;
+    const escapeGated =
+      escapeClean &&
+      escapeArmed &&
+      !!escapeKept &&
+      JSON.stringify(escapeKept) === JSON.stringify(escDirtyBefore);
+
     record(
       'PENDING_CHANGES_GATE',
-      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries, everyFieldArms },
+      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries, everyFieldArms, cancelGated, escapeGated },
       `the §12 R24 keep-editing / discard gate: arm=${JSON.stringify(gate)} (gateArms=${gateArms}); ` +
         `keep=${JSON.stringify(kept)} (preserves=${keepPreserves}); discard=${JSON.stringify(discarded)} ` +
         `(swaps=${discardSwaps}); emptySpotGated=${emptySpotGated}; refreshGated=${refreshGated}; ` +
         `off-Entries refresh: ${JSON.stringify(crossView)} desc=${JSON.stringify(heldDesc)} ` +
         `(gateStaysOnEntries=${gateStaysOnEntries}); per-field arms=${JSON.stringify(arms)} ` +
-        `(everyFieldArms=${everyFieldArms})`,
+        `(everyFieldArms=${everyFieldArms}); ` +
+        `Cancel: armed=${cancelArmed} preserved=${JSON.stringify(cancelKept)} closes-on-discard=${cancelDiscardCloses} ` +
+        `(cancelGated=${cancelGated}); Escape: clean-closes=${escapeClean} dirty-armed=${escapeArmed} ` +
+        `preserved=${JSON.stringify(escapeKept)} (escapeGated=${escapeGated})`,
       'main-pending-gate.png',
+    );
+  });
+}
+
+// WEEK_MOVE_PROMPT — §12 R24 (issue #323): changing the week with a form open CARRIES the entry
+// to the same weekday of the week being opened, so it asks first. Three claims, none of which any
+// BDD leg can see (a DOM prompt over a form's pending fields): the prompt arms; Cancel abandons
+// the WHOLE action so the view never leaves the week it was on; and it asks ONCE per open form,
+// so a confirmed move lets the owner step through weeks freely until the form closes.
+async function sceneWeekMovePrompt(browser) {
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await noMotion(page);
+    const editForm = '.entry-form[data-mode="edit"]';
+    const gateUp = () =>
+      page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+    const snap = () =>
+      page.evaluate(() => ({
+        week: document.getElementById('el-week-label')?.textContent?.trim() ?? null,
+        start: document.querySelector('.entry-form .edit-start')?.value ?? null,
+        stop: document.querySelector('.entry-form .edit-end')?.value ?? null,
+        formOpen: !!document.querySelector('.entry-form'),
+        subject: document.querySelector('.entry-form')?.dataset.id ?? null,
+      }));
+    const openEdit80 = async () => {
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
+      await page.waitForSelector(editForm, { state: 'attached' });
+    };
+
+    await openEdit80();
+    const before = await snap();
+
+    // (a) THE PROMPT ARMS, and it is the week prompt — not the discard gate, which says
+    // something else entirely and offers a destructive button this one must not have.
+    await page.click('#el-next-week');
+    const armed = await gateUp();
+    const promptText = armed
+      ? await page.evaluate(() => ({
+          title: document.querySelector('.gatecard h3')?.textContent?.trim() ?? null,
+          confirm: document.querySelector('.gatecard [data-gate="confirm"]')?.textContent?.trim() ?? null,
+          cancel: document.querySelector('.gatecard [data-gate="cancel"]')?.textContent?.trim() ?? null,
+          noDiscard: !document.querySelector('.gatecard .gate-discard'),
+        }))
+      : null;
+    await page.screenshot({ path: join(EVIDENCE, 'main-week-move-prompt.png') });
+
+    // (b) CANCEL ABANDONS THE WHOLE ACTION — the view stays on the week it was on and the entry
+    // is untouched, so the form and its block stay together. This is the half that separates the
+    // owner's ruling from the behaviour this replaced, which moved the view and stranded the form.
+    await page.click('.gatecard [data-gate="cancel"]');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const afterCancel = await snap();
+    const cancelAbandons =
+      afterCancel.week === before.week && afterCancel.start === before.start && afterCancel.formOpen;
+
+    // (c) CONFIRM CARRIES THE ENTRY — same weekday, same wall-clock time, one week on. Only the
+    // fields move; the write is still the user's Save, so nothing is committed here.
+    await page.click('#el-next-week');
+    await gateUp();
+    await page.click('.gatecard [data-gate="confirm"]');
+    await page.waitForFunction((w) => document.getElementById('el-week-label')?.textContent?.trim() !== w, before.week);
+    const afterConfirm = await snap();
+    const plusDays = (v, n) => {
+      const d = new Date(`${v.slice(0, 10)}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10) + v.slice(10);
+    };
+    const confirmMoves =
+      afterConfirm.start === plusDays(before.start, 7) &&
+      afterConfirm.stop === plusDays(before.stop, 7) &&
+      afterConfirm.formOpen &&
+      afterConfirm.subject === '80' &&
+      !(await page.evaluate(() => window.__EDITED__ || window.__ADDED__ || false));
+
+    // (d) ONCE PER OPEN FORM — the second week change just happens.
+    await page.click('#el-next-week');
+    const armedAgain = await gateUp();
+    await page.waitForFunction(
+      (w) => document.getElementById('el-week-label')?.textContent?.trim() !== w,
+      afterConfirm.week,
+    );
+    const afterSecond = await snap();
+    const asksOnce = !armedAgain && afterSecond.start === plusDays(before.start, 14);
+
+    // (e) ...and the answer dies with the form: a fresh form asks again. Walk the view back to
+    // the week the entry actually LIVES in first — the confirmed move moved the form's fields,
+    // not the stored row, and discarding them leaves entry 80 where it always was. (With no form
+    // open these two steps are exactly the ungated case, which is its own small proof.)
+    await cancelForm(page, editForm);
+    await page.click('#el-prev-week');
+    await page.click('#el-prev-week');
+    await openEdit80();
+    await page.click('#el-next-week');
+    const armedFresh = await gateUp();
+    if (armedFresh) await page.click('.gatecard [data-gate="cancel"]');
+
+    // (f) A PENDING new entry is asked about too — it holds typed work just the same.
+    await cancelForm(page, editForm);
+    await page.focus('#entries .fab');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    await page.click('#el-next-week');
+    const armedOnAdd = await gateUp();
+
+    record(
+      'WEEK_MOVE_PROMPT',
+      { armed, cancelAbandons, confirmMoves, asksOnce, armedFresh, armedOnAdd },
+      `prompt=${JSON.stringify(promptText)} (armed=${armed}); before=${JSON.stringify(before)}; ` +
+        `cancel→${JSON.stringify(afterCancel)} (abandons=${cancelAbandons}); ` +
+        `confirm→${JSON.stringify(afterConfirm)} (moves one week, same weekday, unwritten=${confirmMoves}); ` +
+        `second change armed=${armedAgain} →${JSON.stringify(afterSecond)} (asksOnce=${asksOnce}); ` +
+        `fresh form asks again=${armedFresh}; pending add asks=${armedOnAdd}`,
+      'main-week-move-prompt.png',
     );
   });
 }
@@ -5499,13 +5696,15 @@ async function sceneCalendarEntryBlock(browser) {
 
   const blocks = await page.evaluate(() => {
     const within = (el, root) => !!el && (el === root || root.contains(el));
-    // Park the scrollport on the fixture's own 08:00–16:00 span first: at the 60px hours the
-    // default working-hours scroll leaves the 13:00–16:00 control block's foot below the
-    // viewport, and an off-screen probe reads null instead of the block (a scroll, not a clip
-    // — the same reachability the layout scene asserts).
-    const strip = document.querySelector('.cstrip');
-    strip.scrollTop = 8 * 60;
+    // Bring each block into the scrollport before probing it. A FIXED park (this used to set
+    // strip.scrollTop = 8 * 60) silently assumed a particular strip height: the 13:00–16:00
+    // control block's foot fell below the viewport the moment the strip got shorter, and an
+    // off-screen probe reads null instead of the block. That is a scroll, not a clip, and it is
+    // not what this item is about — the claim under test is that a block hit-tests to ITSELF and
+    // does not spill into the entry below, at whatever scroll position shows it. Centring also
+    // keeps the block clear of the sticky day header, which would otherwise take the top hit.
     return [...document.querySelectorAll('.dcol .ev')].map((ev) => {
+      ev.scrollIntoView({ block: 'center' });
       const r = ev.getBoundingClientRect();
       const midX = Math.round(r.left + r.width / 2);
       // Does the block hit-test to itself? If not, it is off-screen and its spill probes are void.
@@ -6958,8 +7157,7 @@ async function sceneFieldLabels(browser) {
   await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
   await sweep('entries (toolbar + unified form)');
   await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
-  await page.click('.entry-form .edit-cancel');
-  await page.waitForFunction(() => !document.querySelector('.entry-form'));
+  await cancelForm(page);
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
   await page.click('.nav-item[data-view="clients"]');
@@ -7121,8 +7319,7 @@ async function sceneFieldChrome(browser) {
   await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
   await page.evaluate(() => document.activeElement?.blur());
   await sweep('entries (toolbar + unified form)');
-  await page.click('.entry-form .edit-cancel');
-  await page.waitForFunction(() => !document.querySelector('.entry-form'));
+  await cancelForm(page);
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
   await page.click('.nav-item[data-view="clients"]');
@@ -7527,6 +7724,7 @@ const SCENES = {
   UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], captures: ['entries-select-interval.png', 'unified-add.png'], run: sceneUnifiedFormAdd },
   UNIFIED_FORM: { items: ['UNIFIED_FORM'], captures: ['main-edit.png', 'main-edit-exact-times.png'], run: sceneUnifiedForm },
   PENDING_CHANGES_GATE: { items: ['PENDING_CHANGES_GATE'], captures: ['main-pending-gate.png'], run: scenePendingChangesGate },
+  WEEK_MOVE_PROMPT: { items: ['WEEK_MOVE_PROMPT'], captures: ['main-week-move-prompt.png'], run: sceneWeekMovePrompt },
   MULTILINE_DESC: { items: ['MULTILINE_DESC'], captures: ['main-multiline-desc.png'], run: sceneMultilineDesc },
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], captures: ['main-overlap-banner.png'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], captures: ['main-split.png'], run: sceneSplitAffordance },
