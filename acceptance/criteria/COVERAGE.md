@@ -1112,8 +1112,8 @@ perfectly good warn pill. `COLOUR_PAIRING` keeps the other half — that
 billability is SAID at all — and reads the attribute row by position, so a
 palette move can never mute the word. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
-Entries-toolbar control is touched (the Today preset latches the renderer's
-entries query), routing to the Timer view and clicking Start flips the card to
+Entries-toolbar control is touched (the prev-week stepper, which latches the
+renderer's entries query), routing to the Timer view and clicking Start flips the card to
 running IN PLACE, with no reload: state text `running` , the idle-only
 `#start-panel` hides (§12 R05) while the accented `#timer-stop` primary becomes
 visible, and the count-up advances +3s across a pinned-clock step), with the
