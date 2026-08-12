@@ -2427,11 +2427,17 @@ them (#168: the pair was re-hardcoded as `7 * 60` / `18 * 60` in `su.ts` and
 twice more in `timepicker.js`, so a user who moved their working hours got the
 right window from `timelineWindow` and the wrong one from every fallback path;
 `timepicker.js` now calls `SU.timelineWindow` unguarded, like every other SU
-call, since the bundled SU entry loads first). The one branch left
-unpinned is the degenerate-after-clamp fallback (`su.ts` "should not happen off
-validated settings"): it is unreachable, since the window's span is always ≥ 60
-minutes and its center always inside [0, 1440], so no input produces
-`endMin <= startMin` ; the tt-side transcript section "§14 — timeline-window
+call, since the bundled SU entry loads first). The post-clamp fallback is
+pinned too, by the input class it exists for: no FINITE input reaches it (the
+span is always ≥ 60 minutes and the center always inside [0, 1440], so
+`endMin <= startMin` never holds), which leaves the unreadable INSTANT —
+`timelineWindow` reads every timestamp through its own NaN-answering shield,
+because core's zone resolution throws on an Invalid Date rather than answering
+NaN, and a display fallback must land on the default window, not abort the
+render. A bare `endMin <= startMin` cannot see that NaN — NaN compares false to
+everything — so the guard tests finiteness first and an unreadable `nowUtcIso`
+lands on 07:00–18:00 instead of a `{ NaN, NaN }` viewport (#239);
+the tt-side transcript section "§14 — timeline-window
 settings" in `acceptance/evidence/cli-transcript.md` is the CLI-parity evidence
 (§W: CLI evidence is transcript, no GIF). JUDGE `SETTINGS_VIEW`
 (`main-settings.png`) extends its control-coverage fact over the

@@ -92,7 +92,8 @@ const NOON = atLocal(12, 0);
  * inline picker, §12 R16's entries calendar). JUDGE `TIMELINE_WINDOW` proves the two happy
  * paths against the rendered Settings view; these pin the decisions a screenshot cannot
  * reach — the per-field HH:MM fallbacks, the inverted-pair reset, the around-hours guard,
- * re-centering on an edited interval, and the day-edge clamp.
+ * re-centering on an edited interval, the day-edge clamp, and the post-clamp non-finite
+ * fallback.
  */
 describe('SU.timelineWindow — the default scroll viewport, in local minutes-of-day (§14/G16)', () => {
   it('working-hours mode is the stored window, start to end', () => {
@@ -153,6 +154,16 @@ describe('SU.timelineWindow — the default scroll viewport, in local minutes-of
       startMin: 420,
       endMin: 1080,
     });
+  });
+
+  it('an unreadable instant falls back to the default window, never a NaN viewport (#239)', () => {
+    // around_now is the one mode that reads the clock, so an unparseable nowUtcIso is how a
+    // non-finite minute reaches the post-clamp guard — the only garbage this signature admits.
+    // A guard testing endMin <= startMin alone lets it through, since NaN compares false to
+    // everything, and both timeline surfaces scroll to NaN.
+    expect(
+      SU.timelineWindow({ pickerWindowMode: 'around_now', pickerAroundHours: 8 }, 'not-an-instant'),
+    ).toEqual({ startMin: 420, endMin: 1080 });
   });
 
   it('around_now centers the window on the clock and ignores the working hours entirely', () => {
