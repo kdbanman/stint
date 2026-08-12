@@ -1965,12 +1965,25 @@ start form's four attribute fields had no accessible name at all, and
 `#add-desc` / `#search` / `#rep-name` carried a placeholder plus an INVISIBLE
 `aria-label`. The scene drives all five views into the states that hold fields
 (the Timer start-details disclosure, the Entries add form + Custom range, the
-Reports builder + Custom range, Settings) and sweeps every visible
-`input`/`select`/`textarea` for two facts: a programmatic name that is not its
-placeholder, and a persistent VISIBLE element supplying it — through a
+Reports builder + Custom range, Settings) and sweeps every visible FOCUSABLE
+control for two facts: a programmatic name that is not its placeholder, and — for
+the FIELD population alone (the bordered boxes D13 describes, so not the buttons
+and not the checkboxes) — a persistent VISIBLE element supplying it, through a
 `<label>`, `aria-labelledby`, or the row-heading idiom the control bars and
 settings rows use (`.report-lab` / `.set-k`), whose members are named in the
-justification so the population stays reviewable. Nothing caught this before
+justification so the population stays reviewable. The first fact's population is
+FOCUSABLE rather than `input`/`select`/`textarea` because of issue 245: a control
+the user can focus owes a name whatever its tag (WCAG 4.1.2), and the narrower
+sweep is why the app's ONE unnamed control — the Settings global-hotkey capture,
+shipped as a `[tabindex]` span with no role and no name — was invisible to the
+app's one label guard. The control is a real `<button>` now, named "Global
+hotkey, <chord>": `aria-label` overrides content, so naming it for the row alone
+would have silenced the chord the span did announce, and a button has no value
+channel for the binding to ride in instead. The guard was widened rather than
+the case re-flagged, so the
+sweep is what catches the next non-field control; content counts as a name only
+where the role takes its name from content, a bare `<span>` being `generic`,
+where ARIA prohibits naming. Nothing caught this before
 because `design-guard.test.ts` scores tokens, contrast and spacing; label
 presence is a structural fact about the DRIVEN DOM. JUDGE `FIELD_CHROME`
 (`field-chrome-search-focus.png`, issue 149) carries the REST of **D13** — one

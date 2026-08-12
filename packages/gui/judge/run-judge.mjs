@@ -6271,8 +6271,11 @@ async function sceneSettingsView(browser) {
 //   (e) capture itself is UNBROKEN — a real chord (Ctrl+Shift+J) still persists as the Electron
 //       accelerator 'CommandOrControl+Shift+J'. The hatch must not have disarmed the field;
 //   (f) A04: the field paints a ring under :focus-visible as a computed DELTA against its own
-//       unfocused signature (the same predicate KEYBOARD_FOCUS uses, applied to the tabindex'd
-//       <span> that the bare `:focus-visible` outline rule exists to cover).
+//       unfocused signature (the same predicate KEYBOARD_FOCUS uses).
+// The control is a real <button> since issue 245 — role, name and Enter/Space activation from the
+// tag instead of a `tabindex` bolted on in script. Nothing this scene scores changed with it: the
+// hatches live in the same keydown handler, and the swallow that keeps Tab/Escape working is also
+// what keeps the button's native activation from firing while the control is capturing.
 async function sceneHotkeyNoTrap(browser) {
   await withPage(browser, settingsState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -6326,7 +6329,7 @@ async function sceneHotkeyNoTrap(browser) {
         };
       });
     // Arrive the way a keyboard user does: focus the control BEFORE the field and Tab in. Not a
-    // detail — a programmatic .focus() on a tabindex'd <span> does not match `:focus-visible` in
+    // detail — a programmatic .focus() on the capture control does not match `:focus-visible` in
     // Chromium, so only a keyboard arrival paints the ring (f) checks. It also proves the field
     // is reachable going forwards, not merely escapable.
     const focusField = async () => {
@@ -7137,7 +7140,7 @@ async function sceneParityReach(browser) {
 }
 
 /**
- * The in-page field-label sweep (FIELD_LABELS). Collects every VISIBLE form control inside the
+ * The in-page label sweep (FIELD_LABELS). Collects every VISIBLE FOCUSABLE control inside the
  * currently-routed view and records, per control, HOW it is named — which is the whole question
  * design.html D13 asks. Three naming idioms count, and they are the three the app actually uses:
  *
@@ -7158,14 +7161,29 @@ async function sceneParityReach(browser) {
  * an accessible name, not a visible label. So the sweep asks BOTH populations for a name and only
  * the fields for a visible one.
  *
- * Scope: form controls (`input` / `select` / `textarea`). The Settings global-hotkey CAPTURE
- * control is a `[tabindex]` span rather than a field, and is covered by HOTKEY_NO_TRAP.
+ * Scope: ANYTHING FOCUSABLE, not the three field tags (issue 245). Fact (a) is WCAG 4.1.2 — a
+ * control the user can put focus on owes a name whatever its tag — and the narrower population was
+ * how the app's ONE unnamed control stayed invisible to the app's one label guard: the Settings
+ * global-hotkey capture was a `<span tabindex="0">`, and a sweep of `input`/`select`/`textarea`
+ * could not see it. Widening here rather than re-flagging there is the point: the next non-field
+ * control to arrive unnamed is caught by this sweep instead of by another audit.
+ *
+ * A widened population needs one more distinction, because a `<button>` is named by its OWN WORDS
+ * where a form control never is. Content counts as a name only for a role that TAKES its name from
+ * content (accname §4.3.1) — and a bare `<span>`/`<div>` has no role but `generic`, where ARIA
+ * PROHIBITS naming. That is why the old hotkey span could not be named without first becoming
+ * something, and why this rule, not an exemption list, is what makes the guard catch its successor.
  */
 function sweepFieldLabels() {
   const { visible } = window.__probe;
   const text = (el) => (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
+  // The roles this app uses whose accessible name comes from the element's own words. A form
+  // control is named by its LABEL and never by its content, so no tag below maps into this set.
+  const NAME_FROM_CONTENT = new Set(['button', 'link', 'gridcell', 'switch', 'tab', 'menuitem', 'option']);
+  const implicitRole = (el) =>
+    el.tagName === 'BUTTON' || el.tagName === 'SUMMARY' ? 'button' : el.tagName === 'A' ? 'link' : 'generic';
   const view = document.querySelector('.views .view:not([hidden])');
-  const controls = [...(view?.querySelectorAll('input, select, textarea') ?? [])]
+  const controls = [...(view?.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]') ?? [])]
     .filter((el) => el.type !== 'hidden')
     .filter(visible);
   const fields = controls.map((el) => {
@@ -7191,15 +7209,23 @@ function sweepFieldLabels() {
         ? el.closest('.report-row').previousElementSibling
         : null);
     const headText = headEl && visible(headEl) ? text(headEl) : '';
+    // The element's own words, but only where its role takes its name from them. `title` is not
+    // read here for the same reason `placeholder` is not: it is a tooltip, not a name.
+    const role = (el.getAttribute('role') || implicitRole(el)).toLowerCase();
+    const contentText = NAME_FROM_CONTENT.has(role) ? text(el) : '';
     const idiom = labelText ? 'label' : byText ? 'labelledby' : headText ? 'row-heading' : 'none';
     return {
       label: el.id ? `#${el.id}` : `${el.tagName.toLowerCase()}.${typeof el.className === 'string' ? el.className : ''}`,
       idiom,
       name: labelText || byText || headText,
-      field: !(el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')),
+      // Fact (b)'s population, unchanged by the widening: the bordered-box controls D13's rule
+      // describes. A button is not one — it owes a name (fact a), not a visible label.
+      field:
+        ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName) &&
+        !(el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')),
       // The programmatic name, ignoring `placeholder` and `title` — the four start-* fields had
       // none at all, which is the "no accessible name" half of the issue.
-      named: !!(el.getAttribute('aria-label')?.trim() || labelText || byText),
+      named: !!(el.getAttribute('aria-label')?.trim() || labelText || byText || contentText),
       // A persistent, on-screen element names it — the "no visible label" half.
       visiblyNamed: !!(labelText || byText || headText),
     };
@@ -7214,15 +7240,22 @@ function sweepFieldLabels() {
 // name either vanished on the first keystroke or never existed. Nothing could catch it: the GOLD
 // design guard scores tokens, contrast and spacing, and label presence is a structural fact about
 // the DRIVEN DOM. This scene drives the real renderer through all five views and, in each, sweeps
-// every visible form control for TWO facts: EVERY control has a programmatic name that is not its
-// placeholder (D13's floor, and D16/A02's for the icon-shaped ones), and every FIELD — the bordered
-// controls D13's rule describes, so not the checkboxes — has a persistent VISIBLE element supplying
-// that name. The views are driven into the states that
+// every visible FOCUSABLE control for TWO facts: EVERY control has a programmatic name that is not
+// its placeholder (D13's floor, and D16/A02's for the icon-shaped ones), and every FIELD — the
+// bordered controls D13's rule describes, so not the checkboxes and not the buttons — has a
+// persistent VISIBLE element supplying that name. The views are driven into the states that
 // hold fields — the Timer start-details disclosure, the Entries add form + Custom range, the
 // Reports builder + Custom range, and Settings; the Clients view carries no field at rest (its
 // create/rename micro-forms are transient surfaces of their own and are not swept here).
 // Every row-heading-idiom control is NAMED in the justification, so that population stays
 // reviewable the way TARGET_SIZE's spacing exceptions do.
+//
+// Issue 245 widened fact (a)'s population from the three field tags to anything focusable. The
+// guard had a population narrow enough to miss the app's only unnamed control — a Settings
+// global-hotkey capture built as a `<span tabindex="0">`, a focus stop with no role and no name —
+// so the one guard that should have caught it structurally could not see it. Hardening the sweep
+// is the fix rather than a second scene for that one control: the widened population is what
+// catches the NEXT non-field control, which is a class of defect nothing else here reaches.
 async function sceneFieldLabels(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -7275,16 +7308,20 @@ async function sceneFieldLabels(browser) {
   const unnamed = all.filter((f) => !f.named).map((f) => `${f.surface}:${f.label}`);
   const placeholderOnly = fields.filter((f) => !f.visiblyNamed).map((f) => `${f.surface}:${f.label}`);
   const rowIdiom = fields.filter((f) => f.idiom === 'row-heading').map((f) => `${f.label} → '${f.name}'`);
-  // Guard-the-guard: an empty sweep satisfies both emptiness assertions vacuously. The five views
-  // hold well over 20 visible fields across these states, so a sweep that has gone blind fails.
+  // Guard-the-guard, now over BOTH populations: an empty sweep satisfies both emptiness assertions
+  // vacuously. The five views hold 32 visible fields across these states and 151 focusable controls
+  // in all, so a sweep that has gone blind fails at either width instead of passing on an empty
+  // set. The second floor is not decoration: before issue 245 widened fact (a) past the three field
+  // tags this sweep saw 34 controls, so a re-narrowing lands nearer 34 than 151 — a floor pinned
+  // only to the field count would have let the population quietly shrink back with nothing failing.
   record(
     'FIELD_LABELS',
     {
-      sweepReal: fields.length >= 20,
+      sweepReal: fields.length >= 20 && all.length >= 100,
       everyFieldNamed: unnamed.length === 0,
       noPlaceholderOnly: placeholderOnly.length === 0,
     },
-    `D13 sweep over ${all.length} visible controls, ${fields.length} of them fields ` +
+    `D13 sweep over ${all.length} visible focusable controls, ${fields.length} of them fields ` +
       `(${surfaces.map((s) => `${s.surface}=${s.total}`).join(', ')}): ` +
       `no accessible name at all (every control, D13 + D16)=[${unnamed.join('; ') || 'none'}]; ` +
       `field named but not by a visible element (placeholder / aria-label only)=[${placeholderOnly.join('; ') || 'none'}]; ` +

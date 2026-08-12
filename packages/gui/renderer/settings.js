@@ -161,7 +161,27 @@
       );
     }
     if (f.kind === 'hotkey') {
-      return `<span class="hk set-hotkey" data-key="${f.key}">${esc(friendlyHotkey(String(v)))}</span>`;
+      // §14 / WCAG 4.1.2 — a real <button> (issue 245). It used to be a <span> with a `tabindex`
+      // and a `title` bolted on by wire(), which is a control on every axis a sighted user reads
+      // (a focus ring, `cursor: pointer`, a keycap box) and none that assistive tech does: no
+      // role, and no name but the chord it happened to hold. `title` could not supply one — on an
+      // element whose implicit role is `generic`, ARIA PROHIBITS naming — and it is a description
+      // of the gesture, not an identifier. The element carries all three now: role and Enter/Space
+      // activation from the tag, the name from `aria-label` (the same programmatic half every
+      // other control in this file writes, over the visible `.set-k` row heading), and the focus
+      // stop for free. Same shape the tag remover took in issue 148.
+      //
+      // The name carries the CHORD as well as the label, because `aria-label` overrides content:
+      // naming this button "Global hotkey" alone would silence the one thing the old span did
+      // announce, trading half of 4.1.2 for the other half. A button has no value channel, so the
+      // current binding rides in the name — "Global hotkey, Ctrl+Alt+T". It regenerates on every
+      // render(), which persist() calls after a capture, so the spoken value cannot go stale. The
+      // visible `.set-k` heading is still a leading substring of the name (WCAG 2.5.3).
+      const chord = friendlyHotkey(String(v));
+      return (
+        `<button type="button" class="hk set-hotkey" data-key="${f.key}" ` +
+        `aria-label="${esc(f.label)}, ${esc(chord)}">${esc(chord)}</button>`
+      );
     }
     // select
     // A stored value the option list does not carry (e.g. a time-zone ALIAS core accepts
@@ -606,11 +626,16 @@
         void persist(btn.dataset.key, btn.dataset.value);
       });
     }
-    // The global-hotkey capture field: focus it and press a chord; the captured accelerator
+    // The global-hotkey capture control: focus it and press a chord; the captured accelerator
     // (Electron form) is persisted, then re-registered live by main.ts's setSetting handler.
+    // FOCUS IS THE CAPTURING STATE — the chord lands on whatever holds focus — so activating this
+    // button means "start capturing", which is what focusing it already did. macOS is why the line
+    // exists: Chromium follows the platform convention there and does NOT focus a <button> on
+    // click, so the click-then-press gesture would reach nothing (the old `tabindex` span took
+    // mouse focus on every platform). Only the MOUSE reaches this listener: the swallow below
+    // preventDefaults Enter and Space, so the native activation never fires a click.
     for (const el of host.querySelectorAll('.set-hotkey')) {
-      el.setAttribute('tabindex', '0');
-      el.title = 'Click and press a key combination';
+      el.addEventListener('click', () => el.focus());
       el.addEventListener('keydown', (ev) => {
         // The field captures a chord by swallowing the key — so the traversal keys need an
         // explicit hatch BEFORE the swallow, or focus can enter and never leave by keyboard
@@ -620,6 +645,12 @@
         //     on Tab is unbindable here as a result; the escape hatch outranks it.
         //   Escape — cancels the innermost thing (craft checklist §4), which for a capture
         //     field is the capture itself: release focus and bind nothing.
+        // Enter and Space get NO hatch, deliberately (issue 245). They are the <button>'s native
+        // activation keys, and the swallow runs first, so neither activates: a chord CONTAINING
+        // them still binds (Ctrl+Enter, Ctrl+Space), and either one pressed ALONE does nothing at
+        // all — toAccelerator refuses a bare key, and there is nothing for activation to do here
+        // anyway, since focus IS the capturing state. Letting them through instead would fire a
+        // click on the control the user is already inside.
         if (ev.key === 'Tab') return;
         if (ev.key === 'Escape') {
           el.blur();
@@ -641,7 +672,10 @@
     if (ev.ctrlKey || ev.metaKey) parts.push('CommandOrControl');
     if (ev.altKey) parts.push('Alt');
     if (ev.shiftKey) parts.push('Shift');
-    const main = key.length === 1 ? key.toUpperCase() : key;
+    // `ev.key` for the space bar is a literal ' ', which uppercases to a space and would build the
+    // unregisterable accelerator 'CommandOrControl+ '. Electron names that key 'Space' (issue 245:
+    // Space became a chord worth capturing the moment the control became a <button>).
+    const main = key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key;
     parts.push(main);
     return parts.length > 1 ? parts.join('+') : null;
   }
