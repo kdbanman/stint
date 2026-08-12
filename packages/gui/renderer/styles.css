@@ -1035,7 +1035,7 @@ button[hidden] { display: none; }
    matches `:focus-visible`), so the specified idiom never painted at all.
 
    The boundary is an OUTLINE, on one bare `:focus-visible` rule that covers whatever the browser
-   focuses — button, field, link, the tabindex'd hotkey <span>. Outline, not border, because
+   focuses — button, field, link, the roving grid cell. Outline, not border, because
    `outline` is the one property no component rule in this file ever sets, so nothing can outrank
    it; a border-based indicator loses the cascade to any per-component field chrome that spells
    its selector more specifically (`.start-form input[type="text"]` beats `input:focus-visible`),
@@ -2297,7 +2297,17 @@ body.popover { background: var(--paper); margin: 0; }
 .set-toggle.on { background: var(--ink); }
 .set-toggle.on i { left: 18px; }
 .set-toggle-lbl { font-size: 13px; color: var(--muted); min-width: 22px; }
+/* The global-hotkey capture control. It is a real <button> now (issue 245) — role, accessible
+   name, Enter/Space activation and the focus stop come from the element rather than a `tabindex`
+   bolted on in script — so it lands on the base `button` rule above and needs one reset to keep
+   the keycap it has always been. `font: inherit` is that reset: it hands back the page's weight
+   and line-height (the shorthand carries no size, the only form D06's type census allows), and
+   the two declarations after it restate the keycap's own face and step. What the base rule gives
+   and this one does NOT take back is deliberate — the hairline, the control radius and the hover
+   wash are the §15 clickability convention, and a control that presents as a button on every
+   axis should honour it rather than mime it. */
 .set-hotkey {
+  font: inherit;
   font-family: var(--num);
   font-size: 12px;
   color: var(--ink);
