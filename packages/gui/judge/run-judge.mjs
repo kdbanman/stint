@@ -5531,7 +5531,10 @@ async function sceneCalendarAccentBudget(browser) {
       tintedBlocks: closed.filter(carriesAccent).map((el) => `${el.dataset.id}:${paint(el)}`).slice(0, 5),
       tintedBlockCount: closed.filter(carriesAccent).length,
       notPaper: closed.filter((el) => getComputedStyle(el).backgroundColor !== paperRgb).length,
-      notLifted: closed.filter((el) => getComputedStyle(el).boxShadow === 'none').length,
+      // Issue #255: a resting block is not a chosen one, so it carries no rung at all. This used
+      // to count the blocks that had failed to LIFT; it counts the ones that lift with nothing
+      // done to them, which is the same claim re-aimed at the rule that replaced it.
+      liftedAtRest: closed.filter((el) => getComputedStyle(el).boxShadow !== 'none').length,
       runningCount: running.length,
       runningCarriesAccent: running.length === 1 && carriesAccent(running[0]),
       // The audit's own two numbers, recomputed here so the report carries the before/after.
@@ -5544,14 +5547,14 @@ async function sceneCalendarAccentBudget(browser) {
 
   const densityOk = probe.evCount >= 15;
   const noWallpaperOk = probe.tintedBlockCount === 0;
-  const neutralOk = probe.notPaper === 0 && probe.notLifted === 0;
+  const neutralOk = probe.notPaper === 0 && probe.liftedAtRest === 0;
   const signalOk = probe.runningCount === 1 && probe.runningCarriesAccent;
   const budgetOk = probe.accentSolidFills <= 1;
   record(
     'CALENDAR_ACCENT_BUDGET',
     { densityOk, noWallpaperOk, neutralOk, signalOk, budgetOk },
     `entries calendar accent budget over the dense fixture: ${JSON.stringify(probe)}; ` +
-      `density=${densityOk} no-wallpaper=${noWallpaperOk} neutral-surface+lift=${neutralOk} ` +
+      `density=${densityOk} no-wallpaper=${noWallpaperOk} neutral-surface+flat-at-rest=${neutralOk} ` +
       `running-is-the-signal=${signalOk} accent-solid≤1=${budgetOk}`,
     'calendar-accent-budget.png',
   );
@@ -5619,8 +5622,10 @@ async function sceneSelectionLift(browser) {
     const closed = blocks.filter((el) => !el.classList.contains('run'));
     const chosen = closed.filter((el) => el.classList.contains('on'));
     const plain = closed.filter((el) => !el.classList.contains('on'));
-    // The resting rung, read off the live surface rather than named: whatever the untouched
-    // majority computes IS "not lifted", so the comparison stays token-free.
+    // The resting state, read off the live surface rather than named: whatever the untouched
+    // majority computes IS "not chosen", so the comparison stays token-free. Since issue #255
+    // that state is FLAT — the chip rung means chosen, so an unchosen block wears no rung —
+    // which is asserted below rather than assumed here.
     const restShadow = plain.length ? getComputedStyle(plain[0]).boxShadow : '';
     const checks = [...document.querySelectorAll('.dcol .ev .ck')].filter((el) => el.checked);
 
@@ -5672,8 +5677,13 @@ async function sceneSelectionLift(browser) {
   const stateOk =
     probe.evCount >= 15 && probe.selectedCount === 2 && probe.meCount === 1 && probe.meOutline &&
     probe.editorOpen;
+  // D12 as stated, both halves: the chosen block lifts, and the ones nobody chose do NOT. The
+  // second half used to read `!probe.restIsFlat` — it asserted that a resting block carried the
+  // chip rung too, which is the reading issue #255 retired: a lift everything wears cannot say
+  // "chosen". Flat rest is now the requirement, so `chosenNotLifted` (chosen ≠ rest) measures a
+  // real rung against nothing rather than one rung against another.
   const liftOk =
-    probe.chosenNotPaper === 0 && probe.chosenNotLifted === 0 && !probe.restIsFlat;
+    probe.chosenNotPaper === 0 && probe.chosenNotLifted === 0 && probe.restIsFlat;
   const noAccentOk = probe.accentedSelections.length === 0 && probe.accentedChecks.length === 0;
   const checkOk = probe.checkedCount === 2 && probe.checksArePaper;
   // The one sanctioned accent-weak fill on the strip is the pending interval itself.

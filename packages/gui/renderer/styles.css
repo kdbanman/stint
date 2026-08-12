@@ -86,10 +86,20 @@ button:hover .ic { color: var(--ink); }
 button.primary .ic,
 button.primary:hover .ic { color: var(--on-accent); }
 
-/* The tabular-numeral helper — every clock/duration uses it so digits never jitter
-   (design-system). Referenced by the editor/merge clocks, the popover clock, the settings
-   version string, and the day/strip summaries. */
-.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+/* The CLOCK ROLE helper — the class an element wears to say "the text here is a time".
+   design.html D06 states that role as TWO properties in one row ("Every clock and duration:
+   monospace, tabular"), so this rule carries both: the numeric face and tabular figures.
+   Issue 242: it used to carry only the tabular half, which left the face a per-site decision
+   nobody was making — of the seventeen rules claiming tabular figures, eight named the face and
+   NINE let the element inherit whatever it sat in, which was the proportional reading sans.
+   Both halves travel together here now, so a clock cannot get one of them. A field-chrome rule
+   spelled more specifically still outranks this (the D13 cascade lesson), which is why the
+   time FIELDS name the face themselves. */
+.tnum {
+  font-family: var(--num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
 
 /* ---- main window ------------------------------------------------------- */
 /* §12 R22: `.app` carries no width cap — any app-wide cap refuses the window the user gives
@@ -397,6 +407,14 @@ s {
   text-decoration: line-through;
   color: var(--muted);
 }
+/* The struck value is a DURATION, so it carries the Clock role itself rather than borrowing it
+   from `.ef-dur`, the one span it is painted inside today (D06, issue 242). Nothing about the
+   rendering changes; what changes is that the face stops depending on where the fragment is
+   nested, which is what let a formatted duration reach the reading sans in the first place. */
+.struck {
+  font-family: var(--num);
+  font-variant-numeric: tabular-nums;
+}
 
 /* The report view's in-page back/forward nav — a small horizontal row of monochrome links.
    Scoped to the bare `.nav` so the main-window left rail (`.shell .nav`, below) is unaffected. */
@@ -572,6 +590,9 @@ s {
   cursor: pointer;
   transition: background 0.12s;
 }
+/* The knob is flat (issue 255): a switch knob is a position, not a selection, and D12 reserves
+   the chip lift for the chosen one. Its paper fill on the `--rule-strong` / `--ink` track is the
+   whole read. Same reasoning as `.set-toggle i`, the settings twin of this control. */
 .sw i {
   position: absolute;
   top: 3px;
@@ -580,7 +601,6 @@ s {
   height: 17px;
   border-radius: 50%;
   background: var(--paper);
-  box-shadow: var(--sh-chip);
   transition: left 0.12s;
 }
 .sw.on { background: var(--ink); }
@@ -806,7 +826,6 @@ s {
 .unified-form .uf-time {
   flex: 1;
   min-width: 0;
-  font-family: var(--sans);
   font-size: 13px;
   color: var(--ink);
   background: var(--paper);
@@ -814,6 +833,15 @@ s {
   border-radius: var(--r1);
   padding: 8px 12px;
 }
+/* The face is the one thing the two fields do NOT share (issue 242). D13's field chrome is about
+   the border, radius and padding above; it says nothing about type, and D06 says every clock and
+   duration is monospace and tabular — a time you TYPE is still a time, and fixed-width digits are
+   worth most while it is being typed, because they stay put. So the select reads in the interface
+   sans and the Start/Stop fields take the Clock role's face; the `.tnum` helper on them supplies
+   the tabular half, and this pair keeps the family out of a shared rule that would otherwise
+   outrank it. */
+.unified-form .uf-select { font-family: var(--sans); }
+.unified-form .uf-time { font-family: var(--num); font-variant-numeric: tabular-nums; }
 .unified-form .uf-select:disabled { color: var(--muted); background: var(--wash); }
 .unified-form .uf-tags { align-items: flex-start; }
 .unified-form .uf-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; min-width: 0; }
@@ -932,16 +960,18 @@ button:hover { background: var(--hover); }
    one that is, state by state, is the accent-handoff rule below). The fill is --accent-solid
    (tomato·11), never --accent: the on-accent label reads 4.90:1 on the solid but fails the A01
    floor on tomato·9 (design.html D04/D11 — why accent-solid exists). */
-/* Issue 154: the lift is the ladder's sub-card rung (--sh-chip), not a clay glow. D09 gives ONE
-   elevation ladder and the chip lift below it; the hand-rolled `0 1px 2px accent 35%` that used to
-   sit here was a sixth depth signal that also broke "depth, not tint" by colouring the shadow. Same
-   geometry, so the button still lifts off the card — the ladder's warm brown instead of the tint. */
+/* FLAT (issues 154, 255). The button carried a hand-rolled `0 1px 2px accent 35%` glow — a sixth
+   depth signal that also broke D09's "depth, not tint" by colouring the shadow — and #154 moved it
+   onto the ladder's chip rung to end the tint. That kept a lift on an element that is not a
+   selection: D12 gives `--sh-chip` one meaning, "this is the chosen one", and a primary action is
+   never chosen, it is pressed. The fill is what makes this button the brightest thing in the view;
+   it needs no rung. Removing the shadow supersedes #154's choice here — deliberately, over a
+   rendered before/after in which the lift was barely perceptible. */
 button.primary {
   background: var(--accent-solid);
   border-color: var(--accent-solid);
   color: var(--on-accent);
   font-weight: 590;
-  box-shadow: var(--sh-chip);
 }
 button.primary:hover { background: color-mix(in srgb, var(--accent-solid) 88%, black); }
 
@@ -1194,8 +1224,13 @@ button.danger:hover { background: var(--danger-weak); }
   font-size: 12px;
   color: var(--muted);
 }
+/* The split point is a localInputValue timestamp the user reads and retypes, so the field takes
+   the Clock role's face (D06, issue 242) — the same call the entry form's Start/Stop fields and
+   the settings HH:MM pair get. Named here because the field's own chrome rule outranks the
+   `.tnum` helper on the element, which supplies the tabular half. */
 .split-at input[type="text"] {
-  font-family: var(--sans);
+  font-family: var(--num);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   color: var(--ink);
   background: var(--paper);
@@ -1507,6 +1542,7 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--muted);
   background: var(--wash);
   border-bottom: 1px solid var(--rule);
+  font-family: var(--num);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1554,8 +1590,17 @@ button.danger:hover { background: var(--danger-weak); }
   color: var(--muted);
   background: var(--wash);
 }
+/* The duration column. reports.js paints these cells with fmtHM, so they are clocks and take the
+   Clock role whole — the numeric face AND tabular figures (D06, issue 242). They carried only the
+   tabular half and inherited the reading sans, which is the drift the `.tnum` helper made easy to
+   ship: the two properties are one role and they travel together. The cells are written without
+   the helper class (a `<td class="num">` per row), so the face is named here. */
 .report-table td.num,
-.report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.report-table th.num {
+  text-align: right;
+  font-family: var(--num);
+  font-variant-numeric: tabular-nums;
+}
 .report-table .report-grp td { font-weight: 590; }
 .report-table .report-sub td { color: var(--muted); padding-left: 32px; }
 .report-table .report-empty { color: var(--muted); text-align: center; }
@@ -1953,7 +1998,8 @@ button.danger:hover { background: var(--danger-weak); }
 }
 .stp-hour {
   position: absolute; left: -52px; width: 46px; text-align: right;
-  font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums;
+  font-size: 11px; color: var(--muted);
+  font-family: var(--num); font-variant-numeric: tabular-nums;
   transform: translateY(-6px);
 }
 .stp-block { position: absolute; left: 8px; right: 14px; border-radius: var(--r1); }
@@ -1973,7 +2019,8 @@ button.danger:hover { background: var(--danger-weak); }
 .stp-block.me:active { cursor: grabbing; }
 .stp-block.me .stp-lab-top, .stp-block.me .stp-lab-bot {
   position: absolute; left: 0; font-size: 11px; font-weight: 590;
-  font-variant-numeric: tabular-nums; padding: 0 8px; color: var(--ink);
+  font-family: var(--num); font-variant-numeric: tabular-nums;
+  padding: 0 8px; color: var(--ink);
 }
 .stp-block.me .stp-lab-top { top: 4px; }
 .stp-block.me .stp-lab-bot { bottom: 4px; }
@@ -2005,17 +2052,18 @@ button.danger:hover { background: var(--danger-weak); }
    is the one drag affordance of the start-only variant (no bottom resize grip anywhere). */
 /* Issue 153: the control radius, not a pill (D14) — on a 6px-tall grip 8px clamps to 3px, so
    the drag affordance reads as it always did. */
+/* Issue 154: the grip carried the same clay glow as the primary button but at 30% — one effect at
+   two strengths — and moving both onto the ladder's chip rung ended the tint. Issue 255 takes the
+   rung off too: a drag affordance is not a selection, and D12 spends `--sh-chip` on the chosen
+   thing alone. The accent border is what says "grab here". */
 .stp-grip {
   position: absolute; left: calc(50% - 16px); width: 32px; height: 6px; border-radius: var(--r1);
   background: var(--paper); border: 1.5px solid var(--accent);
-  /* Issue 154: the same clay glow as the primary button but at 30% — one effect at two strengths.
-     Both now name the ladder's chip rung; the accent stays where it belongs, on the border. */
-  box-shadow: var(--sh-chip);
   cursor: ns-resize; z-index: 7; touch-action: none;
 }
 .stp-tlabel {
   position: absolute; left: 8px; font-size: 11px; font-weight: 590;
-  font-variant-numeric: tabular-nums; color: var(--ink);
+  font-family: var(--num); font-variant-numeric: tabular-nums; color: var(--ink);
   background: var(--wash); border-radius: var(--r1); padding: 2px 8px; z-index: 7;
 }
 /* §05 R06 / §12 R14 — the Timer view's IN-FLOW start-only disclosure (#le-start-disc):
@@ -2176,23 +2224,29 @@ body.popover { background: var(--paper); margin: 0; }
    dim is legal here and only here; nothing around the field may borrow it. */
 .set-field:disabled { color: var(--muted); background: var(--wash); }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
-   row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM") and
-   tabular so the two times line up; they reuse the .set-field chrome via the shared class. */
+   row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM"); they
+   reuse the .set-field chrome via the shared class, but not its face. A value the user types is
+   still a clock (D06, issue 242), so these take the Clock role whole — the numeric face named
+   here, where it outranks the shared `.set-field` sans, and tabular figures so the two times
+   line up. */
 .set-hhmm {
   min-width: 0;
   width: 68px;
   text-align: center;
+  font-family: var(--num);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
 .set-hhmm-sep { color: var(--muted); font-size: 13px; }
 /* §14 / §12 R23 — the Entries-calendar group's snap-minutes inputs: a compact whole-minutes
    value with a muted "min" suffix beside it (mockup settings.html's field + .meta pair). They
-   reuse the .set-field chrome via the shared class, like the working-hours pair above. */
+   reuse the .set-field chrome via the shared class — and, like that pair, take the Clock role's
+   face over it (D06, issue 242): a snap resolution is a duration the user types. */
 .set-min {
   min-width: 0;
   width: 52px;
   text-align: center;
+  font-family: var(--num);
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
@@ -2225,9 +2279,11 @@ body.popover { background: var(--paper); margin: 0; }
   flex: none;
   transition: background 0.12s;
 }
-/* The knob keeps its 18px; 3px of top offset is what centres it in the 24px track. Issue 154: its
-   lift was --sh-chip's exact geometry hand-written at DOUBLE the token's opacity, so it now names
-   the rung and lifts at the strength the ladder sets. */
+/* The knob keeps its 18px; 3px of top offset is what centres it in the 24px track. Its lift was
+   --sh-chip's exact geometry hand-written at DOUBLE the token's opacity — the drift #154 caught
+   because a hand-copied rung looks like the rung — and it is gone entirely now (issue 255): a
+   knob marks a POSITION on a track, not a chosen thing, and D12 gives the chip lift to the
+   chosen thing alone. */
 .set-toggle i {
   position: absolute;
   top: 3px;
@@ -2236,7 +2292,6 @@ body.popover { background: var(--paper); margin: 0; }
   height: 18px;
   border-radius: 50%;
   background: var(--paper);
-  box-shadow: var(--sh-chip);
   transition: left 0.12s ease;
 }
 .set-toggle.on { background: var(--ink); }
@@ -2545,6 +2600,7 @@ body.popover { background: var(--paper); margin: 0; }
   font-size: 11px;
   color: var(--muted);
   transform: translateY(-6px);
+  font-family: var(--num);
   font-variant-numeric: tabular-nums;
 }
 /* §12 R16/R22: FIT-TO-WIDTH columns — the shown days share the view width equally at every
@@ -2598,13 +2654,16 @@ body.popover { background: var(--paper); margin: 0; }
 /* A calendar event: the positioned block, overriding the legacy .entry grid row. Its inner
    `.bd/.bc/.bt` clip per line, so ops/checkbox at the corners are not clipped away.
    design.html D11 / §02 principles 1–2 (issue 143, unhashed — the D01 scan over this file reads
-   a hashed three-digit number as a colour literal): the block is NEUTRAL PAPER LIFTED off the
-   track, never an accent wash. It used to fill `--accent-weak` behind an accent border, which
+   a hashed three-digit number as a colour literal): the block is NEUTRAL PAPER on the track,
+   never an accent wash. It used to fill `--accent-weak` behind an accent border, which
    made the app's one rationed accent the wallpaper of its busiest view — 51 blocks of "the one
-   thing that matters" on a screen where nothing mattered more than anything else. Depth, not
-   tint: the block rises on the elevation ladder's lowest rung (`--sh-chip`) over a paper fill,
-   and its edge is the neutral control border every other clickable affordance carries (the §15
-   R-clickability convention — an event opens the editor, so it must read as clickable). The
+   thing that matters" on a screen where nothing mattered more than anything else. Neutral, not
+   tint: a paper fill whose edge is the neutral control border every other clickable affordance
+   carries (the §15 R-clickability convention — an event opens the editor, so it must read as
+   clickable). Flat at rest (issue 255): #143 gave the block the chip rung, but D12 spends
+   `--sh-chip` on the CHOSEN thing, and fifty resting blocks are not fifty choices — a lift on all
+   of them is what made the chosen one's lift hard to see. The block now climbs only when
+   something has happened to it: `--sh-raise` under the pointer, `--sh-pop` when chosen. The
    accent left on this surface is the RUNNING block's future fade (`.ev.run` below) — the live
    running state, which is exactly what §02 principle 1 rations the accent for. */
 .dt .ev {
@@ -2616,7 +2675,6 @@ body.popover { background: var(--paper); margin: 0; }
   border: 1px solid var(--rule-strong);
   border-radius: var(--r1);
   background: var(--paper);
-  box-shadow: var(--sh-chip);
   color: inherit;
   cursor: pointer;
   /* design.html D09 — a region is signalled by its surface, so an event's content NEVER paints
@@ -2665,33 +2723,29 @@ body.popover { background: var(--paper); margin: 0; }
   background: var(--paper);
   box-shadow: var(--sh-pop);
 }
-/* Hover is a LIFT, not a tint (D09): the block climbs the ladder chip → raise and comes forward.
-   It keeps its paper fill and neutral edge — the accent stays spent on the running state.
+/* Hover is a LIFT, not a tint (D09): the block climbs off the flat track to `--sh-raise` and comes
+   forward. It keeps its paper fill and neutral edge — the accent stays spent on the running state.
    `:focus-within` is the keyboard's hover (issue 140): the block is one tab stop and its controls
    hang off it, so the block holding focus — itself or through one of those controls — is the same
    "this is the current entry" state the pointer produces, and takes the same rung. It also has to
    come FORWARD: the A04 focus outline is drawn 2px outside the block, and a neighbouring block
-   later in the column's DOM order would otherwise paint over it. */
+   later in the column's DOM order would otherwise paint over it. The CONTINUING forms — the
+   running block's future fade (G8) and each cross-midnight segment's boundary edge (issue #71) —
+   used to need a rule cancelling the resting lift so a closed shadow could not redraw the edge
+   they leave open. Since issue 255 no block rests on a rung, so they need no exception. */
 .dt .ev:hover,
 .dt .ev:focus-within { box-shadow: var(--sh-raise); z-index: 3; }
-/* The CONTINUING forms carry no resting lift: a closed shadow would redraw the very edge they
-   mean to leave open — the running block's future fade (G8) and each cross-midnight segment's
-   boundary edge (issue #71). Hover still lifts them; there the shadow is a pointer affordance. */
-.dt .ev.run,
-.dt .ev.seg { box-shadow: none; }
-.dt .ev.run:hover,
-.dt .ev.seg:hover { box-shadow: var(--sh-raise); }
 /* design.html D12 — a chosen block LIFTS; it does not turn accent (issue 144, unhashed: the D01
    scan over this file reads a hashed three-digit number as a colour literal). Selection used to
    paint an accent border plus an inset accent hairline, so every block the pointer had ticked
-   wore the colour rationed for the one thing that matters. Depth, not tint: the block is already
-   paper on the ladder's lowest rung at rest (`--sh-chip`) and climbs to `--sh-raise` under the
-   pointer, so the chosen one takes the next rung up, `--sh-pop`, and comes forward — it reads
-   apart from its fifty neighbours AND from the one being hovered, with no colour spent and no
+   wore the colour rationed for the one thing that matters. Depth, not tint: the block lies flat
+   on the track at rest and climbs to `--sh-raise` under the pointer, so the chosen one takes the
+   rung above that, `--sh-pop`, and comes forward — it reads apart from its fifty neighbours AND
+   from the one being hovered, with no colour spent and no
    token used outside its role (D04: a border is `rule`/`rule-strong`, never ink or accent).
    `.editing` — the block whose entry is open in the unified form — is the same choice reached
-   another way, so it is the same lift. The `:hover` pair below carries the same specificity as
-   `.dt .ev.run:hover`, so a selected block stays lifted under the pointer instead of dropping
+   another way, so it is the same lift. The `:hover` pair below outranks `.dt .ev:hover`, so a
+   selected block stays lifted under the pointer instead of dropping
    back a rung. Colour is never the sole cue either way: `.on` also holds its corner checkbox
    open (below), and `.editing` has the form itself on screen naming the entry (A05/D05). */
 .dt .ev.on,
@@ -3026,6 +3080,9 @@ body.popover { background: var(--paper); margin: 0; }
   z-index: 6;
   pointer-events: none;
 }
+/* The pill reads a TIME, so it takes the Clock role's face (D06, issue 242) — the markup pairs
+   `.st` with `.tnum`, which carries both halves of that role. No lift (issue 255): D12 spends
+   `--sh-chip` on the chosen thing, and this pill is a readout of where the handle sits. */
 .shandle .st {
   position: absolute;
   right: 0;
@@ -3036,7 +3093,6 @@ body.popover { background: var(--paper); margin: 0; }
   background: var(--paper);
   padding: 2px 8px;
   border-radius: var(--r1);
-  box-shadow: var(--sh-chip);
 }
 
 /* §12 R07: create mode GRAYS the grid — the pending interval stays the one vivid thing
@@ -3064,7 +3120,9 @@ body.popover { background: var(--paper); margin: 0; }
 /* An open (running) subject keeps the future-fade read while staying the accent outline. */
 .dt .ev.me.open { border-bottom: 0; }
 /* The edge grips (mockup .grip): a 32×6 paper pill on the accent border. The visible mark
-   stays the mockup's 6px; the ::before pad widens the hit area to the 24px floor (A03). */
+   stays the mockup's 6px; the ::before pad widens the hit area to the 24px floor (A03). Flat,
+   like `.stp-grip` — a drag affordance is not a selection, and D12 gives the chip lift to the
+   chosen thing alone (issue 255). The accent border is what says "grab here". */
 .grip {
   position: absolute;
   left: calc(50% - 16px);
@@ -3073,14 +3131,16 @@ body.popover { background: var(--paper); margin: 0; }
   border-radius: var(--r1);
   background: var(--paper);
   border: 1.5px solid var(--accent);
-  box-shadow: var(--sh-chip);
   cursor: ns-resize;
   z-index: 7;
 }
 .grip::before { content: ''; position: absolute; left: -4px; right: -4px; top: -9px; bottom: -9px; }
 .grip.t { top: -4px; }
 .grip.b { bottom: -4px; }
-/* The start/stop time pills riding the outer edges (mockup .tlabel). */
+/* The start/stop time pills riding the outer edges (mockup .tlabel). They read TIMES, so they
+   take the Clock role's face (D06, issue 242) — the markup pairs `.tlabel` with `.tnum`, which
+   carries both halves of that role. No lift (issue 255): these are readouts of where the pending
+   interval's edges sit, and D12 spends `--sh-chip` on the chosen thing alone. */
 .tlabel {
   position: absolute;
   left: 6px;
@@ -3091,7 +3151,6 @@ body.popover { background: var(--paper); margin: 0; }
   padding: 2px 8px;
   border-radius: var(--r1);
   z-index: 7;
-  box-shadow: var(--sh-chip);
   pointer-events: none;
 }
 

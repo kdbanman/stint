@@ -327,7 +327,7 @@
         "chromed": true,
         "unoccluded": true
       },
-      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"389/152\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/153\"}",
+      "justification": "split picker (first column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"392/152\"}; delete confirm (last column) {\"inside\":true,\"escapes\":{\"left\":0,\"right\":0},\"clearsStickyAxes\":true,\"topmost\":true,\"controlsReachable\":true,\"opaque\":true,\"paper\":true,\"raised\":true,\"rounded\":true,\"widthVsColumn\":\"278/153\"}",
       "screenshot": "main-inline-gate.png"
     },
     {
@@ -569,7 +569,7 @@
         "signalOk": true,
         "budgetOk": true
       },
-      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":18,\"dayColumns\":5,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"notLifted\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+lift=true running-is-the-signal=true accent-solid≤1=true",
+      "justification": "entries calendar accent budget over the dense fixture: {\"evCount\":18,\"dayColumns\":5,\"tintedBlocks\":[],\"tintedBlockCount\":0,\"notPaper\":0,\"liftedAtRest\":0,\"runningCount\":1,\"runningCarriesAccent\":true,\"accentWeakFills\":0,\"accentSolidFills\":1}; density=true no-wallpaper=true neutral-surface+flat-at-rest=true running-is-the-signal=true accent-solid≤1=true",
       "screenshot": "calendar-accent-budget.png"
     },
     {
@@ -582,7 +582,7 @@
         "checkOk": true,
         "budgetOk": true
       },
-      "justification": "calendar selection over the dense fixture: {\"evCount\":17,\"stripFound\":true,\"selectedCount\":2,\"meCount\":1,\"meOutline\":true,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"rgba(74, 52, 24, 0.12) 0px 1px 2px 0px\",\"restIsFlat\":false,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":1,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
+      "justification": "calendar selection over the dense fixture: {\"evCount\":17,\"stripFound\":true,\"selectedCount\":2,\"meCount\":1,\"meOutline\":true,\"editorOpen\":true,\"accentedSelections\":[],\"chosenNotPaper\":0,\"chosenNotLifted\":0,\"chosenShadow\":\"rgba(60, 42, 18, 0.2) 0px 16px 44px 0px, rgba(60, 42, 18, 0.1) 0px 2px 6px 0px\",\"restShadow\":\"none\",\"restIsFlat\":true,\"checkedCount\":2,\"accentedChecks\":[],\"checksArePaper\":true,\"accentWeakFills\":1,\"accentSolidFills\":0,\"selIds\":[\"1\",\"2\",\"3\"]}; states=true chosen-lifts-off-the-rest=true no-accent-on-selection=true checkbox-is-paper=true accent-budget-held=true",
       "screenshot": "selection-lift.png"
     },
     {
