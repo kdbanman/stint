@@ -1,7 +1,7 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D12, D13, D14,
  * A01/A02, A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158, #164,
- * #241, #242 and #255).
+ * #241, #242, #255, #334 and #335).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -22,7 +22,10 @@
  *      disabled idiom in the direction that keeps the allowlist honest: the sanctioned selectors
  *      are exactly the file's `:disabled` population, and each one paints the whole idiom — faint
  *      on wash with a `not-allowed` cursor. One state had grown three grammars, and the drift was
- *      invisible because every rule was individually legal (issue #241).
+ *      invisible because every rule was individually legal (issue #241). The paint's third axis
+ *      is opacity (issue #335): nothing may multiply the disabled paint, and the Chromium UA dim
+ *      on selects is cancelled by a neutralizer whose presence is itself asserted — the rule it
+ *      cancels lives outside the repo, so no scan over the repo's own rules would miss it.
  *   5. D07 spacing grid, D06 readable-text floor, D13 placeholder colour — declaration-scoped
  *      static scans over styles.css and every mockup's <style> blocks: every padding/margin/gap
  *      px value sits on the 4px grid (2px as the half-step), no font-size declares below 11px,
@@ -47,7 +50,9 @@
  *      element inherit the proportional reading sans). The reach limit that leaves — a
  *      stylesheet cannot see that a string is a time — is closed from the other end by a census
  *      over the renderer's time FORMATTERS: every place one of them is painted must be a site
- *      that carries the whole role.
+ *      that carries the whole role. Two sites paint a time inside a running sentence and stay in
+ *      the reading face by D06's boundary sentence — prose has no column — recorded beside that
+ *      census as asserted exclusions by name (issue #334).
  *   9. D08/D14 the radius trio — the same census over `border-radius`, against three LITERAL
  *      lists: the two recorded 4px exemptions, the circles something else already entails, and
  *      D14's pill-and-tag population. D08 closes its exemption list by spec, so the guard states
@@ -314,6 +319,13 @@ describe('faint is never readable text (design.html D04/D16)', () => {
     '.set-update-btn:disabled',
   ];
 
+  // The one `:disabled` rule that is NOT an idiom site: Chromium's UA sheet ships
+  // `select:disabled { opacity: 0.7 }` — a dimmer stacked on the one disabled paint, reaching
+  // selects and nothing else — and this author-level rule cancels it (issue #335). A
+  // cancellation, not a fifth grammar: the opacity test below pins its body to the bare
+  // `opacity: 1` and nothing beside it.
+  const NEUTRALIZER = 'select:disabled';
+
   // Comments can quote CSS (the doctrine header does), so strip them before parsing rules.
   const rules = (): { selector: string; body: string }[] =>
     [...stylesCss.replace(/\/\*[^]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
@@ -333,9 +345,11 @@ describe('faint is never readable text (design.html D04/D16)', () => {
   it('every disabled control in styles.css carries the whole §07 idiom, and the list is all of them', () => {
     const disabled = rules().filter((r) => r.selector.includes(':disabled'));
     // Guard-the-guard: an allowlist can only be a review surface if the scan behind it still
-    // finds the population. Four disabled rules stand today; a regex gone blind fails here.
-    expect(disabled.map((r) => r.selector).sort()).toEqual([...allowed].sort());
+    // finds the population. Four disabled rules and the neutralizer stand today; a regex gone
+    // blind fails here.
+    expect(disabled.map((r) => r.selector).sort()).toEqual([...allowed, NEUTRALIZER].sort());
     const wrong = disabled
+      .filter((r) => r.selector !== NEUTRALIZER)
       .filter(
         (r) =>
           !/color:\s*var\(--faint\)/.test(r.body) ||
@@ -344,6 +358,51 @@ describe('faint is never readable text (design.html D04/D16)', () => {
       )
       .map((r) => r.selector);
     expect(wrong, 'a disabled rule off design.html §07 idiom (faint on wash, not-allowed)').toEqual([]);
+  });
+
+  it('nothing multiplies the disabled paint with opacity, and the UA neutralizer stands', () => {
+    // §07 names one paint for the state, and opacity is the one property that dims that paint
+    // without naming a colour. Two multipliers had stacked on it (issue #335): Chromium's UA
+    // `select:disabled { opacity: 0.7 }`, which put a disabled select's faint text a shade
+    // apart from a disabled button's, and the Reports increment picker's `.report-field.off
+    // { opacity: 0.5 }` on the control its `disabled` attribute already greys. The first is
+    // cancelled by the neutralizer, whose presence is asserted HERE because the rule it
+    // cancels ships inside Chromium — no scan over the repo's own rules would notice the
+    // neutralizer gone.
+    const neutralizer = rules().filter((r) => r.selector === NEUTRALIZER);
+    expect(
+      neutralizer,
+      `styles.css lost its \`${NEUTRALIZER}\` neutralizer — the UA sheet's 0.7 dim is live again`,
+    ).toHaveLength(1);
+    expect(
+      neutralizer[0]!.body.trim(),
+      'the neutralizer is a cancellation, not a fifth disabled grammar — bare `opacity: 1` only',
+    ).toMatch(/^opacity:\s*1;?$/);
+
+    // The second multiplier's shape was a SIBLING class, not a `:disabled` selector, so a scan
+    // over `:disabled` rules alone would miss its return. Read base compounds instead: a rule
+    // declaring a non-1 opacity whose subject could be one of the disabled controls (the
+    // allowlist's subjects, or a bare select) is a second dimmer on the one paint. The reveal
+    // and gray opacities elsewhere (.ev .ck, .op-btn, .grayed) target none of them.
+    const bases = new Set(
+      ['select'].concat(
+        allowed.flatMap((s) =>
+          simpleSelectors(compoundSelectors(s).pop() ?? '').filter((t) => !t.startsWith(':')),
+        ),
+      ),
+    );
+    const offenders = rules().flatMap((r) => {
+      const opacity = /(?:^|;)\s*opacity\s*:\s*([^;]+)/.exec(r.body);
+      if (!opacity || opacity[1]!.trim() === '1') return [];
+      const dims = r.selector.split(',').some((branch) =>
+        simpleSelectors(compoundSelectors(branch.trim()).pop() ?? '').some((t) => bases.has(t)),
+      );
+      return dims ? [`${r.selector} → opacity: ${opacity[1]!.trim()}`] : [];
+    });
+    expect(
+      offenders,
+      '§07 names one disabled paint — an opacity on a disabled control multiplies it',
+    ).toEqual([]);
   });
 });
 
@@ -836,7 +895,9 @@ describe('the type ramp (design.html D06 §04 — issue 152)', () => {
 //
 // Its reach limit is the one CSS always has: a stylesheet cannot see that a string is a TIME, so
 // a site that claims NEITHER half is invisible here. The formatter census below closes that from
-// the other end — take the helpers that produce a time and check where their output is painted.
+// the other end — take the helpers that produce a time and check where their output is painted —
+// and the two sites it deliberately does NOT reach, a time carried inside a running sentence, are
+// asserted exclusions rather than accidents of the scan (issue #334, the last test below).
 describe('every clock and duration wears the Clock role (design.html D06 — issues 152, 242)', () => {
   it('no surface writes font-variant-numeric to anything but tabular-nums', () => {
     // D06's "digits never jitter" has no opposite case: nothing in this app wants proportional
@@ -1012,6 +1073,38 @@ describe('every clock and duration wears the Clock role (design.html D06 — iss
       offenders,
       'D06 puts every clock and duration in the numeric face, tabular — a formatted time landed outside it',
     ).toEqual([]);
+  });
+
+  it('a time inside a running sentence stays prose — the two exclusions are asserted, not silent (issue #334)', () => {
+    // The census above pins where a formatter's output IS a clock; D06's boundary sentence names
+    // the sites that are not: "A time inside a running sentence is prose, not a Clock: it keeps
+    // the reading face, because tabular figures exist to align digits down a column, and prose
+    // has no column." Two renderer sites paint a formatter's output mid-sentence, and neither
+    // census shape above can see them — which left the exemption an accident of the scan's reach
+    // rather than a decision anyone made. Pinning each site here makes it the decision: a
+    // re-classification (a Clock-role wrap, a reworded sentence, a removal) arrives as a diff to
+    // this list, never as silence.
+    const PROSE_TIMES: Array<{ file: string; sentence: RegExp }> = [
+      // The popover's running state line — "since HH:MM" under the clock, a sentence fragment
+      // in the reading face beside the pop-dot.
+      {
+        file: 'popover.js',
+        sentence: /'<span class="pop-dot"><\/span> since ' \+ localTime\(running\.startUtc\)/,
+      },
+      // The merge-gap confirm's question — two times and two durations carried mid-sentence.
+      {
+        file: 'app.js',
+        sentence:
+          /question: `Not contiguous — merge spans \$\{localTime\(first\.startUtc\)\}–\$\{endLabel\} \(\$\{fmtDur\(spanSeconds\)\}\), folding a \$\{fmtDur\(gapSeconds\)\} gap into billable time\?`/,
+      },
+    ];
+    for (const { file, sentence } of PROSE_TIMES) {
+      const text = readFileSync(join(repoRoot, 'packages/gui/renderer', file), 'utf8');
+      expect(
+        sentence.test(text),
+        `${file}: the recorded prose-time site is gone or changed — re-decide its D06 prose/Clock classification here`,
+      ).toBe(true);
+    }
   });
 });
 
