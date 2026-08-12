@@ -376,15 +376,26 @@
                   </div>
                 </div>
 
+                <!-- design.html D13 (issue 246): "Filters" heads THREE controls, so it is a GROUP
+                     label and names none of them — a control's only visible word is never a
+                     category nor a sibling's name. Each control takes its own visible name, in the
+                     same wrapping idiom AND the same words as the Entries toolbar's filters: one
+                     vocabulary per control across both surfaces. The `aria-label`s go with them,
+                     and so does #rep-tag's placeholder — a visible label IS the accessible name,
+                     and a second, different one only invites the two to disagree (WCAG 2.5.3),
+                     which is the visible-word/spoken-word split this row was filed for. -->
                 <span class="report-lab">Filters</span>
                 <div class="report-row">
-                  <select id="rep-client" class="report-field" aria-label="Filter by client">
-                    <option value="">All clients</option>
-                  </select>
-                  <select id="rep-project" class="report-field" aria-label="Filter by project" disabled>
-                    <option value="">All projects</option>
-                  </select>
-                  <input id="rep-tag" class="report-field" type="text" placeholder="Filter by tag" autocomplete="off" aria-label="Filter by tag" />
+                  <label class="filter-field"><span>Client</span>
+                    <select id="rep-client" class="report-field">
+                      <option value="">All clients</option>
+                    </select></label>
+                  <label class="filter-field"><span>Project</span>
+                    <select id="rep-project" class="report-field" disabled>
+                      <option value="">All projects</option>
+                    </select></label>
+                  <label class="filter-field"><span>Tag</span>
+                    <input id="rep-tag" class="report-field" type="text" autocomplete="off" /></label>
                 </div>
 
                 <span class="report-lab">Billable</span>
@@ -396,18 +407,25 @@
                   </div>
                 </div>
 
+                <!-- design.html D13 (issue 246): the same rule reaches this row. "Rounding" heads
+                     TWO controls — the on/off toggle and the increment picker — so it is a group
+                     label here too. The toggle is named by its own words; the picker was named by
+                     the heading alone, so it takes the row's word for the thing it sets. Range,
+                     Group by and Billable each head ONE control, which is a group label naming
+                     the group it labels, and the rule permits that. -->
                 <span class="report-lab">Rounding</span>
                 <div class="report-row">
                   <label class="report-toggle">
                     <input id="rep-rounding" type="checkbox" />
                     Round grouped totals
                   </label>
-                  <select id="rep-rounding-increment" class="report-field" aria-label="Rounding increment">
-                    <option value="15">nearest 15 min</option>
-                    <option value="6">nearest 6 min</option>
-                    <option value="10">nearest 10 min</option>
-                    <option value="30">nearest 30 min</option>
-                  </select>
+                  <label class="filter-field"><span>Increment</span>
+                    <select id="rep-rounding-increment" class="report-field">
+                      <option value="15">nearest 15 min</option>
+                      <option value="6">nearest 6 min</option>
+                      <option value="10">nearest 10 min</option>
+                      <option value="30">nearest 30 min</option>
+                    </select></label>
                 </div>
               </div>
 

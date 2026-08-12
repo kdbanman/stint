@@ -517,8 +517,13 @@ s {
   font-size: 12px;
   color: var(--muted);
 }
-/* §12 R09 / design.html D13: the toolbar filters share the search field's visible-label
-   idiom — a small muted word beside the control, one grammar for the whole right rail. */
+/* §12 R09 / design.html D13: the app's ONE field-label idiom — a small muted word beside the
+   control, sharing the search field's grammar. The Entries toolbar filters wear it and so do
+   the Reports builder's (issue 246), which is the point of reusing it rather than spelling a
+   second one: the same control gets the same label in the same shape on both surfaces. It
+   stays BESIDE the control in the builder too, not stacked above it — the builder's rows are
+   the same wrapping flex row, and its 1fr column takes the labelled trio on one line at the
+   1040px minimum window, so stacking would spend a row's height to buy nothing. */
 .filter-field {
   display: inline-flex;
   align-items: center;

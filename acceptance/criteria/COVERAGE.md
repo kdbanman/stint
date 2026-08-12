@@ -1971,7 +1971,24 @@ the FIELD population alone (the bordered boxes D13 describes, so not the buttons
 and not the checkboxes) — a persistent VISIBLE element supplying it, through a
 `<label>`, `aria-labelledby`, or the row-heading idiom the control bars and
 settings rows use (`.report-lab` / `.set-k`), whose members are named in the
-justification so the population stays reviewable. The first fact's population is
+justification so the population stays reviewable. That list is a review QUEUE
+and not a pass: the sweep sees that a visible element names a field, never
+whether the word is the right one. Issue 246 is the review coming back — the
+Reports builder's `#rep-client` / `#rep-project` / `#rep-tag` sat under a
+heading reading **Filters**, a category naming none of them, and
+`#rep-rounding-increment` under **Rounding**, a heading it shared with the
+round-or-not toggle; all four were named correctly to a screen reader by an
+`aria-label` and mislabelled to everyone else, with nothing to hold the two
+together because a `.report-lab` span is not a `<label>`. The visible text was
+never the accessible name, so this was never a strict 2.5.3 failure and no
+guard could settle it; the missing rule is now design.html **D13**'s — a
+heading spanning several controls is a group label, and a control's only
+visible word is never a category nor a sibling's name. The four carry their own
+visible label in the Entries toolbar's idiom and vocabulary (Client / Project /
+Tag / Increment, the `aria-label`s and `#rep-tag`'s placeholder dropped with
+them), so they leave the list: it shrinks from fifteen entries to the eleven
+Settings rows, where each `.set-k` names the one control in its row, and that
+shrink is the fix's proof. The first fact's population is
 FOCUSABLE rather than `input`/`select`/`textarea` because of issue 245: a control
 the user can focus owes a name whatever its tag (WCAG 4.1.2), and the narrower
 sweep is why the app's ONE unnamed control — the Settings global-hotkey capture,

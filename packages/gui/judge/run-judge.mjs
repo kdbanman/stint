@@ -7248,7 +7248,16 @@ function sweepFieldLabels() {
 // Reports builder + Custom range, and Settings; the Clients view carries no field at rest (its
 // create/rename micro-forms are transient surfaces of their own and are not swept here).
 // Every row-heading-idiom control is NAMED in the justification, so that population stays
-// reviewable the way TARGET_SIZE's spacing exceptions do.
+// reviewable the way TARGET_SIZE's spacing exceptions do. That list is a REVIEW QUEUE and not a
+// pass: this sweep can see THAT a visible element names a field, never whether it names it with
+// the RIGHT word. Issue 246 is that review coming back — four builder controls rested on a
+// heading that named a category ("Filters" over client/project/tag) or the row rather than the
+// control ("Rounding" over the toggle AND the increment picker), each correctly named to a
+// screen reader by an `aria-label` and mislabelled to everyone else. D13 now settles when a
+// heading may cover more than one control (a heading spanning several IS a group label; a
+// control's only visible word is never a category nor a sibling's name), and the builder's
+// fields carry their own visible label instead. What is left on the list is the Settings rows,
+// where each `.set-k` heading names the one control in its row.
 //
 // Issue 245 widened fact (a)'s population from the three field tags to anything focusable. The
 // guard had a population narrow enough to miss the app's only unnamed control — a Settings
