@@ -200,40 +200,17 @@ export interface UiState {
     entries: EntryRowView[];
   }[];
   sleepFlaggedIds: number[];
-  settings: {
-    rounding: boolean;
-    roundingIncrementMin: number;
-    weekStart: string;
-    firstCheckinMin: number;
-    checkinIntervalMin: number;
-    globalHotkey: string;
-    /** §12 R11 — date rendering mode ('system' | 'iso'). */
-    dateFormat: string;
-    /**
-     * §04 R06 / §14 — the configured time zone: the literal 'system' (follow the OS at
-     * read time) or an IANA zone (pins display/parsing/day-bucketing). The renderer
-     * applies it to SU on every render; persists over the existing `setSetting` channel
-     * (key `timeZone`), parity with `tt config set time_zone`.
-     */
-    timeZone: string;
-    /**
-     * §14 — the timeline-window settings (G15) the Settings → Timeline group edits and
-     * `SU.timelineWindow` derives the picker/calendar default viewport from (G16). Strict
-     * zero-padded HH:MM pair (start<end, core-validated), the picker's default-window mode
-     * ('working_hours' | 'around_now'), and the around-now span in whole hours (1–24). All
-     * four persist over the existing `setSetting` channel — parity with `tt config set`.
-     */
-    workingHoursStart: string;
-    workingHoursEnd: string;
-    pickerWindowMode: string;
-    pickerAroundHours: number;
-    /**
-     * §20 R04 — how many automatic timestamped backups to keep beside the database. The
-     * Settings → Backups retention picker paints this and changes it over the existing
-     * `setSetting` channel (key `backupRetention`), parity with `tt config set backup_retention`.
-     */
-    backupRetention: number;
-  };
+  /**
+   * §14 — the settings snapshot, core's `Settings` ITSELF rather than a renderer restatement
+   * of it. Every row was respelled here once and hand-copied again in `buildUiState`, so core
+   * and the GUI drifted in silence: adding a row to core's interface produced no error at
+   * either site, and `showWeekend` shipped to core and `tt` while the GUI snapshot simply did
+   * not carry it. Naming the type binds the three homes to one, and the restatement's widened
+   * spellings (`weekStart: string` for a `WeekStart`) go with it — a plain data interface of
+   * primitives, so it stays structured-clone-safe across the IPC seam unchanged. Core owns
+   * each row's meaning and validation; settings.ts is where they are documented.
+   */
+  settings: Settings;
   /**
    * §19 R06 — the date/build version string (`YYYY.M.D[.N]`, or the `0.0.0-dev` sentinel on an
    * unstamped build) the Settings → Software Update view shows. The shared @stint/core

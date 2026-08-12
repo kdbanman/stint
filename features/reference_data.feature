@@ -1,5 +1,5 @@
 Feature: Reference-data management
-  # PRD §12 R10 — the Clients view manages the reference data: create / rename / archive
+  # PRD §12 R11 — the Clients view manages the reference data: create / rename / archive
   # clients & projects, and create / rename / archive tags. Every scenario runs TWICE
   # (CoreWorld over @stint/core, CliWorld over `tt client`/`tt project`/`tt tag`), so the
   # GUI Clients view is proven to reach nothing tt cannot (§17 R8 parity). Client and
@@ -10,18 +10,18 @@ Feature: Reference-data management
     Given an empty database
 
   Scenario: Creating a client lists it in the active client list
-    # PRD §12 R10 — the Clients view's Add-client, parity with `tt client add`.
+    # PRD §12 R11 — the Clients view's Add-client, parity with `tt client add`.
     When I add a client "Acme Corp"
     Then client "Acme Corp" is in the active client list
 
   Scenario: Creating a project under a client lists it in the active project list
-    # PRD §12 R10 — Add-project under a client, parity with `tt project add --client`.
+    # PRD §12 R11 — Add-project under a client, parity with `tt project add --client`.
     Given I add a client "Acme Corp"
     When I add a project "Platform" for client "Acme Corp"
     Then project "Platform" is in the active project list
 
   Scenario: Archiving a project hides it from the active list but keeps its history
-    # PRD §07 / §12 R10 — archive is reversible hiding, never deletion; past entries keep
+    # PRD §07 / §12 R11 — archive is reversible hiding, never deletion; past entries keep
     # their label. The Clients view's per-project Archive, parity with `tt project archive`.
     Given a client "Acme Corp" with project "Platform"
     And a closed entry "spec" for "Acme Corp" / "Platform" from 09:00 to 10:00
@@ -30,7 +30,7 @@ Feature: Reference-data management
     And the entry "spec" is for "Acme Corp / Platform"
 
   Scenario: Archiving then restoring a client round-trips it back to the active list
-    # PRD §07 / §12 R13 — archive hides; restore is the reverse, returning the record to every
+    # PRD §07 / §12 R11 — archive hides; restore is the reverse, returning the record to every
     # picker/filter. This is the round-trip that makes "reversible hide" true rather than
     # aspirational. The Clients view's Restore button, parity with `tt client restore`.
     Given I add a client "Acme Corp"
@@ -40,7 +40,7 @@ Feature: Reference-data management
     Then client "Acme Corp" is in the active client list
 
   Scenario: Archiving then restoring a project round-trips it back to the active list
-    # PRD §07 / §12 R13 — the per-project Restore, parity with `tt project restore`.
+    # PRD §07 / §12 R11 — the per-project Restore, parity with `tt project restore`.
     Given a client "Acme Corp" with project "Platform"
     When I archive project "Platform"
     Then project "Platform" is not in the active project list
@@ -48,7 +48,7 @@ Feature: Reference-data management
     Then project "Platform" is in the active project list
 
   Scenario: Restoring a project whose client is still archived is refused
-    # PRD §12 R13 edge — an active project under a hidden client would be unselectable, so core
+    # PRD §07 / §12 R11 edge — an active project under a hidden client would be unselectable, so core
     # refuses the restore (naming the archived client), steering the user to restore the client
     # first. Both surfaces refuse identically (§17 R8).
     Given a client "Acme Corp" with project "Platform"
@@ -59,27 +59,27 @@ Feature: Reference-data management
     And project "Platform" is not in the active project list
 
   Scenario: Creating a tag lists it in the active tag list
-    # PRD §12 R10 — the Tags strip's Add-tag, the explicit manage-it-first path (tags are
+    # PRD §12 R11 — the Tags strip's Add-tag, the explicit manage-it-first path (tags are
     # otherwise born on the fly when first applied). Parity with `tt tag add`.
     When I add a tag "billing"
     Then tag "billing" is in the active tag list
 
   Scenario: Renaming a tag keeps it in the active list under the new name
-    # PRD §12 R10 — the Tags strip's Rename, parity with `tt tag rename`.
+    # PRD §12 R11 — the Tags strip's Rename, parity with `tt tag rename`.
     Given I add a tag "biling"
     When I rename tag "biling" to "billing"
     Then tag "billing" is in the active tag list
     And tag "biling" is not in the active tag list
 
   Scenario: Archiving a tag hides it from the active tag list
-    # PRD §07 / §12 R10 — archive is reversible hiding; the tag drops out of the active
+    # PRD §07 / §12 R11 — archive is reversible hiding; the tag drops out of the active
     # (picker) list while its history is kept. Parity with `tt tag archive`.
     Given I add a tag "deprecated"
     When I archive tag "deprecated"
     Then tag "deprecated" is not in the active tag list
 
   Scenario: Archiving then restoring a tag round-trips it back to the active list
-    # PRD §07 / §12 R13 — restore returns the tag to the pickers, parity with `tt tag restore`.
+    # PRD §07 / §12 R11 — restore returns the tag to the pickers, parity with `tt tag restore`.
     Given I add a tag "billing"
     When I archive tag "billing"
     Then tag "billing" is not in the active tag list
@@ -87,7 +87,7 @@ Feature: Reference-data management
     Then tag "billing" is in the active tag list
 
   Scenario: Create then rename then archive a tag runs the full lifecycle
-    # PRD §12 R10 — the whole tag lifecycle the Tags strip exposes, end to end.
+    # PRD §12 R11 — the whole tag lifecycle the Tags strip exposes, end to end.
     Given I add a tag "draft"
     When I rename tag "draft" to "drafts"
     Then tag "drafts" is in the active tag list

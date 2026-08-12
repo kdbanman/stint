@@ -47,10 +47,11 @@ atomic close never persists an `end` before the `start`) and BDD
 ### PRD §04
 
 `prop/invariants.test.ts`, `cli/test/integration/cross-surface.test.ts`,
-`core/test/integration/lock-contention.test.ts`. §04 R02–R04/R06 are now
+`core/test/integration/lock-contention.test.ts`. §04 R02–R04/R06 are
 classified **`core`** (single source of truth / WAL / all-through-core; derived
 elapsed; atomic `BEGIN IMMEDIATE` transitions; UTC storage), and the badge maps
-to existing integrity/durability coverage with no new behavior: the
+onto the integrity/durability coverage below rather than any behaviour of its
+own: the
 **at-most-one-open** + **atomic-transition** invariants (R02–R04) are the PROP
 laws in `prop/invariants.test.ts` ("at most one open entry after every
 operation" under any generated start/stop/add sequence, never two open rows / no
@@ -93,8 +94,8 @@ at-most-one-open partial unique index (§20 R02), and the wall-clock skew guard
 (§20 R06) — cross-referenced from prd.html §04. The **busy-timeout cooperation**
 claim itself (README.md "each write is one `BEGIN IMMEDIATE` transaction with a
 busy timeout, so the CLI and the running app cooperate"; architecture.html §04)
-— until now only INSPECTED (busy_timeout asserted *configured* by the
-open-invariants PROP + the pragma GOLD), never RACED — is now given behavioral
+— beyond the *configured* busy_timeout the open-invariants PROP + the pragma
+GOLD assert, it is given behavioral
 evidence by the contention integration test
 `core/test/integration/lock-contention.test.ts`: a SECOND in-process connection
 deterministically HOLDS the write lock (held-lock injection, no timing luck, no
@@ -120,7 +121,7 @@ the DB, or the network.
 
 ### PRD §05
 
-**R01 Start — now classified `core`** (data integrity / core-entry per §03):
+**R01 Start — `core`** (data integrity / core-entry per §03):
 Start is the atomic stop-then-start — starting while a timer runs stops the open
 entry first, so switching IS starting with no separate verb (the verb's
 contract, reached from `tt start` and programmatic callers; the window surfaces
@@ -144,8 +145,8 @@ entry backdated before the running one is refused" (run TWICE over core
 `store.start` + `tt start --at` via `run.test.ts` through `attemptStart`) and
 PROP `prop/editing.test.ts` ("`start()`'s atomic close never persists an end
 before the start") + `prop/invariants.test.ts` (the span-validity law). **R02
-Stop — now classified `core`** (data integrity / core-entry per §03):
-badge-only, behaviour unchanged (`end = now` on the open entry). The named
+Stop — `core`** (data integrity / core-entry per §03):
+`end = now` on the open entry. The named
 cross-surface anchor is BDD `features/one_open_entry.feature` "Stopping closes
 the open entry and leaves nothing running" (given a started entry, when I stop
 at 10:00, then exactly zero entries are open AND status reports nothing running
@@ -153,10 +154,11 @@ at 10:00, then exactly zero entries are open AND status reports nothing running
 behaviour is proven identical and reachable on both surfaces; it would fail if
 stop left an entry open / did not set `end=now` on either surface), reinforced
 by the PROP at-most-one-open invariant in `prop/invariants.test.ts` (whose
-`opArb` includes the `stop` op). **R05 Manual add (backfill) — now classified
-`core`** (core data entry per §03): badge-only on the core/CLI behaviour
-(unchanged); the GUI's from/to move onto the unified form's inline interval
-picker + collapsed Start/Stop expander. The named cross-surface anchor is BDD
+`opArb` includes the `stop` op). **R05 Manual add (backfill) —
+`core`** (core data entry per §03): on `tt` the from/to are explicit flags; in
+the GUI they are dragged on the entries week grid
+(drag-to-create, §12 R07/R16) or typed in the unified form's Start/Stop
+fields (§12 R17). The named cross-surface anchor is BDD
 `features/tracking.feature` "Backfill creates a completed entry" (backfilling
 "spec review" from 13:00 to 14:30 yields exactly zero open entries and a
 billable duration of 90 minutes — run TWICE over core `store.add` + `tt add` via
@@ -176,31 +178,31 @@ add backfill — the core-entry contract (§05 R05)"
 and the computed 5400s billable duration, and `tt status --json` reports nothing
 running afterward). The **strict from < to** ordering rule backfill enforces (an
 inverted OR zero-width span is rejected rather than stored, prd.html §05 R05) —
-previously code-only and asserted by zero tests — is now pinned by GOLD
+a core rule no surface restates — is pinned by GOLD
 `core/test/gold/contracts.test.ts` "range-ordering contracts (§05 R5, §09
 R01/R08)" (`add()` rejects both an inverted span and a zero-length `to == from`
 span with `stop time must be after start time` — SURFACE-NEUTRAL wording, pinned
 alongside a sweep asserting no core refusal names a CLI flag, issue 138); this is
 the deliberate strict-**<** twin of §09 R01's **≤**-for-report-ranges rule (a same-day report range is valid, a
-zero-length entry is not). In the GUI the manual-add from/to are set on the
-unified form's inline interval picker (§12 R15, `#add-picker` via
-`window.STP.openInline`) over the collapsed Start/Stop expander (§12 R17, the
-raw-text `#add-from`/`#add-to` fields behind `#add-times-toggle`), and the
-picked/typed from/to are what submit over the unchanged `add` IPC.
+zero-length entry is not). In the GUI the manual-add from/to arrive from a drag on the entries week grid
+(§12 R07/R16 — select-interval, then the pending interval's body/edge drags,
+snapping per R23) or are typed into the unified form's raw Start/Stop fields
+(§12 R17, the exact / overnight path) — grid and fields drive the SAME form
+values, and that raw field text is what submits over the existing `add` IPC.
 `features/tracking.feature` (edit-open + "Backfill creates a completed entry"
 scenarios), `features/overlap_and_editing.feature` ("Editing amends a field
 without disturbing the open state", "Editing the running entry's start does not
 stop it"), `prop/editing.test.ts`, `cli/test/gold/cli.test.ts` (edit/add),
 `gui/test/start.test.ts` (GUI start carries all attributes), JUDGE
-`START_ATTRIBUTES` (`main-start-attributes.png`) + `UNIFIED_FORM_ADD`
-(`unified-add.png` — the unified entry form in ADD mode: the two-column form
-with the left attribute fields + the right inline interval picker over the
-collapsed Start/Stop expander (no `datetime-local`); dragging the picker "me"
-block updates the raw `#add-from`/`#add-to` form state LIVE, and Save entry is
-the sole commit — the picked `fromLocal`/`toLocal` +
-description/client/project/tags/billable ride the single `add` IPC, the
-overlapping backfill still saves and raises the non-blocking overlap banner, §12
-R7/§12 R15/§06 R4 — the GUI face of the now-`core` §12 R7), parity
+`START_ATTRIBUTES` (`main-start-attributes.png`) + `UNIFIED_FORM_ADD` (`unified-add.png` — the unified entry form in CREATE mode on
+the week grid: the + button → select-interval → press-drag path opens the
+reduced form BLANK except the dragged interval (no `datetime-local`); dragging
+the pending interval rewrites the raw Start/Stop fields LIVE and a typed next-
+day stop makes the overnight span; Save entry is the sole commit — the raw
+`fromLocal`/`toLocal` text + description/client/project/tags ride the single
+`add` IPC (billable omitted when untouched, so core derives the §05 R07
+default), the overlapping backfill still saves and raises the non-blocking
+overlap banner, §12 R7/R16/R17/§06 R4 — the GUI face of the now-`core` §12 R7), parity
 `add`→`tt add` and `edit`→`tt edit` (`parity-matrix.json`); the running-entry
 start edit is covered under **R06** below (JUDGE `TIMER_VIEW` + BDD `features/tracking.feature` "Editing the running entry
 start never closes it and never synthesizes an end"). **R06 Running entry
@@ -249,7 +251,7 @@ recorded, the strip + Stop persist [no wedge], correcting to a past instant
 commits and Stop then flips to idle). **R09 Favorite (pinned timer template)** —
 a named preset capturing description/client/project/billable/tags, created from
 the running timer, a closed entry, or explicit attributes ("pin"); listed;
-renamed; unpinned. New `favorite`/`favorite_tag` tables (§13), core
+renamed; unpinned. The `favorite`/`favorite_tag` tables (§13), core
 `store.pinFavorite/listFavorites/renameFavorite/unpinFavorite`. **BDD**
 `features/favorites.feature` (pin-from-running / pin-from-closed-entry /
 pin-from-attributes / rename / unpin, run TWICE over core + tt via `run.test.ts`
@@ -272,7 +274,7 @@ inherits the atomic close-open-then-open behavior (§05 R1/§16), the ≤1-open
 invariant, and the overlap warning (§06 R4). Core
 `store.startFromFavorite(name, overrides?)`. CLI both `tt fav start <name>` and
 `tt start --fav <name>` (the latter layers explicit flags over the template);
-GUI the favorites rail's one-click Resume over the new `startFavorite` IPC.
+GUI the favorites rail's one-click Resume over the `startFavorite` IPC.
 **BDD** `features/favorites.feature` (resume carries the template + the favorite
 is unchanged; resume while another timer is open atomically stops the open one;
 the `tt start --fav` route is at parity with `fav start`; resuming from an
@@ -286,7 +288,7 @@ open entry at now, with no end-of-day clamp") — on a noon clock where
 close-at-now (12:00) and a 23:59 day-boundary clamp diverge, so the guard
 catches a clamp the BDD favorites scenario (clock fixed at 23:59) cannot
 distinguish; the bare-start and `resume()` paths are pinned the same way. **R10
-Multiline descriptions (NEW, G9)** — a description may contain newlines, stored
+Multiline descriptions (G9)** — a description may contain newlines, stored
 VERBATIM; no surface flattens or truncates the stored text. Core `store` writes
 the description through unchanged on add + edit (no trim/normalize), and core
 `export.csvCell` quotes any cell containing `"`, `,`, or a newline so the CSV
@@ -330,7 +332,7 @@ surviving entries are exactly the rest): `features/overlap_and_editing.feature`
 "Deleting an entry removes it and its time from the list" (run TWICE over core
 `store.remove` + tt `rm --force` via the World `remove` capability), so the
 confirmed delete behaves identically on both surfaces. (ii) **confirm gate /
-loss-protection** is now ALSO a surface-neutral BDD scenario, not merely a
+loss-protection** is a surface-neutral BDD scenario, not merely a
 surface concern: `features/overlap_and_editing.feature` "Deleting an entry
 without confirmation is refused (the entry survives)" (run TWICE over core + tt
 via the World `removeUnconfirmed` capability — CoreWorld never auto-confirms a
@@ -359,9 +361,9 @@ refused unless the gap is acknowledged (core `allowGap` / `tt merge --allow-gap`
 gap; descriptions concatenated + tags unioned by core): the selection is made by
 the entries calendar's **hover-corner checkboxes** (§12 R16) — checking any box
 enters multi-select mode and reveals the selection bar's Merge; the conflict
-prompt is now **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
-`openMergeConflict` — the merge-bar path routes through it; `editor.js` and its
-toolbar Merge-selected mirror are gone). JUDGE `MERGE_CONFLICT` +
+prompt is **hosted in `app.js`** (the `.editor.conflict-prompt` modal,
+`openMergeConflict` — the merge bar is the one path into it, with no second
+mirror anywhere). JUDGE `MERGE_CONFLICT` +
 `MERGE_NOCONFLICT` (`packages/gui/judge/`, asserting the
 `.editor.conflict-prompt` modal + `main-merge-conflict.png`; `MERGE_CONFLICT`
 also scores the modal's KEYBOARD EXIT — issue 147, where the app's one modal
@@ -454,7 +456,7 @@ same-name-different-client allowed, run TWICE over core + tt), GOLD
 `assertNameFree`/`assertRenameFree` widened from favorites/saved reports, so no
 surface can drift on how a duplicate reference-data name is detected. **R
 restore / reversible hide** (archive is reversible — a client/project/tag can be
-un-archived back into every picker; §12 R13): surface-neutral BDD
+un-archived back into every picker; §12 R11): surface-neutral BDD
 `features/reference_data.feature` ("Archiving then restoring a
 {client,project,tag} round-trips it back to the active list", plus the edge
 "Restoring a project whose client is still archived is refused", each run TWICE
@@ -493,7 +495,7 @@ same week's total under each of the three variants —
 `tt report --all|--non-billable`, the two-run harness; steps in
 `core/test/bdd/steps.ts`) plus PROP/GOLD; the GUI Reports view's inline
 saved-report **builder** (`gui/renderer/index.html` `#rep-billable-seg` +
-`reports.js`, the in-shell view that replaced the retired `report.html`) is the
+`reports.js`, the in-shell Reports view — there is no standalone report page) is the
 discoverability surface over it — a single segmented Billable control (default
 billable-only) that rides in the SAVED report definition
 (`saveReport`/`editReport`), and the run-output paints the core Report
@@ -555,17 +557,19 @@ round-trip + legacy outward rounding, malformed-date rejection, and the
 saved-report rangeSpec view round-trip — the renderer-safe absolute arm is
 `{kind:'absolute', fromDate, toDate}` while core's `RangeSpec` keeps UTC
 instants). The GUI surfaces (`gui/renderer/index.html` + `reports.js` for the
-Reports builder, `app.js` for the Entries toolbar) are thin discoverability
+Reports builder) are thin discoverability
 shells over it — five labelled preset chips (default This week) each sending the
 preset NAME so the **main process resolves it through core's `resolveRange` **
 (`gui/src/main.ts`), plus a Custom mode whose **two plain `type="date"` fields**
-(`#rep-range-from`/`#rep-range-to`; `#el-range-from` /`#el-range-to`) carry
+(`#rep-range-from`/`#rep-range-to`) carry
 their raw strings verbatim: the saved-report `rangeSpec` travels as the
 plain-date absolute arm (converted through `rangeSpecFromView` /`ToView` →
-`resolveDateRange` /`utcWindowToDatePair`), and the Entries toolbar's
-`listEntries` query carries `{fromDate, toDate}` (resolved in the `listEntries`
-handler) and applies LIVE once both dates are set — there is NO Apply button,
-and the renderer constructs no Date and derives no window. JUDGE `REPORTS_VIEW`
+`resolveDateRange` /`utcWindowToDatePair`). The **Entries view carries no range
+controls at all** (§12 R09, issue #265 — no presets, no date pair): `app.js`
+sends the **selected week** as the same raw plain-date pair, `{fromDate, toDate}`
+spanning the week's seven days (resolved in the `listEntries` handler), so that
+view's window follows the week picker alone. On both surfaces the renderer
+constructs no Date and derives no window. JUDGE `REPORTS_VIEW`
 (`reports-list.png` — the two builder date fields are `input[type="date"]` ,
 Custom… reveals them, saving 2026-06-01/2026-06-07 fires a captured `saveReport`
 whose `rangeSpec` is exactly
@@ -578,7 +582,7 @@ with `tt report --<preset>` / `--range` over the resolved local-midnight bounds,
 R8);
 parity `report` →`tt [report, export]` (the preset/date pair travel inside
 existing payloads — no new channel/parity row). The GUI picker is thus fully
-covered (no longer a gap). **R2 group-by control** (the report's
+covered. **R2 group-by control** (the report's
 Client/Project/Day/Week/Month/Tag selector): the grouping engine is core's
 `store.report` keyed by `by` , proven surface-neutral on core AND tt by
 `features/reporting.feature` (grouping by project/tag/day sums each bucket, an
@@ -617,7 +621,7 @@ tag, omitting any unset filter key. JUDGE `REPORTS_VIEW` (`packages/gui/judge/`,
 client filters re-queries with the matching params and re-renders the
 rows/total). The filter arithmetic itself is the core/tt report coverage above
 (no new channel/parity row — the filters travel inside the existing `report`
-payload). The GUI filter controls are thus fully covered (no longer a gap). **R4
+payload). The GUI filter controls are thus fully covered. **R4
 rounding the line** (`core`; AC=**PROP**) (rounding applies to the grouped line
 nearest the chosen increment — not always up — and never alters stored time):
 the rounding engine is core's `roundSeconds` over the grouped line (`report.ts`
@@ -710,7 +714,7 @@ and no-flag `tt export --csv/--json`) and GOLD `gui/test/ipc-handlers.test.ts` (
 dialog returned, the 'all' file keeping an out-of-window row, cancel writing
 nothing). Parity row `exportEntries` →`tt export` (`parity-matrix.json`; the
 `report` row maps to `tt report` alone). The GUI summary + export is thus
-fully covered (no longer a gap). **R7 free-text search** (a query narrows the entry list to those whose
+fully covered. **R7 free-text search** (a query narrows the entry list to those whose
 description, client name, project name, or any tag contains it —
 case-insensitive substring): the matching engine is core's
 `listEntries({ search })` (applied post-`toView`, like the `tag` post-filter, so
@@ -729,19 +733,19 @@ case-insensitivity + client/tag match, list/report `--json` still satisfy
 description/client/project/tag case-insensitively, composes with a
 range+billable filter, `report({ search })` totals only matches). The GUI search
 box (`gui/renderer/index.html` `#search` + `app.js` ) is the discoverability
-surface over it — each input re-queries the new `search` IPC (`gui/src/main.ts`
+surface over it — each input re-queries the `search` IPC (`gui/src/main.ts`
 → `buildUiState(store, accent, { search })` , narrowing only the visible
-day-grouped list — pinned by GOLD `gui/test/renderer-bundle.test.ts` : ONE
+day-grouped snapshot the week grid paints — pinned by GOLD `gui/test/renderer-bundle.test.ts` : ONE
 flagged entry flags the whole grouped line it landed in, both conditions read
 `overlap` then `unreviewed sleep` , and an absent entry-id or flag set flags
 nothing), and clearing it falls back to `getState` ; `load()` /`onChange`
-re-apply the live query so a tt write keeps the list narrowed. New parity row
+re-apply the live query so a tt write keeps the list narrowed. Parity row
 `search` →`tt [list, report]` (`parity-matrix.json`, asserted by
 `gui/test/parity.test.ts` ). JUDGE `LIVE_FILTER` covers the renderer wiring (live narrowing,
 client/project/tag hits, case-insensitivity, clear-restores) over BDD
 `features/search.feature`'s surface-neutral filter contract. **R08 saved report definition** (a
 named, persistent preset of {range-spec, group-by, filters, rounding}, stored in
-the new `report` table of §13 at `SCHEMA_VERSION` 3): the entity + CRUD live in
+the `report` table of §13 at `SCHEMA_VERSION` 3): the entity + CRUD live in
 `@stint/core` (`savedreport.ts` defines `SavedReport`
 /`SavedReportInput`/`RangeSpec` + `resolveSavedRange` ; `store.ts` adds
 `saveReport`
@@ -967,12 +971,12 @@ above. **Exit codes come from ONE mapper (#169, engineering.html §04)**:
 `bin.ts` is the single place an error becomes user copy and an exit code —
 `CommanderError` → its own code, `CliError` → its `exitCode` (default 2),
 `StoreError` /`TimeParseError` → 2, anything else → `error: <msg>` / 1. The CLI
-no longer re-wraps core errors mid-stack to reach that mapping: the nine
-`catch (err) { throw new CliError(…) }` blocks over `saveReport`
+never re-wraps a core error mid-stack to reach that mapping: over `saveReport`
 /`editReport`/`renameReport`/`removeReport`/`pinFavorite`/`renameFavorite`/`unpinFavorite`/`startFromFavorite`
-were provable no-ops (`StoreError` already maps to 2 with the same message) and
-are deleted, leaving core’s error TYPE intact all the way to `bin.ts` . Two
-remaps survive because they normalise a type `bin.ts` does not know —
+a `catch (err) { throw new CliError(…) }` block would be a provable no-op
+(`StoreError` already maps to 2 with the same message), so core’s error TYPE
+stays intact all the way to `bin.ts` . Two
+remaps exist because they normalise a type `bin.ts` does not know —
 `backup restore` (`RecoveryError` from `core/src/backup.ts` ) and `applySetting`
 (the bare `Error` s `core/src/settings.ts` throws for a rejected value) — each
 carrying the §04 proof comment for its `as Error` ; `merge` ’s `--allow-gap`
@@ -982,20 +986,20 @@ deletion must not move (`cli/test/gold/cli.test.ts`):
 `config set` reads identically to one tt rejects itself — exit 2, no `error: `
 prefix) and
 `a refused and a rejected restore both exit exactly 2 with a bare message` ; the
-rest of the GOLD suite passing unchanged is the proof for the nine. Cross-noted
+rest of the GOLD suite holds the same line for every other command. Cross-noted
 with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below
 ### PRD §12
 `judge/` (renderer facts + screenshots), `gui/test/toggle.test.ts` (toggle
 decision), `gui/test/tray.test.ts` (tray click + menu), `judge-rubric.md` ,
 `manual/runbook.md` (shortcut registration, live tray, real hotkey). **R01 tray
-single-click popover; dropdown removed** (G8 — the tray's single LEFT-click
+single-click popover** (G8 — the tray's single LEFT-click
 opens the compact popover only, the popover is the SOLE surface for the
-Stop/Start toggle + Open Stint (no Switch), and the old 3-item Start/Stop + Open
-Stint dropdown action menu is removed; right-click → a minimal Quit-only OS
-menu, no timer actions): the behaviour is a main-process change
+Stop/Start toggle + Open Stint (no Switch), and there is no action dropdown
+anywhere on the tray; right-click → a minimal Quit-only OS
+menu, no timer actions): the behaviour lives in the main process
 (`gui/src/main.ts` — `tray.on('click', () => togglePopover())` is the only
-action wiring; `buildTrayMenu()` now builds
-`Menu.buildFromTemplate([{ role: 'quit' }])` , dropping the Start/Stop + Open
+action wiring; `buildTrayMenu()` builds exactly
+`Menu.buildFromTemplate([{ role: 'quit' }])` , with no Start/Stop or Open
 Stint entries). The tray itself has no headless host, so the tray's own
 click/menu contents are frozen by the source-guard `gui/test/tray.test.ts`
 (left-click→`togglePopover`, `togglePopover` shows the popover window, and the
@@ -1004,15 +1008,15 @@ tray menu builds ONLY Quit — no Open Stint / Start / Stop / `toggleTimer` /
 JUDGE `TRAY_POPOVER_SURFACE` (`packages/gui/judge/`, `popover-tray-surface.png`
 — the running popover exposes Stop (`#toggle`)+Open Stint (`#open`) with NO
 `#switch` element, the idle popover reads Start with Open Stint present, so the
-popover is the sole action surface since the dropdown is gone), and the real
+popover is the sole action surface, with no dropdown beside it), and the real
 tray left/right-click behaviour on a desktop session is MANUAL
 `CHECK TRAY + GLOBAL HOTKEY` (a single left-click opens the popover only with no
 dropdown menu, a right-click yields at most a Quit-only OS menu, no 3-item
 action dropdown anywhere). No IPC channel / parity change (the popover already
 drives the existing `toggle` /`start` channels). **R3 window shell & nav**
-(MODIFIED — G7: the persistent left-hand nav is present in EVERY view and stays
-a FIXED width on resize; no view escapes the shell — with the standalone
-`report.html` retired by R08, every view renders inside the shell; the current
+(G7: the persistent left-hand nav is present in EVERY view and stays
+a FIXED width on resize; no view escapes the shell — every view, Reports
+included, renders inside it; the current
 view is highlighted): the renderer ships the shell as a pure client-side router
 (no IPC — R3 is presentation only; the per-view data is the separate R5–R11
 reqs), `gui/renderer/index.html` (`.shell` rail + `.view[data-view]` sections
@@ -1022,7 +1026,7 @@ marker, R13 — routing never leaves the shell), with `gui/renderer/styles.css`
 pinning `.shell .nav` at `flex: none` / `flex-shrink: 0` / `168px` and
 `.views { flex: 1; min-width: 0 }` so the views column absorbs all resize and
 the rail can never be squeezed or grown. JUDGE `NAV_SHELL`
-(`packages/gui/judge/`, `main-nav.png` + `main-nav-wide.png` ) now folds two new
+(`packages/gui/judge/`, `main-nav.png` + `main-nav-wide.png` ) folds two
 machine-scored sub-facts beside order/default-active/routing —
 **`SIDEBAR_EVERY_VIEW`** (clicking through all five views keeps the
 `.shell .nav` rail visible (width>0, not hidden) on every route, with exactly
@@ -1033,9 +1037,9 @@ rail; the wide viewport is captured as `main-nav-wide.png` ). A regression (a
 view that hides the rail, or a rail that shrinks/grows on resize) flips the
 NAV_SHELL pass to false. The active item's accent marker is the one sanctioned
 chrome accent the `ACCENT_DISCIPLINE` scan allows (`.nav-item.active`). **R04
-in-window Active-Timer panel** (MODIFIED — the full Active-Timer card now lives
-in the **Timer view** (R14), and the **Entries view keeps only a compact strip**
-of it; the card is still the GUI mirror of `tt status` : a live per-second
+in-window Active-Timer panel** (the full Active-Timer card lives
+in the **Timer view** (R14), and the **Entries view carries only a compact strip**
+of it; the card is the GUI mirror of `tt status` : a live per-second
 count-up, the running/idle state, the running entry's description +
 client/project, its billable/slept attributes, and the primary **Stop** action
 (no Switch — issue #34; Stop + favorite pin are the running card's primary
@@ -1109,15 +1113,15 @@ perfectly good warn pill. `COLOUR_PAIRING` keeps the other half — that
 billability is SAID at all — and reads the attribute row by position, so a
 palette move can never mute the word. **The card stays fresh across views (issue #50):** JUDGE
 `CROSS_VIEW_FRESHNESS` (`packages/gui/judge/`, `timer-cross-view.png` — after an
-Entries-toolbar control is touched (the Today preset latches the renderer's
-entries query), routing to the Timer view and clicking Start flips the card to
+Entries-toolbar control is touched (the prev-week stepper, which latches the
+renderer's entries query), routing to the Timer view and clicking Start flips the card to
 running IN PLACE, with no reload: state text `running` , the idle-only
 `#start-panel` hides (§12 R05) while the accented `#timer-stop` primary becomes
 visible, and the count-up advances +3s across a pinned-clock step), with the
 `cross-view-freshness` recording recipe (`packages/gui/judge/record.mjs`) as its
 moving evidence; `gui/test/entriesquery.test.ts` pins the `listEntries` grouping
 default (`by` omitted → day groups, never a rejected IPC — the throw that
-starved the repaint). **R14 full Timer view (G5)** (NEW — the GUI core-entry
+starved the repaint). **R14 full Timer view (G5)** (the GUI core-entry
 surface: live count-up + state, create/start-with-details while idle (while a
 timer runs the view offers only edit-or-stop — issue #51; no separate Switch
 verb either, issue #34), stop, **edit the running timer live** (attributes +
@@ -1174,20 +1178,20 @@ five favorite IPC channels + the core favorite table/query land via §05 R09/R10
 + §13), so favorites are fully reachable from both surfaces (§17 R14). The
 behavioural pin/list/rename/unpin/resume flows themselves run TWICE via §05
 R09/R10; this req owns the GUI Timer view + its live-edit + rail as the
-reachable surface. **R5 Start form & empty state** (MODIFIED — now `core` (the
-GUI core-entry surface) and relocated to the **Timer view**: the **Start form**
+reachable surface. **R5 Start form & empty state** (`core` — the
+GUI core-entry surface, hosted in the **Timer view**: the **Start form**
 — description / client / project / tags / billable, defaulting per the §08
-client rule — moved out of the Entries toolbar into
-`<section data-view="timer">` , keeping the same ids and the same `start` IPC
-(no new channel, no parity row); the surface is **idle-only** (issue #51): while
+client rule — lives in
+`<section data-view="timer">` and rides the same `start` IPC `tt` uses
+(no channel of its own, no parity row); the surface is **idle-only** (issue #51): while
 a timer runs the Timer view offers **only edit-or-stop of the running entry** —
 `renderTimerCard` hides the whole start panel (the one-tap `#toggle` , the
 `#start-toggle` disclosure and `#start-form` ) until the entry is stopped, so no
 start affordance and no second Description field exists while running (there is
-no separate Switch affordance either — issue #34; core's `start` remains the
+no separate Switch affordance either — issue #34; core's `start` is the
 atomic stop-then-start for `tt` and programmatic callers, §05 R01), and the
 empty window instructs a concrete next action): the inline form
-(`gui/renderer/index.html` `#start-form` + the `#toggle` primary now inside the
+(`gui/renderer/index.html` `#start-form` + the `#toggle` primary inside the
 Timer view's `.start-panel` , with `#start-desc`
 /`#start-client`/`#start-project`/`#start-tags`/`#start-bill` + `app.js`
 building the `start` payload, the billable toggle defaulting per the §05 R07
@@ -1198,7 +1202,7 @@ reaches) carries every attribute over the existing `start` IPC the `tt` CLI uses
 (the resolution lives in core via `gui/src/start.ts` `startWithAttributes` →
 `store.resolveClientProjectByName` + `store.start` , so neither surface drops
 attributes); there is **no dedicated Switch button** (`#switch`) anywhere, and
-the GUI surfaces no start control while running — core's `start` alone remains
+the GUI surfaces no start control while running — core's `start` alone is
 the atomic stop-then-start (§05 R01), reached from `tt start` and programmatic
 callers. The atomic stop-then-start itself is the surface-neutral BDD
 (`features/tracking.feature` "Starting while running stops the open entry
@@ -1217,14 +1221,20 @@ snapshot **hides the start panel** — no visible `#start-form`
 visible Description field, `#le-desc` — with `noSwitch:true` ) plus
 `EMPTY_STATE` (`main-empty.png` — the empty window names "press Ctrl+Alt+T" and
 "run `tt start` "). No new IPC channel/parity row — the attributes travel inside
-the existing `start` payload. **R6 entry editor UI** (the consolidated
-edit/split/merge surface): the GUI ships the inline **unified entry form**
-(`gui/renderer/app.js` `openEntryForm` ) as the one edit surface — a click /
-Edit affordance on a calendar event opens it INLINE (no modal), surfacing
-**every `tt` -editable field** (description / client / project / start / end /
-tags / billable) in one place, the GUI counterpart to `tt edit` , with the
-edit-mode **footer** carrying a **Split** control (`window.stint.split`,
-plain-text instant) and a two-step **Delete** (`window.stint.remove`); **merge**
+the existing `start` payload. **R6 entry editor UI** (the edit surface is the week grid
+itself): the GUI ships the inline **unified entry form**
+(`gui/renderer/app.js` `openUnifiedForm` — ONE builder serving add and edit) as
+the one edit surface — a click / Edit affordance on a calendar event opens it in
+the view-level `#entry-form-host` ABOVE the grid (no modal), surfacing **every
+`tt`-editable field** (description / client / project / start / stop / tags /
+billable) in the reduced three-column card; the entry's stored block leaves the
+grid for the accent-outlined **pending interval** (`.ev.me`), whose **edges drag
+on the grid itself** (only the actively dragged edge snaps, per the R23
+settings) while the raw Start/Stop fields drive the block back — one set of form
+values both ways (R17). A CLEAN form swaps its subject in place; a DIRTY swap
+blocks on the §12 R24 pending-changes gate (its own row below). The edit-mode
+**footer** carries a **Split** control (`window.stint.split`, plain-text
+instant) and a two-step **Delete** (`window.stint.remove`); **merge**
 is reached from the calendar's corner-checkbox multi-select + merge bar, which
 fires `window.stint.merge` directly when the selection agrees and raises the
 `app.js` -hosted **conflict prompt** (pick the winning client/project +
@@ -1233,32 +1243,36 @@ billable, sending `winnerId` , never a resolved name) when it disagrees
 renderer over the existing `edit` /`split`/`merge`/`remove` IPC channels — **no
 new channel/parity row** — and resolves no names (the selects carry the entity
 id; the tag delta goes through the pure `window.SU.tagDiff` ); editing the
-open/running entry omits End so the patch never carries `endUtc` (§05 R6). JUDGE
-`UNIFIED_FORM` (`packages/gui/judge/`, `main-edit.png` — a click / Edit
-affordance opens the unified form INLINE, no modal, every tt-editable field
-seeded, the footer Split + a two-step Delete, and a changed-fields-only Save
-patch) joins the existing `MERGE_CONFLICT` + `MERGE_NOCONFLICT`
+open/running entry omits End so the patch never carries `endUtc` (§05 R6). JUDGE `UNIFIED_FORM` (`packages/gui/judge/`, `main-edit.png` + `main-edit-exact-
+times.png` — a click / Edit affordance opens the unified form above the grid, no
+modal, every tt-editable field seeded; a bottom-grip drag on the grid rewrites
+only the stop onto the coarse grid while the start stays byte-identical; a typed
+stop repositions the grid block live; a clean subject swap is instant; the
+footer Split + a two-step Delete; a changed-fields-only Save patch; and the
+exact-times probe — the off-grid entry opens to the second, a no-drag Save
+patches no time key, only the dragged edge snaps, issue #49) joins the existing
+`MERGE_CONFLICT` + `MERGE_NOCONFLICT`
 (`main-merge-conflict.png`, see §06 R3); BDD `features/reachable_by_hand.feature` (edit / split by hand) +
 `features/overlap_and_editing.feature` (amend without disturbing the open state,
 delete, delete-without-confirmation refused) prove each field persists, the
 Split tiles the span, and the two-step Delete removes — over core AND `tt`. The edit/split/merge *arithmetic* is
 the §06 BDD/GOLD coverage above. The §12 R06 unified-form edit mode is thus
-covered by JUDGE `UNIFIED_FORM` (the readonly entries calendar that
+covered by JUDGE `UNIFIED_FORM` (the entries week grid that
 hosts the hover-Edit / click-to-open is §12 R16; add mode is §12 R07). **Flags
-in context** now also include the **at-write-time overlap banner** (a
+in context** include the **at-write-time overlap banner** (a
 non-blocking inline advisory raised when a write creates an overlap, alongside
-the durable flags — which, now the entries list is gone, render as MARKERS on
-the readonly calendar + DETAIL in the unified editor per §12 R10): JUDGE
+the durable flags — which render as MARKERS on
+the calendar events + DETAIL in the unified editor per §12 R10): JUDGE
 `OVERLAP_BANNER` (`main-overlap-banner.png`) for the at-write-time advisory +
 `CALENDAR_LAYOUT` (`main-calendar.png`, the `.ov` warn band + `.zz` slept hatch)
 + `UNIFIED_FORM` (`main-edit.png`, the editor's overlap detail + reversible subtract) — see §06
 R4. **R9 flags detail**
-(the durable signals spell out the money impact — surfaced in the unified editor
-now the entries list is gone, §12 R10): the overlapped entry's editor carries a
+(the durable signals spell out the money impact — surfaced in the unified
+editor, §12 R10): the overlapped entry's editor carries a
 **detailed overlap detail** — the worst-neighbour overlap minutes + the
 previous/next relation from core's `describeOverlaps`
 (`packages/core/src/report.ts`, built on the one `spansOverlap` rule so the
-detail amount can never drift from the report flag; `detectOverlaps` is now
+detail amount can never drift from the report flag; `detectOverlaps` is
 `new Set(describeOverlaps(...).keys())` ), projected onto the row by the ONE
 builder `gui/src/entryrow.ts` `toEntryRowView`
 (`overlapMinutes`/`overlapRelation`/`rawSeconds` on the entry, shape declared in
@@ -1278,158 +1292,113 @@ time must not silently bill twice); JUDGE `UNIFIED_FORM` (`main-edit.png`)
 asserts the detailed overlap text (`/Overlap:\s*\d+m\s+with\s+(previous|next)/`)
 when the overlapped entry's editor opens, and the line-through struck raw
 duration (04:00:00) beside the trimmed billable (03:00:00) after the slept
-entry's reversible subtract — the flag DETAIL moved into the unified editor now
-the entries list is gone (§12 R10), while the calendar shows only the `.ov` warn
+entry's reversible subtract — the flag DETAIL lives in the unified editor
+(§12 R10), while the calendar shows only the `.ov` warn
 band + `.zz` hatch markers (JUDGE `CALENDAR_LAYOUT` , `main-calendar.png` ).
-**R7 Manual-add (backfill) form — now classified `core` ** (core data entry per
-§03; badge-only on the existing behaviour, plus the unified-form inline
-interval-picker + Start/Stop expander wiring, G5/G2) (the main window offers a
-discoverable form that creates a *completed* past entry from explicit from/to
-times plus the same attributes `tt add` accepts — description / client / project
-/ tags / billable — and treats an overlapping span as warned, not blocked): the
-form (`gui/renderer/index.html` `#add-form` with `#add-from` /`#add-to` +
-`#add-desc` /`#add-client`/`#add-project`/`#add-tags`/`#add-bill`, behind the
-`#add-toggle` disclosure) routes through the new **`add` IPC channel**
-(`gui/src/main.ts` → `store.resolveClientProjectByName` + `store.add` ,
-converting each local datetime to UTC and returning the uniform `WriteAck` so an
-overlapping backfill raises the SAME non-blocking inline `#overlap-banner` the
-edit/start paths use — the entry still saves, §06 R4; a core validation reject
-(`stop time must be after start time`) shows in `#add-warning` as a block, read
-through the one `SU.errMessage` mapping site that strips Electron's IPC wrapper
-and the exception class — issue 138 — and **painted as one**: `#add-warning` is
-the region that serves BOTH message kinds, so `showFormError` sets the `error`
-state class that flips its `--flag` advisory base chrome to the `--danger` block
-palette (design.html D15). Until issue 139 it had no such state and a refusal
-wore the amber advisory chrome — colour saying "saved with a caveat" over a
-sentence saying "nothing was written", D15 exactly inverted; JUDGE
-`ADD_REFUSAL_PALETTE` (`add-refusal-palette.png`) now scores both states of the
-one region on COMPUTED colour — a refused Save is the `--danger` triple with the
-form open and `__ADDED__` null, Cancel-and-reopen returns the region to the
-`--flag` triple, and the same form's committing overlapping backfill raises its
-"allowed, but flagged" banner in `--flag` — plus that the two triples differ, so
-a token collapse cannot pass the split vacuously). The
-warned-not-blocked behaviour is proven surface-neutral on core AND tt by
-`features/overlap_and_editing.feature` ("Backfill that overlaps an existing
-entry is warned, not blocked" + the attribute-bearing "Attribute-bearing
-backfill that overlaps is warned, not blocked" — run TWICE via the World
-`backfill` capability: CoreWorld `store.add` , CliWorld `tt add … --from/--to`
-); AC = **BDD · JUDGE**. The manual-add surface is the **one unified
-entry form in ADD mode** (G5), inline in the Entries view (no modal) — the same
-form edit mode uses (§12 R06). JUDGE `UNIFIED_FORM_ADD` (`unified-add.png`)
-drives the real renderer end to end: the two-column
-`.unified-form[data-mode=add]` shows the LEFT attribute fields (a 3-line
-multiline description `<textarea>` , client + project `<select>` s populated
-from `listClients` /`listProjects`, a tag chip host, the billable toggle) and
-the RIGHT inline interval picker (`#add-picker`: a month calendar + a single-day
-column with the draggable accent "me" rectangle) over the collapsed Start/Stop
-expander (`#add-times-toggle` over the hidden raw text fields `#add-from`
-/`#add-to`), and carries **no `type=datetime-local` ** anywhere (G1); other
-picker entries paint gray and an overlapping span paints a yellow warn-only
-band; **dragging the "me" block updates the raw `#add-from` /`#add-to` form
-state LIVE** (span preserved on a body drag) before any Save (G7); and **Save
-entry is the sole commit** — `window.__ADDED__` carries the picked (post-drag)
-`fromLocal` /`toLocal` + description/client/project/tags/billable over the
-single `add` IPC, the overlapping backfill still saves (form closes) and raises
-the non-blocking overlap banner (§06 R4). BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
-hand (the Manual-add form)" + `features/overlap_and_editing.feature`
-"Attribute-bearing backfill that overlaps is warned, not blocked" prove the same
-flow surface-neutrally over core AND `tt`. The `add` →`tt add` parity row (`parity-matrix.json`, asserted by
-`gui/test/parity.test.ts` ) is unchanged — the unified form adds no capability
-and no new IPC channel (the inline picker only writes back into the existing
-text fields; the picker component itself is the §12 R15 addition, R07 only
-consumes it). The §12 R7 Manual-add form is thus fully covered (no longer TODO).
-**R15 inline interval picker (G5/G7)** (NEW — the picker component R07/R05 only
-consumed before now ships): `gui/renderer/timepicker.js` is the pure renderer
-component `window.STP` (a classic file:// script — no ES module / Node import /
-`@stint/core` / network, guarded by `renderer-static.test.ts` 's no-import +
-no-network file lists, which include `timepicker.js` ) exposing the two
-**INLINE** mount forms
-`STP.openInline({host, startInput, endInput, otherEntries, settings, onChange})`
-and `STP.openStartOnly({host, startInput, otherEntries, settings})` plus the
-pure geometry/snap helpers `snapTo5` / `minutesToY` / `yToMinutes` so the static
-guard + JUDGE can drive the math deterministically. There is **no modal** — the
-picker renders only IN FLOW (no `.stp-backdrop` , no `.stp-apply` ; the
-`.stp-inline` host is `position:static` ) and writes the picked span **LIVE** on
-every drag. It renders a month calendar (pick the day) + a single-day hour-line
-track where the edited entry is a draggable accent rectangle: drag the BODY =
-move start+stop together (5-min snap); drag the BOTTOM grip (`.stp-resize`) =
-resize the stop (5-min snap); other entries render gray (`.stp-block.other`);
-overlap regions render yellow (`.stp-overlap`, **warn-only**,
-`pointer-events:none` — never blocks the save, §06 R4). Default span = the bound
-inputs' value, else last-stop→now; the default scroll viewport comes from the
-ONE window derivation `SU.timelineWindow` (§14/G16) centered on the edited
-interval (full 24h track, never clipped); overnight (stop on a later day) is
-handled only via the collapsed Start/Stop expander (§12 R17, the exact/overnight
-path). It adds **ZERO capabilities** — it only writes `localInputValue`
--formatted strings back into the EXISTING authoritative text inputs and fires
-`input` /`change`. That ONE field format is `YYYY-MM-DD HH:mm:ss` in local time:
-space-separated (this value is the string a user selects and RETYPES, not a wire
-serialization) with the seconds ALWAYS rendered, so the field's own placeholder
-describes the shape it shows and a stored 09:07:33 still round-trips to the
-second (issue #159 corrected both halves of the old lie — a `T` separator and a
-placeholder promising `HH:mm` over a value that appended seconds behind its
-back). Its ONE inverse, `parseLocalInput`, accepts BOTH spellings, so nothing a
-user learned to type breaks; it is regex-driven with no bare `new Date(text)`
-fallback, because the engine's legacy parser reads the half-typed
-`2026-06-24 08:` as 08:00 where the old `T` spelling was Invalid — a fallback
-would have made every mid-keystroke value committable. Both live in
-`gui/src/localtime.ts` (one home, reached by the renderer through `window.SU`,
-by `timerview.ts` 's byte gate, and by the `add` IPC handler) and the pair is
-pinned directly by GOLD `gui/test/renderer-bundle.test.ts` — format, both-spelling
-parse, and the invalid-on-partial rule — so a format drift fails there instead of
-silently un-matching the byte gate `timerview.test.ts` exercises against a literal
-seed (the issue #68 regression), and JUDGE `TIMER_VIEW` asserts the rendered
-`#le-start` matches no `T`-separated pattern and matches its own placeholder.
-The unchanged add/edit IPC paths stay the single source of truth (**no new
-IPC channel, no parity-matrix row**; `parity.test.ts` is per-channel and none is
-added). `gui/renderer/index.html` loads `timepicker.js` BEFORE `app.js` ;
-`app.js` mounts the picker IN FLOW on EVERY R15 surface through ONE shared
-helper `mountIntervalPicker` : the add form (`#add-picker` over `#add-from`
-/`#add-to`, with the snapshot's closed entries as `otherEntries` ), the inline
-edit form (`.edit-picker` over `.edit-start` /`.edit-end`), and the
-running-entry start (`#le-start-pick` → the inline start-only disclosure via
-`openStartOnly` , no end binding, so editing the open row never writes a stop,
-§05 R6). Text entry stays authoritative everywhere (the picker only sets
-`.value` ); Save entry is the sole commit (G7). Accent discipline (§15) holds:
-only the dragged **me** rectangle (`.stp-block.me`) and the selected calendar
-day (`.stp-d.stp-sel`) carry the accent, sanctioned in the JUDGE accent scan.
-Primary AC: JUDGE `UNIFIED_FORM` (`main-edit.png` — the edit-mode inline picker:
-renders IN FLOW with no `.stp-backdrop` /`.stp-apply` and a `position:static`
-host; a month calendar + `.stp-track` + hour lines; a known BODY drag advances
-BOTH `.edit-start` /`.edit-end` by the snapped 5-min amount (span preserved)
-while a `.stp-resize` drag advances only the stop; ≥1 gray `.stp-block.other` +
-≥1 inert yellow `.stp-overlap` paint; no commit until Save entry; and the **§12
-R15 exact-times probe (issue #49)**: opening the deliberately non-5-min-aligned
-entry 84 (09:07:33→11:03:00Z) renders its stored start/stop EXACTLY, to the
-second — never snapped on open — a Save entry with NO drag sends a patch
-carrying no `startUtc` /`endUtc` at all (the store's times round-trip
-unchanged), and a bottom-grip drag lands the stop on the :05 grid while the
-untouched start keeps its seconds), with the ADD-mode picker +
-authoritative-Save path proven by `UNIFIED_FORM_ADD` (`unified-add.png` —
-body-drag live-writes `#add-from` /`#add-to`, Save sends the picked span over
-`add` ) and the running start-only variant (`.stp-block.me.open` mask + start
-grip only, no `.stp-resize` /end label/echo, no end value) by `TIMER_VIEW`
-(`timer-view-full.png`). BDD `features/tracking.feature` runs TWICE (core + tt):
-a 5-minute-aligned backfill span is stored exactly, and an overlapping span
-warns but still saves — the values the picker writes honored identically by both
-surfaces. BDD `features/overlap_and_editing.feature` "Editing an entry without
-touching the times preserves them to the second" (issue #49 — a
-09:07:33→11:03:07 span survives an unrelated description edit byte-for-byte, run
-TWICE over core + tt) and PROP `prop/editing.test.ts` "an edit that changes no
-field is the identity on start/end, to the second" (second-granular fast-check
-spans; an empty patch plus an unrelated-field patch leave start/end
-byte-identical) pin the surface-neutral half of the same contract: stored truth
-is never rewritten by an edit that did not touch it (glossary "Stored truth").
-JUDGE `UNIFIED_FORM` + `UNIFIED_FORM_ADD` + `TIMER_VIEW` drive the add /
-edit-closed / edit-running-start surfaces through the real renderer — body-drag moves the whole
-interval, the bottom grip resizes only the stop (both 5-min snap), others gray,
-overlap yellow warn-only, the form fields update live on every drag with Save
-entry the only commit, and the running entry shows a start grip only + future
-fade with no end. `gui/test/renderer-static.test.ts` 's isolation walk
-additionally pins `timepicker.js` as IPC-free (never `window.stint.*` ); the
-inline-mount behavior (openInline/openStartOnly in flow, no modal chrome,
-drag-writes-live) is JUDGE `TIMER_VIEW` + `UNIFIED_FORM` + `UNIFIED_FORM_ADD` .
-The §12 R15 inline interval picker is thus fully covered. **R8 Report builder &
+**R7 Manual-add (backfill) form — `core`**
+(adding an entry lives on the entries calendar itself: a round
+**+ button** at the bottom-right of the grid, drag-to-create, and one reduced
+form above the grid — creating a *completed* past entry from explicit from/to
+times plus the same attributes `tt add` accepts, an overlapping span warned, not
+blocked): the **+ button** (`app.js` `calFab`, the view's standing accent
+primary — design.html D14 admits its 999px capsule by name; the toolbar carries
+no Add button) hover-expands rightward into "+ Add entry" with the **+
+glyph pinned** (the corner reserves room for the expansion — the spec sentence
+outranks the mockup's sliding glyph); a **pointer click enters select-interval
+mode** (`enterSelectInterval`): a start handle follows the cursor over the grid
+at the **coarse snap** (R23), press-drag sets the length, release opens **create
+mode** — the unified form (`openUnifiedForm`, the same builder edit mode uses,
+G5) in `#entry-form-host` above the grid, **BLANK except the dragged interval**
+(no last-used client/project seeding; billable per its §05 R07 client-keyed
+default — the checkbox follows the Client select until touched, and an untouched
+box is OMITTED from the payload so core derives it); the grid **grays**
+(`.calwrap.grayed`), the + hides, the **fine-snap toggle** holds its spot, and
+the pending interval stays adjustable by dragging anywhere on the grid
+(`startNewDrag`/`startMoveDrag`/`startEdgeDrag`, all writing the raw Start/Stop
+fields LIVE); **keyboard activation** of the + opens the form directly with the
+**working-hours default interval** (§14). A core validation reject (`stop time
+must be after start time`) shows in the form's announced `.ef-warning` as a
+`--danger` block persisting until the next input (§12 R21 / design.html D15),
+read through the one `SU.errMessage` mapping site (issue 138); the committing
+overlapping backfill raises the separate `--flag` `#overlap-banner` advisory —
+JUDGE `ADD_REFUSAL_PALETTE` (`add-refusal-palette.png`) scores both on COMPUTED
+colour plus the palettes-differ pin. The warned-not-blocked behaviour is proven
+surface-neutral on core AND tt by `features/overlap_and_editing.feature`
+("Backfill that overlaps an existing entry is warned, not blocked" + "Attribute-
+bearing backfill that overlaps is warned, not blocked" — run TWICE via the World
+`backfill` capability); AC = **BDD · JUDGE**. JUDGE `UNIFIED_FORM_ADD`
+(`entries-select-interval.png` + `unified-add.png`) drives the whole path end to
+end over the real renderer: the + at rest (accent capsule, pinned glyph, no
+toolbar Add), select-interval (grid inert to events, handle on the coarse grid,
+toggle reading coarse), create (form blank except the coarse-snapped interval,
+grid grayed, accent-outlined me block with two grips + time pills, Save the one
+accent-solid fill), the live body drag (both fields, span preserved), the fine-
+snap toggle re-landing an edge drag on the fine grid, the typed overnight stop
+fanning the pending interval into per-day segments (R17), Save as the sole
+commit over the single existing `add` IPC (raw field text verbatim, no
+`billable` key when untouched), the form closing + rest chrome returning + the
+overlap banner raising, and the keyboard path seeding the working-hours default.
+Two mode/gesture guards ride the same scene: `selectModeExits` — select-interval
+is a mode of the GRID, so routing to another view and back leaves it at rest
+(a stranded mode hides the + that cancels it and makes every entry inert via
+`.sel-mode .dt .ev`, leaving only an unsignposted Escape); and `dragCaptureOk` —
+every grid gesture takes POINTER CAPTURE on the press (counted from the
+platform's own `gotpointercapture`), so a release the page would otherwise never
+hear still ENDS the drag: a button let go outside the window delivers no
+`mouseup` at all, and the pre-capture drag went on following a button-less
+cursor with Escape dead and the next click firing its stale release.
+BDD `features/reachable_by_hand.feature` "Backfill a completed past entry by
+hand (the Manual-add form)" + `features/tracking.feature` ("Backfill creates a
+completed entry" + "Backfill creates a completed overnight entry") prove the
+same flow surface-neutrally over core AND `tt`. The `add`→`tt add` parity row
+(`parity-matrix.json`, asserted by `gui/test/parity.test.ts`) is the whole of
+add's parity — the grid drag adds no capability and **no IPC channel of its
+own** (a drag only ever writes
+the existing raw text fields; §05 R05 / §17 R8 parity holds because every `tt
+add` field stays reachable in the reduced form). The §12 R7 Manual-add form is
+thus fully covered.
+**R15 start-only interval picker** (the running entry's start-adjustment surface
+where no week grid exists — the Timer view's inline start-only disclosure below
+the Start field, the app's ONE interval picker):
+`gui/renderer/timepicker.js` is the pure renderer component `window.STP` (a
+classic file:// script — no ES module / Node import / `@stint/core` / network,
+guarded by `renderer-static.test.ts`'s no-import + no-network file lists)
+exposing the ONE inline mount form `STP.openStartOnly({host, startInput,
+otherEntries, settings})` plus the pure geometry/snap helpers `snapToStep` /
+`minutesToY` / `yToMinutes`. It is the module's WHOLE public surface — there is
+no two-ended variant and no shared mount helper, because a closed entry's span is
+adjusted on the week grid itself (R06/R16) or typed into
+the unified form's Start/Stop fields (R17), so no picker mounts in the Entries
+view. It renders IN FLOW only (no modal,
+no `.stp-backdrop`, no Apply — `#le-start-pick` expands it into `#le-start-disc`
+below the Timer view's Start field): the running block with a START drag grip
+only, fading into the future, structurally incapable of writing an end (§05
+R06/G8); every grip drag snaps per the §12 R23 settings-driven resolution —
+`snapCoarseMinutes` on every open, `snapFineMinutes` while the ephemeral
+fine-snap toggle beside the track (`.stp-snapctl`, the shared `.sw` switch —
+the picker's ONLY snap chrome: no resolution pill, no drag-hint copy) is on;
+the toggle is per-mount state, so reopening the disclosure
+always starts coarse — and writes the bound `#le-start` text LIVE
+(`writeBack` fires input+change, riding the debounced live-edit commit whose
+patch never carries `endUtc`). Opening renders the EXACT stored start, to the
+second — the snap applies only to a handle the user actively drags (issue #49;
+the un-dragged round-trip is pinned by BDD
+`features/overlap_and_editing.feature` "Editing an entry without touching the
+times preserves them to the second" + PROP `prop/editing.test.ts` "an edit that
+changes no field is the identity on start/end, to the second", both surface-
+neutral over core + tt). The one field format stays `YYYY-MM-DD HH:mm:ss` local
+(space-separated, seconds always — issue #159) with `parseLocalInput` its one
+inverse, both in `gui/src/localtime.ts`, pinned by GOLD `gui/test/renderer-bundle.test.ts`. It adds ZERO capabilities — no IPC, no parity row. Primary AC:
+JUDGE `TIMER_VIEW` (`timer-view-full.png` — the in-flow disclosure, start grip
+only, no end grip/label/echo, the future-fade mask, the live coarse-snapped
+write, the endUtc-free patch, plus the R23 Timer-half probes: the toggle as the
+only snap chrome opening coarse, the fine drag landing on the fine grid off the
+coarse one, and a collapse/reopen resetting the toggle while round-tripping the
+shown start byte-for-byte — all at the default pair, with `SNAP_RESOLUTION`
+driving this same picker at a non-default one so the resolution is proven to come
+from the §14 rows rather than from a literal); `gui/test/renderer-static.test.ts`'s isolation walk
+additionally pins `timepicker.js` as IPC-free (never `window.stint.*`). The §12
+R15 start-only picker is thus fully covered. **R8 Report builder &
 export** (the Reports view's range preset/custom picker, group-by selector,
 client/project/tag/billable filters, rounding toggle, and Export CSV / Export
 JSON buttons — the GUI counterpart to `tt report` /`tt export`): the report
@@ -1484,11 +1453,15 @@ renderer, each byte-bound to `tt report` /`tt export` by
 presets/grouping/filters/rounding ride inside the existing `report` payload (no
 new row), and the export adds `exportEntries` →`tt export`
 (`parity-matrix.json`). The §12 R8 report builder & export is thus fully
-covered. **R9 Entries range, filters & search** (the Entries toolbar narrows the
-readonly entries calendar (§12 R16) by a range preset / custom plain-date range
-+ client/project/tag/billable filters + free-text search — there is NO grouping
-in this view; grouped breakdowns moved entirely to Reports, §09 R02 /
-`tt report --by` , G11): the model is core's `store.listEntries`
+covered. **R9 Entries week, filters & search** (the Entries view shows exactly
+ONE week — a month-calendar week picker,
+prev/next-week steppers and a Show-weekend toggle are how the week is chosen,
+and they are the view's whole range vocabulary (core and `tt list --range` take
+arbitrary ranges: week-only is GUI
+presentation, not a core narrowing) — plus client/project/tag/billable filters
++ free-text search to the toolbar's right; there is NO grouping in this view;
+grouped breakdowns belong to Reports, §09 R02 / `tt report --by`,
+G11): the model is core's `store.listEntries`
 (`packages/core/src/store.ts`) applying the one case-insensitive `matchesQuery`
 substring rule over description/client/project/tag (shared with the `search`
 path) to the already range/billable/client/project/tag-filtered set — ONE flat,
@@ -1496,8 +1469,8 @@ ungrouped result the calendar lays into its day columns. Proven surface-neutral
 on core AND tt by `features/entry_list.feature` (a range preset bounds the set,
 a custom range FROM..TO includes only in-range entries, client / project / tag
 filters each narrow it, a search matches live on description/client/project/tag
-and excludes non-matches, a multi-tag entry appears exactly ONCE — the by-tag
-fan-out is gone with grouping — and an empty query + no filters returns every
+and excludes non-matches, a multi-tag entry appears exactly ONCE — the flat set
+never fans an entry out per tag — and an empty query + no filters returns every
 in-range entry — run TWICE via the World `listFiltered` capability: CoreWorld
 `store.listEntries` , CliWorld
 `tt list --search/--range/--client/--project/--tag --json` , so the surfaces are
@@ -1506,91 +1479,125 @@ compared on the identical flat set, §17 R8) and `features/search.feature` (the
 case-insensitive, blank-returns-all — the query the toolbar composes into the
 live entries-calendar read), pinned by GOLD (`cli/test/gold/cli.test.ts`
 `tt list --json` flat row contract; `core/test/entrylist.test.ts` `matchesQuery`
-field-coverage/case-insensitivity/empty-matches-all). The GUI toolbar
-(`gui/renderer/index.html` `#entries-ctrl` — range presets + the two plain
-`type="date"` custom fields `#el-range-from` /`#el-range-to`, `#el-billable-seg`
-, `#el-client` /`#el-project`/`#el-tag` filters, the `#search` box +
-`gui/renderer/app.js` ) drives the calendar live: every control change / search
-keystroke re-runs the read-only **`listEntries` IPC** (`gui/src/main.ts` →
-`resolveRange` /explicit plain-date range + `store.listEntries` , no
-`refreshAll` ) whose flat, day-laid result the readonly calendar (§12 R16) lays
-into its day columns; the group-by segmented control was REMOVED (no
-`#el-by-seg` , no `by` in the query — grouping is Reports' job, §12 R08 /
-`tt report --by` ). `#week-total` tracks the selection live off the in-memory
-snapshot (§17 R11). The controls are inked (monochrome), never accented (§15 —
-the `ACCENT_DISCIPLINE` /`CLICKABILITY` judge scenes stay green). JUDGE
+field-coverage/case-insensitivity/empty-matches-all). The GUI toolbar + picker
+(`gui/renderer/index.html` — the `#el-prev-week`/`#el-next-week` steppers +
+`#el-week-label`, `#el-billable-seg`, the visibly-labelled `#el-client`/
+`#el-project`/`#el-tag` filters, the `#search` box, the `#el-weekend`
+`role="switch"` toggle, and the `#week-picker` month calendar beside the grid;
+`gui/renderer/app.js` `renderWeekPicker`/`selectWeek`) drives the week grid
+live: every week/filter change / search keystroke re-runs the read-only
+**`listEntries` IPC** (`gui/src/main.ts` → `resolveDateRange` over the selected
+week's plain-date pair + `store.listEntries`, no `refreshAll`) whose flat,
+day-laid result the week grid (§12 R16) lays into its shown day columns — the
+query always spans the WHOLE seven-day week, so a hidden weekend day's entries
+are fetched and one toggle away. The picker shows entry-dot days (one
+unfiltered `listEntries` read per displayed month grid), an ink today ring, and
+the selected week highlighted as one seven-cell band (no live/running-timer
+treatment); clicking any day selects its week, and a roving grid (arrow keys
+move the active cell, Enter selects) is the keyboard path. The Show-weekend
+toggle persists the SAME `show_weekend` row the Settings view edits over the
+one `setSetting` IPC (both directions — either surface flips both); off, the
+grid shows Monday–Friday, and a hidden day's entries stay stored, reported, and
+reachable. The toolbar carries NO range presets, NO custom date pair, NO
+group-by segment, NO range-total chip and NO Reports shortcut (no
+`#el-preset-seg`, no `#el-range-from`/`#el-range-to`, no `#el-by-seg`, no
+`#week-total`, no `#report-btn`): range presets belong to the Reports builder
+(§12 R8), per-day billable totals live in the grid's day headers (R16), and
+Reports is reached by its sidebar item alone (R03); the live reflection
+(§17 R11) is the re-query + repaint of the grid and those day-header totals.
+The controls are inked (monochrome), never accented (§15 — the
+`ACCENT_DISCIPLINE`/`CLICKABILITY` judge scenes stay green). JUDGE
 `ENTRIES_CALENDAR` (`packages/gui/judge/`, `entries-search.png` /
-`entries-calendar.png` — `#el-by-seg` ABSENT while the range presets /
-`#el-billable-seg` / `#el-client` / `#el-project` / `#el-tag` / `#search` are
-present, the two custom fields `type="date"` with no `#el-range-apply` ;
-hardened per issue #55 over a multi-week, multi-client, mixed-billable fixture:
-EACH toolbar control (every preset, the billable toggle, client, project, tag,
-search) is driven and the visible `.dcol .ev` COUNT + `#week-total` are asserted
-to move to the expected subset (idle = week-bounded 5.00h, never the all-time
-8.00h), a "refactor" search narrows to the two IN-WEEK matches (range + search
-compose), a Custom… plain-date pair drives raw `{fromDate, toDate}` (no
-`fromUtc` /`toUtc`, no `T` ) that narrows the calendar, and across the whole
-drive zero `listEntries` calls reject with EVERY query carrying the required
-`by:'day'` (`ListEntriesQuery.by`; the mock is strict exactly like core); R16
-supplies the calendar-structure half of the scene). Parity row `listEntries`
-→`tt list` (`parity-matrix.json`, asserted by `gui/test/parity.test.ts` ; its
-notes lose grouping). The §12 R9 Entries toolbar over the readonly entries
-calendar is thus fully covered. **R16 Readonly entries calendar (NEW,
-G10/G13/G16)**: the Entries view content is a readonly calendar — one day
-column per in-range day, sharing spare window width equally over a 124px
-floor (§12 R22), never compressed below it, over a full 24h track, with
-per-day billable header totals, a range chip, empty columns, a cross-midnight
-span shown as one `.ev` segment per touched day column (all sharing the entry
-`data-id` , counted only under its start day — issue #71), hover
+`entries-calendar.png` — those five controls ABSENT while the steppers /
+picker / filters / search / weekend switch are present with the filters right
+of the week label; hardened per issue #55 over a multi-week, multi-client,
+mixed-billable fixture: EACH control (prev/next week, a picker day click, the
+picker's arrow+Enter keyboard path, the billable toggle, client, project, tag,
+search, the weekend toggle) is driven and the visible `.dcol .ev` COUNT is
+asserted to move to the expected subset, a "refactor" search narrows to the two
+IN-WEEK matches (week + search compose), the weekend toggle's captured
+`setSetting {key:'showWeekend'}` payloads prove the persisted row is the
+mechanism while the grid flips 5↔7 columns, and across the whole drive zero
+`listEntries` calls reject with EVERY query carrying the required `by:'day'`
+AND the week's raw plain-date `{fromDate, toDate}` pair (no `fromUtc`/`toUtc`,
+no `T`); R16 supplies the grid-structure half of the scene). Parity row
+`listEntries` →`tt list` (`parity-matrix.json`, asserted by
+`gui/test/parity.test.ts`; its notes name no grouping). The §12 R9 week-only
+Entries toolbar over the week grid is thus fully covered. **R16 Week grid
+(G10/G13/G16)**: the Entries view content is the week grid — one day column per
+SHOWN day of the selected week (Monday–Friday with the weekend hidden, seven
+with it shown, §12 R09), FIT TO THE VIEW WIDTH with no horizontal scroll and no
+floor width (§12 R22 — the columns share the width equally at every window
+size), over a full 24h track with TALL 60px hour rows (hour legibility
+outranks hours-in-view; the viewport scrolls, resting on the working hours),
+a today indicator (an ink ring on the date numeral, matching the picker's),
+per-day billable header totals (the view's ONLY billable figures — the toolbar
+carries no range total, §12 R09; a zero-total day
+paints no figure), empty columns, a cross-midnight
+span shown as one `.ev` segment per SHOWN day column it touches (all sharing
+the entry `data-id`, counted only under its start day — issue #71; a segment
+on a hidden weekend day or outside the selected week is simply not drawn, and
+hiding it never changes attribution or any total), hover
 Delete/Split/Edit + a corner checkbox, a click that opens the unified editor,
 the running future-fade, overlap warn bands + slept hatch, and the multi-select
 merge entry point (§06 R3). Renderer-only (`gui/renderer/app.js` calendar
 renderer + `styles.css` ); it reuses the existing `getState` /`listEntries`
 reads and the §14 timeline-window settings, so **no new IPC channel** (no parity
 row). Headless-pinned by JUDGE `CALENDAR_LAYOUT` (`packages/gui/judge/`,
-`main-calendar.png` over `entriesCalendarState` under a UTC-pinned page): 7
-equal floor-width columns + horizontal scroll at the default window (`.cstrip`
-scrollWidth > clientWidth; the spare-width share at a wider window is JUDGE
-`WINDOW_GEOMETRY`, §12 R22); a full 24h `.dt` track whose default scroll lands on
-working hours with the off-hours (pre-07:00 / post-18:00) entries present and
-reachable — a scroll, never a clip; the per-day `.dh .ds` totals (Mon 12.00h,
-Wed 1.00h) + the `#week-total` range chip (17.00h), read ON SCREEN at the
-post-render scroll position rather than merely present in the DOM — all seven
-`.dh` measured inside the `.cstrip` scrollport, the totals visible with the hour
-labels beside them, and both bands still there once the strip is scrolled fully
-right — because the `.dh` band and the `.gut` gutter are sticky, so the scroll
-on either axis moves the CONTENT past the labels instead of carrying the labels
-off with it (issue #145: the header band was painted and then scrolled away by
-the same render, and the presence-only assertion here passed straight through
-it); an empty present-but-empty `.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
+`main-calendar.png` / `main-calendar-weekend.png` over `entriesCalendarState`
+under a UTC-pinned page): 5 equal fit-to-width columns (spread ≤1px) with NO
+horizontal scroll at the default window, and 7 equal columns still without one
+once the weekend toggle flips (the resize half is JUDGE `WINDOW_GEOMETRY`, §12
+R22); 60px hour rows over a full 1440px 24h `.dt` track whose default scroll
+lands on working hours with the off-hours (pre-07:00 / post-18:00) entries
+present and reachable — a scroll, never a clip; exactly one `.dd.today` ink
+ring (today, distinct from selection); the viewport HELD across a repaint
+(`scrollHeldOk` — parked off the default, an external `changed` broadcast
+rebuilds the grid and leaves the scroll alone, while a week change retargets it:
+each build made a fresh strip and assigned the default to it, so every `tt`
+write yanked the view back mid-look and mid-drag shifted the track under the
+rect the press had captured); the per-day `.dh .ds` totals (Mon
+12.00h, Wed 1.00h, Fri 7.75h; a zero day figure-less), read ON SCREEN at the
+post-render scroll position rather than merely present in the DOM — every
+`.dh` measured inside the `.cstrip` scrollport, the totals visible with the
+hour labels beside them — because the `.dh` band and the `.gut` gutter are
+sticky, so the working-hours scroll moves the CONTENT past the labels instead
+of carrying the labels off with it (issue #145 — vertical only, since the grid
+fits to width and never scrolls horizontally); an empty present-but-empty
+`.dcol` ; a cross-midnight entry (id 8, 22:30→06:15 next day) rendering as TWO
 `.ev` segments sharing its `data-id` — a `.seg-start` reaching the track foot at
 a true height (never the 18px sliver) and a `.seg-end` from the track head —
 with its 7.75h counted ONLY on its start day (Mon reads 12.00h = 4.25h same-day
-+ 7.75h overnight; Tue's header stays off it); hover reveals the ops + `.ck` ; a
++ 7.75h overnight; Tue's header stays off it); the weekend-crossing span (id 9,
+Fri 22:30→Sat 06:15) drawing ONLY its start-day segment while the weekend is
+hidden, its Sat `seg-end` appearing whole on the toggle with Sat's header still
+total-less and Fri's unchanged (§16 — hiding a segment never moves a total);
+hover reveals the ops + `.ck` ; a
 click opens `.edit-form.entry-form` inline; the `.ev.run` future-fade with no
 end edge; the `.ov` overlap band + `.zz` slept hatch; and checking two `.ck`
 boxes reveals `#merge-bar` . How the calendar PAINTS a chosen block is pinned
 separately by JUDGE `SELECTION_LIFT` (`selection-lift.png` /
-`selection-lift-editing.png`, issue 144 — over the same three-week
+`selection-lift-editing.png`, issue 144 — over the same dense-week
 `denseCalendarState` the accent-budget guard uses: two `.ck`-selected blocks and
 one `.editing` block each keep the `--paper` fill and compute a box-shadow a
-rung above the resting one their forty-eight untouched neighbours carry, none of
+rung above the resting one their untouched neighbours carry, none of
 the three and neither checked checkbox paints an accent-family colour, the
 checked box is a paper box with an ink tick, and the strip still holds zero
 `--accent-weak` fills — design.html D12, "a chosen thing lifts, it does not turn
 accent"). The per-day + range **billable totals** the
-calendar's headers/chip present are proven TWICE (core + tt) by BDD
+grid's day headers present are proven TWICE (core + tt) by BDD
 `features/entry_list.feature` ("Per-day and range billable totals over the week
-— including an empty day"), and the never-clip / floor-width / working-hours-default / empty-column
+— including an empty day"), and the never-clip / fit-to-width / working-hours-default / empty-column
 behaviour is JUDGE `CALENDAR_LAYOUT` + `ENTRIES_CALENDAR` . **The event BLOCK
 itself** — that an event contains its own content, and that hovering one moves
 nothing — is JUDGE
 `CALENDAR_ENTRY_BLOCK` (`main-calendar-short.png` over
-`shortEntriesCalendarState` , the design audit's own 10 / 30 / 60 / 180-minute
-durations under a UTC-pinned page): a block's height is duration-driven
-(0.733px/min, floored at 18px) while its content height is fixed by text flow
-(~55px), so the two cross at ~75 minutes and every shorter entry has more
-content than block. The block **clips** (design.html D09) so a short entry
+`shortEntriesCalendarState` , 10 / 30 / 45 / 180-minute durations under a
+UTC-pinned page — the design audit's set, its 60-minute case re-cut to 45 when
+the 60px hours gave a 60-minute block room for its content): a block's height
+is duration-driven (1px/min, floored at 18px) while its content height is
+fixed by text flow (~55px), so the two cross at ~55 minutes and every shorter
+entry has more content than block. The block **clips** (design.html D09) so a short entry
 truncates deliberately (description first, dropping client/project then the
 time) instead of painting into the hour rows beneath, which belong to other
 entries; and the hover ops chip is a pure **overlay** reserving no flow space,
@@ -1601,7 +1608,7 @@ issue-161 measuring error again, one scene over). Containment is
 asserted by **hit-testing**, not by comparing layout rects — `overflow: hidden`
 clips paint, not layout, and the defect lived in the clip chain (the first
 non-visible-overflow ancestor was `.cstrip` , three levels up). The scene also
-asserts its own **fixture realism**: the three sub-75-minute blocks must
+asserts its own **fixture realism**: the three sub-55-minute blocks must
 genuinely lay out more content than they have height for, so reseeding the
 scene with comfortable entries reddens it rather than quietly greening it — the
 audit's retracted first kill of this finding was taken on a 132px block, very
@@ -1610,50 +1617,40 @@ keyboard** — one tab stop per entry, its four hover-revealed controls on a
 roving ← / → focus, and none of them focusable while invisible — is JUDGE
 `CALENDAR_KEYBOARD` (`calendar-keyboard-focus.png` over the same three-week
 `denseCalendarState` , issue 140); the model and its guard are detailed in the
-§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry (NEW, `core` — the
-overnight-backfill path, G2/G17)**: the unified form's collapsed **Start/Stop
-expander** — raw start/stop **text** fields beneath the inline interval picker
-(§12 R15), the exact-entry escape hatch and the **only path for an OVERNIGHT
-span** (the single-day picker can't be dragged across midnight). Expander and
-picker drive the **same shared interval**, with no second source of truth: the
-picker's `openInline` (`gui/renderer/timepicker.js`) listens to its bound
-Start/Stop fields and reflects an EXTERNAL edit back into the column —
-re-anchoring the day, detecting a later-day stop as **overnight**
-(`overnightActive`: column stays on the start's day, echo authoritative for the
-cross-midnight stop), and refreshing the tabular echo (`.stp-echo`) —
-**without** writing back, so a typed cross-midnight stop is never flattened; a
-drag clears the overnight state and writes both ends (so a typed overnight span
-commits identically to a dragged same-day one). The edit form's expander fields
-are raw text too (`.edit-start`/`.edit-end`, the entry-time half of the
-native-`datetime-local` deletion, G1). Renderer-only (`timepicker.js` +
-`gui/renderer/app.js` ), **no new IPC channel** (Save reads the same `fromLocal`
-/`toLocal` fields `tt add` /`tt edit` do — no parity row). **BDD**
-`features/tracking.feature` "Backfill creates a completed overnight entry" (a
-22:00→02:00-next-day span → exactly one closed entry, zero open, a 240-minute
-billable duration — run TWICE over core `store.add` + `tt add --from --to` via
-`run.test.ts` ; it FAILS if either surface rejects, blocks, or flattens a
-cross-midnight span, the exact capability the expander is the GUI path for).
-**JUDGE** `UNIFIED_FORM_EXPANDER` (`packages/gui/judge/run-judge.mjs` + rubric
-row / `unified-form-expander.png` ): the expander collapsed by default (raw
-fields hidden, tabular echo shown); clicking it reveals the two raw text fields;
-typing an overnight span (start `2026-06-24T22:00` , stop `2026-06-25T02:00` )
-updates the shared interval so the echo reads `22:00 – 02:00` and the
-`.stp-block.me` block sits at minute 1320 (22:00) while `#add-to` keeps the
-next-day value; Save sends those exact overnight `fromLocal` /`toLocal` over the
-single `add` IPC (`window.__ADDED__`). **BDD** `features/tracking.feature` "Backfill creates a completed overnight
-entry" (a 22:00 → 02:00-next-day span → one closed entry, zero open, 240
-billable minutes, run over core AND `tt`). Recording `§12 R17` (`record.mjs`)
-drives the add form, expands the expander, types the overnight span, and Saves
-the persisted overnight backfill. **R10 Reference-data management** (the Clients
+§12 R14 row above, since A04 is what it answers to. **R17 Exact time entry
+(`core` — the overnight-backfill path)**: the unified form's raw
+**Start/Stop text fields** (`.edit-start`/`.edit-end` — always visible in the
+reduced form's own column, no expander, no disclosure to open) — the exact-entry escape hatch
+and the **only path for an OVERNIGHT span** (edge drags are clamped to their day
+column). Fields and week-grid drag drive the **same form values**, with no
+second source of truth: every drag writes the fields LIVE (`writeFormInterval`)
+and typing in a field repositions the grid's pending interval
+(`paintPendingOverlay` off the form 'input' event) — a stop typed onto a later
+day fans the interval into one segment per shown day (`calSpanSegments`, the
+same issue-#71 fan-out stored entries use), never flattened to same-day, and the
+typed text stays verbatim in the field. The fields are raw text (`type=text`,
+localInputValue format, G1 — never `datetime-local`); Save commits either way
+over the existing `add`/`edit` IPC (§05 R05 — no channel of its own, no parity row).
+**BDD** `features/tracking.feature` "Backfill creates a completed overnight
+entry" (a 22:00→02:00-next-day span → exactly one closed entry, zero open, a
+240-minute billable duration — run TWICE over core `store.add` + `tt add --from
+--to` via `run.test.ts`; it FAILS if either surface rejects, blocks, or flattens
+a cross-midnight span, the exact capability the fields are the GUI path for).
+**JUDGE** `UNIFIED_FORM_ADD` (`overnightTyped` + `savePatch` — the typed
+next-day stop repaints the pending interval as a `seg-start` + `seg-end` pair on
+the shown days and Save sends the exact typed `toLocal` verbatim over the single
+`add` IPC) + `UNIFIED_FORM` (`typedSync` + `edgeDrag` — a typed stop moves the
+grid block to the exact minute geometry, and a grid drag updates the fields live
+in the other direction). **R10 Reference-data management** (the Clients
 view creates / renames / archives clients & projects, and creates / renames /
 archives tags; archived records drop out of the active picker lists but keep
 their history): the reference-data mutations live in core — `store.addClient`
 /`renameClient`/`archiveClient`/`listClients`, `store.addProject`
-/`renameProject`/`archiveProject`/`listProjects`, and the NEW tag primitives
+/`renameProject`/`archiveProject`/`listProjects`, and the tag primitives
 `store.addTag` (create-or-return, wrapping the on-the-fly `ensureTag` so a name
 never yields two rows) / `renameTag` / `archiveTag` / `findTagByName`
 (`packages/core/src/store.ts`). `tt` reaches every one through `tt client` /`tt
-project`/the NEW `tt tag add/rename/archive/ls` command group
+project`/the `tt tag add/rename/archive/ls` command group
 (`packages/cli/src/program.ts`, modelled on the client/project blocks via
 `resolveEntityRef` + `emitList` ). Proven surface-neutral on core AND tt by
 `features/reference_data.feature` (create a client / a project / a tag and
@@ -1674,17 +1671,21 @@ and every mutation rides the matching `window.stint.*` IPC (`gui/src/ipc.ts`
 adds `listTags` /`addTag`/`renameTag`/`archiveTag`; the client/project channels
 already existed; `gui/src/main.ts` delegates each straight to the Store and
 `refreshAll` s after a mutation). The controls are inked (monochrome), only the
-Add/Save confirms (.primary) accented (§15). New parity rows `listTags` →`tt tag
+Add/Save confirms (.primary) accented (§15). Parity rows `listTags` →`tt tag
 ls`, `addTag` →`tt tag add`, `renameTag` →`tt tag rename`, `archiveTag` →`tt tag
 archive` (`parity-matrix.json`, asserted by `gui/test/parity.test.ts` ). The §12
-R10 reference-data management is thus fully covered. **R11 Settings view** (the
+R10 reference-data management is thus fully covered. **R12 Settings view** (the
 main window ships an in-window Settings view with editable controls for every
 §14 setting): the GUI Settings view (`gui/renderer/index.html` `#settings-panel`
 + `gui/renderer/settings.js` , modelled on `context/mockups/settings.html` )
 renders a control per §14 setting — a rounding toggle, a rounding-increment
 select (6/10/15/30), a Monday/Sunday week-start segment, first-check-in and
-check-in-interval selects, a global-hotkey capture field, and the NEW §14
-date/number format select (System/ISO) — each persisting its value over the SAME
+check-in-interval selects, a global-hotkey capture field, the §14
+date/number format select (System/ISO), and the **Entries calendar** group
+(§14 / §12 R09/R23): a show-weekend toggle (editing the SAME `show_weekend`
+row the §12 R09 Entries-toolbar toggle drives) and the fine/coarse snap
+whole-minute inputs (the settings half of §12 R23 — the drag surfaces that
+consume them are R23's own coverage) — each persisting its value over the SAME
 `setSetting` IPC `tt config set` uses (no new channel/parity row; a
 global-hotkey edit additionally re-registers the OS shortcut live in
 `gui/src/main.ts` 's setSetting handler). Because the AC method is **BDD** —
@@ -1701,15 +1702,15 @@ parity-preserving, §17 R8). The renderer honours the mode through the pure
 `window.SU.applyDateFormat` (drives `localTime` ) helper, and the panel controls
 are inked/monochrome so the §15 `ACCENT_DISCIPLINE` scan stays green. JUDGE
 `SETTINGS_VIEW` (`packages/gui/judge/`, `main-settings.png` — opening the
-Settings nav renders a control for every §14 setting, changing the date-format
-select fires `setSetting` , and the panel stays accent-disciplined), plus
+Settings nav renders a control for every §14 setting, one control of EVERY kind
+the panel builds — select, toggle, segment, hhmm, minutes, hotkey — persists its
+exact key/value over `setSetting` , and the panel stays accent-disciplined), plus
 `HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
 field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
-(issue 135). The §12 R11 Settings view is thus fully covered.
-**R13 Confirm destructive actions** (now
-**`core`** — the in-window destructive-action confirmation is a §03
-loss-protection affordance, so it carries the `core` badge; the classification
-is the only change, the gate behaviour is unchanged) (deleting an entry, or
+(issue 135). The §12 R12 Settings view is thus fully covered.
+**R13 Confirm destructive actions**
+(**`core`** — the in-window destructive-action confirmation is a §03
+loss-protection affordance, so it carries the `core` badge) (deleting an entry, or
 archiving a referenced client/project, asks for confirmation in the window — the
 GUI counterpart to `tt rm` 's confirm / `--force` ; **done when no entry is
 destroyed on a single stray click without a confirm step**): the destructive op
@@ -1724,7 +1725,7 @@ the row Delete click through a generic in-window confirm gate
 monochrome `.danger` button, never the accent, §15) and `window.stint.remove` is
 reachable ONLY from inside the confirm callback; Cancel restores the button
 untouched. The same gate carries the archive-when-referenced confirm the
-Clients management view (§12 R10) offers: `armArchiveClient` /
+Clients management view (§12 R11) offers: `armArchiveClient` /
 `armArchiveProject` route a REFERENCED record's Archive through `confirmInline`
 (an UNREFERENCED record archives directly — R13's exact scope), proven by JUDGE
 `CONFIRM_ARCHIVE` (`main-confirm-archive.png`, detailed in the §07 row). JUDGE
@@ -1735,14 +1736,15 @@ Delete click surfaces the confirm gate and the instrumented
 confirm fires `remove` exactly once carrying the entry id); JUDGE `CONFIRM_DELETE` + `CONFIRM_ARCHIVE` hold it headlessly (Delete shows a
 confirm, Cancel preserves the entry, Delete+confirm removes it exactly once),
 over the surface-neutral BDD `features/overlap_and_editing.feature` "Deleting an
-entry without confirmation is refused". No new IPC channel is added for the gate (`remove` /
-`archiveClient` / `archiveProject` already exist), so
-`parity-matrix.json` / `gui/test/parity.test.ts` are intentionally unchanged.
+entry without confirmation is refused". The gate needs no IPC channel of its own
+(it gates the existing `remove` /
+`archiveClient` / `archiveProject` channels client-side), so
+`parity-matrix.json` / `gui/test/parity.test.ts` carry no row for it.
 WHERE the gate renders is proven too (issue #146, design.html D09): a gate armed
 from a CALENDAR event — the delete confirm or the §06 R2 split picker — is a
-LAYER over the calendar, not content of the ~124px day column its button sat in.
-Laid out in flow both escaped that column with no surface at all (the split
-picker measured 348px against a 124px column and ran 16px off the WINDOW's left
+LAYER over the calendar, not content of the narrow day column its button sits
+in. Laid out in flow either would escape that column with no surface at all (a
+348px split picker against a ~100px column runs off the WINDOW's left
 edge, transparent, 0px radius, no shadow), so `placeInlineGate`
 (`gui/renderer/app.js`) promotes a calendar-armed gate to the popover-rung
 `.cal-gate` layer and clamps its box inside the calendar's visible region, while
@@ -1752,7 +1754,7 @@ builder) stay in flow inside surfaces that already fit them. JUDGE
 real hover affordance on the week's FIRST and LAST day columns — the only places
 the escape is visible — and scores each one inside the calendar's visible box
 with an opaque `--paper` fill, a radius and a shadow. Landing inside the
-scrollport stopped being enough once §12 R16's two axes were PINNED inside it
+scrollport is not enough on its own, given §12 R16's two axes pinned inside it
 (issue #145): the sticky day-header band and hour gutter are opaque and outrank
 the ops chip the gate mounts in, so the clamp region subtracts both bands and the
 scene additionally scores each gate as un-occluded — clear of both bands' rects,
@@ -1761,8 +1763,8 @@ fixture whose first column carries an OVERLAPPING neighbour, so the gate's rank
 is held against real chrome rather than empty track.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
-keyboard — light/dark, system type and accent-on-primary already shipped, the
-residual was the keyboard/focus dimension): focus/keyboard is a pure renderer
+keyboard — the A11y dimension light/dark, system type and accent-on-primary do
+not cover): focus/keyboard is a pure renderer
 concern (no IPC), so it lives entirely under `gui/renderer/` — `styles.css`
 carries the ONE focus idiom design.html D13/A04 name, on a single bare
 `:focus-visible` rule (scoped to keyboard focus so a mouse click paints none,
@@ -1796,8 +1798,8 @@ that rule and this is the whole of it. Beside it, the tabular half of D06: no
 surface writes `font-variant-numeric` to anything but `tabular-nums` , and
 every site the renderer paints a `backupLabel()` timestamp into resolves to
 the `--num` face with tabular figures (`.backup-meta` printed a proportional
-timestamp — the app's one time string without the idiom). The same shape now
-covers D08/D14 as well (issue #153): every authored `border-radius` on every
+timestamp — the app's one time string without the idiom). The same shape
+covers D08/D14 (issue #153): every authored `border-radius` on every
 surface is the trio recomputed from `design.tokens.json` (8px controls, 12px
 cards, 16px window & overlays), or it sits on one of three LITERAL exception
 lists — the two 4px marks D08 records, the circles something else already
@@ -1819,13 +1821,13 @@ box) sit on a literal value-to-selectors table with the same mirror test. Four
 hand-rolled shadows had accumulated outside the ladder, two of them clay glows
 at 35% and 30% — one effect at two strengths — and one of them `--sh-chip`'s
 exact geometry at double the token's opacity, which is the drift a rendered
-check cannot see because it looks like the rung. The same shape finally covers
+check cannot see because it looks like the rung. The same shape covers
 **D01 itself** (issue #157): the rule reads "surfaces reference semantic tokens
-only; a raw scale step OR HEX LITERAL is a defect", and the guard used to
-enforce roughly one of those clauses — mockup hits were filtered to Radix
-palette values, so every non-palette colour rode through, and the styles.css
-half was hex-only and therefore keyword-blind (`color: white`) and
-encoding-blind (`stroke='%23fff'` inside a data URI). A **colour census** now
+only; a raw scale step OR HEX LITERAL is a defect", and BOTH clauses are
+enforced whole — filtering mockup hits to Radix
+palette values would let every non-palette colour ride through, and a hex-only
+styles.css half would be keyword-blind (`color: white`) and
+encoding-blind (`stroke='%23fff'` inside a data URI). A **colour census**
 reads every colour-accepting declaration on every surface, stylesheets and
 inline `style=` alike, and holds each colour it names to being a semantic token
 or a literal on a closed, reasoned list: the host macOS chrome the mockups draw
@@ -1845,8 +1847,8 @@ same mirror test keeping the licence list earned. What the widening found was
 mostly stale mockups: a `#fff` switch knob where the app paints `--paper`, a
 hand-rolled scrim and calendar fade, and an `edit-entry.html` selected day
 still filled with `--accent` under a white label — the pairing design.html
-PROHIBITS and this guard already asserts must stay below 4.5:1, three issues
-after the shipped picker moved to D12's raised paper chip. Beside the census,
+PROHIBITS and this guard already asserts must stay below 4.5:1, while the
+shipped picker paints D12's raised paper chip. Beside the census,
 D04's OTHER clause — one token, one job (issue #158). §03 gives `canvas` the
 backdrop behind a PICTURED window: the desk a doc or a mockup draws under the
 frame it illustrates. The app was painting two shipped surfaces in it — the tray
@@ -1866,7 +1868,7 @@ buttons stay native `<button>` s (Enter/Space-activatable, announced), but they
 are `tabindex="-1"` and reached from the block that holds them rather than being
 top-level stops of their own (issue 140, the roving focus below),
 `index.html` /`popover.html` give `#toggle` an `aria-label` +
-`aria-pressed` (and `#report-btn` an `aria-label` ), and `app.js` /`popover.js`
+`aria-pressed` , and `app.js` /`popover.js`
 keep `aria-pressed` /`aria-label` current on every render so the running/idle
 state is announced, with each dynamic action button carrying a discernible
 `aria-label` . JUDGE `KEYBOARD_FOCUS` (`packages/gui/judge/`, `main-focus.png` —
@@ -1994,8 +1996,8 @@ px, measures a `<label>`-wrapped checkbox as its LABEL — the whole label is
 what a pointer aims at — and asserts the three named elements are PRESENT in
 the swept set, so a remover that regresses to bare prose fails here as well as
 at the keyboard. No new IPC channel (pure renderer), so
-`parity-matrix.json` / `gui/test/parity.test.ts` are unchanged. The §12 R14
-keyboard/focus pass is thus covered (no longer partial). **§17 R11 — destructive
+`parity-matrix.json` / `gui/test/parity.test.ts` carry no row for it. The §12 R14
+keyboard/focus pass is thus fully covered. **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
 totals** (the §17 acceptance framing of the §12 R-confirm + R9-control-bar work;
 GUI-only — core/`tt` have no dialog and re-query per command, so this is a
@@ -2006,24 +2008,19 @@ one home for which actions are destructive; a single Delete click only ARMS the
 in-window `.confirm` affordance and `window.stint.remove` is reachable ONLY from
 the explicit confirm, so **no entry is destroyed on a stray click**, and
 archive-when-referenced runs through the same gate from the Clients view's
-Archive control; (b) the **live-reflection** half is the new pure derivation
-`deriveView(state, sel)` (`gui/src/liveview.ts`, IMPORTED by
-the bundled SU entry `gui/renderer/su.ts` as `window.SU.deriveView` — no
-hand-mirror since issue #83; `gui/test/renderer-bundle.test.ts` asserts the
-shipped bundle IS this derivation) that recomputes the Entries view's visible
-groups + BOTH totals (`listTotalSeconds`, the billable-only `reportTotalSeconds`
-) from the in-memory `UiState` snapshot alone — so a search keystroke / client /
-billable / group selection narrows the list **and** moves `#week-total` in
-lockstep with **no IPC round-trip** (`app.js` `updateLiveTotal` /`liveSelection`
-repaint the total off the snapshot; the authoritative grouped rows still come
-from `listEntries` for tt parity but the totals never wait on it). Because it
-sums the snapshot's core-owned `billableSeconds` , the live total equals what
-`tt report` produces for the same selection — no new core query, and no money
-arithmetic in the renderer (GOLD/PROP/BDD own the report math). **GOLD/unit**
-covers the live half only — `gui/test/liveview.test.ts` (search/client/billable
-narrow rows; group switches grouping; list + report totals recompute to the
-filtered set and equal the full total when no selection is active). The confirm
-half has NO unit leg by design: the rule is a DOM gate in the shipped renderer,
+Archive control; (b) the **live-reflection** half: a week / filter / search
+change in the Entries toolbar re-queries the read-only `listEntries` IPC and
+repaints the week grid and its **day-header totals** live (§12 R09/R16; the
+toolbar carries no range-total chip, so the grid and
+its day headers ARE the reflection surface). The day-header figures sum the
+snapshot's core-owned `billableSeconds` , so they equal what `tt report --by
+day` produces for the same selection — no money arithmetic in the renderer
+(GOLD/PROP/BDD own the report math). The re-query path IS the whole of the
+live reflection: there is no second, snapshot-side narrowing rule in `gui/src`
+to keep in step with it. Core's `matchesQuery`
+owns the one search rule (GOLD-pinned in `core/test/entrylist.test.ts`), and a
+pinned twin of a rule with no consumer is drift waiting to be believed. The
+confirm half has NO unit leg by design: the rule is a DOM gate in the shipped renderer,
 and a pure model of it would stay green while the shipped gate rotted, so it is
 proven on the real surface — the routing `acceptance.html` §05 gives R11 (JUDGE
 + BDD). **JUDGE** (primary) `CONFIRM_DESTRUCTIVE` (`packages/gui/judge/`,
@@ -2040,16 +2037,16 @@ shipped gate carries; **BDD** `features/overlap_and_editing.feature` "Deleting
 an entry without confirmation is refused (the entry survives)" (run TWICE over
 core + tt) holds the surface-neutral half — an unconfirmed destroy destroys
 nothing. Plus `LIVE_FILTER` (`main-filtered.png` — over the multi-week
-seven-entry fixture (all-time billable 8.00h) the idle `#week-total` reads the
-WEEK-BOUNDED 5.00h (issue #55 Part B), a `refactor` keystroke narrows the
-visible rows to the two IN-WEEK matches (range + search compose) and moves
-`#week-total` 5.00h → 3.50h with no `getState` during the keystroke and zero
+seven-entry fixture (five in the shown week) a `refactor` keystroke narrows the
+visible rows to the two IN-WEEK matches (range + search compose) with no
+`getState` during the keystroke and zero
 `listEntries` rejections (the mock is strict about the required `by` , like
-core), both returning to the full set on clear). BDD `features/overlap_and_editing.feature` "Deleting an entry without
+core), returning to the full set on clear; the day-header totals' own guard is
+`CALENDAR_LAYOUT` `totalsOk` ). BDD `features/overlap_and_editing.feature` "Deleting an entry without
 confirmation is refused" pins the refusal surface-neutrally beside those two
-scenes. No new IPC channel (the live view derives off the existing
-`getState` snapshot; confirm gates the existing `remove` client-side), so
-`parity-matrix.json` is intentionally untouched. **R21 write-rejection
+scenes. Neither half needs an IPC channel of its own (the live reflection
+re-runs the read-only `listEntries` read; confirm gates the `remove` channel
+client-side), so §17 R11 carries no `parity-matrix.json` row. **R21 write-rejection
 feedback** — a refused core write is surfaced where it was attempted (editor
 Save, split, inline rename, report builder), never silently swallowed;
 Stop/toggle rejections show in the active view's region (the Timer-view
@@ -2084,30 +2081,155 @@ and core's messages are surface-neutral. Guarded on both halves: GOLD
 `packages/gui/test/renderer-bundle.test.ts` pins the strip against the exact
 production strings and `packages/core/test/gold/contracts.test.ts` sweeps core's
 refusals for CLI flags; JUDGE `WRITE_REJECTION_FEEDBACK` / `FUTURE_START_GUARD`
-/ `POPOVER_REJECT` / `REPORTS_VIEW` now reject through mocks in Electron's REAL
+/ `POPOVER_REJECT` / `REPORTS_VIEW` reject through mocks in Electron's REAL
 wrapped shape and score each region's rendered text as the reason ALONE.
-**R22 window sizing (NEW — issue #126, "the window can grow, the app can't")**:
-the main window opens at 1040×800 and that is also its minimum
-(`gui/src/main.ts` `minWidth` /`minHeight` — 840×600 was a permitted size that
-could not render the unified form's commit button); above it the content is
+**R22 window sizing (issues #126/#265, "the window can grow, the app
+can't")**: the main window opens at 1040×800 and that is also its minimum
+(`gui/src/main.ts` `minWidth` /`minHeight` — anything smaller cannot render the
+unified form's commit button); above it the content is
 fluid — `gui/renderer/styles.css` carries no `.app` width cap, `.dcol` flexes
-from its 124px floor, and only `.settings-panel` / `.reports-view` keep local
-line-length maxima. The tray popover window auto-sizes to its rendered card on
+from zero (fit-to-width, no floor width and no horizontal
+scroll at any size), and only `.settings-panel` / `.reports-view`
+keep local line-length maxima. The tray popover window auto-sizes to its rendered card on
 every show: `togglePopover` measures `#pop` and sizes the window through
 `popoverWindowSize` (`gui/src/popoversize.ts`, clamped to `POPOVER_MAX`), and
 the judge/record harnesses import that same clamp so popover evidence renders
 at the window the user gets. Renderer + main-process only, **no new IPC
 channel** (the measurement rides `webContents.executeJavaScript`). Proven by
-JUDGE `WINDOW_GEOMETRY` (outcomes, not controls: the week whole at 1920 with
-no horizontal scroll and no truncated description; the three-week range still
-scrolling at the floor with more days visible than at 1040; Save entry inside
+JUDGE `WINDOW_GEOMETRY` (outcomes, not controls: the shown week whole with no
+horizontal scroll at 1040 AND at 1920, its equal columns growing to absorb the
+resize with every 1040-truncated description at natural width by 1920; the
+seven-column weekend-on grid fitting the same 1040 minimum; Save entry inside
 the 1040×800 viewport with the exact-times fields inside their column in both
 form modes — the overflow transferred from issue #146; the popover card + both
 actions inside the auto-sized window) beside `NAV_SHELL` 's
 `FIXED_WIDTH_ON_RESIZE` (the `.views` column absorbs the 1040/1440/1920
-resize, rail byte-identical 168) — the sub-fact the pre-fix `.app` cap held at
-views=872/872/872 → false. The minimum-window and auto-sized-popover states
+resize, rail byte-identical 168) — the sub-fact an `.app` width cap would hold
+at views=872/872/872 → false. The minimum-window and auto-sized-popover states
 carry rows in `STATES.md` (Entries × edge, Tray popover × edge).
+**R23 snap resolution & fine-snap toggle (the grid half; the settings half
+is the §14 Entries-calendar row)**: every drag on the week grid — select-
+interval's cursor handle and press-drag (R07), the pending/selected interval's
+body and edge drags (R06/R07/R16) — lands on the snap grid set by the two §14
+settings, consumed off the one `getState` snapshot (`UiState.settings` IS core's
+`Settings`, and `gui/src/uistate.ts` passes the whole row through, so
+`snapFineMinutes`/`snapCoarseMinutes` — and the `showWeekend` row the toolbar
+switch reads — reach the renderer with no per-field copy to forget; the compiler
+is the guard, which is why `showWeekend` could go missing while the field list
+was respelled at each home. No new IPC channel). **Coarse is
+the active resolution on every entry into a drag mode** (`app.js` `fineSnap`
+resets on `enterSelectInterval` and every form open); the **fine-snap toggle**
+(`calSnapCtl`, the shared `.sw` switch) sits at the bottom-right of the grid —
+the + button's spot, present in select-interval mode and while the form is open
+— and is **ephemeral by design** (§14): flipping it persists nothing, and no
+snap chrome beyond the toggle exists. The snap applies ONLY to a handle the user
+actively drags (`snapMin` fires inside the drag handlers alone; issue #49): a
+value a surface merely shows is never rewritten. AC: JUDGE `UNIFIED_FORM_ADD`
+(the handle + press-drag on the coarse 15 grid, the toggle re-landing an edge
+drag on the fine 5 grid ∉ the coarse one, coarse restored on every open) +
+`UNIFIED_FORM` (the edge drag landing coarse while the untouched edge keeps its
+seconds; the exact-times probe) — both at the DEFAULT pair — and JUDGE
+`SNAP_RESOLUTION` (`snap-resolution-grid.png`) at a **non-default** one, which is
+what makes those two evidence about the SETTING rather than about the number 15:
+at fine 2 / coarse 20 the handle and both created edges land ≡ 0 mod 20 and ∉ 0
+mod 15, and a fine edge drag lands ≡ 0 mod 2 and ∉ 0 mod 5, so neither hardcoded
+default can produce any of them (issue #301 — without it, replacing both
+surfaces' settings read with bare 5 / 15 keeps all 57 machine-scored items green).
+The settings pair's storage/validation/parity is the §14 row (GOLD + BDD over
+core and `tt config`). The **Timer half** ships
+the same system in the start-only picker: `timepicker.js`'s per-mount
+`snapStepMin` consumes the identical settings pair off the `openStartOnly`
+`settings` snapshot, its own ephemeral `fineSnap` resets on every mount (every
+open of the disclosure starts coarse), and the toggle beside the track
+(`.stp-snapctl`) is the only snap chrome — no resolution pill, no
+drag-hint copy. AC: JUDGE `TIMER_VIEW` (the coarse drag on the 15
+grid, the fine drag landing ∉ the coarse grid, reopen resetting the toggle
+while the shown start round-trips) — see the §12 R15 row — and the picker half of
+`SNAP_RESOLUTION` (`snap-resolution-picker.png`), which drives the SAME pair
+through this surface's different arithmetic (a pointer DELTA off the stored start
+on a 720px/24h track, where the grid snaps the absolute minute): one helper, two
+independent call sites, either of which can stop passing the settings through. **Both surfaces resolve
+the step through ONE helper**, `gui/src/snap.ts`'s `snapStepMin(settings, fine)`
+re-exported as `window.SU.snapStepMin`: it was written once per surface, and both
+copies re-typed core's defaults as bare 5 / 15, so a moved
+`snap_fine_minutes` reached the settings path and not the fallbacks (the #168
+class). AC: unit `gui/test/snap.test.ts` (the coarse/fine read, the
+stale-snapshot fallback, and that the fallback TRACKS core's row — asserted by
+moving `DEFAULT_SETTINGS.snapCoarseMinutes`, the one assertion a hardcoded copy
+cannot satisfy), plus the duplicate-helper census below.
+
+**R24 pending-changes gate (`core` — loss protection per §03)**: the
+unified form tracks whether its fields differ from their seed (`app.js`
+`formIsDirty` over the `openForm.seed` snapshot — the async select pre-
+population patches the seed, not the fields, so an early keystroke still reads
+dirty). With NO pending changes a subject swap — clicking a different event, an
+empty spot / the + button to start a create, an external refresh re-seeding the
+form — replaces the fields in place, no animation, no prompt (R06/R07); with
+pending changes the swap is **blocked by the keep-editing / discard-changes
+dialog** (`guardedSwap` → `openPendingGate`, the mockup's `.gatecard` on the
+same `.editor-backdrop` idiom the merge prompt uses, so the D11 accent handoff
+covers it): **Keep editing** (focused — the non-destructive default, also what
+Escape and a backdrop click resolve to) returns to the form untouched; only the
+explicit **Discard changes** abandons the edits and performs the swap. **No SUBJECT SWAP
+replaces a dirty form silently** — `renderEntries` leaves the form open across a
+repaint, the `onChange` refresh path re-seeds a
+clean edit form from the fresh snapshot but GATES a dirty one, and the form's own
+footer Delete/Split close it explicitly (a confirmed destroy, not a repaint).
+The same gate now covers the two ways OUT of the form (issue #323). **Cancel**
+was the one unguarded path — it called `closeUnifiedForm()` outright, so the
+button most likely to be clicked discarded typed work in silence while a stray
+click on the grid behind it gated; it routes through `guardedSwap` like
+everything else. Gating Cancel left Save and Cancel as the only exits, so
+**Escape** closes the form too, through the same gate: a clean form goes on the
+keystroke, a dirty one asks. (Escape *inside* the gate keeps its own meaning —
+keep editing — so a doubled Escape lands on the non-destructive answer.) A
+**week change** is a different question with a different answer and has its own
+prompt (below). The gate's PROVEN scope is therefore those three swap paths plus
+Cancel and Escape; a **route away** is still not driven by the JUDGE scene, and
+neither this row nor the rubric claims anything about it in either direction
+(issue #301 — a blanket "no path" claim would run wider than the evidence). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
+row — no BDD leg can see it** (the same routing the R11/R13 confirm gate
+records: a pure model of a DOM gate stays green while the shipped gate rots, so
+it is proven on the real surface). `formIsDirty` compares **seven** fields, so the
+scene arms the gate **once per field kind** — description, client, project, tags,
+billable, start, stop — each confirming the dialog rose, the subject held and
+nothing was written, and that Keep editing returned all seven byte-identical.
+Arming every dirty state with a `.edit-desc` fill would prove one field of seven
+and leave the other six comparisons deletable with the whole suite green (#301).
+AC: JUDGE `PENDING_CHANGES_GATE` (`main-
+pending-gate.png` — arm on a dirty event-click with the subject unswapped and
+nothing written; Keep editing preserving every pending field byte-for-byte, read
+as the WHOLE seven-field snapshot rather than the description alone;
+Discard performing the swap; the empty-spot create and the external-refresh
+broadcast gating identically; and `gateStaysOnEntries` — the gate is a prompt
+about the form the user is looking at, so the same broadcast raises NO dialog
+while another view is on screen and still arms once Entries is back, `route()`
+serving five views where the re-seed once hung off a catch-all `else` that
+covered Reports and Settings too) with the clean-swap half in `UNIFIED_FORM`
+(`cleanSwap`); STATES.md carries the Entries × edge row.
+
+**R24 week-move prompt (`core` — the same loss protection, issue #323)**: a week
+change with a form open used to move the view and leave the form's subject
+behind, drawn nowhere — nothing was lost, but nothing said so either. The entry
+now FOLLOWS the view to the same weekday of the week being opened, and because
+that is a real move of a real entry it is confirmed first (`selectWeek` →
+`openWeekMoveGate`, the same `.gatecard` idiom on a different question, so
+neither button wears the danger treatment — nothing is being thrown away).
+**Cancel abandons the whole action**: the view stays on the week it was on, so
+the form and its block stay together on screen. Confirm shifts the Start/Stop
+fields by whole days on their DATE halves — wall-clock time survives a DST
+boundary — and writes nothing: the commit is still the user's Save, exactly as
+it is for a drag (R17). It asks **once per open form**
+(`openForm.weekMoveConfirmed`, which dies with the form), so a confirmed move
+lets the owner step through several weeks; a fresh form or a pending add asks
+again, so there is one rule rather than two. Every week change funnels through
+the one guarded `selectWeek` — both toolbar steppers and the picker's click and
+Enter — so the confirm cannot be walked around by choosing a different control,
+and a picker click landing inside the week already shown moves nothing and
+asks nothing. **DOM-only, so its guard is a JUDGE row + a STATES.md row** — no
+BDD leg can see a prompt over a form's pending fields. AC: JUDGE
+`WEEK_MOVE_PROMPT` (`main-week-move-prompt.png`).
+
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×
@@ -2165,7 +2287,7 @@ path. Re-introducing a Windows path or changing the data-dir suffix fails
 `gold/contracts.test.ts` , `cli/test/gold/cli.test.ts` ,
 `features/settings.feature` , `gui/judge/run-judge.mjs` . The settings
 (rounding, rounding increment, week start, first check-in, check-in interval,
-global hotkey, the §12 R11 **date/number format** (`dateFormat:
+global hotkey, the §12 R12 **date/number format** (`dateFormat:
 'system'|'iso'`), the §04 R06 **time zone** (`time_zone` — the `'system'`
 sentinel resolved against the OS at read time, or a platform-supported IANA
 zone; an unknown name rejected with nothing stored), and the **§14
@@ -2173,30 +2295,47 @@ timeline-window settings** — four key-value rows
 realizing G15's three settings: `working_hours_start` /`working_hours_end`
 (strict zero-padded HH:MM, defaults 07:00/18:00, cross-field start<end),
 `picker_window_mode` (`working_hours`|`around_now`), `picker_around_hours`
-(integer 1–24, default 8)) with their defaults are descriptor-driven in
+(integer 1–24, default 8), and the **§14 / §12 R09/R23 Entries-calendar
+settings** — the two drag-snap resolutions `snap_fine_minutes` /
+`snap_coarse_minutes` (whole minutes 1–30, defaults 5/15, cross-field fine ≤
+coarse) and `show_weekend` (a STRICT boolean, default off — a non-boolean token
+is rejected rather than stored, unlike `rounding`'s looser pre-rule coercion))
+with their defaults are descriptor-driven in
 `packages/core/src/settings.ts` (`SETTING_DESCRIPTORS` — one row per setting
 owns its snake_case key, parse, and validation), so `readSettings`
 /`writeSetting`/`tt config ls/set` and the GUI `setSetting` channel all derive
 from the one list — the timeline keys reached `tt config` with **zero CLI
-edits** (§17 R8 parity by construction) — as did `time_zone`. GOLD pins the
+edits** (§17 R8 parity by construction) — as did `time_zone` and the three
+Entries-calendar keys. GOLD pins the
 fresh-database defaults table + `--json` object (`cli/test/gold/cli.test.ts` —
-13 rows incl. `time_zone` and the four timeline keys in descriptor order; the raw camelCase `config ls --json` object
+16 rows incl. `time_zone`, the four timeline keys, and the three
+Entries-calendar keys in descriptor order; the raw camelCase `config ls --json` object
 validates against `schemas/settings.schema.json` , the one schema over
 `store.settings()` 's verbatim shape — defaults and a non-default in-domain
 value both pass), the `store.settings()` snapshot
 (`core/test/gold/contracts.test.ts`), the read-as-strict-as-writes fallback for
 corrupt stored values (a `99:99` start AND an inverted stored start/end pair
-both reset to the documented defaults on read), and every timeline rejection
+both reset to the documented defaults on read — as do a corrupt stored
+`show_weekend` token and an inconsistent stored snap pair with fine above
+coarse, which resets BOTH snap keys), and every timeline rejection
 leaving the default stored: malformed HH:MM (`7:00`, `25:00` , `7am` ), a
 start>=end pair (either key), `picker_around_hours` 0/25/2.5, an unknown mode —
 on core (`writeSetting` throws) AND tt (`config set` exits non-zero with a
 diagnostic), plus the `picker_window_mode around_now` round-trip through
 `config ls --json` and the `time_zone` round-trip + unknown-zone rejection (the
-`tt` half of the §04 R06 coverage cross-noted under PRD §04). BDD
+`tt` half of the §04 R06 coverage cross-noted under PRD §04). The same GOLD
+pair pins every Entries-calendar rejection the same way: snap values 0/31
+(out of range), 7.5 (fractional), a fine-above-coarse pair (either key — fine
+20 against coarse 15, coarse 3 against fine 5, with fine == coarse proven
+legal), and a non-boolean `show_weekend`, on core AND tt, each leaving the
+documented default stored. BDD
 `features/settings.feature` proves each setting — including all four timeline
-keys and `time_zone` — round-trips and reads back, the fresh-DB defaults, and
+keys, `time_zone`, and the three Entries-calendar keys — round-trips and reads
+back, the fresh-DB defaults, and
 the rejection scenarios (`working_hours_end 06:00`, `picker_around_hours 25`,
-`time_zone Mars/Olympus_Mons` ) on BOTH core AND tt via the World `setConfig`
+`time_zone Mars/Olympus_Mons`, `snap_coarse_minutes 0/31`,
+`snap_fine_minutes 7.5` and `20`-above-coarse, `show_weekend banana` ) on BOTH
+core AND tt via the World `setConfig`
 /`getConfig`/`attemptSetConfig` (§17 R8), plus "Both surfaces render timestamps
 in the configured time zone" over the World `renderedStart` capability
 (CoreWorld `formatStamp` over the store's settings; CliWorld the human
@@ -2233,7 +2372,23 @@ validated settings"): it is unreachable, since the window's span is always ≥ 6
 minutes and its center always inside [0, 1440], so no input produces
 `endMin <= startMin` ; the tt-side transcript section "§14 — timeline-window
 settings" in `acceptance/evidence/cli-transcript.md` is the CLI-parity evidence
-(§W: CLI evidence is transcript, no GIF). The **backup-retention edge** §14
+(§W: CLI evidence is transcript, no GIF). JUDGE `SETTINGS_VIEW`
+(`main-settings.png`) extends its control-coverage fact over the
+Entries-calendar keys: routing to Settings must render a `data-key` control for
+`showWeekend`, `snapFineMinutes`, and `snapCoarseMinutes` (the Settings →
+Entries calendar group — show-weekend toggle + the two snap whole-minute
+inputs) alongside the eight it already asserted, all over the existing
+`setSetting` channel. Rendering is not wiring, so the same scene now DRIVES one
+control of each KIND the panel builds — select, toggle, segment, hhmm, minutes
+and hotkey — asserting each fires `setSetting` with the exact key/value, and
+holds that driven set against the kinds actually rendered (issue #301: with only
+the date-format select driven, deleting the `input.set-min` change listener left
+`SETTINGS_VIEW` and `TIMELINE_WINDOW` both green while the two snap fields
+persisted nothing). And what the two snap rows are FOR is proven by JUDGE
+`SNAP_RESOLUTION`, the one scene driven from a non-default pair (fine 2 / coarse
+20) — before it, every fixture carried the 5/15 defaults and every assertion was
+a literal default, so the pair was proven to store and validate and proven by
+nothing to be consumed by either drag surface. The **backup-retention edge** §14
 fixes — a retention of 0 means "keep all" (pruning disabled) and a negative
 value behaves as 0 — is pinned by GOLD `core/test/gold/backup-retention.test.ts`
 (0 and a negative value prune nothing; a positive cap still prunes to the N
@@ -2247,16 +2402,16 @@ across the whole window: every clickable text affordance / link carries the
 neutral button background, inert text never does, and the accent stays reserved
 for each view's single primary action): the convention is established in
 `gui/renderer/styles.css` — the base `button` rule IS the convention (a
-`var(--paper)` fill + a `var(--rule-strong)` border), and the
-previously-transparent clickable-text affordances now inherit/mirror it:
+`var(--paper)` fill + a `var(--rule-strong)` border), and every clickable-text
+affordance inherits or mirrors it:
 `button.ghost` (Edit / Delete / Split / Rename / Archive / Cancel / Add project
-/ the per-row kebab) drops `background:transparent`/`border-color:transparent`
-and so carries the neutral button bg+border (quieter than `.primary` only via
+/ the per-row kebab) declares no transparent background or border-colour, so it
+carries the neutral button bg+border (quieter than `.primary` only via
 the muted ink + `.small` sizing), the report-view `.nav .nav-link` tabs take a
 `var(--wash)` fill + `var(--rule)` border (mirroring `context/mockups/main.html`
 `.nav .wk a`), and the left-rail `.nav-item` carries a `var(--paper)` fill +
-subtle border in its resting state (its `:hover` and its `.active` state — the
-D12 lifted paper chip whose icon alone takes the accent — unchanged). Inert text
+subtle border in its resting state (its `:hover` and its `.active` state are the
+D12 lifted paper chip whose icon alone takes the accent). Inert text
 (`.wordmark`/`.summary`/`.day-head`/`.entry .desc`/`.entry .time`/`.set-k`/`.report-lab`/`.settings-title`)
 stays bare; the in-chip `.chip-x` and the `.set-toggle` knob are documented
 in-control sub-affordance exceptions (the parent `.chip`/track IS the
@@ -2322,12 +2477,16 @@ detected on open, never written to, quarantined to a `.corrupted` sibling,
 restored from the latest good backup, the user informed, and the pre-corruption
 data is intact afterward (zero data loss). The **entry-spans-local-midnight**
 row (§16 / §12 R16 / issue #71 — a span crossing local midnight renders
-unflattened as one calendar segment per touched day column, all sharing the
-entry, grouped and totalled under its start day only, matching
-`tt report --by day`) is pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
+unflattened as one calendar segment per SHOWN day column it touches, all
+sharing the entry, grouped and totalled under its start day only, matching
+`tt report --by day`; a segment on a hidden day — the weekend off, or outside
+the selected week — is simply not drawn, and hiding it changes no total) is
+pinned headless by JUDGE `CALENDAR_LAYOUT` (the id-8
 22:30→06:15 cross-midnight fixture: two `.ev` segments sharing a `data-id`, the
 start-day header counting the span, the end day showing the segment without
-counting it). The **DST** row is the PROP pair in `prop/invariants.test.ts`
+counting it; and the id-9 Fri→Sat span drawing only its start segment with the
+weekend hidden, its Sat segment appearing on the Show-weekend toggle with no
+total moving). The **DST** row is the PROP pair in `prop/invariants.test.ts`
 described under §04 above (the 2026 spring-forward and fall-back spans, each
 rendered across five named zones, with the real elapsed seconds and every wall
 clock taken from the calendar). The wall-clock-skew row (`now < start` never yields
@@ -2339,7 +2498,14 @@ rather than stored, §05 R06/R01 / §03) are pinned by BDD
 and never wedges Stop" + "Starting a new entry backdated before the running one
 is refused", each run TWICE over core + tt), PROP `prop/editing.test.ts` +
 `prop/invariants.test.ts` (the span-validity law), and headless JUDGE
-`FUTURE_START_GUARD` (the refusal surfaced on the Timer view with no wedge)
+`FUTURE_START_GUARD` (the refusal surfaced on the Timer view with no wedge) The
+**subject-swap-with-unsaved-edits** row (§16 / §12 R24 — clicking another
+event or an empty spot mid-edit with pending changes blocks on the keep-editing
+/ discard dialog; Keep editing preserves every pending field, only the explicit
+Discard abandons them; a clean form swaps in place with no prompt) is pinned
+headless by JUDGE `PENDING_CHANGES_GATE` (+ `UNIFIED_FORM`'s `cleanSwap`) — a
+DOM-only gate, so no BDD leg exists by the DOM-gate routing recorded under §12
+R24.
 
 ### PRD §19
 
@@ -2596,7 +2762,7 @@ constant** (`packages/core/src/version.ts`, with `VERSION_RE`/`isReleaseVersion`
 the `0.0.0-dev` offline sentinel) by `scripts/stamp-version.mjs` (pure UTC date
 math + `STINT_BUILD_N` same-day suffix; no network) and reported **identically
 by both equal surfaces** — `tt --version` reads `APP_VERSION`
-(`packages/cli/src/program.ts`, replacing the old hardcoded `1.0.0`) and the GUI
+(`packages/cli/src/program.ts` — never a literal in the program) and the GUI
 Settings → Software Update → Current version row reads it off the `getState`
 snapshot's `appVersion`
 (`packages/gui/src/uistate.ts`/`ipc.ts`/`renderer/settings.js`, read-only
@@ -2714,7 +2880,7 @@ the same transaction as the close; backfill (`add`) creates a CLOSED entry and
 deliberately does not touch the schedule. A private `writeAppStateTx` is the
 in-transaction primitive; the typed
 `checkinState()`/`setCheckinState(state, now)`/`recordLastSeen(now)` own the
-GUI-facing writes (the GUI no longer holds the raw keys or its own load/save
+GUI-facing writes (the GUI holds neither the raw keys nor its own load/save
 helpers — `gui/src/main.ts`). Proven by **PROP**
 `core/test/prop/appstate.test.ts` (over random start/stop/add/resume/gap
 sequences on a REAL on-disk DB reopened between ops: after EVERY committed op
@@ -2746,7 +2912,7 @@ v3-shaped backup carrying an out-of-union source restores through the real
 `Store.restoreFromBackup` seam, migrates to v4, loses no row, and leaves the
 CHECK live (#180). **R04/R05 GUI surface**
 — the Settings → Backups renderer (restore list + retention + the
-corruption-recovery banner) is now gated by the deterministic **JUDGE** items
+corruption-recovery banner) is gated by the deterministic **JUDGE** items
 `BACKUPS_SECTION` (R04) and `RECOVERY_NOTICE` (R05) in
 `gui/judge/run-judge.mjs`, plus the `§20 R04` / `§20 R05` `record.mjs`
 recordings — so the user-facing surface is proven, not just the
@@ -2867,6 +3033,43 @@ create/rename/archive → every §14 setting) **with the terminal closed**,
 confirming the real desktop app threads them all together. The per-view UI
 coverage detail lives in the §12 row (R3–R14); this row is the end-to-end
 completeness claim those views jointly satisfy
+
+### §17 R11
+
+R11 is GUI-only by construction: core and `tt` have no dialog and re-query per
+command, so both halves are renderer facts, and the detailed proof map lives in
+the §12 row above (the §12 R13 confirm gate + the §12 R09/R16 control bar) — this
+row is the §17 acceptance framing of it. **(a) Destructive GUI actions confirm
+before acting, the pending-changes discard included.** The shipped gate is
+`confirmInline` in `gui/renderer/app.js` (entered through
+`armDelete` / `armArchiveClient` / `armArchiveProject`), plus the §12 R24
+keep-editing / discard dialog over a dirty unified form. **Primary JUDGE**
+`CONFIRM_DESTRUCTIVE` (`main-confirm.png` — the entry is present pre-confirm with
+zero `remove` calls, then gone post-confirm with exactly one `remove({ id })`),
+with `CONFIRM_DELETE` (`main-confirm-delete.png`) and `CONFIRM_ARCHIVE`
+(`main-confirm-archive.png`) covering the entry and reference-data actions the one
+gate carries, and `PENDING_CHANGES_GATE` (`main-pending-gate.png`) the
+typed-but-unsaved discard — a dirty subject swap raises the dialog, nothing is
+written while it is up, and only the explicit Discard abandons the pending work.
+**BDD** `features/overlap_and_editing.feature` "Deleting an entry without
+confirmation is refused (the entry survives)" (run TWICE over core + tt) holds the
+surface-neutral half — an unconfirmed destroy destroys nothing. The confirm half
+has NO unit leg by design: it is a DOM gate in the shipped renderer, and a pure
+model of it would stay green while the shipped gate rotted (issue #167), so it is
+proven on the real surface. **(b) Entries week/filter/search selections reflect
+live on the calendar and its day-header totals; Reports grouping selections
+reflect live in the grouped totals.** A toolbar change re-queries the read-only
+`listEntries` IPC and repaints the grid + day headers — the toolbar carries no
+range-total chip, so the grid and its headers ARE the reflection surface.
+**JUDGE** `LIVE_FILTER` (`main-filtered.png` — a keystroke narrows to the in-week
+matches, range + search composing, and clearing restores the full set),
+`ENTRIES_CALENDAR` (`entries-search.png` — the week/filter/search re-query),
+`CALENDAR_LAYOUT` `totalsOk` (the day-header figures sum the snapshot's core-owned
+`billableSeconds`, so they equal `tt report --by day` over the same selection — no
+money arithmetic in the renderer), and `REPORTS_VIEW` for the grouping half. No
+new IPC channel: the confirm gate is client-side over the existing `remove`, and
+the live reflection rides the existing `listEntries` / `getState`, so
+`parity-matrix.json` is intentionally untouched
 
 ### §17 R12
 
@@ -3006,8 +3209,8 @@ isolation on, no node integration, preload bridge, renderer speaks only
 `ipcRenderer.invoke`) in `gui/test/renderer-isolation.test.ts` (#35). The same
 static file walk also pins the renderer's ONE-HOME rule (#168): `su.ts` is the
 sole definition of a helper more than one page needs — no other renderer file
-may define `escapeHtml`, `errMessage`, `localMinuteOfDay` or
-`exactMinuteOfDay`, and the minutes-of-day arithmetic
+may define `escapeHtml`, `errMessage`, `localMinuteOfDay`, `exactMinuteOfDay` or
+`snapStepMin`, and the minutes-of-day arithmetic
 (`getHours() * 60 + getMinutes()`) appears exactly once across
 `gui/renderer/`. Static-only by construction: a duplicated helper renders fine
 on a driven page right up until the copies diverge, which they had —
@@ -3015,7 +3218,9 @@ on a driven page right up until the copies diverge, which they had —
 `app.js` one spared `'` across 20 call sites) and `popover.js` escaped nothing,
 while `errMessage` was re-typed at four sites, one dropping the `.message`
 unwrap. `popover.html` is a second document that can reach nothing `app.js`
-defines, so `su.ts` is the only home serving every page. The behavior of the
+defines, so `su.ts` is the only home serving every page — either by defining the
+helper or by re-exporting the `gui/src` module that owns it (`localtime.ts`,
+`snap.ts`), which is one home in both shapes. The behavior of the
 hoisted helpers (the single-quote escape, the unwrap-then-strip message rule,
 the exact minute's seconds fraction) is GOLD
 `gui/test/renderer-bundle.test.ts`, run through the bundle the pages load.

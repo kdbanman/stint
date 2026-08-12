@@ -1,6 +1,6 @@
 /**
  * The pure Timer-view (G5) derivation (PRD §12 R14) — Electron-free so it is unit-testable
- * without a main process, mirroring start.ts / liveview.ts / reportview.ts. The Timer view
+ * without a main process, mirroring start.ts / reportview.ts. The Timer view
  * is the GUI's core-entry surface: a live count-up over the running entry, the live-edit-
  * running strip (edit the OPEN row's attributes + start time WITHOUT stopping it), the Start
  * form, and the pinned favorites rail. ALL behaviour lives in @stint/core (store.start /

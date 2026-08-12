@@ -55,12 +55,11 @@
   /* design.html D13: placeholder text reads muted, never faint */
   ::placeholder{color:var(--muted)}
   textarea.field{resize:vertical;min-height:42px}
-  select.field{width:auto;min-width:150px}
+  select.field{width:100%}
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}
-  /* A03: the removable × is a real button around a 24×24 target — the negative margins keep
-     the chip the size it always was, so only the hit area is bigger than the 11px glyph. */
+  /* A03: the removable × is a real button around a 24×24 target. */
   .tag .tag-x{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;margin:-4px;padding:0;border:0;background:none;color:var(--muted);cursor:pointer}
   .tag .tag-x .ic{width:11px;height:11px}
   .pill{font-size:11px;border-radius:999px;padding:2px 8px;border:1px solid var(--rule-strong);color:var(--muted);background:var(--wash);white-space:nowrap}
@@ -69,256 +68,282 @@
   .meta{color:var(--muted)}.cap{font-size:12px;color:var(--muted)}
 
   body{display:flex;flex-direction:column;align-items:center;gap:44px;min-height:100vh;padding:52px 16px 64px}
+  .slab{width:960px;max-width:100%}
+  .slab > .cap{margin:0 0 8px 4px}
 
-  /* ── the unified entry form: one inline card in the Entries view, add & edit alike ── */
-  .ecard{width:800px;max-width:100%}
-  .ebody{display:flex;gap:24px;padding:24px}
-  .fields{width:252px;flex:none}
-  .f{margin-bottom:16px}.f:last-child{margin-bottom:0}
-  .fw{width:100%}
+  /* ── the unified entry form: ONE card that appears ABOVE the week grid (§12 R06/R07) in a
+     quick upward expansion that leaves the grid in position. Reduced field set only:
+     description · client · project · tags · billable · Start · Stop · Save/Cancel. ── */
+  .eform{padding:20px;display:flex;gap:20px;align-items:flex-start}
+  .eform .fcol{flex:1.3;min-width:0}
+  .eform .acol{width:230px;flex:none}
+  .eform .tcol{width:210px;flex:none}
+  .f{margin-bottom:12px}.f:last-child{margin-bottom:0}
   .lab-row{display:flex;align-items:baseline;justify-content:space-between}
   .tagchips{display:flex;gap:4px;flex-wrap:wrap;align-items:center;padding:2px 0;min-height:28px}
   .tagchips input{border:0;outline:0;flex:1;min-width:72px;font:inherit;font-size:13px;background:none}
-
-  /* ── interval picker: month calendar + one-day timeline, inline ── */
-  .picker{flex:1;min-width:0;display:flex;gap:20px;border-left:1px solid var(--rule);padding-left:24px}
-  .calcol{width:204px;flex:none}
-  .cal-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-  .cal-hd .m{font-size:13px;font-weight:640}
-  .cal-hd .nav2{display:flex;gap:4px}
-  .cal-hd .nav2 span{cursor:pointer;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);width:24px;height:24px;display:flex;align-items:center;justify-content:center}
-  .cal-hd .nav2 .ic{width:14px;height:14px}
-  .grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
-  .grid .dow{font-size:11px;color:var(--muted);text-align:center;padding:4px 0}
-  .grid .d{text-align:center;padding:4px 0;font-size:12px;border-radius:var(--r1);cursor:pointer;color:var(--ink)}
-  .grid .d.mut{color:var(--faint)}
-  .grid .d:hover{background:var(--wash)}
-  .grid .d.sel{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
-
-  /* start/stop disclosure — collapsed to a tabular echo; expands to raw text fields
-     that accept any timestamp, so a stop on a later date makes an overnight span */
-  .xp{display:inline-flex;align-items:center;gap:8px;margin-top:16px;border:0;background:none;font:inherit;font-size:12px;color:var(--ink);cursor:pointer;padding:4px 8px 4px 4px;border-radius:var(--r1)}
-  .xp:hover{background:var(--hover)}
-  .xp .ic{width:13px;height:13px;color:var(--muted)}
-  .xp .tnum{font-weight:590}
-  .xfields{margin-top:8px;padding-left:4px}
-  .xfields .f{margin-bottom:12px}
-
-  /* day timeline — viewport rests on working hours, scrolls the full 24 h */
-  .daycol{flex:1;min-width:0}
-  .daywrap{position:relative}
-  .dayview{height:330px;overflow-y:auto;overscroll-behavior:contain}
-  .dayview::-webkit-scrollbar{width:6px}
-  .dayview::-webkit-scrollbar-thumb{background:var(--rule-strong);border-radius:var(--r1)}
-  .fade{position:absolute;left:0;right:0;height:28px;z-index:8;pointer-events:none}
-  .fade.t{top:0;background:linear-gradient(to bottom,var(--paper),transparent)}
-  .fade.b{bottom:0;background:linear-gradient(to top,var(--paper),transparent)}
-  .track{position:relative;height:720px;border-left:1px solid var(--rule);margin-left:52px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 29px,var(--rule) 29px,var(--rule) 30px)}
-  .hour{position:absolute;left:-52px;width:38px;text-align:right;font-size:11px;color:var(--muted);transform:translateY(-6px)}
-  .block{position:absolute;left:6px;right:10px;border-radius:var(--r1)}
-  .block.other{background:var(--wash);border:1px solid var(--rule);color:var(--muted);font-size:11px;padding:4px 8px;overflow:hidden}
-  .block.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3}
-  /* a running entry has a start and no stop yet: the block dissolves into the future */
-  .block.me.open{cursor:default;-webkit-mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
-  /* time labels & grips live at track level (not inside the block) so they always sit
-     above the block's own stacking context and the overlap band — nothing hides them.
-     V3: the "me" block keeps its outline+accent-weak fill (mock wins), but the time
-     label reads ink — accent-ink text on an accent-weak chip fails contrast. */
-  .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
-  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);box-shadow:var(--sh-chip);cursor:ns-resize;z-index:7}
-  .overlap{position:absolute;left:6px;right:10px;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line);border-radius:0 0 var(--r1) var(--r1);z-index:4;pointer-events:none;display:flex;align-items:center;justify-content:flex-end;padding-right:4px}
-  .overlap .otag{font-size:11px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:2px 8px}
-  .phint{margin-top:8px;display:flex;justify-content:flex-end}
-  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:2px 8px;color:var(--muted)}
-
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
      surfaced here at the point of action; the card stays open and unchanged. --danger block. */
-  .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin:0 24px 12px}
+  .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin:0 20px 12px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
-
   /* footer */
-  .foot{padding:16px 24px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:var(--wash)}
+  .foot{padding:12px 20px;border-top:1px solid var(--rule);display:flex;justify-content:space-between;align-items:center;background:var(--wash);border-radius:0 0 var(--r2) var(--r2)}
   .foot .grp{display:flex;gap:8px;align-items:center}
-  .gate{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
-  .gate .ic{width:14px;height:14px;color:var(--danger)}
-  .gate b{font-weight:590}
 
-  /* the picker area on its own (disclosure expanded) */
-  .ecard.pickonly{width:548px}
-  .pickonly .picker{border-left:0;padding-left:0}
+  /* ── the week grid beneath the form (a fragment of main.html's grid, §12 R16) ── */
+  .gridwrap{position:relative;margin-top:16px}
+  .cgrid{display:flex}
+  .gut{width:48px;flex:none;position:relative}
+  .gut .sp2{height:36px;border-bottom:1px solid var(--rule)}
+  .gut .gtr{position:relative;height:420px}
+  .hlab{position:absolute;right:8px;font-size:11px;color:var(--muted);transform:translateY(-6px);font-variant-numeric:tabular-nums}
+  .dcol{flex:1;min-width:0;border-left:1px solid var(--rule)}
+  .dcol.end{border-right:1px solid var(--rule)}
+  .dh{height:36px;padding:8px 12px 0;border-bottom:1px solid var(--rule)}
+  .dh .dw{font-size:11px;color:var(--muted);font-weight:590}
+  .dh .dd{font-size:12px;font-weight:640;margin-left:4px}
+  .dt{position:relative;height:420px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 59px,var(--rule) 59px,var(--rule) 60px)}
+  .ev{position:absolute;left:6px;right:6px;border-radius:var(--r1);background:var(--paper);border:1px solid var(--rule-strong);box-shadow:var(--sh-chip);padding:4px 8px;overflow:hidden;font-size:11px}
+  .ev .bd{display:block;font-size:12px;font-weight:590;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ev .bc{display:block;font-size:11px;color:var(--muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* create mode (§12 R07): the grid GRAYS OUT while the form is open — the pending interval
+     stays the one vivid thing and remains adjustable by dragging anywhere on the grid */
+  .grayed .dt > .ev:not(.me){opacity:.45}
+  .grayed .dh{opacity:.6}
+  /* the pending / selected interval — the accent-outlined block, edge grips draggable */
+  .ev.me{background:var(--accent-weak);border:1.5px solid var(--accent);box-shadow:var(--sh-card);cursor:grab;z-index:3;overflow:visible}
+  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);box-shadow:var(--sh-chip);cursor:ns-resize;z-index:7}
+  .grip.t{top:-3px}.grip.b{bottom:-3px}
+  .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
+  /* select-interval mode (§12 R07): the start handle follows the cursor at the COARSE snap */
+  .shandle{position:absolute;left:6px;right:6px;height:0;border-top:2px solid var(--accent);z-index:6}
+  .shandle .st{position:absolute;right:0;top:-22px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);box-shadow:var(--sh-chip)}
+  /* the fine-snap toggle (§12 R23): sits bottom-right of the grid — the + button's spot —
+     in select-interval mode and while the form is open; EPHEMERAL, coarse on every open */
+  .snapctl{position:absolute;right:12px;bottom:12px;z-index:10;display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink);background:var(--paper);border:1px solid var(--rule);border-radius:var(--r1);padding:8px 12px;box-shadow:var(--sh-raise)}
+  /* overlap band (warn-only, §06 R04) */
+  .ov{position:absolute;left:6px;right:6px;z-index:4;pointer-events:none;background:repeating-linear-gradient(45deg,var(--flag-bg),var(--flag-bg) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 7px,color-mix(in srgb, var(--flag-line) 60%, var(--flag-bg)) 14px);border-top:1px solid var(--flag-line);border-bottom:1px solid var(--flag-line)}
+  .ov .otag{position:absolute;right:4px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--flag);background:var(--paper);border:1px solid var(--flag-line);border-radius:999px;padding:0 8px;white-space:nowrap}
+
+  /* ── the pending-changes gate (§12 R24): keep editing / discard changes ── */
+  .scrim{position:relative;padding:44px 0}
+  .gatecard{width:440px;margin:0 auto;background:var(--paper);border:1px solid var(--rule-strong);border-radius:var(--r2);box-shadow:var(--sh-modal);padding:20px}
+  .gatecard h3{margin:0 0 8px;font-size:17px;font-weight:640}
+  .gatecard p{margin:0 0 16px;color:var(--muted);font-size:13px}
+  .gatecard .row{display:flex;justify-content:flex-end;gap:8px}
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
 <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
-<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
 <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></symbol>
 <symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 4.5h11l-2.2 3.2L17 11H6"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
 </defs></svg>
 
-<!-- One form for add and edit, shown inline in the Entries view as a card — no modal,
-     no backdrop. This is edit mode; add mode is this same card minus Split/Delete.
-     Body-drag moves the whole block (both ends); the bottom grip resizes the stop;
-     both snap to 5 minutes. Overlap with another entry is warn-only, never blocking.
-     EXACT STORED TIMES (§12 R15, issue #49): this entry is stored 09:07:33–11:03:00 —
-     deliberately off the 5-minute grid. Opening it renders exactly that (the labels/echo
-     read 09:07 / 11:03, the expanded Start field the full 09:07:33); the snap applies
-     only to a handle the user actively drags, and Save without a drag preserves the
-     stored times to the second. -->
-<div class="ecard card">
-  <div class="ebody">
-    <div class="fields">
-      <div class="f"><label class="lab">Description</label><textarea class="field" rows="3">Deep work on core algorithm</textarea></div>
-      <div class="f"><label class="lab">Client</label><select class="field fw"><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option></select></div>
-      <div class="f"><label class="lab">Project</label><select class="field fw"><option>Q3 Strategy</option><option>Project Alpha</option></select></div>
-      <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">coding <button class="tag-x" type="button" aria-label="Remove tag coding"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><span class="tag">product <button class="tag-x" type="button" aria-label="Remove tag product"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><input placeholder="add a tag…"></div></div>
-      <div class="f"><span class="toggle"><span class="sw on"><i></i></span> Billable</span></div>
+<!-- ══ 1 · SELECT-INTERVAL MODE (§12 R07) ══
+     The + button was clicked: a START HANDLE follows the cursor over the week grid at the
+     COARSE snap (§12 R23 — 15 min by default). Press and drag down to set the interval
+     length; release opens create mode. The fine-snap toggle has replaced the + button in
+     the grid's bottom-right corner; it is EPHEMERAL — coarse on every open. -->
+<div class="slab">
+  <div class="cap">Select-interval mode — the start handle follows the cursor (coarse snap); the fine-snap toggle sits where the + button was</div>
+  <div class="gridwrap card" style="padding:0 12px 12px">
+    <div class="cgrid">
+      <div class="gut"><div class="sp2"></div><div class="gtr">
+        <span class="hlab" style="top:0">09:00</span><span class="hlab" style="top:60px">10:00</span><span class="hlab" style="top:120px">11:00</span><span class="hlab" style="top:180px">12:00</span><span class="hlab" style="top:240px">13:00</span><span class="hlab" style="top:300px">14:00</span><span class="hlab" style="top:360px">15:00</span><span class="hlab" style="top:420px">16:00</span>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Mon</span><b class="dd">22</b></div><div class="dt">
+        <div class="ev" style="top:0;height:195px"><span class="bd">Client call: Project Alpha</span><span class="bc">Globex Corp</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Tue</span><b class="dd">23</b></div><div class="dt">
+        <div class="ev" style="top:180px;height:165px"><span class="bd">Market research</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Wed</span><b class="dd">24</b></div><div class="dt">
+        <div class="ev" style="top:60px;height:120px"><span class="bd">Design review</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Thu</span><b class="dd">25</b></div><div class="dt">
+        <!-- the cursor-following start handle, snapped to 10:30 on the coarse grid -->
+        <div class="shandle" style="top:90px"><span class="st tnum">10:30</span></div>
+      </div></div>
+      <div class="dcol end"><div class="dh"><span class="dw">Fri</span><b class="dd">26</b></div><div class="dt"></div></div>
     </div>
-    <div class="picker">
-      <div class="calcol">
-        <div class="cal-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-        <div class="grid">
-          <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-          <span class="d">1</span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span><span class="d">6</span><span class="d">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span><span class="d">13</span><span class="d">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span><span class="d">19</span><span class="d">20</span><span class="d">21</span><span class="d sel">22</span><span class="d">23</span><span class="d">24</span><span class="d">25</span><span class="d">26</span><span class="d">27</span><span class="d">28</span><span class="d">29</span><span class="d">30</span><span class="d mut">1</span><span class="d mut">2</span><span class="d mut">3</span><span class="d mut">4</span><span class="d mut">5</span>
-        </div>
-        <button class="xp"><svg class="ic"><use href="#i-right"/></svg><span class="tnum">09:07 – 11:03</span></button>
-      </div>
-      <div class="daycol">
-        <div class="daywrap">
-          <div class="dayview">
-            <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
-              <div class="block other" style="top:315px;height:30px">Client call</div>
-              <div class="block other" style="top:510px;height:22.5px">Market research</div>
-              <!-- the edited entry, stored 09:07:33–11:03:00: painted EXACTLY, off the 5-min
-                   grid (09:07:33 → 273.8px, 11:03 → 331.5px at 30px/hour) — never snapped on open -->
-              <div class="block me" style="top:273.8px;height:57.7px"></div>
-              <div class="overlap" style="top:315px;height:16.5px"><span class="otag">overlap 33m</span></div>
-              <span class="tlabel tnum" style="top:278.8px">09:07</span>
-              <span class="tlabel tnum" style="top:315px">11:03</span>
-              <span class="grip" style="top:328.5px"></span>
-            </div>
-          </div>
-          <i class="fade t"></i><i class="fade b"></i>
-        </div>
-        <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
-      </div>
-    </div>
-  </div>
-  <!-- §12 R21: a Save core refuses (here, a Stop moved before the Start) is surfaced inline at the
-       point of action — announced, the card staying open and unchanged, never a silent no-op. -->
-  <div class="msg err">Stop time is before the entry started — adjust the Start or Stop and save again.</div>
-  <div class="foot">
-    <span class="grp">
-      <button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Split</button>
-      <!-- Delete arms the in-window two-step gate (§12 R13) — armed state shown on the running panel below -->
-      <button class="btn danger sm">Delete</button>
-    </span>
-    <span class="grp">
-      <button class="btn ghost">Cancel</button>
-      <button class="btn primary">Save entry</button>
-    </span>
+    <span class="snapctl"><span class="sw" role="switch" aria-checked="false"><i></i></span> Fine snap</span>
   </div>
 </div>
 
-<!-- The same form's picker area with the start/stop disclosure expanded: raw text
-     fields for exact entry — a stop dated the next day makes an overnight span. The
-     fields carry the stored truth to the second (09:07:33), so the sub-5-min start is
-     visible and preserved verbatim on Save. The format is the one the user reads and
-     retypes — space-separated, seconds ALWAYS shown, no `T` wire separator (issue 159) —
-     and it is exactly what the field's placeholder promises. -->
-<div class="ecard card pickonly">
-  <div class="ebody">
-    <div class="picker">
-      <div class="calcol">
-        <div class="cal-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-        <div class="grid">
-          <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-          <span class="d">1</span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span><span class="d">6</span><span class="d">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span><span class="d">13</span><span class="d">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span><span class="d">19</span><span class="d">20</span><span class="d">21</span><span class="d sel">22</span><span class="d">23</span><span class="d">24</span><span class="d">25</span><span class="d">26</span><span class="d">27</span><span class="d">28</span><span class="d">29</span><span class="d">30</span><span class="d mut">1</span><span class="d mut">2</span><span class="d mut">3</span><span class="d mut">4</span><span class="d mut">5</span>
-        </div>
-        <button class="xp"><svg class="ic"><use href="#i-down"/></svg><span class="tnum">09:07 – 11:03</span></button>
-        <div class="xfields">
-          <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-22 09:07:33"></div>
-          <div class="f"><label class="lab">Stop</label><input class="field tnum" value="2026-06-22 11:03:00"></div>
-        </div>
+<!-- ══ 2 · CREATE MODE (§12 R07) ══
+     The drag released: the unified entry form expands upward ABOVE the grid (the grid holds
+     its position), seeded ONLY with the dragged interval — description empty, client/project
+     BLANK (no last-used seeding), billable per its default. The grid grays out; the + button
+     is hidden; the pending interval stays adjustable by dragging; the Start/Stop fields are
+     the exact / overnight path (§12 R17) and a grid drag updates them live. -->
+<div class="slab">
+  <div class="cap">Create mode — the reduced form above the grayed grid, seeded only with the dragged interval</div>
+  <div class="card">
+    <div class="eform">
+      <div class="fcol">
+        <div class="f"><label class="lab">Description</label><textarea class="field" rows="3" placeholder="What were you doing?"></textarea></div>
+        <div class="f"><label class="lab">Tags</label><div class="tagchips"><input placeholder="add a tag…"></div></div>
       </div>
-      <div class="daycol">
-        <div class="daywrap">
-          <div class="dayview">
-            <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
-              <div class="block other" style="top:315px;height:30px">Client call</div>
-              <div class="block other" style="top:510px;height:22.5px">Market research</div>
-              <!-- the edited entry, stored 09:07:33–11:03:00: painted EXACTLY, off the 5-min
-                   grid (09:07:33 → 273.8px, 11:03 → 331.5px at 30px/hour) — never snapped on open -->
-              <div class="block me" style="top:273.8px;height:57.7px"></div>
-              <div class="overlap" style="top:315px;height:16.5px"><span class="otag">overlap 33m</span></div>
-              <span class="tlabel tnum" style="top:278.8px">09:07</span>
-              <span class="tlabel tnum" style="top:315px">11:03</span>
-              <span class="grip" style="top:328.5px"></span>
-            </div>
-          </div>
-          <i class="fade t"></i><i class="fade b"></i>
+      <div class="acol">
+        <div class="f"><label class="lab">Client</label><select class="field"><option selected>— none (internal) —</option><option>Globex Corp</option><option>Initech</option></select></div>
+        <div class="f"><label class="lab">Project</label><select class="field"><option selected>—</option></select></div>
+        <div class="f"><span class="toggle"><span class="sw"><i></i></span> Billable</span></div>
+      </div>
+      <div class="tcol">
+        <!-- §12 R17: raw text — the format the user reads and retypes; a stop dated the next
+             day makes an OVERNIGHT span. Seconds always shown (issue 159). -->
+        <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-25 10:30:00"></div>
+        <div class="f"><label class="lab">Stop</label><input class="field tnum" value="2026-06-25 12:15:00"></div>
+      </div>
+    </div>
+    <div class="foot">
+      <span class="grp"></span>
+      <span class="grp">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary">Save entry</button>
+      </span>
+    </div>
+  </div>
+  <div class="gridwrap card grayed" style="padding:0 12px 12px">
+    <div class="cgrid">
+      <div class="gut"><div class="sp2"></div><div class="gtr">
+        <span class="hlab" style="top:0">09:00</span><span class="hlab" style="top:60px">10:00</span><span class="hlab" style="top:120px">11:00</span><span class="hlab" style="top:180px">12:00</span><span class="hlab" style="top:240px">13:00</span><span class="hlab" style="top:300px">14:00</span><span class="hlab" style="top:360px">15:00</span><span class="hlab" style="top:420px">16:00</span>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Mon</span><b class="dd">22</b></div><div class="dt">
+        <div class="ev" style="top:0;height:195px"><span class="bd">Client call: Project Alpha</span><span class="bc">Globex Corp</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Tue</span><b class="dd">23</b></div><div class="dt">
+        <div class="ev" style="top:180px;height:165px"><span class="bd">Market research</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Wed</span><b class="dd">24</b></div><div class="dt">
+        <div class="ev" style="top:60px;height:120px"><span class="bd">Design review</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Thu</span><b class="dd">25</b></div><div class="dt">
+        <!-- the pending interval: 10:30 – 12:15, both edges draggable, body drag moves it -->
+        <div class="ev me" style="top:90px;height:105px">
+          <span class="grip t"></span><span class="grip b"></span>
         </div>
-        <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
+        <span class="tlabel tnum" style="top:66px">10:30</span>
+        <span class="tlabel tnum" style="top:198px">12:15</span>
+      </div></div>
+      <div class="dcol end"><div class="dh"><span class="dw">Fri</span><b class="dd">26</b></div><div class="dt"></div></div>
+    </div>
+    <span class="snapctl"><span class="sw on" role="switch" aria-checked="true"><i></i></span> Fine snap</span>
+  </div>
+</div>
+
+<!-- ══ 3 · EDIT MODE (§12 R06) ══
+     A calendar event was clicked: its details fill the same form above the grid. Start/stop
+     adjust by dragging the SELECTED EVENT'S EDGES on the grid (snap per §12 R23) or by typing
+     in the fields — same form values either way. The footer adds Split and the two-step
+     Delete (§12 R13). The inline error shows a refused Save (§12 R21 — a stop moved before
+     the start): announced, the card staying open and unchanged. The overlap band stays
+     warn-only (§06 R04). -->
+<div class="slab">
+  <div class="cap">Edit mode — the clicked event's details above the grid, its edges draggable; a refused Save surfaces inline</div>
+  <div class="card">
+    <div class="eform">
+      <div class="fcol">
+        <div class="f"><label class="lab">Description</label><textarea class="field" rows="3">Deep work on core algorithm</textarea></div>
+        <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">coding <button class="tag-x" type="button" aria-label="Remove tag coding"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><span class="tag">product <button class="tag-x" type="button" aria-label="Remove tag product"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><input placeholder="add a tag…"></div></div>
+      </div>
+      <div class="acol">
+        <div class="f"><label class="lab">Client</label><select class="field"><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option></select></div>
+        <div class="f"><label class="lab">Project</label><select class="field"><option>Q3 Strategy</option><option>Project Alpha</option></select></div>
+        <div class="f"><span class="toggle"><span class="sw on"><i></i></span> Billable</span></div>
+      </div>
+      <div class="tcol">
+        <!-- stored 09:07:33 – 11:03:00, deliberately off the snap grid: the fields carry the
+             stored truth to the second, and only an actively dragged edge snaps (issue #49) -->
+        <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-22 09:07:33"></div>
+        <div class="f"><label class="lab">Stop</label><input class="field tnum" value="2026-06-22 11:03:00"></div>
+      </div>
+    </div>
+    <!-- §12 R21: a Save core refuses is surfaced inline at the point of action -->
+    <div class="msg err">Stop time is before the entry started — adjust the Start or Stop and save again.</div>
+    <div class="foot">
+      <span class="grp">
+        <button class="btn ghost sm"><svg class="ic"><use href="#i-edit"/></svg> Split</button>
+        <button class="btn danger sm">Delete</button>
+      </span>
+      <span class="grp">
+        <button class="btn ghost">Cancel</button>
+        <button class="btn primary">Save entry</button>
+      </span>
+    </div>
+  </div>
+  <div class="gridwrap card" style="padding:0 12px 12px">
+    <div class="cgrid">
+      <div class="gut"><div class="sp2"></div><div class="gtr">
+        <span class="hlab" style="top:0">08:00</span><span class="hlab" style="top:60px">09:00</span><span class="hlab" style="top:120px">10:00</span><span class="hlab" style="top:180px">11:00</span><span class="hlab" style="top:240px">12:00</span><span class="hlab" style="top:300px">13:00</span><span class="hlab" style="top:360px">14:00</span><span class="hlab" style="top:420px">15:00</span>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Mon</span><b class="dd">22</b></div><div class="dt">
+        <!-- the SELECTED event, stored 09:07:33 – 11:03:00: painted exactly (09:07:33 → 67.6px,
+             11:03 → 183px at 60px/hour), never snapped on display; top+bottom edge grips -->
+        <div class="ev me" style="top:67.6px;height:115.4px">
+          <span class="grip t"></span><span class="grip b"></span>
+        </div>
+        <span class="tlabel tnum" style="top:44px">09:07</span>
+        <span class="tlabel tnum" style="top:186px">11:03</span>
+        <div class="ev" style="top:150px;height:60px;padding-top:36px"><span class="bc">Client call</span></div>
+        <div class="ov" style="top:150px;height:33px"><span class="otag">overlap 33m</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Tue</span><b class="dd">23</b></div><div class="dt">
+        <div class="ev" style="top:240px;height:165px"><span class="bd">Market research</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Wed</span><b class="dd">24</b></div><div class="dt">
+        <div class="ev" style="top:120px;height:120px"><span class="bd">Design review</span><span class="bc">Initech</span></div>
+      </div></div>
+      <div class="dcol"><div class="dh"><span class="dw">Thu</span><b class="dd">25</b></div><div class="dt"></div></div>
+      <div class="dcol end"><div class="dh"><span class="dw">Fri</span><b class="dd">26</b></div><div class="dt"></div></div>
+    </div>
+    <span class="snapctl"><span class="sw" role="switch" aria-checked="false"><i></i></span> Fine snap</span>
+  </div>
+</div>
+
+<!-- ══ 4 · THE PENDING-CHANGES GATE (§12 R24) ══
+     The description above was edited, then a DIFFERENT event was clicked: the subject swap is
+     BLOCKED — Keep editing returns to the form untouched; only the explicit Discard changes
+     abandons the edits and performs the swap. A clean form swaps in place with no prompt and
+     no animation. The same gate stands in front of the two ways OUT of the form — the Cancel
+     button and Escape (issue #323) — so no route loses typed work in silence. -->
+<div class="slab">
+  <div class="cap">The pending-changes gate — a dirty subject swap, Cancel or Escape is blocked; Keep editing preserves every field</div>
+  <div class="scrim">
+    <div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="gate-h">
+      <h3 id="gate-h">Discard unsaved changes?</h3>
+      <p>This entry has edits that haven't been saved. Keep editing to stay here, or discard them to open the other entry.</p>
+      <div class="row">
+        <button class="btn danger sm">Discard changes</button>
+        <button class="btn primary sm">Keep editing</button>
       </div>
     </div>
   </div>
 </div>
 
-<!-- Running entry: a start and no stop yet. The block has a draggable start edge only —
-     no bottom grip, no end label — and dissolves into the future; the Stop field stays
-     empty rather than creeping toward "now". Split and every other end-dependent
-     affordance is absent. The armed two-step in-window delete gate (§12 R13) replaces
-     the outer Cancel; the only commit on the right is Save. -->
-<div class="ecard card">
-  <div class="ebody">
-    <div class="fields">
-      <div class="f"><div class="lab-row"><label class="lab">Description</label><span class="pill run"><span class="dot run"></span> running</span></div><textarea class="field" rows="3">Drafting proposals</textarea></div>
-      <div class="f"><label class="lab">Client</label><select class="field fw"><option>Globex Corp</option><option>Initech</option><option>— none (internal) —</option></select></div>
-      <div class="f"><label class="lab">Project</label><select class="field fw"><option>Q3 Strategy</option><option>Project Alpha</option></select></div>
-      <div class="f"><label class="lab">Tags</label><div class="tagchips"><span class="tag">admin <button class="tag-x" type="button" aria-label="Remove tag admin"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><span class="tag">proposal <button class="tag-x" type="button" aria-label="Remove tag proposal"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></span><input placeholder="add a tag…"></div></div>
-      <div class="f"><span class="toggle"><span class="sw on"><i></i></span> Billable</span></div>
-    </div>
-    <div class="picker">
-      <div class="calcol">
-        <div class="cal-hd"><span class="m">June 2026</span><span class="nav2"><span><svg class="ic"><use href="#i-left"/></svg></span><span><svg class="ic"><use href="#i-right"/></svg></span></span></div>
-        <div class="grid">
-          <span class="dow">M</span><span class="dow">T</span><span class="dow">W</span><span class="dow">T</span><span class="dow">F</span><span class="dow">S</span><span class="dow">S</span>
-          <span class="d">1</span><span class="d">2</span><span class="d">3</span><span class="d">4</span><span class="d">5</span><span class="d">6</span><span class="d">7</span><span class="d">8</span><span class="d">9</span><span class="d">10</span><span class="d">11</span><span class="d">12</span><span class="d">13</span><span class="d">14</span><span class="d">15</span><span class="d">16</span><span class="d">17</span><span class="d">18</span><span class="d">19</span><span class="d">20</span><span class="d">21</span><span class="d">22</span><span class="d sel">23</span><span class="d">24</span><span class="d">25</span><span class="d">26</span><span class="d">27</span><span class="d">28</span><span class="d">29</span><span class="d">30</span><span class="d mut">1</span><span class="d mut">2</span><span class="d mut">3</span><span class="d mut">4</span><span class="d mut">5</span>
-        </div>
-        <button class="xp"><svg class="ic"><use href="#i-down"/></svg><span class="tnum">09:00 –</span></button>
-        <div class="xfields">
-          <div class="f"><label class="lab">Start</label><input class="field tnum" value="2026-06-23 09:00:00"></div>
-          <div class="f"><label class="lab">Stop</label><input class="field tnum" value=""></div>
-        </div>
-      </div>
-      <div class="daycol">
-        <div class="daywrap">
-          <div class="dayview">
-            <div class="track">
-              <span class="hour tnum" style="top:0">00:00</span><span class="hour tnum" style="top:30px">01:00</span><span class="hour tnum" style="top:60px">02:00</span><span class="hour tnum" style="top:90px">03:00</span><span class="hour tnum" style="top:120px">04:00</span><span class="hour tnum" style="top:150px">05:00</span><span class="hour tnum" style="top:180px">06:00</span><span class="hour tnum" style="top:210px">07:00</span><span class="hour tnum" style="top:240px">08:00</span><span class="hour tnum" style="top:270px">09:00</span><span class="hour tnum" style="top:300px">10:00</span><span class="hour tnum" style="top:330px">11:00</span><span class="hour tnum" style="top:360px">12:00</span><span class="hour tnum" style="top:390px">13:00</span><span class="hour tnum" style="top:420px">14:00</span><span class="hour tnum" style="top:450px">15:00</span><span class="hour tnum" style="top:480px">16:00</span><span class="hour tnum" style="top:510px">17:00</span><span class="hour tnum" style="top:540px">18:00</span><span class="hour tnum" style="top:570px">19:00</span><span class="hour tnum" style="top:600px">20:00</span><span class="hour tnum" style="top:630px">21:00</span><span class="hour tnum" style="top:660px">22:00</span><span class="hour tnum" style="top:690px">23:00</span>
-              <div class="block other" style="top:225px;height:37.5px">Email + standup</div>
-              <div class="block me open" style="top:270px;height:300px"></div>
-              <span class="tlabel tnum" style="top:275px">09:00</span>
-              <span class="grip" style="top:267px"></span>
-            </div>
-          </div>
-          <i class="fade t"></i><i class="fade b"></i>
-        </div>
-        <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
+<!-- ══ 5 · THE WEEK-MOVE PROMPT (§12 R24, issue #323) ══
+     The week was changed with this form open. The entry FOLLOWS the view to the same weekday of
+     the week being opened, which is a real move of a real entry, so it is confirmed first. This
+     is NOT the gate above: nothing is discarded either way, so neither button wears the danger
+     idiom and the affirmative one takes the primary. Cancel abandons the WHOLE action — the view
+     stays on the week it was on, so the form and its block stay together on screen. It asks once
+     per open form, so a confirmed move lets the owner step through weeks freely. -->
+<div class="slab">
+  <div class="cap">The week-move prompt — the entry follows the week; Cancel abandons the whole action</div>
+  <div class="scrim">
+    <div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="wk-h">
+      <h3 id="wk-h">Change entry week?</h3>
+      <p>This entry moves to the same day of the week you are opening. Cancel to stay on this week.</p>
+      <div class="row">
+        <button class="btn primary sm">Change week</button>
+        <button class="btn sm">Cancel</button>
       </div>
     </div>
-  </div>
-  <div class="foot">
-    <div class="gate"><svg class="ic"><use href="#i-flag"/></svg> <b>Delete this entry?</b> <button class="btn danger sm">Delete</button><button class="btn ghost sm">Keep</button></div>
-    <button class="btn primary">Save entry</button>
   </div>
 </div>
 
-<!-- rest each timeline viewport on working hours (07:00–18:00); the track scrolls the full 24 h -->
-<script>for(const v of document.querySelectorAll('.dayview'))v.scrollTop=210</script>
 </body>
 </html>

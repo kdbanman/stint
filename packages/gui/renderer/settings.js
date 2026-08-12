@@ -47,6 +47,22 @@
       options: [[4, '4 h'], [6, '6 h'], [8, '8 h'], [12, '12 h']],
       offWhen: (settings) => settings.pickerWindowMode !== 'around_now',
     },
+    // §14 / §12 R09/R23 — the Entries-calendar group (mockup settings.html): show_weekend
+    // (the SAME row the Entries-toolbar toggle drives — §12 R09) and the two drag-snap
+    // resolutions of §12 R23 (whole minutes 1–30, fine ≤ coarse; the fine-snap TOGGLE is
+    // ephemeral UI state, deliberately not a setting).
+    {
+      group: 'Entries calendar', key: 'showWeekend', label: 'Show weekend', kind: 'toggle',
+      note: 'Also toggled from the Entries toolbar',
+    },
+    {
+      group: 'Entries calendar', key: 'snapFineMinutes', label: 'Fine snap', kind: 'minutes',
+      note: 'Drag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value',
+    },
+    {
+      group: 'Entries calendar', key: 'snapCoarseMinutes', label: 'Coarse snap', kind: 'minutes',
+      note: 'Default drag resolution · 1–30 min',
+    },
     {
       group: 'Check-ins', key: 'firstCheckinMin', label: 'First check-in', kind: 'select', cast: 'number',
       options: [[30, '30 min'], [60, '60 min'], [90, '90 min']],
@@ -112,6 +128,17 @@
         `placeholder="HH:MM" data-key="${key}" value="${esc(settings[key] ?? '')}" ` +
         `aria-label="${esc(f.label)} ${key === f.keys[0] ? 'start' : 'end'}">`;
       return input(f.keys[0]) + `<span class="set-hhmm-sep">–</span>` + input(f.keys[1]);
+    }
+    if (f.kind === 'minutes') {
+      // §14 — a whole-minutes text input (the snap resolutions), mirroring the mockup's
+      // value + "min" suffix. Persists Number(value) on change; core validates (integer
+      // 1–30 + the cross-field fine ≤ coarse pair), and a rejection re-renders so the
+      // field reverts to stored truth.
+      return (
+        `<input class="set-field set-min tnum" type="text" inputmode="numeric" size="3" maxlength="2" ` +
+        `data-key="${f.key}" value="${esc(v ?? '')}" aria-label="${esc(f.label)} minutes">` +
+        `<span class="set-min-suffix">min</span>`
+      );
     }
     if (f.kind === 'toggle') {
       const on = v === true;
@@ -559,7 +586,15 @@
         void persist(inp.dataset.key, inp.value.trim());
       });
     }
-    // The rounding toggle flips a boolean.
+    // §14 — the snap-minutes inputs persist Number(value) on change; core validates the
+    // 1–30 whole-minute domain and the cross-field fine ≤ coarse pair, and a rejection
+    // re-renders so the field reverts to the stored truth.
+    for (const inp of host.querySelectorAll('input.set-min')) {
+      inp.addEventListener('change', () => {
+        void persist(inp.dataset.key, Number(inp.value.trim()));
+      });
+    }
+    // A settings toggle (rounding, show weekend) flips a boolean.
     for (const btn of host.querySelectorAll('.set-toggle')) {
       btn.addEventListener('click', () => {
         void persist(btn.dataset.key, btn.getAttribute('aria-checked') !== 'true');

@@ -1,7 +1,7 @@
 /**
  * The exact-times FIELD VOCABULARY (PRD §12 R14/R15/R17, G1) — the one format the raw
  * Start/Stop text fields render, and the one parse that reads them back. Electron-free,
- * mirroring tags.ts / liveview.ts / timerview.ts; its only collaborator is core's
+ * mirroring tags.ts / timerview.ts; its only collaborator is core's
  * wall-clock pair (wallClockOf / wallClockToUtc), the same primitives `tt`'s parseTime
  * uses, so the two surfaces read a wall-clock string identically (§04 R06).
  *

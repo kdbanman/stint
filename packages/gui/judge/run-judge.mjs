@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -82,7 +82,10 @@ async function fitPopoverViewport(page) {
 }
 
 async function withPage(browser, state, name, fn, initOpts = {}) {
-  const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light' });
+  // timezoneId pinned like the explicitly-UTC scenes: the week-only Entries view derives
+  // "today" (the default week, the today ring) from the PAGE's zone, so an unpinned page
+  // would move those facts with the runner's timezone (CI is UTC; a local run must match).
+  const page = await newScenePage(browser, { viewport: name === 'popover.html' ? POPOVER : WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   // Pin the page clock so derived count-ups and the captured evidence are
   // byte-for-byte reproducible; the count-up only advances on explicit fastForward.
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -113,8 +116,19 @@ const readsClean = (message) => typeof message === 'string' && message.length > 
 // frame happened to catch. With motion off, every paint assertion reads the cascade directly and
 // the same interaction gives the same colour every run. Only motion is suppressed: that it exists,
 // and collapses under prefers-reduced-motion, is A06's own static check.
+// §12 R24 (issue #323): Cancel is GATED now — a form holding typed work asks before it closes,
+// so a scene that only wants the form gone has to answer the prompt. A clean form never raises
+// one, which is why this is safe to use everywhere rather than only where the form is dirty.
+// The gate is appended synchronously inside the click handler, so it is already there (or
+// never coming) by the time the click resolves.
+async function cancelForm(page, sel = '.entry-form') {
+  await page.click(`${sel} .edit-cancel`);
+  if (await page.$('.gate-backdrop')) await page.click('.gatecard [data-gate="confirm"]');
+  await page.waitForSelector(sel, { state: 'detached' });
+}
+
 const noMotion = (page) =>
-  page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; }' });
+  page.addStyleTag({ content: '*, *::before, *::after { transition: none !important; animation: none !important; }' });
 
 // Click a calendar event's INERT BODY — the "a click anywhere that is not an action control opens
 // the unified editor" path (§12 R06). Aiming at a line selector (`.bd`, `.bt`) does not work:
@@ -672,8 +686,10 @@ async function sceneCrossViewFreshness(browser) {
     listState(),
     'index.html',
     async (page) => {
-      await page.click('#el-preset-seg .preset[data-preset="today"]');
-      await page.waitForFunction(() => !!window.__LIST_REQ__);
+      // Touch the week machinery (the range presets are gone, §12 R09): stepping to the
+      // previous week latches the toolbar's entries-only query exactly as a preset used to.
+      await page.click('#el-prev-week');
+      await page.waitForFunction(() => window.__LIST_REQ__?.fromDate === '2026-06-15');
       const latched = await page.evaluate(() => window.__LIST_REQ__ ?? null);
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #timer-card');
@@ -712,7 +728,8 @@ async function sceneCrossViewFreshness(browser) {
       await page.screenshot({ path: join(EVIDENCE, 'timer-cross-view.png') });
       await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + 3000));
       const clock2 = (await page.textContent('#timer-clock')).trim();
-      const toolbarLatched = !!latched && latched.preset === 'today';
+      const toolbarLatched =
+        !!latched && latched.by === 'day' && latched.fromDate === '2026-06-15' && latched.toDate === '2026-06-21';
       const idleCard = idle.state === 'idle' && idle.toggle === 'Start' && idle.clock === '00:00:00';
       const flipsInPlace =
         !!after &&
@@ -815,6 +832,12 @@ async function sceneTimerView(browser) {
         noEndEcho: !host.querySelector('.stp-echo-end'),
         fade: /gradient/.test(mask),
         others: host.querySelectorAll('.stp-block.other').length,
+        // §12 R23: the fine-snap toggle beside the track is the picker's ONLY snap chrome —
+        // present, coarse on open (aria-checked=false), with the retired snap-value pill and
+        // drag-hint copy absent (their classes gone from the mount, not merely hidden).
+        snapCtl: window.__probe.visible(host.querySelector('.stp-snapctl .sw')),
+        coarseOnOpen: host.querySelector('.stp-snapctl .sw')?.getAttribute('aria-checked') === 'false',
+        noSnapPill: !host.querySelector('.stp-snaphint') && !host.querySelector('.stp-snap'),
         startBefore: document.querySelector('#le-start')?.value ?? null,
         // issue #159: the field the user reads and RETYPES carries no `T` wire separator, and
         // its placeholder describes the very shape it renders — the two agreed on nothing before.
@@ -823,9 +846,10 @@ async function sceneTimerView(browser) {
     });
     await page.screenshot({ path: join(EVIDENCE, 'timer-view-full.png'), fullPage: true });
 
-    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, 5-min
-    // snapped): the raw #le-start text must advance LIVE from the exact 21:35:53 to the
-    // snapped 20:35 (UTC page) — the drag is the user's edit, so the dragged handle snaps.
+    // Drag the start grip UP by 30px (720px track / 24h → 0.5px per minute → -60min, snapped
+    // at the DEFAULT COARSE resolution — the fixture's snapCoarseMinutes=15, §12 R23): the raw
+    // #le-start text must advance LIVE from the exact 21:35:53 to the coarse-snapped 20:30
+    // (UTC page) — the drag is the user's edit, so the dragged handle snaps.
     const grip = page.locator('#le-start-disc .stp-grip');
     await grip.scrollIntoViewIfNeeded();
     const g = await grip.boundingBox();
@@ -847,6 +871,39 @@ async function sceneTimerView(browser) {
     await page.clock.fastForward(600);
     await page.waitForFunction(() => !!window.__EDITED__);
     const edited = await page.evaluate(() => window.__EDITED__);
+
+    // §12 R23 — the FINE half: flip the toggle beside the track and drag UP by 5px (−10min
+    // from the coarse-landed 20:30). At the fixture's snapFineMinutes=5 the drag lands on
+    // 20:20 — a minute ON the fine grid but OFF the coarse one (1220 % 15 = 5), so a picker
+    // still snapping coarse (or still at the retired hard-coded resolution's arithmetic
+    // against a different base) cannot fake the value.
+    await page.evaluate(() => { window.__EDITED__ = null; });
+    await page.click('#le-start-disc .stp-snapctl .sw');
+    const fineOn = await page.evaluate(
+      () => document.querySelector('#le-start-disc .stp-snapctl .sw')?.getAttribute('aria-checked') === 'true',
+    );
+    const grip2 = page.locator('#le-start-disc .stp-grip');
+    await grip2.scrollIntoViewIfNeeded();
+    const g2 = await grip2.boundingBox();
+    const g2x = Math.round(g2.x + g2.width / 2);
+    const g2y = Math.round(g2.y + g2.height / 2);
+    await page.mouse.move(g2x, g2y);
+    await page.mouse.down();
+    await page.mouse.move(g2x, g2y - 5, { steps: 3 });
+    await page.mouse.up();
+    const fineDragged = await page.evaluate(() => document.querySelector('#le-start')?.value ?? null);
+
+    // §12 R23 — EPHEMERAL: collapse the disclosure and reopen it. The toggle must be back at
+    // coarse (aria-checked=false — the state is per-mount, never persisted), and the shown
+    // start must round-trip untouched: 20:20:00 sits OFF the coarse grid, so a reopen that
+    // re-snapped or rewrote the shown value could not preserve it (issue #49).
+    await page.click('#le-start-pick'); // collapse
+    await page.click('#le-start-pick'); // reopen — a fresh mount
+    await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+    const reopened = await page.evaluate(() => ({
+      coarseAgain: document.querySelector('#le-start-disc .stp-snapctl .sw')?.getAttribute('aria-checked') === 'false',
+      startPreserved: document.querySelector('#le-start')?.value ?? null,
+    }));
     const toSec = (s) => { const [h, m, sec] = s.split(':').map(Number); return h * 3600 + m * 60 + sec; };
     const delta = toSec(t2) - toSec(t1);
     const clockLive = t1 === '01:24:07' && delta === 3;
@@ -879,7 +936,7 @@ async function sceneTimerView(browser) {
       disc.startPlaceholder === 'YYYY-MM-DD HH:mm:ss' &&
       new RegExp(`^${disc.startPlaceholder.replace(/[A-Za-z]/g, '\\d')}$`).test(disc.startBefore);
     const dragWritesLive =
-      dragged.startLive === '2026-06-24 20:35:00' &&
+      dragged.startLive === '2026-06-24 20:30:00' &&
       !/\d{4}-\d{2}-\d{2}T/.test(dragged.startLive) &&
       dragged.stillNoEndChrome &&
       dragged.noBackdrop;
@@ -888,7 +945,13 @@ async function sceneTimerView(browser) {
       typeof edited.id === 'number' &&
       !!edited.patch &&
       !('endUtc' in edited.patch) && // the load-bearing invariant — the open row stays open
-      edited.patch.startUtc === '2026-06-24T20:35:00.000Z';
+      edited.patch.startUtc === '2026-06-24T20:30:00.000Z';
+    // §12 R23 — the Timer half of the snap rule, scored as three facts: the toggle is the
+    // only snap chrome and opens coarse; the fine drag lands on the fine grid OFF the coarse
+    // one; and a collapse/reopen both resets the toggle and round-trips the shown start.
+    const snapChrome = disc.snapCtl && disc.coarseOnOpen && disc.noSnapPill;
+    const fineToggleDrag = fineOn && fineDragged === '2026-06-24 20:20:00';
+    const reopenCoarse = reopened.coarseAgain && reopened.startPreserved === '2026-06-24 20:20:00';
     await page.close();
 
     // design.html D04/D14 (issue #160) — AN ATTRIBUTE IS NOT AN ADVISORY. The same running card,
@@ -965,11 +1028,15 @@ async function sceneTimerView(browser) {
         startSeededExactly,
         dragWritesLive,
         patchStartOnly,
+        snapChrome,
+        fineToggleDrag,
+        reopenCoarse,
         attrVsFlag,
       },
       `Timer clock ${t1} → ${t2} (+${delta}s); strip ${JSON.stringify(before)}; ` +
-        `start-only disclosure ${JSON.stringify(disc)}; grip drag → ${JSON.stringify(dragged)}; ` +
+        `start-only disclosure ${JSON.stringify(disc)}; coarse grip drag → ${JSON.stringify(dragged)}; ` +
         `edit patch ${JSON.stringify(edited)} (endUtc present: ${edited && edited.patch ? ('endUtc' in edited.patch) : 'n/a'}); ` +
+        `fine toggle on=${fineOn}, fine drag → ${fineDragged}; reopen → ${JSON.stringify(reopened)}; ` +
         `attribute-vs-advisory paint ${JSON.stringify(paint)}`,
       'timer-view-full.png',
     );
@@ -1344,13 +1411,16 @@ async function scenePrimaryHandoff(browser) {
     await page.waitForSelector('#fav-pin');
 
     await page.click('.nav-item[data-view="entries"]');
-    await page.waitForSelector('[data-view="entries"]:not([hidden]) #add-toggle');
+    // §12 R07: the Entries standing primary is the week grid's round + button; at rest it is
+    // the view's one accent fill, and opening the unified form hides it while Save entry takes
+    // the accent — the handoff's structural guarantee, measured the same as every other state.
+    await page.waitForSelector('[data-view="entries"]:not([hidden]) #entries .fab');
     await at(page, 'entries · at rest');
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])');
-    await at(page, 'entries · add form open');
-    await page.click('#add-cancel');
-    await page.waitForFunction(() => !!document.querySelector('#add-form')?.hidden);
+    await page.focus('#entries .fab');
+    await page.keyboard.press('Enter'); // the keyboard path opens the form directly (R07)
+    await page.waitForSelector('.entry-form[data-mode="add"]');
+    await at(page, 'entries · unified form open');
+    await cancelForm(page);
 
     await page.click('.nav-item[data-view="clients"]');
     await page.waitForSelector('#clients:not([hidden]) .client[data-id]');
@@ -1707,13 +1777,19 @@ async function sceneRunningSingleAction(browser) {
   });
 }
 
-// UNIFIED_FORM_ADD — §12 R07 (G5/G7): the manual-add surface is the ONE unified entry form in
-// ADD mode, inline in the Entries view (no modal). Driven end to end over the REAL renderer.
+// UNIFIED_FORM_ADD — §12 R07 (core) / R16 / R17 / R23: adding an entry lives on the entries
+// calendar itself. The round + button (bottom-right of the week grid, the view's standing
+// accent primary) enters SELECT-INTERVAL mode on a pointer click — a start handle follows the
+// cursor at the COARSE snap, press-drag sets the length, release enters CREATE mode: the ONE
+// unified entry form (reduced field set) expands above the grid, BLANK except the dragged
+// interval, the grid grays, the + hides and the fine-snap toggle takes its spot. The pending
+// interval stays adjustable by dragging; the raw Start/Stop fields are the exact / overnight
+// path and stay live-synced with the grid both ways. Keyboard activation of the + opens the
+// form DIRECTLY with the working-hours default interval. Save entry is the sole commit over
+// the unchanged `add` IPC.
 //
-// The page is pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
-// 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries, making
-// the gray/overlap geometry deterministic; overlap:true makes the post-save WriteAck carry the
-// overlap warning the inline banner surfaces.
+// The page is pinned to timezoneId 'UTC' (JUDGE_NOW = Wed 2026-06-24T23:00Z) so the shown week
+// is Mon 22 – Fri 26 and the fixture's UTC instants are the local wall clock.
 async function sceneUnifiedFormAdd(browser) {
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -1721,475 +1797,479 @@ async function sceneUnifiedFormAdd(browser) {
     await page.clock.pauseAt(new Date(JUDGE_NOW));
     await page.addInitScript(initScript(JSON.stringify(addFormState()), { overlap: true }));
     await page.goto(fileUrl('index.html'));
-
-    // Wait for the initial load() so `state` (and thus the picker's snapshotEntries) is populated
-    // before the add form mounts the picker — the two seeded closed entries render as rows first.
     await page.waitForSelector('.entry', { state: 'attached' });
+    await noMotion(page);
 
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
-    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-    await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
-    await page.screenshot({ path: join(EVIDENCE, 'unified-add.png'), fullPage: true });
-
-    const layout = await page.evaluate(() => {
-      const form = document.querySelector('#add-form');
-      const q = (sel) => form?.querySelector(sel);
-      const desc = q('#add-desc');
-      const client = q('#add-client');
-      const project = q('#add-project');
-      const timesToggle = q('#add-times-toggle');
-      const timesBody = q('#add-times-body');
-      const from = q('#add-from');
-      const to = q('#add-to');
-      return {
-        visible: !!form && !form.hidden,
-        unified: !!form && form.classList.contains('unified-form') && form.dataset.mode === 'add',
-        descTag: desc ? desc.tagName : null,
-        descRows: desc ? Number(desc.getAttribute('rows')) : null,
-        clientTag: client ? client.tagName : null,
-        projectTag: project ? project.tagName : null,
-        hasTagChips: !!q('#add-tag-chips'),
-        hasBill: !!q('#add-bill'),
-        pickerCal: !!q('#add-picker .stp-cal .stp-grid .stp-d'),
-        pickerTrack: !!q('#add-picker .stp-track'),
-        pickerHours: q('#add-picker') ? q('#add-picker').querySelectorAll('.stp-hour').length : 0,
-        pickerMe: !!q('#add-picker .stp-block.me'),
-        expanderCollapsed: !!timesToggle && timesToggle.getAttribute('aria-expanded') === 'false' && !!timesBody && timesBody.hidden,
-        startText: from ? from.getAttribute('type') : null,
-        stopText: to ? to.getAttribute('type') : null,
-        noDatetimeLocal: form ? form.querySelectorAll('input[type="datetime-local"]').length === 0 : false,
-      };
+    // Every grid gesture below must take POINTER CAPTURE on press (R07/R06). Counted from the
+    // platform's own `gotpointercapture`, so this reads what the browser granted rather than
+    // what the source appears to ask for.
+    await page.evaluate(() => {
+      window.__CAPTURES__ = 0;
+      document.addEventListener('gotpointercapture', () => { window.__CAPTURES__++; }, true);
     });
 
-    const paint = await page.evaluate(() => {
-      const picker = document.querySelector('#add-picker');
+    // (a) REST — the + button sits bottom-right of the grid wrap, accent-filled, and its hover
+    // expansion unfolds the label rightward WITHOUT the + glyph moving (R07's exact sentence:
+    // the corner reserves room for the expansion).
+    const rest = await page.evaluate(() => {
+      const wrap = document.querySelector('#entries .calwrap');
+      const fab = wrap?.querySelector('.fab');
+      if (!fab) return null;
+      const w = wrap.getBoundingClientRect();
+      const f = fab.getBoundingClientRect();
       const { rgbOf } = window.__probe;
-      const accentRgb = rgbOf('--accent');
-      const accentWeakRgb = rgbOf('--accent-weak');
-      const accentSolidRgb = rgbOf('--accent-solid');
-      const inkRgb = rgbOf('--ink');
-      const overlaps = [...picker.querySelectorAll('.stp-overlap')];
-      const me = picker.querySelector('.stp-block.me');
-      const meCs = getComputedStyle(me);
-      const meLab = me.querySelector('.stp-lab-top, .stp-lab-bot');
       return {
-        others: picker.querySelectorAll('.stp-block.other').length,
-        overlaps: overlaps.length,
-        overlapInert: overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
-        meWeakFill: meCs.backgroundColor === accentWeakRgb,
-        meAccentBorder: meCs.borderTopColor === accentRgb && parseFloat(meCs.borderTopWidth) >= 1,
-        // The block's time labels stay INK (accent-ink on accent-weak is the prohibited pair).
-        meInkLabels: !meLab || getComputedStyle(meLab).color === inkRgb,
-        saveSolid: getComputedStyle(document.querySelector('#add-go')).backgroundColor === accentSolidRgb,
+        visible: window.__probe.visible(fab),
+        label: fab.getAttribute('aria-label'),
+        accentSolid: getComputedStyle(fab).backgroundColor === rgbOf('--accent-solid'),
+        capsule: getComputedStyle(fab).borderRadius === '999px',
+        bottomRight: f.bottom > w.bottom - 120 && f.right > w.right - 220,
+        glyphLeft: fab.querySelector('.ic').getBoundingClientRect().left,
+        noToolbarAdd: !document.getElementById('add-toggle'),
+        snapCtlHidden: !window.__probe.visible(document.querySelector('#entries .snapctl')),
       };
     });
-
-    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
-    const seed = await page.evaluate(() => ({
-      from: document.querySelector('#add-from')?.value,
-      to: document.querySelector('#add-to')?.value,
-    }));
-    const meBox = await page.evaluate(() => {
-      const me = document.querySelector('#add-picker .stp-block.me');
-      const r = me.getBoundingClientRect();
-      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+    await page.hover('#entries .fab');
+    await page.waitForFunction(() => {
+      const fl = document.querySelector('#entries .fab .fl');
+      return fl && fl.getBoundingClientRect().width > 60;
     });
-    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
-    await page.mouse.down();
-    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
-    await page.mouse.up();
-    const dragged = await page.evaluate(() => ({
-      from: document.querySelector('#add-from')?.value,
-      to: document.querySelector('#add-to')?.value,
+    const hover = await page.evaluate(() => ({
+      glyphLeft: document.querySelector('#entries .fab .ic').getBoundingClientRect().left,
+      labelText: document.querySelector('#entries .fab .fl').textContent,
     }));
-    const liveUpdate =
-      dragged.from !== seed.from &&
-      dragged.to !== seed.to &&
-      spanMin(dragged.from, dragged.to) === spanMin(seed.from, seed.to); // body drag moves both together
+    const fabRest =
+      !!rest && rest.visible && rest.label === 'Add entry' && rest.accentSolid && rest.capsule &&
+      rest.bottomRight && rest.noToolbarAdd && rest.snapCtlHidden &&
+      hover.labelText === 'Add entry' && Math.abs(hover.glyphLeft - rest.glyphLeft) < 1;
 
-    await page.fill('#add-desc', 'design review');
-    await page.selectOption('#add-client', { label: 'Acme' });
-    await page.waitForSelector('#add-project:not([disabled]) option[value="11"]', { state: 'attached' });
-    await page.selectOption('#add-project', { label: 'API' });
-    await page.click('#add-tag-input');
-    await page.fill('#add-tag-input', 'deep');
-    await page.press('#add-tag-input', 'Enter');
-    await page.click('#add-go');
+    // (b) SELECT-INTERVAL — a pointer click on the + enters select mode: grid takes the
+    // gestures, the + hides, the fine-snap toggle holds its spot (coarse on entry), and the
+    // start handle follows the cursor SNAPPED to the coarse grid (15 min default).
+    await page.click('#entries .fab');
+    await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+    // Aim at an off-grid pixel: 100px below the visible track top is 1h40m past the scroll
+    // offset — whatever it lands on, the handle's minute must sit on the 15-min grid.
+    const aim = await page.evaluate(() => {
+      const t = document.querySelector('#entries .dt[data-day="2026-06-24"]');
+      const r = t.getBoundingClientRect();
+      const strip = document.querySelector('.cstrip').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: Math.max(r.top, strip.top) + 103 };
+    });
+    await page.mouse.move(aim.x, aim.y);
+    await page.waitForSelector('#entries .shandle', { state: 'attached' });
+    const select = await page.evaluate(() => {
+      const h = document.querySelector('#entries .shandle');
+      const label = h.querySelector('.st').textContent;
+      const [hh, mm] = label.split(':').map(Number);
+      return {
+        fabHidden: !window.__probe.visible(document.querySelector('#entries .fab')),
+        snapCtl: window.__probe.visible(document.querySelector('#entries .snapctl')),
+        coarseOff: document.querySelector('#entries .snapctl .sw').getAttribute('aria-checked') === 'false',
+        onCoarseGrid: (hh * 60 + mm) % 15 === 0,
+        inTrack: h.parentElement?.dataset.day === '2026-06-24',
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'entries-select-interval.png') });
+    const selectMode =
+      select.fabHidden && select.snapCtl && select.coarseOff && select.onCoarseGrid && select.inTrack;
+
+    // (b2) SELECT-INTERVAL CANNOT OUTLIVE THE VIEW — it is a mode of the grid, so routing away
+    // resolves it to rest. A stranded mode is a dead-end: the + it replaced is hidden, `.sel-mode
+    // .dt .ev` sets pointer-events:none so no entry can be clicked, and the only way out is
+    // Escape, which nothing on screen mentions. Routed to the Timer view and back, the grid is
+    // at rest: + visible, toggle gone, `.sel-mode` off, and an event clickable again.
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('.view[data-view="timer"]:not([hidden])');
+    await page.click('.nav-item[data-view="entries"]');
+    await page.waitForSelector('#entries .calwrap', { state: 'attached' });
+    const rerouted = await page.evaluate(() => {
+      const wrap = document.querySelector('#entries .calwrap');
+      const ev = document.querySelector('#entries .dt .ev');
+      return {
+        wrapPresent: !!wrap,
+        selMode: !!wrap?.classList.contains('sel-mode'),
+        fabBack: window.__probe.visible(document.querySelector('#entries .fab')),
+        snapCtlHidden: !window.__probe.visible(document.querySelector('#entries .snapctl')),
+        eventPresent: !!ev,
+        eventPointerEvents: ev ? getComputedStyle(ev).pointerEvents : null,
+      };
+    });
+    const selectModeExits =
+      rerouted.wrapPresent && !rerouted.selMode && rerouted.fabBack && rerouted.snapCtlHidden &&
+      rerouted.eventPresent && rerouted.eventPointerEvents !== 'none';
+    // Back into select mode, where (c) picks up. Escape first: a no-op at rest, and the
+    // stranded mode's only exit — without it a regression here would surface as this scene
+    // timing out on a hidden +, instead of the false fact above.
+    await page.keyboard.press('Escape');
+    await page.click('#entries .fab');
+    await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+    await page.mouse.move(aim.x, aim.y);
+    await page.waitForSelector('#entries .shandle', { state: 'attached' });
+
+    // (c) PRESS-DRAG → CREATE — releasing opens the unified form ABOVE the grid, BLANK except
+    // the dragged interval: description empty, client/project unseeded (no last-used), no tags,
+    // billable off (the §05 R07 client-keyed default), the grid GRAYED, + hidden, the toggle
+    // still in its spot, the pending interval painted with edge grips + time pills.
+    await page.mouse.down();
+    await page.mouse.move(aim.x, aim.y + 90, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    await page.waitForSelector('#entries .ev.me', { state: 'attached' });
+    const create = await page.evaluate(() => {
+      const form = document.querySelector('.entry-form[data-mode="add"]');
+      const q = (sel) => form.querySelector(sel);
+      const start = q('.edit-start').value;
+      const stop = q('.edit-end').value;
+      const minOf = (v) => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16));
+      return {
+        hosted: form.parentElement?.id === 'entry-form-host',
+        aboveGrid: form.getBoundingClientRect().bottom <= document.querySelector('#entries .calwrap').getBoundingClientRect().top,
+        noModal: !document.querySelector('.editor-backdrop') && getComputedStyle(form).position === 'static',
+        descTag: q('.edit-desc')?.tagName,
+        descRows: Number(q('.edit-desc')?.getAttribute('rows')),
+        blank:
+          q('.edit-desc').value === '' && q('.edit-client').value === '' &&
+          q('.edit-project').disabled && form.querySelectorAll('.ef-tag-chips .chip').length === 0 &&
+          q('.edit-bill-box').getAttribute('aria-checked') === 'false',
+        startText: q('.edit-start').getAttribute('type') === 'text',
+        stopText: q('.edit-end').getAttribute('type') === 'text',
+        noDatetimeLocal: document.querySelectorAll('input[type="datetime-local"]').length === 0,
+        onCoarse: minOf(start) % 15 === 0 && minOf(stop) % 15 === 0,
+        span: start < stop,
+        grayed: !!document.querySelector('#entries .calwrap.grayed'),
+        fabHidden: !window.__probe.visible(document.querySelector('#entries .fab')),
+        snapCtl: window.__probe.visible(document.querySelector('#entries .snapctl')),
+        me: document.querySelectorAll('#entries .ev.me').length,
+        grips: document.querySelectorAll('#entries .grip').length,
+        pills: [...document.querySelectorAll('#entries .tlabel')].map((l) => l.textContent),
+        start,
+        stop,
+      };
+    });
+    const meAccent = await page.evaluate(() => {
+      const me = document.querySelector('#entries .ev.me');
+      const cs = getComputedStyle(me);
+      const { rgbOf } = window.__probe;
+      return {
+        weakFill: cs.backgroundColor === rgbOf('--accent-weak'),
+        accentBorder: cs.borderTopColor === rgbOf('--accent') && parseFloat(cs.borderTopWidth) >= 1,
+        saveSolid:
+          getComputedStyle(document.querySelector('.entry-form button[type="submit"]')).backgroundColor ===
+          rgbOf('--accent-solid'),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'unified-add.png'), fullPage: true });
+    const createBlank =
+      create.hosted && create.aboveGrid && create.noModal && create.descTag === 'TEXTAREA' &&
+      create.descRows === 3 && create.blank && create.startText && create.stopText &&
+      create.noDatetimeLocal && create.onCoarse && create.span && create.grayed &&
+      create.fabHidden && create.snapCtl && create.me === 1 && create.grips === 2 &&
+      create.pills.length === 2 && meAccent.weakFill && meAccent.accentBorder && meAccent.saveSolid;
+
+    // (d) LIVE DRAG — a body drag on the pending interval moves BOTH fields, span preserved,
+    // still on the coarse grid; flipping the fine-snap toggle re-lands an edge drag on the
+    // FINE grid (5 min default) — the settings pair consumed, the toggle ephemeral (R23).
+    const spanMin = (a, b) => Math.round((Date.parse(b.replace(' ', 'T')) - Date.parse(a.replace(' ', 'T'))) / 60000);
+    const meBox = await page.evaluate(() => {
+      // Bring the pending block into the scrollport before aiming at it. Its rect is in viewport
+      // space whether or not the strip is showing it, so a clipped block hands back coordinates
+      // that land on whatever sits above the grid — and the drag silently does nothing. What is
+      // under test is that a body drag moves both fields, not where the strip happens to sit.
+      const me = document.querySelector('#entries .ev.me');
+      me.scrollIntoView({ block: 'center' });
+      const r = me.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(meBox.x, meBox.y);
+    await page.mouse.down();
+    await page.mouse.move(meBox.x, meBox.y - 61, { steps: 8 });
+    await page.mouse.up();
+    const bodyDragged = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    const minOf = (v) => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16));
+    const liveDrag =
+      bodyDragged.start !== create.start && bodyDragged.stop !== create.stop &&
+      spanMin(bodyDragged.start, bodyDragged.stop) === spanMin(create.start, create.stop) &&
+      minOf(bodyDragged.start) % 15 === 0;
+    await page.click('#entries .snapctl .sw');
+    const gripBox = await page.evaluate(() => {
+      // Same reason as meBox: the body drag just moved this block, so re-centre before aiming.
+      const grip = document.querySelector('#entries .grip.b');
+      grip.scrollIntoView({ block: 'center' });
+      const r = grip.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(gripBox.x, gripBox.y);
+    await page.mouse.down();
+    await page.mouse.move(gripBox.x, gripBox.y + 23, { steps: 6 });
+    await page.mouse.up();
+    const fineDragged = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    const fineSnapOk =
+      fineDragged.start === bodyDragged.start && // only the dragged stop edge moved
+      fineDragged.stop !== bodyDragged.stop &&
+      minOf(fineDragged.stop) % 5 === 0 && minOf(fineDragged.stop) % 15 !== 0; // landed on the FINE grid
+
+    // (d2) THE DRAG ENDS ON THE RELEASE, EVEN OFF-WINDOW. A button let go outside the window
+    // delivers no mouseup to the page at all; pointer capture is what makes the browser deliver
+    // `pointerup` anyway — which is why the sibling picker (timepicker.js) has always used it.
+    // Without it the drag never ends: the interval keeps following a cursor with no button held,
+    // Escape stays dead (its handler is guarded on no drag in flight), and the next click
+    // anywhere fires the stale release. Driven as the browser delivers it — a pointerup at the
+    // window while the button is still physically down — then the cursor is moved a long way:
+    // the fields must be frozen. The mid-drag reading proves the drag was live first, so a
+    // gesture that never started could not pass this.
+    const beforeRelease = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    const holdBox = await page.evaluate(() => {
+      const r = document.querySelector('#entries .grip.b').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.move(holdBox.x, holdBox.y);
+    await page.mouse.down();
+    await page.mouse.move(holdBox.x, holdBox.y - 45, { steps: 5 });
+    const midDrag = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.evaluate(() => window.dispatchEvent(new PointerEvent('pointerup', { bubbles: true })));
+    await page.mouse.move(holdBox.x, holdBox.y - 200, { steps: 8 });
+    const afterRelease = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.mouse.up();
+    const captures = await page.evaluate(() => window.__CAPTURES__);
+    const dragRelease = { beforeRelease, midDrag, afterRelease, captures };
+    const dragCaptureOk =
+      midDrag.stop !== beforeRelease.stop && // the drag was genuinely live
+      afterRelease.stop === midDrag.stop && // and stopped dead on the release
+      afterRelease.start === midDrag.start && // the untouched edge never moved either
+      captures >= 3; // the press → drag → release path captured on each of the three gestures
+
+    // (e) §12 R17 — the raw fields are the ONLY overnight path and drive the grid live: a stop
+    // typed onto the NEXT day repaints the pending interval as one segment per shown day
+    // (seg-start on Wed 24 to the column foot, seg-end on Thu 25 from the head), never a
+    // same-day sliver; the typed text stays verbatim in the field.
+    await page.fill('.entry-form .edit-end', '2026-06-25 02:00:00');
+    await page.waitForFunction(() => document.querySelectorAll('#entries .ev.me').length === 2);
+    const overnight = await page.evaluate(() => {
+      const segs = [...document.querySelectorAll('#entries .ev.me')].map((m) => ({
+        day: m.parentElement.dataset.day,
+        cls: m.className,
+        top: m.style.top,
+      }));
+      return { segs, stopField: document.querySelector('.entry-form .edit-end').value };
+    });
+    const overnightTyped =
+      overnight.segs.length === 2 &&
+      overnight.segs.some((s) => s.day === '2026-06-24' && /seg-start/.test(s.cls)) &&
+      overnight.segs.some((s) => s.day === '2026-06-25' && /seg-end/.test(s.cls) && s.top === '0px') &&
+      overnight.stopField === '2026-06-25 02:00:00';
+
+    // (f) SAVE — the sole commit over the unchanged `add` IPC: the raw field text verbatim plus
+    // the picked attributes; billable UNTOUCHED is omitted so core derives the §05 R07 default.
+    // The overlapping backfill still saves (the form closes, rest chrome returns) and the
+    // non-blocking overlap banner raises (§06 R4).
+    await page.fill('.entry-form .edit-desc', 'late deploy');
+    await page.selectOption('.entry-form .edit-client', { label: 'Acme' });
+    await page.waitForSelector('.entry-form .edit-project:not([disabled]) option[value="11"]', { state: 'attached' });
+    await page.selectOption('.entry-form .edit-project', { label: 'API' });
+    await page.click('.entry-form .ef-tag-add');
+    await page.fill('.entry-form .ef-tag-add', 'deep');
+    await page.press('.entry-form .ef-tag-add', 'Enter');
+    await page.click('.entry-form button[type="submit"]');
     await page.waitForFunction(() => !!window.__ADDED__);
-    await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
     await page.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' }).catch(() => {});
     const commit = await page.evaluate(() => {
       const banner = document.querySelector('#overlap-banner');
       return {
         added: window.__ADDED__,
-        formClosed: !!document.querySelector('#add-form')?.hidden,
+        formClosed: !document.querySelector('.entry-form'),
+        fabBack: window.__probe.visible(document.querySelector('#entries .fab')),
+        ungrayed: !document.querySelector('#entries .calwrap.grayed'),
         bannerVisible: !!banner && !banner.hidden,
         bannerText: banner ? banner.textContent.trim() : '',
       };
     });
     const a = commit.added || {};
     const savePatch =
-      a.fromLocal === dragged.from && // Save sent the LIVE picker-driven span (not the seed, not a re-typed value)
-      a.toLocal === dragged.to &&
-      a.description === 'design review' &&
+      a.fromLocal === fineDragged.start &&
+      a.toLocal === '2026-06-25 02:00:00' && // the typed overnight stop, verbatim
+      a.description === 'late deploy' &&
       a.client === 'Acme' &&
       a.project === 'API' &&
-      Array.isArray(a.tags) &&
-      a.tags.includes('deep') &&
-      a.billable === true;
-
-    const layoutOk =
-      layout.visible &&
-      layout.unified &&
-      layout.descTag === 'TEXTAREA' &&
-      layout.descRows === 3 &&
-      layout.clientTag === 'SELECT' &&
-      layout.projectTag === 'SELECT' &&
-      layout.hasTagChips &&
-      layout.hasBill &&
-      layout.pickerCal &&
-      layout.pickerTrack &&
-      layout.pickerHours > 0 &&
-      layout.pickerMe &&
-      layout.expanderCollapsed &&
-      layout.startText === 'text' &&
-      layout.stopText === 'text' &&
-      layout.noDatetimeLocal;
-    const paintOk =
-      paint.others >= 1 && paint.overlaps >= 1 && paint.overlapInert &&
-      paint.meWeakFill && paint.meAccentBorder && paint.meInkLabels && paint.saveSolid;
-    const formCloses = commit.formClosed;
+      Array.isArray(a.tags) && a.tags.includes('deep') &&
+      !('billable' in a); // untouched → omitted; core derives the client-keyed default (§05 R07)
+    const formCloses = commit.formClosed && commit.fabBack && commit.ungrayed;
     const overlapBanner = commit.bannerVisible && /overlap/i.test(commit.bannerText);
+
+    // (g) KEYBOARD PATH — activating the + by keyboard opens the form DIRECTLY, seeded with the
+    // working-hours default interval (§14 workingHoursStart 07:00 → 07:00–08:00 on today).
+    await page.focus('#entries .fab');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    const keyed = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+      focusInForm: !!document.activeElement?.closest('.entry-form'),
+    }));
+    const keyboardPath =
+      keyed.start === '2026-06-24 07:00:00' && keyed.stop === '2026-06-24 08:00:00' && keyed.focusInForm;
+
     record(
       'UNIFIED_FORM_ADD',
-      { layoutOk, paintOk, liveUpdate, savePatch, formCloses, overlapBanner },
-      `unified add form: layout=${JSON.stringify(layout)}; picker paint=${JSON.stringify(paint)}; ` +
-        `live drag seed=${JSON.stringify(seed)}→${JSON.stringify(dragged)} (live=${liveUpdate}); ` +
-        `Save sole commit added=${JSON.stringify(a)} (patchOk=${savePatch}); ` +
-        `form closed=${commit.formClosed}, overlap banner=${commit.bannerVisible} "${commit.bannerText}"`,
+      { fabRest, selectMode, selectModeExits, createBlank, liveDrag, fineSnapOk, dragCaptureOk, overnightTyped, savePatch, formCloses, overlapBanner, keyboardPath },
+      `+ button → select-interval → create on the week grid: rest=${JSON.stringify(rest)} hover=${JSON.stringify(hover)}; ` +
+        `select=${JSON.stringify(select)}; reroute=${JSON.stringify(rerouted)} (selectModeExits=${selectModeExits}); ` +
+        `create=${JSON.stringify(create)} meAccent=${JSON.stringify(meAccent)}; ` +
+        `bodyDrag=${JSON.stringify(create.start)}→${JSON.stringify(bodyDragged)} (liveDrag=${liveDrag}); ` +
+        `fine=${JSON.stringify(fineDragged)} (fineSnapOk=${fineSnapOk}); ` +
+        `release-off-window=${JSON.stringify(dragRelease)} (dragCaptureOk=${dragCaptureOk}); ` +
+        `overnight=${JSON.stringify(overnight)}; ` +
+        `Save sole commit added=${JSON.stringify(a)} (savePatch=${savePatch}); closed=${JSON.stringify(commit)}; ` +
+        `keyboard=${JSON.stringify(keyed)} (ok=${keyboardPath})`,
       'unified-add.png',
     );
     await page.close();
   }
 }
 
-// UNIFIED_FORM_EXPANDER — §12 R17 (core: core data entry): the unified add form's collapsed
-// Start/Stop expander is the exact-entry escape hatch and the ONLY path for an OVERNIGHT span.
-//
-// Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → 22:00 on
-// 2026-06-24) is a deterministic local instant, and the typed 22:00/02:00 map to fixed column
-// geometry (720px/24h track → 22:00 = 660px from the track top).
-async function sceneUnifiedFormExpander(browser) {
-  {
-    const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
-    await page.clock.install({ time: new Date(JUDGE_NOW) });
-    await page.clock.pauseAt(new Date(JUDGE_NOW));
-    await page.addInitScript(initScript(JSON.stringify(addFormState())));
-    await page.goto(fileUrl('index.html'));
-    await page.waitForSelector('.entry', { state: 'attached' });
-
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-    await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
-    await page.screenshot({ path: join(EVIDENCE, 'unified-form-expander.png'), fullPage: true });
-    const collapsed = await page.evaluate(() => {
-      const toggle = document.querySelector('#add-times-toggle');
-      const body = document.querySelector('#add-times-body');
-      const echo = document.querySelector('#add-picker .stp-echo');
-      return {
-        toggleCollapsed: !!toggle && toggle.getAttribute('aria-expanded') === 'false',
-        fieldsHidden: !!body && body.hidden,
-        echoPresent: !!echo && echo.textContent.trim().length > 0,
-        echoTabular: !!echo && echo.classList.contains('tnum'),
-      };
-    });
-
-    await page.click('#add-times-toggle');
-    await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
-    const fields = await page.evaluate(() => {
-      const from = document.querySelector('#add-from');
-      const to = document.querySelector('#add-to');
-      return {
-        fieldsShown: !document.querySelector('#add-times-body')?.hidden,
-        fromText: from ? from.getAttribute('type') : null,
-        toText: to ? to.getAttribute('type') : null,
-      };
-    });
-
-    // (c) TYPE an overnight span into the raw fields → the shared interval updates so the picker
-    // column reflects the typed start and the collapsed echo reflects the cross-midnight span.
-    // Deliberately typed in the `T` spelling the fields no longer RENDER (issue #159): both
-    // spellings parse, the picker leaves an untouched field verbatim, and Save sends what was
-    // typed — so the format change costs nothing a user already had in muscle memory.
-    await page.fill('#add-from', '2026-06-24T22:00');
-    await page.fill('#add-to', '2026-06-25T02:00');
-    await page.waitForFunction(
-      () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
-    );
-    const reflected = await page.evaluate(() => {
-      const me = document.querySelector('#add-picker .stp-block.me');
-      const TRACK_H = window.STP.TRACK_H; // 720px/24h → the geometry the picker draws
-      const top = me ? parseFloat(me.style.top) : NaN;
-      const startMin = Number.isFinite(top) ? Math.round((top / TRACK_H) * 1440) : null;
-      return {
-        echo: document.querySelector('#add-picker .stp-echo')?.textContent.trim() ?? '',
-        meStartMin: startMin, // the "me" block's top → its start minute-of-day (22:00 = 1320)
-        fromValue: document.querySelector('#add-from')?.value,
-        toValue: document.querySelector('#add-to')?.value, // the next-day stop kept verbatim
-      };
-    });
-
-    await page.fill('#add-desc', 'overnight deploy');
-    await page.click('#add-go');
-    await page.waitForFunction(() => !!window.__ADDED__);
-    const added = await page.evaluate(() => window.__ADDED__);
-
-    const collapsedOk = collapsed.toggleCollapsed && collapsed.fieldsHidden && collapsed.echoPresent && collapsed.echoTabular;
-    const fieldsOk = fields.fieldsShown && fields.fromText === 'text' && fields.toText === 'text';
-    const reflectedOk =
-      reflected.echo === '22:00 – 02:00' &&
-      reflected.meStartMin === 1320 &&
-      reflected.fromValue === '2026-06-24T22:00' &&
-      reflected.toValue === '2026-06-25T02:00';
-    const savedOk = !!added && added.fromLocal === '2026-06-24T22:00' && added.toLocal === '2026-06-25T02:00';
-    record(
-      'UNIFIED_FORM_EXPANDER',
-      { collapsedOk, fieldsOk, reflectedOk, savedOk },
-      `collapsed Start/Stop expander drives the shared interval: ` +
-        `collapsed=${JSON.stringify(collapsed)} (ok=${collapsedOk}); expand→fields=${JSON.stringify(fields)} (ok=${fieldsOk}); ` +
-        `typed overnight reflected=${JSON.stringify(reflected)} (ok=${reflectedOk}); ` +
-        `Save sole commit added=${JSON.stringify(added)} (ok=${savedOk})`,
-      'unified-form-expander.png',
-    );
-    await page.close();
-  }
-}
-
-// UNIFIED_FORM — §12 R06: editing an entry opens the ONE unified entry form in EDIT MODE in the
-// SAME view-level host add mode uses (#entry-form-host) — NOT crammed into the ~124px calendar day
-// column — in the view flow (no modal / backdrop / dialog chrome; position:static).
+// UNIFIED_FORM — §12 R06 / R16 / R17: editing an entry opens the SAME reduced unified form in
+// EDIT MODE above the week grid (no modal), every tt-editable field seeded; start/stop adjust
+// by dragging the SELECTED EVENT'S EDGES on the grid (only the dragged edge snaps — issue #49)
+// or by typing in the raw Start/Stop fields — grid and fields drive the same values both ways;
+// a CLEAN form swaps its subject in place with no prompt; Save sends a changed-fields-only
+// patch over the `edit` IPC; the footer carries Split + the two-step Delete; the §12 R10 flag
+// detail (overlap amount + reversible sleep subtract) lives here.
 async function sceneUnifiedForm(browser) {
   await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await noMotion(page);
     const editRow = '.entry[data-id="80"]';
-    // The unified form (edit mode) opens in the SAME view-level host add mode uses (#entry-form-host),
-    // in the view flow — NOT inside the ~124px calendar day column. Only one form is ever open, so its
-    // seeded fields are reachable by the plain `.edit-form.entry-form` selector (no row ancestor).
-    const editForm = '.edit-form.entry-form';
-    // (b0) Host identity: open ADD mode, record its host; then open EDIT mode and assert the edit
-    // form mounts in the very SAME host element (§12 R06/G5 — one host, add + edit). Do this first
-    // (a clean page), then cancel both back to the plain calendar for the field probe below.
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-    const addHostIsFormHost = await page.evaluate(
-      () => document.querySelector('#add-form')?.parentElement?.id === 'entry-form-host',
-    );
-    await page.click('#add-cancel');
-    await page.hover(editRow);
-    await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(editForm, { state: 'attached' });
-    const sameHost = await page.evaluate(() => {
-      const form = document.querySelector('.edit-form.entry-form');
-      const host = document.getElementById('entry-form-host');
-      const addForm = document.getElementById('add-form');
-      return !!form && !!host && form.parentElement === host && addForm?.parentElement === host;
-    });
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
+    const editForm = '.entry-form[data-mode="edit"]';
 
-    // (a) A click on the entry body (an inert cell, not an action control) opens the form.
-    // Entry 83 (15:00–16:00) overlaps entry 80's span (14:00–15:30) on the readonly calendar and,
-    // per the mockup's full-width offset-stack layout (main.html §Tue: the later event stacks on
-    // top of the earlier one's tail), covers the lower part of entry 80. Reach it the way a user
-    // does: move the cursor ONTO the entry first — hover raises it above the overlapping neighbour
-    // (`.dt .ev:hover` → z-index) and reveals its affordances — then click its inert body.
+    // (a) A click on the entry body (an inert cell, not an action control) opens the form in
+    // the view-level host above the grid; the entry's stored block leaves the grid, replaced
+    // by the accent-outlined pending interval with edge grips (the mockup's edit grammar).
     await page.hover(editRow);
     await clickEventBody(page, editRow);
     await page.waitForSelector(editForm, { state: 'attached' });
-    const clickOpens = await page.evaluate(
-      () => !!document.querySelector('.edit-form.entry-form') &&
-        document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
-    );
-    // Cancel back to the list so the Edit-affordance path opens a fresh form for the full probe.
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
+    await page.waitForSelector('#entries .ev.me', { state: 'attached' });
+    const clickOpens = await page.evaluate(() => {
+      const form = document.querySelector('.entry-form[data-mode="edit"]');
+      return (
+        !!form && form.dataset.id === '80' && form.parentElement?.id === 'entry-form-host' &&
+        !document.querySelector('.editor-backdrop') && getComputedStyle(form).position === 'static' &&
+        form.getBoundingClientRect().bottom <= document.querySelector('#entries .calwrap').getBoundingClientRect().top &&
+        !document.querySelector('.entry[data-id="80"]') && // the stored block is the me block now
+        document.querySelectorAll('#entries .ev.me').length === 1 &&
+        !!document.querySelector('#entries .grip.t') && !!document.querySelector('#entries .grip.b') &&
+        !document.querySelector('#entries .calwrap.grayed') && // gray-out is CREATE mode only (R07)
+        window.__probe.visible(document.querySelector('#entries .snapctl')) &&
+        !window.__probe.visible(document.querySelector('#entries .fab'))
+      );
+    });
 
-    // (b) The Edit affordance opens the same form; wait for the async reference-data to fill both
-    // the client (Acme=1) and project (API=11) selects so the seeded-select assertions are stable.
-    await page.click(`${editRow} [data-act="edit"]`);
+    // (b) Seeded from the entry — wait for the async reference data to pre-select the selects.
     await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
     await page.waitForSelector(`${editForm} .edit-project option[value="11"]`, { state: 'attached' });
     const probe = await page.evaluate(() => {
-      const form = document.querySelector('.edit-form.entry-form');
+      const form = document.querySelector('.entry-form[data-mode="edit"]');
       const v = (sel) => form?.querySelector(sel);
-      const desc = v('.edit-desc');
-      const start = v('.edit-start');
-      const end = v('.edit-end');
-      const bill = v('.edit-bill-box');
-      const client = v('.edit-client');
-      const project = v('.edit-project');
-      const chips = [...(form?.querySelectorAll('.ef-tag-chips .chip') ?? [])].map((c) => c.textContent.replace('×', '').trim());
       return {
-        inContext: !!form && form.parentElement?.id === 'entry-form-host' && form.dataset.id === '80' &&
-          document.querySelector('.entry[data-id="80"]')?.classList.contains('editing') === true,
-        noBackdrop: !document.querySelector('.editor-backdrop'),
-        noDialog: !document.querySelector('[role="dialog"]'),
-        hostStatic: form ? getComputedStyle(form).position === 'static' : false,
-        descTag: desc ? desc.tagName : null,
-        descSeeded: desc ? desc.value : null,
-        clientSeeded: client ? client.value : null,
-        projectSeeded: project ? project.value : null,
-        tagChips: chips,
-        billSeeded: bill ? bill.checked : null,
-        startSeeded: start ? start.value.length > 0 : false,
-        endPresent: !!end,
-        endSeeded: end ? end.value.length > 0 : false,
+        descTag: v('.edit-desc')?.tagName,
+        descSeeded: v('.edit-desc')?.value,
+        clientSeeded: v('.edit-client')?.value,
+        projectSeeded: v('.edit-project')?.value,
+        tagChips: [...form.querySelectorAll('.ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+        billSeeded: v('.edit-bill-box')?.getAttribute('aria-checked'),
+        startSeeded: v('.edit-start')?.value,
+        endSeeded: v('.edit-end')?.value,
         hasSplit: !!v('.ef-split'),
         hasDelete: !!v('.ef-delete'),
-        // design.html D11: only Save entry carries the accent-solid fill — it is the single
-        // .primary in the footer (the class whose one paint token is --accent-solid).
-        footAccent: form ? form.querySelectorAll('.edit-foot .primary').length : 0,
+        footAccent: form.querySelectorAll('.uf-foot .primary').length,
       };
     });
     await page.screenshot({ path: join(EVIDENCE, 'main-edit.png') });
+    const seeded =
+      probe.descTag === 'TEXTAREA' && probe.descSeeded === 'design review' &&
+      probe.clientSeeded === '1' && probe.projectSeeded === '11' &&
+      probe.tagChips.join(',') === 'deep' && probe.billSeeded === 'true' &&
+      probe.startSeeded === '2026-06-24 14:00:00' && probe.endSeeded === '2026-06-24 15:30:00';
 
-    // §12 R15 — the INLINE interval picker mounted in the edit form (successor to the retired
-    // picker-modal judge scene). It renders IN FLOW (no .stp-backdrop, no .stp-apply anywhere;
-    // the .stp-inline host computes position:static) as a month calendar + a single-day .stp-track
-    // with hour lines. Entry 83 (15:00–16:00Z) paints as a gray other block AND, over the shared
-    // 15:00–15:30 minutes with entry 80's edited "me" span (14:00–15:30Z), an inert yellow warn band
-    // (pointer-events:none — warn-only, never blocks Save). A known BODY drag advances BOTH bound
-    // form fields (.edit-start/.edit-end) by the snapped 5-min amount (span preserved); a bottom
-    // .stp-resize drag advances ONLY .edit-end. Every write is LIVE into the form's own fields — no
-    // commit fires here (the Cancel below discards them; Save entry is the sole commit, tested next,
-    // G7). The running-entry start-only variant (.stp-block.me.open mask + start grip only, no
-    // .stp-resize/end label/echo, no end value) is asserted by the TIMER_VIEW scene, which drives
-    // STP.openStartOnly over the same component.
-    await page.waitForSelector(`${editForm} .edit-picker .stp-track`, { state: 'attached' });
-    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
-    const picker = await page.evaluate(() => {
-      const form = document.querySelector('.edit-form.entry-form');
-      const host = form.querySelector('.edit-picker');
-      const box = host.querySelector('.stp-inline');
-      const overlaps = [...host.querySelectorAll('.stp-overlap')];
-      return {
-        inFlow: !!box && getComputedStyle(box).position === 'static',
-        noBackdrop: !document.querySelector('.stp-backdrop'),
-        noApply: !document.querySelector('.stp-apply'),
-        hasCal: !!host.querySelector('.stp-cal .stp-grid .stp-d'),
-        hasTrack: !!host.querySelector('.stp-track'),
-        hours: host.querySelectorAll('.stp-hour').length,
-        others: host.querySelectorAll('.stp-block.other').length,
-        overlaps: overlaps.length,
-        overlapInert: overlaps.length > 0 && overlaps.every((el) => getComputedStyle(el).pointerEvents === 'none'),
-      };
+    // (c) EDGE DRAG on the grid — the bottom grip drags the stop onto the coarse snap grid
+    // while the start stays byte-untouched; the fields update LIVE (R17). Then the reverse
+    // direction: TYPING a stop moves the grid block.
+    const grip = await page.evaluate(() => {
+      const g = document.querySelector('#entries .grip.b');
+      g.scrollIntoView({ block: 'center' });
+      const r = g.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
-    // BODY drag up ~60px (720px/24h track → 0.5px/min → −120min, 5-min snapped) — BOTH fields move,
-    // span preserved (LIVE into the form's own start/stop state, before any Save).
-    const spanMin = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 60000);
-    const seedTimes = await page.evaluate(() => ({
-      from: document.querySelector('.edit-form .edit-start')?.value,
-      to: document.querySelector('.edit-form .edit-end')?.value,
-    }));
-    await page.locator(`${editForm} .edit-picker .stp-block.me`).scrollIntoViewIfNeeded();
-    const meBox = await page.evaluate(() => {
-      const r = document.querySelector('.edit-form .edit-picker .stp-block.me').getBoundingClientRect();
-      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
-    });
-    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy));
+    await page.mouse.move(grip.x, grip.y);
     await page.mouse.down();
-    await page.mouse.move(Math.round(meBox.cx), Math.round(meBox.cy - 60), { steps: 12 });
+    await page.mouse.move(grip.x, grip.y + 33, { steps: 6 });
     await page.mouse.up();
-    const bodyDrag = await page.evaluate(() => ({
-      from: document.querySelector('.edit-form .edit-start')?.value,
-      to: document.querySelector('.edit-form .edit-end')?.value,
+    const edge = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
     }));
-    const bodyOk =
-      bodyDrag.from !== seedTimes.from &&
-      bodyDrag.to !== seedTimes.to &&
-      spanMin(bodyDrag.from, bodyDrag.to) === spanMin(seedTimes.from, seedTimes.to);
-    await page.locator(`${editForm} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
-    const resizeBox = await page.evaluate(() => {
-      const r = document.querySelector('.edit-form .edit-picker .stp-resize').getBoundingClientRect();
-      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
-    });
-    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy));
-    await page.mouse.down();
-    await page.mouse.move(Math.round(resizeBox.cx), Math.round(resizeBox.cy + 30), { steps: 8 });
-    await page.mouse.up();
-    const resizeDrag = await page.evaluate(() => ({
-      from: document.querySelector('.edit-form .edit-start')?.value,
-      to: document.querySelector('.edit-form .edit-end')?.value,
-    }));
-    const resizeOk = resizeDrag.from === bodyDrag.from && resizeDrag.to !== bodyDrag.to;
-    const pickerOk =
-      picker.inFlow && picker.noBackdrop && picker.noApply && picker.hasCal && picker.hasTrack &&
-      picker.hours > 0 && picker.others >= 1 && picker.overlaps >= 1 && picker.overlapInert &&
-      bodyOk && resizeOk;
-
-    // Discard the dragged times — Cancel and reopen a FRESH form so the Save-patch test below sees
-    // the entry's original (unchanged) times and asserts a description-ONLY patch (Save sole commit).
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
-    await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
-    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
-
-    await page.fill(`${editForm} .edit-desc`, 'final draft');
-    await page.click(`${editForm} button[type="submit"]`);
-    await page.waitForFunction(() => !!window.__EDITED__);
-    const edited = await page.evaluate(() => window.__EDITED__);
-
-    await page.click(`${editRow} [data-act="edit"]`);
-    await page.waitForSelector(`${editForm} .ef-delete`, { state: 'attached' });
-    await page.click(`${editForm} .ef-delete`);
-    const armed = await page.evaluate(() => ({
-      confirmShown: !!document.querySelector('.edit-form [data-act="confirm-delete"]'),
-      question: document.querySelector('.edit-form .confirm-q')?.textContent ?? null,
-      removedYet: window.__REMOVED__ === true,
-    }));
-    await page.click(`${editForm} [data-act="confirm-delete"]`);
-    await page.waitForFunction(() => window.__REMOVED__ === true);
-    const removed = await page.evaluate(() => ({
-      removed: window.__REMOVED__ === true,
-      calls: window.__REMOVE_CALLS__ || [],
-    }));
-
-    // §12 R10 — the flags surface IN THE EDITOR (the list is gone; the calendar shows only the
-    // markers). Open the OVERLAPPED entry (81): the flags region spells out the overlap detail
-    // (amount + which neighbour). Then open the SLEPT entry (82): its reversible Subtract/Restore
-    // control is present, and after subtracting the raw duration reads struck (04:00:00) beside the
-    // trimmed billable (03:00:00); subtracting again restores it (the struck raw disappears).
-    // The delete above removed entry 80 + reloaded; wait for that repaint before opening 81/82.
-    await page.waitForSelector('.entry[data-id="80"]', { state: 'detached' }).catch(() => {});
-    // Hover first so the target event rises above its overlapping neighbour (`.dt .ev:hover` →
-    // z-index), then open it via its Edit affordance — same overlap-defeating move as step (a).
-    await page.waitForSelector('.entry[data-id="81"] [data-act="edit"]', { state: 'attached' });
-    await page.hover('.entry[data-id="81"]');
-    await page.click('.entry[data-id="81"] [data-act="edit"]');
-    await page.waitForSelector('.edit-form .ef-flags .banner.overlap', { state: 'attached' });
-    const overlapDetail = await page.evaluate(
-      () => document.querySelector('.edit-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
+    const minOf = (v) => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16));
+    const edgeDrag =
+      edge.start === '2026-06-24 14:00:00' && // untouched edge byte-identical
+      edge.stop !== '2026-06-24 15:30:00' &&
+      minOf(edge.stop) % 15 === 0; // the dragged edge landed on the coarse grid
+    const beforeTyped = await page.evaluate(
+      () => document.querySelector('#entries .ev.me').style.height,
     );
-    await page.click('.edit-form .edit-cancel');
-    await page.waitForSelector('.edit-form', { state: 'detached' });
-
-    await page.hover('.entry[data-id="82"]');
-    await page.click('.entry[data-id="82"] [data-act="edit"]');
-    await page.waitForSelector('.edit-form .ef-subtract', { state: 'attached' });
-    const sleptBefore = await page.evaluate(() => {
-      const form = document.querySelector('.edit-form');
-      return {
-        subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
-        struckBefore: !!form?.querySelector('.ef-dur s.struck'),
-      };
+    await page.fill('.entry-form .edit-end', '2026-06-24 17:00:00');
+    await page.waitForFunction(
+      (h) => document.querySelector('#entries .ev.me')?.style.height !== h,
+      beforeTyped,
+    );
+    const typedSync = await page.evaluate(() => {
+      const me = document.querySelector('#entries .ev.me');
+      // 14:00 → 17:00 at 1px/min = 180px tall, top at 840px.
+      return me.style.top === '840px' && me.style.height === '180px';
     });
-    await page.click('.edit-form .ef-subtract');
-    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'attached' });
+
+    // (d) A CLEAN form swaps its subject in place — Cancel (discarding the drag), reopen 80,
+    // then click entry 82: the form re-seeds to 82 instantly, no prompt, no animation gate.
+    await cancelForm(page, editForm); // the drag dirtied it, so Cancel asks — answer it
+    await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+    await page.hover(editRow);
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editForm}[data-id="80"]`, { state: 'attached' });
+    await page.hover('.entry[data-id="82"]');
+    await clickEventBody(page, '.entry[data-id="82"]');
+    await page.waitForSelector(`${editForm}[data-id="82"]`, { state: 'attached' });
+    const cleanSwap = await page.evaluate(
+      () =>
+        !document.querySelector('.gate-backdrop') &&
+        document.querySelector('.entry-form')?.dataset.id === '82' &&
+        document.querySelector('.entry-form .edit-desc')?.value === 'deep work',
+    );
+
+    // (e) §12 R10 — the flags surface IN THE EDITOR: the slept entry (82, open now) carries the
+    // reversible Subtract/Restore control — subtract strikes the raw duration through beside
+    // the trimmed billable; a second click restores. Then the overlapped entry (81) spells out
+    // the overlap amount + neighbour.
+    await page.waitForSelector('.entry-form .ef-subtract', { state: 'attached' });
+    const sleptBefore = await page.evaluate(() => ({
+      subtractLabel: document.querySelector('.entry-form .ef-subtract')?.textContent?.trim() ?? '',
+      struckBefore: !!document.querySelector('.entry-form .ef-dur s.struck'),
+    }));
+    await page.click('.entry-form .ef-subtract');
+    await page.waitForSelector('.entry-form .ef-dur s.struck', { state: 'attached' });
     const sleptAfter = await page.evaluate(() => {
-      const form = document.querySelector('.edit-form');
+      const form = document.querySelector('.entry-form');
       const s = form?.querySelector('.ef-dur s.struck');
       return {
         subtractLabel: form?.querySelector('.ef-subtract')?.textContent?.trim() ?? '',
@@ -2198,148 +2278,552 @@ async function sceneUnifiedForm(browser) {
         durText: form?.querySelector('.ef-dur')?.textContent?.replace(/\s+/g, ' ').trim() ?? '',
       };
     });
-    await page.click('.edit-form .ef-subtract');
-    await page.waitForSelector('.edit-form .ef-dur s.struck', { state: 'detached' });
+    await page.click('.entry-form .ef-subtract');
+    await page.waitForSelector('.entry-form .ef-dur s.struck', { state: 'detached' });
     const sleptRestored = await page.evaluate(
-      () => !document.querySelector('.edit-form .ef-dur s.struck'),
+      () => !document.querySelector('.entry-form .ef-dur s.struck'),
     );
+    const sleptOk =
+      /Subtract/i.test(sleptBefore.subtractLabel) && !sleptBefore.struckBefore &&
+      sleptAfter.struckLineThrough && /04:00:00/.test(sleptAfter.struckText) &&
+      /03:00:00/.test(sleptAfter.durText) && /Restore/i.test(sleptAfter.subtractLabel) && sleptRestored;
+    await page.hover('.entry[data-id="81"]');
+    await page.click('.entry[data-id="81"] [data-act="edit"]');
+    await page.waitForSelector('.entry-form .ef-flags .banner.overlap', { state: 'attached' });
+    const overlapDetail = await page.evaluate(
+      () => document.querySelector('.entry-form .ef-flags .banner.overlap')?.textContent?.trim() ?? '',
+    );
+    const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
 
-    // §12 R15 (issue #49) — EXACT stored times round-trip. Entry 84 (09:07:33 → 11:03:00Z) is
-    // deliberately NOT 5-minute-aligned: (1) opening its editor renders the stored start/stop
-    // EXACTLY, to the second — never snapped to the picker grid; (2) Save entry with NO drag
-    // sends a patch carrying no startUtc/endUtc at all, so the store's times round-trip
-    // unchanged; (3) only an actively dragged stop grip snaps — after a bottom-grip drag the
-    // stop lands on the :05 grid while the untouched start keeps its seconds. The assertions are
-    // shape-relative (seconds suffix + minute-mod-5), so they hold under any whole-minute host
-    // timezone offset.
-    await page.click('.edit-form .edit-cancel');
-    await page.waitForSelector('.edit-form', { state: 'detached' });
+    // (f) SAVE — a changed-fields-only patch over the `edit` IPC: change only the description
+    // on entry 81 and the patch carries exactly that one key.
+    await page.fill('.entry-form .edit-desc', 'final draft');
+    await page.click(`${editForm} button[type="submit"]`);
+    await page.waitForFunction(() => !!window.__EDITED__);
+    const edited = await page.evaluate(() => window.__EDITED__);
+    const savePatch =
+      !!edited && edited.id === 81 && !!edited.patch &&
+      edited.patch.description === 'final draft' && Object.keys(edited.patch).length === 1;
+
+    // (g) The footer's two-step Delete gate: arm (nothing removed) → confirm (one remove).
+    await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+    await page.hover(editRow);
+    await page.click(`${editRow} [data-act="edit"]`);
+    await page.waitForSelector(`${editForm} .ef-delete`, { state: 'attached' });
+    await page.click(`${editForm} .ef-delete`);
+    const armed = await page.evaluate(() => ({
+      confirmShown: !!document.querySelector('.entry-form [data-act="confirm-delete"]'),
+      question: document.querySelector('.entry-form .confirm-q')?.textContent ?? null,
+      removedYet: window.__REMOVED__ === true,
+    }));
+    await page.click(`${editForm} [data-act="confirm-delete"]`);
+    await page.waitForFunction(() => window.__REMOVED__ === true);
+    const removed = await page.evaluate(() => ({
+      removed: window.__REMOVED__ === true,
+      calls: window.__REMOVE_CALLS__ || [],
+      formClosed: !document.querySelector('.entry-form'),
+    }));
+    const deleteGate =
+      armed.confirmShown && /confirm/i.test(armed.question || '') && !armed.removedYet &&
+      removed.removed && removed.calls.length === 1 && removed.calls[0].id === 80 && removed.formClosed;
+    const footer = probe.hasSplit && probe.hasDelete && probe.footAccent === 1;
+
+    // (h) EXACT stored times (issue #49): entry 84 (09:07:33 → 11:03:00) is deliberately off
+    // the snap grid — opening renders the stored instants to the SECOND, Save with no drag
+    // sends a patch with NO time keys, and a stop-grip drag snaps ONLY the dragged stop while
+    // the untouched start keeps its seconds.
+    await page.waitForSelector('.entry[data-id="84"]', { state: 'attached' });
     await page.evaluate(() => {
-      window.__EDITED__ = null; // beat (c) recorded entry 80's patch — clear it for this probe
+      window.__EDITED__ = null;
     });
     await page.hover('.entry[data-id="84"]');
     await page.click('.entry[data-id="84"] [data-act="edit"]');
-    await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
-    await page.waitForSelector(`${editForm} .edit-picker .stp-block.me`, { state: 'attached' });
+    await page.waitForSelector(`${editForm}[data-id="84"] .edit-client option[value="1"]`, { state: 'attached' });
     const exactSeed = await page.evaluate(() => ({
-      from: document.querySelector('.edit-form .edit-start')?.value ?? '',
-      to: document.querySelector('.edit-form .edit-end')?.value ?? '',
+      from: document.querySelector('.entry-form .edit-start')?.value ?? '',
+      to: document.querySelector('.entry-form .edit-end')?.value ?? '',
     }));
-    // Capture the exact-times rendering ON CAMERA: expand the Start/Stop disclosure so the raw
-    // fields (2026-06-24T09:07:33 / …T11:03) are visible, then screenshot the entry-84 editor —
-    // the committed evidence that a stored 09:07:33 opens as 09:07:33, never snapped to 09:05.
-    await page.click(`${editForm} .ef-times-toggle`);
     await page.evaluate(() =>
-      document.querySelector('.edit-form.entry-form')?.scrollIntoView({ block: 'center' }));
+      document.querySelector('.entry-form')?.scrollIntoView({ block: 'center' }));
     await page.screenshot({ path: join(EVIDENCE, 'main-edit-exact-times.png') });
     await page.click(`${editForm} button[type="submit"]`);
     await page.waitForFunction(() => !!window.__EDITED__);
     const noDragSave = await page.evaluate(() => window.__EDITED__);
     await page.hover('.entry[data-id="84"]');
     await page.click('.entry[data-id="84"] [data-act="edit"]');
-    await page.waitForSelector(`${editForm} .edit-picker .stp-resize`, { state: 'attached' });
-    await page.locator(`${editForm} .edit-picker .stp-resize`).scrollIntoViewIfNeeded();
+    await page.waitForSelector('#entries .grip.b', { state: 'attached' });
     const grip84 = await page.evaluate(() => {
-      const r = document.querySelector('.edit-form .edit-picker .stp-resize').getBoundingClientRect();
-      return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+      const g = document.querySelector('#entries .grip.b');
+      g.scrollIntoView({ block: 'center' });
+      const r = g.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     });
-    await page.mouse.move(Math.round(grip84.cx), Math.round(grip84.cy));
+    await page.mouse.move(grip84.x, grip84.y);
     await page.mouse.down();
-    await page.mouse.move(Math.round(grip84.cx), Math.round(grip84.cy + 30), { steps: 8 });
+    await page.mouse.move(grip84.x, grip84.y + 30, { steps: 6 });
     await page.mouse.up();
     const snapDrag = await page.evaluate(() => ({
-      from: document.querySelector('.edit-form .edit-start')?.value ?? '',
-      to: document.querySelector('.edit-form .edit-end')?.value ?? '',
+      from: document.querySelector('.entry-form .edit-start')?.value ?? '',
+      to: document.querySelector('.entry-form .edit-end')?.value ?? '',
     }));
-    await page.click(`${editForm} .edit-cancel`);
-    await page.waitForSelector(editForm, { state: 'detached' });
-    const minuteMod5 = (v) => Number(v.slice(14, 16)) % 5;
+    await cancelForm(page, editForm); // the drag dirtied it, so Cancel asks — answer it
     const exactShown =
       /:33$/.test(exactSeed.from) && // the start renders its stored seconds (…09:07:33)
-      exactSeed.to.length === 19 && // the stop (…11:03:00) shows its :00 seconds (issue #159)…
-      minuteMod5(exactSeed.to) !== 0; // …but sits OFF the 5-min grid — shown unsnapped
+      exactSeed.to === '2026-06-24 11:03:00'; // the stop shows :00 seconds, OFF the snap grid
     const noDragRoundTrip =
-      !!noDragSave &&
-      noDragSave.id === 84 &&
-      !!noDragSave.patch &&
-      !('startUtc' in noDragSave.patch) &&
-      !('endUtc' in noDragSave.patch);
+      !!noDragSave && noDragSave.id === 84 && !!noDragSave.patch &&
+      !('startUtc' in noDragSave.patch) && !('endUtc' in noDragSave.patch);
     const dragSnaps =
       snapDrag.from === exactSeed.from && // the untouched start keeps its exact seconds
-      snapDrag.to.length === 19 && // the dragged stop is a whole minute (…:00 shown)…
-      minuteMod5(snapDrag.to) === 0 && // …on the :05 grid
+      minOf(snapDrag.to) % 15 === 0 && // the dragged stop landed on the coarse grid
       snapDrag.to !== exactSeed.to;
     const exactTimesOk = exactShown && noDragRoundTrip && dragSnaps;
 
-    const overlapDetailOk = /Overlap:\s*\d+m\s+with\s+(previous|next)\b/.test(overlapDetail);
-    const sleptOk =
-      /Subtract/i.test(sleptBefore.subtractLabel) &&
-      !sleptBefore.struckBefore &&
-      sleptAfter.struckLineThrough &&
-      /04:00:00/.test(sleptAfter.struckText) &&
-      /03:00:00/.test(sleptAfter.durText) &&
-      /Restore/i.test(sleptAfter.subtractLabel) &&
-      sleptRestored;
-
-    const seeded =
-      probe.inContext &&
-      probe.noBackdrop &&
-      probe.noDialog &&
-      probe.hostStatic &&
-      probe.descTag === 'TEXTAREA' &&
-      probe.descSeeded === 'design review' &&
-      probe.clientSeeded === '1' &&
-      probe.projectSeeded === '11' &&
-      probe.tagChips.join(',') === 'deep' &&
-      probe.billSeeded === true &&
-      probe.startSeeded &&
-      probe.endPresent &&
-      probe.endSeeded;
-    const footer = probe.hasSplit && probe.hasDelete && probe.footAccent === 1;
-    const savePatch =
-      !!edited &&
-      edited.id === 80 &&
-      edited.patch &&
-      edited.patch.description === 'final draft' &&
-      Object.keys(edited.patch).length === 1;
-    const deleteGate =
-      armed.confirmShown &&
-      /confirm/i.test(armed.question || '') &&
-      !armed.removedYet &&
-      removed.removed &&
-      removed.calls.length === 1 &&
-      removed.calls[0].id === 80;
-    const hostShared = addHostIsFormHost && sameHost;
     record(
       'UNIFIED_FORM',
-      {
-        hostShared,
-        clickOpens,
-        seeded,
-        pickerOk,
-        footer,
-        savePatch,
-        deleteGate,
-        overlapDetailOk,
-        sleptOk,
-        exactTimesOk,
-      },
-      `unified entry form (edit mode) in the SAME view-level host as add mode (#entry-form-host, in ` +
-        `flow), seeded, INLINE picker (in-flow, no backdrop/apply, ` +
-        `month cal + track + hours, body-drag moves both fields snapped, resize moves only stop, ` +
-        `gray others + inert yellow overlap), footer Split + two-step Delete, save patch, ` +
-        `§12 R10 flags (overlap detail + reversible subtract), ` +
-        `§12 R15 exact times (stored start/stop shown to the second, no-drag Save patches no ` +
-        `time, only the dragged stop grip snaps to :05): ` +
-        `hostShared=${hostShared} clickOpens=${clickOpens} probe=${JSON.stringify(probe)} ` +
-        `picker=${JSON.stringify(picker)} seed=${JSON.stringify(seedTimes)}→body=${JSON.stringify(bodyDrag)}` +
-        `(bodyOk=${bodyOk})→resize=${JSON.stringify(resizeDrag)}(resizeOk=${resizeOk}) ` +
-        `edited=${JSON.stringify(edited)} armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)} ` +
-        `overlapDetail=${JSON.stringify(overlapDetail)} sleptBefore=${JSON.stringify(sleptBefore)} ` +
-        `sleptAfter=${JSON.stringify(sleptAfter)} sleptRestored=${sleptRestored} ` +
-        `exactTimes: seed=${JSON.stringify(exactSeed)} noDragSave=${JSON.stringify(noDragSave)} ` +
-        `snapDrag=${JSON.stringify(snapDrag)} (shown=${exactShown} roundTrip=${noDragRoundTrip} snap=${dragSnaps})`,
+      { clickOpens, seeded, edgeDrag, typedSync, cleanSwap, footer, savePatch, deleteGate, overlapDetailOk, sleptOk, exactTimesOk },
+      `unified form (edit mode) above the grid, the selected event the draggable accent interval: ` +
+        `clickOpens=${clickOpens} probe=${JSON.stringify(probe)}; edge=${JSON.stringify(edge)} (edgeDrag=${edgeDrag}); ` +
+        `typedSync=${typedSync}; cleanSwap=${cleanSwap}; edited=${JSON.stringify(edited)}; ` +
+        `armed=${JSON.stringify(armed)} removed=${JSON.stringify(removed)}; ` +
+        `overlapDetail=${JSON.stringify(overlapDetail)}; slept=${JSON.stringify(sleptBefore)}→${JSON.stringify(sleptAfter)} restored=${sleptRestored}; ` +
+        `exactTimes: seed=${JSON.stringify(exactSeed)} noDragSave=${JSON.stringify(noDragSave)} snapDrag=${JSON.stringify(snapDrag)} ` +
+        `(shown=${exactShown} roundTrip=${noDragRoundTrip} snap=${dragSnaps})`,
       'main-edit.png',
+    );
+  });
+}
+
+// PENDING_CHANGES_GATE — §12 R24 (core, loss protection) / §16: the unified form tracks whether
+// its fields differ from their seed. A DIRTY subject swap — clicking another event, an empty
+// spot mid-edit, or an external refresh re-seeding the form — is BLOCKED by the keep-editing /
+// discard-changes dialog: Keep editing preserves every pending field; only the explicit Discard
+// abandons them and performs the swap. A clean form swaps in place with no prompt (asserted in
+// UNIFIED_FORM). DOM-only: no BDD leg can see this gate (COVERAGE.md's rule for DOM gates), so
+// this scene and the STATES.md row are its whole proof.
+async function scenePendingChangesGate(browser) {
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await noMotion(page);
+    const editForm = '.entry-form[data-mode="edit"]';
+
+    // (a) Dirty the form on entry 80, then click entry 82 — the gate ARMS: a dialog with the
+    // keep/discard pair, Keep editing focused (the non-destructive default), the form's
+    // subject unswapped beneath it, and nothing written.
+    // The WHOLE pending state, as the user sees it — all seven fields `formIsDirty` compares,
+    // not a sample of one. `keepPreserves` used to read `{id, .edit-desc}`, which is a claim
+    // about the description and nothing else; "every pending field byte-for-byte" is only a
+    // fact if every pending field is read.
+    const snapForm = () =>
+      page.evaluate(() => {
+        const f = document.querySelector('.entry-form');
+        if (!f) return null;
+        const q = (s) => f.querySelector(s);
+        return {
+          id: f.dataset.id ?? null,
+          desc: q('.edit-desc')?.value ?? null,
+          client: q('.edit-client')?.value ?? null,
+          project: q('.edit-project')?.value ?? null,
+          billable: q('.edit-bill-box')?.getAttribute('aria-checked') ?? null,
+          start: q('.edit-start')?.value ?? null,
+          stop: q('.edit-end')?.value ?? null,
+          tags: [...f.querySelectorAll('.ef-tag-chips .chip')].map((c) => c.textContent.replace('×', '').trim()),
+        };
+      });
+    // The reference data arrives async and the seed's select halves are patched in when it
+    // does, so both the dirty comparison and the snapshot below wait for the options to land.
+    const openClean80 = async () => {
+      if (await page.$('.entry-form')) await cancelForm(page);
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      await page.hover('.entry[data-id="80"]');
+      await page.click('.entry[data-id="80"] [data-act="edit"]');
+      await page.waitForSelector(`${editForm}[data-id="80"]`, { state: 'attached' });
+      await page.waitForSelector(`${editForm} .edit-client option[value="1"]`, { state: 'attached' });
+      await page.waitForSelector(`${editForm} .edit-project option[value="11"]`, { state: 'attached' });
+    };
+
+    await openClean80();
+    await page.fill('.entry-form .edit-desc', 'typed but unsaved');
+    const pending = await snapForm();
+    await page.hover('.entry[data-id="82"]');
+    await clickEventBody(page, '.entry[data-id="82"]');
+    await page.waitForSelector('.gate-backdrop .gatecard', { state: 'attached' });
+    const gate = await page.evaluate(() => {
+      const card = document.querySelector('.gatecard');
+      return {
+        dialog: card?.getAttribute('role') === 'dialog' && card?.getAttribute('aria-modal') === 'true',
+        heading: card?.querySelector('h3')?.textContent ?? '',
+        keepFocused: document.activeElement?.classList.contains('gate-keep'),
+        subjectHeld: document.querySelector('.entry-form')?.dataset.id === '80',
+        nothingWritten: !window.__EDITED__ && !window.__ADDED__,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'main-pending-gate.png') });
+    const gateArms =
+      gate.dialog && /discard/i.test(gate.heading) && gate.keepFocused && gate.subjectHeld && gate.nothingWritten;
+
+    // (b) KEEP EDITING — the dialog closes, the form stays on entry 80 with EVERY pending
+    // field preserved: the whole seven-field snapshot taken before the gate, compared
+    // byte-for-byte after it, not the description alone.
+    await page.click('.gatecard .gate-keep');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const kept = await snapForm();
+    const keepPreserves =
+      kept?.id === '80' &&
+      kept.desc === 'typed but unsaved' &&
+      JSON.stringify(kept) === JSON.stringify(pending);
+
+    // (c) DISCARD — the same swap attempted again, but the explicit Discard abandons the
+    // typed edits and performs it: the form re-seeds to entry 82, the typed text gone.
+    await page.hover('.entry[data-id="82"]');
+    await clickEventBody(page, '.entry[data-id="82"]');
+    await page.waitForSelector('.gate-backdrop', { state: 'attached' });
+    await page.click('.gatecard .gate-discard');
+    await page.waitForFunction(() => document.querySelector('.entry-form')?.dataset.id === '82');
+    const discarded = await page.evaluate(() => ({
+      id: document.querySelector('.entry-form')?.dataset.id,
+      desc: document.querySelector('.entry-form .edit-desc')?.value,
+      gateGone: !document.querySelector('.gate-backdrop'),
+    }));
+    const discardSwaps = discarded.id === '82' && discarded.desc === 'deep work' && discarded.gateGone;
+
+    // (d) An EMPTY SPOT mid-edit is a create-swap, gated the same way when dirty: dirty the
+    // form on 82, press an empty patch of Thursday's track — the gate arms and Keep editing
+    // returns untouched (no create begins).
+    await page.fill('.entry-form .edit-desc', 'still unsaved');
+    const empty = await page.evaluate(() => {
+      const t = document.querySelector('#entries .dt[data-day="2026-06-25"]');
+      const r = t.getBoundingClientRect();
+      const strip = document.querySelector('.cstrip').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: Math.max(r.top, strip.top) + 60 };
+    });
+    await page.mouse.click(empty.x, empty.y);
+    await page.waitForSelector('.gate-backdrop', { state: 'attached' });
+    await page.click('.gatecard .gate-keep');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const emptySpotGated = await page.evaluate(
+      () =>
+        document.querySelector('.entry-form')?.dataset.id === '82' &&
+        document.querySelector('.entry-form .edit-desc')?.value === 'still unsaved',
+    );
+
+    // (e) An EXTERNAL REFRESH (a tt write's changed broadcast) wants to re-seed the form's
+    // subject — a subject swap, so the dirty form gates instead of silently reloading; Keep
+    // editing preserves the pending fields over the refreshed grid.
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    await page.waitForSelector('.gate-backdrop', { state: 'attached' });
+    await page.click('.gatecard .gate-keep');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const refreshGated = await page.evaluate(
+      () =>
+        document.querySelector('.entry-form')?.dataset.id === '82' &&
+        document.querySelector('.entry-form .edit-desc')?.value === 'still unsaved',
+    );
+
+    // (f) THE GATE BELONGS TO THE ENTRIES VIEW. It guards a subject swap on the form the user
+    // is looking at, so a refresh arriving while another view is on screen must not raise a
+    // modal about a form that is not visible — Keep editing would focus a field inside the
+    // hidden Entries section. A watcher records any gate that appears while Entries is hidden
+    // (durable, so no polling window can miss one), then the same broadcast is fired again with
+    // Entries back on screen: the gate must arm THERE. Both halves are asserted, so a gate that
+    // simply stopped working could not pass this.
+    await page.evaluate(() => {
+      window.__GATE_OFF_ENTRIES__ = 0;
+      new MutationObserver(() => {
+        const entries = document.querySelector('.view[data-view="entries"]');
+        if (document.querySelector('.gate-backdrop') && entries?.hidden) window.__GATE_OFF_ENTRIES__++;
+      }).observe(document.body, { childList: true, subtree: true });
+    });
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('.view[data-view="settings"]:not([hidden])');
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    // Routed back by activating the nav item directly rather than by a hit-tested click: a
+    // stray gate over Settings is a full-screen backdrop, and a real click would be swallowed
+    // by it — the defect would surface as a timeout instead of the false fact it is.
+    await page.$eval('.nav-item[data-view="entries"]', (el) => el.click());
+    await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
+    // The settings-view broadcast's own reload was queued first and its mock getState resolves
+    // immediately, so its continuation has already run by the time this second gate is up.
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    await page.waitForSelector('.gate-backdrop', { state: 'attached' });
+    const crossView = await page.evaluate(() => ({
+      gatesOffEntries: window.__GATE_OFF_ENTRIES__,
+      formHeld: document.querySelector('.entry-form')?.dataset.id === '82',
+    }));
+    await page.click('.gatecard .gate-keep');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const heldDesc = await page.evaluate(() => document.querySelector('.entry-form .edit-desc')?.value);
+    const gateStaysOnEntries =
+      crossView.gatesOffEntries === 0 && crossView.formHeld && heldDesc === 'still unsaved';
+
+    // (g) EVERY FIELD KIND ARMS IT, AND EVERY FIELD SURVIVES KEEP EDITING (issue #301, review
+    // round 2). `formIsDirty()` compares SEVEN fields; every scene above dirties the same one.
+    // Deleting the six non-description comparisons left this item — and UNIFIED_FORM,
+    // UNIFIED_FORM_ADD and 311/311 GUI tests — entirely green, so a user who had only retyped a
+    // client, dragged an edge, flipped billable or added a tag would have lost that work
+    // silently to the next click. The rubric's own words are "every pending field": one arm per
+    // field kind, each asserting the gate raised, the subject held, nothing written, and the
+    // WHOLE seven-field snapshot returned byte-identical by Keep editing.
+    //
+    // Isolation is per-line where the product allows it. Changing the client necessarily
+    // re-derives the project select (the cascade is real behaviour, not a test artifact), so
+    // that arm covers the client+project pair; the project arm below moves to a SIBLING project
+    // of the same client, so it moves `.edit-project` and nothing else.
+    const DIRTY_KINDS = [
+      { kind: 'description', dirty: () => page.fill('.entry-form .edit-desc', 'retyped, unsaved') },
+      { kind: 'client', dirty: async () => {
+          await page.selectOption('.entry-form .edit-client', { label: 'Globex' });
+          await page.waitForFunction(() => document.querySelector('.entry-form .edit-client')?.value === '2');
+        } },
+      { kind: 'project', dirty: () => page.selectOption('.entry-form .edit-project', { label: 'Web' }) },
+      { kind: 'tags', dirty: async () => {
+          await page.click('.entry-form .ef-tag-add');
+          await page.fill('.entry-form .ef-tag-add', 'urgent');
+          await page.press('.entry-form .ef-tag-add', 'Enter');
+          await page.waitForFunction(
+            () => [...document.querySelectorAll('.entry-form .ef-tag-chips .chip')].length === 2,
+          );
+        } },
+      { kind: 'billable', dirty: async () => {
+          await page.click('.entry-form .edit-bill-box');
+          await page.waitForFunction(
+            () => document.querySelector('.entry-form .edit-bill-box')?.getAttribute('aria-checked') === 'false',
+          );
+        } },
+      { kind: 'start', dirty: () => page.fill('.entry-form .edit-start', '2026-06-24 13:15:00') },
+      { kind: 'stop', dirty: () => page.fill('.entry-form .edit-end', '2026-06-24 16:45:00') },
+    ];
+    const arms = [];
+    for (const { kind, dirty } of DIRTY_KINDS) {
+      await openClean80();
+      const seed = await snapForm();
+      await dirty();
+      const before = await snapForm();
+      await page.hover('.entry[data-id="82"]');
+      await clickEventBody(page, '.entry[data-id="82"]');
+      // Short, and CAUGHT: a gate that fails to arm must be recorded as a false fact, not a
+      // scene that throws — the swap it failed to block has already happened by then.
+      const armed = await page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2500 })
+        .then(() => true)
+        .catch(() => false);
+      const held = await page.evaluate(() => ({
+        subject: document.querySelector('.entry-form')?.dataset.id ?? null,
+        nothingWritten: !window.__EDITED__ && !window.__ADDED__,
+      }));
+      let after = null;
+      if (armed) {
+        await page.click('.gatecard .gate-keep');
+        await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+        after = await snapForm();
+      }
+      arms.push({
+        kind,
+        // The dirtying actually moved the field it names — so a no-op "edit" cannot make the
+        // arm below look like a gate that works.
+        dirtied: JSON.stringify(before) !== JSON.stringify(seed),
+        armed,
+        subjectHeld: held.subject === '80',
+        nothingWritten: held.nothingWritten,
+        preserved: !!after && JSON.stringify(after) === JSON.stringify(before),
+      });
+    }
+    const everyFieldArms = arms.every(
+      (a) => a.dirtied && a.armed && a.subjectHeld && a.nothingWritten && a.preserved,
+    );
+
+    // (f) THE TWO WAYS OUT OF THE FORM (issue #323). Cancel used to close the form outright —
+    // every other route to losing pending work was gated and the likeliest one was not. Escape
+    // is the cheap way out that gating Cancel demands, and it is gated the same. Both legs run
+    // from a re-established, known state rather than whatever the arms loop left behind.
+    // A RELOAD is the honest reset between legs: tearing the form node out by hand would leave
+    // the renderer's openForm pointing at a detached node, and every leg after it would be
+    // measuring a state the app can never actually be in. The init script re-applies on reload.
+    const openDirtyEdit = async (dirty) => {
+      await page.reload();
+      await noMotion(page);
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      // The edit control lives in the hover-revealed .ops, so click it the way the other
+      // scenes do rather than relying on a hover landing first.
+      await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
+      await page.waitForSelector(editForm, { state: 'attached' });
+      if (dirty) await page.fill('.entry-form .edit-desc', 'typed work that must not vanish');
+      return snapForm();
+    };
+    const gateUp = () =>
+      page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2500 })
+        .then(() => true)
+        .catch(() => false);
+
+    const dirtyBefore = await openDirtyEdit(true);
+    await page.click('.entry-form .edit-cancel');
+    const cancelArmed = await gateUp();
+    let cancelKept = null;
+    if (cancelArmed) {
+      await page.click('.gatecard [data-gate="cancel"]');
+      await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+      cancelKept = await snapForm();
+    }
+    // ...and the confirm half really does close it, so the gate is not merely obstructive.
+    await page.click('.entry-form .edit-cancel');
+    await gateUp();
+    await page.click('.gatecard [data-gate="confirm"]');
+    await page.waitForSelector('.entry-form', { state: 'detached' });
+    const cancelDiscardCloses = await page.evaluate(() => !document.querySelector('.entry-form'));
+
+    await openDirtyEdit(false); // CLEAN form: Escape just closes, nothing to ask about
+    await page.keyboard.press('Escape');
+    const escapeClean = await page
+      .waitForSelector('.entry-form', { state: 'detached', timeout: 2500 })
+      .then(() => true)
+      .catch(() => false);
+
+    const escDirtyBefore = await openDirtyEdit(true); // DIRTY form: Escape asks
+    await page.keyboard.press('Escape');
+    const escapeArmed = await gateUp();
+    let escapeKept = null;
+    if (escapeArmed) {
+      await page.click('.gatecard [data-gate="cancel"]');
+      await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+      escapeKept = await snapForm();
+    }
+    const cancelGated =
+      cancelArmed && !!cancelKept && JSON.stringify(cancelKept) === JSON.stringify(dirtyBefore) && cancelDiscardCloses;
+    const escapeGated =
+      escapeClean &&
+      escapeArmed &&
+      !!escapeKept &&
+      JSON.stringify(escapeKept) === JSON.stringify(escDirtyBefore);
+
+    record(
+      'PENDING_CHANGES_GATE',
+      { gateArms, keepPreserves, discardSwaps, emptySpotGated, refreshGated, gateStaysOnEntries, everyFieldArms, cancelGated, escapeGated },
+      `the §12 R24 keep-editing / discard gate: arm=${JSON.stringify(gate)} (gateArms=${gateArms}); ` +
+        `keep=${JSON.stringify(kept)} (preserves=${keepPreserves}); discard=${JSON.stringify(discarded)} ` +
+        `(swaps=${discardSwaps}); emptySpotGated=${emptySpotGated}; refreshGated=${refreshGated}; ` +
+        `off-Entries refresh: ${JSON.stringify(crossView)} desc=${JSON.stringify(heldDesc)} ` +
+        `(gateStaysOnEntries=${gateStaysOnEntries}); per-field arms=${JSON.stringify(arms)} ` +
+        `(everyFieldArms=${everyFieldArms}); ` +
+        `Cancel: armed=${cancelArmed} preserved=${JSON.stringify(cancelKept)} closes-on-discard=${cancelDiscardCloses} ` +
+        `(cancelGated=${cancelGated}); Escape: clean-closes=${escapeClean} dirty-armed=${escapeArmed} ` +
+        `preserved=${JSON.stringify(escapeKept)} (escapeGated=${escapeGated})`,
+      'main-pending-gate.png',
+    );
+  });
+}
+
+// WEEK_MOVE_PROMPT — §12 R24 (issue #323): changing the week with a form open CARRIES the entry
+// to the same weekday of the week being opened, so it asks first. Three claims, none of which any
+// BDD leg can see (a DOM prompt over a form's pending fields): the prompt arms; Cancel abandons
+// the WHOLE action so the view never leaves the week it was on; and it asks ONCE per open form,
+// so a confirmed move lets the owner step through weeks freely until the form closes.
+async function sceneWeekMovePrompt(browser) {
+  await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await noMotion(page);
+    const editForm = '.entry-form[data-mode="edit"]';
+    const gateUp = () =>
+      page
+        .waitForSelector('.gate-backdrop .gatecard', { state: 'attached', timeout: 2000 })
+        .then(() => true)
+        .catch(() => false);
+    const snap = () =>
+      page.evaluate(() => ({
+        week: document.getElementById('el-week-label')?.textContent?.trim() ?? null,
+        start: document.querySelector('.entry-form .edit-start')?.value ?? null,
+        stop: document.querySelector('.entry-form .edit-end')?.value ?? null,
+        formOpen: !!document.querySelector('.entry-form'),
+        subject: document.querySelector('.entry-form')?.dataset.id ?? null,
+      }));
+    const openEdit80 = async () => {
+      await page.waitForSelector('.entry[data-id="80"]', { state: 'attached' });
+      await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
+      await page.waitForSelector(editForm, { state: 'attached' });
+    };
+
+    await openEdit80();
+    const before = await snap();
+
+    // (a) THE PROMPT ARMS, and it is the week prompt — not the discard gate, which says
+    // something else entirely and offers a destructive button this one must not have.
+    await page.click('#el-next-week');
+    const armed = await gateUp();
+    const promptText = armed
+      ? await page.evaluate(() => ({
+          title: document.querySelector('.gatecard h3')?.textContent?.trim() ?? null,
+          confirm: document.querySelector('.gatecard [data-gate="confirm"]')?.textContent?.trim() ?? null,
+          cancel: document.querySelector('.gatecard [data-gate="cancel"]')?.textContent?.trim() ?? null,
+          noDiscard: !document.querySelector('.gatecard .gate-discard'),
+        }))
+      : null;
+    await page.screenshot({ path: join(EVIDENCE, 'main-week-move-prompt.png') });
+
+    // (b) CANCEL ABANDONS THE WHOLE ACTION — the view stays on the week it was on and the entry
+    // is untouched, so the form and its block stay together. This is the half that separates the
+    // owner's ruling from the behaviour this replaced, which moved the view and stranded the form.
+    await page.click('.gatecard [data-gate="cancel"]');
+    await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+    const afterCancel = await snap();
+    const cancelAbandons =
+      afterCancel.week === before.week && afterCancel.start === before.start && afterCancel.formOpen;
+
+    // (c) CONFIRM CARRIES THE ENTRY — same weekday, same wall-clock time, one week on. Only the
+    // fields move; the write is still the user's Save, so nothing is committed here.
+    await page.click('#el-next-week');
+    await gateUp();
+    await page.click('.gatecard [data-gate="confirm"]');
+    await page.waitForFunction((w) => document.getElementById('el-week-label')?.textContent?.trim() !== w, before.week);
+    const afterConfirm = await snap();
+    const plusDays = (v, n) => {
+      const d = new Date(`${v.slice(0, 10)}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + n);
+      return d.toISOString().slice(0, 10) + v.slice(10);
+    };
+    const confirmMoves =
+      afterConfirm.start === plusDays(before.start, 7) &&
+      afterConfirm.stop === plusDays(before.stop, 7) &&
+      afterConfirm.formOpen &&
+      afterConfirm.subject === '80' &&
+      !(await page.evaluate(() => window.__EDITED__ || window.__ADDED__ || false));
+
+    // (d) ONCE PER OPEN FORM — the second week change just happens.
+    await page.click('#el-next-week');
+    const armedAgain = await gateUp();
+    await page.waitForFunction(
+      (w) => document.getElementById('el-week-label')?.textContent?.trim() !== w,
+      afterConfirm.week,
+    );
+    const afterSecond = await snap();
+    const asksOnce = !armedAgain && afterSecond.start === plusDays(before.start, 14);
+
+    // (e) ...and the answer dies with the form: a fresh form asks again. Walk the view back to
+    // the week the entry actually LIVES in first — the confirmed move moved the form's fields,
+    // not the stored row, and discarding them leaves entry 80 where it always was. (With no form
+    // open these two steps are exactly the ungated case, which is its own small proof.)
+    await cancelForm(page, editForm);
+    await page.click('#el-prev-week');
+    await page.click('#el-prev-week');
+    await openEdit80();
+    await page.click('#el-next-week');
+    const armedFresh = await gateUp();
+    if (armedFresh) await page.click('.gatecard [data-gate="cancel"]');
+
+    // (f) A PENDING new entry is asked about too — it holds typed work just the same.
+    await cancelForm(page, editForm);
+    await page.focus('#entries .fab');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    await page.click('#el-next-week');
+    const armedOnAdd = await gateUp();
+
+    record(
+      'WEEK_MOVE_PROMPT',
+      { armed, cancelAbandons, confirmMoves, asksOnce, armedFresh, armedOnAdd },
+      `prompt=${JSON.stringify(promptText)} (armed=${armed}); before=${JSON.stringify(before)}; ` +
+        `cancel→${JSON.stringify(afterCancel)} (abandons=${cancelAbandons}); ` +
+        `confirm→${JSON.stringify(afterConfirm)} (moves one week, same weekday, unwritten=${confirmMoves}); ` +
+        `second change armed=${armedAgain} →${JSON.stringify(afterSecond)} (asksOnce=${asksOnce}); ` +
+        `fresh form asks again=${armedFresh}; pending add asks=${armedOnAdd}`,
+      'main-week-move-prompt.png',
     );
   });
 }
@@ -2441,9 +2925,12 @@ async function sceneSplitAffordance(browser) {
       const chip = row?.querySelector('.ops')?.getBoundingClientRect();
       const ck = row?.querySelector('.ck')?.getBoundingClientRect();
       const col = row?.closest('.dt')?.getBoundingClientRect();
-      // No horizontal overlap between the ops chip and the corner checkbox, and the chip stays
-      // inside its day column.
-      const noOverlap = !!chip && !!ck && (chip.left >= ck.right || ck.left >= chip.right);
+      // No overlap between the ops chip and the corner checkbox — beside it at generous
+      // column widths, on the row below it once the fit-to-width columns narrow (§12 R16's
+      // container-stepped chip) — and the chip stays inside its day column.
+      const noOverlap =
+        !!chip && !!ck &&
+        (chip.left >= ck.right || ck.left >= chip.right || chip.top >= ck.bottom || ck.top >= chip.bottom);
       const chipInColumn = !!chip && !!col && chip.left >= col.left - 0.5 && chip.right <= col.right + 0.5;
       return { noOverlap, chipInColumn };
     });
@@ -2742,38 +3229,15 @@ async function sceneWriteRejectionFeedback(browser) {
   }
 }
 
-// ADD_REFUSAL_PALETTE — design.html D15 (issue 139): the add form's ONE message region serves
-// BOTH message kinds, so the palette — not the region — is what tells them apart. A refused Save
-// is a BLOCK (nothing was written, the form is still open) and must read in the --danger notice;
-// an overlap is allowed-but-flagged (the entry SAVED) and must read in the --flag advisory. The
-// app shipped the inversion: the refusal wore flag chrome, so colour said "saved with a caveat"
-// while the sentence said "nothing was written".
-//
-// Both states are driven on the same form and scored on COMPUTED colour, because a palette is
-// exactly the fact a screenshot-only check lets rot: (a) a refused Save paints #add-warning in
-// danger; (b) dismissing the form and reopening it returns the region to its flag base chrome —
-// the refusal's state class does not outlive the message and repaint the next advisory; (c) an
-// overlapping backfill that COMMITS raises its advisory in flag. Fails if a refusal reads flag,
-// if the two states resolve to the same triple, or if the refused write records anything.
+// ADD_REFUSAL_PALETTE — §12 R21 / design.html D15: the unified form's refusal region against
+// the overlap advisory. A refused Save is a BLOCK (nothing was written, the form stays open)
+// and reads in the --danger notice palette from the form's own announced `.ef-warning` region,
+// persisting until the next input on the form; an overlapping backfill is allowed-but-flagged
+// (the entry SAVED, the form closed) and reads in the --flag advisory palette from the
+// separate #overlap-banner. Scored on COMPUTED colour, because a palette is exactly the fact
+// a screenshot-only check lets rot; the two token triples must also DIFFER, so a token
+// collapse cannot pass the split vacuously.
 async function sceneAddRefusalPalette(browser) {
-  // Palette probe over one region: the three painted surfaces plus both token triples, so the
-  // justification line shows what was measured against what — not just a boolean.
-  const probeAddWarning = () => {
-    const { rgbOf } = window.__probe;
-    const el = document.querySelector('#add-warning');
-    const cs = getComputedStyle(el);
-    return {
-      erred: el.classList.contains('error'),
-      color: cs.color,
-      background: cs.backgroundColor,
-      border: cs.borderTopColor,
-      danger: [rgbOf('--danger'), rgbOf('--danger-weak'), rgbOf('--danger')],
-      flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
-    };
-  };
-  const painted = (p) => [p.color, p.background, p.border];
-  const same = (a, b) => a.every((v, i) => v === b[i]);
-
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
   await page.clock.pauseAt(new Date(JUDGE_NOW));
@@ -2782,42 +3246,47 @@ async function sceneAddRefusalPalette(browser) {
   await page.waitForSelector('.entry', { state: 'attached' });
   await noMotion(page); // a paint assertion reads the cascade, never a frozen mid-transition frame
 
-  await page.click('#add-toggle');
-  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
-  await page.fill('#add-desc', 'a backfill core will refuse');
-  await page.click('#add-go');
-  await page.waitForSelector('#add-warning:not([hidden])', { state: 'attached' });
+  // Open the form by the + button's keyboard path (the working-hours default interval) and
+  // drive a Save the strict-rejecting core mock refuses.
+  await page.focus('#entries .fab');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+  await page.fill('.entry-form .edit-desc', 'a backfill core will refuse');
+  await page.click('.entry-form button[type="submit"]');
+  await page.waitForSelector('.entry-form .ef-warning:not([hidden])', { state: 'attached' });
   await page.screenshot({ path: join(EVIDENCE, 'add-refusal-palette.png'), fullPage: true });
-  const refused = {
-    ...(await page.evaluate(probeAddWarning)),
-    ...(await page.evaluate(() => {
-      const el = document.querySelector('#add-warning');
-      return {
-        formOpen: !document.querySelector('#add-form').hidden,
-        shown: window.__probe.visible(el) && el.textContent.trim().length > 0,
-        announced: el.getAttribute('role') === 'status' && el.hasAttribute('aria-live'),
-        message: el.textContent.trim(),
-        notWritten: window.__ADDED__ == null,
-      };
-    })),
-  };
-
-  // (b) THE REGION'S OTHER STATE — Cancel and reopen: the region is back to its advisory base
-  // chrome. (A refusal that left its state class behind would dress the next overlap warning,
-  // which is on the same region, as a hard block — the same inversion pointing the other way.)
-  await page.click('#add-cancel');
-  await page.click('#add-toggle');
-  await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
-  const reopened = await page.evaluate(probeAddWarning);
+  const refused = await page.evaluate(() => {
+    const { rgbOf, visible } = window.__probe;
+    const el = document.querySelector('.entry-form .ef-warning');
+    const cs = getComputedStyle(el);
+    return {
+      formOpen: !!document.querySelector('.entry-form[data-mode="add"]'),
+      shown: visible(el) && el.textContent.trim().length > 0,
+      announced: el.getAttribute('role') === 'status' && el.hasAttribute('aria-live'),
+      message: el.textContent.trim(),
+      notWritten: window.__ADDED__ == null,
+      color: cs.color,
+      background: cs.backgroundColor,
+      border: cs.borderTopColor,
+      danger: [rgbOf('--danger'), rgbOf('--danger-weak'), rgbOf('--danger')],
+      flag: [rgbOf('--flag'), rgbOf('--flag-bg'), rgbOf('--flag-line')],
+    };
+  });
+  // §12 R21: the message persists until the NEXT INPUT on the form — a corrective keystroke
+  // clears it, so the fixed value starts from a clean slate.
+  await page.fill('.entry-form .edit-desc', 'corrected');
+  const inputClears = await page.evaluate(
+    () => document.querySelector('.entry-form .ef-warning')?.hidden === true,
+  );
   await page.close();
 
   const advisory = await withPage(browser, addFormState(), 'index.html', async (p) => {
     await p.waitForSelector('.entry', { state: 'attached' });
     await noMotion(p);
-    await p.click('#add-toggle');
-    await p.waitForSelector('#add-picker .stp-track', { state: 'attached' });
-    await p.click('#add-go');
+    await p.focus('#entries .fab');
+    await p.keyboard.press('Enter');
+    await p.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    await p.click('.entry-form button[type="submit"]');
     await p.waitForSelector('#overlap-banner:not([hidden])', { state: 'attached' });
     return p.evaluate(() => {
       const { rgbOf, visible } = window.__probe;
@@ -2826,6 +3295,7 @@ async function sceneAddRefusalPalette(browser) {
       return {
         shown: visible(el),
         written: window.__ADDED__ != null,
+        formClosed: !document.querySelector('.entry-form'),
         text: el.textContent.trim(),
         erred: el.classList.contains('error'),
         color: cs.color,
@@ -2836,8 +3306,8 @@ async function sceneAddRefusalPalette(browser) {
     });
   }, { overlap: true });
 
-  const refusalReadsDanger = refused.erred && same(painted(refused), refused.danger);
-  const advisoryChromeIntact = !reopened.erred && same(painted(reopened), reopened.flag);
+  const same = (a, b) => a.every((v, i) => v === b[i]);
+  const refusalReadsDanger = same([refused.color, refused.background, refused.border], refused.danger);
   const advisoryReadsFlag =
     !advisory.erred && same([advisory.color, advisory.background, advisory.border], advisory.flag);
   // The two palettes are only a split if they DIFFER — pin it here so a token edit that collapsed
@@ -2846,21 +3316,21 @@ async function sceneAddRefusalPalette(browser) {
   const refusalAnnounced = refused.formOpen && refused.shown && refused.announced && refused.notWritten;
   const reasonAlone =
     refused.message === 'stop time must be after start time' && readsClean(refused.message);
-  const advisoryShown = advisory.shown && advisory.written && /allowed, but flagged/i.test(advisory.text);
+  const advisoryShown =
+    advisory.shown && advisory.written && advisory.formClosed && /allowed, but flagged/i.test(advisory.text);
   record(
     'ADD_REFUSAL_PALETTE',
     {
       refusalAnnounced,
       reasonAlone,
       refusalReadsDanger,
-      advisoryChromeIntact,
+      inputClears,
       advisoryShown,
       advisoryReadsFlag,
       palettesDiffer,
     },
-    `refused save=${JSON.stringify(refused)} (danger=${refusalReadsDanger}); reopened=${JSON.stringify(reopened)} ` +
-      `(flag base intact=${advisoryChromeIntact}); overlap advisory=${JSON.stringify(advisory)} (flag=${advisoryReadsFlag}); ` +
-      `palettes differ=${palettesDiffer}`,
+    `refused save=${JSON.stringify(refused)} (danger=${refusalReadsDanger}, clears on input=${inputClears}); ` +
+      `overlap advisory=${JSON.stringify(advisory)} (flag=${advisoryReadsFlag}); palettes differ=${palettesDiffer}`,
     'add-refusal-palette.png',
   );
 }
@@ -2889,7 +3359,18 @@ async function sceneMergeConflict(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        // "Above the calendar" is a position, not a sibling adjacency: the unified form's host
+        // sits between the two now (it belongs directly above the grid it edits), and reading
+        // nextElementSibling made that a failure of the SELECTION BAR, which had not moved.
+        aboveCalendar: (() => {
+          const body = document.querySelector('.ebody');
+          if (!bar || !body) return false;
+          return (
+            !body.contains(bar) &&
+            !!(bar.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            bar.getBoundingClientRect().bottom <= body.getBoundingClientRect().top + 0.5
+          );
+        })(),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),
@@ -4203,212 +4684,299 @@ async function sceneReportsView(browser) {
   });
 }
 
-// ENTRIES_CALENDAR — §12 R09 (toolbar) + §12 R16 (calendar): the Entries TOOLBAR drives the
-// readonly entries calendar. Hardened per the issue-#55 triage: over the MULTI-WEEK,
-// multi-client, mixed-billable fixture, EACH toolbar control (range preset, billable toggle,
-// client, project, tag, search) is driven in turn and the VISIBLE EVENT COUNT + #week-total are
-// asserted to move to the expected subset — counts, not just pixels — with NO listEntries call
-// rejecting (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core).
-// Deterministic sub-facts are machine-scored under the pinned JUDGE clock (Wed 2026-06-24,
-// weekStart monday).
+// ENTRIES_CALENDAR — §12 R09 (the week-only toolbar + week picker) over §12 R16 (the week
+// grid). The Entries view shows EXACTLY ONE WEEK: the month-calendar week picker (entry-dot
+// days, today ring, selected-week band, a roving-grid keyboard path, no live-timer
+// treatment), the prev/next-week steppers, the filters/search on the toolbar's right, and
+// the Show-weekend toggle over the persisted show_weekend row. The range concept is GONE:
+// no presets, no custom date pair, no range-total chip, no Reports shortcut. Hardened per
+// the issue-#55 triage: over the MULTI-WEEK, multi-client, mixed-billable fixture, EACH
+// control is driven in turn and the VISIBLE EVENT COUNT is asserted to move to the expected
+// subset — counts, not just pixels — with NO listEntries call rejecting
+// (window.__LIST_ERRORS__, the mock is strict about `by` exactly like core). Deterministic
+// sub-facts are machine-scored under the pinned JUDGE clock (Wed 2026-06-24, weekStart
+// monday, show_weekend off).
 async function sceneEntriesCalendar(browser) {
   await withPage(browser, listState(), 'index.html', async (page) => {
     const probe = () =>
       page.evaluate(() => ({
-        req: { ...(window.__LIST_REQ__ || {}) },
         evCount: document.querySelectorAll('.dcol .ev').length,
         evText: [...document.querySelectorAll('.dcol .ev')].map((e) => e.textContent),
-        weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
+        weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+        wsFirst: document.querySelector('#week-picker .d.ws.first')?.dataset.day ?? null,
+        wsLast: document.querySelector('#week-picker .d.ws.last')?.dataset.day ?? null,
       }));
-    const waitCountAndTotal = (n, total) =>
-      page.waitForFunction(
-        ({ n, total }) =>
-          document.querySelectorAll('.dcol .ev').length === n &&
-          document.querySelector('#week-total')?.textContent.trim() === total,
-        { n, total },
-      );
+    const waitCount = (n) =>
+      page.waitForFunction((n) => document.querySelectorAll('.dcol .ev').length === n, n);
 
-    // The default load paints the readonly entries calendar (R16) — no toolbar control touched
-    // yet. All SEVEN fixture entries lay into their day columns, and the idle chip is the
-    // WEEK-BOUNDED billable sum (issue #55 Part B): this week's 5.00h — NOT the all-time 8.00h.
+    // The default load paints the CURRENT week (Mon Jun 22 – Fri Jun 26 shown, weekend off) off
+    // the snapshot — the five in-week fixture entries lay into their day columns. The retired
+    // controls stay retired (#264 chip/shortcut, and now the whole range machinery).
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+    // The picker's entry dots arrive from one async unfiltered listEntries read — wait for them
+    // so the dot facts read a settled picker.
+    await page.waitForFunction(() => document.querySelectorAll('#week-picker .edot').length > 0);
     const before = await page.evaluate(() => ({
       hasByControl: !!document.querySelector('#el-by-seg'),
+      hasRangeChip: !!document.querySelector('#week-total'),
+      hasReportShortcut: !!document.querySelector('#report-btn'),
       hasPresets: !!document.querySelector('#el-preset-seg'),
+      hasDatePair: !!document.querySelector('#el-custom-range, #el-range-from, #el-range-to, #el-range-apply'),
+      hasPrev: !!document.querySelector('#el-prev-week'),
+      hasNext: !!document.querySelector('#el-next-week'),
       hasBillable: !!document.querySelector('#el-billable-seg'),
       hasClientFilter: !!document.querySelector('#el-client'),
       hasProjectFilter: !!document.querySelector('#el-project'),
       hasTagFilter: !!document.querySelector('#el-tag'),
       hasSearch: !!document.querySelector('#search'),
-      fromType: document.querySelector('#el-range-from')?.type ?? '',
-      toType: document.querySelector('#el-range-to')?.type ?? '',
-      hasApply: !!document.querySelector('#el-range-apply'),
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+      // §12 R09: the filters sit to the RIGHT of the toolbar — the spacer pushes them past
+      // the week label. Asserted on the controls sharing the label's row (the toolbar wraps
+      // at the 1040 minimum, exactly as the mockup's own toolbar does; a wrapped row cannot
+      // be "right of" a label it is below).
+      filtersRight: (() => {
+        const label = document.querySelector('#el-week-label')?.getBoundingClientRect();
+        if (!label) return false;
+        return ['#el-billable-seg', '#el-client', '#el-tag', '#search', '#el-weekend'].every((s) => {
+          const r = document.querySelector(s)?.getBoundingClientRect();
+          return !!r && (r.left > label.right || r.top > label.bottom - 1);
+        });
+      })(),
+      // the week picker (one month calendar beside the grid)
+      monthLabel: document.querySelector('#week-picker .wk-hd .m')?.textContent ?? '',
+      dotDays: [...document.querySelectorAll('#week-picker .d')]
+        .filter((d) => d.querySelector('.edot'))
+        .map((d) => d.dataset.day),
+      todayCell: document.querySelector('#week-picker .d.today')?.dataset.day ?? null,
+      todayRing: (() => {
+        const tn = document.querySelector('#week-picker .d.today .tn2');
+        return !!tn && getComputedStyle(tn).boxShadow !== 'none';
+      })(),
+      wsBand: [...document.querySelectorAll('#week-picker .d.ws')].map((d) => d.dataset.day),
+      wsFirst: document.querySelector('#week-picker .d.ws.first')?.dataset.day ?? null,
+      wsLast: document.querySelector('#week-picker .d.ws.last')?.dataset.day ?? null,
+      // §12 R09: the picker renders NO live/running-timer treatment.
+      pickerRunMarks: document.querySelectorAll('#week-picker .run-dot, #week-picker .dot').length,
+      // the weekend toggle at the toolbar's right, off by default (§14)
+      weekendRole: document.querySelector('#el-weekend')?.getAttribute('role') ?? '',
+      weekendChecked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      dayCols: document.querySelectorAll('.dcol').length,
       evCount: document.querySelectorAll('.dcol .ev').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
+    // PREV WEEK — the visible week steps back to Jun 15–21: one event (last week's 'refactor
+    // planning'), the label and the picker's selected-week band move with it.
+    await page.click('#el-prev-week');
+    await waitCount(1);
+    const onPrev = await probe();
+    // NEXT WEEK — steps forward again to the current week; the default five return.
+    await page.click('#el-next-week');
+    await waitCount(5);
+    const onNext = await probe();
+
+    // PICKER CLICK — clicking ANY day selects that day's WHOLE week: Jun 17 (a Wednesday)
+    // selects Jun 15–21.
+    await page.click('#week-picker .d[data-day="2026-06-17"]');
+    await waitCount(1);
+    const onPicked = await probe();
+
+    // PICKER KEYBOARD — the roving grid: the picked cell holds the grid's one tabindex="0";
+    // ArrowRight moves the active cell to the 18th, ArrowDown to the 25th, and Enter selects
+    // that day's week (the current week — the five events return).
+    await page.focus('#week-picker .d[data-day="2026-06-17"]');
+    await page.keyboard.press('ArrowRight');
+    const afterRight = await page.evaluate(() => document.activeElement?.dataset?.day ?? null);
+    await page.keyboard.press('ArrowDown');
+    const afterDown = await page.evaluate(() => document.activeElement?.dataset?.day ?? null);
+    await page.keyboard.press('Enter');
+    await waitCount(5);
+    const onKeyed = await probe();
+
     // SEARCH — matches three "refactor" descriptions in the fixture, but only the TWO inside
-    // the default week window survive (range + search COMPOSE): last week's 'refactor planning'
-    // stays excluded. The events narrow to 2 and #week-total drops to their 3.50h.
+    // the selected week survive (week + search COMPOSE): last week's 'refactor planning'
+    // stays excluded. The events narrow to 2.
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => window.__LIST_REQ__?.search === 'refactor');
-    await waitCountAndTotal(2, '3.50h');
+    await waitCount(2);
     await page.screenshot({ path: join(EVIDENCE, 'entries-search.png'), fullPage: true });
     const onSearch = await probe();
-
     await page.fill('#search', '');
-    await waitCountAndTotal(7, '5.00h');
+    await waitCount(5);
 
-    // RANGE PRESETS — each chip re-queries and the visible subset + chip move with it:
-    // month (June: 6 events, 7.00h billable) → last-week (1 event, 2.00h) → last-month
-    // (1 event, 1.00h) → today (3 events, 3.00h) → week (5 events, 5.00h).
-    await page.click('#el-preset-seg .preset[data-preset="month"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'month');
-    await waitCountAndTotal(6, '7.00h');
-    const onMonth = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="last-week"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-week');
-    await waitCountAndTotal(1, '2.00h');
-    const onLastWeek = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="last-month"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'last-month');
-    await waitCountAndTotal(1, '1.00h');
-    const onLastMonth = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="today"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'today');
-    await waitCountAndTotal(3, '3.00h');
-    const onToday = await probe();
-    await page.click('#el-preset-seg .preset[data-preset="week"]');
-    await page.waitForFunction(() => window.__LIST_REQ__?.preset === 'week');
-    await waitCountAndTotal(5, '5.00h');
-
-    // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events, 5.00h);
-    // non-billable keeps ONLY it (1 event, a 0.00h billable sum); all restores the 5.
+    // BILLABLE TOGGLE — billable drops the non-billable 'team lunch' (4 events);
+    // non-billable keeps ONLY it (1 event); all restores the 5.
     await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'billable');
-    await waitCountAndTotal(4, '5.00h');
+    await waitCount(4);
     const onBillable = await probe();
     await page.click('#el-billable-seg .seg-btn[data-billable="non-billable"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'non-billable');
-    await waitCountAndTotal(1, '0.00h');
+    await waitCount(1);
     const onNonBillable = await probe();
     await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
     await page.waitForFunction(() => window.__LIST_REQ__?.billable === 'all');
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    // CLIENT FILTER — Acme (id 1) keeps this week's three Acme entries (2.50h billable)…
+    // CLIENT FILTER — Acme (id 1) keeps this week's three Acme entries…
     await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
     await page.selectOption('#el-client', '1');
     await page.waitForFunction(() => window.__LIST_REQ__?.clientId === 1);
-    await waitCountAndTotal(3, '2.50h');
+    await waitCount(3);
     const onClient = await probe();
-    // …PROJECT FILTER — its API project (id 11) narrows to the single 'auth refactor' (2.00h).
+    // …PROJECT FILTER — its API project (id 11) narrows to the single 'auth refactor'.
     await page.waitForSelector('#el-project option[value="11"]', { state: 'attached' });
     await page.selectOption('#el-project', '11');
     await page.waitForFunction(() => window.__LIST_REQ__?.projectId === 11);
-    await waitCountAndTotal(1, '2.00h');
+    await waitCount(1);
     const onProject = await probe();
     // Reset the client (project resets with it) — the week's 5 return.
     await page.selectOption('#el-client', '');
     await page.waitForFunction(
       () => window.__LIST_REQ__?.clientId === undefined && window.__LIST_REQ__?.projectId === undefined,
     );
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    // TAG FILTER — 'ci' keeps the week's two ci-tagged entries (2.50h billable), then clears.
+    // TAG FILTER — 'ci' keeps the week's two ci-tagged entries, then clears.
     await page.fill('#el-tag', 'ci');
     await page.waitForFunction(() => window.__LIST_REQ__?.tag === 'ci');
-    await waitCountAndTotal(2, '2.50h');
+    await waitCount(2);
     const onTag = await probe();
     await page.fill('#el-tag', '');
     await page.waitForFunction(() => window.__LIST_REQ__?.tag === undefined);
-    await waitCountAndTotal(5, '5.00h');
+    await waitCount(5);
 
-    await page.click('#el-preset-seg .preset[data-preset="custom"]');
-    await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-    await page.fill('#el-range-from', '2026-06-23');
-    await page.fill('#el-range-to', '2026-06-23');
-    await page.waitForFunction(
-      () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
-    );
-    await waitCountAndTotal(2, '2.00h');
+    // SHOW-WEEKEND TOGGLE — drives the PERSISTED show_weekend row over the same setSetting
+    // channel the Settings view uses (§12 R09/§14), and the grid follows: five columns off,
+    // seven on, no stored data touched. The captured payload proves the persisted row is the
+    // mechanism, not a local flag.
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const onWeekend = await page.evaluate(() => ({
+      setSetting: window.__SET_SETTING__ ?? null,
+      checked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      dayCols: document.querySelectorAll('.dcol').length,
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+    }));
     await page.screenshot({ path: join(EVIDENCE, 'entries-calendar.png'), fullPage: true });
-    const onCustom = await probe();
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 5);
+    const offWeekend = await page.evaluate(() => ({
+      setSetting: window.__SET_SETTING__ ?? null,
+      checked: document.querySelector('#el-weekend')?.getAttribute('aria-checked') ?? '',
+      weekLabel: document.querySelector('#el-week-label')?.textContent ?? '',
+    }));
 
-    // Issue #55: NO listEntries call rejected across the whole drive, and EVERY query carried
-    // the required by:'day' grouping (the strict mock mirrors core's required-field contract).
+    // Issue #55: NO listEntries call rejected across the whole drive, EVERY query carried the
+    // required by:'day' grouping, and every windowed query carried the week's PLAIN-DATE pair
+    // (raw YYYY-MM-DD strings, never a derived instant — the §09 R01 vocabulary).
     const wire = await page.evaluate(() => ({
       errors: window.__LIST_ERRORS__ || 0,
       reqCount: (window.__LIST_REQS__ || []).length,
       allCarryBy: (window.__LIST_REQS__ || []).every((r) => r && r.by === 'day'),
+      allPlainDates: (window.__LIST_REQS__ || []).every(
+        (r) => /^\d{4}-\d{2}-\d{2}$/.test(String(r.fromDate)) && /^\d{4}-\d{2}-\d{2}$/.test(String(r.toDate)),
+      ),
     }));
 
     const controlsOk =
-      !before.hasByControl &&
-      before.hasPresets && before.hasBillable && before.hasClientFilter &&
-      before.hasProjectFilter && before.hasTagFilter && before.hasSearch;
-    // Issue #55 Part B: the idle chip is the WEEK's billable sum, not the all-time 8.00h.
-    const defaultOk = before.evCount === 7 && before.weekTotal === '5.00h';
+      // the whole range machinery is GONE with the week-only view (#265), the #264 retirements
+      // with it — and no grouping control returns.
+      !before.hasByControl && !before.hasRangeChip && !before.hasReportShortcut &&
+      !before.hasPresets && !before.hasDatePair &&
+      // the R09 controls are present, the filters/search/toggle to the toolbar's RIGHT
+      before.hasPrev && before.hasNext && before.hasBillable && before.hasClientFilter &&
+      before.hasProjectFilter && before.hasTagFilter && before.hasSearch && before.filtersRight;
+    const weekDefaultOk =
+      before.evCount === 5 && // the current week's five entries, not the fixture's seven
+      before.dayCols === 5 && // Mon–Fri, weekend hidden (§14 default)
+      before.weekLabel === 'Jun 22 – 26, 2026';
+    const pickerOk =
+      before.monthLabel === 'June 2026' &&
+      // entry-dot days: exactly the June days carrying entries (17, 23, 24 — May's stays off
+      // this month's grid); dots are unfiltered by design
+      before.dotDays.join(',') === '2026-06-17,2026-06-23,2026-06-24' &&
+      before.todayCell === '2026-06-24' && before.todayRing &&
+      // the selected week highlighted as ONE unit — all seven days, weekend included
+      before.wsBand.length === 7 &&
+      before.wsFirst === '2026-06-22' && before.wsLast === '2026-06-28' &&
+      before.pickerRunMarks === 0 && // no live-timer treatment (§12 R09)
+      before.weekendRole === 'switch' && before.weekendChecked === 'false';
+    const stepOk =
+      onPrev.evCount === 1 &&
+      onPrev.evText.some((t) => /refactor planning/.test(t)) &&
+      onPrev.weekLabel === 'Jun 15 – 19, 2026' &&
+      onPrev.wsFirst === '2026-06-15' && onPrev.wsLast === '2026-06-21' &&
+      onNext.evCount === 5 && onNext.wsFirst === '2026-06-22';
+    const pickerSelectOk =
+      onPicked.evCount === 1 &&
+      onPicked.wsFirst === '2026-06-15' && onPicked.wsLast === '2026-06-21' &&
+      onPicked.weekLabel === 'Jun 15 – 19, 2026';
+    const pickerKeysOk =
+      afterRight === '2026-06-18' && afterDown === '2026-06-25' &&
+      onKeyed.evCount === 5 && onKeyed.wsFirst === '2026-06-22';
     const searchOk =
-      onSearch.req.search === 'refactor' &&
-      onSearch.req.by === 'day' && // the query carries the REQUIRED grouping (issue #55)
       onSearch.evCount === 2 && // narrowed to the two IN-WEEK "refactor" events…
       onSearch.evText.some((t) => /auth refactor/.test(t)) &&
       onSearch.evText.some((t) => /refactor tests/.test(t)) &&
       !onSearch.evText.some((t) => /deploy pipeline/.test(t)) && // …non-matches excluded…
-      !onSearch.evText.some((t) => /refactor planning/.test(t)) && // …range + search compose
-      onSearch.weekTotal === '3.50h'; // #week-total moved to the matching subset's sum
-    const presetsOk =
-      onMonth.evCount === 6 && onMonth.weekTotal === '7.00h' &&
-      onLastWeek.evCount === 1 && onLastWeek.weekTotal === '2.00h' &&
-      onLastWeek.evText.some((t) => /refactor planning/.test(t)) &&
-      onLastMonth.evCount === 1 && onLastMonth.weekTotal === '1.00h' &&
-      onLastMonth.evText.some((t) => /may retro/.test(t)) &&
-      onToday.evCount === 3 && onToday.weekTotal === '3.00h';
+      !onSearch.evText.some((t) => /refactor planning/.test(t)); // …week + search compose
     const billableOk =
-      onBillable.evCount === 4 && onBillable.weekTotal === '5.00h' &&
+      onBillable.evCount === 4 &&
       !onBillable.evText.some((t) => /team lunch/.test(t)) &&
-      onNonBillable.evCount === 1 && onNonBillable.weekTotal === '0.00h' &&
+      onNonBillable.evCount === 1 &&
       onNonBillable.evText.some((t) => /team lunch/.test(t));
     const clientProjectOk =
-      onClient.evCount === 3 && onClient.weekTotal === '2.50h' &&
+      onClient.evCount === 3 &&
       !onClient.evText.some((t) => /deploy pipeline|refactor tests/.test(t)) && // Globex excluded
-      onProject.evCount === 1 && onProject.weekTotal === '2.00h' &&
+      onProject.evCount === 1 &&
       onProject.evText.some((t) => /auth refactor/.test(t));
     const tagOk =
-      onTag.evCount === 2 && onTag.weekTotal === '2.50h' &&
+      onTag.evCount === 2 &&
       onTag.evText.some((t) => /deploy pipeline/.test(t)) &&
       onTag.evText.some((t) => /refactor tests/.test(t));
-    const customRangeOk =
-      before.fromType === 'date' && before.toType === 'date' && !before.hasApply &&
-      onCustom.req.fromDate === '2026-06-23' && onCustom.req.toDate === '2026-06-23' &&
-      onCustom.req.fromUtc === undefined && onCustom.req.toUtc === undefined &&
-      !String(onCustom.req.fromDate).includes('T') &&
-      onCustom.evCount === 2 && onCustom.weekTotal === '2.00h' &&
-      onCustom.evText.some((t) => /standup/.test(t)) &&
-      onCustom.evText.some((t) => /refactor tests/.test(t)) &&
-      !onCustom.evText.some((t) => /auth refactor|deploy pipeline/.test(t));
-    const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy;
+    const weekendOk =
+      onWeekend.setSetting?.key === 'showWeekend' && onWeekend.setSetting?.value === true &&
+      onWeekend.checked === 'true' && onWeekend.dayCols === 7 &&
+      onWeekend.weekLabel === 'Jun 22 – 28, 2026' &&
+      offWeekend.setSetting?.key === 'showWeekend' && offWeekend.setSetting?.value === false &&
+      offWeekend.checked === 'false' && offWeekend.weekLabel === 'Jun 22 – 26, 2026';
+    const wireOk = wire.errors === 0 && wire.reqCount > 0 && wire.allCarryBy && wire.allPlainDates;
     record(
       'ENTRIES_CALENDAR',
-      { controlsOk, defaultOk, searchOk, presetsOk, billableOk, clientProjectOk, tagOk, customRangeOk, wireOk },
-      `entries calendar: default=${JSON.stringify(before)} -> search=${JSON.stringify(onSearch)} ` +
-        `-> presets month=${onMonth.evCount}/${onMonth.weekTotal} lastWeek=${onLastWeek.evCount}/${onLastWeek.weekTotal} ` +
-        `lastMonth=${onLastMonth.evCount}/${onLastMonth.weekTotal} today=${onToday.evCount}/${onToday.weekTotal} ` +
-        `-> billable=${onBillable.evCount}/${onBillable.weekTotal} nonBillable=${onNonBillable.evCount}/${onNonBillable.weekTotal} ` +
-        `-> client=${onClient.evCount}/${onClient.weekTotal} project=${onProject.evCount}/${onProject.weekTotal} ` +
-        `-> tag=${onTag.evCount}/${onTag.weekTotal} -> custom dates=${JSON.stringify(onCustom)} ` +
+      {
+        controlsOk,
+        weekDefaultOk,
+        pickerOk,
+        stepOk,
+        pickerSelectOk,
+        pickerKeysOk,
+        searchOk,
+        billableOk,
+        clientProjectOk,
+        tagOk,
+        weekendOk,
+        wireOk,
+      },
+      `week-only entries toolbar: default=${JSON.stringify(before)} -> prev=${JSON.stringify(onPrev)} ` +
+        `next=${onNext.evCount}@${onNext.wsFirst} -> picked=${JSON.stringify(onPicked)} ` +
+        `-> keys right=${afterRight} down=${afterDown} enter=${onKeyed.evCount}@${onKeyed.wsFirst} ` +
+        `-> search=${onSearch.evCount} -> billable=${onBillable.evCount}/${onNonBillable.evCount} ` +
+        `-> client=${onClient.evCount} project=${onProject.evCount} -> tag=${onTag.evCount} ` +
+        `-> weekend on=${JSON.stringify(onWeekend)} off=${JSON.stringify(offWeekend)} ` +
         `-> wire=${JSON.stringify(wire)}`,
       'entries-calendar.png',
     );
   });
 }
 
-// CALENDAR_LAYOUT — §12 R16: the readonly entries CALENDAR structure over the real renderer +
-// entriesCalendarState. Drives the calendar-layout half of the requirement (the toolbar-drives-
-// calendar half is ENTRIES_CALENDAR above). Machine-scored under the pinned JUDGE clock with the
-// page pinned to timezoneId 'UTC' so the fixture's UTC instants map to a stable local-time
-// geometry on the 24h track.
+// CALENDAR_LAYOUT — §12 R16: the week-grid structure over the real renderer +
+// entriesCalendarState. Drives the grid half of the requirement (the toolbar/picker half is
+// ENTRIES_CALENDAR above): fit-to-width columns with NO horizontal scroll, taller 60px hours
+// over the full 24h track, the today indicator, per-day header totals (start-day attribution),
+// cross-midnight segments — including the hidden-day rule (§16): a segment on a day the grid
+// does not show is simply not drawn, and the Show-weekend toggle reveals it without changing
+// any total. Machine-scored under the pinned JUDGE clock with the page pinned to timezoneId
+// 'UTC' so the fixture's UTC instants map to a stable local-time geometry on the 24h track.
 async function sceneCalendarLayout(browser) {
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -4418,47 +4986,40 @@ async function sceneCalendarLayout(browser) {
     await page.goto(fileUrl('index.html'));
     await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
 
-    // The 24h track geometry the renderer uses (HOUR_PX=44), replicated to check off-hours
-    // positioning: working-start 07:00 → 420 min → ~308px; working-end 18:00 → 1080 min → ~792px.
-    const pxPerMin = 44 / 60;
+    // The 24h track geometry the renderer uses (HOUR_PX=60 — the §12 R16 taller hours): working
+    // hours 07:00–18:00 → 420–1080 min → 420–1080 px at 1px/min.
+    const pxPerMin = 60 / 60;
     const workStartPx = 420 * pxPerMin;
     const workEndPx = 1080 * pxPerMin;
 
     const structure = await page.evaluate(
       ({ workStartPx, workEndPx }) => {
         const cols = [...document.querySelectorAll('.dcol')];
-        const colWidths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+        const colWidths = cols.map((c) => c.getBoundingClientRect().width);
         const strip = document.querySelector('.cstrip');
         const track = document.querySelector('.dt');
         const evs = [...document.querySelectorAll('.dcol .ev')];
         const evTop = (el) => parseFloat(el.style.top) || 0;
         const evNum = (el, prop) => Math.round(parseFloat(el.style[prop]) || 0);
-        // §12 R16 (issue #71): the cross-midnight entry (data-id 8, 22:30→06:15 next day) renders
-        // as TWO segments sharing its id — a start-day segment and an end-day segment. Capture each
-        // segment's class + top/height so the rubric can assert the split geometry (start segment
-        // reaches the track bottom at a TRUE height; end segment runs from the track top) rather
-        // than the single 18px sliver the same-day end-min math used to collapse it to.
-        const xmid = [...document.querySelectorAll('.dcol .ev[data-id="8"]')].map((el) => ({
+        const segsOf = (id) => [...document.querySelectorAll(`.dcol .ev[data-id="${id}"]`)].map((el) => ({
           cls: el.className,
           top: evNum(el, 'top'),
           height: evNum(el, 'height'),
         }));
         const dayTotals = {};
+        const dayHasTotal = {};
         for (const dh of document.querySelectorAll('.dcol .dh')) {
           const dd = dh.querySelector('.dd')?.textContent?.trim();
           dayTotals[dd] = dh.querySelector('.ds')?.textContent?.trim() ?? null;
+          dayHasTotal[dd] = !!dh.querySelector('.ds');
         }
         const emptyCols = cols.filter((c) => c.querySelectorAll('.dt .ev').length === 0).length;
         const runEv = document.querySelector('.dcol .ev.run');
         const runBg = runEv ? getComputedStyle(runEv).backgroundImage : '';
         const runBt = runEv ? runEv.querySelector('.bt')?.textContent?.trim() ?? '' : '';
         // §12 R16 / G13, issue #145: the day headers must be ON SCREEN at the post-render scroll
-        // position, not merely present in the DOM. This scene used to read the per-day totals out
-        // of the markup, which is a CONTROL-level fact — and it passed while the render scrolled
-        // the whole 52px header band out of the viewport, leaving seven unlabelled columns with
-        // zero visible totals. Measured against the scrollport rect instead: `.dh` is vertically
-        // inside `.cstrip`'s box (the axis the working-hours scroll moves), and the header band's
-        // own visible height is its full 52px, so a partly-clipped band fails too.
+        // position, not merely present in the DOM — the sticky header band keeps the totals and
+        // the hour labels visible while the working-hours scroll moves the track beneath them.
         const stripRect = strip.getBoundingClientRect();
         const gut = document.querySelector('.gut');
         const dhs = [...document.querySelectorAll('.dcol .dh')];
@@ -4466,29 +5027,29 @@ async function sceneCalendarLayout(browser) {
           const r = el.getBoundingClientRect();
           return r.height > 0 && r.top >= stripRect.top - 0.5 && r.bottom <= stripRect.bottom + 0.5;
         };
-        // Fully on screen on BOTH axes — the strictest reading of "a reader can see this label".
-        // The rightmost columns sit past the horizontal scroll by design (the strip scrolls), so
-        // this is a floor, not an equality.
         const fullyVisible = (el) => {
           const r = el.getBoundingClientRect();
-          return (
-            vInside(el) && r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5
-          );
+          return vInside(el) && r.left >= stripRect.left - 0.5 && r.right <= stripRect.right + 0.5;
         };
+        // The taller hours, read off the painted gutter: consecutive hour labels sit 60px apart.
+        const hlabTops = [...document.querySelectorAll('.gut .hlab')].map((el) => parseFloat(el.style.top));
+        const today = document.querySelector('.dcol .dh .dd.today');
         return {
           colCount: cols.length,
-          colWidths,
-          allEqualWidth: colWidths.length > 0 && colWidths.every((w) => w === colWidths[0]),
-          fixedWidth: colWidths[0] ?? 0,
-          hScroll: !!strip && strip.scrollWidth > strip.clientWidth,
+          colSpread: colWidths.length ? Math.max(...colWidths) - Math.min(...colWidths) : 0,
+          minColWidth: colWidths.length ? Math.round(Math.min(...colWidths)) : 0,
+          // §12 R16: fit to width — the columns + gutter FILL the strip and nothing scrolls
+          // horizontally at the default window.
+          hScroll: !!strip && strip.scrollWidth > strip.clientWidth + 1,
           vScroll: !!strip && strip.scrollHeight > strip.clientHeight,
           scrollTop: strip ? Math.round(strip.scrollTop) : 0,
           trackHeight: track ? Math.round(track.getBoundingClientRect().height) : 0,
+          hourStepPx: hlabTops.length > 1 ? hlabTops[1] - hlabTops[0] : 0,
           evCount: evs.length,
           hasBeforeWork: evs.some((el) => evTop(el) < workStartPx),
           hasAfterWork: evs.some((el) => evTop(el) > workEndPx),
           dayTotals,
-          weekTotal: document.querySelector('#week-total')?.textContent?.trim() ?? null,
+          dayHasTotal,
           emptyCols,
           overlapBands: document.querySelectorAll('.dcol .ov').length,
           overlapTag: document.querySelector('.dcol .ov .otag')?.textContent?.trim() ?? '',
@@ -4496,18 +5057,21 @@ async function sceneCalendarLayout(browser) {
           sleptMoon: !!document.querySelector('.dcol .ev .zz use[href="#i-moon"]'),
           runPresent: !!runEv,
           runFade: /gradient/.test(runBg),
-          xmid,
-          // The full 24h track bottom in px (CAL_DAY_PX = 44 * 24) — the start segment must reach
-          // it, proving it runs to local midnight, not to a clipped 18px block.
-          trackBottomPx: 44 * 24,
+          // §12 R16: the TODAY indicator — the ink ring on the date numeral (Wed 24 under the
+          // pinned clock), one and only one, distinct from selection.
+          todayCount: document.querySelectorAll('.dcol .dh .dd.today').length,
+          todayText: today?.textContent?.trim() ?? null,
+          todayRing: !!today && getComputedStyle(today).boxShadow !== 'none',
+          // Both-shown cross-midnight (id 8, Mon 22:30 → Tue 06:15) and the weekend-crossing
+          // span (id 9, Fri 22:30 → Sat 06:15) whose Sat segment must NOT be drawn (weekend off).
+          xmid: segsOf('8'),
+          hiddenSegs: segsOf('9'),
+          trackBottomPx: 60 * 24,
           runNoEnd: /\d{1,2}:\d{2}/.test(runBt) && !/\d{1,2}:\d{2}\s*[–-]\s*\d{1,2}:\d{2}/.test(runBt),
-          // issue #145 — the header band and hour gutter AT THE DEFAULT PAINT.
           headerCount: dhs.length,
           headersOnScreen: dhs.filter(vInside).length,
-          dayTotalsOnScreen: [...document.querySelectorAll('.dcol .dh .ds')].filter(fullyVisible)
-            .length,
-          // The mechanism, named so a regression says WHICH half broke: the labels stick to the
-          // scrollport instead of riding the scroll.
+          dayTotalsOnScreen: [...document.querySelectorAll('.dcol .dh .ds')].filter(fullyVisible).length,
+          dayTotalsCount: document.querySelectorAll('.dcol .dh .ds').length,
           dhPosition: dhs[0] ? getComputedStyle(dhs[0]).position : '',
           gutPosition: gut ? getComputedStyle(gut).position : '',
           hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
@@ -4517,28 +5081,80 @@ async function sceneCalendarLayout(browser) {
     );
     await page.screenshot({ path: join(EVIDENCE, 'main-calendar.png') });
 
-    // issue #145, the other axis: the hour gutter labels the time for EVERY column, so it has to
-    // survive the horizontal scroll the fixed-width columns force — the same defect as the header
-    // band, ninety degrees round. Scroll the strip fully right, then read the gutter's left edge
-    // against the scrollport's (sticky pins the two together) and confirm the header band is still
-    // on screen at the same time, so the two axes are proven to compose rather than one at a time.
-    const axes = await page.evaluate(() => {
+    // §12 R09/R16/§16: the Show-weekend toggle reveals the weekend columns AND the weekend
+    // segment of the Fri→Sat span — without giving Sat's header a total (start-day attribution,
+    // asserted per §16\'s "hiding a segment never changes attribution or any total") and still
+    // with no horizontal scroll at seven columns. Toggled back off so the hover/editor/merge
+    // probes below run at the default five-column paint.
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const weekend = await page.evaluate(() => {
       const strip = document.querySelector('.cstrip');
-      strip.scrollLeft = strip.scrollWidth;
-      const s = strip.getBoundingClientRect();
-      const vInside = (el) => {
-        const r = el.getBoundingClientRect();
-        return r.height > 0 && r.top >= s.top - 0.5 && r.bottom <= s.bottom + 0.5;
+      const cols = [...document.querySelectorAll('.dcol')].map((c) => c.getBoundingClientRect().width);
+      const segs = [...document.querySelectorAll('.dcol .ev[data-id="9"]')].map((el) => ({
+        cls: el.className,
+        top: Math.round(parseFloat(el.style.top) || 0),
+        height: Math.round(parseFloat(el.style.height) || 0),
+      }));
+      const satHead = [...document.querySelectorAll('.dcol .dh')].find(
+        (dh) => dh.querySelector('.dd')?.textContent?.trim() === '27',
+      );
+      return {
+        dayCols: cols.length,
+        colSpread: cols.length ? Math.max(...cols) - Math.min(...cols) : 0,
+        hScroll: !!strip && strip.scrollWidth > strip.clientWidth + 1,
+        segs,
+        satHasTotal: !!satHead?.querySelector('.ds'),
+        friTotal: [...document.querySelectorAll('.dcol .dh')]
+          .find((dh) => dh.querySelector('.dd')?.textContent?.trim() === '26')
+          ?.querySelector('.ds')?.textContent?.trim() ?? null,
       };
-      const out = {
-        scrolledRight: Math.round(strip.scrollLeft) > 0,
-        gutOffset: Math.round(document.querySelector('.gut').getBoundingClientRect().left - s.left),
-        headersOnScreen: [...document.querySelectorAll('.dcol .dh')].filter(vInside).length,
-        hourLabelsOnScreen: [...document.querySelectorAll('.gut .hlab')].filter(vInside).length,
-      };
-      strip.scrollLeft = 0; // back to the at-rest position the remaining sub-facts read.
-      return out;
     });
+    await page.screenshot({ path: join(EVIDENCE, 'main-calendar-weekend.png') });
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 5);
+
+    // §12 R16 — the grid's SCROLL POSITION SURVIVES A REPAINT. renderCalendar assigned
+    // strip.scrollTop on every build, so any external write (a tt edit, the DB file watcher)
+    // yanked the viewport back to working hours mid-look — and mid-drag it shifted the track
+    // under the rect a press captured, silently bending the cursor→minute mapping. Parked well
+    // off the default, a `changed` broadcast must rebuild the grid and LEAVE the viewport where
+    // the user put it; an explicit week change is what legitimately retargets it. Both halves
+    // are scored, so a build that simply stopped scrolling could not pass. The rebuild is
+    // awaited by tagging the live strip and waiting for an untagged one — the repaint replaces
+    // the node, so this is the repaint itself, not a timer.
+    const parkedTop = await page.evaluate(() => {
+      const strip = document.querySelector('.cstrip');
+      strip.scrollTop = 900;
+      strip.dataset.gen = 'pre-refresh';
+      return Math.round(strip.scrollTop);
+    });
+    await page.evaluate(() => window.stint.__FIRE_CHANGED__());
+    await page.waitForFunction(() => {
+      const s = document.querySelector('.cstrip');
+      return !!s && s.dataset.gen !== 'pre-refresh';
+    });
+    const topAfterRefresh = await page.evaluate(() =>
+      Math.round(document.querySelector('.cstrip').scrollTop),
+    );
+    await page.evaluate(() => {
+      document.querySelector('.cstrip').dataset.gen = 'pre-week';
+    });
+    await page.click('#el-next-week');
+    await page.waitForFunction(() => {
+      const s = document.querySelector('.cstrip');
+      return !!s && s.dataset.gen !== 'pre-week';
+    });
+    const topAfterWeek = await page.evaluate(() =>
+      Math.round(document.querySelector('.cstrip').scrollTop),
+    );
+    await page.click('#el-prev-week');
+    await page.waitForSelector('.dcol .ev', { state: 'attached' });
+    const scroll = { parkedTop, topAfterRefresh, topAfterWeek };
+    const scrollHeldOk =
+      parkedTop > 600 && // genuinely parked off the working-hours default
+      topAfterRefresh === parkedTop && // the external repaint left it alone
+      topAfterWeek > 300 && topAfterWeek < 550; // a week change retargets to working hours
 
     await page.hover('.entry[data-id="7"]');
     await page.waitForTimeout(250);
@@ -4557,13 +5173,15 @@ async function sceneCalendarLayout(browser) {
     });
 
     // Clicking an event body opens the unified editor (an off-hours event, so this also exercises
-    // the scroll-into-view reachability of the never-clipped 24h track). The hover changes nothing
-    // geometrically (CALENDAR_ENTRY_BLOCK guards that), so the title is where it was at rest.
+    // the scroll-into-view reachability of the never-clipped 24h track).
     await clickEventBody(page, '.entry[data-id="5"]');
     await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
+    // §12 R06: the edited entry's stored block leaves the grid — the accent-outlined pending
+    // interval (`.ev.me`, the UNIFIED_FORM scene's grammar) stands in for it.
     const editorOpen = await page.evaluate(
       () => !!document.querySelector('#entry-form-host .edit-form.entry-form[data-id="5"]') &&
-        document.querySelector('.entry[data-id="5"]')?.classList.contains('editing') === true,
+        !document.querySelector('.entry[data-id="5"]') &&
+        document.querySelectorAll('#entries .ev.me').length >= 1,
     );
 
     const mergeHiddenBefore = await page.evaluate(() => !!document.querySelector('#merge-bar')?.hidden);
@@ -4576,7 +5194,18 @@ async function sceneCalendarLayout(browser) {
       const go = bar?.querySelector('#merge-go');
       return {
         shown: !!bar && !bar.hidden,
-        aboveCalendar: !!bar && bar.nextElementSibling?.id === 'entries',
+        // "Above the calendar" is a position, not a sibling adjacency: the unified form's host
+        // sits between the two now (it belongs directly above the grid it edits), and reading
+        // nextElementSibling made that a failure of the SELECTION BAR, which had not moved.
+        aboveCalendar: (() => {
+          const body = document.querySelector('.ebody');
+          if (!bar || !body) return false;
+          return (
+            !body.contains(bar) &&
+            !!(bar.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+            bar.getBoundingClientRect().bottom <= body.getBoundingClientRect().top + 0.5
+          );
+        })(),
         countText: count?.textContent.trim() ?? '',
         goLabel: go?.textContent.trim() ?? '',
         goNeutral: !!go && !go.classList.contains('primary'),
@@ -4589,44 +5218,74 @@ async function sceneCalendarLayout(browser) {
       mergeBar.goLabel === 'Merge' &&
       mergeBar.goNeutral;
 
+    // §12 R16/R22: five fit-to-width columns (Mon–Fri, weekend hidden) sharing the strip
+    // equally, NO horizontal scroll — at the 1040 default the equal share is well past any
+    // legibility concern and there is no floor to hold. "Equally" is spread < 2px, not 0:
+    // flex divides a strip that is not a multiple of the column count into fractional
+    // widths, and different Chromium builds round the fractions differently (CI measured
+    // 1.016px across seven columns where local measured ≤1). A real divergence — the old
+    // 124px floor compressing one column — is tens of pixels, far past the tolerance.
     const columnsOk =
-      structure.colCount === 7 &&
-      structure.allEqualWidth &&
-      structure.fixedWidth >= 110 &&
-      structure.fixedWidth <= 140 &&
-      structure.hScroll;
+      structure.colCount === 5 &&
+      structure.colSpread < 2 &&
+      structure.minColWidth > 60 &&
+      !structure.hScroll;
+    const tallHoursOk = structure.hourStepPx === 60 && structure.trackHeight === 1440;
     const neverClipOk =
       structure.vScroll &&
-      structure.scrollTop > 200 &&
-      structure.scrollTop < 500 &&
-      structure.trackHeight >= 1000 &&
+      structure.scrollTop > 300 &&
+      structure.scrollTop < 550 &&
+      structure.trackHeight >= 1400 &&
       structure.hasBeforeWork &&
       structure.hasAfterWork;
+    const todayOk = structure.todayCount === 1 && structure.todayText === '24' && structure.todayRing;
     // §12 R16 (issue #71): the 22nd's header carries the cross-midnight span in full (start-day
-    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h — and the week
-    // chip sums to 17.00h. The 23rd's header is NOT asserted here, but its total must stay off the
-    // overnight span (it shows the end segment without counting it) — pinned by crossMidnightOk +
-    // the segment/attribution rule below.
+    // attribution) — 4.25h of same-day work + the 7.75h overnight span = 12.00h — and the 26th
+    // counts its weekend-crossing span whole (7.75h) though only the start segment draws. A
+    // zero-total day paints NO figure (the mockup's authored quiet header).
     const totalsOk =
       structure.dayTotals['22'] === '12.00h' &&
       structure.dayTotals['24'] === '1.00h' &&
-      structure.weekTotal === '17.00h';
+      structure.dayTotals['26'] === '7.75h' &&
+      structure.dayHasTotal['25'] === false;
     const emptyOk = structure.emptyCols >= 1;
     // §12 R16 (issue #71): the cross-midnight entry renders as exactly TWO segments sharing id 8.
-    // The start segment sits at 22:30 (1350 min → ~990px) and runs to the track bottom (a true
-    // ~66px height, never the 18px sliver); the end segment starts at the track top (0) and runs
-    // to 06:15 (375 min → ~275px). The two blocks share the one data-id, so the span is one entry.
+    // The start segment sits at 22:30 (1350 min → 1350px at 60px hours) and runs to the track
+    // bottom (a true 90px height, never the 18px sliver); the end segment starts at the track
+    // top (0) and runs to 06:15 (375 min → 375px). The two blocks share the one data-id.
     const startSeg = structure.xmid.find((s) => /\bseg-start\b/.test(s.cls));
     const endSeg = structure.xmid.find((s) => /\bseg-end\b/.test(s.cls));
     const crossMidnightOk =
       structure.xmid.length === 2 &&
       !!startSeg &&
       !!endSeg &&
-      Math.abs(startSeg.top - 990) <= 2 && // 22:30
-      startSeg.height > 40 && // a TRUE height, not the 18px floor
+      Math.abs(startSeg.top - 1350) <= 2 && // 22:30
+      startSeg.height > 60 && // a TRUE height, not the 18px floor
       Math.abs(startSeg.top + startSeg.height - structure.trackBottomPx) <= 2 && // reaches midnight
-      endSeg.top === 0 && // starts at the day's top edge (00:00)
-      Math.abs(endSeg.height - 275) <= 2; // down to 06:15
+      endSeg.top === 0 && // starts at the day\'s top edge (00:00)
+      Math.abs(endSeg.height - 375) <= 2; // down to 06:15
+    // §12 R09/R16/§16: the Fri→Sat span draws ONLY its start-day segment while the weekend is
+    // hidden — the Sat segment is simply not drawn, never a clipped sliver in the start column.
+    const hiddenStart = structure.hiddenSegs.find((s) => /\bseg-start\b/.test(s.cls));
+    const hiddenSegOk =
+      structure.hiddenSegs.length === 1 &&
+      !!hiddenStart &&
+      Math.abs(hiddenStart.top - 1350) <= 2 &&
+      Math.abs(hiddenStart.top + hiddenStart.height - structure.trackBottomPx) <= 2;
+    // …and the toggle REVEALS it: seven fit-to-width columns (still no horizontal scroll), the
+    // Sat seg-end from the track head down to 06:15, Sat\'s header still total-less, Fri\'s
+    // unchanged — hiding/showing a segment never moves a total.
+    const wkendEnd = weekend.segs.find((s) => /\bseg-end\b/.test(s.cls));
+    const weekendRevealOk =
+      weekend.dayCols === 7 &&
+      weekend.colSpread < 2 &&
+      !weekend.hScroll &&
+      weekend.segs.length === 2 &&
+      !!wkendEnd &&
+      wkendEnd.top === 0 &&
+      Math.abs(wkendEnd.height - 375) <= 2 &&
+      !weekend.satHasTotal &&
+      weekend.friTotal === '7.75h';
     const flagsOk =
       structure.overlapBands >= 1 &&
       /overlap\s*\d+m/.test(structure.overlapTag) &&
@@ -4634,29 +5293,24 @@ async function sceneCalendarLayout(browser) {
       structure.sleptMoon;
     const runOk = structure.runPresent && structure.runFade && structure.runNoEnd;
     const hoverOk = hover.opsRevealed && hover.hasDelete && hover.hasSplit && hover.hasEdit && hover.hasCheckbox;
-    // §12 R16 / G13, issue #145: the labels the calendar paints are VISIBLE at the default paint
-    // and stay visible through the scroll on either axis. `totalsOk` above reads the totals out of
-    // the DOM; this reads them off the screen — the outcome the requirement is actually about.
-    // The header COUNT is exact on the vertical axis (all seven, the axis the defect was on); the
-    // per-day totals are a floor on the horizontal one, because the strip is deliberately narrower
-    // than the week (columnsOk asserts that scroll): at the 1040px window the ~808px scrollport
-    // holds the 48px gutter plus six 124px columns, and the seventh is a scroll away.
-    // The pre-fix defect measured ZERO totals on screen and ZERO headers vertically.
+    // §12 R16 / G13, issue #145: the labels the grid paints are VISIBLE at the default paint —
+    // the header band and the hour gutter are sticky, so the working-hours scroll moves the
+    // track past them, never the labels off screen. (The horizontal half of #145 retired with
+    // the horizontal scroll itself: the columns fit the width now.)
     const labelsOnScreenOk =
       structure.dhPosition === 'sticky' &&
       structure.gutPosition === 'sticky' &&
       structure.headersOnScreen === structure.colCount &&
-      structure.dayTotalsOnScreen >= 4 &&
-      structure.hourLabelsOnScreen > 0 &&
-      axes.scrolledRight &&
-      Math.abs(axes.gutOffset) <= 1 &&
-      axes.headersOnScreen === structure.colCount &&
-      axes.hourLabelsOnScreen > 0;
+      structure.dayTotalsOnScreen === structure.dayTotalsCount &&
+      structure.hourLabelsOnScreen > 0;
     record(
       'CALENDAR_LAYOUT',
       {
         columnsOk,
+        tallHoursOk,
         neverClipOk,
+        scrollHeldOk,
+        todayOk,
         totalsOk,
         emptyOk,
         flagsOk,
@@ -4664,14 +5318,18 @@ async function sceneCalendarLayout(browser) {
         hoverOk,
         labelsOnScreenOk,
         crossMidnightOk,
+        hiddenSegOk,
+        weekendRevealOk,
         editorOpen,
         mergeHiddenBefore,
         mergeShown,
       },
-      `entries calendar layout: structure=${JSON.stringify(structure)}; hover=${JSON.stringify(hover)}; ` +
-        `labelsOnScreen=${labelsOnScreenOk} axes=${JSON.stringify(axes)}; ` +
-        `crossMidnight=${crossMidnightOk}; editorOpen=${editorOpen}; ` +
-        `selection bar hidden-before=${mergeHiddenBefore} shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
+      `week grid layout: structure=${JSON.stringify(structure)}; weekend=${JSON.stringify(weekend)}; ` +
+        `hover=${JSON.stringify(hover)}; labelsOnScreen=${labelsOnScreenOk}; ` +
+        `scroll=${JSON.stringify(scroll)} (scrollHeldOk=${scrollHeldOk}); ` +
+        `crossMidnight=${crossMidnightOk} hiddenSeg=${hiddenSegOk} weekendReveal=${weekendRevealOk}; ` +
+        `editorOpen=${editorOpen}; selection bar hidden-before=${mergeHiddenBefore} ` +
+        `shown-after-2=${mergeShown} ${JSON.stringify(mergeBar)}`,
       'main-calendar.png',
     );
     await page.close();
@@ -4680,15 +5338,16 @@ async function sceneCalendarLayout(browser) {
 
 // WINDOW_GEOMETRY — §12 R22 (issue #126): the app uses the window it is given, and every
 // surface fits the window it ships in. Outcomes, not controls, at real geometry:
-//   • 1920×800 over the one-week fixture: all 7 day columns fully visible with no horizontal
-//     scroll, equal widths above the 124px floor, and every description ellipsised at the
-//     1040 default renders its full natural width — the columns share the window;
-//   • 1920×800 over the three-week fixture: the range still does not fit, so columns hold the
-//     floor and the strip still scrolls (§12 R16) — but more days are fully visible than at
-//     the default;
-//   • WINDOW (1040×800 — the default AND the minimum): the unified add form, expander open,
+//   • the week-only grid FITS TO WIDTH at every size (§12 R16): at the 1040×800 default the
+//     five shown columns share the width equally with NO horizontal scroll, and at 1920 the
+//     same columns GROW to absorb the resize — every description that ellipsised at 1040
+//     renders its full natural width at 1920;
+//   • the seven-column weekend-on grid fits the SAME 1040 window — still equal shares, still
+//     no horizontal scroll (there is no floor width and no sanctioned horizontal scroll left
+//     in this view);
+//   • WINDOW (1040×800 — the default AND the minimum): the unified add form
 //     commits without scrolling — Save entry fully inside the viewport — and the exact-times
-//     fields sit inside their picker column with no document-level horizontal overflow
+//     Start/Stop fields sit inside the form's time column with no document-level horizontal overflow
 //     (ex-issue #146: #add-to ran 14px past the window); the edit form's same row likewise;
 //   • the popover at its auto-sized window (the shipped clamp): card and both actions fully
 //     inside, nothing to scroll.
@@ -4696,25 +5355,19 @@ async function sceneWindowGeometry(browser) {
   const measureCalendar = (page) =>
     page.evaluate(() => {
       const strip = document.querySelector('.cstrip');
-      const s = strip.getBoundingClientRect();
       const cols = [...document.querySelectorAll('.dcol')];
-      const widths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
-      const fullyVisible = cols.filter((c) => {
-        const r = c.getBoundingClientRect();
-        return r.left >= s.left - 0.5 && r.right <= s.right + 0.5;
-      }).length;
+      const widths = cols.map((c) => c.getBoundingClientRect().width);
       return {
-        widths,
-        equal: widths.length > 0 && widths.every((w) => w === widths[0]),
-        fullyVisible,
-        hScroll: strip.scrollWidth > strip.clientWidth,
+        count: cols.length,
+        minWidth: widths.length ? Math.round(Math.min(...widths)) : 0,
+        spread: widths.length ? Math.max(...widths) - Math.min(...widths) : 0,
+        hScroll: strip.scrollWidth > strip.clientWidth + 1,
         truncatedDescs: [...document.querySelectorAll('.dcol .ev .bd')].filter(
           (b) => b.scrollWidth > b.clientWidth,
         ).length,
       };
     });
 
-  // One-week fixture: the columns share a wider window; the week fits whole at 1920.
   {
     const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
     await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -4726,41 +5379,32 @@ async function sceneWindowGeometry(browser) {
     await page.setViewportSize({ width: 1920, height: WINDOW.height });
     const weekAtWide = await measureCalendar(page);
     await page.screenshot({ path: join(EVIDENCE, 'calendar-wide.png') });
+    // Back to the minimum, then weekend ON: seven columns must fit the SAME window.
+    await page.setViewportSize(WINDOW);
+    await page.click('#el-weekend');
+    await page.waitForFunction(() => document.querySelectorAll('.dcol').length === 7);
+    const weekendAtDefault = await measureCalendar(page);
     await page.close();
 
-    // Three-week fixture: the floor and the horizontal scroll survive, and width still pays out.
-    const densePage = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
-    await densePage.clock.install({ time: new Date(JUDGE_NOW) });
-    await densePage.clock.pauseAt(new Date(JUDGE_NOW));
-    await densePage.addInitScript(initScript(JSON.stringify(denseCalendarState()), {}));
-    await densePage.goto(fileUrl('index.html'));
-    await densePage.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
-    const denseAtDefault = await measureCalendar(densePage);
-    await densePage.setViewportSize({ width: 1920, height: WINDOW.height });
-    const denseAtWide = await measureCalendar(densePage);
-    await densePage.close();
-
-    // The unified form at the 1040×800 minimum: committable without scrolling, and the
-    // exact-times fields inside their column in BOTH modes (ex-issue #146).
+    // The unified form at the 1040×800 minimum: committable without scrolling, and the raw
+    // Start/Stop fields inside their own column in BOTH modes (ex-issue #146).
     const addFit = await withPage(browser, addFormState(), 'index.html', async (page) => {
       await page.waitForSelector('.entry', { state: 'attached' });
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.waitForSelector('#add-picker .stp-track', { state: 'attached' });
-      await page.click('#add-times-toggle');
-      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+      await page.focus('#entries .fab');
+      await page.keyboard.press('Enter'); // the R07 keyboard path opens create directly
+      await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
       const probe = await page.evaluate(() => {
         const r = (el) => el.getBoundingClientRect();
-        const save = document.querySelector('#add-go');
-        const col = document.querySelector('#add-form .uf-picker').getBoundingClientRect();
+        const save = document.querySelector('.entry-form button[type="submit"]');
+        const col = document.querySelector('.entry-form .ef-tcol').getBoundingClientRect();
         return {
           scrollY: window.scrollY,
           saveInViewport:
             r(save).top >= 0 && r(save).bottom <= window.innerHeight && r(save).right <= window.innerWidth,
           saveBottom: Math.round(r(save).bottom),
           fieldsInColumn:
-            r(document.querySelector('#add-from')).right <= col.right + 0.5 &&
-            r(document.querySelector('#add-to')).right <= col.right + 0.5,
+            r(document.querySelector('.entry-form .edit-start')).right <= col.right + 0.5 &&
+            r(document.querySelector('.entry-form .edit-end')).right <= col.right + 0.5,
           noHOverflow: document.documentElement.scrollWidth <= window.innerWidth,
         };
       });
@@ -4771,11 +5415,13 @@ async function sceneWindowGeometry(browser) {
       await page.waitForSelector('.dcol .ev', { state: 'attached' });
       await page.evaluate(() => document.querySelector('.entry[data-id="80"] [data-act="edit"]').click());
       await page.waitForSelector('.edit-form.entry-form', { state: 'attached' });
-      await page.click('.edit-form .ef-times-toggle');
       return page.evaluate(() => {
         const r = (el) => el.getBoundingClientRect();
-        const col = document.querySelector('.edit-form .uf-picker').getBoundingClientRect();
+        const save = document.querySelector('.entry-form button[type="submit"]');
+        const col = document.querySelector('.entry-form .ef-tcol').getBoundingClientRect();
         return {
+          saveInViewport:
+            r(save).top >= 0 && r(save).bottom <= window.innerHeight && r(save).right <= window.innerWidth,
           fieldsInColumn:
             r(document.querySelector('.edit-form .edit-start')).right <= col.right + 0.5 &&
             r(document.querySelector('.edit-form .edit-end')).right <= col.right + 0.5,
@@ -4806,25 +5452,27 @@ async function sceneWindowGeometry(browser) {
     });
 
     const weekOk =
-      weekAtWide.fullyVisible === 7 &&
+      weekAtDefault.count === 5 &&
+      weekAtDefault.spread < 2 &&
+      !weekAtDefault.hScroll &&
+      weekAtWide.count === 5 &&
+      weekAtWide.spread < 2 &&
       !weekAtWide.hScroll &&
-      weekAtWide.equal &&
-      weekAtWide.widths[0] > weekAtDefault.widths[0] &&
+      weekAtWide.minWidth > weekAtDefault.minWidth + 100 && // the resize lands on the columns
       weekAtDefault.truncatedDescs > 0 &&
       weekAtWide.truncatedDescs === 0;
-    const denseOk =
-      denseAtWide.fullyVisible > denseAtDefault.fullyVisible &&
-      denseAtWide.equal &&
-      denseAtWide.widths[0] === denseAtDefault.widths[0] &&
-      denseAtWide.hScroll;
+    const weekendOk =
+      weekendAtDefault.count === 7 &&
+      weekendAtDefault.spread < 2 &&
+      !weekendAtDefault.hScroll;
     const addOk = addFit.scrollY === 0 && addFit.saveInViewport && addFit.fieldsInColumn && addFit.noHOverflow;
-    const editOk = editFit.fieldsInColumn && editFit.noHOverflow;
+    const editOk = editFit.saveInViewport && editFit.fieldsInColumn && editFit.noHOverflow;
     const popOk = popFit.cardInside && popFit.toggleInside && popFit.openInside && popFit.noOverflow;
     record(
       'WINDOW_GEOMETRY',
-      { weekOk, denseOk, addOk, editOk, popOk },
+      { weekOk, weekendOk, addOk, editOk, popOk },
       `week@1040=${JSON.stringify(weekAtDefault)} week@1920=${JSON.stringify(weekAtWide)} → ${weekOk}; ` +
-        `dense@1040 fullyVisible=${denseAtDefault.fullyVisible} dense@1920=${JSON.stringify(denseAtWide)} → ${denseOk}; ` +
+        `weekend-on@1040=${JSON.stringify(weekendAtDefault)} → ${weekendOk}; ` +
         `add-form@minimum=${JSON.stringify(addFit)} → ${addOk}; edit-form=${JSON.stringify(editFit)} → ${editOk}; ` +
         `popover=${JSON.stringify(popFit)} → ${popOk}`,
       'calendar-wide.png',
@@ -4833,14 +5481,15 @@ async function sceneWindowGeometry(browser) {
 }
 
 // CALENDAR_ACCENT_BUDGET — design.html D11 / §02 principles 1–2, machine-scored (issue #143).
-// The Entries calendar is the app's busiest surface, and it used to fill every entry block with
-// --accent-weak behind an accent border: the design audit measured 51 accent-tinted blocks and
-// ZERO accent-solid primaries — the colour rationed for "the one thing that matters" was the
-// wallpaper. This scene pins the budget as an OUTCOME over a realistically dense fixture
-// (denseCalendarState: three weeks, 51 blocks, the last one OPEN), because the defect is
-// invisible at toy density — a one-day fixture would show almost nothing. Driven at the app's
-// 1040×800 default window with the page pinned to UTC, and AT REST: no toolbar control is
-// touched, so what is measured is the view as it loads.
+// The Entries week grid is the app's busiest surface, and it used to fill every entry block with
+// --accent-weak behind an accent border: the design audit measured a calendar of accent-tinted
+// blocks and ZERO accent-solid primaries — the colour rationed for "the one thing that matters"
+// was the wallpaper. This scene pins the budget as an OUTCOME over a realistically dense fixture
+// (denseCalendarState: the current week's elapsed days full — 17 blocks, the last one OPEN; the
+// week-only view of §12 R09 caps the visible surface at one week, so a busy week IS the app's
+// densest screen), because the defect is invisible at toy density. Driven at the app's 1040×800
+// default window with the page pinned to UTC, and AT REST: no toolbar control is touched, so
+// what is measured is the view as it loads.
 async function sceneCalendarAccentBudget(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -4893,7 +5542,7 @@ async function sceneCalendarAccentBudget(browser) {
   await page.screenshot({ path: join(EVIDENCE, 'calendar-accent-budget.png') });
   await page.close();
 
-  const densityOk = probe.evCount >= 50;
+  const densityOk = probe.evCount >= 15;
   const noWallpaperOk = probe.tintedBlockCount === 0;
   const neutralOk = probe.notPaper === 0 && probe.notLifted === 0;
   const signalOk = probe.runningCount === 1 && probe.runningCarriesAccent;
@@ -4910,13 +5559,15 @@ async function sceneCalendarAccentBudget(browser) {
 
 // SELECTION_LIFT — design.html D12, machine-scored on the Entries calendar (issue #144).
 // "A chosen thing lifts — a raised paper chip with a shadow — it does not turn accent." The
-// calendar broke it at all three of its selection sites: a merge-selected block took an accent
-// border plus an inset accent hairline, the corner checkbox that made the choice filled solid
-// accent, and the block open in the editor (`.editing`) took the same accent ring. This scene
-// pins the repaired idiom as an OUTCOME over the same three-week `denseCalendarState` the
-// CALENDAR_ACCENT_BUDGET guard uses (51 blocks, the last one open), at the 1040×800 default
-// window with the page pinned to UTC — density matters here too, because "lifted" only means
-// something measured against the fifty neighbours that are not.
+// calendar broke it at its merge-selection sites: a merge-selected block took an accent border
+// plus an inset accent hairline, and the corner checkbox that made the choice filled solid
+// accent. This scene pins the repaired idiom as an OUTCOME over the dense fixture at the
+// 1040×800 default window — density matters, because "lifted" only means something measured
+// against the fifty neighbours that are not. The EDITED entry is deliberately different now
+// (§12 R06, mockup edit-entry.html): it leaves the paper ladder entirely and paints as the
+// accent-OUTLINED pending interval (`.ev.me` — accent-weak fill, accent border, edge grips),
+// the grid's one sanctioned accent carrier while the form is open — asserted here so the D12
+// no-accent rule and the R06 accent-interval grammar stay measured side by side.
 async function sceneSelectionLift(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
   await page.clock.install({ time: new Date(JUDGE_NOW) });
@@ -4946,7 +5597,7 @@ async function sceneSelectionLift(browser) {
   await page.evaluate(() => document.activeElement?.blur());
   await page.screenshot({ path: join(EVIDENCE, 'selection-lift.png') });
   await page.click(`.ev[data-id="${ids[2]}"] [data-act="edit"]`);
-  await page.waitForSelector('.ev.editing');
+  await page.waitForSelector('#entries .ev.me');
   await page.locator('.cstrip').scrollIntoViewIfNeeded();
 
   const probe = await page.evaluate((sel) => {
@@ -4964,10 +5615,10 @@ async function sceneSelectionLift(browser) {
     const accentWeakRgb = rgbOf('--accent-weak');
     const accentSolidRgb = rgbOf('--accent-solid');
 
-    const blocks = [...document.querySelectorAll('.dcol .ev')];
+    const blocks = [...document.querySelectorAll('.dcol .ev')].filter((el) => !el.classList.contains('me'));
     const closed = blocks.filter((el) => !el.classList.contains('run'));
-    const chosen = closed.filter((el) => el.classList.contains('on') || el.classList.contains('editing'));
-    const plain = closed.filter((el) => !el.classList.contains('on') && !el.classList.contains('editing'));
+    const chosen = closed.filter((el) => el.classList.contains('on'));
+    const plain = closed.filter((el) => !el.classList.contains('on'));
     // The resting rung, read off the live surface rather than named: whatever the untouched
     // majority computes IS "not lifted", so the comparison stays token-free.
     const restShadow = plain.length ? getComputedStyle(plain[0]).boxShadow : '';
@@ -4986,11 +5637,19 @@ async function sceneSelectionLift(browser) {
       if (bg === accentWeakRgb) accentWeakFills++;
       if (bg === accentSolidRgb) accentSolidFills++;
     }
+    const me = document.querySelector('#entries .ev.me');
+    const meCs = me ? getComputedStyle(me) : null;
     return {
       evCount: blocks.length,
       stripFound: !!strip,
-      selectedCount: closed.filter((el) => el.classList.contains('on')).length,
-      editingCount: blocks.filter((el) => el.classList.contains('editing')).length,
+      selectedCount: chosen.length,
+      // §12 R06: the edited entry's stored block leaves the grid; the accent-outlined
+      // pending interval with its edge grips stands in for it.
+      meCount: document.querySelectorAll('#entries .ev.me').length,
+      meOutline:
+        !!meCs && meCs.backgroundColor === accentWeakRgb &&
+        meCs.borderTopColor.includes(triplets[0]) && parseFloat(meCs.borderTopWidth) >= 1 &&
+        !!me.querySelector('.grip.t') && !!me.querySelector('.grip.b'),
       editorOpen: !!document.querySelector('#entry-form-host .edit-form.entry-form'),
       // The offenders, named — a failure points at the element, not just a count.
       accentedSelections: chosen.filter(carriesAccent).map((el) => `${el.dataset.id}:${paint(el)}`),
@@ -5011,12 +5670,14 @@ async function sceneSelectionLift(browser) {
   await page.close();
 
   const stateOk =
-    probe.evCount >= 50 && probe.selectedCount === 2 && probe.editingCount === 1 && probe.editorOpen;
+    probe.evCount >= 15 && probe.selectedCount === 2 && probe.meCount === 1 && probe.meOutline &&
+    probe.editorOpen;
   const liftOk =
     probe.chosenNotPaper === 0 && probe.chosenNotLifted === 0 && !probe.restIsFlat;
   const noAccentOk = probe.accentedSelections.length === 0 && probe.accentedChecks.length === 0;
   const checkOk = probe.checkedCount === 2 && probe.checksArePaper;
-  const budgetOk = probe.stripFound && probe.accentWeakFills === 0 && probe.accentSolidFills <= 1;
+  // The one sanctioned accent-weak fill on the strip is the pending interval itself.
+  const budgetOk = probe.stripFound && probe.accentWeakFills === 1 && probe.accentSolidFills <= 1;
   record(
     'SELECTION_LIFT',
     { stateOk, liftOk, noAccentOk, checkOk, budgetOk },
@@ -5033,9 +5694,10 @@ async function sceneSelectionLift(browser) {
 // hover padding shoving text out of the bottom — so one scene guards both.
 //
 // The fixture (shortEntriesCalendarState) seeds the four durations the design audit measured —
-// 10 / 30 / 60 / 180 minutes. Block height is duration-driven (0.733px/min, floored at 18px) while
-// content height is fixed by text flow (~55px), so they cross at ~75 minutes and only the sub-75
-// blocks can spill. This matters more than usual: the audit first KILLED a narrower version of the
+// 10 / 30 / 45 / 180 minutes (the audit's 60-minute case became 45 when the week grid's 60px
+// hours gave a 60-minute block room for its content). Block height is duration-driven (1px/min,
+// floored at 18px) while content height is fixed by text flow (~55px), so they cross at ~55
+// minutes and only the sub-55 blocks can spill. This matters more than usual: the audit first KILLED a narrower version of the
 // finding after measuring a 132px block, and a scene seeded with hour-plus entries alone would
 // reproduce that mistake exactly. The 180-minute block is the control.
 //
@@ -5056,7 +5718,15 @@ async function sceneCalendarEntryBlock(browser) {
 
   const blocks = await page.evaluate(() => {
     const within = (el, root) => !!el && (el === root || root.contains(el));
+    // Bring each block into the scrollport before probing it. A FIXED park (this used to set
+    // strip.scrollTop = 8 * 60) silently assumed a particular strip height: the 13:00–16:00
+    // control block's foot fell below the viewport the moment the strip got shorter, and an
+    // off-screen probe reads null instead of the block. That is a scroll, not a clip, and it is
+    // not what this item is about — the claim under test is that a block hit-tests to ITSELF and
+    // does not spill into the entry below, at whatever scroll position shows it. Centring also
+    // keeps the block clear of the sticky day header, which would otherwise take the top hit.
     return [...document.querySelectorAll('.dcol .ev')].map((ev) => {
+      ev.scrollIntoView({ block: 'center' });
       const r = ev.getBoundingClientRect();
       const midX = Math.round(r.left + r.width / 2);
       // Does the block hit-test to itself? If not, it is off-screen and its spill probes are void.
@@ -5114,7 +5784,7 @@ async function sceneCalendarEntryBlock(browser) {
   const byId = Object.fromEntries(blocks.map((b) => [b.id, b]));
   const liveOk = blocks.length === 4 && blocks.every((b) => b.selfHit);
   const containedOk = blocks.every((b) => b.below.every((p) => !p.intoEntry));
-  // The three sub-75-minute blocks must genuinely overflow their height — otherwise the fixture
+  // The three sub-55-minute blocks must genuinely overflow their height — otherwise the fixture
   // stopped exercising the defect and `containedOk` is proving nothing.
   const shortfallReal = ['201', '202', '203'].every((id) => {
     const b = byId[id];
@@ -5152,9 +5822,11 @@ async function sceneCalendarEntryBlock(browser) {
 // are reached with ← / → from the focused block, and `.ev:focus-within` opens the whole set — so
 // arriving at an entry is also how a keyboard user learns the controls are there.
 //
-// Driven over `denseCalendarState` (three weeks, 51 blocks, the last one open) at the app's
-// 1040×800 default window, pinned to UTC. Density is the whole guard, per the issue-#55 lesson the
-// triage cites: at one day of data the traversal cost is invisible and any stop model looks fine.
+// Driven over `denseCalendarState` (the dense current week — 17 blocks, the last one open; the
+// week-only view caps the surface at one week, so a busy week is the densest calendar the app can
+// show) at the app's 1040×800 default window, pinned to UTC. Density is the whole guard, per the
+// issue-#55 lesson the triage cites: at one day of data the traversal cost is invisible and any
+// stop model looks fine.
 // Motion is off (noMotion) so an opacity probe reads the cascade, not a frame of the 0.12s fade.
 async function sceneCalendarKeyboard(browser) {
   const page = await newScenePage(browser, { viewport: WINDOW, colorScheme: 'light', timezoneId: 'UTC' });
@@ -5237,7 +5909,7 @@ async function sceneCalendarKeyboard(browser) {
   await page.close();
 
   const calStops = walk.filter((s) => s.inCalendar);
-  const fixtureReal = fixture.blocks >= 50 && fixture.controls >= 150;
+  const fixtureReal = fixture.blocks >= 15 && fixture.controls >= 45;
   const oneStopPerBlock = calStops.length === fixture.blocks && calStops.every((s) => s.isBlock);
   // The traversal cost, stated as the ratio the fix changed: the calendar spends one stop per
   // ENTRY, not one per control, so walking past it costs well under half of what its controls
@@ -5279,43 +5951,35 @@ async function sceneCalendarKeyboard(browser) {
   );
 }
 
-// LIVE_FILTER — §17 R11: a search / filter / group selection is reflected LIVE in BOTH the
-// visible list AND the report total, with no getState reload during the keystroke. Hardened
-// per the issue-#55 triage over the MULTI-WEEK fixture (seven entries across this week / last
-// week / last month, all-time billable 8.00h). The strict listEntries mock rejects any query
-// missing the required `by` (exactly like core), so the whole flow also proves no toolbar query
-// throws.
+// LIVE_FILTER — §17 R11: a search / filter selection is reflected LIVE on the visible
+// week grid, with no getState reload during the keystroke. Hardened per the issue-#55
+// triage over the MULTI-WEEK fixture (seven entries across this week / last week / last
+// month — the week-only view paints the current week's FIVE at rest, §12 R09). The strict
+// listEntries mock rejects any query missing the required `by` (exactly like core), so the
+// whole flow also proves no toolbar query throws. The toolbar's range-total chip is retired
+// (#264, §12 R09): the culled totalLiveOk fact stays culled — the day-header totals keep
+// their own guard in CALENDAR_LAYOUT's totalsOk.
 async function sceneLiveFilter(browser) {
   await withPage(browser, liveState(), 'index.html', async (page) => {
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length > 0);
     const before = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
     }));
     await page.fill('#search', 'refactor');
     await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 2);
-    await page.waitForFunction(
-      () => document.querySelector('#week-total')?.textContent.trim() === '3.50h',
-    );
     await page.screenshot({ path: join(EVIDENCE, 'main-filtered.png'), fullPage: true });
     const onSearch = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
       descs: [...document.querySelectorAll('#entries .entry .desc')].map((d) => d.textContent),
       getStateCalls: window.__GETSTATE_CALLS__ ?? 0,
       listErrors: window.__LIST_ERRORS__ || 0, // no listEntries call rejected (issue #55)
     }));
     const noReloadOnSearch = onSearch.getStateCalls === before.getStateCalls;
     await page.fill('#search', '');
-    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 7);
-    await page.waitForFunction(
-      (t) => document.querySelector('#week-total')?.textContent.trim() === t,
-      before.weekTotal,
-    );
+    await page.waitForFunction(() => document.querySelectorAll('#entries .entry').length === 5);
     const onClear = await page.evaluate(() => ({
       rowCount: document.querySelectorAll('#entries .entry').length,
-      weekTotal: document.querySelector('#week-total')?.textContent.trim() ?? null,
     }));
 
     await page.fill('#search', 'no-such-entry-xyzzy');
@@ -5330,30 +5994,25 @@ async function sceneLiveFilter(browser) {
     }));
 
     const listLiveOk =
-      before.rowCount === 7 &&
+      before.rowCount === 5 &&
       onSearch.rowCount === 2 &&
       onSearch.descs.some((d) => /auth refactor/.test(d)) &&
       onSearch.descs.some((d) => /refactor tests/.test(d)) &&
       !onSearch.descs.some((d) => /deploy pipeline/.test(d)) &&
-      !onSearch.descs.some((d) => /refactor planning/.test(d));
-    const totalLiveOk =
-      before.weekTotal === '5.00h' && // WEEK-BOUNDED by default — never the all-time 8.00h
-      onSearch.weekTotal === '3.50h' && // the total moved to the selection's billable sum…
-      onSearch.listErrors === 0 && // …with no listEntries rejection along the way
-      onClear.rowCount === 7 &&
-      onClear.weekTotal === '5.00h'; // …and returns with the full set when cleared
+      !onSearch.descs.some((d) => /refactor planning/.test(d)) &&
+      onSearch.listErrors === 0 && // no listEntries rejection along the way…
+      onClear.rowCount === 5; // …and clearing returns the week's full set
     const noMatchOk =
       noMatch.rowCount === 0 &&
       /No matching entries/.test(noMatch.text) &&
-      /Widen the range/.test(noMatch.text) &&
+      /Try another week/.test(noMatch.text) &&
       !/No entries yet/.test(noMatch.text) &&
       noMatch.listErrors === 0;
     record(
       'LIVE_FILTER',
-      { listLiveOk, totalLiveOk, noReloadOnSearch, noMatchOk },
-      `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows, ` +
-        `report total ${before.weekTotal}→${onSearch.weekTotal}→${onClear.weekTotal} ` +
-        `(week-bounded idle, range+search compose; getState unchanged during the keystroke: ` +
+      { listLiveOk, noReloadOnSearch, noMatchOk },
+      `live filter: list ${before.rowCount}→${onSearch.rowCount}→${onClear.rowCount} rows ` +
+        `(range+search compose; getState unchanged during the keystroke: ` +
         `${noReloadOnSearch}; listEntries rejections: ${onSearch.listErrors}); ` +
         `no-match empty state ${JSON.stringify(noMatch)}`,
       'main-filtered.png',
@@ -5406,7 +6065,7 @@ async function sceneSettingsView(browser) {
       return {
         visible: !document.querySelector('.view[data-view="settings"]').hidden,
         keys,
-        allSeven:
+        allControls:
           has('rounding') &&
           has('roundingIncrementMin') &&
           has('weekStart') &&
@@ -5414,15 +6073,92 @@ async function sceneSettingsView(browser) {
           has('checkinIntervalMin') &&
           has('globalHotkey') &&
           has('dateFormat') &&
-          has('timeZone'),
+          has('timeZone') &&
+          // §14 / §12 R09/R23 — the Entries-calendar group: the show-weekend toggle and
+          // the fine/coarse snap-minutes inputs (the Timeline group's four keys are
+          // asserted by the dedicated TIMELINE_WINDOW scene).
+          has('showWeekend') &&
+          has('snapFineMinutes') &&
+          has('snapCoarseMinutes'),
         offenders,
         segChip,
       };
     });
 
-    await page.selectOption('.set-field[data-key="dateFormat"]', 'iso');
-    await page.waitForFunction(() => window.__SET_SETTING__?.key === 'dateFormat');
-    const set = await page.evaluate(() => window.__SET_SETTING__);
+    // EVERY CONTROL KIND PERSISTS (issue #301, review round 2). `allControlsPresent` above is a
+    // has(key) presence check, and only the date-format SELECT was ever driven — so the two
+    // snap inputs (and the working-hours pair, and the toggles) could render and persist
+    // NOTHING with this item still green: deleting the `input.set-min` change listener in
+    // settings.js left SETTINGS_VIEW and TIMELINE_WINDOW both passing. Presence is not wiring.
+    //
+    // The fix generalizes past the snap pair rather than special-casing it: settings.js's
+    // fieldControl() builds SIX control kinds, each with its own listener in wire(), and the
+    // defect is per-KIND (one missing loop silently unwires every field of that kind). So one
+    // control of each kind is driven end to end — the interaction a user makes, then the
+    // setSetting payload it produced — and `everyKindDriven` below holds the DRIVEN set against
+    // the kinds actually RENDERED in the panel, so a seventh kind added to FIELDS fails here
+    // until it is driven too.
+    const KIND_DRIVES = [
+      { kind: 'select', selector: '#settings-panel select.set-field',
+        drive: () => page.selectOption('#settings-panel .set-field[data-key="dateFormat"]', 'iso'),
+        key: 'dateFormat', value: 'iso' },
+      { kind: 'toggle', selector: '#settings-panel .set-toggle',
+        drive: () => page.click('#settings-panel .set-toggle[data-key="showWeekend"]'),
+        key: 'showWeekend', value: true },
+      { kind: 'segment', selector: '#settings-panel .set-seg .seg-btn',
+        drive: () => page.click('#settings-panel .set-seg[data-key="weekStart"] .seg-btn[data-value="sunday"]'),
+        key: 'weekStart', value: 'sunday' },
+      // A text input persists on `change`, which fires on commit — fill() alone does not, so
+      // each of these is typed and then blurred exactly as a user leaves the field.
+      { kind: 'hhmm', selector: '#settings-panel input.set-hhmm',
+        drive: async () => {
+          await page.fill('#settings-panel input.set-hhmm[data-key="workingHoursStart"]', '09:00');
+          await page.locator('#settings-panel input.set-hhmm[data-key="workingHoursStart"]').blur();
+        },
+        key: 'workingHoursStart', value: '09:00' },
+      // The §12 R23 snap pair — the kind the shipped bug unwired. 20 is a whole 1–30 minute
+      // value core accepts beside the fine default (fine ≤ coarse), and NOT the 15 it replaces,
+      // so a field that persisted nothing leaves the spy on the previous kind's payload.
+      { kind: 'minutes', selector: '#settings-panel input.set-min',
+        drive: async () => {
+          await page.fill('#settings-panel input.set-min[data-key="snapCoarseMinutes"]', '20');
+          await page.locator('#settings-panel input.set-min[data-key="snapCoarseMinutes"]').blur();
+        },
+        key: 'snapCoarseMinutes', value: 20 },
+      // Last: persist() re-renders the panel and replaces the capture field's node.
+      { kind: 'hotkey', selector: '#settings-panel .set-hotkey',
+        drive: async () => {
+          await page.focus('#settings-panel .set-hotkey');
+          await page.keyboard.press('Control+Shift+J');
+        },
+        key: 'globalHotkey', value: 'CommandOrControl+Shift+J' },
+    ];
+    // Which kinds the panel actually RENDERS, read off the DOM before anything is driven — the
+    // roster `everyKindDriven` is held against, so this cannot pass by the controls being absent.
+    const kindsPresent = await page.evaluate(
+      (sels) => sels.filter(({ selector }) => !!document.querySelector(selector)).map(({ kind }) => kind),
+      KIND_DRIVES.map(({ kind, selector }) => ({ kind, selector })),
+    );
+    const drives = [];
+    for (const { kind, key, value, drive } of KIND_DRIVES) {
+      // Cleared first, so each kind's fact is about the payload IT produced — an unwired
+      // control would otherwise inherit the previous kind's write and read as a pass.
+      await page.evaluate(() => { window.__SET_SETTING__ = null; });
+      await drive();
+      // Caught: a kind that persists nothing must record `wrote: null`, not time the scene out.
+      await page.waitForFunction((k) => window.__SET_SETTING__?.key === k, key).catch(() => {});
+      const wrote = await page.evaluate(() => window.__SET_SETTING__ ?? null);
+      drives.push({ kind, expected: { key, value }, wrote });
+    }
+    // The date-format payload the row's justification has always printed.
+    const set = drives.find((d) => d.kind === 'select').wrote;
+    const everyKindPersists = drives.every(
+      (d) => !!d.wrote && d.wrote.key === d.expected.key && d.wrote.value === d.expected.value,
+    );
+    const everyKindDriven =
+      kindsPresent.length >= 5 &&
+      kindsPresent.every((k) => KIND_DRIVES.some((d) => d.kind === k)) &&
+      KIND_DRIVES.every((d) => kindsPresent.includes(d.kind));
 
     const segChipOk =
       probe.segChip.present &&
@@ -5430,13 +6166,15 @@ async function sceneSettingsView(browser) {
       probe.segChip.chipInk &&
       probe.segChip.chipLifted &&
       probe.segChip.peersFlat;
-    const allControlsPresent = probe.visible && probe.allSeven;
+    const allControlsPresent = probe.visible && probe.allControls;
     const accentDiscipline = probe.offenders.length === 0;
     const editFiresSetSetting = !!set && set.key === 'dateFormat' && set.value === 'iso';
     record(
       'SETTINGS_VIEW',
-      { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting },
-      `settings panel exposes all eight §14 controls (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}`,
+      { allControlsPresent, accentDiscipline, segChipOk, editFiresSetSetting, everyKindPersists, everyKindDriven },
+      `settings panel exposes all eleven §14 controls incl. the Entries-calendar group (${JSON.stringify(probe.keys)}), accent discipline holds (offenders=[${probe.offenders.join(', ') || 'none'}]), D12 raised-chip segment selection=${segChipOk} ${JSON.stringify(probe.segChip)}, date-format edit fired setSetting=${JSON.stringify(set)}; ` +
+        `every control kind persists=${everyKindPersists} ${JSON.stringify(drives)}; ` +
+        `kinds rendered=${JSON.stringify(kindsPresent)} all driven=${everyKindDriven}`,
       'main-settings.png',
     );
   });
@@ -5586,9 +6324,13 @@ async function sceneHotkeyNoTrap(browser) {
 // TIMELINE_WINDOW — §14 / §12 R12 / §12 R15 / §12 R16 / G16: the timeline-window settings
 // and the ONE viewport derivation they drive. SU.timelineWindow is the single source of the
 // window math (G16; §12 R15's picker and §12 R16's calendar must consume it, never re-derive
-// it) and is evaluated in-page under the pinned JUDGE_NOW clock. The timeline consumers mark
-// their scroll container with the `data-timeline-track` hook; this scene drives Settings only,
-// where no consumer mounts, so `consumerTrack` reports "pending" WITHOUT failing.
+// it) and is evaluated in-page under the pinned JUDGE_NOW clock. The timeline consumer marks
+// its scroll container with the `data-timeline-track` hook — the Timer view's start-only
+// picker, driven here on a second page because it only mounts for a RUNNING entry. §12 R16's
+// week grid is the other consumer and carries its own, stronger guard: CALENDAR_LAYOUT's
+// `neverClipOk` measures the same scroll-not-clip outcome on the grid's own `.cstrip` (full
+// 24h track, default scroll at working hours, off-hours entries present and reachable), so
+// duplicating the hook there would add a second name for a fact already scored.
 async function sceneTimelineWindow(browser) {
   await withPage(browser, timelineWindowState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="settings"]');
@@ -5699,15 +6441,58 @@ async function sceneTimelineWindow(browser) {
       };
     });
 
-    const track = await page.evaluate(() => {
-      const el = document.querySelector('[data-timeline-track]');
-      if (!el) return { present: false, ok: false };
-      const scrollable = el.scrollHeight > el.clientHeight;
-      // The scroll window sits at the configured start: scrollTop/scrollHeight ≈ startMin/1440.
-      const expected = window.SU.timelineWindow(window.__STATE__.settings, window.__JUDGE_NOW__, null);
-      const frac = el.scrollTop / el.scrollHeight;
-      const ok = scrollable && Math.abs(frac - expected.startMin / 1440) < 0.02;
-      return { present: true, ok, scrollable, scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    // The CONSUMER half (§12 R15 / G16), on its own page because the picker only mounts for a
+    // RUNNING entry: the Timer view's start-only picker, seeded with the same 09:00–15:00
+    // working hours the Settings half above renders, must open as a FULL-24h SCROLLABLE track
+    // positioned at the configured window — a scroll default, never a clipped one. Until the
+    // redesign landed §12 R15/R16 no consumer mounted anywhere this scene drove, so this fact
+    // passed vacuously on `!el`; the fixture now guarantees the element exists, and `present`
+    // is asserted rather than tolerated so the stub cannot come back by the element going away.
+    const track = await withPage(browser, timelineConsumerState(), 'index.html', async (cpage) => {
+      await cpage.click('.nav-item[data-view="timer"]');
+      await cpage.click('#le-start-pick');
+      await cpage.waitForSelector('#le-start-disc:not([hidden]) [data-timeline-track]', { state: 'attached' });
+      return cpage.evaluate(() => {
+        const el = document.querySelector('#le-start-disc [data-timeline-track]');
+        if (!el) return { present: false, ok: false };
+        const scrollable = el.scrollHeight > el.clientHeight;
+        // The expected window is SU.timelineWindow's OWN answer for what this picker is
+        // editing — the configured 09:00–15:00 span re-centered on the running interval
+        // (§12 R15's picker opens on the entry it adjusts). Passing `null` here instead
+        // would score the picker against a window it is not supposed to use, and a probe
+        // that expects the wrong thing is worse than none: scrollTop/scrollHeight ≈
+        // startMin/1440 over the full-24h track.
+        const running = window.__STATE__.status?.entry ?? null;
+        const expected = window.SU.timelineWindow(
+          window.__STATE__.settings,
+          window.__JUDGE_NOW__,
+          running ? { startUtc: running.startUtc, endUtc: null } : null,
+        );
+        // Geometry comes from the shipped `STP.minutesToY` rather than a re-derived
+        // px-per-minute here (the same never-re-derive rule the window math follows), and the
+        // target is CLAMPED: a window whose start sits late in the day cannot be put at the top
+        // of a 24h track, and the browser pins scrollTop to its maximum. Asserting the raw
+        // startMin fraction would demand a scroll position no browser can produce and fail a
+        // correct picker — so the fact is "scrolled to the window, or as far as the track
+        // allows", plus the outcome that makes the centering worth doing: the interval being
+        // edited is actually INSIDE the viewport.
+        const maxScroll = el.scrollHeight - el.clientHeight;
+        const target = Math.min(window.STP.minutesToY(expected.startMin), maxScroll);
+        const editedY = running ? window.STP.minutesToY(window.SU.localMinuteOfDay(running.startUtc)) : null;
+        const editedVisible =
+          editedY !== null && editedY >= el.scrollTop && editedY <= el.scrollTop + el.clientHeight;
+        const ok = scrollable && Math.abs(el.scrollTop - target) <= 2 && editedVisible;
+        return {
+          present: true,
+          ok,
+          scrollable,
+          editedVisible,
+          scrollTop: Math.round(el.scrollTop),
+          scrollHeight: Math.round(el.scrollHeight),
+          target: Math.round(target),
+          expectedStartMin: expected.startMin,
+        };
+      });
     });
 
     const groupSeeded = probe.allFour && probe.startValue === '09:00' && probe.endValue === '15:00';
@@ -5723,7 +6508,9 @@ async function sceneTimelineWindow(browser) {
       afterFlip.aroundEnabled &&
       !afterFlip.rowOff;
     const windowMath = windows.workingOk && windows.aroundOk && windows.calendarOk;
-    const consumerTrack = track.present ? track.ok : true;
+    // No longer `present ? ok : true` — §12 R15's picker has landed, so a missing track is a
+    // regression, not a not-yet.
+    const consumerTrack = track.present && track.ok;
     record(
       'TIMELINE_WINDOW',
       { groupSeeded, aroundDisabledUndimmed, modeFlipEnablesAround, windowMath, consumerTrack },
@@ -5736,9 +6523,10 @@ async function sceneTimelineWindow(browser) {
         `SU.timelineWindow working=${JSON.stringify(windows.working)} (exact 540–900: ${windows.workingOk}), ` +
         `around_now/8=${JSON.stringify(windows.around)} vs expected ${JSON.stringify(windows.expectedAround)} ` +
         `(${windows.aroundOk}), calendar-forced-working-hours ok=${windows.calendarOk}; ` +
-        (track.present
-          ? `consumer track scrollable+positioned=${track.ok} (scrollTop=${track.scrollTop}/${track.scrollHeight})`
-          : `consumer track pending §12 R15/R16 (no [data-timeline-track] yet — re-verified post-wave)`),
+        `§12 R15 consumer track (the Timer view's start-only picker, same 09:00–15:00 config) ` +
+        `present=${track.present} scrollable+positioned-at-the-window=${track.ok} ` +
+        `(scrollTop=${track.scrollTop}→target ${track.target} of ${track.scrollHeight}, ` +
+        `window start ${track.expectedStartMin}min, edited interval visible=${track.editedVisible})`,
       'timeline-window.png',
     );
   });
@@ -5774,6 +6562,144 @@ async function sceneTimelineWindowAround(browser) {
       'timeline-window.png',
     );
   });
+}
+
+// SNAP_RESOLUTION — §12 R23 / §14: the two stored snap resolutions are actually CONSUMED by both
+// drag surfaces. Every other fixture carries the 5/15 defaults and every other snap assertion is
+// a literal default, so a renderer that hardcoded 5 and 15 passed all 57 machine-scored items —
+// the settings pair was proven to store and validate, and proven by nothing to be read. This
+// scene is the only one driven from a NON-DEFAULT pair (2/20, fixtures.mjs SNAP_NON_DEFAULT).
+//
+// The discriminator is modular, and deliberately two-sided: a coarse landing must be ≡ 0 mod 20
+// AND ∉ 0 mod 15, a fine landing ≡ 0 mod 2 AND ∉ 0 mod 5. Either default therefore produces a
+// value the assertion rejects — 15-stepping cannot land on the 20-grid-but-off-15 minutes, and
+// 5-stepping cannot land on an off-5 even minute. Asserting `% 20 === 0` alone would not do it:
+// 60-minute boundaries sit on both grids, which is the same trap that made 5/15 a weak pair.
+async function sceneSnapResolution(browser) {
+  // (A) THE ENTRIES WEEK GRID (app.js). The track is 1px per minute and snapMin() snaps the
+  // ABSOLUTE minute under the cursor, so the landings below are computed from the track's own
+  // rect rather than assumed: press at minute 503 → 500, release at 623 → 620. Both are on the
+  // 20-grid and off the 15-grid; a hardcoded coarse 15 would land 495/615 and 630, failing.
+  const grid = await withPage(browser, snapGridState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.waitForSelector('#entries .fab', { state: 'attached' });
+    // Aim from the track rect. The viewport opens on working hours, so both points are computed
+    // and then CHECKED to be inside the visible strip — an off-screen aim would hit nothing and
+    // is a broken scene, not a passing one.
+    const aim = await page.evaluate(() => {
+      const t = document.querySelector('#entries .dt[data-day="2026-06-24"]');
+      const r = t.getBoundingClientRect();
+      const strip = document.querySelector('.cstrip').getBoundingClientRect();
+      const at = (minute) => ({ x: Math.round(r.left + r.width / 2), y: Math.round(r.top + minute) });
+      const press = at(503);
+      const release = at(623);
+      const inStrip = (p) => p.y > strip.top && p.y < strip.bottom;
+      return { press, release, onScreen: [press, release].every(inStrip) };
+    });
+
+    // SELECT-INTERVAL: the start handle follows the cursor snapped at the stored COARSE step.
+    await page.click('#entries .fab');
+    await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+    await page.mouse.move(aim.press.x, aim.press.y);
+    await page.waitForSelector('#entries .shandle', { state: 'attached' });
+    const handleMin = await page.evaluate(() => {
+      const [hh, mm] = document.querySelector('#entries .shandle .st').textContent.split(':').map(Number);
+      return hh * 60 + mm;
+    });
+
+    // PRESS-DRAG → CREATE: both raw fields carry the coarse-snapped span.
+    await page.mouse.down();
+    await page.mouse.move(aim.release.x, aim.release.y, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    const minOf = (v) => Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16));
+    const coarse = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+
+    // FINE: flip the toggle beside the grid and drag the stop edge. The step is now the stored
+    // fine 2, so the landing is even but off the 5-grid — unreachable at either default.
+    // The target is recomputed against the track's CURRENT rect: opening the form above the grid
+    // shifts it, so an aim measured before the form opened would land somewhere else entirely.
+    await page.click('#entries .snapctl .sw');
+    const fineAim = await page.evaluate(() => {
+      const r = document.querySelector('#entries .dt[data-day="2026-06-24"]').getBoundingClientRect();
+      const g = document.querySelector('#entries .grip.b').getBoundingClientRect();
+      return {
+        grip: { x: Math.round(g.left + g.width / 2), y: Math.round(g.top + g.height / 2) },
+        target: { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + 634) },
+      };
+    });
+    await page.mouse.move(fineAim.grip.x, fineAim.grip.y);
+    await page.mouse.down();
+    await page.mouse.move(fineAim.target.x, fineAim.target.y, { steps: 6 });
+    await page.mouse.up();
+    const fine = await page.evaluate(() => ({
+      start: document.querySelector('.entry-form .edit-start').value,
+      stop: document.querySelector('.entry-form .edit-end').value,
+    }));
+    await page.screenshot({ path: join(EVIDENCE, 'snap-resolution-grid.png') });
+    return {
+      onScreen: aim.onScreen,
+      handleMin,
+      coarse: { ...coarse, startMin: minOf(coarse.start), stopMin: minOf(coarse.stop) },
+      fine: { ...fine, stopMin: minOf(fine.stop) },
+    };
+  });
+  const onCoarse = (m) => m % 20 === 0 && m % 15 !== 0;
+  const onFine = (m) => m % 2 === 0 && m % 5 !== 0;
+  const gridCoarseFromSettings =
+    grid.onScreen && onCoarse(grid.handleMin) && onCoarse(grid.coarse.startMin) && onCoarse(grid.coarse.stopMin);
+  const gridFineFromSettings =
+    onFine(grid.fine.stopMin) &&
+    grid.fine.stopMin !== grid.coarse.stopMin && // the drag actually moved the edge
+    grid.fine.start === grid.coarse.start; // and only the dragged edge moved
+
+  // (B) THE TIMER VIEW'S START-ONLY PICKER (timepicker.js). Its grip drag is RELATIVE — the
+  // step is applied to (stored start + pointer delta) on a 720px/24h track, 0.5px per minute —
+  // so the same pair is exercised through different arithmetic, which is the point of covering
+  // both surfaces: one shared helper, two independent call sites, either of which can stop
+  // passing the settings through.
+  const picker = await withPage(browser, snapPickerState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="timer"]');
+    await page.click('#le-start-pick');
+    await page.waitForSelector('#le-start-disc .stp-grip', { state: 'attached' });
+    const dragGrip = async (dy) => {
+      const grip = page.locator('#le-start-disc .stp-grip');
+      await grip.scrollIntoViewIfNeeded();
+      const g = await grip.boundingBox();
+      const x = Math.round(g.x + g.width / 2);
+      const y = Math.round(g.y + g.height / 2);
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.move(x, y + dy, { steps: 6 });
+      await page.mouse.up();
+      return page.evaluate(() => document.querySelector('#le-start')?.value ?? null);
+    };
+    // −30px = −60min off the stored 21:35:53 → 20:35:53 → the coarse 20 grid lands 20:40.
+    const coarse = await dragGrip(-30);
+    await page.click('#le-start-disc .stp-snapctl .sw');
+    // −13px = −26min off 20:40 → 20:14 on the fine 2 grid (even, and off the 5 grid).
+    const fine = await dragGrip(-13);
+    await page.screenshot({ path: join(EVIDENCE, 'snap-resolution-picker.png') });
+    return { coarse, fine };
+  });
+  const minOf = (v) => (v ? Number(v.slice(11, 13)) * 60 + Number(v.slice(14, 16)) : NaN);
+  const pickerCoarseFromSettings = onCoarse(minOf(picker.coarse)) && /:00$/.test(picker.coarse);
+  const pickerFineFromSettings = onFine(minOf(picker.fine)) && minOf(picker.fine) !== minOf(picker.coarse);
+
+  record(
+    'SNAP_RESOLUTION',
+    { gridCoarseFromSettings, gridFineFromSettings, pickerCoarseFromSettings, pickerFineFromSettings },
+    `§12 R23 at the NON-DEFAULT stored pair (fine 2 / coarse 20): entries grid ${JSON.stringify(grid)} ` +
+      `— coarse landings ≡0 mod 20 and ∉0 mod 15 (${gridCoarseFromSettings}), fine stop ≡0 mod 2 and ` +
+      `∉0 mod 5 with the start edge untouched (${gridFineFromSettings}); timer start-only picker ` +
+      `${JSON.stringify(picker)} — coarse ${pickerCoarseFromSettings}, fine ${pickerFineFromSettings}. ` +
+      `Neither hardcoded default (5 or 15) can produce any of these minutes.`,
+    'snap-resolution-grid.png',
+  );
 }
 
 // SOFTWARE_UPDATE — §19 R03/R04/R06 (G3): the Settings → Software Update group, driven with
@@ -6245,13 +7171,15 @@ async function sceneFieldLabels(browser) {
   await sweep('timer (start details)');
   await page.screenshot({ path: join(EVIDENCE, 'field-labels-timer.png') });
 
+  // Entries — the week-only toolbar's filter/search fields (visible-label idiom, §12 R09)
+  // plus the unified form in create mode, opened by the + button's keyboard path (§12 R07).
   await page.click('.nav-item[data-view="entries"]');
-  await page.click('#add-toggle');
-  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-  await page.click('#el-preset-seg .preset[data-preset="custom"]');
-  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-  await sweep('entries (add form + custom range)');
+  await page.focus('#entries .fab');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+  await sweep('entries (toolbar + unified form)');
   await page.screenshot({ path: join(EVIDENCE, 'field-labels-entries.png') });
+  await cancelForm(page);
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
   await page.click('.nav-item[data-view="clients"]');
@@ -6403,12 +7331,17 @@ async function sceneFieldChrome(browser) {
   await page.waitForSelector('#start-form:not([hidden])', { state: 'attached' });
   await sweep('timer (start details)');
 
+  // Entries — the week-only toolbar's filter/search fields plus the unified form in create
+  // mode (the + button's keyboard path, §12 R07). Opening the form focuses its description;
+  // drop that focus before sweeping, or the focused field's accent border reads as a chrome
+  // offender.
   await page.click('.nav-item[data-view="entries"]');
-  await page.click('#add-toggle');
-  await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-  await page.click('#el-preset-seg .preset[data-preset="custom"]');
-  await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-  await sweep('entries (add form + custom range)');
+  await page.focus('#entries .fab');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+  await page.evaluate(() => document.activeElement?.blur());
+  await sweep('entries (toolbar + unified form)');
+  await cancelForm(page);
 
   // Clients — no field at rest; swept anyway so a field added here cannot slip in unswept.
   await page.click('.nav-item[data-view="clients"]');
@@ -6429,8 +7362,9 @@ async function sceneFieldChrome(browser) {
   // so the :focus-visible the D13 idiom hangs off is the one a keyboard user gets.
   await page.click('.nav-item[data-view="entries"]');
   await page.waitForSelector('#search', { state: 'attached' });
-  // The toolbar control immediately before the search label — one Tab lands on the field.
-  await page.evaluate(() => document.querySelector('#report-btn').focus());
+  // The toolbar control immediately before the search label — one Tab lands on the field
+  // (#el-tag, the last filter of the week-only toolbar's right rail).
+  await page.evaluate(() => document.querySelector('#el-tag').focus());
   await page.keyboard.press('Tab');
   const focus = await page.evaluate(() => {
     const el = document.querySelector('#search');
@@ -6576,23 +7510,27 @@ async function sceneTargetSize(browser) {
     }
   });
 
-  // The Entries add form — the inline picker's day grid, a tag chip with its remover, the
-  // Billable label, and the calendar's hover-corner select checkbox beside its ops chip.
+  // The unified form in CREATE mode — the billable switch, a tag chip with its remover, the
+  // fine-snap toggle in the + button's spot, and the pending interval's edge grips (whose
+  // visible 6px mark rides a ::before-padded 24px hit area, A03).
   await withPage(browser, addFormState(), 'index.html', async (page) => {
-    await page.waitForSelector('[data-view="entries"]:not([hidden]) #add-toggle');
-    await page.click('#add-toggle');
-    await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-    await page.fill('#add-tag-input', 'deep');
-    await page.press('#add-tag-input', 'Enter');
-    await page.waitForSelector('#add-tag-chips .chip-x', { state: 'attached' });
-    await sweep(page, 'entries (add form)');
+    await noMotion(page); // measure the settled layout, not the form's entrance animation
+    await page.waitForSelector('[data-view="entries"]:not([hidden]) #entries .fab');
+    await page.focus('#entries .fab');
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+    await page.fill('.entry-form .ef-tag-add', 'deep');
+    await page.press('.entry-form .ef-tag-add', 'Enter');
+    await page.waitForSelector('.entry-form .ef-tag-chips .chip-x', { state: 'attached' });
+    await sweep(page, 'entries (unified form, create)');
     await page.screenshot({ path: join(EVIDENCE, 'target-size-add-form.png') });
   });
 
-  // The unified editor — the same picker and tag editor mounted in the edit form.
+  // The unified editor — the same form seeded from an entry, its interval on the grid.
   await withPage(browser, unifiedFormState(), 'index.html', async (page) => {
+    await noMotion(page);
     await page.locator('[data-act="edit"]').first().click();
-    await page.waitForSelector('.entry-form .edit-picker .stp-block.me', { state: 'attached' });
+    await page.waitForSelector('.entry-form[data-mode="edit"]', { state: 'attached' });
     await sweep(page, 'entries (unified editor)');
   });
 
@@ -6621,11 +7559,11 @@ async function sceneTargetSize(browser) {
   const sanctioned = perSurface.flatMap((v) =>
     v.spacingSanctioned.map((x) => `${x.label} ${x.w}x${x.h} (${x.near}px clear)`),
   );
-  // Guard-the-guard: the three targets issue 148 measured under the floor must be IN the swept
+  // Guard-the-guard: the targets issue 148 measured under the floor must be IN the swept
   // set. `.chip-x` is the load-bearing one — as a <b> it matched no selector, so an empty sweep
   // of it would have "passed" this scene forever.
   const swept = new Set(perSurface.flatMap((v) => v.swept.map((s) => s.split(' ')[0])));
-  const missing = ['button.chip-x', 'input.ck', 'button.stp-d'].filter(
+  const missing = ['button.chip-x', 'input.ck'].filter(
     (want) => ![...swept].some((s) => s.startsWith(want)),
   );
   record(
@@ -6805,9 +7743,10 @@ const SCENES = {
   START_ATTRIBUTES: { items: ['START_ATTRIBUTES'], captures: ['main-start-attributes.png'], run: sceneStartAttributes },
   START_FORM: { items: ['START_FORM'], captures: ['main-start-form.png', 'main-start-form-running.png'], run: sceneStartForm },
   RUNNING_SINGLE_ACTION: { items: ['RUNNING_SINGLE_ACTION'], captures: ['timer-running-single-action.png'], run: sceneRunningSingleAction },
-  UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], captures: ['unified-add.png'], run: sceneUnifiedFormAdd },
-  UNIFIED_FORM_EXPANDER: { items: ['UNIFIED_FORM_EXPANDER'], captures: ['unified-form-expander.png'], run: sceneUnifiedFormExpander },
+  UNIFIED_FORM_ADD: { items: ['UNIFIED_FORM_ADD'], captures: ['entries-select-interval.png', 'unified-add.png'], run: sceneUnifiedFormAdd },
   UNIFIED_FORM: { items: ['UNIFIED_FORM'], captures: ['main-edit.png', 'main-edit-exact-times.png'], run: sceneUnifiedForm },
+  PENDING_CHANGES_GATE: { items: ['PENDING_CHANGES_GATE'], captures: ['main-pending-gate.png'], run: scenePendingChangesGate },
+  WEEK_MOVE_PROMPT: { items: ['WEEK_MOVE_PROMPT'], captures: ['main-week-move-prompt.png'], run: sceneWeekMovePrompt },
   MULTILINE_DESC: { items: ['MULTILINE_DESC'], captures: ['main-multiline-desc.png'], run: sceneMultilineDesc },
   OVERLAP_BANNER: { items: ['OVERLAP_BANNER'], captures: ['main-overlap-banner.png'], run: sceneOverlapBanner },
   SPLIT_AFFORDANCE: { items: ['SPLIT_AFFORDANCE'], captures: ['main-split.png'], run: sceneSplitAffordance },
@@ -6827,7 +7766,7 @@ const SCENES = {
   TAG_CHIPS: { items: ['TAG_CHIPS'], captures: ['main-tags.png'], run: sceneTagChips },
   REPORTS_VIEW: { items: ['REPORTS_VIEW'], captures: ['reports-list.png', 'reports-run.png', 'reports-empty.png'], run: sceneReportsView },
   ENTRIES_CALENDAR: { items: ['ENTRIES_CALENDAR'], captures: ['entries-search.png', 'entries-calendar.png'], run: sceneEntriesCalendar },
-  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], captures: ['main-calendar.png'], run: sceneCalendarLayout },
+  CALENDAR_LAYOUT: { items: ['CALENDAR_LAYOUT'], captures: ['main-calendar.png', 'main-calendar-weekend.png'], run: sceneCalendarLayout },
   WINDOW_GEOMETRY: { items: ['WINDOW_GEOMETRY'], captures: ['calendar-wide.png', 'min-window-add.png', 'popover-fit.png'], run: sceneWindowGeometry },
   CALENDAR_ACCENT_BUDGET: { items: ['CALENDAR_ACCENT_BUDGET'], captures: ['calendar-accent-budget.png'], run: sceneCalendarAccentBudget },
   SELECTION_LIFT: { items: ['SELECTION_LIFT'], captures: ['selection-lift.png', 'selection-lift-editing.png'], run: sceneSelectionLift },
@@ -6838,6 +7777,7 @@ const SCENES = {
   HOTKEY_NO_TRAP: { items: ['HOTKEY_NO_TRAP'], captures: ['settings-hotkey-focus.png'], run: sceneHotkeyNoTrap },
   TIMELINE_WINDOW: { items: ['TIMELINE_WINDOW'], captures: ['timeline-window.png'], run: sceneTimelineWindow },
   TIMELINE_WINDOW_AROUND: { items: ['TIMELINE_WINDOW'], captures: [], run: sceneTimelineWindowAround },
+  SNAP_RESOLUTION: { items: ['SNAP_RESOLUTION'], captures: ['snap-resolution-grid.png', 'snap-resolution-picker.png'], run: sceneSnapResolution },
   SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], captures: ['main-software-update.png', 'main-software-update-error.png', 'main-software-update-check-error.png'], run: sceneSoftwareUpdate },
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], captures: ['main-backups.png', 'main-backups-empty.png'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], captures: ['main-recovery.png'], run: sceneRecoveryNotice },

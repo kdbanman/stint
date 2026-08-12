@@ -160,8 +160,13 @@
   /* the time label & start grip live at track level so nothing hides them */
   .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
   .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);box-shadow:var(--sh-chip);cursor:ns-resize;z-index:7}
+  /* §12 R23: the fine-snap toggle beside the track — ephemeral, coarse on every open;
+     no snap-value pill, no drag-hint copy */
   .phint{margin-top:12px;display:flex;justify-content:flex-end}
-  .snap{font-size:11px;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:2px 8px;color:var(--muted)}
+  .snapctl{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
+  .snapctl .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);box-shadow:var(--sh-chip)}
+  .snapctl .sw.on{background:var(--ink)}.snapctl .sw.on i{left:17px}
 </style>
 </head>
 <body>
@@ -249,7 +254,7 @@
               </div>
               <i class="fade t"></i><i class="fade b"></i>
             </div>
-            <div class="phint"><span class="snap tnum">snap · 5 min</span></div>
+            <div class="phint"><span class="snapctl"><span class="sw" role="switch" aria-checked="false"><i></i></span> Fine snap</span></div>
           </div>
           <div class="r-row2">
             <span class="toggle"><span class="sw on"><i></i></span> Billable</span>

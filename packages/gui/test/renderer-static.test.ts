@@ -84,8 +84,10 @@ describe('renderer static contract', () => {
     // the idle and running faces of one standing action, only ever one of them on screen (§12 R05)
     // — so this is "at least one", not "exactly one"; that no two are LIT at once is the judge's
     // per-state count. Settings names none: its only primary, the update download, exists solely
-    // while an update waits.
-    expect(perView.filter((v) => v.marks === 0).map((v) => v.view)).toEqual(['settings']);
+    // while an update waits. Entries names none STATICALLY: its standing primary is the week
+    // grid's round + button (§12 R07), built per calendar repaint by app.js calFab — the marker
+    // lives in that builder, asserted below, so the view still cannot lose its handoff unmarked.
+    expect(perView.filter((v) => v.marks === 0).map((v) => v.view)).toEqual(['entries', 'settings']);
     for (const v of perView) {
       // A marker must sit on a `.primary` button: it is the handoff's target, and marking anything
       // else opts a control into a handoff for an accent it never carried.
@@ -100,6 +102,10 @@ describe('renderer static contract', () => {
     const app = read('app.js');
     expect(app).toMatch(/function syncStandingPrimary\(\)/);
     expect(app).toMatch(/new MutationObserver\(syncStandingPrimary\)/);
+    // The Entries view's dynamically-built + button carries the marker AND the primary class
+    // (calFab) — the same pairing the static markup rule above holds the other views to.
+    expect(app).toMatch(/className = 'fab primary'/);
+    expect(app).toMatch(/setAttribute\('data-standing-primary', ''\)/);
     expect(
       [...app.matchAll(/querySelectorAll\('\[data-standing-primary\]'\)/g)].length,
       'the marker is read in exactly one place',
@@ -140,13 +146,18 @@ describe('renderer static contract', () => {
     // dropped the `.message` unwrap and rendered `[object Object]`. popover.html is a SEPARATE
     // document and can reach nothing app.js defines, so su.ts is the only home that serves
     // every page — this binds that, since these had already been re-typed twice.
-    const shared = ['escapeHtml', 'errMessage', 'localMinuteOfDay', 'exactMinuteOfDay'];
+    const shared = ['escapeHtml', 'errMessage', 'localMinuteOfDay', 'exactMinuteOfDay', 'snapStepMin'];
     const su = read('su.ts');
     const defines = (src: string, name: string) =>
       // A DEFINITION (`function f(`, `const f =`), never a `const { f } = window.SU` import.
       new RegExp(`(?:function\\s+${name}\\s*\\(|(?:const|let|var)\\s+${name}\\s*=)`).test(src);
+    // su.ts SERVES a helper either way: defined in the file, or imported from the gui/src module
+    // that owns it (localtime.ts, snap.ts) and re-exported on the SU object. Both are one home;
+    // what the loop below forbids is a SECOND definition in a renderer script.
+    const serves = (name: string) =>
+      defines(su, name) || new RegExp(`import\\s*\\{[^}]*\\b${name}\\b[^}]*\\}\\s*from`).test(su);
     for (const name of shared) {
-      expect(defines(su, name), `su.ts must define ${name} — it is the declared home`).toBe(true);
+      expect(serves(name), `su.ts must serve ${name} — it is the declared home`).toBe(true);
       for (const f of ['app.js', 'timepicker.js', 'popover.js', 'reports.js', 'settings.js']) {
         expect(defines(read(f), name), `${f} must consume window.SU.${name}, not redefine it`).toBe(false);
       }

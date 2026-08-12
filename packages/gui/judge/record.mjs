@@ -28,8 +28,9 @@
  *   node packages/gui/judge/record.mjs <reqId> [...]  # record only the named recipe(s)
  *   node packages/gui/judge/record.mjs --list         # list the recipe ids and exit
  *
- * Publishing to GIF: the produced .webm is a gitignored working artifact; the committed evidence
- * is a .gif per recipe (e.g. `§20 R04` → `20-r04.gif`). Install ffmpeg (`apt-get install -y
+ * Publishing to GIF: the produced .webm is a gitignored working artifact; the uploaded evidence
+ * is a .gif per recipe (e.g. `§20 R04` → `20-r04.gif`), kept under the 5 MB GitHub Camo ceiling
+ * by convertToGif's re-encode ladder. Install ffmpeg (`apt-get install -y
  * ffmpeg`) and convert at the recordings' convention (full resolution, 50/3 fps, palette):
  *   ffmpeg -y -i "§20 R04.webm" -vf "fps=50/3,palettegen=stats_mode=diff" /tmp/pal.png
  *   ffmpeg -y -i "§20 R04.webm" -i /tmp/pal.png \
@@ -103,6 +104,16 @@ function resolveChromium() {
 
 const fileUrl = (name) => 'file://' + join(RENDERER, name);
 const wait = (page, ms) => page.waitForTimeout(ms);
+
+// §12 R24 (issue #323): Cancel is GATED now — a form holding typed work asks before it closes.
+// A recipe that only wants the form gone has to answer the prompt; a clean form never raises one,
+// so this is safe everywhere. The gate is appended synchronously inside the click handler, so it
+// is already there (or never coming) by the time the click resolves.
+const cancelForm = async (page, sel = '.entry-form') => {
+  await page.click(`${sel} .edit-cancel`);
+  if (await page.$('.gate-backdrop')) await page.click('.gatecard [data-gate="confirm"]');
+  await page.waitForSelector(sel, { state: 'detached' });
+};
 
 // ASCII-only output slug from a requirement/recipe id, so the committed GIF name is filesystem-
 // and PR-image safe: "§12 R15" → "12-r15", "§05 R01" → "05-r01", "favorites-rail" → "favorites-rail".
@@ -310,49 +321,106 @@ function decoratePage(page) {
   return page;
 }
 
+// GitHub proxies every image in a README/PR through Camo, which DROPS anything over 5 MB — an
+// oversized GIF is a broken image on the index page, not a slow one. The ceiling is therefore a
+// hard property of a shippable recording, not a guideline (author-qa-gif skill). The number is
+// scripts/upload-evidence.mjs's own LIMIT: that uploader is what actually refuses the file, so a
+// looser ceiling here would just move the failure to publish time.
+const GIF_MAX_BYTES = 5_000_000;
+
+// The re-encode ladder walked until a recipe's GIF fits GIF_MAX_BYTES. Rung 0 is the documented
+// convention (full resolution, 15fps). Below it the rungs give up resolution and frame rate
+// together at first, then FRAME RATE ALONE: a recording of a UI is read by pausing on its text,
+// so a floor of ~0.6x scale (where the app's 11px labels and time fields still resolve) outranks
+// smoothness — a jerkier GIF you can read beats a fluid one you cannot. Every rung keeps the
+// ~0.5x slowdown and the end-frame hold, so a shrunk recording still reads at its siblings' pace.
+const GIF_RUNGS = [
+  { scale: 1, fps: 15 },
+  { scale: 0.85, fps: 12 },
+  { scale: 0.72, fps: 10 },
+  { scale: 0.72, fps: 8 },
+  { scale: 0.6, fps: 8 },
+  { scale: 0.6, fps: 6 },
+];
+
 // Convert a finished .webm to a committed, ASCII-named animated GIF via the documented two-pass
 // palette pipeline — slowed to ~0.5x (setpts=2.0*PTS) with a ~1.5s hold on the final frame
-// (tpad), 15fps, lanczos scale, sierra2_4a dither for quality. Returns the GIF path on success,
-// or throws so the caller surfaces the conversion gap (we never ship a faked GIF).
+// (tpad), lanczos scale, sierra2_4a dither for quality — re-encoding down the rung ladder until
+// the file fits under GIF_MAX_BYTES. Returns { path, bytes, rung } on success, or throws so the
+// caller surfaces the conversion gap (we never ship a faked GIF).
 function convertToGif(webmPath, gifPath) {
   const palette = gifPath.replace(/\.gif$/, '') + '.pal.png';
-  const vf =
-    'setpts=2.0*PTS,fps=15,scale=iw:-1:flags=lanczos,tpad=stop_mode=clone:stop_duration=1.5';
-  const pass1 = spawnSync(
-    'ffmpeg',
-    ['-y', '-i', webmPath, '-vf', `${vf},palettegen=stats_mode=diff`, palette],
-    { encoding: 'utf8' },
-  );
-  if (pass1.status !== 0) {
+  // A GIF's bytes track pixels-per-frame × frames, so rung 0's measured size predicts every
+  // lower rung to within a small factor. Jumping straight to the first rung that is predicted to
+  // fit — and still verifying the real size afterwards, walking on if the prediction was
+  // optimistic — keeps the guarantee while skipping the encodes that could only have failed:
+  // each rung is two full ffmpeg passes over a ~20s capture, so walking all five costs minutes
+  // per recipe across a 40-recipe run.
+  const predict = (from, to, bytesAtFrom) =>
+    bytesAtFrom *
+    (GIF_RUNGS[to].scale / GIF_RUNGS[from].scale) ** 2 *
+    (GIF_RUNGS[to].fps / GIF_RUNGS[from].fps);
+  let bytes = 0;
+  let rung = 0;
+  for (; rung < GIF_RUNGS.length; rung++) {
+    const { scale, fps } = GIF_RUNGS[rung];
+    // scale=iw*<f> with an explicit -1 height keeps the aspect ratio; rung 0's iw*1 is a no-op
+    // resize, so the default output stays byte-for-byte what the convention produced before.
+    const vf =
+      `setpts=2.0*PTS,fps=${fps},scale=iw*${scale}:-1:flags=lanczos,` +
+      'tpad=stop_mode=clone:stop_duration=1.5';
+    const pass1 = spawnSync(
+      'ffmpeg',
+      ['-y', '-i', webmPath, '-vf', `${vf},palettegen=stats_mode=diff`, palette],
+      { encoding: 'utf8' },
+    );
+    if (pass1.status !== 0) {
+      rmSync(palette, { force: true });
+      throw new Error(
+        `ffmpeg palettegen failed (status ${pass1.status}): ${(pass1.stderr || pass1.error?.message || '').split('\n').slice(-4).join(' ')}`,
+      );
+    }
+    const pass2 = spawnSync(
+      'ffmpeg',
+      [
+        '-y',
+        '-i',
+        webmPath,
+        '-i',
+        palette,
+        '-filter_complex',
+        `${vf}[v];[v][1:v]paletteuse=dither=sierra2_4a`,
+        gifPath,
+      ],
+      { encoding: 'utf8' },
+    );
     rmSync(palette, { force: true });
+    if (pass2.status !== 0) {
+      throw new Error(
+        `ffmpeg paletteuse failed (status ${pass2.status}): ${(pass2.stderr || pass2.error?.message || '').split('\n').slice(-4).join(' ')}`,
+      );
+    }
+    if (!existsSync(gifPath) || statSync(gifPath).size === 0) {
+      throw new Error('ffmpeg produced no non-empty GIF.');
+    }
+    bytes = statSync(gifPath).size;
+    if (bytes <= GIF_MAX_BYTES) break;
+    // 0.9 of the ceiling as the target, so a prediction that runs a little high still lands
+    // under it rather than costing an extra rung.
+    const measured = rung;
+    while (rung + 1 < GIF_RUNGS.length && predict(measured, rung + 1, bytes) > GIF_MAX_BYTES * 0.9) {
+      rung++;
+    }
+  }
+  // The bottom rung still over the ceiling means the recipe itself is too long for a GIF — a
+  // recipe-authoring problem (trim the scene), not something to paper over with a smaller frame.
+  if (bytes > GIF_MAX_BYTES) {
     throw new Error(
-      `ffmpeg palettegen failed (status ${pass1.status}): ${(pass1.stderr || pass1.error?.message || '').split('\n').slice(-4).join(' ')}`,
+      `GIF is ${bytes} bytes after every re-encode rung — over the ${GIF_MAX_BYTES}-byte Camo ` +
+        'ceiling. Shorten the recipe rather than shrinking the frame further.',
     );
   }
-  const pass2 = spawnSync(
-    'ffmpeg',
-    [
-      '-y',
-      '-i',
-      webmPath,
-      '-i',
-      palette,
-      '-filter_complex',
-      `${vf}[v];[v][1:v]paletteuse=dither=sierra2_4a`,
-      gifPath,
-    ],
-    { encoding: 'utf8' },
-  );
-  rmSync(palette, { force: true });
-  if (pass2.status !== 0) {
-    throw new Error(
-      `ffmpeg paletteuse failed (status ${pass2.status}): ${(pass2.stderr || pass2.error?.message || '').split('\n').slice(-4).join(' ')}`,
-    );
-  }
-  if (!existsSync(gifPath) || statSync(gifPath).size === 0) {
-    throw new Error('ffmpeg produced no non-empty GIF.');
-  }
-  return gifPath;
+  return { path: gifPath, bytes, rung };
 }
 
 // Is a GIF-CAPABLE `ffmpeg` runnable on PATH? (Capability honesty — if not, we keep the .webm and
@@ -416,6 +484,80 @@ function pickerDayState() {
     },
     days: [{ day: '2026-06-24', entries: [open, ...base.days[0].entries] }],
   };
+}
+
+// §12 R07 — the shipped drag-to-create gesture, shared by every recipe that adds an entry by
+// hand. A POINTER click on the round + (bottom-right of the week grid) enters select-interval
+// mode, the cursor carries a snapped start handle down the named day's column, and a press-drag
+// then release opens the unified form seeded with the dragged interval. Offsets are pixels from
+// the visible top of the track — the strip opens on the configured working hours — on the grid's
+// 60px/hour geometry, so `dragPx: 90` is an hour and a half.
+//
+// It lives here rather than in each recipe because the gesture is ONE requirement: a recipe that
+// drove it by hand would drift from its siblings the next time the chrome moves, which is exactly
+// how the retired #add-toggle recipes came to record a form the app no longer had.
+async function dragCreate(page, { day, atY = 100, dragPx = 90 }) {
+  await page.click('#entries .fab');
+  await page.waitForSelector('#entries .calwrap.sel-mode', { state: 'attached' });
+  const aim = await page.evaluate((d) => {
+    const track = document.querySelector(`#entries .dt[data-day="${d}"]`);
+    const r = track.getBoundingClientRect();
+    const strip = document.querySelector('.cstrip').getBoundingClientRect();
+    return { x: Math.round(r.left + r.width / 2), y: Math.round(Math.max(r.top, strip.top)) };
+  }, day);
+  await page.mouse.move(aim.x, aim.y + atY, { steps: 18 });
+  await page.waitForSelector('#entries .shandle', { state: 'attached' });
+  await wait(page, 800);
+  await page.mouse.down();
+  await page.mouse.move(aim.x, aim.y + atY + dragPx, { steps: 18 });
+  await page.mouse.up();
+  await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+  await page.waitForSelector('#entries .ev.me', { state: 'attached' });
+}
+
+// The scoped `window.stint.add` override the manual-add recipes share: it records the backfill
+// payload AND splices a matching completed row into the injected snapshot, so the post-Save
+// load()/getState repaint paints the new entry onto the grid ON CAMERA rather than leaving the
+// scene on an empty column. Set via page.evaluate on ONE page — no shared fixture or JUDGE scene
+// is touched, and the renderer's unchanged submit path stays the single source of truth.
+// `overlapped` drives whether the spliced row wears the §06 R04 warn band.
+function installAddSplice(page, { id, overlapped = false, overlapMinutes = 0 }) {
+  return page.evaluate(
+    (opts) => {
+      window.stint.add = (p) => {
+        window.__ADDED__ = p;
+        const st = window.__STATE__;
+        const fromUtc = new Date(p.fromLocal).toISOString();
+        const toUtc = new Date(p.toLocal).toISOString();
+        const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
+        const day = fromUtc.slice(0, 10);
+        const row = {
+          id: opts.id,
+          description: p.description || null,
+          clientLabel: [p.client || null, p.project || null].filter(Boolean).join(' / ') || null,
+          startUtc: fromUtc,
+          endUtc: toUtc,
+          billableSeconds: sec,
+          billable: p.billable !== false,
+          overlapped: opts.overlapped,
+          overlapMinutes: opts.overlapMinutes,
+          overlapRelation: opts.overlapped ? 'overlaps' : null,
+          sleptThrough: false,
+          excludedSeconds: 0,
+          rawSeconds: sec,
+          tags: Array.isArray(p.tags) ? p.tags.slice() : [],
+        };
+        let block = (st.days ||= []).find((d) => d.day === day);
+        if (!block) {
+          block = { day, entries: [] };
+          st.days.unshift(block);
+        }
+        block.entries.unshift(row);
+        return Promise.resolve(window.__ACK__);
+      };
+    },
+    { id, overlapped, overlapMinutes },
+  );
 }
 
 /**
@@ -605,12 +747,12 @@ const RECIPES = {
     },
   },
 
-  // §09 R01 (G3) — a CUSTOM range is a pair of PLAIN DATES on BOTH surfaces the requirement
-  // touches: the Reports builder and the Entries toolbar. There is no time-of-day, no
-  // datetime-local, and no standalone visual range-picker modal for the entry-range chrome —
-  // just two `type="date"` fields whose raw YYYY-MM-DD strings ARE the range. This recording
-  // walks both surfaces in one take, driving the SAME selectors the REPORTS_VIEW and
-  // ENTRY_LIST_SEARCH judge scenes gate:
+  // §09 R01 (G3) — a CUSTOM range is a pair of PLAIN DATES, and the Reports builder is now the
+  // ONE place in the GUI that has a range at all. There is no time-of-day, no datetime-local, and
+  // no visual range-picker modal — just two `type="date"` fields whose raw YYYY-MM-DD strings ARE
+  // the range. The requirement's own sentence names both halves ("two date fields in the Reports
+  // builder … the Entries view is week-only and carries no range controls, §12 R09"), so the
+  // recording shows both — the pair that exists and the absence that replaced the retired one:
   //
   //   (A) REPORTS BUILDER — route to Reports, open + New report, pick the Custom… preset (which
   //       reveals #rep-custom-range, hidden until chosen), and TYPE the plain-date pair into
@@ -621,11 +763,12 @@ const RECIPES = {
   //       card paints the grouped run-output under a resolved-range header, so the plain-date
   //       range is shown resolving to real billable lines.
   //
-  //   (B) ENTRIES TOOLBAR — route to Entries (the default day-grouped calendar), pick the
-  //       toolbar's Custom… preset (revealing #el-custom-range), and TYPE the plain-date pair
-  //       into #el-range-from / #el-range-to (2026-06-23 → 2026-06-23). There is NO Apply
-  //       button — setting both dates drives a LIVE listEntries carrying { fromDate, toDate }
-  //       as raw strings, and the calendar narrows on the spot to the two in-range entries.
+  //   (B) ENTRIES — the retired half, recorded as an absence. The toolbar's range presets and its
+  //       plain-date pair are GONE (#264/#297): the Entries view shows exactly one WEEK, chosen by
+  //       the prev/next steppers and the week picker. The beat ASSERTS on camera that no preset
+  //       segment and no range field exists anywhere in the view — a re-grown range control would
+  //       FAIL this recording rather than be quietly re-recorded — then steps the week back and
+  //       forward so the only range concept the view has is seen moving.
   //
   // The listState fixture serves both surfaces from one page load: the Entries calendar reads
   // its day-grouped snapshot while the Reports builder reads the always-seeded SAVED_REPORTS via
@@ -664,409 +807,322 @@ const RECIPES = {
       );
       await wait(page, 1400);
 
-      // ===== (B) ENTRIES TOOLBAR — the same plain-date pair, applied LIVE (no Apply) =====
-      // The Entries view is now the readonly day-column CALENDAR (the day-grouped list retired),
-      // so wait for its events (.dcol .ev) rather than the old `#entries .day` grouping.
+      // ===== (B) ENTRIES — no range controls at all; the view is one WEEK =====
       await page.click('.nav-item[data-view="entries"]');
       await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
-      await page.evaluate(() => window.__recCaption && window.__recCaption('Entries — Custom… is a plain date pair, applied live (no Apply)'));
-      await wait(page, 700);
-      await page.click('#el-preset-seg .preset[data-preset="custom"]');
-      await page.waitForSelector('#el-custom-range:not([hidden])', { state: 'attached' });
-      await wait(page, 500);
-      await page.fill('#el-range-from', '2026-06-23');
-      await wait(page, 400);
-      await page.fill('#el-range-to', '2026-06-23');
-      await page.waitForFunction(
-        () => window.__LIST_REQ__?.fromDate === '2026-06-23' && window.__LIST_REQ__?.toDate === '2026-06-23',
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Entries has no range controls — it shows exactly one week (§12 R09)'));
+      await wait(page, 900);
+      // The absence, asserted rather than merely framed: no preset segment, no from/to pair, no
+      // date input of any kind — only the week label the steppers and picker move.
+      const rangeChrome = await page.evaluate(() => ({
+        presets: document.querySelectorAll('.view[data-view="entries"] .preset, #el-preset-seg').length,
+        rangeFields: document.querySelectorAll('#el-range-from, #el-range-to').length,
+        dateInputs: document.querySelectorAll('.view[data-view="entries"] input[type="date"]').length,
+        weekLabel: document.getElementById('el-week-label')?.textContent?.trim() ?? '',
+      }));
+      if (rangeChrome.presets || rangeChrome.rangeFields || rangeChrome.dateInputs || !rangeChrome.weekLabel) {
+        throw new Error(`Entries still carries range chrome: ${JSON.stringify(rangeChrome)}`);
+      }
+      await page.evaluate(
+        (label) => window.__recCaption && window.__recCaption(`0 presets, 0 date fields — just the week: ${label}`),
+        rangeChrome.weekLabel,
       );
-      await wait(page, 1600);
+      await wait(page, 1400);
+      // The week itself is the only range the view has — step back to the previous week (last
+      // week's lone 'refactor planning' entry) and forward again.
+      await page.click('#el-prev-week');
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 1);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Prev week — one entry; the week is the range'));
+      await wait(page, 1300);
+      await page.click('#el-next-week');
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 5);
+      await wait(page, 1500);
     },
   },
 
-  // §05 R05 — manual add by DRAG on the unified form's INLINE interval picker (G5/G7, §12 R07/R15).
-  // Drives the REAL renderer end to end: open the Add-entry disclosure — the unified add form mounts
-  // the inline interval picker IN FLOW (window.STP / timepicker.js — month view → single-day
-  // hour-line column, no modal, no Apply) — DRAG the "me" rectangle body (start+stop move together,
-  // 5-min snap) and DRAG the bottom resize edge (stop only, 5-min snap); every drag writes the
-  // picked span LIVE into the authoritative #add-from/#add-to fields (text stays authoritative),
-  // then Save (the SOLE commit) and SHOW the new completed backfill entry appear in the Entries list.
+  // §05 R05 — manual add (backfill) by DRAG, entirely in the window (§12 R07/R16). The add surface
+  // is the week grid itself: the round + button enters select-interval mode, a start handle
+  // follows the cursor at the coarse snap, and a press-drag down a day column sets the interval —
+  // releasing opens the ONE unified form above the grid, seeded with exactly that span. The
+  // recording then drags the pending interval's BOTTOM GRIP to lengthen the stop (only the dragged
+  // edge moves, R06/R23) with the raw Stop field ticking LIVE, types a description, and presses
+  // Save entry — the sole commit over the unchanged `add` IPC — and the new completed backfill
+  // entry appears on the grid.
   //
-  // The add form lives in the Entries view (the GUI default view), under the toolbar's "Add entry"
-  // disclosure; the picker is the SAME shared component the Timer-view/edit paths reuse. The page is
-  // pinned to UTC so the seeded UTC other-entries land on a deterministic local day, and the drag
-  // pixel deltas ride the shared geometry (track = 720px/24h → 0.5px/min): +30px body ≈ +60min,
-  // +15px resize ≈ +30min stop.
-  //
-  // To SHOW the saved entry appear, this recipe scopes a local override of window.stint.add
-  // (exactly like §05 R02 scopes its toggle override): the override records the backfill and
-  // also splices a completed row for the chosen span into the injected snapshot, so the
-  // post-Save load()/getState repaint paints the new entry into the day-grouped list. The
-  // override is set via page.evaluate on THIS page only — no shared fixture or JUDGE scene is
-  // touched, and the renderer's unchanged submit path (fromLocal/toLocal → window.stint.add)
-  // stays the single source of truth.
+  // Thursday 25 is the drag target: pickerState's two seeded entries sit on Wednesday 24, so the
+  // created span owns a clean column and the geometry stays deterministic. The page is pinned to
+  // UTC so those seeded UTC instants are the local wall clock, and the drag deltas ride the grid's
+  // 60px/hour track (90px = 1h30m).
   '§05 R05': {
     page: 'index.html',
     state: pickerState,
     contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-      await page.fill('#add-desc', 'invoice prep');
-      await wait(page, 700);
-      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
-
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('#add-picker .stp-block.me');
-          const r = me.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        });
-
-      const before = await meBox();
-      const grabX = Math.round(before.cx);
-      const grabY = Math.round((before.top + before.bottom) / 2);
-      await page.mouse.move(grabX, grabY);
-      await page.mouse.down();
-      await page.mouse.move(grabX, grabY + 30, { steps: 20 });
-      await page.mouse.up();
-      await wait(page, 700);
-
-      const me2 = await meBox();
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
-      await page.mouse.down();
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 15), { steps: 16 });
-      await page.mouse.up();
+      await page.waitForSelector('.dcol .ev');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Add a past entry by hand — the + on the week grid (§05 R05)'));
+      await wait(page, 900);
+      await dragCreate(page, { day: '2026-06-25', atY: 100, dragPx: 90 });
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Release → the unified form opens above the grid, seeded with the drag'));
       await wait(page, 1200);
 
-      await page.evaluate(() => {
-        window.stint.add = (p) => {
-          window.__ADDED__ = p;
-          const st = window.__STATE__;
-          const fromUtc = new Date(p.fromLocal).toISOString();
-          const toUtc = new Date(p.toLocal).toISOString();
-          const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
-          const day = fromUtc.slice(0, 10);
-          const row = {
-            id: 300,
-            description: p.description || null,
-            clientLabel: [p.client || null, p.project || null].filter(Boolean).join(' / ') || null,
-            startUtc: fromUtc,
-            endUtc: toUtc,
-            billableSeconds: sec,
-            billable: p.billable !== false,
-            overlapped: false,
-            overlapMinutes: 0,
-            overlapRelation: null,
-            sleptThrough: false,
-            excludedSeconds: 0,
-            rawSeconds: sec,
-            tags: Array.isArray(p.tags) ? p.tags.slice() : [],
-          };
-          let block = (st.days ||= []).find((d) => d.day === day);
-          if (!block) {
-            block = { day, entries: [] };
-            st.days.unshift(block);
-          }
-          block.entries.unshift(row);
-          return Promise.resolve(window.__ACK__);
-        };
+      // Lengthen the stop by dragging the pending interval's bottom grip — only the dragged edge
+      // moves, and the raw Stop field is written live (R06/R17/R23).
+      const grip = await page.evaluate(() => {
+        const el = document.querySelector('#entries .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
       });
-
+      await page.mouse.move(grip.x, grip.y, { steps: 14 });
+      await page.mouse.down();
+      await page.mouse.move(grip.x, grip.y + 45, { steps: 18 });
+      await page.mouse.up();
+      const span = await page.evaluate(() => ({
+        start: document.querySelector('.entry-form .edit-start').value,
+        stop: document.querySelector('.entry-form .edit-end').value,
+      }));
+      await page.evaluate(
+        (s) => window.__recCaption && window.__recCaption(`Drag the stop grip — Stop writes live: ${s.stop}`),
+        span,
+      );
       await wait(page, 1200);
 
-      await page.click('#add-go');
-      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
-      await page.waitForSelector('text=invoice prep').catch(() => {});
-      await wait(page, 1500);
+      await page.fill('.entry-form .edit-desc', 'invoice prep');
+      await wait(page, 700);
+      await installAddSplice(page, { id: 300 });
+      await page.click('.entry-form button[type="submit"]');
+      await page.waitForSelector('.entry-form', { state: 'detached' });
+      await page.waitForFunction(() => !!window.__ADDED__);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Save entry — the backfill lands on the grid'));
+      await wait(page, 1800);
     },
   },
 
-  // §12 R07 (core entry, G5/G7) — the GUI MANUAL-ADD surface is the ONE unified entry form in ADD
-  // mode, and the recording shows the R07 beats the requirement gates: (1) opening "Add entry
-  // manually" reveals the two-column unified form (left: multiline description + client/project +
-  // tags + billable; right: the inline interval picker over the collapsed Start/Stop expander);
-  // (2) DRAGGING the picker "me" block sets the span and the raw Start/Stop fields update LIVE
-  // (the picker drives the form state, G7) with other entries gray and the overlap band yellow
-  // (warn-only); (3) clicking "Save entry" is the SOLE commit — the entry saves over the same
-  // `add` path (fromLocal/toLocal → window.stint.add), the new completed backfill row appears in
-  // the Entries list, and — because the span overlaps a seeded entry — the non-blocking overlap
-  // banner paints (§06 R4: warned, not blocked).
+  // §12 R07 (core entry, G5/G7) — the GUI MANUAL-ADD surface is the week grid plus the ONE
+  // unified entry form in ADD mode. There is no toolbar "Add entry" disclosure any more: manual
+  // add lives on the week grid itself, and the recording shows the R07 beats the requirement
+  // gates: (1) at REST the round + sits bottom-right of the grid and its hover expands rightward
+  // into "+ Add entry" without the + glyph moving; (2) a POINTER click enters SELECT-INTERVAL
+  // mode — the + hides, the ephemeral fine-snap toggle takes its spot, and a snapped start handle
+  // with a time pill follows the cursor down a day column; (3) a press-drag and release enters
+  // CREATE mode — the ONE unified form expands ABOVE the grid, the grid grays out, and the form is
+  // BLANK except the dragged interval (the REDUCED field set: 3-line description, client, project
+  // under client, tags, billable, the always-present Start/Stop pair, Save entry / Cancel — and
+  // nothing else); (4) the pending interval stays adjustable — a body drag moves both edges
+  // together, writing both raw fields live; (5) "Save entry" is the SOLE commit over the unchanged
+  // `add` IPC, and because the span overlaps a seeded entry the non-blocking overlap banner paints
+  // (§06 R04: warned, not blocked).
   //
-  // Pinned to timezoneId 'UTC' so the pinned-clock default seed (JUDGE_NOW − 1h → now =
-  // 22:00–23:00 local on 2026-06-24) lands on the same local day as the seeded other-entries,
-  // making the gray/overlap geometry deterministic; initOpts overlap:true makes the post-save
-  // WriteAck carry the overlap warning the inline banner surfaces on camera. As before, a scoped
-  // window.stint.add override splices the saved row into the injected snapshot so it SHOWS on the
-  // repaint, and returns the shared (overlap-carrying) __ACK__ so applyAck() raises the banner;
-  // the override is set on THIS page only — no shared fixture or JUDGE scene is touched, and the
-  // renderer's unchanged submit path stays the single source of truth.
+  // The strip is scrolled to the evening before the gesture so the drag lands across
+  // addFormState's 19:00–20:00 row and the overlap is REAL geometry rather than a claim. Pinned to
+  // timezoneId 'UTC' so those seeded UTC instants are the local wall clock; initOpts overlap:true
+  // makes the post-save WriteAck carry the warning the inline banner surfaces on camera, and the
+  // shared installAddSplice puts the saved row on the grid for the repaint.
   '§12 R07': {
     page: 'index.html',
     state: addFormState,
     initOpts: { overlap: true },
     contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
-      // Wait for the initial load() so `state` (and the picker's snapshotEntries) is populated.
+      // Wait for the initial load() so `state` (and the grid's day columns) is populated.
       await page.waitForSelector('.entry', { state: 'attached' });
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-      await page.waitForSelector('#add-client option[value="1"]', { state: 'attached' });
-      await wait(page, 700);
-
-      await page.fill('#add-desc', 'invoice prep');
-      await page.selectOption('#add-client', { label: 'Globex' });
-      await page.waitForSelector('#add-project:not([disabled]) option[value="21"]', { state: 'attached' });
-      await page.selectOption('#add-project', { label: 'Onboarding' });
-      await page.click('#add-tag-input');
-      await page.fill('#add-tag-input', 'admin');
-      await page.press('#add-tag-input', 'Enter');
-      await wait(page, 700);
-
-      const meBox = () =>
-        page.evaluate(() => {
-          const me = document.querySelector('#add-picker .stp-block.me');
-          const r = me.getBoundingClientRect();
-          return { cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
-        });
-      const before = await meBox();
-      await page.mouse.move(Math.round(before.cx), Math.round(before.cy));
-      await page.mouse.down();
-      await page.mouse.move(Math.round(before.cx), Math.round(before.cy - 40), { steps: 20 });
-      await page.mouse.up();
-      await wait(page, 900);
-
-      // Extend the stop via the bottom resize grip so the span overlaps a seeded entry — the yellow
-      // warn band shows the overlap is warned, not blocked.
-      const me2 = await page.evaluate(() => {
-        const me = document.querySelector('#add-picker .stp-block.me');
-        const r = me.getBoundingClientRect();
-        return { cx: r.left + r.width / 2, bottom: r.bottom };
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Manual add lives on the week grid — the round + (§12 R07)'));
+      // The + expands rightward on hover; the glyph itself does not move.
+      await page.hover('#entries .fab');
+      await page.waitForFunction(() => {
+        const fl = document.querySelector('#entries .fab .fl');
+        return fl && fl.getBoundingClientRect().width > 60;
       });
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1));
-      await page.mouse.down();
-      await page.mouse.move(Math.round(me2.cx), Math.round(me2.bottom - 1 + 20), { steps: 16 });
-      await page.mouse.up();
-      await wait(page, 1200);
-
+      await wait(page, 1100);
+      // Bring the evening into view so the dragged span crosses the seeded 19:00–20:00 entry.
       await page.evaluate(() => {
-        window.stint.add = (p) => {
-          window.__ADDED__ = p;
-          const st = window.__STATE__;
-          const fromUtc = new Date(p.fromLocal).toISOString();
-          const toUtc = new Date(p.toLocal).toISOString();
-          const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
-          const day = fromUtc.slice(0, 10);
-          const row = {
-            id: 301,
-            description: p.description || null,
-            clientLabel: [p.client || null, p.project || null].filter(Boolean).join(' / ') || null,
-            startUtc: fromUtc,
-            endUtc: toUtc,
-            billableSeconds: sec,
-            billable: p.billable !== false,
-            overlapped: true,
-            overlapMinutes: 45,
-            overlapRelation: 'overlaps',
-            sleptThrough: false,
-            excludedSeconds: 0,
-            rawSeconds: sec,
-            tags: Array.isArray(p.tags) ? p.tags.slice() : [],
-          };
-          let block = (st.days ||= []).find((d) => d.day === day);
-          if (!block) {
-            block = { day, entries: [] };
-            st.days.unshift(block);
-          }
-          block.entries.unshift(row);
-          return Promise.resolve(window.__ACK__);
-        };
+        const strip = document.querySelector('.cstrip');
+        if (strip) strip.scrollTop = 17 * 60;
       });
+      await wait(page, 500);
 
-      await page.click('#add-go');
-      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
-      await page.waitForSelector('text=invoice prep').catch(() => {});
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Click + → select-interval: a snapped start handle follows the cursor'));
+      await dragCreate(page, { day: '2026-06-24', atY: 60, dragPx: 120 });
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Release → the reduced form, blank but for the dragged interval; the grid grays'));
+      await wait(page, 1500);
+
+      await page.waitForSelector('.entry-form .edit-client option[value="1"]', { state: 'attached' });
+      await page.fill('.entry-form .edit-desc', 'invoice prep');
+      await page.selectOption('.entry-form .edit-client', { label: 'Globex' });
+      await page.waitForSelector('.entry-form .edit-project:not([disabled]) option[value="21"]', { state: 'attached' });
+      await page.selectOption('.entry-form .edit-project', { label: 'Onboarding' });
+      await page.click('.entry-form .ef-tag-add');
+      await page.fill('.entry-form .ef-tag-add', 'admin');
+      await page.press('.entry-form .ef-tag-add', 'Enter');
+      await wait(page, 800);
+
+      // The pending interval is still adjustable: a body drag carries start and stop together,
+      // both raw fields written live (R07/R17).
+      const me = await page.evaluate(() => {
+        const el = document.querySelector('#entries .ev.me');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      });
+      // Downward, so the committed span genuinely runs across the seeded 19:00–20:00 entry —
+      // the overlap the banner reports is geometry the viewer can see, not a claim.
+      await page.mouse.move(me.x, me.y, { steps: 14 });
+      await page.mouse.down();
+      await page.mouse.move(me.x, me.y + 30, { steps: 16 });
+      await page.mouse.up();
+      const span = await page.evaluate(() => ({
+        start: document.querySelector('.entry-form .edit-start').value,
+        stop: document.querySelector('.entry-form .edit-end').value,
+      }));
+      await page.evaluate(
+        (s) => window.__recCaption && window.__recCaption(`Drag the block — both fields move: ${s.start.slice(11, 16)} – ${s.stop.slice(11, 16)}`),
+        span,
+      );
+      await wait(page, 1300);
+
+      await installAddSplice(page, { id: 301, overlapped: true, overlapMinutes: 45 });
+      await page.click('.entry-form button[type="submit"]');
+      await page.waitForSelector('.entry-form', { state: 'detached' });
+      await page.waitForFunction(() => !!window.__ADDED__);
       await page.waitForSelector('#overlap-banner:not([hidden])').catch(() => {});
-      await wait(page, 1600);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Save entry — overlap is warned inline, never blocked (§06 R04)'));
+      await wait(page, 1800);
     },
   },
 
-  // §12 R15 — the INLINE INTERVAL PICKER itself, the umbrella requirement the §05 R05 / §12 R07
-  // manual-add scenes are special cases of. This recording exercises the picker through ALL THREE
-  // of its sanctioned entry points in one take, plus the durability contract — every one renders IN
-  // FLOW (no modal, no backdrop, no Apply) and writes the picked span LIVE into the authoritative
-  // text fields, with Save entry the sole commit:
+  // §12 R15 — the START-ONLY INTERVAL PICKER. The requirement narrowed to exactly one component:
+  // the running entry's start-adjustment surface in the Timer view, where no week grid exists. It
+  // is NOT the manual-add surface any more (that is the grid, R07) and NOT the closed-entry
+  // editing surface (that is the grid's edge drags plus the raw fields, R06/R17) — its own closing
+  // sentence is "no picker mounts in the Entries view". The recording shows both halves:
   //
-  //   (1) ADD-ENTRY — open the Entries-view Add form; the inline picker is mounted in flow in the
-  //       form's right column. DRAG the accent "me" rectangle body (start+stop move together, 5-min
-  //       snap — the #add-from/#add-to fields tick LIVE as it snaps), DRAG the bottom handle to
-  //       resize the stop; any seeded other-entry on the day paints GRAY and an overlapping span
-  //       paints YELLOW (warn-only). Close the add form (this beat is about the picker).
+  //   (1) THE COMPONENT — the live-edit strip's Start field carries a calendar affordance
+  //       (#le-start-pick) that DISCLOSES the picker inline below the field (#le-start-disc):
+  //       in flow, no modal, no backdrop, no Apply. It opens on the EXACT stored start (never
+  //       snapped on display) and paints a single-day column where the running block carries a
+  //       START grip only, dissolving into the future — no end control anywhere, so amending the
+  //       start can never close the open row (§05 R06). Dragging the grip writes #le-start LIVE,
+  //       the other entries on the day sit gray behind it, and the ephemeral fine-snap toggle sits
+  //       beside the track (the only snap chrome, R23).
   //
-  //   (2) EDIT-CLOSED — click Edit on the closed 'morning sync' row (09:00–11:00); its inline form
-  //       mounts the picker carrying BOTH start+stop. The OTHER closed entry ('market research',
-  //       14:00–15:00) paints gray; drag the bottom handle DOWN to extend the stop past 14:00 so the
-  //       span overlaps it → the yellow warn region paints, written LIVE into the form's .edit-end
-  //       field. Cancel (no commit needed — the requirement is the picker, not the edit).
+  //   (2) THE ABSENCE — routing back to Entries and opening a CLOSED entry's editor, the recipe
+  //       ASSERTS that no `.stp` picker mounted anywhere in the view: the closed entry's span is
+  //       adjusted on the grid itself (its selected block's edge grips) and by the raw Start/Stop
+  //       fields. A picker regrown in the Entries view FAILS the recording rather than being
+  //       quietly re-recorded.
   //
-  //   (3) EDIT-RUNNING-START — route to the Timer view; the live-edit strip's Start field
-  //       (#le-start) calendar affordance DISCLOSES the picker inline SEEDED START-ONLY (the open
-  //       row has no stop, so editing it can never close the timer, §05 R6). Only a thin start
-  //       handle shows — no resize, no stop, the block fading into the future. Drag it to a new
-  //       start; #le-start updates LIVE (no Apply — the text field is the authoritative commit path).
-  //
-  //   (4) OVERNIGHT VIA THE EXPANDER — back in the add form, expand the Start/Stop expander (§12
-  //       R17) and TYPE a span that crosses midnight directly into the raw text fields
-  //       (2026-06-24T22:00 → 2026-06-25T06:00) — the single-day picker's escape hatch and the only
-  //       overnight path — proving TEXT ENTRY REMAINS and stays authoritative.
-  //
-  // The page is pinned to UTC (like the §05 R05 scene) and the state carries a running open entry
-  // (id 99, start 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24, so
-  // the picker's single-day column draws the gray other-entries deterministically for every entry
-  // point. Drag pixel deltas ride the shared geometry (track 720px/24h → 0.5px/min, i.e. 30px/hour).
-  // No write IPC is needed — this scene demonstrates the picker affordance and its LIVE write into
-  // the authoritative text fields; the add/edit submit paths are proven on camera by §05 R05 / §12 R07.
+  // The page is pinned to UTC and the state carries a running open entry (id 99, start
+  // 2026-06-24T12:00) PLUS the two pickerState closed entries, all on 2026-06-24, so the picker's
+  // single-day column draws its gray other-entries deterministically. Its drag deltas ride the
+  // component's own geometry (track 720px/24h → 30px/hour), which is NOT the week grid's 60px/hour
+  // — one reason the two surfaces are recorded separately. No write IPC is scoped: the live write
+  // into the authoritative Start field is the whole subject.
   '§12 R15': {
     page: 'index.html',
     // The shared picker-day snapshot (running open row + the two pickerState closed entries, all
-    // on 2026-06-24), so every entry point's single-day column shows the gray other-entries.
+    // on 2026-06-24), so the disclosure's single-day column shows the gray other-entries.
     state: pickerDayState,
     contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
-      const meBox = (hostSel) =>
-        page.evaluate((sel) => {
-          const me = document.querySelector(`${sel} .stp-block.me`);
-          const r = me.getBoundingClientRect();
-          return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        }, hostSel);
-
-      // ===== (1) ADD-ENTRY — the inline picker, mounted in flow; drag body + resize LIVE =====
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.waitForSelector('#add-picker .stp-block.me', { state: 'attached' });
-      await page.fill('#add-desc', 'invoice prep');
-      await wait(page, 600);
-      await page.locator('#add-picker .stp-block.me').scrollIntoViewIfNeeded();
-
-      const a0 = await meBox('#add-picker');
-      const aGrabX = Math.round(a0.cx);
-      const aGrabY = Math.round((a0.top + a0.bottom) / 2);
-      await page.mouse.move(aGrabX, aGrabY);
-      await page.mouse.down();
-      await page.mouse.move(aGrabX, aGrabY + 30, { steps: 20 });
-      await page.mouse.up();
-      await wait(page, 700);
-
-      const a1 = await meBox('#add-picker');
-      await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1));
-      await page.mouse.down();
-      await page.mouse.move(Math.round(a1.cx), Math.round(a1.bottom - 1 + 15), { steps: 16 });
-      await page.mouse.up();
-      await wait(page, 1300);
-
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
-      await wait(page, 500);
-
-      // ===== (2) EDIT-CLOSED — inline edit a closed row; the picker carries start+stop, overlap =====
-      // Open the inline Edit form on the closed 'morning sync' row (id 1, 09:00–11:00). The unified
-      // editor mounts in the shared view-level host (#entry-form-host), NOT nested in the calendar
-      // event (editor rehost, §12 R06) — so the form + its inline picker are read via the plain
-      // `.edit-form` selector (only one form is open). Hover the event first to reveal its ops.
-      await page.hover('.entry[data-id="1"]');
-      await page.click('.entry[data-id="1"] [data-act="edit"]');
-      await page.waitForSelector('.edit-form.entry-form .edit-picker .stp-block.me', { state: 'attached' });
-      await wait(page, 800);
-      await page.locator('.edit-form .edit-picker .stp-resize').scrollIntoViewIfNeeded();
-      // The OTHER closed entry ('market research' 14:00–15:00) paints gray. Drag the bottom resize
-      // handle DOWN ~+95px (≈ +190min) to extend the stop from 11:00 past 14:00 → the span overlaps
-      // it and the yellow warn-only region paints, written LIVE into the form's .edit-end field.
-      const e1 = await meBox('.edit-form .edit-picker');
-      await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1));
-      await page.mouse.down();
-      await page.mouse.move(Math.round(e1.cx), Math.round(e1.bottom - 1 + 95), { steps: 24 });
-      await page.mouse.up();
-      await wait(page, 1300);
-      await page.click('.edit-form.entry-form .edit-cancel');
-      await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
-      await wait(page, 500);
-
-      // ===== (3) EDIT-RUNNING-START — the INLINE START-ONLY disclosure (§05 R06, no modal) =====
+      // ===== (1) THE START-ONLY DISCLOSURE — in flow, start grip only, live write =====
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('[data-view="timer"]:not([hidden]) #live-edit:not([hidden])');
-      await wait(page, 600);
-      // The running Start field's calendar affordance DISCLOSES the start-only picker inline,
-      // in flow below the field — no modal, no backdrop, no Apply. The open row has NO stop,
-      // so the running block fades into the future with a START grip only — no resize handle,
-      // no end label — editing the open row can never close the timer (§05 R06). (The dedicated
-      // 'running-start-only' recipe below is the §05 R06 QA evidence; this beat keeps the R15
-      // every-surface tour complete.)
+      const seeded = await page.evaluate(() => document.querySelector('#le-start')?.value ?? '');
+      await page.evaluate(
+        (s) => window.__recCaption && window.__recCaption(`The running start, exactly as stored: ${s}`),
+        seeded,
+      );
+      await wait(page, 900);
       await page.click('#le-start-pick');
       await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
-      await wait(page, 900);
-      const grip3 = page.locator('#le-start-disc .stp-grip');
-      await grip3.scrollIntoViewIfNeeded();
-      const r0 = await grip3.boundingBox();
-      const rGrabX = Math.round(r0.x + r0.width / 2);
-      const rGrabY = Math.round(r0.y + r0.height / 2);
-      await page.mouse.move(rGrabX, rGrabY);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('The start-only picker discloses in flow — no modal, no Apply (§12 R15)'));
+      await wait(page, 1100);
+      // No end control exists anywhere in the component — the block simply dissolves into the
+      // future behind its `.open` mask, and the ONE grip is the start's.
+      const shape = await page.evaluate(() => ({
+        block: !!document.querySelector('#le-start-disc .stp-block.me.open'),
+        grips: document.querySelectorAll('#le-start-disc .stp-grip').length,
+        resizeHandles: document.querySelectorAll('#le-start-disc .stp-resize').length,
+        snapCtl: !!document.querySelector('#le-start-disc .stp-snapctl .sw'),
+      }));
+      if (!shape.block || shape.grips !== 1 || shape.resizeHandles !== 0 || !shape.snapCtl) {
+        throw new Error(`start-only picker is not start-only: ${JSON.stringify(shape)}`);
+      }
+      const grip = page.locator('#le-start-disc .stp-grip');
+      await grip.scrollIntoViewIfNeeded();
+      const g0 = await grip.boundingBox();
+      const gx = Math.round(g0.x + g0.width / 2);
+      const gy = Math.round(g0.y + g0.height / 2);
+      await page.mouse.move(gx, gy, { steps: 14 });
       await page.mouse.down();
-      await page.mouse.move(rGrabX, rGrabY - 20, { steps: 16 });
+      await page.mouse.move(gx, gy - 30, { steps: 18 });
       await page.mouse.up();
-      await wait(page, 1000);
+      const dragged = await page.evaluate(() => document.querySelector('#le-start')?.value ?? '');
+      await page.evaluate(
+        (s) => window.__recCaption && window.__recCaption(`Drag the start grip — Start writes live: ${s}`),
+        dragged,
+      );
+      await wait(page, 1400);
       await page.click('#le-start-pick');
       await page.waitForSelector('#le-start-disc[hidden]', { state: 'attached' });
-      await wait(page, 1200);
+      await wait(page, 700);
 
-      // ===== (4) OVERNIGHT VIA THE EXPANDER — text remains authoritative (§12 R17) =====
-      // Back to the Entries view and the Add form; expand the collapsed Start/Stop expander — the
-      // single-day picker's exact/overnight escape hatch — and TYPE a span that crosses midnight
-      // directly into the raw text fields. The typed span is authoritative; the inline picker's
-      // single-day column simply shows the start day.
+      // ===== (2) NO PICKER MOUNTS IN THE ENTRIES VIEW =====
       await page.click('.nav-item[data-view="entries"]');
-      await page.waitForSelector('.view[data-view="entries"]:not([hidden])');
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.fill('#add-desc', 'overnight deploy');
-      await page.click('#add-times-toggle');
-      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
-      await page.fill('#add-from', '2026-06-24T22:00');
-      await page.fill('#add-to', '2026-06-25T06:00');
-      await wait(page, 800);
-      const overnightHandled = await page.evaluate(
-        () => !document.querySelector('.stp-backdrop') && document.querySelector('#add-to')?.value === '2026-06-25T06:00',
-      );
-      if (!overnightHandled) {
-        throw new Error('overnight span not preserved via the Start/Stop expander (text should stay authoritative)');
+      await page.waitForSelector('.view[data-view="entries"]:not([hidden]) .dcol .ev');
+      await page.hover('.entry[data-id="1"]');
+      await page.click('.entry[data-id="1"] [data-act="edit"]');
+      await page.waitForSelector('.entry-form[data-mode="edit"]', { state: 'attached' });
+      await page.waitForSelector('#entries .ev.me .grip', { state: 'attached' });
+      const entriesPickers = await page.evaluate(() => ({
+        pickers: document.querySelectorAll('.view[data-view="entries"] .stp').length,
+        gridGrips: document.querySelectorAll('#entries .ev.me .grip').length,
+        rawFields: document.querySelectorAll('.entry-form .uf-time').length,
+      }));
+      if (entriesPickers.pickers || entriesPickers.gridGrips !== 2 || entriesPickers.rawFields !== 2) {
+        throw new Error(`Entries should adjust spans on the grid, not a picker: ${JSON.stringify(entriesPickers)}`);
       }
-      await wait(page, 1600);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Entries mounts NO picker — a closed span drags on the grid, or is typed'));
+      await wait(page, 1800);
     },
   },
 
-  // V3 (design.html D11) — the picker "me" BLOCK close-up. The divergence resolved to the MOCK's
-  // idiom: the block a user drags is an accent OUTLINE over a WEAK accent fill with INK labels and
-  // full-strength accent GRIPS — never the retired solid-accent slab. The rule behind it is accent
+  // V3 (design.html D11) — the "me" BLOCK close-up. The divergence resolved to the MOCK's idiom:
+  // the block a user drags is an accent OUTLINE over a WEAK accent fill with INK labels and
+  // accent-bordered paper GRIPS — never the retired solid-accent slab. The rule behind it is accent
   // discipline: a solid accent fill marks a view's one primary ACTION, and a time span is data, not
   // an action; the weak fill also keeps the block's own labels readable in ink (a white label on
   // accent-weak would fail the text floor outright).
   //
-  // The close-up opens the unified editor on the closed 'morning sync' row (09:00–11:00) and works
-  // its inline picker: drag the block BODY down (start and stop move together on the 5-min snap)
-  // and then the bottom accent GRIP (only the stop moves), with the form's Start/Stop text fields
-  // updating LIVE on every step — the captions echo the actual field values, so the live write is
-  // legible rather than asserted off-camera. It then ends on the RUNNING variant, which is cheap
-  // from this fixture: the Timer view's start-only disclosure paints the same idiom with no end
-  // edge at all — the block dissolves into the future behind its mask and offers a start grip
-  // alone (§05 R06: editing an open row can never close it).
+  // The block's home moved with the transition: the pending/selected interval now paints on the
+  // WEEK GRID itself (paintPendingOverlay's `.ev.me`), not inside a form-mounted picker. So the
+  // close-up opens the unified editor on the closed 'morning sync' row (09:00–11:00) — whose stored
+  // segments are replaced on the grid by the accent-outlined pending block — and works it there:
+  // drag the block BODY down (start and stop move together on the coarse snap) and then the bottom
+  // accent GRIP (only the stop moves), with the form's Start/Stop text fields updating LIVE on
+  // every step — the captions echo the actual field values, so the live write is legible rather
+  // than asserted off-camera. It then ends on the RUNNING variant, which is cheap from this
+  // fixture: the Timer view's start-only disclosure paints the same idiom with no end edge at all —
+  // the block dissolves into the future behind its mask and offers a start grip alone (§05 R06:
+  // editing an open row can never close it).
   //
   // Computed oracles ride along at both ends, resolved against the live tokens (never a hardcoded
   // hex), so a regression to the solid-accent slab FAILS the recording: the block's fill must be
-  // accent-weak (not accent-solid), its border the full accent, its labels ink; the running block
-  // must carry the `.open` mask class and expose NO resize grip. No write IPC is scoped — the
-  // picker's live write into the authoritative text fields is the whole subject, and the add/edit
-  // commit paths are proven on camera by §05 R05 / §12 R07.
+  // accent-weak (not accent-solid), its border the full accent, its time pills ink; the running
+  // block must carry the `.open` mask class and expose NO resize grip. No write IPC is scoped —
+  // the live write into the authoritative text fields is the whole subject, and the add/edit commit
+  // paths are proven on camera by §05 R05 / §12 R07.
   'V3': {
     page: 'index.html',
     state: pickerDayState,
@@ -1075,23 +1131,29 @@ const RECIPES = {
       const times = () =>
         page.evaluate(() => {
           const v = (sel) => document.querySelector(sel)?.value || '';
-          return { start: v('.edit-form .edit-start').slice(11, 16), end: v('.edit-form .edit-end').slice(11, 16) };
+          return { start: v('.entry-form .edit-start').slice(11, 16), end: v('.entry-form .edit-end').slice(11, 16) };
         });
-      const meBox = (hostSel) =>
-        page.evaluate((sel) => {
-          const r = document.querySelector(`${sel} .stp-block.me`).getBoundingClientRect();
+      // Centre the block in the scrollport before measuring it. Its rect is in viewport space
+      // whether or not the strip is showing it, so a clipped block hands back coordinates that
+      // land above the grid and the drag does nothing (issue #323, when the head band shortened
+      // the visible grid). A take whose subject is off-screen is also a take nobody can read.
+      const meBox = () =>
+        page.evaluate(() => {
+          const me = document.querySelector('#entries .ev.me');
+          me.scrollIntoView({ block: 'center' });
+          const r = me.getBoundingClientRect();
           return { top: r.top, bottom: r.bottom, cx: r.left + r.width / 2 };
-        }, hostSel);
+        });
 
-      // ===== The EDIT picker: the block is an outline over a weak fill, with ink labels =====
+      // ===== The GRID block: an outline over a weak fill, with ink time pills =====
       await page.waitForSelector('.entry[data-id="1"]');
       await page.hover('.entry[data-id="1"]');
       await page.click('.entry[data-id="1"] [data-act="edit"]');
-      await page.waitForSelector('.edit-form.entry-form .edit-picker .stp-block.me', { state: 'attached' });
-      await page.locator('.edit-form .edit-picker .stp-block.me').scrollIntoViewIfNeeded();
+      await page.waitForSelector('.entry-form[data-mode="edit"]', { state: 'attached' });
+      await page.waitForSelector('#entries .ev.me .grip.b', { state: 'attached' });
       await page.evaluate(() =>
         window.__recCaption &&
-        window.__recCaption('The picked span: an accent OUTLINE over a weak fill, ink labels (V3 / D11)'));
+        window.__recCaption('The selected span: an accent OUTLINE over a weak fill, ink pills (V3 / D11)'));
       await wait(page, 1500);
 
       const blockFacts = await page.evaluate(() => {
@@ -1103,15 +1165,15 @@ const RECIPES = {
           p.remove();
           return c;
         };
-        const me = document.querySelector('.edit-form .edit-picker .stp-block.me');
+        const me = document.querySelector('#entries .ev.me');
         const cs = getComputedStyle(me);
-        const lab = me.querySelector('.stp-lab-top');
-        const grip = me.querySelector('.stp-resize i');
+        const lab = me.parentElement.querySelector('.tlabel');
+        const grip = me.querySelector('.grip.b');
         return {
           fill: cs.backgroundColor,
           border: cs.borderTopColor,
           label: lab ? getComputedStyle(lab).color : '',
-          grip: grip ? getComputedStyle(grip).backgroundColor : '',
+          grip: grip ? getComputedStyle(grip).borderTopColor : '',
           accent: resolve('--accent'),
           accentSolid: resolve('--accent-solid'),
           accentWeak: resolve('--accent-weak'),
@@ -1127,21 +1189,21 @@ const RECIPES = {
         throw new Error(`V3: the "me" block outline is ${blockFacts.border}, expected accent ${blockFacts.accent}`);
       }
       if (blockFacts.label !== blockFacts.ink) {
-        throw new Error(`V3: the "me" block label is ${blockFacts.label}, expected ink ${blockFacts.ink}`);
+        throw new Error(`V3: the time pill is ${blockFacts.label}, expected ink ${blockFacts.ink}`);
       }
       if (blockFacts.grip !== blockFacts.accent) {
-        throw new Error(`V3: the resize grip is ${blockFacts.grip}, expected accent ${blockFacts.accent}`);
+        throw new Error(`V3: the edge grip's border is ${blockFacts.grip}, expected accent ${blockFacts.accent}`);
       }
 
-      // DRAG THE BODY down +20px (≈ +40min on the 30px/hour track, 5-min snap) — start and stop
-      // move TOGETHER and both text fields tick live.
+      // DRAG THE BODY down +45px (≈ +45min on the grid's 60px/hour track, coarse snap) — start and
+      // stop move TOGETHER and both text fields tick live.
       const t0 = await times();
-      const b0 = await meBox('.edit-form .edit-picker');
+      const b0 = await meBox();
       const bx = Math.round(b0.cx);
       const by = Math.round((b0.top + b0.bottom) / 2);
-      await page.mouse.move(bx, by);
+      await page.mouse.move(bx, by, { steps: 14 });
       await page.mouse.down();
-      await page.mouse.move(bx, by + 20, { steps: 20 });
+      await page.mouse.move(bx, by + 45, { steps: 20 });
       await page.mouse.up();
       await wait(page, 500);
       const t1 = await times();
@@ -1156,10 +1218,15 @@ const RECIPES = {
       );
       await wait(page, 1300);
 
-      const b1 = await meBox('.edit-form .edit-picker');
-      await page.mouse.move(Math.round(b1.cx), Math.round(b1.bottom - 1));
+      const g1 = await page.evaluate(() => {
+        const el = document.querySelector('#entries .ev.me .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      });
+      await page.mouse.move(g1.x, g1.y, { steps: 12 });
       await page.mouse.down();
-      await page.mouse.move(Math.round(b1.cx), Math.round(b1.bottom - 1 + 15), { steps: 16 });
+      await page.mouse.move(g1.x, g1.y + 30, { steps: 16 });
       await page.mouse.up();
       await wait(page, 500);
       const t2 = await times();
@@ -1173,8 +1240,7 @@ const RECIPES = {
         `The accent grip resizes the stop alone — ${t1.end} → ${t2.end}`,
       );
       await wait(page, 1500);
-      await page.click('.edit-form.entry-form .edit-cancel');
-      await page.waitForSelector('.edit-form.entry-form', { state: 'detached' });
+      await cancelForm(page, '.entry-form');
       await wait(page, 500);
 
       // ===== The RUNNING variant: the same idiom with no end edge (§05 R06) =====
@@ -1209,75 +1275,86 @@ const RECIPES = {
     },
   },
 
-  // §12 R17 (core entry) — the unified form's collapsed Start/Stop EXPANDER: the exact-entry escape
-  // hatch and the ONLY path for an OVERNIGHT span. The recording opens the unified add form, EXPANDS
-  // the collapsed Start/Stop expander (its raw text fields hidden until then), and TYPES a span that
-  // crosses midnight (2026-06-24T22:00 → 2026-06-25T02:00) directly into the raw fields; the inline
-  // picker column reflects the typed START and its collapsed echo reflects the cross-midnight span
-  // ("22:00 – 02:00") while the raw stop keeps the next-day value verbatim (text authoritative,
-  // never flattened to same-day). "Save entry" is the sole commit — the overnight backfill PERSISTS
-  // over the unchanged `add` IPC and appears on the Entries repaint.
+  // §12 R17 (core entry) — EXACT TIME ENTRY. The unified form's Start and Stop fields are raw text
+  // fields, always present in the form (the collapsed Start/Stop expander is retired): the
+  // exact-entry escape hatch — type a precise instant rather than drag — and the ONLY path for an
+  // OVERNIGHT span. The recording opens the add form by the KEYBOARD path (activating the + with
+  // Enter seeds the working-hours default and leaves focus in the form, so the whole scene is
+  // typed), then TYPES a span crossing midnight (2026-06-24 22:00:00 → 2026-06-25 02:00:00)
+  // straight into the fields.
   //
-  // Pinned to UTC (like §05 R05 / §12 R07) so the typed instants land on deterministic local days; a
-  // scoped window.stint.add override splices the saved overnight row into the injected snapshot so it
-  // SHOWS on the repaint, leaving the renderer's unchanged submit path the single source of truth.
+  // The payoff is that fields and grid drive the SAME form values: the typed stop repaints the
+  // pending interval as TWO segments — a seg-start running from 22:00 to Wednesday's foot and a
+  // seg-end from Thursday's head down to 02:00 — never a flattened same-day sliver, while the
+  // field keeps the next-day text verbatim. The recipe asserts both segments landed before the
+  // payoff beat, so a stop silently flattened to same-day FAILS the recording. "Save entry" is the
+  // sole commit and the overnight backfill appears on the repaint, spanning both columns.
+  //
+  // Pinned to UTC (like §05 R05 / §12 R07) so the typed instants land on deterministic local days;
+  // the shared installAddSplice puts the saved row on the grid, leaving the renderer's unchanged
+  // submit path the single source of truth.
   '§12 R17': {
     page: 'index.html',
     state: addFormState,
     contextOpts: { timezoneId: 'UTC' },
     drive: async (page) => {
       await page.waitForSelector('.entry', { state: 'attached' });
-      await page.click('#add-toggle');
-      await page.waitForSelector('#add-form:not([hidden])', { state: 'attached' });
-      await page.waitForSelector('#add-picker .stp-echo', { state: 'attached' });
-      await page.fill('#add-desc', 'overnight deploy');
-      await wait(page, 700);
-      await page.click('#add-times-toggle');
-      await page.waitForSelector('#add-times-body:not([hidden])', { state: 'attached' });
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Exact time entry: the form\'s raw Start/Stop fields (§12 R17)'));
+      await wait(page, 900);
+      // The keyboard path: activating the + opens the form directly on the working-hours default.
+      await page.focus('#entries .fab');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.entry-form[data-mode="add"]', { state: 'attached' });
+      await page.waitForSelector('#entries .ev.me', { state: 'attached' });
+      await wait(page, 900);
+
+      await page.fill('.entry-form .edit-desc', 'overnight deploy');
+      await page.fill('.entry-form .edit-start', '2026-06-24 22:00:00');
       await wait(page, 600);
-      await page.fill('#add-from', '2026-06-24T22:00');
-      await page.fill('#add-to', '2026-06-25T02:00');
-      await page.waitForFunction(
-        () => document.querySelector('#add-picker .stp-echo')?.textContent.trim() === '22:00 – 02:00',
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Type a stop on the NEXT day — the only overnight path'));
+      await page.fill('.entry-form .edit-end', '2026-06-25 02:00:00');
+      // Fields and grid drive the same values: the typed overnight span repaints as one segment
+      // per shown day, never a same-day sliver.
+      await page.waitForFunction(() => document.querySelectorAll('#entries .ev.me').length === 2);
+      const segs = await page.evaluate(() =>
+        [...document.querySelectorAll('#entries .ev.me')].map((m) => ({
+          day: m.parentElement.dataset.day,
+          part: /seg-start/.test(m.className) ? 'seg-start' : /seg-end/.test(m.className) ? 'seg-end' : 'other',
+        })),
       );
-      await wait(page, 1400);
-      await page.evaluate(() => {
-        window.stint.add = (p) => {
-          window.__ADDED__ = p;
-          const st = window.__STATE__;
-          const fromUtc = new Date(p.fromLocal).toISOString();
-          const toUtc = new Date(p.toLocal).toISOString();
-          const sec = Math.max(0, Math.round((Date.parse(toUtc) - Date.parse(fromUtc)) / 1000));
-          const day = fromUtc.slice(0, 10);
-          const row = {
-            id: 320,
-            description: p.description || null,
-            clientLabel: null,
-            startUtc: fromUtc,
-            endUtc: toUtc,
-            billableSeconds: sec,
-            billable: p.billable !== false,
-            overlapped: false,
-            overlapMinutes: 0,
-            overlapRelation: null,
-            sleptThrough: false,
-            excludedSeconds: 0,
-            rawSeconds: sec,
-            tags: [],
-          };
-          let block = (st.days ||= []).find((d) => d.day === day);
-          if (!block) {
-            block = { day, entries: [] };
-            st.days.unshift(block);
-          }
-          block.entries.unshift(row);
-          return Promise.resolve(window.__ACK__);
-        };
-      });
-      await page.click('#add-go');
-      await page.waitForSelector('#add-form[hidden]', { state: 'attached' });
-      await page.waitForSelector('text=overnight deploy').catch(() => {});
-      await wait(page, 1500);
+      const spansMidnight =
+        segs.some((s) => s.day === '2026-06-24' && s.part === 'seg-start') &&
+        segs.some((s) => s.day === '2026-06-25' && s.part === 'seg-end');
+      if (!spansMidnight) {
+        throw new Error(`typed overnight span did not paint one segment per day: ${JSON.stringify(segs)}`);
+      }
+      // A midnight-crossing span sits at OPPOSITE ends of the 24h track — the start day's foot
+      // and the next day's head — so the two segments can never share one viewport. Scroll to
+      // each in turn rather than caption a payoff the camera cannot see.
+      const scrollStrip = (to) =>
+        page.evaluate((t) => {
+          const s = document.querySelector('.cstrip');
+          if (s) s.scrollTop = t === 'bottom' ? s.scrollHeight : 0;
+        }, to);
+      await scrollStrip('bottom');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Wednesday: the span runs from 22:00 down to the column\'s foot'));
+      await wait(page, 1700);
+      await scrollStrip('top');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Thursday: it continues from the head down to 02:00 — one entry, two segments'));
+      await wait(page, 1700);
+
+      await installAddSplice(page, { id: 320 });
+      await page.click('.entry-form button[type="submit"]');
+      await page.waitForSelector('.entry-form', { state: 'detached' });
+      await page.waitForFunction(() => window.__ADDED__?.toLocal === '2026-06-25 02:00:00');
+      await scrollStrip('bottom');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Save entry — the overnight backfill persists, counted under its start day'));
+      await wait(page, 1900);
     },
   },
 
@@ -1622,27 +1699,43 @@ const RECIPES = {
     },
   },
 
-  // §12 R16 — the readonly entries CALENDAR. Over a whole week of day columns (each with its
-  // per-day billable header total, plus the range chip), the recording: scrolls the strip
-  // HORIZONTALLY across the columns (the week does not fit at this window — the columns hold
-  // their comfortable floor width); scrolls the 24h track VERTICALLY to reveal the off-hours
-  // entries (scroll, never clip — every hour is reachable though the viewport opens on working
-  // hours); and hovers an event to reveal its Delete / Split / Edit ops + the corner checkbox. The
-  // empty days sit as present-but-empty columns throughout.
+  // §12 R16 — the entries CALENDAR (week grid). Over a whole week of day columns — each carrying
+  // its per-day billable header total, and no range chip anywhere (retracted by #295: the day
+  // headers and the grid ARE the reflection surface) — the recording: shows the shown week filling
+  // the view width with NO horizontal scroll (§12 R22, asserted on camera rather than framed);
+  // scrolls the 24h track VERTICALLY to reveal the off-hours entries (scroll, never clip — every
+  // hour is reachable though the viewport opens on working hours); and hovers an event to reveal
+  // its Delete / Split / Edit ops + the corner checkbox. The empty days sit as present-but-empty
+  // columns throughout, and Wednesday wears the today ring.
   '§12 R16': {
     page: 'index.html',
     state: entriesCalendarState,
     drive: async (page) => {
       await page.waitForSelector('.dcol .ev');
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Entries — a readonly week calendar (§12 R16)'));
+        window.__recCaption && window.__recCaption('Entries — the week grid (§12 R16)'));
       await wait(page, 1100);
-      await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Fixed-width day columns, per-day totals + a range chip'));
-      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = s.scrollWidth; });
-      await wait(page, 900);
-      await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollLeft = 0; });
-      await wait(page, 800);
+      // The horizontal-scroll beat this recipe used to open on is now a FACT to deny: the week
+      // fits, so a re-grown floor width would fail here instead of scrolling past the camera.
+      const fit = await page.evaluate(() => {
+        const strip = document.querySelector('.cstrip');
+        return {
+          overflow: strip.scrollWidth - strip.clientWidth,
+          columns: document.querySelectorAll('#entries .dcol').length,
+          totals: [...document.querySelectorAll('#entries .dcol .dh .ds')].map((t) => t.textContent),
+          today: document.querySelectorAll('#entries .dcol .dh .dd.today').length,
+          chips: document.querySelectorAll('#week-total').length,
+        };
+      });
+      if (fit.overflow > 1 || fit.chips) {
+        throw new Error(`the week grid should fit with no range chip: ${JSON.stringify(fit)}`);
+      }
+      await page.evaluate(
+        (f) => window.__recCaption && window.__recCaption(
+          `${f.columns} equal columns filling the view, no horizontal scroll — totals in the headers`),
+        fit,
+      );
+      await wait(page, 1400);
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('The 24h track scrolls — off-hours entries stay reachable, never clipped'));
       await page.evaluate(() => { const s = document.querySelector('.cstrip'); if (s) s.scrollTop = 0; });
@@ -1653,98 +1746,202 @@ const RECIPES = {
       await page.hover('.entry[data-id="7"]').catch(() => {});
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Hover an event → Delete / Split / Edit + a corner checkbox'));
-      await wait(page, 1300);
+      await wait(page, 1500);
     },
   },
 
-  // §12 R09 (issue #55) — EVERY Entries-toolbar control narrows the calendar LIVE, with the
-  // range chip (#week-total) tracking each selection. Recorded over the multi-week, multi-
-  // client, mixed-billable listState fixture (7 entries: this week 5.00h billable + a non-
-  // billable lunch, last week 2.00h, last month 1.00h — all-time 8.00h) so "filtered" is
-  // visibly different from "shows everything" (the exact blindness that let the dead toolbar
-  // ship). The recording drives, in turn: the idle default (the chip reads the WEEK-BOUNDED
-  // 5.00h, not the all-time 8.00h — issue #55 Part B), the search box (range + search compose:
-  // last week's 'refactor planning' stays excluded), each range preset, the billable toggle,
-  // the client + project filters, and the tag filter — each visibly moving the event set AND
-  // the chip. Every query rides the strict listEntries mock (rejects a missing `by` exactly
-  // like core), so the flow on camera is also the no-query-throws proof. Mirrors the hardened
-  // ENTRIES_CALENDAR / LIVE_FILTER judge scenes; same fixture, same selectors.
+  // §12 R22 (with §12 R09) — THE WEEK-ONLY ENTRIES VIEW, and the fit-to-width grid that came with
+  // it. The retired view had range presets, a floor column width and a horizontal scrollbar; this
+  // one shows exactly one week whose day columns SHARE THE VIEW WIDTH EQUALLY at every window size
+  // and every column count. The recording drives the four affordances that make the week navigable
+  // and shows the fit surviving each of them:
+  //
+  //   (1) FIT — five equal columns filling the strip with no horizontal overflow, and TODAY marked
+  //       on the grid (the ink ring on Wednesday's date numeral, distinct from selection).
+  //   (2) THE WEEK PICKER — the month calendar beside the grid: entry-dot days, its own today ring,
+  //       and the selected week highlighted as ONE unit. Clicking any day selects that day's whole
+  //       week and the grid follows.
+  //   (3) THE STEPPERS — prev/next move by exactly seven days, weekend visibility notwithstanding.
+  //   (4) THE WEEKEND TOGGLE — flipping it persists show_weekend over the same setSetting IPC the
+  //       Settings control uses and repaints SEVEN columns; the grid still fits, because equal
+  //       shares of the width is the rule, not a five-column coincidence.
+  //
+  // The overflow is measured at every count, so a re-grown floor width fails the recording rather
+  // than scrolling quietly past the camera. entriesCalendarState is the CALENDAR_LAYOUT judge
+  // scene's own fixture (today on Wed 24, an empty Thursday, a Friday span reaching into the
+  // hidden weekend), pinned to UTC so its instants are the local wall clock.
+  '§12 R22': {
+    page: 'index.html',
+    state: entriesCalendarState,
+    contextOpts: { timezoneId: 'UTC' },
+    drive: async (page) => {
+      // Overflow at the current column count — the fact the whole recipe re-checks.
+      const fit = () =>
+        page.evaluate(() => {
+          const strip = document.querySelector('.cstrip');
+          const cols = [...document.querySelectorAll('#entries .dcol')];
+          const widths = cols.map((c) => Math.round(c.getBoundingClientRect().width));
+          return {
+            columns: cols.length,
+            overflow: strip.scrollWidth - strip.clientWidth,
+            spread: widths.length ? Math.max(...widths) - Math.min(...widths) : 0,
+            width: widths[0] ?? 0,
+            label: document.getElementById('el-week-label')?.textContent?.trim() ?? '',
+          };
+        });
+      const requireFit = async (where) => {
+        const f = await fit();
+        // 1px of slack for sub-pixel column rounding; anything more is a real scrollbar.
+        if (f.overflow > 1 || f.spread > 1) {
+          throw new Error(`${where}: the week grid no longer fits its view — ${JSON.stringify(f)}`);
+        }
+        return f;
+      };
+
+      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length > 0);
+      const weekdays = await requireFit('weekdays');
+      await page.evaluate(
+        (f) => window.__recCaption && window.__recCaption(
+          `${f.label} — ${f.columns} equal ${f.width}px columns, zero horizontal scroll (§12 R22)`),
+        weekdays,
+      );
+      await wait(page, 1500);
+      // Today is marked ON THE GRID (the header ring), not merely selected.
+      const today = await page.evaluate(() => ({
+        grid: document.querySelector('#entries .dcol .dh .dd.today')?.textContent ?? '',
+        picker: document.querySelector('#week-picker .d.today')?.textContent?.trim() ?? '',
+        dots: document.querySelectorAll('#week-picker .edot').length,
+        band: document.querySelectorAll('#week-picker .d.ws').length,
+      }));
+      if (!today.grid || !today.picker || today.band !== 7) {
+        throw new Error(`today/selection indicators missing: ${JSON.stringify(today)}`);
+      }
+      await page.evaluate(
+        (t) => window.__recCaption && window.__recCaption(
+          `Today ringed on the grid and in the picker (${t.grid}); the selected week is one lifted band`),
+        today,
+      );
+      await wait(page, 1500);
+
+      // (2) THE WEEK PICKER — click a day in the previous week; the whole week follows.
+      await page.click('#week-picker .d[data-day="2026-06-17"]');
+      await page.waitForFunction(() => document.getElementById('el-week-label')?.textContent?.includes('Jun 15'));
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Click any day in the picker → that day\'s whole week'));
+      await requireFit('picker-selected week');
+      await wait(page, 1400);
+
+      // (3) THE STEPPERS — seven days at a time, back to the current week.
+      await page.click('#el-next-week');
+      await page.waitForFunction(() => document.getElementById('el-week-label')?.textContent?.includes('Jun 22'));
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Prev / next step the week by exactly seven days'));
+      await wait(page, 1300);
+
+      // (4) THE WEEKEND TOGGLE — seven columns, still sharing the width equally.
+      await page.click('#el-weekend');
+      await page.waitForFunction(() => document.querySelectorAll('#entries .dcol').length === 7);
+      const weekend = await requireFit('weekend shown');
+      await page.evaluate(
+        (f) => window.__recCaption && window.__recCaption(
+          `Show weekend → ${f.columns} columns at ${f.width}px each, still no horizontal scroll`),
+        weekend,
+      );
+      await wait(page, 1700);
+      await page.click('#el-weekend');
+      await page.waitForFunction(() => document.querySelectorAll('#entries .dcol').length === 5);
+      const back = await requireFit('weekend hidden again');
+      await page.evaluate(
+        (f) => window.__recCaption && window.__recCaption(
+          `Off again — back to ${f.columns} columns, the width shared out between them`),
+        back,
+      );
+      await wait(page, 1600);
+    },
+  },
+
+  // §12 R09 (issue #55) — the Entries WEEK, its filters and its search. The view shows exactly one
+  // week and has no range concept: the retired range presets and the retired range-total chip are
+  // both gone (#264/#295/#297), so the week is chosen by the prev/next steppers or the week picker
+  // and the per-day header totals are the reflection surface every filter moves.
+  //
+  // Recorded over the multi-week, multi-client, mixed-billable listState fixture (7 entries: this
+  // week 5 — four billable plus a non-billable lunch — last week 1, last month 1) so "filtered" is
+  // visibly different from "shows everything" (the exact blindness that let the dead toolbar ship).
+  // The recording drives, in turn: the idle week, the search box (range + search compose — last
+  // week's 'refactor planning' stays excluded even though it matches), the billable toggle, the
+  // client + project filters, the tag filter, and finally the week steppers, each visibly moving
+  // the event set. Every query rides the strict listEntries mock (rejects a missing `by` exactly
+  // like core), so the flow on camera is also the no-query-throws proof, closed out by the wire
+  // verdict. Mirrors the hardened ENTRIES_CALENDAR / LIVE_FILTER judge scenes; same fixture, same
+  // selectors.
   '§12 R09': {
     page: 'index.html',
     state: listState,
     drive: async (page) => {
       const settle = (n) =>
         page.waitForFunction((c) => document.querySelectorAll('.dcol .ev').length === c, n);
-      await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 7);
+      await settle(5);
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Entries toolbar — every control filters the calendar live (§12 R09)'));
+        window.__recCaption && window.__recCaption('Entries — one week, filtered live (§12 R09)'));
       await wait(page, 1100);
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Idle: 7 entries across 3 weeks — "This week" chip reads the week-bounded 5.00h'));
+        window.__recCaption && window.__recCaption('Idle: this week\'s 5 entries; the day headers carry the totals'));
       await wait(page, 1200);
 
       await page.fill('#search', 'refactor');
       await settle(2);
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Search "refactor" → 2 in-week matches, chip 3.50h (range + search compose)'));
+        window.__recCaption && window.__recCaption('Search "refactor" → 2 in-week matches; last week\'s stays out (week + search compose)'));
       await wait(page, 1400);
       await page.fill('#search', '');
-      await settle(7);
-
-      await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Range presets — This month: 6 entries, 7.00h'));
-      await page.click('#el-preset-seg .preset[data-preset="month"]');
-      await settle(6);
-      await wait(page, 1100);
-      await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Last week: 1 entry, 2.00h'));
-      await page.click('#el-preset-seg .preset[data-preset="last-week"]');
-      await settle(1);
-      await wait(page, 1100);
-      await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Today: 3 entries, 3.00h'));
-      await page.click('#el-preset-seg .preset[data-preset="today"]');
-      await settle(3);
-      await wait(page, 1100);
-      await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('This week: 5 entries, 5.00h'));
-      await page.click('#el-preset-seg .preset[data-preset="week"]');
       await settle(5);
-      await wait(page, 1100);
 
       await page.evaluate(() =>
         window.__recCaption && window.__recCaption('Billable: 4 entries — the non-billable lunch drops out'));
       await page.click('#el-billable-seg .seg-btn[data-billable="billable"]');
       await settle(4);
-      await wait(page, 1100);
+      await wait(page, 1200);
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Non-billable: only the lunch, chip 0.00h'));
+        window.__recCaption && window.__recCaption('Non-billable: only the lunch'));
       await page.click('#el-billable-seg .seg-btn[data-billable="non-billable"]');
       await settle(1);
-      await wait(page, 1100);
+      await wait(page, 1200);
       await page.click('#el-billable-seg .seg-btn[data-billable="all"]');
       await settle(5);
 
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Client Acme: 3 entries, 2.50h'));
+        window.__recCaption && window.__recCaption('Client Acme: 3 entries'));
       await page.waitForSelector('#el-client option[value="1"]', { state: 'attached' });
       await page.selectOption('#el-client', '1');
       await settle(3);
-      await wait(page, 1100);
+      await wait(page, 1200);
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Project API: 1 entry, 2.00h'));
+        window.__recCaption && window.__recCaption('Project API: 1 entry'));
       await page.waitForSelector('#el-project option[value="11"]', { state: 'attached' });
       await page.selectOption('#el-project', '11');
       await settle(1);
-      await wait(page, 1100);
+      await wait(page, 1200);
       await page.selectOption('#el-client', '');
       await settle(5);
 
       await page.evaluate(() =>
-        window.__recCaption && window.__recCaption('Tag "ci": 2 entries, 2.50h'));
+        window.__recCaption && window.__recCaption('Tag "ci": 2 entries'));
       await page.fill('#el-tag', 'ci');
       await settle(2);
       await wait(page, 1300);
+      await page.fill('#el-tag', '');
+      await settle(5);
+
+      // The week steppers are the only range control left, and they compose with the filters:
+      // stepping back with the search still on shows last week's lone 'refactor planning'.
+      await page.fill('#search', 'refactor');
+      await settle(2);
+      await page.click('#el-prev-week');
+      await settle(1);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Prev week, search still on — last week\'s "refactor planning" alone'));
+      await wait(page, 1400);
 
       const wire = await page.evaluate(() => ({
         errors: window.__LIST_ERRORS__ || 0,
@@ -1769,20 +1966,21 @@ const RECIPES = {
   //       reachable — the same z-index reveal the judge relies on.)
   //   (2) CLICKs Edit → the ONE unified entry form opens in EDIT MODE in the shared view-level host
   //       (#entry-form-host, in flow, no modal/backdrop), seeded from every tt-editable field
-  //       (multiline description, client/project, tag chips, billable, the Start/Stop expander) —
-  //       the identical add-mode form, now in edit mode (§12 R06); the edited event carries .editing.
+  //       (multiline description, client/project, tag chips, billable, the always-present raw
+  //       Start/Stop pair) — the identical add-mode form, now in edit mode (§12 R06).
   //   (3) exercises §06 R01's confirm gate in the edit-mode footer: the first Delete click ARMS a
   //       worded confirm (nothing removed yet), the explicit confirm then fires window.stint.remove
   //       with the entry id and the event LEAVES the calendar on the repaint. No scoped override is
   //       needed — the shared initScript remove mock splices the row and reloads (as the judge's
   //       CONFIRM_DELETE / UNIFIED_FORM items rely on), so the deletion lands on camera.
-  //   (4) §12 R15 (issue #49) — EXACT stored times: opens the NOT-5-min-aligned entry 84
-  //       (09:07:33 → 11:03:00Z) and shows the editor rendering the stored start/stop to the
-  //       second (no snap-on-open), then clicks Save entry with NO drag and asserts (via
-  //       waitForFunction — the recording FAILS if it times out) that the committed patch carries
-  //       no startUtc/endUtc: the store's times round-trip unchanged.
-  //   (5) reopens entry 84 and drags the bottom stop grip — asserting the DRAGGED stop (and only
-  //       it) snaps onto the :05 grid while the untouched start keeps its 09:07:33.
+  //   (4) issue #49 — EXACT stored times: opens the NOT-snap-aligned entry 84 (09:07:33 →
+  //       11:03:00Z) and shows the editor rendering the stored start/stop to the second (no
+  //       snap-on-open), then clicks Save entry with NO drag and asserts (via waitForFunction —
+  //       the recording FAILS if it times out) that the committed patch carries no
+  //       startUtc/endUtc: the store's times round-trip unchanged.
+  //   (5) reopens entry 84 and drags the selected interval's bottom stop grip ON THE GRID —
+  //       asserting the DRAGGED stop (and only it) snaps onto the coarse grid while the untouched
+  //       start keeps its 09:07:33.
   // No IPC surgery: the whole scene runs over the unmodified renderer + the same window.stint.*
   // channels tt uses; the shared unifiedFormState keeps the recording 1:1 with the JUDGE scene.
   '§12 R06': {
@@ -1838,7 +2036,6 @@ const RECIPES = {
       await page.click(`${exactRow} [data-act="edit"]`);
       await page.waitForSelector('#entry-form-host .edit-form.entry-form[data-id="84"]', { state: 'attached' });
       await page.waitForSelector('.edit-form.entry-form .edit-client option[value="1"]', { state: 'attached' });
-      await page.click('.edit-form .ef-times-toggle');
       await page.evaluate(() =>
         window.__recCaption &&
         window.__recCaption('Exact stored times — a 09:07:33 entry opens as 09:07:33, never snapped to 09:05'));
@@ -1858,29 +2055,180 @@ const RECIPES = {
       );
       await wait(page, 1400);
 
+      // The edited entry's own span is dragged on the GRID: its stored segments are replaced by
+      // the accent-outlined selected interval, whose bottom grip moves the stop alone (§12
+      // R06/R23) — the edit-mode half of the same overlay §12 R07's create mode drags.
       await page.hover(exactRow);
       await page.click(`${exactRow} [data-act="edit"]`);
-      await page.waitForSelector('.edit-form .edit-picker .stp-resize', { state: 'attached' });
-      await page.click('.edit-form .ef-times-toggle');
+      await page.waitForSelector('#entries .ev.me .grip.b', { state: 'attached' });
       await page.evaluate(() =>
         window.__recCaption &&
-        window.__recCaption('Drag the stop grip — only the dragged handle snaps to the 5-min grid'));
-      const resizeLoc = page.locator('.edit-form .edit-picker .stp-resize');
-      await resizeLoc.scrollIntoViewIfNeeded();
-      const rBox = await resizeLoc.boundingBox();
-      const rx = Math.round(rBox.x + rBox.width / 2);
-      const ry = Math.round(rBox.y + rBox.height / 2);
-      await page.mouse.move(rx, ry);
+        window.__recCaption('Drag the stop grip on the grid — only the dragged handle snaps to the grid'));
+      const gripBox = await page.evaluate(() => {
+        const el = document.querySelector('#entries .ev.me .grip.b');
+        el.scrollIntoView({ block: 'center' }); // a clipped target aims the drag off the grid (#323)
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      });
+      await page.mouse.move(gripBox.x, gripBox.y, { steps: 14 });
       await page.mouse.down();
-      await page.mouse.move(rx, ry + 30, { steps: 10 });
+      await page.mouse.move(gripBox.x, gripBox.y + 40, { steps: 14 });
       await page.mouse.up();
       await page.waitForFunction(() => {
         const from = document.querySelector('.edit-form .edit-start')?.value ?? '';
         const to = document.querySelector('.edit-form .edit-end')?.value ?? '';
-        // 19 chars: the field renders YYYY-MM-DD HH:mm:ss, seconds always (issue #159).
-        return /:33$/.test(from) && to.length === 19 && Number(to.slice(14, 16)) % 5 === 0;
+        // 19 chars: the field renders YYYY-MM-DD HH:mm:ss, seconds always (issue #159). The
+        // untouched start keeps its :33; the dragged stop lands on the coarse 15-min grid.
+        return /:33$/.test(from) && to.length === 19 && Number(to.slice(14, 16)) % 15 === 0;
       });
       await wait(page, 1600);
+    },
+  },
+
+  // §12 R24 (core, loss protection) — THE PENDING-CHANGES GATE, on screen. The unified form tracks
+  // whether its fields differ from their seed; swapping its subject — clicking a different event —
+  // is instant when the form is clean and BLOCKED by the keep-editing / discard-changes dialog when
+  // it is dirty. The whole point is that typed work is never lost to a stray click, which is a
+  // thing to WATCH rather than to read: the recording is the moving half of the
+  // PENDING_CHANGES_GATE judge item.
+  //
+  // Over unifiedFormState (the same seeded snapshot the judge drives — 'design review' id 80 and
+  // 'deep work' id 82), the recording plays the contrast three times:
+  //
+  //   (1) CLEAN SWAP — open entry 80, touch nothing, click entry 82: the fields replace in place,
+  //       no dialog. Establishes that the gate is about pending edits, not about clicking.
+  //   (2) KEEP EDITING — reopen 80, TYPE into the description, then click 82. The dialog rises with
+  //       Keep editing FOCUSED (the non-destructive default), the form's subject still 80 beneath
+  //       it, and nothing written. Keep editing returns to the form with the typed text intact —
+  //       echoed in the caption from the live field, so preservation is legible, not asserted
+  //       off-camera.
+  //   (3) DISCARD CHANGES — the same swap attempted again, resolved the other way: the explicit
+  //       Discard abandons the typed work and performs the swap, and the form is now seeded from
+  //       entry 82 with the typed text gone.
+  //
+  // Each beat asserts its own facts (dialog present / absent, the subject held, nothing written,
+  // the typed text preserved or gone), so a gate that stopped arming — or one that armed and then
+  // lost the edits anyway — FAILS the recording instead of being quietly re-recorded. No IPC
+  // surgery: the scene runs over the unmodified renderer and the shared fixture mocks.
+  '§12 R24': {
+    page: 'index.html',
+    state: unifiedFormState,
+    drive: async (page) => {
+      const TYPED = 'costing the migration';
+      // The renderer treats a click on an op button / checkbox as an action, not a body click, so
+      // the swap must land on the event's own inert body — found by hit-test, exactly as a user's
+      // eye does, rather than assumed to be the block's centre.
+      const clickEventBody = async (selector) => {
+        await page.locator(selector).scrollIntoViewIfNeeded();
+        const point = await page.evaluate((sel) => {
+          const ev = document.querySelector(sel);
+          const r = ev.getBoundingClientRect();
+          const inert = (el) =>
+            el && ev.contains(el) && !el.closest('[data-act], input, button, a, .confirm, .split-at');
+          for (let y = r.top + 3; y < r.bottom - 2; y += 3) {
+            for (let x = r.left + 3; x < r.right - 2; x += 3) {
+              if (inert(document.elementFromPoint(Math.round(x), Math.round(y)))) {
+                return { x: Math.round(x), y: Math.round(y) };
+              }
+            }
+          }
+          return null;
+        }, selector);
+        if (!point) throw new Error(`no clickable inert body on ${selector}`);
+        await page.mouse.move(point.x, point.y, { steps: 16 });
+        await wait(page, 380);
+        await page.mouse.click(point.x, point.y);
+      };
+      const openEdit = async (id) => {
+        await page.hover(`.entry[data-id="${id}"]`);
+        await page.click(`.entry[data-id="${id}"] [data-act="edit"]`);
+        await page.waitForSelector(`.entry-form[data-mode="edit"][data-id="${id}"]`, { state: 'attached' });
+        // The reference data arrives async and patches the seed's select halves; waiting for it
+        // keeps the "dirty" below about what was typed and not about a select still filling in.
+        await page.waitForSelector('.entry-form .edit-client option[value="1"]', { state: 'attached' });
+      };
+      const subject = () => page.evaluate(() => document.querySelector('.entry-form')?.dataset.id ?? null);
+      const typedNow = () =>
+        page.evaluate(() => document.querySelector('.entry-form .edit-desc')?.value ?? '');
+
+      await page.waitForSelector('.dcol .ev');
+
+      // ===== (1) CLEAN SWAP — no prompt, the fields just change =====
+      await openEdit(80);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('A CLEAN form swaps subject in place — no prompt (§12 R24)'));
+      await wait(page, 750);
+      await clickEventBody('.entry[data-id="82"]');
+      await page.waitForFunction(() => document.querySelector('.entry-form')?.dataset.id === '82');
+      if (await page.$('.gate-backdrop')) throw new Error('a clean swap raised the gate');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Nothing typed, nothing to lose — "deep work" simply replaces it'));
+      await wait(page, 1250);
+
+      // ===== (2) DIRTY SWAP → KEEP EDITING — the typed work comes back untouched =====
+      await cancelForm(page, '.entry-form');
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Now the same swap, with unsaved edits on the form'));
+      await openEdit(80);
+      await page.fill('.entry-form .edit-desc', TYPED);
+      await page.evaluate(
+        (t) => window.__recCaption && window.__recCaption(`Now type something and DON'T save: "${t}"`),
+        TYPED,
+      );
+      await wait(page, 850);
+      await clickEventBody('.entry[data-id="82"]');
+      await page.waitForSelector('.gate-backdrop .gatecard', { state: 'attached' });
+      // Reaching an event further down the day scrolled the page; the gate rides a FIXED
+      // backdrop, so scrolling back frames the dialog over the form it is guarding — the
+      // pending work has to be visible for "nothing was lost" to be something a viewer can see.
+      await page.evaluate(() => window.scrollTo({ top: 0 }));
+      await wait(page, 300);
+      const armed = await page.evaluate(() => ({
+        heading: document.querySelector('.gatecard h3')?.textContent ?? '',
+        keepFocused: document.activeElement?.classList.contains('gate-keep'),
+        subject: document.querySelector('.entry-form')?.dataset.id ?? null,
+        nothingWritten: !window.__EDITED__ && !window.__ADDED__,
+      }));
+      if (!/discard/i.test(armed.heading) || !armed.keepFocused || armed.subject !== '80' || !armed.nothingWritten) {
+        throw new Error(`the gate did not arm as specified: ${JSON.stringify(armed)}`);
+      }
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('The swap is BLOCKED — Keep editing is focused, nothing written'));
+      await wait(page, 1250);
+      await page.click('.gatecard .gate-keep');
+      await page.waitForSelector('.gate-backdrop', { state: 'detached' });
+      const kept = { id: await subject(), desc: await typedNow() };
+      if (kept.id !== '80' || kept.desc !== TYPED) {
+        throw new Error(`Keep editing lost the pending work: ${JSON.stringify(kept)}`);
+      }
+      await page.evaluate(
+        (t) => window.__recCaption && window.__recCaption(`Keep editing → still entry 80, still "${t}"`),
+        kept.desc,
+      );
+      await wait(page, 1250);
+
+      // ===== (3) THE SAME SWAP, DISCARDED — the only way typed work is abandoned =====
+      await clickEventBody('.entry[data-id="82"]');
+      await page.waitForSelector('.gate-backdrop .gatecard', { state: 'attached' });
+      // Reaching an event further down the day scrolled the page; the gate rides a FIXED
+      // backdrop, so scrolling back frames the dialog over the form it is guarding — the
+      // pending work has to be visible for "nothing was lost" to be something a viewer can see.
+      await page.evaluate(() => window.scrollTo({ top: 0 }));
+      await wait(page, 300);
+      await page.evaluate(() =>
+        window.__recCaption && window.__recCaption('Same swap again — this time Discard changes'));
+      await wait(page, 850);
+      await page.click('.gatecard .gate-discard');
+      await page.waitForFunction(() => document.querySelector('.entry-form')?.dataset.id === '82');
+      const swapped = { id: await subject(), desc: await typedNow() };
+      if (swapped.id !== '82' || swapped.desc === TYPED) {
+        throw new Error(`Discard did not perform the swap: ${JSON.stringify(swapped)}`);
+      }
+      await page.evaluate(
+        (d) => window.__recCaption && window.__recCaption(`Discard → the swap happens: entry 82, "${d}"`),
+        swapped.desc,
+      );
+      await wait(page, 1550);
     },
   },
 
@@ -1912,8 +2260,7 @@ const RECIPES = {
         window.__recCaption &&
         window.__recCaption('Open the entry → the overlap detail: amount + which neighbour'));
       await wait(page, 1300);
-      await page.click('.edit-form .edit-cancel');
-      await page.waitForSelector('.edit-form', { state: 'detached' });
+      await cancelForm(page, '.edit-form');
       await page.hover('.entry[data-id="12"]');
       await page.click('.entry[data-id="12"] [data-act="edit"]');
       await page.waitForSelector('.edit-form .ef-subtract');
@@ -3030,9 +3377,12 @@ const RECIPES = {
   // even after an Entries-toolbar control has been touched (the regression path: pre-fix,
   // a used filter latched the renderer's entries-query flag and starved every later load()
   // of its repaint, so Start clicks mutated the DB while the card stayed frozen on idle).
-  // The recording drives the exact reported path over the idle list fixture: touch the
-  // Today range preset on the Entries toolbar (the calendar narrows), route to the Timer
-  // view (the card reads idle / 00:00:00 / Start), click Start — the toggle mock mutates
+  // The recording drives the exact reported path over the idle list fixture: touch the week
+  // machinery on the Entries toolbar — the range presets that used to stand in for "a toolbar
+  // control was touched" retired with the week-only view, so stepping to the previous week
+  // latches the toolbar's entries-only query exactly as a preset did, which is also what the
+  // CROSS_VIEW_FRESHNESS judge scene now drives — route to the
+  // Timer view (the card reads idle / 00:00:00 / Start), click Start — the toggle mock mutates
   // the snapshot like main's toggleTimer over core (toggleStarts) — and the card flips to
   // running ON CAMERA without any reload: state 'running', the primary reads Stop, and the
   // fresh count-up visibly ticks up from 00:00:00 as the pinned clock steps. The JUDGE
@@ -3042,10 +3392,10 @@ const RECIPES = {
     state: listState,
     initOpts: { toggleStarts: true },
     drive: async (page) => {
-      await page.waitForSelector('.view[data-view="entries"]:not([hidden]) #el-preset-seg');
+      await page.waitForSelector('.view[data-view="entries"]:not([hidden]) #el-prev-week');
       await wait(page, 600);
-      await page.click('#el-preset-seg .preset[data-preset="today"]');
-      await page.waitForFunction(() => !!window.__LIST_REQ__);
+      await page.click('#el-prev-week');
+      await page.waitForFunction(() => window.__LIST_REQ__?.fromDate === '2026-06-15');
       await wait(page, 700);
       await page.click('.nav-item[data-view="timer"]');
       await page.waitForSelector('.view[data-view="timer"]:not([hidden]) #timer-card.idle');
@@ -3424,8 +3774,8 @@ async function recordRecipe(browser, reqId, recipe) {
   }
   const gifOut = join(RECORDINGS, `${slug}.gif`);
   rmSync(gifOut, { force: true });
-  convertToGif(webmOut, gifOut);
-  return { webm: webmOut, webmBytes, gif: gifOut, gifBytes: statSync(gifOut).size, gifGap: null };
+  const gif = convertToGif(webmOut, gifOut);
+  return { webm: webmOut, webmBytes, gif: gifOut, gifBytes: gif.bytes, gifRung: gif.rung, gifGap: null };
 }
 
 // The recorder lock. Constraint: the final <slug>.webm/<slug>.gif names are deliberately
@@ -3528,7 +3878,10 @@ async function main() {
         const r = await recordRecipe(browser, id, RECIPES[id]);
         saved.push({ id, ...r });
         if (r.gif) {
-          console.log(`RECORDED ${id.padEnd(22)} ${r.gif} (${r.gifBytes} bytes GIF)`);
+          // The rung is printed when it is not the default, so a recording that had to be
+          // shrunk to clear the Camo ceiling says so instead of looking like a plain encode.
+          const rung = r.gifRung > 0 ? `, re-encode rung ${r.gifRung}` : '';
+          console.log(`RECORDED ${id.padEnd(22)} ${r.gif} (${r.gifBytes} bytes GIF${rung})`);
         } else {
           console.log(
             `RECORDED ${id.padEnd(22)} ${r.webm} (${r.webmBytes} bytes WEBM; GIF skipped: ${r.gifGap})`,

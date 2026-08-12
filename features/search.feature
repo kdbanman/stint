@@ -3,8 +3,8 @@ Feature: Free-text search (§09 R7)
   # name, project name, or any tag contains the query (case-insensitive substring). This
   # locks the search CONTRACT the GUI search box (gui/renderer/index.html #search) composes
   # into the live entries-calendar query (§12 R09): with the toolbar idle it routes through
-  # window.stint.search({ query }); once the toolbar is active (a range/filter is in play) the
-  # same query rides INSIDE listEntries so it composes with the chosen range/filters. Both
+  # window.stint.search({ query }); once the toolbar is active (a week/filter control is in
+  # play) the same query rides INSIDE listEntries so it composes with the chosen week/filters. Both
   # paths land on core listEntries({ search }). It runs TWICE — once over @stint/core
   # (store.listEntries({ search })) and once over tt (`tt list --all --json --search <query>`)
   # — so the surfaces are proven identical (§17 R8).

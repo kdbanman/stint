@@ -780,7 +780,8 @@
     const navItem = document.querySelector('.nav-item[data-view="reports"]');
     if (navItem) navItem.addEventListener('click', () => void renderDefs());
     if (window.stint && window.stint.onChange) window.stint.onChange(() => refreshIfVisible());
-    // Paint once so a route into the view (or app.js's report-btn) lands on the populated list.
+    // Paint once so a route into the view (the sidebar item — the only route to Reports,
+    // §12 R03) lands on the populated list.
     void renderDefs();
   }
 

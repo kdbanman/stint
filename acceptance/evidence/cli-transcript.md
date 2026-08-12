@@ -264,6 +264,9 @@ working_hours_start     07:00
 working_hours_end       18:00
 picker_window_mode      working_hours
 picker_around_hours     8
+snap_fine_minutes       5
+snap_coarse_minutes     15
+show_weekend            false
 backup_retention        5
 # exit 0
 ```
@@ -298,7 +301,7 @@ Rejected — the pair must satisfy start<end (core validation, identical on both
 
 ```console
 $ tt config ls --json
-{"rounding":false,"roundingIncrementMin":15,"weekStart":"monday","firstCheckinMin":60,"checkinIntervalMin":30,"globalHotkey":"CommandOrControl+Alt+T","dateFormat":"iso","timeZone":"America/Edmonton","workingHoursStart":"08:30","workingHoursEnd":"16:30","pickerWindowMode":"around_now","pickerAroundHours":8,"backupRetention":5}
+{"rounding":false,"roundingIncrementMin":15,"weekStart":"monday","firstCheckinMin":60,"checkinIntervalMin":30,"globalHotkey":"CommandOrControl+Alt+T","dateFormat":"iso","timeZone":"America/Edmonton","workingHoursStart":"08:30","workingHoursEnd":"16:30","pickerWindowMode":"around_now","pickerAroundHours":8,"snapFineMinutes":5,"snapCoarseMinutes":15,"showWeekend":false,"backupRetention":5}
 # exit 0
 ```
 

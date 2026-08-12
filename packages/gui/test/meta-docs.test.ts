@@ -341,6 +341,44 @@ describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a
 });
 
 /**
+ * GOLD — every §17 criterion has a COVERAGE.md section (issue #301, review round 2).
+ *
+ * A blind spot in the apparatus itself. The checks above bind COVERAGE's CITATIONS (paths,
+ * judge items) and the runbook's badges to acceptance.html — everything COVERAGE *says* is
+ * held to something real. Nothing held COVERAGE to saying anything at all: its §17 catalogue
+ * ran R1…R10 and jumped straight to R12, so **§17 R11 — destructive GUI actions confirm before
+ * acting — had no section**, and R11 is the one §17 gate this transition edited. A criterion
+ * with no proof-map row is not a stale citation a reader can spot; it is an absence, and an
+ * absence is exactly what no reader notices. Same shape as the MANUAL-badge bind above:
+ * acceptance.html §05 is the roster, COVERAGE.md's `### §17 Rn` headings are the catalogue,
+ * and the two sets must be equal both directions.
+ */
+describe('GOLD — every §17 criterion has a COVERAGE.md section (#301)', () => {
+  // §05's key cells are `R1`, `R2 core`, … — rowIds defaults a bare `Rn` key to section 17.
+  const rosterIds = routingRows('s5')
+    .flatMap((r) => rowIds(r.key)?.rs ?? [])
+    .sort((a, b) => a - b);
+  const catalogueIds = [...coverage.matchAll(/^### §17 R(\d+)\s*$/gm)]
+    .map((m) => parseInt(m[1]!, 10))
+    .sort((a, b) => a - b);
+
+  it('read both homes (neither the §05 roster nor the COVERAGE catalogue is silently empty)', () => {
+    expect(rosterIds.length).toBe(14);
+    expect(catalogueIds.length).toBeGreaterThan(10);
+  });
+
+  it('every §17 criterion acceptance.html routes has a COVERAGE.md section', () => {
+    const uncatalogued = rosterIds.filter((n) => !catalogueIds.includes(n)).map((n) => `§17 R${n}`);
+    expect(uncatalogued, '§17 criteria with no `### §17 Rn` section in COVERAGE.md').toEqual([]);
+  });
+
+  it('COVERAGE.md catalogues no §17 criterion acceptance.html does not route', () => {
+    const invented = catalogueIds.filter((n) => !rosterIds.includes(n)).map((n) => `§17 R${n}`);
+    expect(invented, 'COVERAGE.md sections for §17 criteria acceptance.html §05 has no row for').toEqual([]);
+  });
+});
+
+/**
  * GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (issue #167).
  *
  * The path check above only guards citations that LOOK like files. A criterion whose proof is a
