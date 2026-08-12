@@ -122,6 +122,10 @@
   .ctrl{display:grid;grid-template-columns:92px 1fr;gap:12px 16px;align-items:center}
   .ctrl .cl{font-size:12px;color:var(--muted);text-align:right}
   .ctrl .cr{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  /* design.html D13: a row heading over SEVERAL controls is a group label, so each control in
+     it carries its own visible word beside it — the same field-label idiom main.html's Search
+     wears (.srchf) and the app spells as .filter-field. */
+  .ctrl .ff{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
   .efoot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
   .efoot .left{margin-right:auto}
   /* §12 R21: the inline error-message component (design-system .msg.err) — a refused Save is
@@ -314,16 +318,22 @@
               <div class="cr"><select class="field"><option>Today</option><option>This week</option><option>Last week</option><option>This month</option><option>Last month</option><option selected>Custom…</option></select><input class="field date tnum invalid" aria-invalid="true" value="2026-05-31"><span class="meta">–</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-01"></div>
               <span class="cl">Group by</span>
               <div class="cr"><span class="seg"><button class="on">Client</button><button>Project</button><button>Day</button><button>Week</button><button>Month</button><button>Tag</button></span></div>
+              <!-- design.html D13: "Filters" and "Rounding" each head MORE THAN ONE control, so
+                   each is a GROUP label and names none of them — a control's only visible word is
+                   never a category. Every control in the two rows carries its own word beside it,
+                   in the same vocabulary the Entries toolbar uses for the same filters; the
+                   billable segment is named by its own buttons, and the rounding switch by the
+                   words beside it, which is what a switch and a checkbox are named by. -->
               <span class="cl">Filters</span>
               <div class="cr">
-                <select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select>
-                <select class="field"><option>All projects</option></select>
-                <select class="field"><option>All tags</option><option selected>deep</option></select>
+                <label class="ff"><span>Client</span><select class="field"><option>All clients</option><option>Globex Corp</option><option>Initech</option></select></label>
+                <label class="ff"><span>Project</span><select class="field"><option>All projects</option></select></label>
+                <label class="ff"><span>Tag</span><select class="field"><option>All tags</option><option selected>deep</option></select></label>
                 <span class="seg"><button>All</button><button class="on">Billable</button><button>Non-billable</button></span>
               </div>
               <span class="cl">Rounding</span>
-              <div class="cr"><span class="toggle"><span class="sw on"><i></i></span></span>
-                <select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></div>
+              <div class="cr"><label class="toggle"><span class="sw on"><i></i></span> Round grouped totals</label>
+                <label class="ff"><span>Increment</span><select class="field"><option>nearest 6 min</option><option>nearest 10 min</option><option selected>nearest 15 min</option><option>nearest 30 min</option></select></label></div>
             </div>
             <!-- §12 R21: a refused Save is surfaced in the builder — a duplicate name (core rejects,
                  §13), an incomplete custom range (focus the missing field), or an inverted custom

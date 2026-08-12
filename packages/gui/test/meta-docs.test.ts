@@ -460,11 +460,14 @@ describe('GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (#167
  * that IS the longest, which is the one thing the ratchet cannot absorb (a table row is one
  * physical line; there is nowhere to wrap). Then it re-baselines to the new length and holds
  * there: 5640 → 5951 when REPORTS_VIEW grew the §12 R21 refusal claim by its field-marking half
- * (issue #243). A re-baseline is a declared move in the PR that makes it, never a silent bump.
+ * (issue #243), and 5951 → 6504 when FIELD_LABELS recorded the review its own justification list
+ * exists to invite (issue #246) — the longest line is FIELD_LABELS' row again. A re-baseline is a
+ * declared move in the PR that makes it, never a silent bump, and it lands on the file's EXACT
+ * longest line: slack in a ratchet stops it ratcheting.
  */
 const CRITERIA_DIR = 'acceptance/criteria';
 const LINE_LIMIT = 500;
-const BUDGETS = new Map([['judge-rubric.md', 5951]]);
+const BUDGETS = new Map([['judge-rubric.md', 6504]]);
 
 describe('GOLD — acceptance/criteria/*.md stay line-diffable (#128)', () => {
   const docs = readdirSync(join(repoRoot, CRITERIA_DIR), { withFileTypes: true })
