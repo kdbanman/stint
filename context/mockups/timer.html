@@ -28,7 +28,7 @@
 /* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .tnum{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
   .win{max-width:1040px;margin:32px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
@@ -54,7 +54,7 @@
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent);box-shadow:var(--sh-chip)}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
   .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:var(--on-accent)}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
@@ -77,7 +77,7 @@
   .toggle{display:inline-flex;align-items:center;gap:12px;color:var(--ink)}
   /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
   .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer;transition:background .12s}
-  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);box-shadow:var(--sh-chip);transition:left .12s}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);transition:left .12s}
   .sw.on{background:var(--ink)}.sw.on i{left:17px}
   /* fields */
   .lab{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
@@ -158,14 +158,14 @@
   /* a running entry has a start and no stop yet: the block dissolves into the future */
   .block.me.open{-webkit-mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%);mask-image:linear-gradient(to bottom,black 0,black 15%,rgba(0,0,0,.5) 48%,transparent 78%)}
   /* the time label & start grip live at track level so nothing hides them */
-  .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7;box-shadow:var(--sh-chip)}
-  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);box-shadow:var(--sh-chip);cursor:ns-resize;z-index:7}
+  .tlabel{position:absolute;left:6px;font-size:11px;font-weight:640;color:var(--ink);background:var(--paper);padding:2px 8px;border-radius:var(--r1);z-index:7}
+  .grip{position:absolute;left:calc(50% - 16px);width:32px;height:6px;border-radius:var(--r1);background:var(--paper);border:1.5px solid var(--accent);cursor:ns-resize;z-index:7}
   /* §12 R23: the fine-snap toggle beside the track — ephemeral, coarse on every open;
      no snap-value pill, no drag-hint copy */
   .phint{margin-top:12px;display:flex;justify-content:flex-end}
   .snapctl{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--ink)}
   .snapctl .sw{width:36px;height:24px;border-radius:var(--r1);background:var(--rule-strong);position:relative;flex:none;cursor:pointer}
-  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper);box-shadow:var(--sh-chip)}
+  .sw i{position:absolute;top:3px;left:2px;width:17px;height:17px;border-radius:50%;background:var(--paper)}
   .snapctl .sw.on{background:var(--ink)}.snapctl .sw.on i{left:17px}
 </style>
 </head>
