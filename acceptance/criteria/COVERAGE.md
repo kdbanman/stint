@@ -2051,7 +2051,8 @@ at the keyboard. Issue 224 is the same green-by-fixture lesson on the floor's
 other side: no swept scene seeded an entry under 24 minutes, so the sanction
 the exemption grants was never exercised. The short-block surface seeds a
 10-minute entry (an 18px block); the sanction is duration-true (the block's
-painted span must read under 24 minutes and hold R16's 18px legibility floor),
+painted span must read under 24 minutes — a long entry squashed by a layout
+regression still reads ≥24m in its own time label and stays a violation),
 each sanctioned block is NAMED in the readout the way spacing exceptions are,
 the class must be non-empty (`shortBlockMet` — reseeding the fixture long
 reddens the gate), and the focused short block's corner checkbox and ops chip

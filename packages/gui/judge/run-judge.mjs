@@ -7581,8 +7581,8 @@ async function sceneFieldChrome(browser) {
 // sanction: design.html §07's recorded A03 exemption (SC 2.5.8's essential-presentation
 // carve-out) — block height ENCODES duration (§12 R16), a taller block would misstate the data,
 // and the keyboard path is size-independent. The sanction is DURATION-TRUE, never class-wide: the
-// block's own painted span must read under 24 minutes AND the block must hold R16's 18px
-// legibility floor, so a long entry squashed under 24px by a layout regression stays a violation.
+// block's own painted span must read under 24 minutes, so a long entry squashed under 24px by a
+// layout regression still reads ≥24m in its own time label and stays a violation.
 // Guard-the-guard (shortBlockMet): the run must MEET at least one sanctioned block — reseed the
 // fixture past 24 minutes and this scene reddens instead of passing blind. The same surface
 // drives #224's clip half: with the block FOCUSED, its corner checkbox and ops chip must
@@ -7628,13 +7628,15 @@ function sweepTargets() {
     // #224 — the DURATION-TRUE sanction, design.html §07's recorded A03 exemption (SC 2.5.8's
     // essential-presentation carve-out): a calendar event block shorter than the floor where
     // height encodes duration (§12 R16). Granted only when the block's own painted span (.bt)
-    // says under 24 minutes AND the block holds R16's 18px legibility floor — so a long entry
-    // shrunk by a layout regression, or a floor regression squashing a short one illegible,
-    // falls through to the ordinary checks and reddens.
+    // says under 24 minutes — the span condition is itself what refuses the regression case: a
+    // long entry squashed under 24px still reads ≥24m in its own time label and falls through
+    // to the ordinary checks. Deliberately NO height leg: R16 pins no numeric block floor (the
+    // app's floor is implementation, app.js calEvent), so a px threshold here would dress an
+    // implementation detail as spec and refuse legitimately tiny entries.
     if (b.el.matches('.dt .ev')) {
       const m = /(\d{1,2}):(\d{2})–(\d{1,2}):(\d{2})/.exec(b.el.querySelector('.bt')?.textContent ?? '');
       const mins = m ? (Number(m[3]) * 60 + Number(m[4]) - Number(m[1]) * 60 - Number(m[2]) + 1440) % 1440 : null;
-      if (mins !== null && mins < 24 && b.h >= 18) {
+      if (mins !== null && mins < 24) {
         durationSanctioned.push({ label: `${b.label}[data-id="${b.el.dataset.id}"]`, w: round(b.w), h: round(b.h), mins });
         continue;
       }
