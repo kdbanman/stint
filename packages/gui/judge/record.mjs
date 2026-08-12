@@ -27,6 +27,14 @@
  *   node packages/gui/judge/record.mjs                # record every known fixture
  *   node packages/gui/judge/record.mjs <reqId> [...]  # record only the named recipe(s)
  *   node packages/gui/judge/record.mjs --list         # list the recipe ids and exit
+ *   node packages/gui/judge/record.mjs --jobs=N       # cap concurrent GIF encodes (env:
+ *                                                     # STINT_RECORD_JOBS; default cores-2)
+ *
+ * Cost shape: a full run is dominated by ffmpeg, not by the browser — encoding a recipe takes
+ * roughly twice its capture, and every recipe forced below rung 0 pays that again. So the capture
+ * loop hands each finished .webm to a bounded pool of nice'd encoders and moves straight on to the
+ * next recipe: captures stay serial (their real-time dwells are the deliverable and must not race
+ * each other) while the encodes fan out across the idle cores behind them.
  *
  * Publishing to GIF: the produced .webm is a gitignored working artifact; the uploaded evidence
  * is a .gif per recipe (e.g. `§20 R04` → `20-r04.gif`), kept under the 5 MB GitHub Camo ceiling
@@ -48,7 +56,8 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
+import { availableParallelism, setPriority } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -321,6 +330,58 @@ function decoratePage(page) {
   return page;
 }
 
+// Run one ffmpeg pass, resolved rather than thrown so the caller reports the two passes' failures
+// in its own words. Spawned asynchronously (not spawnSync) because encoding is what the capture
+// loop overlaps with: a synchronous pass blocks the event loop, which would idle Chromium for the
+// whole encode. The child is de-prioritized so the recorder — whose captured frame rate is the one
+// thing contention could damage — always outranks the encoders sharing the host with it.
+const ENCODE_NICE = 10;
+function runFfmpeg(args) {
+  return new Promise((resolve) => {
+    const child = spawn('ffmpeg', args, { stdio: ['ignore', 'ignore', 'pipe'] });
+    try {
+      setPriority(child.pid, ENCODE_NICE);
+    } catch {
+      // Unsupported or not permitted on this host — the encode still runs, just not nice'd.
+    }
+    let stderr = '';
+    child.stderr.on('data', (d) => {
+      stderr += d;
+    });
+    child.on('error', (err) => resolve({ status: -1, stderr: err.message }));
+    child.on('close', (status) => resolve({ status, stderr }));
+  });
+}
+
+const tailOf = (stderr) => (stderr || '').split('\n').slice(-4).join(' ');
+
+// A bounded pool: `limit` jobs in flight, the rest queued. Encoding is single-threaded per ffmpeg
+// process (its own -filter_threads makes no measurable difference to the palette passes), so the
+// only way to use the rest of the machine is to run several encodes at once.
+function makePool(limit) {
+  let active = 0;
+  const queue = [];
+  const pump = () => {
+    while (active < limit && queue.length) {
+      const { job, resolve, reject } = queue.shift();
+      active += 1;
+      job().then(resolve, reject).finally(() => {
+        active -= 1;
+        pump();
+      });
+    }
+  };
+  return (job) =>
+    new Promise((resolve, reject) => {
+      queue.push({ job, resolve, reject });
+      pump();
+    });
+}
+
+// Leave the capture two cores of headroom: Chromium is recording while these run, and a dropped
+// frame is a damaged deliverable where a slower encode is only a slower run.
+const DEFAULT_JOBS = Math.max(1, Math.min(4, availableParallelism() - 2));
+
 // GitHub proxies every image in a README/PR through Camo, which DROPS anything over 5 MB — an
 // oversized GIF is a broken image on the index page, not a slow one. The ceiling is therefore a
 // hard property of a shippable recording, not a guideline (author-qa-gif skill). The number is
@@ -334,83 +395,80 @@ const GIF_MAX_BYTES = 5_000_000;
 // so a floor of ~0.6x scale (where the app's 11px labels and time fields still resolve) outranks
 // smoothness — a jerkier GIF you can read beats a fluid one you cannot. Every rung keeps the
 // ~0.5x slowdown and the end-frame hold, so a shrunk recording still reads at its siblings' pace.
+// `share` is the rung's MEASURED output size as a fraction of the same recipe's rung-0 size, and
+// it is deliberately the most OPTIMISTIC (smallest) fraction observed rather than an average —
+// see pickRung for why the direction matters.
 const GIF_RUNGS = [
-  { scale: 1, fps: 15 },
-  { scale: 0.85, fps: 12 },
-  { scale: 0.72, fps: 10 },
-  { scale: 0.72, fps: 8 },
-  { scale: 0.6, fps: 8 },
-  { scale: 0.6, fps: 6 },
+  { scale: 1, fps: 15, share: 1 },
+  { scale: 0.85, fps: 12, share: 0.87 },
+  { scale: 0.72, fps: 10, share: 0.55 },
+  { scale: 0.72, fps: 8, share: 0.45 },
+  { scale: 0.6, fps: 8, share: 0.32 },
+  { scale: 0.6, fps: 6, share: 0.26 },
 ];
+
+// Which rung to try next, given that `bytes` came out of rung `from`. A GIF's size does NOT track
+// pixels-per-frame × frames the way the old scale²×fps model assumed: dropping resolution feeds
+// the dither more distinct colours per unit area, so a downscale returns far less than its area
+// (rung 1 measured ~0.88 of rung 0, where that model predicted 0.58). Predicting from the measured
+// shares instead is what keeps a shrink from costing three full encodes.
+//
+// The shares are the smallest ever observed, and the ceiling here is the REAL ceiling with no
+// safety margin, because the two errors are not symmetric: skipping a rung that would have fit
+// permanently costs the recording resolution and frame rate the reader needs, while trying a rung
+// that turns out too big costs one encode. So we skip only the rungs that cannot fit even on the
+// most favourable estimate, and let the measurement settle every borderline case.
+function pickRung(from, bytes) {
+  let to = from + 1;
+  while (to + 1 < GIF_RUNGS.length && (bytes * GIF_RUNGS[to].share) / GIF_RUNGS[from].share > GIF_MAX_BYTES) {
+    to += 1;
+  }
+  return to;
+}
 
 // Convert a finished .webm to a committed, ASCII-named animated GIF via the documented two-pass
 // palette pipeline — slowed to ~0.5x (setpts=2.0*PTS) with a ~1.5s hold on the final frame
 // (tpad), lanczos scale, sierra2_4a dither for quality — re-encoding down the rung ladder until
 // the file fits under GIF_MAX_BYTES. Returns { path, bytes, rung } on success, or throws so the
 // caller surfaces the conversion gap (we never ship a faked GIF).
-function convertToGif(webmPath, gifPath) {
+async function convertToGif(webmPath, gifPath) {
   const palette = gifPath.replace(/\.gif$/, '') + '.pal.png';
-  // A GIF's bytes track pixels-per-frame × frames, so rung 0's measured size predicts every
-  // lower rung to within a small factor. Jumping straight to the first rung that is predicted to
-  // fit — and still verifying the real size afterwards, walking on if the prediction was
-  // optimistic — keeps the guarantee while skipping the encodes that could only have failed:
-  // each rung is two full ffmpeg passes over a ~20s capture, so walking all five costs minutes
-  // per recipe across a 40-recipe run.
-  const predict = (from, to, bytesAtFrom) =>
-    bytesAtFrom *
-    (GIF_RUNGS[to].scale / GIF_RUNGS[from].scale) ** 2 *
-    (GIF_RUNGS[to].fps / GIF_RUNGS[from].fps);
   let bytes = 0;
   let rung = 0;
-  for (; rung < GIF_RUNGS.length; rung++) {
+  for (;;) {
     const { scale, fps } = GIF_RUNGS[rung];
     // scale=iw*<f> with an explicit -1 height keeps the aspect ratio; rung 0's iw*1 is a no-op
     // resize, so the default output stays byte-for-byte what the convention produced before.
     const vf =
       `setpts=2.0*PTS,fps=${fps},scale=iw*${scale}:-1:flags=lanczos,` +
       'tpad=stop_mode=clone:stop_duration=1.5';
-    const pass1 = spawnSync(
-      'ffmpeg',
-      ['-y', '-i', webmPath, '-vf', `${vf},palettegen=stats_mode=diff`, palette],
-      { encoding: 'utf8' },
-    );
+    const pass1 = await runFfmpeg([
+      '-y', '-i', webmPath, '-vf', `${vf},palettegen=stats_mode=diff`, palette,
+    ]);
     if (pass1.status !== 0) {
       rmSync(palette, { force: true });
-      throw new Error(
-        `ffmpeg palettegen failed (status ${pass1.status}): ${(pass1.stderr || pass1.error?.message || '').split('\n').slice(-4).join(' ')}`,
-      );
+      throw new Error(`ffmpeg palettegen failed (status ${pass1.status}): ${tailOf(pass1.stderr)}`);
     }
-    const pass2 = spawnSync(
-      'ffmpeg',
-      [
-        '-y',
-        '-i',
-        webmPath,
-        '-i',
-        palette,
-        '-filter_complex',
-        `${vf}[v];[v][1:v]paletteuse=dither=sierra2_4a`,
-        gifPath,
-      ],
-      { encoding: 'utf8' },
-    );
+    const pass2 = await runFfmpeg([
+      '-y',
+      '-i',
+      webmPath,
+      '-i',
+      palette,
+      '-filter_complex',
+      `${vf}[v];[v][1:v]paletteuse=dither=sierra2_4a`,
+      gifPath,
+    ]);
     rmSync(palette, { force: true });
     if (pass2.status !== 0) {
-      throw new Error(
-        `ffmpeg paletteuse failed (status ${pass2.status}): ${(pass2.stderr || pass2.error?.message || '').split('\n').slice(-4).join(' ')}`,
-      );
+      throw new Error(`ffmpeg paletteuse failed (status ${pass2.status}): ${tailOf(pass2.stderr)}`);
     }
     if (!existsSync(gifPath) || statSync(gifPath).size === 0) {
       throw new Error('ffmpeg produced no non-empty GIF.');
     }
     bytes = statSync(gifPath).size;
-    if (bytes <= GIF_MAX_BYTES) break;
-    // 0.9 of the ceiling as the target, so a prediction that runs a little high still lands
-    // under it rather than costing an extra rung.
-    const measured = rung;
-    while (rung + 1 < GIF_RUNGS.length && predict(measured, rung + 1, bytes) > GIF_MAX_BYTES * 0.9) {
-      rung++;
-    }
+    if (bytes <= GIF_MAX_BYTES || rung === GIF_RUNGS.length - 1) break;
+    rung = pickRung(rung, bytes);
   }
   // The bottom rung still over the ceiling means the recipe itself is too long for a GIF — a
   // recipe-authoring problem (trim the scene), not something to paper over with a smaller frame.
@@ -3765,17 +3823,9 @@ async function recordRecipe(browser, reqId, recipe) {
   renameSync(produced, webmOut);
   rmSync(stage, { recursive: true, force: true });
   const webmBytes = statSync(webmOut).size;
-
-  // Convert to the committed ASCII-named GIF (two-pass palette, ~0.5x, 1.5s end hold). If ffmpeg
-  // is unavailable, keep the .webm and report the gap honestly — never ship a faked GIF.
-  const gap = ffmpegGap();
-  if (gap) {
-    return { webm: webmOut, webmBytes, gif: null, gifBytes: 0, gifGap: gap };
-  }
-  const gifOut = join(RECORDINGS, `${slug}.gif`);
-  rmSync(gifOut, { force: true });
-  const gif = convertToGif(webmOut, gifOut);
-  return { webm: webmOut, webmBytes, gif: gifOut, gifBytes: gif.bytes, gifRung: gif.rung, gifGap: null };
+  // The GIF conversion is deliberately NOT done here: it is pure CPU with no browser involvement,
+  // so main() hands it to the encode pool and lets it run while the next recipe is being captured.
+  return { webm: webmOut, webmBytes, slug };
 }
 
 // The recorder lock. Constraint: the final <slug>.webm/<slug>.gif names are deliberately
@@ -3842,6 +3892,8 @@ async function main() {
     for (const id of Object.keys(RECIPES)) console.log(id);
     return;
   }
+  const jobsArg = argv.find((a) => a.startsWith('--jobs='));
+  const jobs = Math.max(1, Number(jobsArg?.slice('--jobs='.length) ?? process.env.STINT_RECORD_JOBS ?? DEFAULT_JOBS) || DEFAULT_JOBS);
   const requested = argv.filter((a) => !a.startsWith('-'));
   const unknown = requested.filter((id) => !RECIPES[id]);
   if (unknown.length) {
@@ -3870,28 +3922,54 @@ async function main() {
     args: ['--no-sandbox', '--disable-gpu'],
   });
 
+  // One capability probe for the whole run, not one per recipe: it is a property of the host.
+  const gap = ffmpegGap();
+  const submit = makePool(jobs);
   const saved = [];
   const failures = [];
+  const encoding = [];
   try {
+    // Capture stays STRICTLY SERIAL. Recipes dwell in real time for the camera, so running two
+    // captures at once would make each one's pauses race the other's for the CPU — and the pauses
+    // are the deliverable. Only the encodes fan out.
     for (const id of ids) {
+      let captured;
       try {
-        const r = await recordRecipe(browser, id, RECIPES[id]);
-        saved.push({ id, ...r });
-        if (r.gif) {
-          // The rung is printed when it is not the default, so a recording that had to be
-          // shrunk to clear the Camo ceiling says so instead of looking like a plain encode.
-          const rung = r.gifRung > 0 ? `, re-encode rung ${r.gifRung}` : '';
-          console.log(`RECORDED ${id.padEnd(22)} ${r.gif} (${r.gifBytes} bytes GIF${rung})`);
-        } else {
-          console.log(
-            `RECORDED ${id.padEnd(22)} ${r.webm} (${r.webmBytes} bytes WEBM; GIF skipped: ${r.gifGap})`,
-          );
-        }
+        captured = await recordRecipe(browser, id, RECIPES[id]);
       } catch (err) {
         failures.push({ id, message: err.message, noVideoHandle: err.noVideoHandle === true });
         console.error(`FAILED   ${id.padEnd(22)} ${err.message}`);
+        continue;
       }
+      if (gap) {
+        saved.push({ id, ...captured, gif: null, gifBytes: 0, gifGap: gap });
+        console.log(
+          `RECORDED ${id.padEnd(22)} ${captured.webm} (${captured.webmBytes} bytes WEBM; GIF skipped: ${gap})`,
+        );
+        continue;
+      }
+      // Queued, NOT awaited — the next capture starts now and this encode runs beside it.
+      const gifOut = join(RECORDINGS, `${captured.slug}.gif`);
+      rmSync(gifOut, { force: true });
+      console.log(`CAPTURED ${id.padEnd(22)} ${captured.webmBytes} bytes WEBM — encoding`);
+      encoding.push(
+        submit(() => convertToGif(captured.webm, gifOut)).then(
+          (gif) => {
+            saved.push({ id, ...captured, gif: gifOut, gifBytes: gif.bytes, gifRung: gif.rung, gifGap: null });
+            // The rung is printed when it is not the default, so a recording that had to be
+            // shrunk to clear the Camo ceiling says so instead of looking like a plain encode.
+            const rung = gif.rung > 0 ? `, re-encode rung ${gif.rung}` : '';
+            console.log(`RECORDED ${id.padEnd(22)} ${gifOut} (${gif.bytes} bytes GIF${rung})`);
+          },
+          (err) => {
+            failures.push({ id, message: err.message, noVideoHandle: false });
+            console.error(`FAILED   ${id.padEnd(22)} ${err.message}`);
+          },
+        ),
+      );
     }
+    // The last few encodes are still running once the final capture lands.
+    await Promise.all(encoding);
   } finally {
     await browser.close();
   }
