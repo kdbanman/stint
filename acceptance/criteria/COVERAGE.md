@@ -1986,9 +1986,17 @@ heading spanning several controls is a group label, and a control's only
 visible word is never a category nor a sibling's name. The four carry their own
 visible label in the Entries toolbar's idiom and vocabulary (Client / Project /
 Tag / Increment, the `aria-label`s and `#rep-tag`'s placeholder dropped with
-them), so they leave the list: it shrinks from fifteen entries to the eleven
-Settings rows, where each `.set-k` names the one control in its row, and that
-shrink is the fix's proof. The first fact's population is
+them), so they leave the list: it shrinks from fifteen entries to eleven, and
+that shrink is the fix's proof. Issue 337 is the queue returning once more, this
+time to the row the same shape had reached first: Settings' **Working hours**
+pair, one `.set-k` heading over TWO strict-HH:MM inputs whose only names were the
+hidden `aria-label`s `Working hours start` / `Working hours end`, so on screen
+each field was identified by a `HH:MM` placeholder and its side of an en dash.
+The pair took visible **Start** / **End** labels in the same wrapping idiom
+(`.filter-field`, the app's one field-label shape), the `aria-label`s went with
+them, and the en dash went too — the words say what it stood for. The list is
+nine now, all of them Settings rows where each `.set-k` names the one control in
+its row. The first fact's population is
 FOCUSABLE rather than `input`/`select`/`textarea` because of issue 245: a control
 the user can focus owes a name whatever its tag (WCAG 4.1.2), and the narrower
 sweep is why the app's ONE unnamed control — the Settings global-hotkey capture,

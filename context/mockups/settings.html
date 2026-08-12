@@ -112,6 +112,11 @@
   .sc{justify-self:end;display:flex;align-items:center;gap:8px}
   .kbd{font-family:var(--num);font-size:12px;border:1px solid var(--rule-strong);border-radius:var(--r1);padding:4px 8px;background:var(--wash);box-shadow:0 1px 0 var(--rule-strong)}
   .vrow{display:flex;align-items:center;gap:8px}
+  /* design.html D13 (issue 337): a row heading over SEVERAL controls is a group label, so each
+     control in it carries its own visible word beside it — the same field-label idiom
+     main.html's Search wears (.srchf), reports.html spells .ff, and the app spells
+     .filter-field. Working hours is the one Settings row with two fields under one heading. */
+  .ff{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
   .ver{font-family:var(--num);font-size:12px;color:var(--ink)}
   .ok{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--run)}.ok .ic{width:14px;height:14px}
   .ilink{display:inline-flex;align-items:center;gap:4px;color:var(--accent-ink);cursor:pointer}.ilink .ic{width:13px;height:13px}
@@ -173,7 +178,7 @@
       <div class="srow"><div class="sk">Week start</div><div class="sc"><span class="seg"><button class="on">Monday</button><button>Sunday</button></span></div></div>
 
       <div class="sgrp">Timeline</div>
-      <div class="srow"><div class="sk">Working hours<small>Entries and the picker open to these hours</small></div><div class="sc"><input class="field time tnum" value="07:00"><span class="meta">–</span><input class="field time tnum" value="18:00"></div></div>
+      <div class="srow"><div class="sk">Working hours<small>Entries and the picker open to these hours</small></div><div class="sc"><label class="ff"><span>Start</span><input class="field time tnum" value="07:00"></label><label class="ff"><span>End</span><input class="field time tnum" value="18:00"></label></div></div>
       <div class="srow"><div class="sk">Picker window</div><div class="sc"><span class="seg"><button class="on">Working hours</button><button>Around now</button></span></div></div>
       <div class="srow off"><div class="sk">Around</div><div class="sc"><select class="field" disabled><option>4 h</option><option>6 h</option><option selected>8 h</option><option>12 h</option></select></div></div>
 

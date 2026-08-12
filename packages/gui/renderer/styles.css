@@ -519,11 +519,15 @@ s {
 }
 /* §12 R09 / design.html D13: the app's ONE field-label idiom — a small muted word beside the
    control, sharing the search field's grammar. The Entries toolbar filters wear it and so do
-   the Reports builder's (issue 246), which is the point of reusing it rather than spelling a
-   second one: the same control gets the same label in the same shape on both surfaces. It
+   the Reports builder's (issue 246) and Settings' working-hours pair (issue 337), which is the
+   point of reusing it rather than spelling a second one: the same control gets the same label in
+   the same shape on every surface. It
    stays BESIDE the control in the builder too, not stacked above it — the builder's rows are
    the same wrapping flex row, and its 1fr column takes the labelled trio on one line at the
-   1040px minimum window, so stacking would spend a row's height to buy nothing. */
+   1040px minimum window, so stacking would spend a row's height to buy nothing. The Settings
+   row is the same story at its own width: label + 68px field, twice, inside a 330px control
+   column. The class is named for where the idiom started, not for a population it is limited
+   to — a second class with these five declarations would be a second idiom by another name. */
 .filter-field {
   display: inline-flex;
   align-items: center;
@@ -2253,11 +2257,13 @@ body.popover { background: var(--paper); margin: 0; }
    §07 asks for. */
 .set-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
-   row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM"); they
+   row, each under its own `.filter-field` label (D13, issue 337 — the row heading names the pair,
+   not either field). Narrower than the default .set-field (they hold only "HH:MM"); they
    reuse the .set-field chrome via the shared class, but not its face. A value the user types is
    still a clock (D06, issue 242), so these take the Clock role whole — the numeric face named
    here, where it outranks the shared `.set-field` sans, and tabular figures so the two times
-   line up. */
+   line up. The en-dash that used to join them is gone with the labels' arrival: "Start" and
+   "End" say what the glyph was standing in for. */
 .set-hhmm {
   min-width: 0;
   width: 68px;
@@ -2266,7 +2272,6 @@ body.popover { background: var(--paper); margin: 0; }
   font-variant-numeric: tabular-nums;
   font-feature-settings: "tnum";
 }
-.set-hhmm-sep { color: var(--muted); font-size: 13px; }
 /* §14 / §12 R23 — the Entries-calendar group's snap-minutes inputs: a compact whole-minutes
    value with a muted "min" suffix beside it (mockup settings.html's field + .meta pair). They
    reuse the .set-field chrome via the shared class — and, like that pair, take the Clock role's

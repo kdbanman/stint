@@ -123,11 +123,22 @@
       // §14 — one row, two strict HH:MM text inputs (workingHoursStart / workingHoursEnd),
       // each persisting on change over the SAME setSetting channel. Core validates (shape +
       // start<end); a rejection re-renders, reverting the field to stored truth.
-      const input = (key) =>
+      //
+      // design.html D13 (issue 246's rule, issue 337): "Working hours" heads TWO controls, so it
+      // is a GROUP label and names neither of them. On screen each field used to be identified by
+      // its `HH:MM` placeholder and its side of an en dash, while an invisible `aria-label` named
+      // it correctly to a screen reader alone. Each input now carries its own visible word in the
+      // app's ONE field-label idiom — the wrapping `.filter-field` label the Entries toolbar and
+      // the Reports builder wear — and the `aria-label`s go with them: a visible label IS the
+      // accessible name, and a second, different one only invites the two to disagree (the issue
+      // 245 lesson). The en dash goes too — once the words read Start and End, the glyph says the
+      // same thing a second time. The `placeholder` stays: it is the FORMAT core demands, not a
+      // name, which is the one thing D13 still licenses a placeholder to be.
+      const input = (key, lbl) =>
+        `<label class="filter-field"><span>${lbl}</span>` +
         `<input class="set-field set-hhmm tnum" type="text" inputmode="numeric" size="5" maxlength="5" ` +
-        `placeholder="HH:MM" data-key="${key}" value="${esc(settings[key] ?? '')}" ` +
-        `aria-label="${esc(f.label)} ${key === f.keys[0] ? 'start' : 'end'}">`;
-      return input(f.keys[0]) + `<span class="set-hhmm-sep">–</span>` + input(f.keys[1]);
+        `placeholder="HH:MM" data-key="${key}" value="${esc(settings[key] ?? '')}"></label>`;
+      return input(f.keys[0], 'Start') + input(f.keys[1], 'End');
     }
     if (f.kind === 'minutes') {
       // §14 — a whole-minutes text input (the snap resolutions), mirroring the mockup's
