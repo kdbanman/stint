@@ -1,7 +1,7 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D12, D13, D14,
  * A01/A02, A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158, #164,
- * #242 and #255).
+ * #241, #242 and #255).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -18,7 +18,11 @@
  *      the tokens file (never trusted from a table), over the permitted token pairs design.html
  *      §03 names, plus the prohibited pairs that must stay unusable.
  *   4. D04/D16 faint-is-never-text — `color: var(--faint)` survives only on the sanctioned
- *      disabled-state selectors; everything readable reads `muted` (G10).
+ *      disabled-state selectors; everything readable reads `muted` (G10). Beside it, §07's
+ *      disabled idiom in the direction that keeps the allowlist honest: the sanctioned selectors
+ *      are exactly the file's `:disabled` population, and each one paints the whole idiom — faint
+ *      on wash with a `not-allowed` cursor. One state had grown three grammars, and the drift was
+ *      invisible because every rule was individually legal (issue #241).
  *   5. D07 spacing grid, D06 readable-text floor, D13 placeholder colour — declaration-scoped
  *      static scans over styles.css and every mockup's <style> blocks: every padding/margin/gap
  *      px value sits on the 4px grid (2px as the half-step), no font-size declares below 11px,
@@ -296,19 +300,50 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
 describe('faint is never readable text (design.html D04/D16)', () => {
   // The one sanctioned faint-as-text use: a disabled control (the WCAG A01 exemption
   // design.html §07 records). Anything else must read `muted` — faint on paper is 3.3:1.
-  const allowed = ['.report-field:disabled'];
+  //
+  // The list is per-selector on purpose: it is the review surface for spending that exemption,
+  // so every disabled control the app grows arrives here as a diff line someone has to approve.
+  // It is NOT a menu of grammars — §07 states one idiom for the state, and the assertion below
+  // holds every listed selector to it, so a rule cannot join the list and then paint its own dim
+  // (issue 241, where the four disabled rules had drifted into three different treatments and
+  // each one's comment claimed it was following one of the others).
+  const allowed = [
+    '.unified-form .uf-select:disabled',
+    '.report-field:disabled',
+    '.set-field:disabled',
+    '.set-update-btn:disabled',
+  ];
+
+  // Comments can quote CSS (the doctrine header does), so strip them before parsing rules.
+  const rules = (): { selector: string; body: string }[] =>
+    [...stylesCss.replace(/\/\*[^]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      selector: m[1]!.trim().replace(/\s+/g, ' '),
+      body: m[2]!,
+    }));
 
   it('styles.css paints color: var(--faint) only on the sanctioned disabled selectors', () => {
-    // Comments can quote CSS (the doctrine header does), so strip them before parsing rules.
-    const css = stylesCss.replace(/\/\*[^]*?\*\//g, '');
-    const offenders: string[] = [];
-    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
-      if (!/color:\s*var\(--faint\)/.test(rule[2]!)) continue;
-      const selector = rule[1]!.trim().replace(/\s+/g, ' ');
-      if (!allowed.includes(selector)) offenders.push(selector);
-    }
+    const offenders = rules()
+      .filter((r) => /color:\s*var\(--faint\)/.test(r.body))
+      .map((r) => r.selector)
+      .filter((s) => !allowed.includes(s));
     expect(offenders, 'faint used as text colour outside the disabled allowlist').toEqual([]);
+  });
+
+  it('every disabled control in styles.css carries the whole §07 idiom, and the list is all of them', () => {
+    const disabled = rules().filter((r) => r.selector.includes(':disabled'));
+    // Guard-the-guard: an allowlist can only be a review surface if the scan behind it still
+    // finds the population. Four disabled rules stand today; a regex gone blind fails here.
+    expect(disabled.map((r) => r.selector).sort()).toEqual([...allowed].sort());
+    const wrong = disabled
+      .filter(
+        (r) =>
+          !/color:\s*var\(--faint\)/.test(r.body) ||
+          !/background:\s*var\(--wash\)/.test(r.body) ||
+          !/cursor:\s*not-allowed/.test(r.body),
+      )
+      .map((r) => r.selector);
+    expect(wrong, 'a disabled rule off design.html §07 idiom (faint on wash, not-allowed)').toEqual([]);
   });
 });
 
