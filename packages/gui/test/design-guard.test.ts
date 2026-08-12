@@ -244,8 +244,8 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
     // and every site is held to the ≥24px the branch demands by the text-colour census below.
     ['accent', 'paper', LARGE_TEXT_FLOOR],
     // Non-text signal: icons, running marks, focus. A02's 3:1 floor is carried by the
-    // FULL-STRENGTH accent — the D13 focus boundary (a field's accent border, an outline
-    // everywhere else) and icon ink. The focus HALO (--ring) paints only a 35% mix and is a
+    // FULL-STRENGTH accent — the D13 focus boundary (an outline, with a field's accent border as
+    // dressing on top of it) and icon ink. The focus HALO (--ring) paints only a 35% mix and is a
     // redundant echo around that boundary, never the indicator of record.
     // Scored against all three surfaces a focus stop actually sits on (issue #137); --canvas is
     // absent deliberately — no focus stop is drawn against it, and since issue #158 no shipped
@@ -451,10 +451,11 @@ describe('one focus idiom, reachable (design.html D13/A04, A02 — issue #137)',
       if (FOCUS_RULE.test(sel)) continue;
       if (/(?:^|[;{])\s*outline\s*:/.test(rule[2]!)) strays.push(sel);
     }
-    // A02 rests on this. An outline cannot be outranked by a more specific component rule the
-    // way a border can — `.start-form input[type="text"]` beats `input:focus-visible`, which is
-    // how the accent border D13 asks for silently lost the cascade and never painted (#137). A
-    // component rule reaching for `outline` would put the boundary back in play.
+    // A02 rests on this, and so now does D13, which names the outline as the boundary and carries
+    // the reason with it: an outline cannot be outranked by a more specific component rule the way
+    // a border can — `.start-form input[type="text"]` beats `input:focus-visible`, which is how the
+    // accent border D13 USED to ask for silently lost the cascade and never painted (#137; the spec
+    // caught up in #253). A component rule reaching for `outline` would put the boundary back in play.
     expect(strays, 'outline declared outside the focus rule').toEqual([]);
   });
 
@@ -1040,7 +1041,8 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
    *  offset and no blur means no light source, so D09 does not govern it, and the rule that does
    *  is named per row. */
   const NOT_ELEVATION: ReadonlyArray<readonly [layer: string, sites: ReadonlySet<string>]> = [
-    // D13's focus idiom — "accent border + the 3px ring". The ring is a property of its own, which
+    // D13's focus idiom — an accent outline as the boundary, plus the 3px ring on fields. The ring
+    // is a property of its own, which
     // the generator synthesizes, and the focus census above already owns which token may paint it;
     // this row only records that a ring is not a rung.
     [

@@ -219,9 +219,14 @@
     the nav rail: the active item is a lifted chip whose <em>icon</em> may take accent; its label
     stays ink. (<code>accent-weak</code> backs non-selection accents only: pills, weak fills.)</p>
     <p><span class="rid">D13</span><strong>Fields.</strong> One border (<code>rule-strong</code>),
-    one radius (8px), one focus idiom: <code>accent</code> border + the 3px ring. Every field carries
-    a visible label (this is also the §07 border-contrast exemption). Placeholder text uses
-    <code>muted</code>, never <code>faint</code>.</p>
+    one radius (8px), one focus idiom: an <code>accent</code> <strong>outline</strong> (with
+    <code>outline-offset</code>) as the boundary, plus the 3px ring on fields — the accent border
+    stays as field dressing. Outline, not border: a border-based indicator loses the cascade to any
+    component field chrome whose selector is spelled more specifically, so it silently fails to
+    paint, and <code>outline</code> is the one property no component rule sets. Every field carries
+    a visible label (this is also the §07 border-contrast exemption) — a heading spanning several
+    controls is a group label, and a control's only visible word is never a category nor a sibling's
+    name. Placeholder text uses <code>muted</code>, never <code>faint</code>.</p>
     <p><span class="rid">D14</span><strong>Pills &amp; tags</strong> are the only pill-shaped
     elements — plus the Entries <strong>+ Add-entry button</strong>, whose required
     circle-to-lozenge hover expansion (PRD §12 R07) entails the capsule; their colour is
@@ -229,7 +234,10 @@
     <p><span class="rid">D15</span><strong>Inline messages</strong> (PRD §12 R21): a
     <code>warn</code> advisory (flag tokens) is allowed-but-flagged — the write saved; an
     <code>err</code> (danger tokens) is a refused write — the form stays open, nothing changed. Two
-    palettes so an advisory never reads as a hard block.</p>
+    palettes so an advisory never reads as a hard block. A refusal that can be attributed to
+    particular fields also marks them — the <code>danger</code> border and the 3px ring in
+    <code>danger-weak</code>, plus the programmatic invalid state — so the message says why and the
+    form shows where; the marks clear on the next input, on the message's own lifecycle.</p>
     <p><span class="rid">D16</span><strong>Icons.</strong> One line family (the <code>#i-*</code>
     symbol set), 1.6px stroke, <code>currentColor</code>; icons inherit text colour and take accent
     only when their item is active. Icon-only affordances use <code>muted</code>, never
@@ -253,6 +261,12 @@
     borders where the field carries a visible label (D13) — the boundary is not the sole identifier;
     purely decorative separators (<code>rule</code>); the mark's own bars, which are a brand asset
     rather than text or an affordance (D21).</p>
+    <p><strong>The disabled idiom.</strong> One paint for the state, on every disabled control and
+    not fields alone: <code>faint</code> text on <code>wash</code>, with <code>not-allowed</code> as
+    the cursor. The extra dimness is what separates disabled from ordinary <code>muted</code>
+    secondary text, and the cursor tells the pointer the same fact the colour tells the eye. This is
+    the exemption above being spent deliberately: <code>faint</code> is otherwise never readable
+    text (D04/D16), and it is permitted here only because A01 does not govern a disabled control.</p>
   </section>
 
   <section id="s08">
