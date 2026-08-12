@@ -456,11 +456,15 @@ describe('GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (#167
  * The cap is deliberately loose — a legitimate table row runs long, and this is a diffability
  * floor, not a style rule. `judge-rubric.md` is the same table-of-multi-KB-cells shape and is
  * NOT restructured here (#128 is scoped to COVERAGE.md); rather than exempt it, it carries a
- * budget at today's longest line, so it can only get shorter.
+ * budget at its longest line, so it can only get shorter — until a new claim lands on the row
+ * that IS the longest, which is the one thing the ratchet cannot absorb (a table row is one
+ * physical line; there is nowhere to wrap). Then it re-baselines to the new length and holds
+ * there: 5640 → 5951 when REPORTS_VIEW grew the §12 R21 refusal claim by its field-marking half
+ * (issue #243). A re-baseline is a declared move in the PR that makes it, never a silent bump.
  */
 const CRITERIA_DIR = 'acceptance/criteria';
 const LINE_LIMIT = 500;
-const BUDGETS = new Map([['judge-rubric.md', 5640]]);
+const BUDGETS = new Map([['judge-rubric.md', 5951]]);
 
 describe('GOLD — acceptance/criteria/*.md stay line-diffable (#128)', () => {
   const docs = readdirSync(join(repoRoot, CRITERIA_DIR), { withFileTypes: true })

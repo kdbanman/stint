@@ -2077,7 +2077,21 @@ view, not only mirrored to the off-view banner) + the `REPORTS_VIEW` refusal
 sub-facts (an incomplete custom range → zero `saveReport` , the missing field
 focused; a duplicate name whose message persists past the tick), and the
 duplicate-name contract in BDD `features/saved_reports.feature` (run TWICE over
-core + `tt` ); JUDGE `WRITE_REJECTION_FEEDBACK` is the edit-mode Stop-before-Start twin + the
+core + `tt` ); **which FIELD a refusal is about (design.html D15, issue #243)** —
+saying why is only half a refusal, and the app could not mark a field at all
+(`styles.css` had no invalid paint under any spelling, and a guard comment
+recorded the divergence instead of closing it), so a form with several fields
+named the problem and pointed at nothing. Core answers with a message and no
+field id — a contract `tt` reads too — so the attribution lives in the
+RENDERER: `reports.js` maps the refusal shapes it can pin (core's inverted
+custom range first, beside the renderer-local incomplete one) onto their field
+ids, sets `aria-invalid` there — the ONE state, which `styles.css` paints the
+D13 ring geometry in `--danger` / `--danger-weak` from, so the mark an eye sees
+and the mark a screen reader hears cannot drift apart — and drops it on the
+message's own §12 R21 lifecycle. JUDGE `REPORTS_VIEW` `fieldMarkOk` scores the
+outcome: both date fields painted (COMPUTED border + ring) and programmatically
+invalid, the unmentioned name field clean, and the next input clearing message
+and marks together; JUDGE `WRITE_REJECTION_FEEDBACK` is the edit-mode Stop-before-Start twin + the
 split-outside-span refusal. **What the surfaced message is PAINTED in
 (design.html D15, issue 139)** — the dedicated `.form-error` regions are the
 `--danger` block palette by construction, but the two regions that serve BOTH

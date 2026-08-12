@@ -1246,9 +1246,17 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
         'input:focus-visible, select:focus-visible, textarea:focus-visible',
       ]),
     ],
-    // The same ring geometry in the danger colour, on an invalid field. Mockup-only: the shipped
-    // renderer has no invalid-field paint, so this licence is spent in reports.html alone.
-    ['0 0 0 3px var(--danger-weak)', new Set(['.field.invalid'])],
+    // The same ring geometry in the danger colour, on a field a refusal is pinned to (D15's
+    // second half). Two spellings of one state: the mockup marks a class, the app keys off the
+    // `aria-invalid` it must set anyway, so its single write paints the box AND names it to
+    // assistive tech (issue #243).
+    [
+      '0 0 0 3px var(--danger-weak)',
+      new Set([
+        '.field.invalid',
+        "input[aria-invalid='true'], select[aria-invalid='true'], textarea[aria-invalid='true']",
+      ]),
+    ],
     // A keycap's bottom edge. Zero blur, zero spread, in the rule colour: a 1px LINE, drawn as a
     // shadow only because a real border would change the box the hotkey field lays out in.
     ['0 1px 0 var(--rule-strong)', new Set(['.set-hotkey', '.kbd'])],

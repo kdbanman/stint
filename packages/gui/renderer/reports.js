@@ -23,17 +23,51 @@
   // open. Announced via role=status/aria-live in the markup. The message reads through the
   // shared SU.errMessage — a rejection carrying an Error object must render its message here
   // exactly as it does on every other surface, not `[object Object]` (issue #168).
-  function setWarn(msg) {
+  //
+  // design.html D15's second half: a refusal that can be pinned on particular fields also MARKS
+  // them, so the message says why and the form shows where. `fields` are those field ids — they
+  // wear the mark and the first takes focus, which is the incomplete-range refusal's own
+  // point-at-the-field idiom generalized rather than doubled (issue #243). The marks ride the
+  // MESSAGE's lifecycle, not a second one: every clearWarn drops them.
+  function setWarn(msg, fields = []) {
     const el = $('rep-warning');
     if (!el) return;
     el.textContent = errMessage(msg);
     el.hidden = false;
+    markInvalid(fields);
+    if (fields.length) $(fields[0]).focus();
   }
   function clearWarn() {
     const el = $('rep-warning');
     if (!el) return;
     el.textContent = '';
     el.hidden = true;
+    markInvalid([]);
+  }
+
+  // Mark exactly `ids` invalid, unmarking whatever the last message marked — read back off the
+  // builder rather than remembered, so the two lists cannot drift. `aria-invalid` is the ONE
+  // state: styles.css paints the danger border + ring from that same attribute (D15), so the
+  // renderer writes the programmatic half and the visual half comes with it.
+  function markInvalid(ids) {
+    for (const el of $('rep-builder').querySelectorAll('[aria-invalid]')) {
+      el.removeAttribute('aria-invalid');
+    }
+    for (const id of ids) $(id).setAttribute('aria-invalid', 'true');
+  }
+
+  // Which fields a CORE refusal can be pinned on. Core answers a refused write with a message and
+  // no field id — a shared contract tt reads too — so the GUI-only question "which box was wrong"
+  // is answered here, against core's own refusal text: one row per refusal shape this builder can
+  // attribute, and a refusal matching none reads as the message alone, exactly as every refusal
+  // did before issue #243. The inverted custom range is the row context/mockups/reports.html
+  // draws — core's rangeSpecOrderError (§09 R01), refusing a From after its To.
+  const ATTRIBUTABLE = [
+    { refusal: /range end must not be before its start/i, fields: ['rep-range-from', 'rep-range-to'] },
+  ];
+  function attributableFields(err) {
+    const message = errMessage(err);
+    return ATTRIBUTABLE.find((a) => a.refusal.test(message))?.fields ?? [];
   }
 
   // The five core presets the range chips drive, plus their display label. 'custom' is the
@@ -363,19 +397,20 @@
     const input = draftToInput();
     if (!input.name) {
       // §12 R21: an empty name is refused with focus + a persistent inline message (not a
-      // silent no-op) — the same feedback shape the incomplete-range refusal uses below.
+      // silent no-op). Focus alone, no field mark: neither NAME refusal is attributed yet —
+      // this one nor core's duplicate name — so the pair stay one shape (issue #243 marks the
+      // RANGE, the case design.html D15 and the reports.html mockup draw).
       $('rep-name').focus();
       setWarn('Name your report before saving.');
       return;
     }
     // §09 R01 / §12 R21: a custom range needs BOTH plain dates before it can save. An incomplete
     // range is refused where it was attempted — this is a renderer-local refusal that never
-    // reaches core, so it needs its own feedback: focus the missing field + a persistent inline
-    // message (mirroring the empty-name focus), never the bare return that read as a dead click.
+    // reaches core, so it needs its own feedback: a persistent inline message pinned on the
+    // missing field, never the bare return that read as a dead click.
     if (input.rangeSpec.kind === 'absolute' && (!input.rangeSpec.fromDate || !input.rangeSpec.toDate)) {
       const missing = !input.rangeSpec.fromDate ? 'rep-range-from' : 'rep-range-to';
-      $(missing).focus();
-      setWarn('Pick both a From and a To date for the custom range.');
+      setWarn('Pick both a From and a To date for the custom range.', [missing]);
       return;
     }
     try {
@@ -390,12 +425,15 @@
         await window.stint.editReport({ name, patch });
       }
     } catch (err) {
-      // §12 R21: a duplicate name (§13 UNIQUE COLLATE NOCASE) / invalid range is core's to
+      // §12 R21: a duplicate name (§13 UNIQUE COLLATE NOCASE) / inverted range is core's to
       // reject. Surface it in the PERSISTENT inline region — NOT the old constraint-validation
       // dance that set a message and cleared it in the SAME tick, so it never stayed on screen.
-      // The message stays until the next input on the builder.
-      setWarn(String((err && err.message) || err));
-      $('rep-name').focus();
+      // The message stays until the next input on the builder. A refusal the builder can pin on
+      // fields marks them and focuses the first (D15); one it cannot — a duplicate name names no
+      // field — leaves the boxes alone and just parks the caret where a retype starts.
+      const fields = attributableFields(err);
+      setWarn(err, fields);
+      if (!fields.length) $('rep-name').focus();
       return;
     }
     closeBuilder();
