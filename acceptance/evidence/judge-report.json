@@ -557,7 +557,7 @@
         "editOk": true,
         "popOk": true
       },
-      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":614,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
+      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":613,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
@@ -763,9 +763,11 @@
       "facts": {
         "sweepReal": true,
         "noUndersizedTargets": true,
-        "noneAbsent": true
+        "noneAbsent": true,
+        "shortBlockMet": true,
+        "shortBlockUnclipped": true
       },
-      "justification": "A03 sweep over 254 visible targets across 10 surfaces (entries=23, timer=20, clients=26, reports=14, settings=26, entries (unified form, create)=32, entries (unified editor)=52, timer (start details)=20, reports (builder)=39, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]",
+      "justification": "A03 sweep over 294 visible targets across 11 surfaces (entries=23, timer=20, clients=26, reports=14, settings=26, entries (unified form, create)=32, entries (unified editor)=52, timer (start details)=20, reports (builder)=39, entries (short blocks)=40, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]; duration-true exemption (design.html §07, issue #224 — sub-floor calendar blocks whose height encodes a sub-24-minute span; must be non-empty)=[entries (short blocks):div.ev entry[data-id=\"201\"] 138.8x18 (10m — height is duration)]; focused 18px short block: corner checkbox beyond-box=true hit-testable=true, ops chip beyond-box=true hit-testable=true",
       "screenshot": "main-target-size.png"
     },
     {

@@ -2720,8 +2720,9 @@ body.popover { background: var(--paper); margin: 0; }
   background: var(--paper);
   color: inherit;
   cursor: pointer;
-  /* design.html D09 — a region is signalled by its surface, so an event's content NEVER paints
-     outside its own block. A block's height comes from its duration while its text height is fixed
+  /* design.html D09 — a region is signalled by its surface, so a RESTING event's content never
+     paints outside its own block (the hatch below opens the clip only for the attended states).
+     A block's height comes from its duration while its text height is fixed
      by text flow, so anything under ~55 minutes has less block than content; clipping makes that
      shortfall DELIBERATE TRUNCATION (§4) — the description first, then client/project, then the
      time label, each dropping as the block shortens — instead of a spill into the hour rows below,
@@ -2733,11 +2734,22 @@ body.popover { background: var(--paper); margin: 0; }
   margin: 0;
   border-bottom: 1px solid var(--rule-strong);
 }
-/* The one exception to the clip: while an inline gate is MOUNTED on the event — the two-step delete
-   confirm (.confirm) or the split picker (.split-at) — the block hosts a transient control that is
-   wider than a day column and is not the entry's own content. Clipping it would hide the Cancel the
-   gate exists to offer, so the block opens up for exactly as long as the gate is up. */
-.dt .ev:has(.confirm, .split-at) { overflow: visible; }
+/* The exceptions to the clip — transient states, one block at a time. While an inline gate is
+   MOUNTED on the event — the two-step delete confirm (.confirm) or the split picker (.split-at) —
+   the block hosts a transient control that is wider than a day column and is not the entry's own
+   content; clipping it would hide the Cancel the gate exists to offer, so the block opens up for
+   exactly as long as the gate is up. Hover and focus-within take the same hatch (issue 224): a
+   block shorter than the A03 24px floor is drawn short because height ENCODES duration — the
+   design.html §07 recorded exemption, SC 2.5.8's essential-presentation carve-out — and the clip
+   was swallowing the very controls those states exist to REVEAL (the corner checkbox and the ops
+   chip, which a narrow column drops to top: 30px, wholly outside a sub-30px block). Since issue
+   140 block focus is how a keyboard user discovers those controls at all, so the clip must yield
+   exactly when the reveal fires. Same shape as the gate rationale: the state is attended and
+   singular, and it already owns the raise rung (--sh-raise + z-index 3, below), so what spills
+   reads as a layer OVER the calendar, never as content of the rows beneath (D09). */
+.dt .ev:has(.confirm, .split-at),
+.dt .ev:hover,
+.dt .ev:focus-within { overflow: visible; }
 /* design.html D09 (issue 146, unhashed — the D01 scan over this file reads a hashed three-digit
    number as a colour literal): a transient gate armed FROM a calendar event is a LAYER OVER the
    calendar, not content of the 124px day column its button sat in. Laid out in flow it was an
@@ -2960,8 +2972,9 @@ body.popover { background: var(--paper); margin: 0; }
    (the mockup draws exactly this collision at its min width; the app must keep both
    CLICKABLE). Sized by the day track, the chip steps down a rung at a time:
      • under ~118px of column, it drops below the checkbox lane (top: 30px) — both stay
-       whole and hittable; a very short block clips the dropped chip, where the
-       click-anywhere/keyboard path into the editor (footer Split + Delete) remains;
+       whole and hittable; a very short block clips the dropped chip AT REST, and the
+       hover/focus-within hatch above reopens it the moment the block is attended (issue
+       224 — the click-anywhere/keyboard path into the editor never depended on it);
      • under ~82px (seven columns near the minimum window), it also stacks vertically so
        the three buttons keep their full 24px width inside the block. */
 .dt { container-type: inline-size; }
