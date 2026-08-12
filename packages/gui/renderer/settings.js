@@ -170,9 +170,17 @@
       // activation from the tag, the name from `aria-label` (the same programmatic half every
       // other control in this file writes, over the visible `.set-k` row heading), and the focus
       // stop for free. Same shape the tag remover took in issue 148.
+      //
+      // The name carries the CHORD as well as the label, because `aria-label` overrides content:
+      // naming this button "Global hotkey" alone would silence the one thing the old span did
+      // announce, trading half of 4.1.2 for the other half. A button has no value channel, so the
+      // current binding rides in the name — "Global hotkey, Ctrl+Alt+T". It regenerates on every
+      // render(), which persist() calls after a capture, so the spoken value cannot go stale. The
+      // visible `.set-k` heading is still a leading substring of the name (WCAG 2.5.3).
+      const chord = friendlyHotkey(String(v));
       return (
         `<button type="button" class="hk set-hotkey" data-key="${f.key}" ` +
-        `aria-label="${esc(f.label)}">${esc(friendlyHotkey(String(v)))}</button>`
+        `aria-label="${esc(f.label)}, ${esc(chord)}">${esc(chord)}</button>`
       );
     }
     // select

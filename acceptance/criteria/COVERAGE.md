@@ -1976,8 +1976,11 @@ FOCUSABLE rather than `input`/`select`/`textarea` because of issue 245: a contro
 the user can focus owes a name whatever its tag (WCAG 4.1.2), and the narrower
 sweep is why the app's ONE unnamed control — the Settings global-hotkey capture,
 shipped as a `[tabindex]` span with no role and no name — was invisible to the
-app's one label guard. The control is a real `<button aria-label="Global
-hotkey">` now, and the guard was widened rather than the case re-flagged, so the
+app's one label guard. The control is a real `<button>` now, named "Global
+hotkey, <chord>": `aria-label` overrides content, so naming it for the row alone
+would have silenced the chord the span did announce, and a button has no value
+channel for the binding to ride in instead. The guard was widened rather than
+the case re-flagged, so the
 sweep is what catches the next non-field control; content counts as a name only
 where the role takes its name from content, a bare `<span>` being `generic`,
 where ARIA prohibits naming. Nothing caught this before
