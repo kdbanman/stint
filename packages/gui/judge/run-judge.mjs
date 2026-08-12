@@ -5683,7 +5683,13 @@ async function sceneSelectionLift(browser) {
     const blocks = [...document.querySelectorAll('.dcol .ev')].filter((el) => !el.classList.contains('me'));
     const closed = blocks.filter((el) => !el.classList.contains('run'));
     const chosen = closed.filter((el) => el.classList.contains('on'));
-    const plain = closed.filter((el) => !el.classList.contains('on'));
+    // RESTING means nothing is chosen AND nothing is pointing at it. The scene opens the editor
+    // by clicking a block's edit control, which leaves the cursor over the calendar, and a hovered
+    // block climbs to the raise rung — so a sample that ignored `:hover` could read the hover
+    // state as the resting one, intermittently. It went unseen while the assertion below was
+    // `!restIsFlat`, which a hover satisfies as happily as the chip lift did; issue #255 inverted
+    // it to require flat, which is what made the latent flake reachable.
+    const plain = closed.filter((el) => !el.classList.contains('on') && !el.matches(':hover'));
     // The resting state, read off the live surface rather than named: whatever the untouched
     // majority computes IS "not chosen", so the comparison stays token-free. Since issue #255
     // that state is FLAT — the chip rung means chosen, so an unchosen block wears no rung —
