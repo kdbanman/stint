@@ -85,8 +85,9 @@
   select.field{width:auto;min-width:150px}
   .field.time{width:72px;text-align:center;font-family:var(--num);font-size:13px}
   /* an inapplicable row (.srow.off) greys its CONTROL only: a disabled control is design.html
-     §07's recorded A01 exemption, its label is plain readable text and keeps full --ink */
-  .field:disabled{color:var(--muted);background:var(--wash)}
+     §07's recorded A01 exemption, its label is plain readable text and keeps full --ink.
+     The control takes §07's disabled idiom whole — faint on wash, not-allowed cursor */
+  .field:disabled{color:var(--faint);background:var(--wash);cursor:not-allowed}
   /* card / tag / pill */
   .card{background:var(--paper);border:1px solid var(--rule);border-radius:var(--r2);box-shadow:var(--sh-card)}
   .tag{font-size:11px;color:var(--muted);background:var(--wash);border:1px solid var(--rule);border-radius:999px;padding:2px 8px;display:inline-flex;align-items:center;gap:4px}

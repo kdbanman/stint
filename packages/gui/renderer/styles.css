@@ -842,7 +842,10 @@ s {
    outrank it. */
 .unified-form .uf-select { font-family: var(--sans); }
 .unified-form .uf-time { font-family: var(--num); font-variant-numeric: tabular-nums; }
-.unified-form .uf-select:disabled { color: var(--muted); background: var(--wash); }
+/* design.html §07's disabled idiom, and the whole of it: faint on wash with a not-allowed cursor.
+   The same three declarations paint every disabled control in this file — one state, one answer
+   (issue 241). */
+.unified-form .uf-select:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 .unified-form .uf-tags { align-items: flex-start; }
 .unified-form .uf-tag-chips { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; flex: 1; min-width: 0; }
 .unified-form .uf-tag-add {
@@ -1557,7 +1560,8 @@ button.danger:hover { background: var(--danger-weak); }
   border-radius: var(--r1);
   padding: 8px 12px;
 }
-/* §09 R3: the project filter is disabled until a client is chosen. Dimmed, monochrome. */
+/* §09 R3: the project filter is disabled until a client is chosen — painted in design.html §07's
+   disabled idiom, which is not this rule's local choice but the file's (issue 241). */
 .report-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 /* §09 R4: the increment picker reads as a secondary choice when rounding is OFF. Monochrome. */
 .report-field.off { opacity: 0.5; }
@@ -2219,10 +2223,15 @@ body.popover { background: var(--paper); margin: 0; }
   padding: 8px 12px;
   min-width: 160px;
 }
-/* A disabled settings field greys ITSELF — muted on wash, the same treatment the unified form's
-   disabled select carries. A disabled control is design.html §07's recorded A01 exemption, so a
-   dim is legal here and only here; nothing around the field may borrow it. */
-.set-field:disabled { color: var(--muted); background: var(--wash); }
+/* A disabled settings field greys ITSELF, in design.html §07's disabled idiom — faint on wash
+   with a not-allowed cursor (issue 241). The dim spends §07's recorded A01 exemption, which the
+   CONTROL holds and nothing around it may borrow: `.set-k` beside this field is ordinary readable
+   text, and dimming the row composited it to 3.19:1 against A01's 4.5:1 floor (issue 155). The
+   row marks the state with its `off` class; the control carries both halves of the paint, and its
+   `disabled` attribute is what stops it interacting — a pointer-events blanket over the row's
+   control cell would only cost the cursor its hit test, and with it the honest pointer feedback
+   §07 asks for. */
+.set-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 /* §14 — the Timeline group's working-hours pair: two compact strict-HH:MM text inputs on one
    row, joined by an en-dash. Narrower than the default .set-field (they hold only "HH:MM"); they
    reuse the .set-field chrome via the shared class, but not its face. A value the user types is
@@ -2252,13 +2261,10 @@ body.popover { background: var(--paper); margin: 0; }
 }
 .set-min-suffix { color: var(--muted); font-size: 13px; }
 /* §14 — a row whose control is inapplicable under the current mode (the Around span while the
-   picker window is working_hours) marks the state on the row and stops its control interacting,
-   but the DIM rides on the `disabled` control alone (the .set-field:disabled rule above) — never
-   on the row. Dimming the row applied the control's exemption to everything beside it: `.set-k`
-   is ordinary readable text, and at the row's opacity 0.5 it composited to 3.19:1 against A01's
-   4.5:1 floor while the comment here claimed it "stays legible" (issue 155). The label keeps its
-   full --ink; the greyed select is what says the row is off. */
-.set-row.off .set-ctrl { pointer-events: none; }
+   picker window is working_hours) carries NO paint of its own: the `.set-row.off` class is a state
+   marker, and the greyed select is what says the row is off. The whole treatment lives on the
+   control (.set-field:disabled above), which is why nothing here dims the row and nothing here
+   blankets it in pointer-events. The label keeps its full --ink (issue 155). */
 /* The week-start segmented control reuses the .seg / .seg-btn raised-chip rules. */
 .set-seg { vertical-align: middle; }
 /* The rounding toggle: a monochrome track that fills inked when on. The knob slides; the ON
@@ -2319,7 +2325,14 @@ body.popover { background: var(--paper); margin: 0; }
   color: var(--ink);
   padding: 8px 12px;
 }
-.set-update-btn:disabled { color: var(--muted); cursor: default; background: var(--wash); }
+/* design.html §07's disabled idiom reaches buttons, not fields alone: a check or download in
+   flight greys its button faint on wash and tells the pointer the same fact with not-allowed
+   (issue 241). A button-shaped variant of the state would be a second answer to a question the
+   app answers once. The three declarations are the whole idiom — no opacity beside them:
+   Chromium's UA sheet carries `select:disabled { opacity: 0.7 }` and gives a button nothing, so
+   this text lands a shade stronger than a disabled select's. Closing that last gap means naming
+   an opacity §07 does not; re-muting THIS rule to close it would just restore the drift. */
+.set-update-btn:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 .pill.new,
 .update-result.new {
   color: var(--flag);
