@@ -2831,7 +2831,14 @@ body.popover { background: var(--paper); margin: 0; }
   pointer-events: none;
 }
 /* The hover-corner checkbox: appears on hover (opacity, so it stays Playwright-checkable at rest)
-   and stays lit once selected. Styled from an <input> so `.check()`/`.sel` still resolve. */
+   and stays lit once selected. Styled from an <input> so `.check()`/`.sel` still resolve.
+   Issue #244 — whenever the box is visible (hover, focus-within, checked) its painted core
+   (x≈5–21) sits over the description's first ~13px (text starts at x=8). That overlap is
+   decided, like the ops chip's on the other corner (its comment at `.ev .ops` below): "The
+   selection box is only visible some of the time. e.g. on hover. So overlap is fine. We don't
+   need to make room for a control that's usually not there. Presumably the user is already
+   familiar with the overlapped description by the time they move to select it." So no
+   block-level padding reserves room for the box, here or in mock main.html. */
 .ev .ck {
   position: absolute;
   /* 1px, not the 5px it reads as: the 4px transparent ring below puts the PAINTED box back on
@@ -2862,7 +2869,6 @@ body.popover { background: var(--paper); margin: 0; }
   opacity: 0;
   transition: opacity 0.12s ease;
 }
-.ev.wck { padding-left: 28px; }
 /* design.html A04 — "focus visible on every interactive element, NEVER FULLY OBSCURED" (issue
    140). The checkbox was the one hover-revealed control with no focus clause: Tab landed on a
    16×16 box still at zero opacity, and since `opacity` takes the outline with it, the focus ring
