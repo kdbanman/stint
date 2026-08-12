@@ -1054,6 +1054,21 @@ textarea:focus-visible {
   box-shadow: var(--ring);
 }
 
+/* design.html D15, the refusal's second half: the message region says WHY, the field it can be
+   pinned on says WHERE. D13's ring geometry in the danger colour — the same halo the focus idiom
+   above draws, and it must outrank that one while both hold, so it is written after it at equal
+   specificity. Keyed off `aria-invalid` rather than a class of its own: the attribute has to be
+   set anyway for the state to exist for assistive tech, so one write paints the box AND names it,
+   and the mark an eye sees can never disagree with the mark a screen reader hears. One rule for
+   every field in the app — issue #243 was that NO field could be marked at all, so a refusal that
+   knew which box was wrong had nothing to point with. */
+input[aria-invalid='true'],
+select[aria-invalid='true'],
+textarea[aria-invalid='true'] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-weak);
+}
+
 /* design.html D13: placeholder text reads muted, never faint — one rule for every field. */
 ::placeholder { color: var(--muted); }
 

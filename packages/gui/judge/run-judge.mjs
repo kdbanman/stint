@@ -4368,6 +4368,54 @@ async function sceneReportsView(browser) {
       cardCount: document.querySelectorAll('#rep-defs .def').length, // still the two seeded defs
     }));
 
+    // (i2b) design.html D15 — the refusal's SECOND HALF: a message alone names the problem while
+    // the form points at nothing, so the two date fields the refusal is ABOUT are marked. Read as
+    // the OUTCOME a user gets: the danger border and the 3px danger-weak ring as COMPUTED paint
+    // (not the attribute that asked for them), and the programmatic invalid state that tells a
+    // screen reader the same thing. Only those two — the name the message does not mention stays
+    // unmarked, or "which field" would mean nothing.
+    const invertedMarks = await page.evaluate(() => {
+      const { rgbOf } = window.__probe;
+      const danger = rgbOf('--danger');
+      const dangerRing = `${rgbOf('--danger-weak')} 0px 0px 0px 3px`;
+      return {
+        fields: ['rep-range-from', 'rep-range-to'].map((id) => {
+          const el = document.getElementById(id);
+          const cs = getComputedStyle(el);
+          return {
+            id,
+            ariaInvalid: el.getAttribute('aria-invalid'),
+            border: [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor],
+            borderAllDanger: [cs.borderTopColor, cs.borderRightColor, cs.borderBottomColor, cs.borderLeftColor]
+              .every((c) => c === danger),
+            ring: cs.boxShadow,
+            ringIsDanger: cs.boxShadow === dangerRing,
+          };
+        }),
+        nameMarked: !!document.querySelector('#rep-name')?.hasAttribute('aria-invalid'),
+        markedInBuilder: document.querySelectorAll('#rep-builder [aria-invalid]').length,
+      };
+    });
+
+    // (i3) …and both halves clear TOGETHER on the next input: the marks ride the MESSAGE's own
+    // §12 R21 lifecycle, so the form never keeps pointing at a box after it has stopped saying
+    // why. Correcting the From date is that next input.
+    await page.fill('#rep-range-from', '2026-06-01');
+    const invertedCleared = await page.evaluate(() => {
+      const dangerWeak = window.__probe.rgbOf('--danger-weak');
+      return {
+        warnHidden: !!document.querySelector('#rep-warning')?.hidden,
+        fields: ['rep-range-from', 'rep-range-to'].map((id) => {
+          const el = document.getElementById(id);
+          return { id, ariaInvalid: el.getAttribute('aria-invalid'), ring: getComputedStyle(el).boxShadow };
+        }),
+        stillPainted: ['rep-range-from', 'rep-range-to'].filter((id) =>
+          getComputedStyle(document.getElementById(id)).boxShadow.includes(dangerWeak),
+        ),
+        markedInBuilder: document.querySelectorAll('#rep-builder [aria-invalid]').length,
+      };
+    });
+
     await page.click('#rep-preset-seg .preset[data-preset="custom"]');
     await page.waitForSelector('#rep-custom-range:not([hidden])', { state: 'attached' });
     await page.fill('#rep-name', 'June window');
@@ -4660,6 +4708,19 @@ async function sceneReportsView(browser) {
       refuseInverted.message === 'report range end must not be before its start' &&
       readsClean(refuseInverted.message) &&
       refuseInverted.cardCount === 2;
+    const fieldMarkOk =
+      // design.html D15 — the refused inverted range MARKS the two fields it is about: the
+      // danger border on all four sides and the danger-weak ring as computed paint, plus the
+      // programmatic invalid state, and nothing else in the builder wears either.
+      invertedMarks.fields.length === 2 &&
+      invertedMarks.fields.every((f) => f.ariaInvalid === 'true' && f.borderAllDanger && f.ringIsDanger) &&
+      !invertedMarks.nameMarked &&
+      invertedMarks.markedInBuilder === 2 &&
+      // …and the next input takes the message and the marks away together (§12 R21's lifecycle).
+      invertedCleared.warnHidden &&
+      invertedCleared.markedInBuilder === 0 &&
+      invertedCleared.fields.every((f) => f.ariaInvalid === null) &&
+      invertedCleared.stillPainted.length === 0;
     const emptyOk =
       defsEmpty.shown && defsEmpty.text === 'No saved reports yet.' && defsEmpty.cards === 0;
     record(
@@ -4677,9 +4738,10 @@ async function sceneReportsView(browser) {
         oneOpenOk,
         kebabOk,
         refusalOk,
+        fieldMarkOk,
         emptyOk,
       },
-      `reports view: list=${JSON.stringify(list)} pre-run=${JSON.stringify(preRun)} pre-run all-data export=${JSON.stringify(preRunExport)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} post-run visibility=${JSON.stringify(postRunVisible)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} second run=${JSON.stringify(secondRun)} collapsed=${JSON.stringify(collapsed)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
+      `reports view: list=${JSON.stringify(list)} pre-run=${JSON.stringify(preRun)} pre-run all-data export=${JSON.stringify(preRunExport)} builder=${JSON.stringify(builder)} refuse-incomplete=${JSON.stringify(refuseIncomplete)} refuse-duplicate=${JSON.stringify(refuseDup)} refuse-inverted=${JSON.stringify(refuseInverted)} inverted field marks=${JSON.stringify(invertedMarks)} marks cleared by the next input=${JSON.stringify(invertedCleared)} customSave=${JSON.stringify(customSave)} edit=${JSON.stringify(editOpen)} run=${JSON.stringify(run)} post-run visibility=${JSON.stringify(postRunVisible)} export filtered CSV=${JSON.stringify(afterCsv)} JSON=${JSON.stringify(afterJson)} all-data CSV=${JSON.stringify(afterAllCsv)} JSON=${JSON.stringify(afterAllJson)} labels=${JSON.stringify(exportLabels)} second run=${JSON.stringify(secondRun)} collapsed=${JSON.stringify(collapsed)} inline rename=${JSON.stringify(renamed)} armed=${JSON.stringify(armed)} deleted=${JSON.stringify(deleted)} zero-defs empty=${JSON.stringify(defsEmpty)}`,      'reports-list.png',
     );
   });
 }
