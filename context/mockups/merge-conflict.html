@@ -28,7 +28,7 @@
 /* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
-  .tnum{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .tnum{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
   .win{max-width:1040px;margin:32px auto 8px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong);position:relative}
@@ -55,7 +55,7 @@
   .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap;transition:background .12s,box-shadow .12s}
   .btn:hover{background:var(--hover)}
   .btn .ic{width:15px;height:15px;color:var(--muted)}
-  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent);box-shadow:var(--sh-chip)}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
   .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
   .btn.primary .ic{color:var(--on-accent)}
   .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
@@ -85,14 +85,15 @@
   .dh .dd{font-size:12px;font-weight:640;margin-left:4px}
   .dh .ds{font-size:11px;color:var(--muted);margin-left:8px}
   .dt{position:relative;height:240px;background:repeating-linear-gradient(to bottom,transparent 0,transparent 59px,var(--rule) 59px,var(--rule) 60px)}
-  .ev{position:absolute;left:6px;right:6px;border-radius:var(--r1);background:var(--paper);border:1px solid var(--rule-strong);box-shadow:var(--sh-chip);padding:4px 8px 4px 28px;overflow:hidden;font-size:11px}
+  .ev{position:absolute;left:6px;right:6px;border-radius:var(--r1);background:var(--paper);border:1px solid var(--rule-strong);padding:4px 8px 4px 28px;overflow:hidden;font-size:11px}
   .ev .bd{display:block;font-size:12px;font-weight:590;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ev .bc{display:block;font-size:11px;color:var(--muted);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .ev .bt{display:block;font-size:11px;color:var(--muted);margin-top:2px;font-variant-numeric:tabular-nums}
   /* design.html D12 (issue #144): a chosen block LIFTS, it does not turn accent; the checked
      box is a tick — paper fill, neutral edge, chip lift, ink mark. */
   .ev.on{box-shadow:var(--sh-pop);z-index:3}
-  .ev .ck{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);box-shadow:var(--sh-chip);display:flex;align-items:center;justify-content:center}
+  .ev .ck{position:absolute;top:4px;left:4px;width:16px;height:16px;border-radius:4px;border:1.5px solid var(--rule-strong);background:var(--paper);display:flex;align-items:center;justify-content:center}
+  .ev .ck.on{box-shadow:var(--sh-chip)}
   .ev .ck .ic{width:12px;height:12px;color:var(--ink)}
   .selbar{display:flex;align-items:center;gap:12px;padding:12px 16px;margin-bottom:16px;border-radius:var(--r1);background:var(--wash);border:1px solid var(--rule)}
   .selbar .cap{flex:1}
@@ -176,8 +177,8 @@
           <div class="dcol end">
             <div class="dh"><span class="dw">Wed</span><b class="dd">24</b><span class="ds tnum">2.00h</span></div>
             <div class="dt">
-              <div class="ev on" style="top:0;height:60px"><span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">api work</span><span class="bc">Client A · API</span><span class="bt">09:00 – 10:00</span></div>
-              <div class="ev on" style="top:60px;height:60px"><span class="ck"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">internal sync</span><span class="bc">Client B</span><span class="bt">10:00 – 11:00</span></div>
+              <div class="ev on" style="top:0;height:60px"><span class="ck on"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">api work</span><span class="bc">Client A · API</span><span class="bt">09:00 – 10:00</span></div>
+              <div class="ev on" style="top:60px;height:60px"><span class="ck on"><svg class="ic"><use href="#i-check"/></svg></span><span class="bd">internal sync</span><span class="bc">Client B</span><span class="bt">10:00 – 11:00</span></div>
             </div>
           </div>
         </div>
