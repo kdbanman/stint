@@ -1797,9 +1797,13 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
     .filter(Boolean)
     .join(' · ');
   const keptTags = [...new Set(entries.flatMap((e) => e.tags ?? []))].join(' · ');
-  const agreeRow = (label, value) =>
+  // `tnum` is the Clock-role marker (design.html D06 — monospace, tabular), so it rides only the
+  // row whose value IS a time. It used to sit on all three: invisible while the class carried
+  // tabular figures alone, and a description painted in the numeric face once it carried the
+  // face too (issue 242).
+  const agreeRow = (label, value, valueClass = 'val') =>
     value
-      ? `<div class="agree">${icon('check')}<b>${label}</b><span class="val tnum">${escapeHtml(value)}</span></div>`
+      ? `<div class="agree">${icon('check')}<b>${label}</b><span class="${valueClass}">${escapeHtml(value)}</span></div>`
       : '';
 
   dialog.innerHTML =
@@ -1810,7 +1814,7 @@ function openMergeConflict(entries, onDone = () => {}, allowGap = false) {
     billRow +
     agreeRow('Description', keptDesc) +
     agreeRow('Tags', keptTags) +
-    agreeRow('Span', spanLabel) +
+    agreeRow('Span', spanLabel, 'val tnum') +
     `</div>` +
     `<div class="ed-foot">` +
     `<button type="button" class="small ghost mc-cancel">Cancel</button>` +
@@ -2040,7 +2044,9 @@ function openSplitForm(btn, e) {
   wrap.className = 'split-at';
   wrap.innerHTML =
     `<span class="split-q">Split at</span>` +
-    `<input type="text" class="split-input" autocomplete="off" spellcheck="false" ` +
+    // `tnum` is the Clock-role marker every time site in the app wears (design.html D06): the
+    // field holds a localInputValue instant, so its digits are monospace and tabular.
+    `<input type="text" class="split-input tnum" autocomplete="off" spellcheck="false" ` +
     `placeholder="YYYY-MM-DD HH:mm:ss" aria-label="Split instant" />` +
     `<button class="small primary" type="button" data-act="confirm-split">Split</button>` +
     `<button class="small ghost split-cancel" type="button">Cancel</button>` +

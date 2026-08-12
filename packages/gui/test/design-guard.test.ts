@@ -1,6 +1,7 @@
 /**
- * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D13, D14, A01/A02,
- * A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158 and #164).
+ * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D12, D13, D14,
+ * A01/A02, A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158, #164,
+ * #242 and #255).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -34,8 +35,15 @@
  *   8. D06 the type ramp — the same census over `font-size`/`font-weight`, from both stylesheets
  *      and inline `style=` attributes: every authored size and weight is a step §04 names, so a
  *      sixth role cannot accumulate a site at a time (issue #152). The 11px floor in (5) is one
- *      end of that rule; this is the whole of it. Paired with the tabular check the same issue
- *      names, since a clock that is not tabular is off the Clock role even at the right size.
+ *      end of that rule; this is the whole of it. Beside it, D06's Clock row as the TWO
+ *      properties it states: no surface writes `font-variant-numeric` to anything but
+ *      `tabular-nums`, and a rule claiming that tabular half names `font.num` in the SAME rule,
+ *      so the face cannot be left to the cascade (issue 242 — the `.tnum` helper carried the
+ *      tabular half alone, and nine of the seventeen rules claiming tabular figures let their
+ *      element inherit the proportional reading sans). The reach limit that leaves — a
+ *      stylesheet cannot see that a string is a time — is closed from the other end by a census
+ *      over the renderer's time FORMATTERS: every place one of them is painted must be a site
+ *      that carries the whole role.
  *   9. D08/D14 the radius trio — the same census over `border-radius`, against three LITERAL
  *      lists: the two recorded 4px exemptions, the circles something else already entails, and
  *      D14's pill-and-tag population. D08 closes its exemption list by spec, so the guard states
@@ -48,7 +56,11 @@
  *      that paints depth names a `shadow.*` rung, and every layer that paints something ELSE (the
  *      D13 focus ring, a hairline drawn as an inset, a keycap's bottom edge) sits on a literal
  *      value→sites table. Four hand-rolled shadows had accumulated outside the ladder, two of them
- *      accent-tinted at 35% and 30% — one effect at two strengths (issue #154).
+ *      accent-tinted at 35% and 30% — one effect at two strengths (issue #154). Beside it, the
+ *      one rung whose meaning is not "a layer above the layer below": D12's chip lift means
+ *      CHOSEN, so the shipped selectors wearing it are a literal list of selections and anything
+ *      else reaching for it fails (issue #255 — half the population had picked it up as a general
+ *      sub-card lift, and a lift on everything says nothing).
  *  11. D01 the colour census — the same census over every colour-accepting property, from both
  *      stylesheets and inline `style=`: every colour a surface NAMES is a semantic token or a
  *      literal on a closed, reasoned list. This is (2) at the strength D01 actually states.
@@ -523,20 +535,16 @@ interface Typography {
   readonly px?: number;
   readonly weight?: number;
   readonly display?: string;
-  readonly family?: string;
-  readonly numeric?: string;
 }
 
-/** The font-size, font-weight, display, font-family and font-variant-numeric a site resolves to
- *  on one surface. `px` is left undefined when no rule declares a literal px size — an unreadable
- *  site, which callers that need a size must treat as a failure rather than a pass. */
+/** The font-size, font-weight and display a site resolves to on one surface. `px` is left
+ *  undefined when no rule declares a literal px size — an unreadable site, which callers that
+ *  need a size must treat as a failure rather than a pass. */
 const typographyAt = (css: string, site: string): Typography => {
   const resolved: {
     px?: number;
     weight?: number;
     display?: string;
-    family?: string;
-    numeric?: string;
   } = {};
   for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
     // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
@@ -553,10 +561,6 @@ const typographyAt = (css: string, site: string): Typography => {
         resolved.weight = value === 'bold' ? 700 : value === 'normal' ? 400 : Number(value);
       } else if (parsed[1] === 'display') {
         resolved.display = value;
-      } else if (parsed[1] === 'font-family') {
-        resolved.family = value;
-      } else if (parsed[1] === 'font-variant-numeric') {
-        resolved.numeric = value;
       }
     }
   }
@@ -778,7 +782,27 @@ describe('the type ramp (design.html D06 §04 — issue 152)', () => {
   });
 });
 
-describe('every clock and duration is tabular (design.html D06 — issue 152)', () => {
+// ---- the Clock role: monospace AND tabular, inseparably (issues 152, 242) --------------------
+// D06's Clock row states one role as TWO properties — "Every clock and duration: monospace,
+// tabular — digits never jitter" — and the app had been shipping them apart. The `.tnum` helper
+// class, which every time site in the renderer wears, carried the tabular half and no family, so
+// the face was a per-site decision nobody was making: of the seventeen rules claiming tabular
+// figures, eight named `var(--num)` and nine let their element inherit the proportional reading
+// sans. The report table's duration column was the site issue 242 filed; the interval picker's
+// hour labels, the calendar gutter, both settings time fields and the entry form's Start/Stop
+// pair were the same drift nobody had counted.
+//
+// The guard below is the cause, not the instances: a rule that claims the tabular half must name
+// the face in the SAME rule. That is decidable with no site model, no cascade resolution and no
+// allowlist, and it holds the fix in the one place a fix can be undone — a new clock cannot claim
+// half the role. It also removes the cascade risk that made this drift invisible: a component's
+// own field chrome outranks a helper class (the D13 lesson), so every time FIELD names the role
+// in its own rule rather than leaving it to `.tnum`, and this test is what keeps that true.
+//
+// Its reach limit is the one CSS always has: a stylesheet cannot see that a string is a TIME, so
+// a site that claims NEITHER half is invisible here. The formatter census below closes that from
+// the other end — take the helpers that produce a time and check where their output is painted.
+describe('every clock and duration wears the Clock role (design.html D06 — issues 152, 242)', () => {
   it('no surface writes font-variant-numeric to anything but tabular-nums', () => {
     // D06's "digits never jitter" has no opposite case: nothing in this app wants proportional
     // figures. Writing `normal` would be the one way to opt a clock out of the idiom while still
@@ -795,29 +819,164 @@ describe('every clock and duration is tabular (design.html D06 — issue 152)', 
     expect(offenders, 'D06: every clock and duration is tabular').toEqual([]);
   });
 
-  it('every backup timestamp the renderer prints lands in a monospace, tabular site', () => {
-    // Reach, stated plainly: CSS cannot see that a string is a TIME, so "every clock and duration"
-    // is not decidable from the stylesheet alone. What IS decidable is the other direction — take
-    // a formatter that produces a time and check where its output is painted. `backupLabel()` is
-    // the one the audit caught: it feeds two sites, and only `.ver` carried the idiom while
-    // `.backup-meta` printed "Jul 26, 2026, 00:30" in the proportional sans (issue 152).
-    const settingsJs = readFileSync(join(repoRoot, 'packages/gui/renderer/settings.js'), 'utf8');
+  it('every rule claiming tabular figures names the numeric face in the same rule', () => {
+    // The two halves of one role, held together at the point of authorship. Not a resolved-cascade
+    // check on purpose: resolving would let a rule claim the tabular half and lean on some other
+    // rule for the face, which is exactly the arrangement that let fifteen sites drift — and a
+    // resolver would then have to guess an element's ancestry from a class list it read out of a
+    // template. Same rule, both properties, nothing to guess.
     const css = stylesCss.replace(/\/\*[^]*?\*\//g, '');
-    const sites = [...settingsJs.matchAll(/class="([^"]+)">\$\{esc\(backupLabel\(/g)]
-      // group 1 is the class list, which a match guarantees; `a b` becomes the compound `.a.b`
-      .map((m) => `.${m[1]!.trim().split(/\s+/).join('.')}`);
-    // Guard-the-guard: two such sites stand today. A markup reshuffle that broke the match would
-    // otherwise leave nothing to score.
-    expect(sites.length, 'the backupLabel census found fewer than the two known sites').toBeGreaterThanOrEqual(2);
+    const claimed: Array<{ site: string; family?: string }> = [];
+    for (const rule of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+      const declarations = new Map<string, string>();
+      for (const declaration of rule[2]!.split(';')) {
+        const parsed = /^\s*([a-z-]+)\s*:([^]*)$/.exec(declaration);
+        if (parsed) declarations.set(parsed[1]!, parsed[2]!.trim());
+      }
+      if (declarations.get('font-variant-numeric') !== 'tabular-nums') continue;
+      claimed.push({
+        site: rule[1]!.trim().replace(/\s+/g, ' '),
+        family: declarations.get('font-family'),
+      });
+    }
+    // Guard-the-guard: the assertion below is an emptiness check, so a scan that stopped matching
+    // would report no offenders and read green. Twenty rules claim the tabular half today.
+    expect(
+      claimed.length,
+      'the Clock-role census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(15);
 
-    const offenders = sites
-      .map((site) => ({ site, type: typographyAt(css, site) }))
-      .filter((h) => h.type.family !== 'var(--num)' || h.type.numeric !== 'tabular-nums')
-      .map(
-        (h) =>
-          `${h.site} → ${h.type.family ?? 'no font-family'} / ${h.type.numeric ?? 'no font-variant-numeric'}`,
+    const offenders = claimed
+      .filter((c) => c.family !== 'var(--num)')
+      .map((c) => `${c.site} → ${c.family ?? 'no font-family'}`);
+    expect(
+      offenders,
+      'D06 states one Clock role as two properties: a rule claiming tabular figures names the face',
+    ).toEqual([]);
+  });
+
+  it('every formatted time the renderer paints lands in a Clock-role site', () => {
+    // The other end of the reach problem. CSS cannot see that a string is a time, so this takes
+    // the helpers that PRODUCE one and checks where each is painted. The predecessor traced a
+    // single formatter (`backupLabel`) through a single regex; three more existed, `fmtHM` feeding
+    // the report table's cells among them, so the census that was meant to catch issue 242's site
+    // could not see it. The list below is every renderer helper whose output a user reads as a
+    // time, and a new one arriving unlisted is the residue this shape cannot close — which is why
+    // the rule-level census above, not this one, is the class guard.
+    const TIME_FORMATTERS = [
+      'fmtDur', // core formatDuration — HH:MM:SS
+      'fmtHours', // core formatHours + the view's h suffix
+      'fmtHM', // reports.js — the report table's Hh MMm
+      'localTime', // su.ts — the configured zone's HH:MM
+      'localInputValue', // src/localtime.ts — the field vocabulary's YYYY-MM-DD HH:mm:ss
+      'backupLabel', // settings.js — a backup's timestamp
+      'rangeLabel', // su.ts — a report's resolved window
+    ];
+    const renderer = join(repoRoot, 'packages/gui/renderer');
+    const scripts = readdirSync(renderer)
+      .filter((f) => f.endsWith('.js'))
+      .map((f): [string, string] => [f, readFileSync(join(renderer, f), 'utf8')]);
+    const markup = new Map(
+      ['index.html', 'popover.html'].map((f): [string, string] => [
+        f,
+        readFileSync(join(renderer, f), 'utf8'),
+      ]),
+    );
+
+    /** An element's authored selector: its tag plus its class list, `<td class="num tnum">` →
+     *  `td.num.tnum`. The tag is kept because a rule may target the element through it
+     *  (`.report-table td.num` does). */
+    const compoundOf = (tag: string, classes: string): string =>
+      `${tag}.${classes.trim().split(/\s+/).join('.')}`;
+
+    /** The class list of the element carrying `id`, looked up in the renderer's two documents. */
+    const byId = (id: string): string | null => {
+      for (const [, text] of markup) {
+        const el = new RegExp(`<(\\w+)((?:[^>"']|"[^"]*")*?)id="${id}"((?:[^>"']|"[^"]*")*)>`).exec(
+          text,
+        );
+        // groups 1-3 are non-optional in the pattern, so a match guarantees them
+        if (!el) continue;
+        const cls = /class="([^"]*)"/.exec(el[2]! + el[3]!);
+        return cls ? compoundOf(el[1]!, cls[1]!) : el[1]!;
+      }
+      return null;
+    };
+
+    // The two shapes the renderer paints in: an element written with its class list around the
+    // interpolation, and a `textContent` assignment onto an id declared in the markup. A formatter
+    // reaching the DOM through a local element variable is out of this scan's reach; those sites
+    // wear `.tnum`, which the rule-level census above holds to the whole role.
+    const painted: Array<{ where: string; formatter: string; site: string }> = [];
+    for (const name of TIME_FORMATTERS) {
+      const inline = new RegExp(`<(\\w+)[^<>]*class="([^"]+)"[^<>]*>\\$\\{[^}]*\\b${name}\\(`, 'g');
+      const byid = new RegExp(`\\$\\('([\\w-]+)'\\)\\.textContent\\s*=[^;]*\\b${name}\\(`, 'g');
+      for (const [file, text] of scripts) {
+        for (const m of text.matchAll(inline)) {
+          // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+          painted.push({ where: file, formatter: name, site: compoundOf(m[1]!, m[2]!) });
+        }
+        for (const m of text.matchAll(byid)) {
+          const site = byId(m[1]!);
+          expect(site, `${file}: #${m[1]} is painted with ${name}() but declared in no document`).not.toBeNull();
+          if (site) painted.push({ where: `${file}: #${m[1]}`, formatter: name, site });
+        }
+      }
+    }
+    // Guard-the-guard: twelve paints stand today across five formatters and both shapes. The
+    // assertion below is an emptiness check, so a markup reshuffle that broke either regex would
+    // otherwise leave nothing to score — the failure this replaces scored two sites and called it
+    // the population.
+    expect(painted.length, 'the formatter census found fewer paints than stand today').toBeGreaterThanOrEqual(9);
+    expect(
+      new Set(painted.map((p) => p.formatter)).size,
+      'the formatter census reached only one helper — it is back to pinning a single call site',
+    ).toBeGreaterThanOrEqual(4);
+    expect(
+      painted.some((p) => p.where.includes('#')),
+      'the id-assignment half of the census found nothing — the report totals are painted there',
+    ).toBe(true);
+
+    // A site carries the role when a rule that could style it gives it both halves. "Could style
+    // it" is the rule's SUBJECT compound being covered by the element's own tag and classes, with
+    // ancestry assumed present — the report cell's face is declared on `.report-table td.num`, and
+    // a template gives no ancestors to match it against. The over-reach is bounded by the census
+    // above: every rule in play declares both halves or none.
+    const roleRules = [...(stylesCss.replace(/\/\*[^]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g))]
+      .flatMap((rule) =>
+        // groups 1 and 2 are non-optional in the pattern, so a match guarantees them
+        rule[1]!.split(',').map((branch) => {
+          const compounds = compoundSelectors(branch.trim());
+          return {
+            subject: compounds[compounds.length - 1] ?? '',
+            family: /(?:^|[;{])\s*font-family\s*:\s*([^;}]+)/.exec(rule[2]!)?.[1]?.trim(),
+            numeric: /(?:^|[;{])\s*font-variant-numeric\s*:\s*([^;}]+)/.exec(rule[2]!)?.[1]?.trim(),
+          };
+        }),
       );
-    expect(offenders, 'D06 puts every clock and duration in the numeric face, tabular').toEqual([]);
+    const roleAt = (site: string): { face: boolean; tabular: boolean; sans: string[] } => {
+      const reaching = roleRules.filter((r) => r.subject && compoundCovers(r.subject, site));
+      return {
+        face: reaching.some((r) => r.family === 'var(--num)'),
+        tabular: reaching.some((r) => r.numeric === 'tabular-nums'),
+        // Any reading face that can reach the element at all — the D13 cascade lesson, where a
+        // component rule spelled more specifically silently outranks the idiom.
+        sans: reaching.filter((r) => r.family && r.family !== 'var(--num)').map((r) => r.family!),
+      };
+    };
+
+    const offenders = painted
+      .map((p) => ({ ...p, role: roleAt(p.site) }))
+      .filter((p) => !p.role.face || !p.role.tabular || p.role.sans.length > 0)
+      .map(
+        (p) =>
+          `${p.where}: ${p.formatter}() → ${p.site} (face=${p.role.face}, tabular=${p.role.tabular}${p.role.sans.length ? `, reading face reaches it: ${p.role.sans.join(', ')}` : ''})`,
+      );
+    expect(
+      offenders,
+      'D06 puts every clock and duration in the numeric face, tabular — a formatted time landed outside it',
+    ).toEqual([]);
   });
 });
 
@@ -1023,6 +1182,41 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
 // copy that rots when the token moves — exactly what D01 says of a hex literal — and reading it as
 // on-ladder would leave this guard blind to the one drift shape that has already happened once.
 
+/** Split a `box-shadow` value into its comma-separated layers, ignoring the commas inside
+ *  `rgba(...)` / `color-mix(...)`. A naive `.split(',')` would shred exactly the hand-rolled
+ *  values the ladder census exists to catch, and every fragment would then fail for the wrong
+ *  reason. Shared with the chip census below, which reads the same layers for a different
+ *  question — that one asks WHICH rung, this one asks whether it is a rung at all. */
+const layers = (value: string): string[] => {
+  const out: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of value) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) {
+      out.push(current);
+      current = '';
+    } else current += ch;
+  }
+  out.push(current);
+  return out.map((l) => l.trim().replace(/\s+/g, ' ')).filter(Boolean);
+};
+
+/** NOT global: `.test()` on a /g regex carries `lastIndex` between calls and would skip every
+ *  other site. Only the longhand — `box-shadow` has no shorthand to hide inside. */
+const SHADOW_DECL = /(?:^|[;{])\s*box-shadow\s*:\s*([^;}]+)/;
+
+const shadowDeclarations = (): Array<{ where: string; site: string; value: string }> =>
+  styledSites().flatMap((s) =>
+    // group 1 is non-optional in the pattern, so a match guarantees it
+    [...s.declarations.matchAll(new RegExp(SHADOW_DECL, 'g'))].map((m) => ({
+      where: `${s.surface}: ${s.site}`,
+      site: s.site,
+      value: m[1]!.trim(),
+    })),
+  );
+
 describe('the elevation ladder (design.html D09 — issue 154)', () => {
   /** The rungs, recomputed from design.tokens.json rather than transcribed — the same stance the
    *  contrast block and the radius trio take. `none` is not a rung but the absence of one: the
@@ -1071,39 +1265,6 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
     // in the ink colour, not a rung.
     ['inset 0 0 0 1.5px var(--ink)', new Set(['.wkgrid .d.today .tn2', '.dh .dd.today'])],
   ];
-
-  /** Split a `box-shadow` value into its comma-separated layers, ignoring the commas inside
-   *  `rgba(...)` / `color-mix(...)`. A naive `.split(',')` would shred exactly the hand-rolled
-   *  values this census exists to catch, and every fragment would then fail for the wrong reason. */
-  const layers = (value: string): string[] => {
-    const out: string[] = [];
-    let depth = 0;
-    let current = '';
-    for (const ch of value) {
-      if (ch === '(') depth++;
-      else if (ch === ')') depth--;
-      if (ch === ',' && depth === 0) {
-        out.push(current);
-        current = '';
-      } else current += ch;
-    }
-    out.push(current);
-    return out.map((l) => l.trim().replace(/\s+/g, ' ')).filter(Boolean);
-  };
-
-  /** NOT global: `.test()` on a /g regex carries `lastIndex` between calls and would skip every
-   *  other site. Only the longhand — `box-shadow` has no shorthand to hide inside. */
-  const SHADOW_DECL = /(?:^|[;{])\s*box-shadow\s*:\s*([^;}]+)/;
-
-  const shadowDeclarations = (): Array<{ where: string; site: string; value: string }> =>
-    styledSites().flatMap((s) =>
-      // group 1 is non-optional in the pattern, so a match guarantees it
-      [...s.declarations.matchAll(new RegExp(SHADOW_DECL, 'g'))].map((m) => ({
-        where: `${s.surface}: ${s.site}`,
-        site: s.site,
-        value: m[1]!.trim(),
-      })),
-    );
 
   const licensed = (layer: string, site: string): boolean =>
     NOT_ELEVATION.some(([value, sites]) => value === layer && sites.has(site));
@@ -1185,6 +1346,82 @@ describe('the elevation ladder (design.html D09 — issue 154)', () => {
         `${rung} is on the ladder but the generator emits no such property`,
       ).toContain(`  ${rung.slice(4, -1)}:`);
     }
+  });
+});
+
+// ---- the chip lift means CHOSEN (design.html D12/D09 — issue #255) ----------------------------
+// The ladder census above asks whether a shadow layer NAMES a rung. It cannot ask which rung,
+// and one rung carries a meaning the others do not: `shadow.chip` is not a layer above the layer
+// below it. design.tokens.json calls it "the D12 raised-chip lift"; D09 admits it as "the chip
+// lift … as the sub-card selection rung (D12)"; D12 states the idiom — "A chosen thing lifts — a
+// raised paper chip with a shadow (the segmented idiom) — it does not turn accent."
+//
+// That makes the rung decidable from the selector: an element wearing it is claiming to BE the
+// chosen one. Eight shipped selectors are — the nav chip, the picked week band, the selection
+// count, the chosen segment, the active range preset, the chosen merge option, the picked picker
+// day, the ticked calendar checkbox. Eight more had picked it up as a general sub-card lift: the
+// primary button (an action is pressed, never chosen), two switch knobs and two drag grips (a
+// position and an affordance), two time pills (a readout), and every calendar block at rest —
+// fifty lifts on a screen with at most a couple of choices on it. A lift on everything says
+// nothing, which is the state D12 was written against.
+//
+// The population is a LITERAL list matched EXACTLY against the rule's selector — the shape #153,
+// #154 and #157 settled on — so a non-selection selector reaching for the rung fails here rather
+// than sailing past a ladder census that only asked whether it named A rung. The mirror below
+// keeps the list from rotting into a permissive blob.
+//
+// Shipped renderer only, deliberately, where the sibling censuses span every surface: this one
+// scores what an element MEANS, and several mockup components have no shipped counterpart, so
+// their role is a design call rather than a code one. The rule is about what the app paints;
+// keeping the mockups in step is PRD §18's hand-sync obligation and a separate decision.
+
+describe('the chip lift means chosen (design.html D12 — issue #255)', () => {
+  const SHIPPED = 'packages/gui/renderer/styles.css';
+
+  /** The selection population — every shipped element D12 licenses to lift. Each is a CHOICE the
+   *  user has made and can unmake, and each is the one chosen member of a set of peers. */
+  const CHIP_SELECTIONS = new Set<string>([
+    '.nav-item.active', // the active view in the nav rail
+    '.wkgrid .d.ws', // the picked week, as one band across the row
+    '.sel-count', // the merge selection's count pill
+    '.seg .seg-btn.on', // the chosen segment (the idiom D12 names)
+    '.presets .preset.on', // the active date-range preset
+    '.editor.conflict-prompt .mc-opt.on', // the chosen merge-conflict option
+    '.stp-d.stp-sel', // the picked day in the interval picker
+    '.ev .ck:checked', // the ticked calendar checkbox — the control that MAKES a selection
+  ]);
+
+  /** Every shipped rule naming the chip rung, read per LAYER: `.ev .ck:checked` writes its 1.5px
+   *  boundary and the rung in one declaration, so a per-declaration scan would miss the shape. */
+  const chipSites = (): string[] =>
+    shadowDeclarations()
+      .filter((d) => d.where.startsWith(SHIPPED))
+      .filter((d) => layers(d.value).includes('var(--sh-chip)'))
+      .map((d) => d.site);
+
+  it('no shipped selector wears the chip lift unless it is a selection', () => {
+    const sites = chipSites();
+    // Guard-the-guard: the assertion below is an emptiness check, so a scan that stopped matching
+    // would report no offenders and read green. Eight selections stand today.
+    expect(
+      sites.length,
+      'the chip census found almost nothing — it has gone blind',
+    ).toBeGreaterThanOrEqual(8);
+
+    const offenders = sites.filter((site) => !CHIP_SELECTIONS.has(site));
+    expect(
+      offenders,
+      'D12 gives the chip lift ONE meaning — this is the chosen one. Nothing else may lift',
+    ).toEqual([]);
+  });
+
+  it('every listed selection still wears it (the list stays earned)', () => {
+    // The mirror every literal list in this file carries: a selector that has stopped writing the
+    // rung is a licence nobody is spending, sitting there ready to legalise whatever reclaims the
+    // name — and, here, also the signal that a selection has quietly stopped reading as chosen.
+    const worn = new Set(chipSites());
+    const dead = [...CHIP_SELECTIONS].filter((site) => !worn.has(site));
+    expect(dead, 'a listed selection no longer lifts — D12 says a chosen thing does').toEqual([]);
   });
 });
 

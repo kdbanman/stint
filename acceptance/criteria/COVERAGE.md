@@ -1794,11 +1794,20 @@ AND inline `style=` attributes, since design-system.html writes the ramp's own
 illustration inline — must be a step the §04 table names (11/12/13px, 17–18px
 Title, 24–38px Clock; weights 450/590/640/680), so a sixth role cannot
 accumulate one 12.5px site at a time; the 11px readable floor is one end of
-that rule and this is the whole of it. Beside it, the tabular half of D06: no
-surface writes `font-variant-numeric` to anything but `tabular-nums` , and
-every site the renderer paints a `backupLabel()` timestamp into resolves to
-the `--num` face with tabular figures (`.backup-meta` printed a proportional
-timestamp — the app's one time string without the idiom). The same shape
+that rule and this is the whole of it. Beside it, D06's **Clock row as the two
+properties it states** — "every clock and duration: monospace, tabular": no
+surface writes `font-variant-numeric` to anything but `tabular-nums`, and a
+rule claiming that tabular half names `font.num` in the SAME rule, so the face
+can never be left to the cascade (issue #242 — the `.tnum` helper carried the
+tabular half alone, so nine of the seventeen rules claiming tabular figures let
+their element inherit the proportional reading sans, the report table's
+duration column among them). The reach limit a stylesheet always has — CSS cannot see that a
+string is a time — is closed from the other end by a census over the
+renderer's time FORMATTERS: every place one of them is painted, read out of
+the class attribute around the interpolation or the id the value is assigned
+to, must be a site carrying the whole role. Its predecessor traced one
+formatter through one regex and could not see the site the issue was filed
+about. The same shape
 covers D08/D14 (issue #153): every authored `border-radius` on every
 surface is the trio recomputed from `design.tokens.json` (8px controls, 12px
 cards, 16px window & overlays), or it sits on one of three LITERAL exception
@@ -1821,7 +1830,15 @@ box) sit on a literal value-to-selectors table with the same mirror test. Four
 hand-rolled shadows had accumulated outside the ladder, two of them clay glows
 at 35% and 30% — one effect at two strengths — and one of them `--sh-chip`'s
 exact geometry at double the token's opacity, which is the drift a rendered
-check cannot see because it looks like the rung. The same shape covers
+check cannot see because it looks like the rung. One rung then gets a census
+of its own (issue #255), because one rung carries a meaning the others do not:
+**`shadow.chip` means CHOSEN** (D12 — "a chosen thing lifts … it does not turn
+accent"), so the shipped selectors wearing it are a literal list of eight
+selections, and a non-selection reaching for it fails where the ladder census
+saw only that it had named a rung. Half the population had picked it up as a
+general sub-card lift — the primary button, two switch knobs, two drag grips,
+two time pills and every calendar block at rest — and a lift on everything
+says nothing. The same shape covers
 **D01 itself** (issue #157): the rule reads "surfaces reference semantic tokens
 only; a raw scale step OR HEX LITERAL is a defect", and BOTH clauses are
 enforced whole — filtering mockup hits to Radix
