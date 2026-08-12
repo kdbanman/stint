@@ -586,21 +586,29 @@ s {
 .sw.on { background: var(--ink); }
 .sw.on i { left: 17px; }
 
-/* §12 R09/R16: the Entries body — the week-picker rail on the left, the week grid filling
-   the rest (mockup main.html `.ebody`). The grid host flexes and may shrink (min-width: 0),
-   which is what lets its day columns FIT the view width with no horizontal scroll. */
-.ebody { display: flex; gap: 20px; align-items: flex-start; }
-.ebody #entries { flex: 1; min-width: 0; }
+/* §12 R09/R16: the Entries HEAD BAND — the month-calendar week picker and the toolbar, side
+   by side ABOVE the grid (mockup main.html `.eband`). Pairing them is the whole point: the
+   band costs the height of the TALLER of the two, not the sum, and the toolbar spends the
+   width the picker leaves instead of stranding it. The toolbar may shrink and re-wrap
+   (min-width: 0); the picker never does. */
+.eband { display: flex; gap: 20px; align-items: flex-start; }
+.eband .toolbar { flex: 1; min-width: 0; align-self: center; }
+
+/* §12 R09/R16: the Entries body — the week grid, spanning the FULL view width now that the
+   picker has moved above it (issue #323). min-width: 0 is what lets its day columns FIT the
+   view width with no horizontal scroll. */
+.ebody { display: block; }
+.ebody #entries { min-width: 0; }
 
 /* §12 R09: the month-calendar WEEK PICKER — a raised card (the one boxed surface in this
-   view: it is a distinct instrument beside the grid, not inline chrome). Entry-dot days, a
-   today RING, the selected week highlighted as ONE lifted band (design.html D12 — depth,
-   not tint). No live/running-timer treatment anywhere on it. */
+   view: it is a distinct instrument, not inline chrome, which is exactly why it keeps the card
+   now that it shares the head band with the toolbar's filters). Entry-dot days, a today RING,
+   the selected week highlighted as ONE lifted band (design.html D12 — depth, not tint). No
+   live/running-timer treatment anywhere on it. */
 .wkpick {
   width: 224px;
   flex: none;
-  padding: 16px;
-  margin-top: 12px;
+  padding: 12px;
   background: var(--paper);
   border: 1px solid var(--rule);
   border-radius: var(--r2);
@@ -610,7 +618,7 @@ s {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 .wk-hd .m { font-size: 13px; font-weight: 640; }
 .wk-hd .nav2 { display: flex; gap: 4px; }
@@ -2483,7 +2491,26 @@ body.popover { background: var(--paper); margin: 0; }
    axes below can outrank the event chrome inside (`.ck` is z-6, `.ops` z-5, `.ov` z-4) without
    those high numbers leaking out to outrank anything drawn over the calendar. Nothing inside
    needs to escape: `overflow: auto` already clips the strip's descendants to its box. */
-.cstrip { position: relative; z-index: 0; overflow: auto; max-height: 60vh; padding-bottom: 8px; }
+/* §12 R22: the grid's visible height is what ABSORBS the head band, so the Entries view still
+   fits the 1040×800 minimum window without the PAGE scrolling — at that size the round + button
+   sits at the grid's foot, and a page that overflows puts it under the fold where reaching it
+   scrolls the whole view. A flat 60vh cannot say this: it is a fraction of the window, but the
+   space actually left over is the window MINUS the fixed chrome above (masthead, the open
+   form's slot, the head band, the merge bar). So subtract that chrome instead. 410px is it —
+   measured at the minimum window against the WORST at-rest case, the one that has to fit: the
+   masthead, a running-timer card, the head band and a visible merge bar. (An open form overflows
+   past this and always did; the form is anchored at the top, so its Save stays in view — what
+   must not go under the fold is the + button at the grid's foot.) `min()` keeps tall windows
+   from handing the grid more than
+   the 60vh the design asks for. The grid gives this up cheaply — it scrolls internally over a
+   1440px day track at every size anyway. */
+.cstrip {
+  position: relative;
+  z-index: 0;
+  overflow: auto;
+  max-height: min(60vh, calc(100vh - 410px));
+  padding-bottom: 8px;
+}
 .cgrid { display: flex; }
 /* issue 145 (unhashed — the D01 scan over this file reads a hashed three-digit number as a colour
    literal): the labels STICK to the scrollport instead of scrolling out of it. The strip opens

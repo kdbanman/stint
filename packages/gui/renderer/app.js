@@ -1084,11 +1084,23 @@ function wireGridDrag(wrap) {
   });
 }
 
-// Escape leaves select-interval mode (rest is a keystroke away, matching the gate's
-// non-destructive default). Bound once at the document: the handle/overlay live inside a
-// repainted host, so a per-build binding would leak one listener per repaint.
+// Escape leaves select-interval mode, and CLOSES an open form through the same gate the Cancel
+// button uses (§12 R24, issue #323). Gating Cancel left Save and Cancel as the only ways out of
+// the form, and Cancel now costs a confirm when there is typed work — so Escape, which every
+// desktop app spends on exactly this, became the cheap way out. A clean form just closes; a
+// dirty one asks. Rest is a keystroke away either way, matching the gate's non-destructive
+// default. Bound once at the document: the handle/overlay live inside a repainted host, so a
+// per-build binding would leak one listener per repaint.
 document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && calMode === 'select' && !gridDrag) exitToRest();
+  if (ev.key !== 'Escape' || gridDrag) return;
+  // A dialog on screen owns Escape — the gate resolves to keep/cancel, the merge prompt closes
+  // itself. Both bind with capture, but a stray Escape must not also reach past them to here.
+  if (document.querySelector('.editor-backdrop')) return;
+  if (calMode === 'select') {
+    exitToRest();
+    return;
+  }
+  if (openForm) guardedSwap(() => closeUnifiedForm());
 });
 
 // §12 R04: the FULL in-window Active-Timer card — the GUI mirror of `tt status`, hosted in
@@ -2142,42 +2154,84 @@ function guardedSwap(perform) {
 // non-destructive default, also what Escape and a backdrop click resolve to; Discard changes
 // wears the danger text idiom (it destroys typed work).
 function openPendingGate(perform) {
+  openGateCard({
+    title: 'Discard unsaved changes?',
+    body: "This entry has edits that haven't been saved. Keep editing to stay here, or discard them to open the other entry.",
+    confirmLabel: 'Discard changes',
+    confirmClass: 'small danger gate-discard',
+    cancelLabel: 'Keep editing',
+    cancelClass: 'small primary gate-keep',
+    onConfirm: perform,
+  });
+}
+
+// §12 R24 (issue #323): the WEEK-MOVE prompt — a week change with a form open would carry the
+// entry to the same weekday of the week being opened, which is a real move of a real entry, so
+// it asks first. This is NOT the discard gate: nothing is thrown away either way, so neither
+// button is destructive and the affirmative one takes the primary. Cancel means what it says on
+// a "do this? / cancel" prompt — the whole action is abandoned, the view stays on the week it
+// was on, and the form keeps its subject and its block together on screen.
+//
+// It asks ONCE per open form. After the first yes, further week changes just happen, so the
+// owner can confirm and then step through several weeks. openForm.weekMoveConfirmed carries the
+// answer and dies with the form (closeUnifiedForm drops openForm), which is also what resets it
+// when a different subject opens.
+function openWeekMoveGate(perform) {
+  openGateCard({
+    title: 'Change entry week?',
+    body: 'This entry moves to the same day of the week you are opening. Cancel to stay on this week.',
+    confirmLabel: 'Change week',
+    confirmClass: 'small primary gate-week-go',
+    cancelLabel: 'Cancel',
+    cancelClass: 'small gate-week-cancel',
+    onConfirm: perform,
+  });
+}
+
+// The gate dialog itself (mockup edit-entry.html .gatecard): the app's second modal, riding
+// the same backdrop idiom as the merge-conflict prompt so design.html D11's accent handoff
+// (syncStandingPrimary reads .editor-backdrop) covers it. The CANCEL half is always the
+// non-destructive default — what Escape, a backdrop click and the initial focus all resolve to
+// — whichever of the two carries the accent. Callers own the button classes because the
+// pending gate's pair (danger Discard / primary Keep editing) and the week gate's pair
+// (primary Change week / neutral Cancel) sit differently on design.html D11.
+function openGateCard({ title, body, confirmLabel, confirmClass, cancelLabel, cancelClass, onConfirm }) {
   if (document.querySelector('.gate-backdrop')) return; // one gate at a time
   const backdrop = document.createElement('div');
   backdrop.className = 'editor-backdrop gate-backdrop';
   backdrop.innerHTML =
     `<div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="gate-h">` +
-    `<h3 id="gate-h">Discard unsaved changes?</h3>` +
-    `<p>This entry has edits that haven't been saved. Keep editing to stay here, or discard them to open the other entry.</p>` +
+    `<h3 id="gate-h">${title}</h3>` +
+    `<p>${body}</p>` +
     `<div class="gate-row">` +
-    `<button type="button" class="small danger gate-discard">Discard changes</button>` +
-    `<button type="button" class="small primary gate-keep">Keep editing</button>` +
+    `<button type="button" class="${confirmClass}" data-gate="confirm">${confirmLabel}</button>` +
+    `<button type="button" class="${cancelClass}" data-gate="cancel">${cancelLabel}</button>` +
     `</div></div>`;
   const dismiss = () => {
     backdrop.remove();
     document.removeEventListener('keydown', onKey, true);
   };
-  const keep = () => {
+  const cancel = () => {
     dismiss();
     openForm?.form.querySelector('.edit-desc')?.focus();
   };
   const onKey = (ev) => {
     if (ev.key === 'Escape') {
       ev.stopPropagation();
-      keep();
+      cancel();
     }
   };
-  backdrop.querySelector('.gate-keep').addEventListener('click', keep);
-  backdrop.querySelector('.gate-discard').addEventListener('click', () => {
+  backdrop.querySelector('[data-gate="cancel"]').addEventListener('click', cancel);
+  backdrop.querySelector('[data-gate="confirm"]').addEventListener('click', () => {
     dismiss();
-    perform();
+    onConfirm();
   });
   backdrop.addEventListener('click', (ev) => {
-    if (ev.target === backdrop) keep(); // outside click = the non-destructive default
+    if (ev.target === backdrop) cancel(); // outside click = the non-destructive default
   });
   document.addEventListener('keydown', onKey, true);
   document.body.appendChild(backdrop);
-  backdrop.querySelector('.gate-keep').focus();
+  backdrop.querySelector('[data-gate="cancel"]').focus();
 }
 
 // §12 R24: an external refresh (a tt write) arrived while an EDIT form is open — re-seed the
@@ -2443,7 +2497,10 @@ async function openUnifiedForm(opts) {
     });
   }
 
-  form.querySelector('.edit-cancel').addEventListener('click', () => closeUnifiedForm());
+  // §12 R24 (issue #323): Cancel is a way to LOSE the form, so it is gated like every other one.
+  // It was the single unguarded path — the button most likely to be clicked threw typed work
+  // away in silence while a stray click on the grid behind it did not.
+  form.querySelector('.edit-cancel').addEventListener('click', () => guardedSwap(() => closeUnifiedForm()));
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -2809,7 +2866,56 @@ function selectSegment(group, btn) {
 // picker's Enter — so they all land here: re-anchor the picker's month + roving cell, then
 // either re-query (a non-default week / filters / search ride listEntries) or fall back to
 // the plain default getState paint when the selection IS the default view.
+// §12 R24 (issue #323): every week change funnels through here — the two toolbar steppers and
+// the picker's click and Enter alike — so the confirm cannot be walked around by choosing a
+// different control. With no form open, or when the chosen day is already inside the shown
+// week (a picker click that moves nothing), this is just applySelectedWeek.
 function selectWeek(dayToken) {
+  const nextWeekStart = calWeekBounds(dayToken)[0];
+  const currentWeekStart = calSelectedWeekStart();
+  if (!openForm || nextWeekStart === currentWeekStart) {
+    applySelectedWeek(dayToken);
+    return;
+  }
+  const move = () => {
+    shiftOpenFormDays(calDaysBetween(currentWeekStart, nextWeekStart));
+    applySelectedWeek(dayToken);
+  };
+  if (openForm.weekMoveConfirmed) {
+    move();
+    return;
+  }
+  openWeekMoveGate(() => {
+    openForm.weekMoveConfirmed = true;
+    move();
+  });
+}
+
+// Whole days between two day strings — pure UTC math on the day tokens, like calAddDays, so it
+// is timezone-agnostic and always lands on a multiple of seven here.
+function calDaysBetween(fromDay, toDay) {
+  return Math.round((Date.parse(`${toDay}T00:00:00Z`) - Date.parse(`${fromDay}T00:00:00Z`)) / 86400000);
+}
+
+// Carry the open form's interval by whole days, keeping the WALL-CLOCK time: the shift lands on
+// the date halves of the Start/Stop text and never on a millisecond count, so an entry crossing
+// a DST boundary still reads 09:00 on the other side. Only the fields move — the write is still
+// the user's Save, exactly as it is for a drag (R17).
+function shiftOpenFormDays(days) {
+  if (!openForm || !days) return;
+  const form = openForm.form;
+  for (const sel of ['.edit-start', '.edit-end']) {
+    const field = form.querySelector(sel);
+    if (!field?.value) continue;
+    const day = field.value.slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue; // unparseable text is the user's to fix (R21)
+    field.value = calAddDays(day, days) + field.value.slice(10);
+  }
+  clearFormError(form.querySelector('.ef-warning'));
+  paintPendingOverlay();
+}
+
+function applySelectedWeek(dayToken) {
   selectedWeekStart = calWeekBounds(dayToken)[0];
   // A different week is a different set of days, so the viewport retargets to the working-hours
   // default rather than restoring a position that belonged to the week just left (§12 R16).

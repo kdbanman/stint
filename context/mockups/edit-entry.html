@@ -308,9 +308,10 @@
      The description above was edited, then a DIFFERENT event was clicked: the subject swap is
      BLOCKED — Keep editing returns to the form untouched; only the explicit Discard changes
      abandons the edits and performs the swap. A clean form swaps in place with no prompt and
-     no animation. -->
+     no animation. The same gate stands in front of the two ways OUT of the form — the Cancel
+     button and Escape (issue #323) — so no route loses typed work in silence. -->
 <div class="slab">
-  <div class="cap">The pending-changes gate — a dirty subject swap is blocked; Keep editing preserves every field</div>
+  <div class="cap">The pending-changes gate — a dirty subject swap, Cancel or Escape is blocked; Keep editing preserves every field</div>
   <div class="scrim">
     <div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="gate-h">
       <h3 id="gate-h">Discard unsaved changes?</h3>
@@ -318,6 +319,27 @@
       <div class="row">
         <button class="btn danger sm">Discard changes</button>
         <button class="btn primary sm">Keep editing</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ 5 · THE WEEK-MOVE PROMPT (§12 R24, issue #323) ══
+     The week was changed with this form open. The entry FOLLOWS the view to the same weekday of
+     the week being opened, which is a real move of a real entry, so it is confirmed first. This
+     is NOT the gate above: nothing is discarded either way, so neither button wears the danger
+     idiom and the affirmative one takes the primary. Cancel abandons the WHOLE action — the view
+     stays on the week it was on, so the form and its block stay together on screen. It asks once
+     per open form, so a confirmed move lets the owner step through weeks freely. -->
+<div class="slab">
+  <div class="cap">The week-move prompt — the entry follows the week; Cancel abandons the whole action</div>
+  <div class="scrim">
+    <div class="gatecard" role="dialog" aria-modal="true" aria-labelledby="wk-h">
+      <h3 id="wk-h">Change entry week?</h3>
+      <p>This entry moves to the same day of the week you are opening. Cancel to stay on this week.</p>
+      <div class="row">
+        <button class="btn primary sm">Change week</button>
+        <button class="btn sm">Cancel</button>
       </div>
     </div>
   </div>

@@ -2175,11 +2175,19 @@ replaces a dirty form silently** — `renderEntries` leaves the form open across
 repaint, the `onChange` refresh path re-seeds a
 clean edit form from the fresh snapshot but GATES a dirty one, and the form's own
 footer Delete/Split close it explicitly (a confirmed destroy, not a repaint).
-The gate's PROVEN scope is exactly those three swap paths: a **Cancel** on a
-dirty form, a **week change** and a **route away** are not driven by the JUDGE
-scene, and neither this row nor the rubric claims anything about them in either
-direction (issue #301 — a blanket "no path" claim would run wider than the
-evidence). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
+The same gate now covers the two ways OUT of the form (issue #323). **Cancel**
+was the one unguarded path — it called `closeUnifiedForm()` outright, so the
+button most likely to be clicked discarded typed work in silence while a stray
+click on the grid behind it gated; it routes through `guardedSwap` like
+everything else. Gating Cancel left Save and Cancel as the only exits, so
+**Escape** closes the form too, through the same gate: a clean form goes on the
+keystroke, a dirty one asks. (Escape *inside* the gate keeps its own meaning —
+keep editing — so a doubled Escape lands on the non-destructive answer.) A
+**week change** is a different question with a different answer and has its own
+prompt (below). The gate's PROVEN scope is therefore those three swap paths plus
+Cancel and Escape; a **route away** is still not driven by the JUDGE scene, and
+neither this row nor the rubric claims anything about it in either direction
+(issue #301 — a blanket "no path" claim would run wider than the evidence). **The gate is DOM-only, so its guard is a JUDGE row + a STATES.md
 row — no BDD leg can see it** (the same routing the R11/R13 confirm gate
 records: a pure model of a DOM gate stays green while the shipped gate rots, so
 it is proven on the real surface). `formIsDirty` compares **seven** fields, so the
@@ -2199,6 +2207,28 @@ while another view is on screen and still arms once Entries is back, `route()`
 serving five views where the re-seed once hung off a catch-all `else` that
 covered Reports and Settings too) with the clean-swap half in `UNIFIED_FORM`
 (`cleanSwap`); STATES.md carries the Entries × edge row.
+
+**R24 week-move prompt (`core` — the same loss protection, issue #323)**: a week
+change with a form open used to move the view and leave the form's subject
+behind, drawn nowhere — nothing was lost, but nothing said so either. The entry
+now FOLLOWS the view to the same weekday of the week being opened, and because
+that is a real move of a real entry it is confirmed first (`selectWeek` →
+`openWeekMoveGate`, the same `.gatecard` idiom on a different question, so
+neither button wears the danger treatment — nothing is being thrown away).
+**Cancel abandons the whole action**: the view stays on the week it was on, so
+the form and its block stay together on screen. Confirm shifts the Start/Stop
+fields by whole days on their DATE halves — wall-clock time survives a DST
+boundary — and writes nothing: the commit is still the user's Save, exactly as
+it is for a drag (R17). It asks **once per open form**
+(`openForm.weekMoveConfirmed`, which dies with the form), so a confirmed move
+lets the owner step through several weeks; a fresh form or a pending add asks
+again, so there is one rule rather than two. Every week change funnels through
+the one guarded `selectWeek` — both toolbar steppers and the picker's click and
+Enter — so the confirm cannot be walked around by choosing a different control,
+and a picker click landing inside the week already shown moves nothing and
+asks nothing. **DOM-only, so its guard is a JUDGE row + a STATES.md row** — no
+BDD leg can see a prompt over a form's pending fields. AC: JUDGE
+`WEEK_MOVE_PROMPT` (`main-week-move-prompt.png`).
 
 ### PRD §12 (UI states)
 
