@@ -2085,6 +2085,17 @@ button.danger:hover { background: var(--danger-weak); }
   background: var(--paper); border: 1.5px solid var(--accent);
   cursor: ns-resize; z-index: 7; touch-action: none;
 }
+/* design.html A03 (issue 247): the bar is the start-only variant's ONE drag affordance, and its
+   6px of paint was also its whole hit area — a quarter of the 24px floor on a control whose only
+   job is a precise vertical drag. Same remedy as .stp-resize above and the week grid's
+   .grip::before: a transparent hit pad; not one pixel of paint moves. Measured in the running
+   app first: the nearest interactive neighbour (the fine-snap switch) stands 105px clear and
+   everything under the pad (.stp-track, .stp-block) is inert in this variant, so the pad grows
+   SYMMETRICALLY — 24px tall, 40px wide, centred on the bar. Sized as an explicit box rather
+   than the precedents' negative insets: those anchor to the PADDING box, which the 1.5px border
+   shrinks, so -9/-9 on this 6px bar would compute to 22px — under the floor it reaches for.
+   The judge measures this pad by name (TARGET_SIZE startGripHit24). */
+.stp-grip::before { content: ''; position: absolute; left: calc(50% - 20px); top: calc(50% - 12px); width: 40px; height: 24px; }
 .stp-tlabel {
   position: absolute; left: 8px; font-size: 11px; font-weight: 590;
   font-family: var(--num); font-variant-numeric: tabular-nums; color: var(--ink);

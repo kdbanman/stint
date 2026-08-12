@@ -7589,7 +7589,20 @@ async function sceneFieldChrome(browser) {
 // hit-test beyond the block's own box (the styles.css hover/focus-within escape hatch), because
 // since #140 block focus is how a keyboard user discovers those controls at all.
 //
-// The gate is ZERO unsanctioned undersized targets across all eleven surfaces; the sanctioned
+// Issue #247 closed the gate's remaining surface-and-selector gap, both halves at once. The
+// running Timer view's start-only picker draws its ONE drag affordance, `.stp-grip`, as a bare
+// span — no role, no tabindex, no [data-act] — so the role-based selector below cannot meet it,
+// and the only host that renders it (#le-start-disc) exists only while an entry is RUNNING,
+// while this scene's Timer surface is the idle start-details form. Two independent blind spots,
+// one invisible control. The twelfth surface opens the picker over a running fixture and
+// measures the grip BY NAME as a non-role extra (the selector stays role-based — widening it
+// to bare spans would flood the sweep with false targets): present (guard-the-guard — a run
+// where the grip is absent FAILS rather than passing empty), and its A03 target is the
+// ::before hit pad styles.css centres on the 6px bar, scored as the computed pad box ≥24×24
+// PLUS elementFromPoint at the centred 24×24 box's edges resolving to the grip — so a pad
+// that shrinks, un-centres, goes inert, or slides under another element reddens the scene.
+//
+// The gate is ZERO unsanctioned undersized targets across all twelve surfaces; the sanctioned
 // ones — spacing and duration-true alike — are named in the justification so each stays
 // reviewable.
 function sweepTargets() {
@@ -7750,6 +7763,48 @@ async function sceneTargetSize(browser) {
     await page.screenshot({ path: join(EVIDENCE, 'target-size-short-block.png') });
   });
 
+  // #247 — the RUNNING Timer view, the surface no sweep or screenshot ever met: #le-start-disc
+  // and its `.stp-grip` mount only while an entry is running. The ordinary role sweep runs over
+  // the whole view (the live-edit strip, the favorites rail); the grip is then measured by name,
+  // per the header note — its pointerdown listener rides the span itself, so the ::before pad's
+  // hits reach the drag (events on a pseudo-element target its originating element). The capture
+  // frames #le-start-disc with the grip visible: until now no judge screenshot held it (PR #235
+  // had to photograph the mockup), so the rendered-comparison half of A03 had nothing to look at.
+  let gripProbe;
+  await withPage(browser, timerViewRunningState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="timer"]');
+    await page.waitForSelector('[data-view="timer"]:not([hidden]) #le-start-pick');
+    await page.click('#le-start-pick');
+    await page.waitForSelector('#le-start-disc:not([hidden]) .stp-grip', { state: 'attached' });
+    await page.locator('#le-start-disc .stp-grip').scrollIntoViewIfNeeded();
+    await sweep(page, 'timer (running, start-only picker)');
+    gripProbe = await page.evaluate(() => {
+      const grip = document.querySelector('#le-start-disc .stp-grip');
+      if (!grip) return { present: false };
+      const r = grip.getBoundingClientRect();
+      const pad = getComputedStyle(grip, '::before');
+      const padW = parseFloat(pad.width) || 0;
+      const padH = parseFloat(pad.height) || 0;
+      const cx = Math.round(r.left + r.width / 2);
+      const cy = Math.round(r.top + r.height / 2);
+      // The centred 24×24 box's extremes, 1px inside each edge: each must hit-test to the grip
+      // itself, or the pad is mis-centred, covered, or inert — a computed 24px box that nothing
+      // can press is no target. Kept 1px inside so subpixel track geometry never flakes an edge.
+      const edges = [[cx, cy - 11], [cx, cy + 11], [cx - 11, cy], [cx + 11, cy]]
+        .map(([x, y]) => document.elementFromPoint(x, y) === grip);
+      const round = (n) => Math.round(n * 10) / 10;
+      return {
+        present: true,
+        barW: round(r.width), barH: round(r.height), padW, padH,
+        // The effective A03 box: the painted bar or its centred pad, whichever reaches further.
+        w: Math.max(r.width, padW), h: Math.max(r.height, padH),
+        edgesHit: edges.every(Boolean),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'target-size-start-grip.png') });
+  });
+
   // The popover is its own renderer — sweep both of its tray actions too.
   await withPage(browser, runningState(), 'popover.html', async (pp) => sweep(pp, 'popover'));
 
@@ -7787,6 +7842,12 @@ async function sceneTargetSize(browser) {
         !!shortClip && shortClip.focused &&
         shortClip.ck.beyondBlock && shortClip.ck.unclipped &&
         shortClip.ops.beyondBlock && shortClip.ops.unclipped,
+      // #247 guard-the-guard: the running picker's start grip must be MET — it is invisible to
+      // the role selector, so only this named assertion notices it gone.
+      startGripMet: !!gripProbe?.present,
+      // #247 A03 by name: the grip's effective target (painted bar ∪ centred ::before hit pad)
+      // reaches 24×24, and the centred box's edges genuinely hit-test to the grip.
+      startGripHit24: !!gripProbe?.present && gripProbe.w >= 24 && gripProbe.h >= 24 && gripProbe.edgesHit,
     },
     `A03 sweep over ${totalTargets} visible targets across ${perSurface.length} surfaces ` +
       `(${perSurface.map((v) => `${v.surface}=${v.total}`).join(', ')}): ` +
@@ -7797,7 +7858,12 @@ async function sceneTargetSize(browser) {
       `encodes a sub-24-minute span; must be non-empty)=[${durationTrue.join('; ') || 'NONE MET'}]; ` +
       `focused ${shortClip?.height}px short block: corner checkbox beyond-box=${shortClip?.ck.beyondBlock} ` +
       `hit-testable=${shortClip?.ck.unclipped}, ops chip beyond-box=${shortClip?.ops.beyondBlock} ` +
-      `hit-testable=${shortClip?.ops.unclipped}`,
+      `hit-testable=${shortClip?.ops.unclipped}; ` +
+      `running picker's .stp-grip, measured by name (issue #247 — no role reaches it): ` +
+      (gripProbe?.present
+        ? `${gripProbe.barW}x${gripProbe.barH} bar riding a ${gripProbe.padW}x${gripProbe.padH} ` +
+          `centred hit pad (effective ${gripProbe.w}x${gripProbe.h}), centred-box edges hit-test=${gripProbe.edgesHit}`
+        : 'ABSENT'),
     'main-target-size.png',
   );
 }
@@ -8004,7 +8070,7 @@ const SCENES = {
   PARITY_REACH: { items: ['PARITY_REACH'], captures: ['parity-timer.png', 'parity-entries.png', 'parity-clients.png', 'parity-reports.png', 'parity-settings.png'], run: sceneParityReach },
   FIELD_LABELS: { items: ['FIELD_LABELS'], captures: ['field-labels-timer.png', 'field-labels-entries.png', 'field-labels-reports.png'], run: sceneFieldLabels },
   FIELD_CHROME: { items: ['FIELD_CHROME'], captures: ['field-chrome-search-focus.png'], run: sceneFieldChrome },
-  TARGET_SIZE: { items: ['TARGET_SIZE'], captures: ['main-target-size.png', 'target-size-add-form.png', 'target-size-short-block.png'], run: sceneTargetSize },
+  TARGET_SIZE: { items: ['TARGET_SIZE'], captures: ['main-target-size.png', 'target-size-add-form.png', 'target-size-short-block.png', 'target-size-start-grip.png'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], captures: ['main-colour-pairing.png'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], captures: [], run: sceneDesktopFeel },
 };
