@@ -71,6 +71,12 @@
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
   .seg button:hover{color:var(--ink)}
   .seg button.on{background:var(--paper);color:var(--ink);font-weight:590;box-shadow:var(--sh-chip)}
+  /* §09 R1 (issues 161/153): the range presets — the segment idiom unwrapped (no wash tray);
+     each preset is a bordered paper chip on the segment's metric, the active one the raised
+     chip (D12 — lift, never accent). The app's .presets construction. */
+  .seg.presets{background:transparent;border:0;border-radius:0;padding:0;gap:8px;flex-wrap:wrap}
+  .seg.presets button{border:1px solid var(--rule-strong);background:var(--paper)}
+  .seg.presets button:hover:not(.on){background:var(--hover);color:var(--ink)}
   /* toggle */
   .toggle{display:inline-flex;align-items:center;gap:8px;color:var(--ink)}
   /* 24px tall — the A03 target floor; the knob keeps its 17px and centres on 3px. */
@@ -315,7 +321,11 @@
             <div class="en"><label class="lab">Report name</label><input class="field" value="Monthly — all clients by client" style="max-width:380px"></div>
             <div class="ctrl">
               <span class="cl">Range</span>
-              <div class="cr"><select class="field"><option>Today</option><option>This week</option><option>Last week</option><option>This month</option><option>Last month</option><option selected>Custom…</option></select><input class="field date tnum invalid" aria-invalid="true" value="2026-05-31"><span class="meta">–</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-01"></div>
+              <div class="cr">
+                <span class="seg presets"><button>Today</button><button>This week</button><button>Last week</button><button>This month</button><button>Last month</button><button class="on">Custom…</button></span>
+                <label class="ff"><span>From</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-31"></label>
+                <label class="ff"><span>To</span><input class="field date tnum invalid" aria-invalid="true" value="2026-05-01"></label>
+              </div>
               <span class="cl">Group by</span>
               <div class="cr"><span class="seg"><button class="on">Client</button><button>Project</button><button>Day</button><button>Week</button><button>Month</button><button>Tag</button></span></div>
               <!-- design.html D13: "Filters" and "Rounding" each head MORE THAN ONE control, so

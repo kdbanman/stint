@@ -28,7 +28,11 @@
 /* STINT-TOKENS end */
   *{box-sizing:border-box}
   body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased}
+  /* .tnum is the Clock role's tabular-numerals face (issue 242) — ONE meaning; naming a token
+     or a class in prose is .tok below (issue 336). */
   .tnum{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  /* inline code marker in prose — token names, class names, CSS keywords. Mono face only. */
+  .tok{font-family:var(--num)}
   .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
   /* window chrome */
   .win{max-width:1040px;margin:32px auto 12px;background:var(--paper);border-radius:var(--r3);overflow:hidden;box-shadow:var(--sh-win);border:1px solid var(--rule-strong)}
@@ -218,10 +222,10 @@
 
   <div class="two">
     <div class="panel">
-      <p class="rule"><b>Light — draw the eye, don't decorate.</b> Fluent uses light to guide attention (reveal highlight, focus glow). Our only "light" is the clay focus ring (<span class="tnum">--ring</span>) and the warm hover wash (<span class="tnum">--hover</span>). The single primary action is the brightest thing in a view; everything else stays quiet so the eye always lands in one place.</p>
+      <p class="rule"><b>Light — draw the eye, don't decorate.</b> Fluent uses light to guide attention (reveal highlight, focus glow). Our only "light" is the clay focus ring (<span class="tok">--ring</span>) and the warm hover wash (<span class="tok">--hover</span>). The single primary action is the brightest thing in a view; everything else stays quiet so the eye always lands in one place.</p>
     </div>
     <div class="panel">
-      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tnum">--sh-card</span>) → raised → popover (<span class="tnum">--sh-pop</span>) → modal (<span class="tnum">--sh-modal</span>), plus the chip lift (<span class="tnum">--sh-chip</span>) as the sub-card selection rung — the raised chip every chosen thing wears. The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
+      <p class="rule"><b>Depth — a strict elevation ladder.</b> Fluent splits an app into a base canvas with content floating above on z-ordered shadows. We keep one ladder: canvas → card (<span class="tok">--sh-card</span>) → raised → popover (<span class="tok">--sh-pop</span>) → modal (<span class="tok">--sh-modal</span>), plus the chip lift (<span class="tok">--sh-chip</span>) as the sub-card selection rung — the raised chip every chosen thing wears. The tray popover, merge dialog and update banner each sit exactly one rung above what they cover. Never nest cards.</p>
     </div>
   </div>
   <div class="two" style="margin-top:16px">
@@ -275,7 +279,7 @@
     <div class="icons">
       <div class="i"><svg class="ic"><use href="#i-clock"/></svg><span>clock</span></div><div class="i"><svg class="ic"><use href="#i-list"/></svg><span>list</span></div><div class="i"><svg class="ic"><use href="#i-users"/></svg><span>clients</span></div><div class="i"><svg class="ic"><use href="#i-chart"/></svg><span>reports</span></div><div class="i"><svg class="ic"><use href="#i-settings"/></svg><span>settings</span></div><div class="i"><svg class="ic"><use href="#i-search"/></svg><span>search</span></div><div class="i"><svg class="ic"><use href="#i-play"/></svg><span>play</span></div><div class="i"><svg class="ic"><use href="#i-stop"/></svg><span>stop</span></div><div class="i"><svg class="ic"><use href="#i-swap"/></svg><span>merge</span></div><div class="i"><svg class="ic"><use href="#i-plus"/></svg><span>add</span></div><div class="i"><svg class="ic"><use href="#i-star"/></svg><span>favorite</span></div><div class="i"><svg class="ic"><use href="#i-cal"/></svg><span>calendar</span></div><div class="i"><svg class="ic"><use href="#i-flag"/></svg><span>flag</span></div><div class="i"><svg class="ic"><use href="#i-moon"/></svg><span>sleep</span></div><div class="i"><svg class="ic"><use href="#i-edit"/></svg><span>edit</span></div><div class="i"><svg class="ic"><use href="#i-dots"/></svg><span>more</span></div><div class="i"><svg class="ic"><use href="#i-download"/></svg><span>update</span></div><div class="i"><svg class="ic"><use href="#i-restore"/></svg><span>restore</span></div><div class="i"><svg class="ic"><use href="#i-info"/></svg><span>info</span></div><div class="i"><svg class="ic"><use href="#i-check"/></svg><span>check</span></div>
     </div>
-    <p class="rule" style="margin-top:12px">Replaces every emoji in the old mockups (📌 🌙 ⚑ ▦ ⬇ ▲▼ ⋮⋮). 1.6px stroke, <span class="tnum">currentColor</span>, so icons inherit text colour and only turn accent when their item is active.</p>
+    <p class="rule" style="margin-top:12px">Replaces every emoji in the old mockups (📌 🌙 ⚑ ▦ ⬇ ▲▼ ⋮⋮). 1.6px stroke, <span class="tok">currentColor</span>, so icons inherit text colour and only turn accent when their item is active.</p>
   </div>
 
   <h2>The mark — the app's face in the OS</h2>
@@ -287,7 +291,7 @@
     <div class="i"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAYAAABXAvmHAAABOElEQVR4nOzYPUvDUBTG8XNiKIriB2gqOCiiOIs4ufoCTiL4TdwddPMzuIlznV0dirooooOgVGcjKIh9etO1OXfMk8D5LRnODbl/Elq4qTRcKg3nAWwewOYBbNEAbM5P9mdmT6HYVtEFqRAgz6LoZnl+pNevv9Y6tQYfuytrA504D0uWhAl4xOD/sHP1cFc2Tqz7wuZ36JsvqC5rku5Z4yRy64HUBES2rFlpwNt+ZypcFqUmwne+CuNzLw2Yu3z/Cetjb6daKtM6ehHj/H+AzQPYPIDNA9g8gM0D2DyAzQPYPIDNA9g8gC1ydIInqYlwTnpjzWJnPxdSF0DXGpkB7X7rOFxuhQzAffbZOrHmZoD2en/t/GsDgrPRUXfFwnNfimdn3/l6sRdrnUrD+c8omweweQBb4wOGAAAA///PJcYvAAAABklEQVQDAPasScKR3NHBAAAAAElFTkSuQmCC" width="24" height="24" alt="The running tray glyph"><span>tray · running</span></div>
     </div>
     <!-- STINT-MARK end -->
-    <p class="rule" style="margin-top:12px">Two back-to-back calendar events: the elapsed one solid, the next one waiting. The tray drops the field — at 16pt the enclosing square costs the bars half their height — and <span class="tnum">running</span> fuses the two bars into one block, so the state reads as <strong>shape</strong>. That is what survives macOS's template images, which discard colour outright. design.html §09 D18–D21.</p>
+    <p class="rule" style="margin-top:12px">Two back-to-back calendar events: the elapsed one solid, the next one waiting. The tray drops the field — at 16pt the enclosing square costs the bars half their height — and <span class="tok">running</span> fuses the two bars into one block, so the state reads as <strong>shape</strong>. That is what survives macOS's template images, which discard colour outright. design.html §09 D18–D21.</p>
   </div>
 
   <h2>Controls</h2>
