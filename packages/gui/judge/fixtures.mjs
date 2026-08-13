@@ -983,6 +983,12 @@ export function denseCalendarState() {
  * pure geometry: no overlap band, slept hatch or cross-midnight segment perturbs the blocks. The
  * 180-minute entry is the control — it has room to spare, so a containment assertion that passes
  * only on it proves nothing.
+ *
+ * TARGET_SIZE sweeps this fixture too (#224): the 10-minute entry (id 201, an 18px block) is the
+ * sub-24-minute target design.html §07's A03 duration-true exemption names, and the scene's
+ * shortBlockMet guard REQUIRES one — lengthen every entry past 24 minutes and TARGET_SIZE fails
+ * rather than passing blind. Its clip probe also focuses id 201, so that entry must stay closed
+ * (an open block grows a 180px future span and stops being short).
  */
 export function shortEntriesCalendarState() {
   const ev = (o) => ({

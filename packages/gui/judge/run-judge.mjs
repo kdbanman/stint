@@ -7573,8 +7573,25 @@ async function sceneFieldChrome(browser) {
 //   (c) the undersized controls live on TRANSIENT surfaces — the add form, the unified editor
 //       and its inline picker, the reports builder, the Timer start-details disclosure — which
 //       the old five-views-at-rest route never opened. The route now drives them.
-// The gate is ZERO unsanctioned undersized targets across all nine surfaces; the
-// spacing-sanctioned ones are named in the justification so each stays reviewable.
+//
+// Issue #224 closed the same gate's remaining fixture gap. A calendar block under the floor is a
+// REAL target (§12 R14: the block is the tab stop and a body click opens the editor), but no swept
+// surface seeded an entry under 24 minutes — green by fixture. The eleventh surface sweeps the
+// short-entry calendar fixture, and an undersized calendar block passes through a third, named
+// sanction: design.html §07's recorded A03 exemption (SC 2.5.8's essential-presentation
+// carve-out) — block height ENCODES duration (§12 R16), a taller block would misstate the data,
+// and the keyboard path is size-independent. The sanction is DURATION-TRUE, never class-wide: the
+// block's own painted span must read under 24 minutes, so a long entry squashed under 24px by a
+// layout regression still reads ≥24m in its own time label and stays a violation.
+// Guard-the-guard (shortBlockMet): the run must MEET at least one sanctioned block — reseed the
+// fixture past 24 minutes and this scene reddens instead of passing blind. The same surface
+// drives #224's clip half: with the block FOCUSED, its corner checkbox and ops chip must
+// hit-test beyond the block's own box (the styles.css hover/focus-within escape hatch), because
+// since #140 block focus is how a keyboard user discovers those controls at all.
+//
+// The gate is ZERO unsanctioned undersized targets across all eleven surfaces; the sanctioned
+// ones — spacing and duration-true alike — are named in the justification so each stays
+// reviewable.
 function sweepTargets() {
   const sel = 'button, a[href], input, select, textarea, [tabindex]:not([tabindex="-1"]), [data-act]';
   const { visible } = window.__probe;
@@ -7605,8 +7622,25 @@ function sweepTargets() {
   const round = (n) => Math.round(n * 10) / 10;
   const violations = [];
   const spacingSanctioned = [];
+  const durationSanctioned = [];
   for (const b of boxes) {
     if (!undersized(b)) continue;
+    // #224 — the DURATION-TRUE sanction, design.html §07's recorded A03 exemption (SC 2.5.8's
+    // essential-presentation carve-out): a calendar event block shorter than the floor where
+    // height encodes duration (§12 R16). Granted only when the block's own painted span (.bt)
+    // says under 24 minutes — the span condition is itself what refuses the regression case: a
+    // long entry squashed under 24px still reads ≥24m in its own time label and falls through
+    // to the ordinary checks. Deliberately NO height leg: R16 pins no numeric block floor (the
+    // app's floor is implementation, app.js calEvent), so a px threshold here would dress an
+    // implementation detail as spec and refuse legitimately tiny entries.
+    if (b.el.matches('.dt .ev')) {
+      const m = /(\d{1,2}):(\d{2})–(\d{1,2}):(\d{2})/.exec(b.el.querySelector('.bt')?.textContent ?? '');
+      const mins = m ? (Number(m[3]) * 60 + Number(m[4]) - Number(m[1]) * 60 - Number(m[2]) + 1440) % 1440 : null;
+      if (mins !== null && mins < 24) {
+        durationSanctioned.push({ label: `${b.label}[data-id="${b.el.dataset.id}"]`, w: round(b.w), h: round(b.h), mins });
+        continue;
+      }
+    }
     let nearest = Infinity;
     let who = 'nothing';
     for (const o of boxes) {
@@ -7620,7 +7654,7 @@ function sweepTargets() {
     violations.push(entry);
   }
   const swept = boxes.map((b) => b.label);
-  return { total: boxes.length, violations, spacingSanctioned, swept };
+  return { total: boxes.length, violations, spacingSanctioned, durationSanctioned, swept };
 }
 async function sceneTargetSize(browser) {
   const perSurface = [];
@@ -7673,6 +7707,49 @@ async function sceneTargetSize(browser) {
     await sweep(page, 'reports (builder)');
   });
 
+  // #224 — the short-block calendar: the week grid seeded with entries under 24 minutes, the
+  // population design.html §07's A03 exemption names and every other surface lacks. The seed is
+  // scene-local apparatus (the judge's own short-entry fixture, shared with CALENDAR_ENTRY_BLOCK),
+  // never the recordings' shared dataset — its 10-minute entry (id 201, an 18px block) is what
+  // shortBlockMet requires the sweep to MEET. The same page then drives the clip half: focusing
+  // the short block must leave its corner checkbox and ops chip hit-testable BEYOND the block's
+  // own 18px box — `overflow: hidden` clips hit-testing along with paint, so elementFromPoint
+  // reads the styles.css hover/focus-within hatch the way a pointer does. `beyondBlock` keeps the
+  // probe honest: each control's box must genuinely exceed the block, or the hatch is untested.
+  let shortClip;
+  await withPage(browser, shortEntriesCalendarState(), 'index.html', async (page) => {
+    await noMotion(page); // reveal opacity + lift are transitioned; read the settled state
+    await page.waitForFunction(() => document.querySelectorAll('.dcol .ev').length === 4);
+    await sweep(page, 'entries (short blocks)');
+    shortClip = await page.evaluate(() => {
+      const ev = document.querySelector('.dcol .ev[data-id="201"]');
+      ev.scrollIntoView({ block: 'center' });
+      ev.focus();
+      const r = ev.getBoundingClientRect();
+      const probe = (el) => {
+        if (!el) return { present: false, beyondBlock: false, unclipped: false };
+        const b = el.getBoundingClientRect();
+        // A point inside the control but strictly BELOW the block's box: clipped overflow makes
+        // it unreachable; the #224 hatch makes it hit the control (or a descendant, the icon).
+        const x = Math.round(b.left + b.width / 2);
+        const y = Math.round(Math.max(b.top + 2, r.bottom + 2));
+        const hit = document.elementFromPoint(x, y);
+        return {
+          present: true,
+          beyondBlock: b.bottom > r.bottom + 1,
+          unclipped: !!hit && (hit === el || el.contains(hit)),
+        };
+      };
+      return {
+        focused: document.activeElement === ev,
+        height: Math.round(r.height),
+        ck: probe(ev.querySelector('.ck')),
+        ops: probe(ev.querySelector('.ops .op-btn[data-act="edit"]')),
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'target-size-short-block.png') });
+  });
+
   // The popover is its own renderer — sweep both of its tray actions too.
   await withPage(browser, runningState(), 'popover.html', async (pp) => sweep(pp, 'popover'));
 
@@ -7682,6 +7759,11 @@ async function sceneTargetSize(browser) {
   );
   const sanctioned = perSurface.flatMap((v) =>
     v.spacingSanctioned.map((x) => `${x.label} ${x.w}x${x.h} (${x.near}px clear)`),
+  );
+  // #224 — the duration-true class, surfaced by name exactly as the spacing exceptions are, so
+  // every block the §07 exemption sanctions stays reviewable rather than silently passed.
+  const durationTrue = perSurface.flatMap((v) =>
+    v.durationSanctioned.map((x) => `${v.surface}:${x.label} ${x.w}x${x.h} (${x.mins}m — height is duration)`),
   );
   // Guard-the-guard: the targets issue 148 measured under the floor must be IN the swept
   // set. `.chip-x` is the load-bearing one — as a <b> it matched no selector, so an empty sweep
@@ -7696,12 +7778,26 @@ async function sceneTargetSize(browser) {
       sweepReal: totalTargets > 0,
       noUndersizedTargets: allViolations.length === 0,
       noneAbsent: missing.length === 0,
+      // #224 guard-the-guard: the sanctioned class must be MET, so a reseed that removes the
+      // sub-24-minute entry fails the scene instead of passing it blind.
+      shortBlockMet: durationTrue.length > 0,
+      // #224 clip half: both hover-revealed controls of the FOCUSED short block genuinely exceed
+      // its box and still hit-test — the styles.css hover/focus-within hatch is load-bearing.
+      shortBlockUnclipped:
+        !!shortClip && shortClip.focused &&
+        shortClip.ck.beyondBlock && shortClip.ck.unclipped &&
+        shortClip.ops.beyondBlock && shortClip.ops.unclipped,
     },
     `A03 sweep over ${totalTargets} visible targets across ${perSurface.length} surfaces ` +
       `(${perSurface.map((v) => `${v.surface}=${v.total}`).join(', ')}): ` +
       `under 24×24 with less than 24px of clearance=[${allViolations.join('; ') || 'none'}]; ` +
       `swept but absent (the tag remover, the select checkbox, a picker day cell)=[${missing.join(', ') || 'none'}]; ` +
-      `spacing-exception (undersized, ≥24px clear of every other target)=[${[...new Set(sanctioned)].join('; ') || 'none'}]`,
+      `spacing-exception (undersized, ≥24px clear of every other target)=[${[...new Set(sanctioned)].join('; ') || 'none'}]; ` +
+      `duration-true exemption (design.html §07, issue #224 — sub-floor calendar blocks whose height ` +
+      `encodes a sub-24-minute span; must be non-empty)=[${durationTrue.join('; ') || 'NONE MET'}]; ` +
+      `focused ${shortClip?.height}px short block: corner checkbox beyond-box=${shortClip?.ck.beyondBlock} ` +
+      `hit-testable=${shortClip?.ck.unclipped}, ops chip beyond-box=${shortClip?.ops.beyondBlock} ` +
+      `hit-testable=${shortClip?.ops.unclipped}`,
     'main-target-size.png',
   );
 }
@@ -7908,7 +8004,7 @@ const SCENES = {
   PARITY_REACH: { items: ['PARITY_REACH'], captures: ['parity-timer.png', 'parity-entries.png', 'parity-clients.png', 'parity-reports.png', 'parity-settings.png'], run: sceneParityReach },
   FIELD_LABELS: { items: ['FIELD_LABELS'], captures: ['field-labels-timer.png', 'field-labels-entries.png', 'field-labels-reports.png'], run: sceneFieldLabels },
   FIELD_CHROME: { items: ['FIELD_CHROME'], captures: ['field-chrome-search-focus.png'], run: sceneFieldChrome },
-  TARGET_SIZE: { items: ['TARGET_SIZE'], captures: ['main-target-size.png', 'target-size-add-form.png'], run: sceneTargetSize },
+  TARGET_SIZE: { items: ['TARGET_SIZE'], captures: ['main-target-size.png', 'target-size-add-form.png', 'target-size-short-block.png'], run: sceneTargetSize },
   COLOUR_PAIRING: { items: ['COLOUR_PAIRING'], captures: ['main-colour-pairing.png'], run: sceneColourPairing },
   DESKTOP_FEEL: { items: ['DESKTOP_FEEL'], captures: [], run: sceneDesktopFeel },
 };
