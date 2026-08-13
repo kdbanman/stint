@@ -790,7 +790,7 @@
       "item": "DESKTOP_FEEL",
       "pass": null,
       "facts": null,
-      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)",
+      "justification": "unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, reports-list, reports-run, main-focus, popover-running)",
       "screenshot": "main-running.png"
     }
   ]

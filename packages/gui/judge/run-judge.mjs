@@ -7988,6 +7988,29 @@ async function sceneColourPairing(browser) {
   );
 }
 
+// DESKTOP_FEEL's review list (issue #290) — the screenshots its justification hands the
+// rubric/human reviewer. CURATED, not generated: a person chose these ten as the review
+// slice (one per major surface), so the list must stay a hand-authored selection, never
+// derived from the declarations. But every entry must name a file some scene declares
+// under the #283/#289 capture contract (`SCENES[*].captures`) — this list is the one
+// consumer of capture names that escaped that contract, and it shipped two names no scene
+// writes (main-report-client/main-report-day, survivors of a pre-#283 reports naming;
+// today's report-view screens are reports-list/reports-run). main() holds every entry to
+// the declarations before any scene runs, so a dead name fails the run instead of sending
+// a reviewer hunting for evidence that was never produced.
+const DESKTOP_FEEL_REVIEW = [
+  'main-empty.png',
+  'main-running.png',
+  'main-timer.png',
+  'main-calendar.png',
+  'main-edit.png',
+  'main-tags.png',
+  'reports-list.png',
+  'reports-run.png',
+  'main-focus.png',
+  'popover-running.png',
+];
+
 // DESKTOP_FEEL — subjective; NOT machine-scored. `pass: null` so it is never
 // counted as an automated pass; the screenshots are the evidence a human/LLM
 // scores against acceptance/criteria/judge-rubric.md.
@@ -7995,7 +8018,9 @@ async function sceneDesktopFeel() {
   record(
     'DESKTOP_FEEL',
     null,
-    'unscored here — screenshots captured for rubric/human scoring (main-empty, main-running, main-timer, main-calendar, main-edit, main-tags, main-report-client, main-report-day, main-focus, popover-running)',
+    // Rendered from DESKTOP_FEEL_REVIEW (extensions dropped, as the justification has
+    // always read) so the reviewer-facing list and the bound list cannot diverge.
+    `unscored here — screenshots captured for rubric/human scoring (${DESKTOP_FEEL_REVIEW.map((f) => f.replace(/\.png$/, '')).join(', ')})`,
     'main-running.png',
   );
 }
@@ -8076,6 +8101,23 @@ const SCENES = {
 };
 
 async function main() {
+  // The review-list bind (issue #290), alongside the per-scene drift throws below: every
+  // name DESKTOP_FEEL hands its reviewer must be a capture some scene declares it writes
+  // (#283/#289), checked before any scene runs so a dead name fails the run immediately,
+  // naming the dangling entry. Guard-the-guard: the list must be non-empty, so a refactor
+  // that empties it fails here rather than passing vacuously with nothing to check.
+  if (!DESKTOP_FEEL_REVIEW.length) {
+    throw new Error('DESKTOP_FEEL review list is empty — no screenshots routed to rubric/human review');
+  }
+  const declaredCaptures = new Set(Object.values(SCENES).flatMap((s) => s.captures));
+  const dangling = DESKTOP_FEEL_REVIEW.filter((f) => !declaredCaptures.has(f));
+  if (dangling.length) {
+    throw new Error(
+      `DESKTOP_FEEL review list names captures no scene declares: [${dangling.join(', ')}] — ` +
+        're-point each at a file in some SCENES[*].captures declaration',
+    );
+  }
+
   mkdirSync(EVIDENCE, { recursive: true });
   const exe = resolveChromium();
   const browser = await chromium.launch({
