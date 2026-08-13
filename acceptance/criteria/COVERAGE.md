@@ -2053,7 +2053,8 @@ and the 3px ring resolve on the element that HOLDS focus, its wrapper painting
 nothing. That second fact is what a wrapper-styled field can never satisfy, and
 is why the fix moved the chrome onto the input rather than resetting the input
 and leaving the wrapper as the box. JUDGE `TARGET_SIZE` (`main-target-size.png`
-/ `target-size-add-form.png` / `target-size-short-block.png`, issues 148 + 224)
+/ `target-size-add-form.png` / `target-size-short-block.png` /
+`target-size-start-grip.png`, issues 148 + 224 + 247)
 carries design.html **A03** — every
 interactive target is ≥24×24 CSS px, or stands ≥24px clear of its nearest
 neighbour, or is a calendar event block whose height encodes a sub-24-minute
@@ -2066,9 +2067,9 @@ anyway for three reasons it now closes: it ROUNDED each box before comparing
 (23.84 read as 24), the remover was a `<b>` with a click listener and so
 matched no interactive selector at all, and the undersized controls live on
 transient surfaces the five-views-at-rest route never opened. The scene drives
-eleven surfaces (the five views, the add form, the unified editor, the Timer
-start-details disclosure, the Reports builder, the short-block calendar, the
-popover), compares raw CSS
+twelve surfaces (the five views, the add form, the unified editor, the Timer
+start-details disclosure, the running Timer view's start-only picker, the
+Reports builder, the short-block calendar, the popover), compares raw CSS
 px, measures a `<label>`-wrapped checkbox as its LABEL — the whole label is
 what a pointer aims at — and asserts the three named elements are PRESENT in
 the swept set, so a remover that regresses to bare prose fails here as well as
@@ -2083,7 +2084,16 @@ the class must be non-empty (`shortBlockMet` — reseeding the fixture long
 reddens the gate), and the focused short block's corner checkbox and ops chip
 must exceed the block's box yet still hit-test (`shortBlockUnclipped` — the
 `styles.css` hover/focus-within overflow hatch, the keyboard discovery path
-issue 140 made load-bearing). No new IPC channel (pure renderer), so
+issue 140 made load-bearing). Issue 247 is the selector lesson beside it: the
+running picker's start-drag grip (`.stp-grip`) is a bare span the role-based
+sweep cannot match, mounted only while an entry is running — a state no swept
+surface held — so a 32×6 drag target was invisible to the gate on two axes at
+once. The running-picker surface measures the grip by name: present
+(`startGripMet` — an absent grip fails rather than passing empty) and its
+`::before` hit pad — transparent, paint untouched — computing ≥24×24 with the
+centred box's edges hit-testing to the grip itself (`startGripHit24`); its
+capture is the first judge screenshot to frame `#le-start-disc` at all. No new
+IPC channel (pure renderer), so
 `parity-matrix.json` / `gui/test/parity.test.ts` carry no row for it. The §12 R14
 keyboard/focus pass is thus fully covered. **§17 R11 — destructive
 actions confirm, and search/filter/group reflect live in the list AND the
