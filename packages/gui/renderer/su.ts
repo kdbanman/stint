@@ -274,6 +274,16 @@ function timelineWindow(
   nowUtcIso: string,
   editedInterval?: { startUtc?: string; endUtc?: string | null } | null,
 ): { startMin: number; endMin: number } {
+  // Every instant this window positions against is read HERE, not through localMinuteOfDay
+  // directly: that one resolves the configured zone through core's wallClockOf, which THROWS
+  // on an unreadable instant (Intl, since #269) instead of answering NaN. A viewport default
+  // is a shield, not a validator — an unreadable timestamp must land it on the working-hours
+  // default, never abort the render — so unreadable reads NaN and falls into the guard at the
+  // bottom, the one exit every other bad-input path already takes (#239).
+  const minuteOfDay = (when: string): number => {
+    const d = new Date(when);
+    return Number.isNaN(d.getTime()) ? NaN : localMinuteOfDay(d);
+  };
   const s = settings || {};
   let start = hhmmToMin(s.workingHoursStart) ?? DEFAULT_WINDOW.startMin;
   let end = hhmmToMin(s.workingHoursEnd) ?? DEFAULT_WINDOW.endMin;
@@ -286,13 +296,13 @@ function timelineWindow(
       Number.isInteger(s.pickerAroundHours) && s.pickerAroundHours! >= 1 && s.pickerAroundHours! <= 24
         ? s.pickerAroundHours!
         : 8;
-    const nowMin = localMinuteOfDay(nowUtcIso);
+    const nowMin = minuteOfDay(nowUtcIso);
     start = nowMin - (hours * 60) / 2;
     end = nowMin + (hours * 60) / 2;
   }
   if (editedInterval && editedInterval.startUtc) {
-    const a = localMinuteOfDay(editedInterval.startUtc);
-    const b = editedInterval.endUtc ? localMinuteOfDay(editedInterval.endUtc) : a;
+    const a = minuteOfDay(editedInterval.startUtc);
+    const b = editedInterval.endUtc ? minuteOfDay(editedInterval.endUtc) : a;
     const span = end - start;
     const mid = (a + b) / 2;
     start = mid - span / 2;
@@ -303,9 +313,13 @@ function timelineWindow(
   const clamp = (m: number) => Math.max(0, Math.min(1440, Math.round(m)));
   let startMin = clamp(start);
   let endMin = clamp(end);
-  if (endMin <= startMin) {
-    // Degenerate after clamping (should not happen off validated settings) — fall back to
-    // core's working-hours default rather than a zero-height viewport.
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin <= startMin) {
+    // The non-finite half is the half that fires (issue #239): an unreadable instant reads
+    // NaN above, clamp propagates it, and `endMin <= startMin` cannot see it — every
+    // comparison against NaN is false — so the window used to leave as { NaN, NaN }. The `<=`
+    // half is the belt: no finite path in here produces a non-positive span (the working
+    // hours reset above, around_now forces ≥ 1h, an edited interval preserves the span).
+    // Either way the viewport lands on core's working-hours default, never an unpaintable one.
     startMin = DEFAULT_WINDOW.startMin;
     endMin = DEFAULT_WINDOW.endMin;
   }
