@@ -177,7 +177,7 @@
     platform it runs on.</p>
     <table>
       <tr><th>Role</th><th>Spec</th><th>Rule</th></tr>
-      <tr><td class="term">Clock</td><td>24–38px · 680 · <code>font.num</code> · tnum</td><td>Every clock and duration: monospace, tabular — digits never jitter. Timer-view clock 38px; strip clock 24px — an A01 floor, not taste: the running count-up is accent, and accent carries text only on the ≥24px large-text branch.</td></tr>
+      <tr><td class="term">Clock</td><td>24–38px · 680 · <code>font.num</code> · tnum</td><td>Every clock and duration readout — columns, labels, pills, fields: monospace, tabular — digits never jitter. A time inside a running sentence is prose, not a Clock: it keeps the reading face, because tabular figures exist to align digits down a column, and prose has no column. Timer-view clock 38px; strip clock 24px — an A01 floor, not taste: the running count-up is accent, and accent carries text only on the ≥24px large-text branch.</td></tr>
       <tr><td class="term">Title</td><td>17–18px · 640</td><td>View &amp; panel titles.</td></tr>
       <tr><td class="term">Body strong</td><td>13px · 590</td><td>Labels &amp; list primary.</td></tr>
       <tr><td class="term">Body</td><td>13px · 450</td><td>Default interface text.</td></tr>
@@ -260,7 +260,10 @@
     disabled controls (A01 does not apply); the run-dot when paired with its label (D05); field
     borders where the field carries a visible label (D13) — the boundary is not the sole identifier;
     purely decorative separators (<code>rule</code>); the mark's own bars, which are a brand asset
-    rather than text or an affordance (D21).</p>
+    rather than text or an affordance (D21); and calendar event blocks shorter than the A03 floor,
+    where height encodes duration (§12 R16) — SC 2.5.8's essential-presentation carve-out: a taller
+    block would misstate the data, the keyboard path is size-independent, and the target-size gate
+    names each sanctioned block rather than passing it silently.</p>
     <p><strong>The disabled idiom.</strong> One paint for the state, on every disabled control and
     not fields alone: <code>faint</code> text on <code>wash</code>, with <code>not-allowed</code> as
     the cursor. The extra dimness is what separates disabled from ordinary <code>muted</code>
