@@ -1807,7 +1807,24 @@ renderer's time FORMATTERS: every place one of them is painted, read out of
 the class attribute around the interpolation or the id the value is assigned
 to, must be a site carrying the whole role. Its predecessor traced one
 formatter through one regex and could not see the site the issue was filed
-about. The same shape
+about. Two sites the census's shapes cannot see are ASSERTED exclusions
+rather than absences (issue #334): the popover's running "since HH:MM" line
+and the merge-gap confirm's question paint a time inside a running sentence,
+and design.html D06's boundary sentence keeps prose in the reading face —
+tabular figures exist to align digits down a column, and prose has no column
+— so each site is pinned by name in the census and a re-classification
+arrives as a visible allowlist diff, never as silence. Beside the Clock
+role's reach, the disabled state's paint (issue #335): design.html §07 names
+ONE disabled treatment — faint on wash, `not-allowed`, the census pinning the
+`:disabled` population to it (issue #241) — and two opacity multipliers still
+stacked on that paint: Chromium's UA `select:disabled { opacity: 0.7 }`, now
+cancelled by an author-level neutralizer whose PRESENCE the census asserts
+(the rule it cancels ships inside Chromium, so no scan over the repo's own
+rules would notice the neutralizer gone), and the Reports increment picker's
+`.report-field.off { opacity: 0.5 }` on the control its `disabled` attribute
+already greys, now deleted in favour of the bare `:disabled` paint — the
+census fails any rule that dims a disabled control's compound with an
+opacity, naming the offender. The same shape
 covers D08/D14 (issue #153): every authored `border-radius` on every
 surface is the trio recomputed from `design.tokens.json` (8px controls, 12px
 cards, 16px window & overlays), or it sits on one of three LITERAL exception

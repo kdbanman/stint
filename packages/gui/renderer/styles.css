@@ -101,6 +101,16 @@ button.primary:hover .ic { color: var(--on-accent); }
   font-feature-settings: "tnum";
 }
 
+/* design.html §07 names ONE paint for the disabled state — faint on wash with a not-allowed
+   cursor — and Chromium's UA sheet stacks a second dimmer on top of it for one element:
+   `select:disabled { opacity: 0.7 }`, while a button gets nothing. Left standing, a disabled
+   select's faint text rendered at ~70% alpha, a shade apart from a disabled button's in the
+   same state (issue #335). Cancelled once here, at the element the UA rule targets, so the
+   idiom rules stay exactly §07's three declarations. design-guard's disabled census asserts
+   THIS rule's presence: deleting it would fail no scan over the repo's own rules, because the
+   0.7 it cancels ships inside Chromium. */
+select:disabled { opacity: 1; }
+
 /* ---- main window ------------------------------------------------------- */
 /* §12 R22: `.app` carries no width cap — any app-wide cap refuses the window the user gives
    it and re-creates issue 126 at a bigger monitor. Line length is bounded locally where it
@@ -1583,8 +1593,11 @@ button.danger:hover { background: var(--danger-weak); }
 /* §09 R3: the project filter is disabled until a client is chosen — painted in design.html §07's
    disabled idiom, which is not this rule's local choice but the file's (issue 241). */
 .report-field:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
-/* §09 R4: the increment picker reads as a secondary choice when rounding is OFF. Monochrome. */
-.report-field.off { opacity: 0.5; }
+/* §09 R4: rounding OFF disables the increment picker; the `off` class reports.js toggles beside
+   the `disabled` attribute is a bare state marker, painted by nothing — the §07 disabled paint
+   above is the whole de-emphasis. Its old `opacity: 0.5` sat ON TOP of that paint, leaving this
+   the one control double-dimmed relative to its disabled siblings (issue #335 — the same lesson
+   `.set-row.off` learned in issue 155). */
 
 .report-summary {
   border: 1px solid var(--rule);
@@ -2358,10 +2371,9 @@ body.popover { background: var(--paper); margin: 0; }
 /* design.html §07's disabled idiom reaches buttons, not fields alone: a check or download in
    flight greys its button faint on wash and tells the pointer the same fact with not-allowed
    (issue 241). A button-shaped variant of the state would be a second answer to a question the
-   app answers once. The three declarations are the whole idiom — no opacity beside them:
-   Chromium's UA sheet carries `select:disabled { opacity: 0.7 }` and gives a button nothing, so
-   this text lands a shade stronger than a disabled select's. Closing that last gap means naming
-   an opacity §07 does not; re-muting THIS rule to close it would just restore the drift. */
+   app answers once. The three declarations are the whole idiom — no opacity beside them: the
+   UA select dim that used to land this text a shade stronger than a disabled select's is
+   cancelled at the `select:disabled` neutralizer beside the base conventions (issue #335). */
 .set-update-btn:disabled { color: var(--faint); background: var(--wash); cursor: not-allowed; }
 .pill.new,
 .update-result.new {
