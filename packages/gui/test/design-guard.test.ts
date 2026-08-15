@@ -157,12 +157,12 @@ const semantic = (name: string): string => {
 };
 
 describe('design token parity (design.html D02)', () => {
-  it('the emitter produces a non-trivial block over all eleven mockups (guard-the-guard)', () => {
+  it('the emitter produces a non-trivial block over all twelve mockups (guard-the-guard)', () => {
     // ≥20 custom-property declarations and the full mockup census — an emitter refactor that
     // silently dropped a token family, or a mockup landing without markers, trips here.
     const declarations = generatedBlock.match(/--[a-z0-9-]+:/g) ?? [];
     expect(declarations.length).toBeGreaterThanOrEqual(20);
-    expect(mockupNames.length).toBe(11);
+    expect(mockupNames.length).toBe(12);
   });
 
   it('every mockup and styles.css carries exactly the generated block between its markers', () => {

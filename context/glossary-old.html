@@ -154,7 +154,7 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Setting</td>
-          <td data-l="Definition">A key/value pair of app configuration (rounding, week start, check-in cadence, hotkey, the timeline window, …). Shared by both surfaces through the same database — which is why the storage paths are deliberately <em>not</em> settings: they must be readable before the database opens, so they live in the <strong>config file</strong> (§06) instead.</td>
+          <td data-l="Definition">A key/value pair of app configuration (rounding, week start, check-in cadence, hotkey, the timeline window, …). Shared by both surfaces through the same database.</td>
           <td class="avoid" data-l="Avoid"><s>preference</s>, <s>config flag</s></td>
         </tr>
         <tr>
@@ -377,28 +377,8 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">Backup</td>
-          <td data-l="Definition">A <strong>timestamped copy of the SQLite file</strong> (<code>&lt;dbfilename&gt;.bak-&lt;stamp&gt;</code>), written into the <strong>backup directory</strong> on launch when the DB has changed since the last one; the last N are retained (default 5). The durability net for the <strong>stored truth</strong> — a copy, never a mutation. Source for <strong>restore</strong>.</td>
+          <td data-l="Definition">A <strong>timestamped copy of the SQLite file</strong>, written beside the database on launch when the DB has changed since the last one; the last N are retained (default 5). The durability net for the <strong>stored truth</strong> — a copy, never a mutation. Source for <strong>restore</strong>.</td>
           <td class="avoid" data-l="Avoid"><s>snapshot</s>, <s>dump</s>, <s>archive</s> (that's reference data), <s>export</s> (that's CSV/JSON data-out)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Backup directory</td>
-          <td data-l="Definition">The one directory backups are written to and read from: <code>TT_BACKUP_DIR</code>, else the config file's <code>backupDir</code>, else <strong>beside the database</strong> (the default). Retention, listing, restore, and corruption recovery all operate on this directory alone — resolved before the database opens, so recovery can find it even when the database cannot open. Changing it is a <strong>storage migrate</strong> (a verified move) or <strong>start fresh</strong> (§20 R13). The GUI row label is "Backup folder"; the spec term is backup directory.</td>
-          <td class="avoid" data-l="Avoid"><s>backup path</s>, <s>backup location</s> (loose), <s>backup folder</s> (GUI label only)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Migrate (storage)</td>
-          <td data-l="Definition">One of the two answers a <strong>storage change</strong> requires: carry the stored data to the new location. For the <strong>database</strong>: checkpoint → backup at the old home → copy → integrity-check the copy → commit — the old file <strong>always stays in place</strong> (copy, never delete; §20 R12). For the <strong>backup directory</strong>: a verified <strong>move</strong> — a fresh backup lands in the new directory first, then each backup is copied, verified, and only then removed from the old (§20 R13). Always carries its object ("migrate the database", "migrate backups") — a bare <em>migration</em> is the schema kind (§09).</td>
-          <td class="avoid" data-l="Avoid"><s>move</s> (unqualified), <s>transfer</s>, <s>relocate</s>, <s>migration</s> (bare — that's schema, §09)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Start fresh</td>
-          <td data-l="Definition">The other answer: the new location starts empty — a new database with first-run semantics, or an empty backup directory — while the old file / old backups stay where they were, untouched. Nothing is destroyed; the old data is simply no longer the live copy. A start-fresh pointed at a location that already holds a database file <strong>adopts</strong> it instead (§20 R12).</td>
-          <td class="avoid" data-l="Avoid"><s>reset</s> (that's deleting a config key), <s>wipe</s>, <s>clean slate</s> (nothing is erased)</td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Adopt</td>
-          <td data-l="Definition">Start-fresh's outcome at a destination that already holds a database file: that file becomes the live database — iff it passes the <strong>integrity check</strong> and the schema-version gate (§20 R08/R09), refused loudly otherwise (§20 R12). What makes "point Stint at my moved file" possible from Settings without a shell.</td>
-          <td class="avoid" data-l="Avoid"><s>attach</s>, <s>mount</s>, <s>import</s> (nothing is copied in)</td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Restore (database)</td>
@@ -448,18 +428,8 @@
         </tr>
         <tr>
           <td class="term" data-l="Term">The database</td>
-          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Its path resolves through one ladder on both surfaces: <code>TT_DB</code>, else the <strong>config file</strong>'s <code>dbPath</code>, else the OS's standard app-data directory — macOS <code>~/Library/Application Support/stint/…</code>, Linux <code>~/.local/share/stint/…</code> (resolved via Electron's <code>app.getPath('userData')</code>, and the per-OS equivalent for <code>tt</code>). Offline, always.</td>
+          <td data-l="Definition">The single local SQLite file (WAL mode) that is the one source of truth. Default in the OS's standard app-data directory — macOS <code>~/Library/Application Support/stint/…</code>, Linux <code>~/.local/share/stint/…</code> (resolved via Electron's <code>app.getPath('userData')</code>, and the per-OS equivalent for <code>tt</code>), overridable via <code>TT_DB</code>. Offline, always.</td>
           <td class="avoid" data-l="Avoid"><s>the store</s>, <s>the DB file</s>, <s>local cache</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Config file</td>
-          <td data-l="Definition">The small JSON file both surfaces read <strong>before the database opens</strong> — <code>$XDG_CONFIG_HOME/stint/config.json</code> on Linux, <code>~/Library/Application Support/stint/config.json</code> on macOS, its own location overridable via <code>TT_CONFIG</code> — holding at most two <strong>optional absolute paths</strong>: <code>dbPath</code> and <code>backupDir</code>. The one configuration that cannot be a <strong>Setting</strong> (a database row cannot locate its own database). Env vars outrank it; an absent key means the next rung; <strong>reset deletes the key</strong> — a resolved default is never written in. A file that cannot be trusted refuses the launch (§20 R10). The CLI's write interface for storage paths — there are no setter verbs.</td>
-          <td class="avoid" data-l="Avoid"><s>settings file</s> (settings are database rows), <s>preferences</s>, <s>rc file</s>, <s>dotfile</s></td>
-        </tr>
-        <tr>
-          <td class="term" data-l="Term">Effective path</td>
-          <td data-l="Definition">The path a surface actually uses after resolving a storage ladder — env var → config file → default — together with its <strong>source</strong>, the rung that set it. What <code>tt paths</code> prints and the Settings <strong>Storage</strong> group shows; one shared core resolver serves both surfaces, so their effective paths can never disagree.</td>
-          <td class="avoid" data-l="Avoid"><s>active path</s>, <s>current path</s> (unqualified), <s>resolved path</s></td>
         </tr>
         <tr>
           <td class="term" data-l="Term">Invariant</td>
@@ -655,10 +625,6 @@
         <tr>
           <td data-l="Ambiguity"><strong>Quarantined vs replaced</strong> — two set-aside database files during recovery.</td>
           <td data-l="Resolution"><strong>Quarantined file</strong> (<code>.corrupted-&lt;ts&gt;</code>) is the <em>corrupt</em> file moved aside by automatic <strong>corruption recovery</strong>. <strong>Replaced file</strong> (<code>.replaced-&lt;ts&gt;</code>) is the <em>previously-good live</em> file moved aside by a <em>user-initiated</em> <strong>restore</strong>. Both exist so data is never destroyed outright; neither is a <strong>backup</strong> (the copy restored <em>from</em>).</td>
-        </tr>
-        <tr>
-          <td data-l="Ambiguity"><strong>"Migrate" — schema or storage?</strong> Two moves wear one verb.</td>
-          <td data-l="Resolution">A bare <strong>migration</strong> is the schema kind: §20 R08's additive upgrade <em>inside</em> one database file, applied silently on open. <strong>Migrate (storage)</strong> is the §12 R26 / §20 R12–R13 relocation of the database file (or the backup set) to a new home, chosen explicitly in the storage change flow. The storage sense always carries its object — "migrate the database," "migrate backups" — so an unqualified "migration" always means schema.</td>
         </tr>
         <tr>
           <td data-l="Ambiguity"><strong>Range preset vs range spec</strong> — the menu choice vs what a saved report stores.</td>

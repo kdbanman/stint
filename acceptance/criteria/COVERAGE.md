@@ -3282,6 +3282,27 @@ both-surfaces claim — the `fav*`/`*Report` IPC channels ↔
 `tt fav …`/`tt report …` parity-matrix rows — is owned by §05 R09/R10 and §09
 R08/R09 (this row consumes those rows, it does not author them)
 
+### §17 R15
+
+**Authored by the custom-storage-paths transition; the executable proof lands
+with its member backlog (the transition's [META] Orchestration parent names the
+members and their sequence).** Routed per acceptance.html §04/§05: **BDD** a
+storage-paths feature run TWICE over @stint/core AND tt — the env → config →
+default ladders (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides),
+the loud refusals for an untrusted config file and for a configured path whose
+parent is missing (no auto-mkdir, no silent fallback), the migrate /
+start-fresh / adopt flows, and backup-into-the-active-directory. **PROP**
+pipeline invariants — the old database byte-identical after any outcome, the
+config file untouched on any failure, no backup ever lost by a directory move.
+**GOLD** the config-file and paths read-side schema contracts plus the
+no-APPDATA path census extension (`packages/core/src/paths.ts`). **JUDGE** the
+Settings Storage group and change-dialog scenes over the driven renderer.
+**MANUAL** the runbook's CHECK STORAGE CHANGE procedure (the real OS picker,
+the native refusal dialog, and the relaunch — the parts with no headless host).
+Until those members land this criterion is specified but unproven; this section
+exists so the §17 roster and this catalogue stay equal in both directions
+(the #301 bind).
+
 ## Residual risk we accept (verbatim from acceptance.html §11)
 
 - **Sleep reconciliation is wall-clock-approximate.** Gap-sourced spans bound the

@@ -126,6 +126,16 @@
   .prog .bar{width:200px;height:7px;border-radius:4px;background:var(--wash);overflow:hidden;border:1px solid var(--rule)}
   .prog .bar i{display:block;height:100%;width:62%;background:var(--ink)}
   .prog .pct{font-size:12px;color:var(--muted)}
+  /* §12 R25 — the file-backed Storage group: enclosed in a card so it reads as a different
+     kind of thing from the settings rows around it (these are config-file paths, not DB rows).
+     Existing grammar only: .card, .srow, .pill; the effective path is the row's small line. */
+  .fbk{padding:2px 16px 8px;margin-top:8px}
+  .fbk .fbk-cap{font-size:12px;color:var(--muted);padding:8px 2px;border-bottom:1px solid var(--rule)}
+  .fbk .fbk-cap code{font-family:var(--num);font-size:11px;background:var(--wash);padding:2px 4px;border-radius:var(--r1)}
+  .sk small.path{font-family:var(--num);font-size:11px;word-break:break-all}
+  /* the disabled control idiom (design.html §07's recorded exemption), applied to a button:
+     an env-overridden row's Change… is inert — the env rung outranks anything the app writes */
+  .btn:disabled{color:var(--faint);background:var(--wash);border-color:var(--rule);cursor:not-allowed}
 </style>
 </head>
 <body>
@@ -211,6 +221,23 @@
       <div class="srow"><div class="sk">Last backup</div><div class="sc"><span class="vrow"><span class="ver tnum">2026-06-27 08:59</span> <span class="ok"><svg class="ic"><use href="#i-check"/></svg> verified</span></span></div></div>
       <div class="srow"><div class="sk">Keep</div><div class="sc"><select class="field"><option>last 3</option><option selected>last 5</option><option>last 10</option></select></div></div>
       <div class="srow"><div class="sk">Restore from backup</div><div class="sc"><button class="btn sm"><svg class="ic"><use href="#i-restore"/></svg> Restore…</button></div></div>
+
+      <!-- §12 R25 / §13 — the Storage group: file-backed, beside Backups. Each row shows the
+           effective path, its source (env / config file / default), and Change… (the §12 R26
+           flow, storage-change.html). The env-overridden row says so and disables Change…;
+           Reset to default appears only on a config-set row and deletes the key (§13). -->
+      <div class="sgrp">Storage</div>
+      <div class="card fbk">
+        <div class="fbk-cap">Stored in a config file — not in your database: <code>~/.config/stint/config.json</code>. Environment variables override the file; <code>tt paths</code> prints these same paths and sources.</div>
+        <div class="srow">
+          <div class="sk">Database<small class="path tnum">/home/kirby/tracking/timetracker.sqlite</small></div>
+          <div class="sc"><span class="pill">config file</span><button class="btn sm">Change…</button><button class="btn sm ghost">Reset to default…</button></div>
+        </div>
+        <div class="srow">
+          <div class="sk">Backup folder<small class="path tnum">/mnt/nas/stint-backups</small><small>Set by <code style="font-family:var(--num);font-size:11px">TT_BACKUP_DIR</code> — clear the variable to change it here</small></div>
+          <div class="sc"><span class="pill">env · TT_BACKUP_DIR</span><button class="btn sm" disabled>Change…</button></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>

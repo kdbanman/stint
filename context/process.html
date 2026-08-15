@@ -220,6 +220,7 @@
         <tr><td data-l="check">Tray + global hotkey on a real desktop session (§12 R01/R02)</td><td data-l="why">Needs a real OS shell. Mirrors: <code>tray.test.ts</code>, the JUDGE popover scenes.</td></tr>
         <tr><td data-l="check">Real sleep/wake spans (§10a)</td><td data-l="why">Needs real power events. Mirrors: BDD/PROP over injected clocks.</td></tr>
         <tr><td data-l="check">Publish-on-merge actually firing (§19 R05)</td><td data-l="why">Only a real merge on the upstream repo runs it. Mirror: the release-wiring GOLD guard.</td></tr>
+        <tr><td data-l="check">Storage change end-to-end — OS picker, the guided dialog, relaunch onto the new location (§12 R26, §20 R11–R13)</td><td data-l="why">Needs a real desktop OS: the native file picker, the native broken-path dialog, and the app relaunch have no headless host. Mirrors: the JUDGE storage-dialog scenes, the §20 R12–R13 BDD/PROP pipeline suites, the GOLD path/config contracts.</td></tr>
       </tbody>
     </table>
   </section>

@@ -311,7 +311,7 @@ describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a
 
   it('parsed both tables and the live procedures (nothing is silently empty)', () => {
     expect(rows.filter((r) => r.table === '§04').length).toBeGreaterThan(30);
-    expect(rows.filter((r) => r.table === '§05').length).toBe(14);
+    expect(rows.filter((r) => r.table === '§05').length).toBe(15);
     expect(manualRows.length).toBeGreaterThan(4);
     expect(liveClaims.size).toBeGreaterThan(10);
   });
@@ -363,7 +363,7 @@ describe('GOLD — every §17 criterion has a COVERAGE.md section (#301)', () =>
     .sort((a, b) => a - b);
 
   it('read both homes (neither the §05 roster nor the COVERAGE catalogue is silently empty)', () => {
-    expect(rosterIds.length).toBe(14);
+    expect(rosterIds.length).toBe(15);
     expect(catalogueIds.length).toBeGreaterThan(10);
   });
 

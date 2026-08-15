@@ -157,8 +157,7 @@
         <tr><td class="m" data-l="Module">backup</td><td data-l="Owns">Filesystem durability — backup, retention, integrity check, quarantine and recovery.</td></tr>
         <tr><td class="m" data-l="Module">checkin</td><td data-l="Owns">Check-in cadence logic and the canonical <code>app_state</code> keys.</td></tr>
         <tr><td class="m" data-l="Module">settings</td><td data-l="Owns">The typed settings interface, defaults, and validation.</td></tr>
-        <tr><td class="m" data-l="Module">paths</td><td data-l="Owns">Storage path resolution — the env → config file → default ladders for the database, the backup directory, and the config file itself (<a href="prd.html#s13">§13</a>); each effective path carries the rung that set it.</td></tr>
-        <tr><td class="m" data-l="Module">config</td><td data-l="Owns">The out-of-DB config file (<a href="prd.html#s13">§13</a>): its per-OS location, the two optional path keys, validation (absolute paths, no unknown keys — an untrusted file refuses the launch, §20 R10), the atomic write-temp-then-rename commit, and reset-by-deleting-the-key.</td></tr>
+        <tr><td class="m" data-l="Module">paths</td><td data-l="Owns">DB path resolution — <code>TT_DB</code>, else the per-OS app-data directory.</td></tr>
         <tr><td class="m" data-l="Module">version</td><td data-l="Owns">The one app-version string both surfaces report, and its <code>YYYY.M.D[.N]</code> shape.</td></tr>
         <tr><td class="m" data-l="Module">label</td><td data-l="Owns">The single client/project label-join rule.</td></tr>
         <tr><td class="m" data-l="Module">index</td><td data-l="Owns">The public API barrel — the only import surface for <code>cli</code> and <code>gui</code>.</td></tr>
@@ -179,7 +178,7 @@
   <section id="s4">
     <div class="eyebrow"><span class="n">04</span> Storage &amp; the write path</div>
     <h2>One file, one writer, atomic transitions</h2>
-    <p>The Database is a single SQLite file in <strong>WAL mode</strong> — concurrent readers, one writer — at a path both surfaces resolve through one ladder: <code>TT_DB</code>, else the config file's <code>dbPath</code>, else the OS app-data default (<a href="prd.html#s13">§13</a>; the config bootstrap is §07). Schema and pragmas are <a href="prd.html#s13">§13</a>; the hardening rules are <a href="prd.html#s20">§20</a>. Two things are architectural: the write path, and the invariant it protects.</p>
+    <p>The Database is a single SQLite file in <strong>WAL mode</strong> — concurrent readers, one writer — at the OS app-data path, overridable by <code>TT_DB</code>. Schema and pragmas are <a href="prd.html#s13">§13</a>; the hardening rules are <a href="prd.html#s20">§20</a>. Two things are architectural: the write path, and the invariant it protects.</p>
     <h3>Atomic stop-then-start</h3>
     <p>Starting a timer while one runs is one transaction, so it is safe regardless of which surface triggers it or how fast start/stop arrive (<a href="prd.html#s4">§04 R04</a>).</p>
     <pre class="dgm">  <span class="k">start(...)</span>  <span class="c">// switch is the same transaction, surfaced as one action</span>
@@ -208,20 +207,15 @@
   <section id="s7">
     <div class="eyebrow"><span class="n">07</span> Durability &amp; integrity</div>
     <h2>One anchor: DB open</h2>
-    <p>Every durability rule is <span class="core">core</span> and specified in <a href="prd.html#s20">§20</a>. They share one architectural property: all run at <strong>open, before any write</strong>, so a misconfigured or corrupt file never reaches normal operation — and one step runs before even the open, because it decides <em>what</em> to open.</p>
-    <pre class="dgm">  <span class="k">resolve</span>            <span class="c">before anything opens</span>
-    0. <span class="c">config + ladders</span>   read/validate the config file; resolve db + backup paths <span class="c">(§13)</span>
-       <span class="c">untrusted config or broken db path → refuse loudly HERE, no fallback (§20 R10–R11)</span>
-  <span class="k">open</span>
+    <p>Every durability rule is <span class="core">core</span> and specified in <a href="prd.html#s20">§20</a>. They share one architectural property: all run at <strong>open, before any write</strong>, so a misconfigured or corrupt file never reaches normal operation.</p>
+    <pre class="dgm">  <span class="k">open</span>
     1. <span class="c">assert pragmas</span>     WAL · foreign_keys · busy_timeout · synchronous=FULL   <span class="c">(§20 R01)</span>
     2. <span class="c">integrity check</span>    on failure → quarantine .corrupted + restore backup    <span class="c">(§20 R03/R05)</span>
-    3. <span class="c">backup-on-launch</span>   if changed since last, timestamped copy into the
-                          backup directory + prune                               <span class="c">(§20 R04)</span>
+    3. <span class="c">backup-on-launch</span>   if changed since last, timestamped copy + prune        <span class="c">(§20 R04)</span>
     4. <span class="c">migrate</span>           to current schema version (additive)
        <span class="c">→ only now are writes allowed</span></pre>
     <p class="cap">Figure 3 — the open sequence</p>
-    <p><strong>The config bootstrap.</strong> The storage paths live in a small JSON config file, not the <code>setting</code> table, for a structural reason: settings are database rows, and a row cannot say where to find its own database — while corruption recovery (step 2) must find the backup directory <em>before</em> the database opens. So the <code>config</code>/<code>paths</code> modules run first, both surfaces resolving identically with nothing passed extra; a config file that cannot be trusted, or a configured path whose parent is gone, refuses the launch rather than opening a guessed location (§20 R10–R11 — the phantom-empty-tracker guard). Changing a location at runtime (§12 R26) is a core pipeline — backup first, copy, verify, then a single atomic config commit (write-temp-then-rename) and a relaunch — so the running process never swaps databases under itself, and a failure at any stage leaves the config and the old location untouched (§20 R12–R13).</p>
-    <p>Recovery never loses data: the corrupt file is preserved as a <code>.corrupted</code> sibling and the latest good backup in the active backup directory is copied into place. Backup/restore is reachable from both surfaces. Schedule state in <code>app_state</code> commits in the same transaction as the entry that changes it (§20 R07), so the two can't drift.</p>
+    <p>Recovery never loses data: the corrupt file is preserved as a <code>.corrupted</code> sibling and the latest good backup is copied into place. Backup/restore is reachable from both surfaces. Schedule state in <code>app_state</code> commits in the same transaction as the entry that changes it (§20 R07), so the two can't drift.</p>
   </section>
 
   <section id="s8">
@@ -234,7 +228,7 @@
   <span class="c">main</span>      <span class="k">ipcMain.handle(channel)</span>  <span class="c">→  Store method / pure helper</span>
             <span class="c">└ broadcasts 'changed' → renderer refresh (fs.watch does the same cross-surface)</span></pre>
     <p class="cap">Figure 4 — GUI internal IPC</p>
-    <p>The renderer-reachable channels form the <strong>parity matrix</strong>: each maps to an equivalent <code>tt</code> path in <code>acceptance/criteria/parity-matrix.json</code>, asserted in CI. Three capabilities have no CLI twin and sit outside the matrix — the tray, the global hotkey, and Software Update — so update rides a separate <code>update:*</code> IPC namespace rather than the parity channels. The storage change flow (<a href="prd.html#s12">§12 R26</a>) splits the same way: its <strong>read side</strong> (the Storage rows' effective paths + sources) is an ordinary parity channel twinned with <code>tt paths</code>, while the <strong>write side</strong> — the guided change pipeline — rides its own <code>storage:*</code> namespace off the matrix, because its CLI counterpart is deliberately not a verb: the config file plus the documented §13 procedure (quit, edit, relaunch). The pipelines themselves live in core (§20 R12–R13); the GUI only drives them.</p>
+    <p>The renderer-reachable channels form the <strong>parity matrix</strong>: each maps to an equivalent <code>tt</code> path in <code>acceptance/criteria/parity-matrix.json</code>, asserted in CI. Three capabilities have no CLI twin and sit outside the matrix — the tray, the global hotkey, and Software Update — so update rides a separate <code>update:*</code> IPC namespace rather than the parity channels.</p>
     <p><strong>The renderer is built, not hand-copied</strong> (the issue #83 decision, recorded). The page scripts are classic (non-module) scripts, but their shared display helpers — <code>window.SU</code> — are a typed TypeScript entry (<code>packages/gui/renderer/su.ts</code>) that esbuild bundles into a classic IIFE script (<code>renderer/dist/su.js</code>) at build time (<code>scripts/build-renderer.mjs</code>). The bundle <em>imports</em> the display rules — core's <code>formatDuration</code>/<code>formatHours</code> and the GUI's pure view modules (<code>tags</code>, <code>timerview</code>, <code>localtime</code>) — so no core rule is re-implemented in page code. The rationale that matters: the pages load over <code>file://</code> under a <code>script-src 'self'</code> CSP, which permits any <em>local built</em> script — the earlier "classic script, so no bundler" comment was folklore, not a constraint. Core declares <code>sideEffects: false</code> so its Node-touching modules (db, store, backup) tree-shake out of the browser bundle, and <code>gui/test/renderer-bundle.test.ts</code> executes the shipped bundle, asserting it stays node-free and behaves exactly as the modules it imports. The renderer is statically guarded like everything else — ESLint plus <code>checkJs</code> typechecking (<code>tsconfig.renderer.json</code> / <code>tsconfig.popover.json</code>), no ignore-list exemption.</p>
   </section>
 
