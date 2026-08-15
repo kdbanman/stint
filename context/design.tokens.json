@@ -75,7 +75,7 @@
   "semantic": {
     "$description": "The only tokens surfaces may use. Text tokens meet 4.5:1 on the surfaces design.html permits them on; signal tokens meet 3:1 non-text. faint is never readable text (3.28:1) — decorative and disabled uses only.",
     "paper":        { "$type": "color", "$value": "{color.sand.1}",   "$description": "App/window surface." },
-    "sidebar":      { "$type": "color", "$value": "{color.sand.2}",   "$description": "Nav rail surface." },
+    "sidebar":      { "$type": "color", "$value": "{color.sand.2}",   "$description": "Nav rail surface — the region reads by layout + rule border; the fill is warmth, not signal." },
     "wash":         { "$type": "color", "$value": "{color.sand.3}",   "$description": "Sunken component background (segmented track, tags, pills)." },
     "hover":        { "$type": "color", "$value": "{color.sand.4}",   "$description": "Hover wash." },
     "canvas":       { "$type": "color", "$value": "{color.sand.5}",   "$description": "Backdrop behind the window (mockups/docs only)." },
