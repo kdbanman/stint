@@ -268,21 +268,15 @@ function calDayParts(dayStr) {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return { dw: CAL_WEEKDAYS[dt.getUTCDay()], dd: String(d) };
 }
+// The week grid's calendar arithmetic lives in gui/src/weekgrid.ts (SU.*) — importable and
+// unit-tested (#322). What stays here is the resolution these day-token functions can't do:
+// the settings snapshot, the selected week, and the clock.
 function calAddDays(dayStr, n) {
-  const [y, m, d] = dayStr.split('-').map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCDate(dt.getUTCDate() + n);
-  return dt.toISOString().slice(0, 10);
+  return SU.addDays(dayStr, n);
 }
-// The [start, end] day strings of the week (by the weekStart setting) containing a day. Pure
-// string/UTC math so it is timezone-agnostic — used to pad the default view to a whole week.
+// The [start, end] day strings of the week containing a day, per the weekStart setting (§14).
 function calWeekBounds(dayStr) {
-  const [y, m, d] = dayStr.split('-').map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  const startDow = state && state.settings && state.settings.weekStart === 'sunday' ? 0 : 1;
-  const back = (dow - startDow + 7) % 7;
-  const start = calAddDays(dayStr, -back);
-  return [start, calAddDays(start, 6)];
+  return SU.weekBounds(dayStr, state?.settings?.weekStart);
 }
 function calEnumerateDays(minDay, maxDay) {
   const out = [];
@@ -293,14 +287,6 @@ function calEnumerateDays(minDay, maxDay) {
     cur = calAddDays(cur, 1);
   }
   return out;
-}
-
-// Whether a 'YYYY-MM-DD' token is a Monday–Friday weekday (UTC math over the token, like
-// calDayParts — the token is already a resolved local day, so no zone re-derivation here).
-function calIsWeekday(dayStr) {
-  const [y, m, d] = dayStr.split('-').map(Number);
-  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
-  return dow >= 1 && dow <= 5;
 }
 
 // Today's local day token in the configured zone — the one 'today' every surface of this
@@ -322,64 +308,34 @@ function calWeekDays() {
   return calEnumerateDays(ws, calAddDays(ws, 6));
 }
 function calShownDays() {
-  const week = calWeekDays();
-  return state && state.settings && state.settings.showWeekend ? week : week.filter(calIsWeekday);
+  return SU.shownDays(calSelectedWeekStart(), !!state?.settings?.showWeekend);
 }
 
-// Fixed English month names for the week label and the picker's month heading (deterministic
-// across runners; the date/number-format setting governs times and numerals, not these).
+// Fixed English month names for the picker's month heading (deterministic across runners; the
+// date/number-format setting governs times and numerals, not these).
 const CAL_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const CAL_MONTHS_SHORT = CAL_MONTHS.map((m) => m.slice(0, 3));
 
-// §12 R09: the toolbar's week label over the SHOWN days — "Jun 22 – 26, 2026" with the
-// weekend hidden, "Jun 22 – 28, 2026" with it shown; month/year repeat only when they differ
-// across the span (a cross-month or cross-year week names both ends in full).
+// §12 R09: the toolbar's week label over the SHOWN days — its two ends are what the label
+// names, so the widening across a month or year boundary is decided from them alone.
 function calWeekLabel() {
   const shown = calShownDays();
-  const first = shown[0];
-  const last = shown[shown.length - 1];
-  const [fy, fm, fd] = first.split('-').map(Number);
-  const [ly, lm, ld] = last.split('-').map(Number);
-  if (fy === ly && fm === lm) return `${CAL_MONTHS_SHORT[fm - 1]} ${fd} – ${ld}, ${fy}`;
-  if (fy === ly) return `${CAL_MONTHS_SHORT[fm - 1]} ${fd} – ${CAL_MONTHS_SHORT[lm - 1]} ${ld}, ${fy}`;
-  return `${CAL_MONTHS_SHORT[fm - 1]} ${fd}, ${fy} – ${CAL_MONTHS_SHORT[lm - 1]} ${ld}, ${ly}`;
+  return SU.weekLabel(shown[0], shown[shown.length - 1]);
 }
 
-// §12 R16 (issue #71): the rendering SEGMENTS an entry lays onto the day columns. A same-day
-// entry is one 'full' segment in its start-day column; a CLOSED entry whose local end day differs
-// from its local start day CROSSES MIDNIGHT and renders ONE SEGMENT PER TOUCHED COLUMN, all sharing
-// the entry id: a start-day segment (its start minute → the track BOTTOM, 24:00), a full-height
-// 00:00→24:00 segment for each fully-covered middle day, and an end-day segment (the track TOP,
-// 00:00 → its end minute). The open/running entry never splits — it stays one future-fading
-// start-only block in its start column (calEvent caps the span; no end day exists to cross into).
-// Attribution is NOT touched here: the entry lives in exactly one day bucket keyed by its START
-// day (entrylist.ts localDay(startUtc)); these segments are a pure rendering fan-out that never
-// re-buckets it, so a cross-midnight end/middle column shows the span WITHOUT counting it in that
-// column's billable total — matching `tt report --by day`. `startDay` is the authoritative bucket
-// key the entry was grouped under (never re-derived), so the start segment always lands in its
-// own column even at a local-day boundary. topMin/botMin are local minutes-of-day; a null botMin
-// marks the open block, whose foot calEvent computes (future-fade cap).
+// §12 R16 (issue #71): the rendering SEGMENTS an entry lays onto the day columns — the fan-out
+// itself is SU.entrySegments (gui/src/weekgrid.ts, where it is unit-pinned); resolved here is
+// the entry's stored UTC into the grid's vocabulary of local day tokens and minutes-of-day.
+// `startDay` is the authoritative bucket key the entry was grouped under and is passed through
+// UNRESOLVED, so the start segment lands in its own column even at a local-day boundary.
 function calEntrySegments(e, startDay) {
-  const startMin = localMinuteOfDay(e.startUtc);
-  if (e.endUtc === null) return [{ day: startDay, topMin: startMin, botMin: null, part: 'open' }];
-  const endDay = calLocalDayOf(e.endUtc);
-  const endMin = localMinuteOfDay(e.endUtc);
-  // Same local day (the common case): one block start→end, with the legibility floor applied by
-  // calEvent. `endDay <= startDay` also folds any degenerate end-before-start into the same-day
-  // path rather than emitting a backwards fan-out.
-  if (endDay <= startDay) {
-    return [{ day: startDay, topMin: startMin, botMin: Math.max(endMin, startMin + 5), part: 'full' }];
-  }
-  // Cross-midnight: a start segment to the boundary, a full-height slice per whole middle day, and
-  // an end segment from the boundary down to the end minute.
-  const segs = [{ day: startDay, topMin: startMin, botMin: 1440, part: 'seg-start' }];
-  for (let mid = calAddDays(startDay, 1); mid < endDay; mid = calAddDays(mid, 1)) {
-    segs.push({ day: mid, topMin: 0, botMin: 1440, part: 'seg-mid' });
-  }
-  // A span ending exactly at local midnight (endMin 0) gains no visible slice on the end day — the
-  // start segment already reaches the boundary — so no zero-height end segment is emitted.
-  if (endMin > 0) segs.push({ day: endDay, topMin: 0, botMin: endMin, part: 'seg-end' });
-  return segs;
+  return SU.entrySegments({
+    startDay,
+    startMin: localMinuteOfDay(e.startUtc),
+    end:
+      e.endUtc === null
+        ? null
+        : { day: calLocalDayOf(e.endUtc), min: localMinuteOfDay(e.endUtc) },
+  });
 }
 
 // §12 R16 (G13): resolve the ORDERED set of day columns to paint plus each day's entries + its
@@ -706,28 +662,15 @@ function writeFormInterval(startDate, stopDate) {
   paintPendingOverlay();
 }
 
-// §12 R16 (issue #71): the shown-day rendering segments of an arbitrary local span — the
-// same fan-out calEntrySegments applies to stored entries, over the form's live interval:
-// one 'full' block same-day, else start segment → the column foot, a full-height slice per
-// whole middle day, an end segment from the column head. A null stop is the open row's
-// start-only block (capped like calEvent's future fade).
+// §12 R16 (issue #71): the shown-day rendering segments of the form's live interval — the same
+// fan-out stored entries use (SU.spanSegments, gui/src/weekgrid.ts), resolved here from the raw
+// instants the form holds. A falsy stop is the open row's start-only block.
 function calSpanSegments(startIso, stopIso) {
-  const startDay = calLocalDayOf(startIso);
-  const startMinute = localMinuteOfDay(startIso);
-  if (!stopIso) {
-    return [{ day: startDay, topMin: startMinute, botMin: Math.min(startMinute + 180, 1440), part: 'open' }];
-  }
-  const endDay = calLocalDayOf(stopIso);
-  const endMinute = localMinuteOfDay(stopIso);
-  if (endDay <= startDay) {
-    return [{ day: startDay, topMin: startMinute, botMin: Math.max(endMinute, startMinute + 1), part: 'full' }];
-  }
-  const segs = [{ day: startDay, topMin: startMinute, botMin: 1440, part: 'seg-start' }];
-  for (let mid = calAddDays(startDay, 1); mid < endDay; mid = calAddDays(mid, 1)) {
-    segs.push({ day: mid, topMin: 0, botMin: 1440, part: 'seg-mid' });
-  }
-  if (endMinute > 0) segs.push({ day: endDay, topMin: 0, botMin: endMinute, part: 'seg-end' });
-  return segs;
+  return SU.spanSegments({
+    startDay: calLocalDayOf(startIso),
+    startMin: localMinuteOfDay(startIso),
+    end: stopIso ? { day: calLocalDayOf(stopIso), min: localMinuteOfDay(stopIso) } : null,
+  });
 }
 
 // §12 R06/R07 (mockup edit-entry.html): paint the pending/selected interval — the ONE vivid
