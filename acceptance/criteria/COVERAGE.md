@@ -1541,7 +1541,8 @@ hiding it never changes attribution or any total), hover
 Delete/Split/Edit + a corner checkbox, a click that opens the unified editor,
 the running future-fade, overlap warn bands + slept hatch, and the multi-select
 merge entry point (§06 R3). Renderer-only (`gui/renderer/app.js` calendar
-renderer + `styles.css` ); it reuses the existing `getState` /`listEntries`
+renderer + `styles.css` , over the Electron-free calendar math in
+`gui/src/weekgrid.ts` ); it reuses the existing `getState` /`listEntries`
 reads and the §14 timeline-window settings, so **no new IPC channel** (no parity
 row). Headless-pinned by JUDGE `CALENDAR_LAYOUT` (`packages/gui/judge/`,
 `main-calendar.png` / `main-calendar-weekend.png` over `entriesCalendarState`
@@ -1575,7 +1576,12 @@ total-less and Fri's unchanged (§16 — hiding a segment never moves a total);
 hover reveals the ops + `.ck` ; a
 click opens `.edit-form.entry-form` inline; the `.ev.run` future-fade with no
 end edge; the `.ov` overlap band + `.zz` slept hatch; and checking two `.ck`
-boxes reveals `#merge-bar` . How the calendar PAINTS a chosen block is pinned
+boxes reveals `#merge-bar` . The calendar arithmetic UNDER that rendered week —
+which days the shown week is, how the toolbar names them, and the
+segment fan-out itself — is unit `gui/test/weekgrid.test.ts` over
+`gui/src/weekgrid.ts` (issue #322): the branches one pinned week cannot reach,
+namely a Sunday `week_start` , the cross-month and cross-year label widening,
+and a span crossing more than one midnight. How the calendar PAINTS a chosen block is pinned
 separately by JUDGE `SELECTION_LIFT` (`selection-lift.png` /
 `selection-lift-editing.png`, issue 144 — over the same dense-week
 `denseCalendarState` the accent-budget guard uses: two `.ck`-selected blocks and
@@ -1855,7 +1861,13 @@ selections, and a non-selection reaching for it fails where the ladder census
 saw only that it had named a rung. Half the population had picked it up as a
 general sub-card lift — the primary button, two switch knobs, two drag grips,
 two time pills and every calendar block at rest — and a lift on everything
-says nothing. The same shape covers
+says nothing. The rung's STRENGTH is floored beside its meaning (issue #338):
+a lift must be perceptible to say anything, and the #308 pairs measured the
+prior `0 1px 2px/.12` rung at a mean Δ6/255 over ~1% of pixels at every
+single-chip site — invisible in place — so `shadow.chip` must clear an
+alpha ≥ .25 / reach ≥ 4px floor recomputed from `design.tokens.json`, sitting
+at the value #338's rendered pairs chose; dialing the lift back below
+perception is a reviewed floor edit, never a quiet token change. The same shape covers
 **D01 itself** (issue #157): the rule reads "surfaces reference semantic tokens
 only; a raw scale step OR HEX LITERAL is a defect", and BOTH clauses are
 enforced whole — filtering mockup hits to Radix
@@ -3359,7 +3371,7 @@ while `errMessage` was re-typed at four sites, one dropping the `.message`
 unwrap. `popover.html` is a second document that can reach nothing `app.js`
 defines, so `su.ts` is the only home serving every page — either by defining the
 helper or by re-exporting the `gui/src` module that owns it (`localtime.ts`,
-`snap.ts`), which is one home in both shapes. The behavior of the
+`snap.ts`, `weekgrid.ts`), which is one home in both shapes. The behavior of the
 hoisted helpers (the single-quote escape, the unwrap-then-strip message rule,
 the exact minute's seconds fraction) is GOLD
 `gui/test/renderer-bundle.test.ts`, run through the bundle the pages load.

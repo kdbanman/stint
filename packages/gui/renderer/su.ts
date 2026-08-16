@@ -18,6 +18,10 @@
  *                  renderer-only home would fork the pair the moment they did (issue #159).
  *   - snapStepMin → src/snap.ts — the §12 R23 drag-snap resolution both time surfaces read,
  *                  reading core's DEFAULT_SETTINGS for the fallback rather than re-typing it.
+ *   - the week-grid calendar math (addDays, weekBounds, shownDays, weekLabel, entrySegments,
+ *                  spanSegments)
+ *                → src/weekgrid.ts — §12 R09/R16 day-token arithmetic, unit-pinned where
+ *                  app.js could not be asked a question at all (issue #322).
  *
  * Everything below those imports is renderer-only display chrome with no other home.
  * Display only: elapsed is always derived (now − start), never stored.
@@ -32,6 +36,7 @@ import { countUpSeconds } from '../src/timerview.js';
 import { tagDiff } from '../src/tags.js';
 import { localInputValue, parseLocalInput } from '../src/localtime.js';
 import { snapStepMin } from '../src/snap.js';
+import { addDays, entrySegments, shownDays, spanSegments, weekBounds, weekLabel } from '../src/weekgrid.js';
 
 /** Format a duration in seconds as HH:MM:SS — core's rule verbatim (signed negatives). */
 const fmtDur = formatDuration;
@@ -417,6 +422,15 @@ const SU = {
   // §12 R23: the one drag-snap step (src/snap.ts) — the week grid and the start-only picker
   // both resolve their active resolution here instead of each keeping a copy.
   snapStepMin,
+  // §12 R09/R16: the Entries week grid's calendar arithmetic (src/weekgrid.ts). It speaks day
+  // tokens and minutes-of-day only — app.js resolves instants through the helpers above and
+  // supplies its own settings/selection/clock at the call sites.
+  addDays,
+  weekBounds,
+  shownDays,
+  weekLabel,
+  entrySegments,
+  spanSegments,
   localDayOf,
   startOfDay,
   dayStartOfToken,

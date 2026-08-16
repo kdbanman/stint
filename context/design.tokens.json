@@ -75,7 +75,7 @@
   "semantic": {
     "$description": "The only tokens surfaces may use. Text tokens meet 4.5:1 on the surfaces design.html permits them on; signal tokens meet 3:1 non-text. faint is never readable text (3.28:1) — decorative and disabled uses only.",
     "paper":        { "$type": "color", "$value": "{color.sand.1}",   "$description": "App/window surface." },
-    "sidebar":      { "$type": "color", "$value": "{color.sand.2}",   "$description": "Nav rail surface." },
+    "sidebar":      { "$type": "color", "$value": "{color.sand.2}",   "$description": "Nav rail surface — the region reads by layout + rule border; the fill is warmth, not signal." },
     "wash":         { "$type": "color", "$value": "{color.sand.3}",   "$description": "Sunken component background (segmented track, tags, pills)." },
     "hover":        { "$type": "color", "$value": "{color.sand.4}",   "$description": "Hover wash." },
     "canvas":       { "$type": "color", "$value": "{color.sand.5}",   "$description": "Backdrop behind the window (mockups/docs only)." },
@@ -112,7 +112,7 @@
   },
   "shadow": {
     "$description": "The warm elevation ladder (chip → card → raise → pop → modal → win). One rung above what a surface covers; never nest cards. chip is not a layer rung — it is the D12 selection lift, below card.",
-    "chip":  { "$type": "shadow", "$value": "0 1px 2px rgba(74,52,24,.12)", "$description": "The D12 raised-chip lift — the selection rung below card. It says one thing: this is the chosen one. Nothing merely raised, pressed, dragged, or resting takes it." },
+    "chip":  { "$type": "shadow", "$value": "0 1px 3px rgba(74,52,24,.25)", "$description": "The D12 raised-chip lift — the selection rung below card. It says one thing: this is the chosen one. Nothing merely raised, pressed, dragged, or resting takes it. Its strength is a floor, not taste: below ~.25 alpha with ~4px of reach the lift stops reading at chip size (issue #338's rendered pairs), so design-guard holds the value there." },
     "card":  { "$type": "shadow", "$value": "0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05)" },
     "raise": { "$type": "shadow", "$value": "0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06)" },
     "pop":   { "$type": "shadow", "$value": "0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10)" },

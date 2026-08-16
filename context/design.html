@@ -141,7 +141,7 @@
     <table>
       <tr><th>Token</th><th>Step</th><th>Role</th><th>Contrast</th></tr>
       <tr><td class="term"><span class="chip" style="background:#fdfdfc"></span>paper</td><td>sand·1</td><td>App/window surface</td><td>—</td></tr>
-      <tr><td class="term"><span class="chip" style="background:#f9f9f8"></span>sidebar</td><td>sand·2</td><td>Nav rail surface</td><td>—</td></tr>
+      <tr><td class="term"><span class="chip" style="background:#f9f9f8"></span>sidebar</td><td>sand·2</td><td>Nav rail surface — the region reads by layout + <code>rule</code> border; the fill is warmth, not signal</td><td>—</td></tr>
       <tr><td class="term"><span class="chip" style="background:#f1f0ef"></span>wash</td><td>sand·3</td><td>Sunken component background</td><td>—</td></tr>
       <tr><td class="term"><span class="chip" style="background:#e9e8e6"></span>hover</td><td>sand·4</td><td>Hover wash</td><td>—</td></tr>
       <tr><td class="term"><span class="chip" style="background:#e2e1de"></span>canvas</td><td>sand·5</td><td>Backdrop behind the window (docs/mockups)</td><td>—</td></tr>
@@ -217,7 +217,10 @@
     <p><span class="rid">D12</span><strong>Selection ≠ accent.</strong> A chosen thing lifts —
     a raised paper chip with a shadow (the segmented idiom) — it does not turn accent. This includes
     the nav rail: the active item is a lifted chip whose <em>icon</em> may take accent; its label
-    stays ink. (<code>accent-weak</code> backs non-selection accents only: pills, weak fills.)</p>
+    stays ink. The active read is carried by the <code>shadow.chip</code> lift, the 590 label, and
+    the accent icon — the chip's paper fill is garnish, not a carrier (D04 — the rail fill is
+    warmth, not signal). (<code>accent-weak</code> backs non-selection accents only: pills, weak
+    fills.)</p>
     <p><span class="rid">D13</span><strong>Fields.</strong> One border (<code>rule-strong</code>),
     one radius (8px), one focus idiom: an <code>accent</code> <strong>outline</strong> (with
     <code>outline-offset</code>) as the boundary, plus the 3px ring on fields — the accent border
@@ -266,8 +269,9 @@
     names each sanctioned block rather than passing it silently.</p>
     <p><strong>The disabled idiom.</strong> One paint for the state, on every disabled control and
     not fields alone: <code>faint</code> text on <code>wash</code>, with <code>not-allowed</code> as
-    the cursor. The extra dimness is what separates disabled from ordinary <code>muted</code>
-    secondary text, and the cursor tells the pointer the same fact the colour tells the eye. This is
+    the cursor. The compound — the dimmer text, the <code>wash</code> fill, the cursor — is what
+    separates disabled from ordinary <code>muted</code> secondary text, and the cursor tells the
+    pointer the same fact the paint tells the eye. This is
     the exemption above being spent deliberately: <code>faint</code> is otherwise never readable
     text (D04/D16), and it is permitted here only because A01 does not govern a disabled control.</p>
   </section>
