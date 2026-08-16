@@ -403,6 +403,10 @@ const NOT_JUDGE_ITEMS = new Set([
   'SETTING_DESCRIPTORS',
   'STINT_BUILD_N',
   'STINT_VERSION',
+  // The §13 storage-ladder env vars (the TT_DB pattern), cited by the §13/§20 rows.
+  'TT_BACKUP_DIR',
+  'TT_CONFIG',
+  'TT_DB',
   'UPDATE_CHECK_FAILED',
   'VERSION_RE',
   // NAV_SHELL's two named sub-facts. They live inside that row's prose, not as rows of their

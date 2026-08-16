@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/paths.json",
+  "title": "tt paths --json",
+  "description": "The read side of the §13 storage ladders (PRD §11): each effective storage path — the database, the backup directory, and the config file's own path — with the ladder rung that set it (env / config / default). The config file's ladder has no config rung. The same paths and sources the Settings Storage group shows (§12 R25).",
+  "type": "object",
+  "required": ["database", "backup_directory", "config_file"],
+  "additionalProperties": false,
+  "properties": {
+    "database": {
+      "type": "object",
+      "required": ["path", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["env", "config", "default"] }
+      }
+    },
+    "backup_directory": {
+      "type": "object",
+      "required": ["path", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["env", "config", "default"] }
+      }
+    },
+    "config_file": {
+      "type": "object",
+      "required": ["path", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "source": { "enum": ["env", "default"] }
+      }
+    }
+  }
+}

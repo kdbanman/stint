@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1369,6 +1369,74 @@ describe('GOLD: tt backup ls / now / restore (§20 R04/R05, §17 R12)', () => {
     const rejected = tt(['backup', 'restore', 'tt.sqlite.bak-20000101T000000Z', '--force']);
     expect(rejected.code).toBe(2);
     expect(rejected.err).not.toMatch(/^error: /);
+  });
+});
+
+describe('GOLD: tt paths (§11, §13) + dead backup directory (§20 R14)', () => {
+  // §11/§13 — the read side of the storage ladders: `tt paths` prints each effective path
+  // (database, backup directory, the config file's own path) with the rung that set it,
+  // through the SAME core resolver the launch uses. Read-only: no store is opened, so a
+  // paths query creates no database. §20 R14 — a dead backup directory is reported plainly
+  // by `backup ls|now`, never rendered as an innocent empty list or a claimed backup.
+  const ttEnv = (
+    args: string[],
+    env: Record<string, string | undefined>,
+  ): { out: string; err: string; code: number } => {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, TT_NOW: '2026-06-24T10:24:07Z', NODE_NO_WARNINGS: '1', ...env },
+    });
+    return { out: (res.stdout ?? '').trimEnd(), err: (res.stderr ?? '').trimEnd(), code: res.status ?? 0 };
+  };
+
+  it('--json validates against paths.schema.json and reports the rung per row', () => {
+    const cfg = join(dir, 'config.json');
+    writeFileSync(cfg, JSON.stringify({ backupDir: join(dir, 'conf-backups') }));
+    const r = ttEnv(['paths', '--json'], { TT_DB: db, TT_CONFIG: cfg, TT_BACKUP_DIR: undefined });
+    expect(r.code).toBe(0);
+    const json = JSON.parse(r.out);
+    const validate = validator('paths.schema.json');
+    expect(validate(json) || validate.errors).toBe(true);
+    expect(json).toEqual({
+      database: { path: db, source: 'env' },
+      backup_directory: { path: join(dir, 'conf-backups'), source: 'config' },
+      config_file: { path: cfg, source: 'env' },
+    });
+  });
+
+  it('the human table prints the three rows with their sources, and opens no database', () => {
+    const cfg = join(dir, 'config.json'); // absent — every path takes the next rung
+    const r = ttEnv(['paths'], { TT_DB: db, TT_CONFIG: cfg, TT_BACKUP_DIR: undefined });
+    expect(r.code).toBe(0);
+    const lines = r.out.split('\n');
+    expect(lines[0]).toMatch(/^PATH\s+VALUE\s+SOURCE$/);
+    expect(r.out).toMatch(/database\s+\S+\s+env/);
+    expect(r.out).toMatch(/backup directory\s+\S+\s+default/);
+    expect(r.out).toMatch(/config file\s+\S+\s+env/);
+    // Read-only by design: no setter verb exists, and the query created no database file.
+    expect(existsSync(db)).toBe(false);
+  });
+
+  it('an untrusted config file refuses `tt paths` naming the file and the error (§20 R10)', () => {
+    const cfg = join(dir, 'config.json');
+    writeFileSync(cfg, '{ nope');
+    const r = ttEnv(['paths'], { TT_DB: db, TT_CONFIG: cfg, TT_BACKUP_DIR: undefined });
+    expect(r.code).toBe(2);
+    expect(r.err).toContain(`config file ${cfg}`);
+    expect(r.err).toMatch(/not valid JSON/);
+  });
+
+  it('backup ls and now report a dead backup directory plainly; no backup is claimed (§20 R14)', () => {
+    seed(); // the launch itself proceeds — a dead net never blocks tracking
+    const gone = join(dir, 'backups-gone');
+    const ls = ttEnv(['backup', 'ls'], { TT_DB: db, TT_BACKUP_DIR: gone });
+    expect(ls.code).toBe(2);
+    expect(ls.err).toBe(`backup directory ${gone} does not exist — backups cannot be written or listed`);
+    const now = ttEnv(['backup', 'now'], { TT_DB: db, TT_BACKUP_DIR: gone });
+    expect(now.code).toBe(2);
+    expect(now.err).toBe(`backup directory ${gone} does not exist — no backup was written`);
+    expect(now.out).not.toMatch(/backed up/);
+    expect(existsSync(gone)).toBe(false);
   });
 });
 

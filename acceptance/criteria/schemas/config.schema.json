@@ -1,0 +1,12 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stint.local/schemas/config.json",
+  "title": "stint storage config file (config.json)",
+  "description": "The §13 config file both surfaces read BEFORE anything opens ($XDG_CONFIG_HOME/stint/config.json on Linux, ~/Library/Application Support/stint/config.json on macOS, TT_CONFIG overriding). Exactly two OPTIONAL absolute-path keys — dbPath and backupDir; an absent key means the next ladder rung, and reset means deleting the key. Anything outside this shape — an unknown key, a relative path, a non-string value — is an UNTRUSTED file that refuses the launch loudly (§20 R10); additionalProperties: false is that contract.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "dbPath": { "type": "string", "pattern": "^/" },
+    "backupDir": { "type": "string", "pattern": "^/" }
+  }
+}

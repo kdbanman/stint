@@ -6,12 +6,15 @@
  * All writes run under BEGIN IMMEDIATE with a busy timeout, so they cooperate with
  * the running app across processes. Elapsed is never stored — always derived.
  */
+import { dirname } from 'node:path';
 import { openDb, type Db } from './db.js';
-import { resolveDbPath } from './paths.js';
+import { assertDbPathUsable, resolveStoragePaths } from './paths.js';
 import {
   backupDb,
+  backupDirState,
   listBackups as listBackupsFs,
   restoreFromBackup as restoreFromBackupFs,
+  type BackupDirState,
   type BackupInfo,
   type RecoveryResult,
 } from './backup.js';
@@ -162,6 +165,8 @@ export class Store {
     private readonly clock: Clock,
     /** The on-disk path (`:memory:` for the in-memory store), needed for backup/recovery. */
     private readonly path: string,
+    /** §20 R04 — the ACTIVE backup directory (§13's ladder; default beside the database). */
+    private readonly backupDir: string,
   ) {}
 
   /** A cached prepared statement for a fixed SQL string (hot read paths). */
@@ -175,23 +180,52 @@ export class Store {
   }
 
   /**
-   * Open the store at the resolved path (TT_DB or per-OS default). On a file-backed open this
-   * integrity-checks the DB and recovers from the latest backup if it is corrupt (§20 R03/R05),
-   * then writes a fresh launch backup if the DB changed since the last one (§20 R04). The launch
-   * backup is best-effort: a backup failure must never block opening the store.
+   * Open the store at the §13-resolved paths. The database and backup directory both
+   * resolve through the shared ladders (env → config file → default) unless passed
+   * explicitly; the config file is read and validated FIRST, so an untrusted config
+   * (§20 R10) or a config-set database path with a dead parent (§20 R11) refuses the
+   * open loudly before anything is created — never a silent fallback. On a file-backed
+   * open this integrity-checks the DB and recovers from the latest backup in the ACTIVE
+   * backup directory if it is corrupt (§20 R03/R05), then writes a fresh launch backup
+   * there if the DB changed since the last one (§20 R04). The launch backup is
+   * best-effort: a backup failure — a dead backup directory included (§20 R14) — must
+   * never block opening the store.
    */
   static open(
-    opts: { path?: string; clock?: Clock; userDataDir?: string; busyTimeoutMs?: number } = {},
+    opts: {
+      path?: string;
+      clock?: Clock;
+      userDataDir?: string;
+      busyTimeoutMs?: number;
+      backupDir?: string;
+      /** The environment the §13 ladders read (tests inject; default `process.env`). */
+      env?: NodeJS.ProcessEnv;
+    } = {},
   ): Store {
-    const path = opts.path ?? resolveDbPath(process.env, opts.userDataDir);
+    let path = opts.path;
+    let backupDir = opts.backupDir;
+    if (path === undefined || backupDir === undefined) {
+      // §20 R10/R11 — resolve through the ladders; ConfigError / StoragePathError
+      // propagate so a broken configuration stops the launch before any open or write.
+      const resolved = resolveStoragePaths(opts.env ?? process.env, opts.userDataDir);
+      if (path === undefined) {
+        assertDbPathUsable(resolved);
+        path = resolved.db.path;
+      }
+      // The default rung is "beside the resolved database" — beside the EFFECTIVE path,
+      // which an explicit opts.path may have overridden (the GUI passes its resolved path).
+      backupDir ??=
+        resolved.backupDir.source === 'default' ? dirname(path) : resolved.backupDir.path;
+    }
     let recovery: RecoveryResult | null = null;
     const db = openDb(path, {
       ...(opts.busyTimeoutMs !== undefined ? { busyTimeoutMs: opts.busyTimeoutMs } : {}),
+      backupDir,
       onRecovered: (r) => {
         recovery = r;
       },
     });
-    const store = new Store(db, opts.clock ?? systemClock, path);
+    const store = new Store(db, opts.clock ?? systemClock, path, backupDir);
     store.recovery = recovery;
     store.makeLaunchBackup();
     return store;
@@ -199,7 +233,7 @@ export class Store {
 
   /** Open an in-memory store (tests). Backups/recovery are no-ops for `:memory:`. */
   static openMemory(clock: Clock = systemClock): Store {
-    return new Store(openDb(':memory:'), clock, ':memory:');
+    return new Store(openDb(':memory:'), clock, ':memory:', ':memory:');
   }
 
   /**
@@ -210,9 +244,14 @@ export class Store {
   private makeLaunchBackup(): void {
     if (this.path === ':memory:') return;
     try {
-      backupDb(this.path, this.db, { retention: this.settings().backupRetention });
+      backupDb(this.path, this.db, {
+        retention: this.settings().backupRetention,
+        backupDir: this.backupDir,
+      });
     } catch {
-      /* a backup write must never block opening the store */
+      /* a backup write must never block opening the store (§20 R14 — a dead backup
+         directory included: the database is healthy, tracking is not held hostage;
+         the failure is surfaced through backupDirStatus, never claimed as written) */
     }
   }
 
@@ -230,19 +269,38 @@ export class Store {
     return this.recovery;
   }
 
-  /** §20 R04 — the timestamped backups beside the database, newest-first. */
+  /** §20 R04 — the timestamped backups in the active backup directory, newest-first. */
   listBackups(): BackupInfo[] {
-    return listBackupsFs(this.path);
+    return listBackupsFs(this.path, this.backupDir);
+  }
+
+  /**
+   * §20 R14 — the active backup directory and whether it can receive a backup. The dead
+   * durability net every backup surface must report plainly (`tt backup ls|now`, the
+   * Settings Backups section) rather than rendering as an innocent empty list.
+   */
+  backupDirStatus(): BackupDirState {
+    if (this.path === ':memory:') return { path: ':memory:', ok: true, problem: null };
+    return backupDirState(this.backupDir);
   }
 
   /**
    * §20 R04 — force a backup now (the explicit Settings "Back up now" / `tt backup now` path).
    * Returns the new BackupInfo, or null when the DB is unchanged since the last backup (so the
    * surface can say "unchanged") or in-memory. Honors the retention setting like the launch path.
+   * §20 R14 — a dead backup directory throws a plain refusal naming it; an unwritten backup is
+   * never reported as written.
    */
   backupNow(): BackupInfo | null {
     if (this.path === ':memory:') return null;
-    return backupDb(this.path, this.db, { retention: this.settings().backupRetention });
+    const state = this.backupDirStatus();
+    if (!state.ok) {
+      throw new StoreError(`backup directory ${state.path} ${state.problem} — no backup was written`);
+    }
+    return backupDb(this.path, this.db, {
+      retention: this.settings().backupRetention,
+      backupDir: this.backupDir,
+    });
   }
 
   /**
@@ -256,13 +314,13 @@ export class Store {
     }
     // Validate the name BEFORE closing the live handle, so an unknown name fails cleanly with the
     // store still open (a failed restore must never leave the store in a half-closed state).
-    if (!listBackupsFs(this.path).some((b) => b.name === backupName)) {
-      throw new StoreError(`no backup named "${backupName}" beside the database`);
+    if (!listBackupsFs(this.path, this.backupDir).some((b) => b.name === backupName)) {
+      throw new StoreError(`no backup named "${backupName}" in the backup directory`);
     }
     this.stmtCache.clear();
     this.db.close();
     try {
-      const result = restoreFromBackupFs(this.path, backupName);
+      const result = restoreFromBackupFs(this.path, backupName, new Date(), this.backupDir);
       this.db = openDb(this.path);
       return result;
     } catch (err) {

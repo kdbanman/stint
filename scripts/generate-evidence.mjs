@@ -47,7 +47,9 @@ md.push('');
 function tt(args, now = NOW) {
   const res = spawnSync('node', [BIN, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, TT_DB: db, TT_NOW: now, NODE_NO_WARNINGS: '1' },
+    // TT_CONFIG pins the §13 config file to an absent path so a host machine's real
+    // config can never steer this transcript (test isolation — the TT_DB pattern).
+    env: { ...process.env, TT_DB: db, TT_NOW: now, TT_CONFIG: join(dir, 'no-config.json'), NODE_NO_WARNINGS: '1' },
   });
   return { out: (res.stdout ?? '').trimEnd(), err: (res.stderr ?? '').trimEnd(), code: res.status ?? 0 };
 }
@@ -222,6 +224,83 @@ show(['config', 'set', 'working_hours_end', '06:00'], {
 show(['config', 'ls', '--json'], {
   note: 'Read-back: the three valid writes round-tripped; `working_hours_end` still reads `16:30` — the rejected write left it untouched.',
 });
+
+// ─────────────── §13 / §17 R15 — storage paths: ladders + loud refusals ─────
+section(
+  '§13 / §17 R15 — storage paths: one ladder on both surfaces, loud refusals',
+  'The storage paths resolve through §13\'s ladders (env → config file → default, first ' +
+    'rung wins) via ONE core resolver, so `tt paths` and the GUI Settings Storage group can ' +
+    'never disagree. `tt paths` is read-only — there are deliberately no path setters; the ' +
+    'config file is the CLI\'s write interface. An untrusted config file (§20 R10) or a ' +
+    'configured database path with a dead parent (§20 R11) refuses the launch loudly, ' +
+    'naming the file and the error — never a silent fallback; a missing backup directory ' +
+    'never blocks the launch but is reported plainly wherever backups speak (§20 R14). ' +
+    'This section runs in its own isolated sandbox; its absolute temp paths are redacted ' +
+    'to `<storage>` so the transcript stays byte-reproducible (process.html R08), and the ' +
+    'human `tt paths` table is skipped for the same reason (its column padding tracks the ' +
+    'runner\'s temp-path length) — the JSON contract is the pinned artefact.',
+);
+{
+  // An isolated sandbox so the ladder demos cannot perturb the R1–R7 transcript DB.
+  const sdir = mkdtempSync(join(tmpdir(), 'stint-evidence-storage-'));
+  mkdirSync(join(sdir, 'env-db'));
+  const scfg = join(sdir, 'config.json');
+  const redact = (s) => s.split(sdir).join('<storage>');
+  const stt = (args, env) => {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, TT_NOW: NOW, TT_CONFIG: scfg, NODE_NO_WARNINGS: '1', ...env },
+    });
+    return { out: (res.stdout ?? '').trimEnd(), err: (res.stderr ?? '').trimEnd(), code: res.status ?? 0 };
+  };
+  const showStorage = (args, env, note) => {
+    const r = stt(args, env);
+    const lines = ['```console', '$ ' + 'tt ' + args.join(' ')];
+    if (r.out) lines.push(redact(r.out));
+    if (r.err) lines.push(redact(r.err));
+    lines.push(`# exit ${r.code}`, '```');
+    if (note) lines.push('', note);
+    md.push(lines.join('\n'), '');
+    return r;
+  };
+
+  // The three rungs in one read: TT_DB (env) + config backupDir (config) + TT_CONFIG (env).
+  writeFileSync(scfg, JSON.stringify({ backupDir: join(sdir, 'conf-backups') }) + '\n');
+  showStorage(['paths', '--json'], { TT_DB: join(sdir, 'env-db', 'tt.sqlite') },
+    'Each row carries its SOURCE: the database from the env rung (`TT_DB`), the backup ' +
+      'directory from the config file\'s `backupDir`, the config file\'s own path from ' +
+      '`TT_CONFIG`. No store was opened — `tt paths` created no database.');
+
+  // §20 R10 — an untrusted config file refuses loudly, naming the file and the error.
+  // (The relative-path case is shown rather than raw bad JSON: the JSON-parse detail is
+  // V8's own wording, which may move across Node versions, and this transcript is
+  // byte-gated — process.html R08. The bad-JSON refusal is pinned in GOLD instead.)
+  writeFileSync(scfg, JSON.stringify({ dbPath: 'relative/tt.sqlite' }) + '\n');
+  showStorage(['paths'], {},
+    'A relative configured path is an untrusted file: even the read refuses, naming the ' +
+      'file and the error (§20 R10).');
+  writeFileSync(scfg, JSON.stringify({ dbPath: join(sdir, 'env-db', 'tt.sqlite'), extra: true }) + '\n');
+  showStorage(['status'], {},
+    'An unknown key is an UNTRUSTED file: the launch is refused before anything opens — ' +
+      'no guessed or fallback path is ever used (the phantom-empty-tracker guard).');
+
+  // §20 R11 — a configured database path whose parent is missing refuses; no auto-mkdir.
+  writeFileSync(scfg, JSON.stringify({ dbPath: join(sdir, 'gone', 'tt.sqlite') }) + '\n');
+  showStorage(['status'], {},
+    'A config-set database path with a missing parent refuses the launch, naming the ' +
+      'configured path AND the config file that set it; the directory is NOT created (§20 R11).');
+
+  // §20 R14 — a dead backup directory never blocks the launch but is reported plainly.
+  writeFileSync(scfg, '{}\n');
+  const senv = { TT_DB: join(sdir, 'env-db', 'tt.sqlite'), TT_BACKUP_DIR: join(sdir, 'backups-gone') };
+  showStorage(['add', 'storage demo', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T09:30:00Z'], senv,
+    'The launch itself proceeds — a dead backup directory never holds tracking hostage (§20 R14).');
+  showStorage(['backup', 'ls'], senv);
+  showStorage(['backup', 'now'], senv,
+    'Both backup verbs report the dead durability net plainly, and an unwritten backup is ' +
+      'never reported as written (§20 R14).');
+  rmSync(sdir, { recursive: true, force: true });
+}
 
 // ───────────────────────────── R9 ───────────────────────────────────────────
 section('R9 — no network connections');
