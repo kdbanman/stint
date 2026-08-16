@@ -1861,7 +1861,13 @@ selections, and a non-selection reaching for it fails where the ladder census
 saw only that it had named a rung. Half the population had picked it up as a
 general sub-card lift — the primary button, two switch knobs, two drag grips,
 two time pills and every calendar block at rest — and a lift on everything
-says nothing. The same shape covers
+says nothing. The rung's STRENGTH is floored beside its meaning (issue #338):
+a lift must be perceptible to say anything, and the #308 pairs measured the
+prior `0 1px 2px/.12` rung at a mean Δ6/255 over ~1% of pixels at every
+single-chip site — invisible in place — so `shadow.chip` must clear an
+alpha ≥ .25 / reach ≥ 4px floor recomputed from `design.tokens.json`, sitting
+at the value #338's rendered pairs chose; dialing the lift back below
+perception is a reviewed floor edit, never a quiet token change. The same shape covers
 **D01 itself** (issue #157): the rule reads "surfaces reference semantic tokens
 only; a raw scale step OR HEX LITERAL is a defect", and BOTH clauses are
 enforced whole — filtering mockup hits to Radix

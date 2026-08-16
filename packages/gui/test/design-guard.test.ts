@@ -1,7 +1,7 @@
 /**
  * GOLD — the design-layer guard (design.html D01/D02, D04, D06/D07, D08, D09, D12, D13, D14,
  * A01/A02, A04, A06; transition PR #132, issues #137, #141, #152, #153, #154, #157, #158, #164,
- * #241, #242, #255, #334 and #335).
+ * #241, #242, #255, #334, #335 and #338).
  *
  * The computed checks the JUDGE's rendered comparison cannot honestly make (design.html §08):
  *
@@ -81,6 +81,11 @@
  *      §03's "Backdrop behind the window (docs/mockups)", so no SHIPPED surface may name it: the
  *      app is the window, not a picture of one. A total ban rather than a list, with the mockups'
  *      continued use as its mirror (issue #158). Item (4) is the same clause over `faint`.
+ *  13. D12 chip-lift strength floor — the same rule-level stance as (3), beside it in the file,
+ *      for the one rung whose job is to be SEEN alone: `shadow.chip` must clear an alpha + reach
+ *      floor recomputed from the tokens file. The floor sits at the value issue #338's rendered
+ *      pairs chose, after #308 measured the old rung imperceptible at chip size — a token edit
+ *      cannot dial the lift back below perceptibility without moving the floor itself.
  *
  * Deliberately out of scope: D14's SECOND clause — that a pill's colour is semantic (run / flag /
  * accent), never decorative. Which colours read as decorative on which pill is a rendered
@@ -299,6 +304,56 @@ describe('contrast floors, recomputed from design.tokens.json (design.html A01/A
         `${fg} on ${bg} now passes 4.5:1 — revisit the design.html prohibition`,
       ).toBeLessThan(TEXT_FLOOR);
     }
+  });
+});
+
+describe('the chip lift clears its perceptibility floor (design.html D09/D12 — issue #338)', () => {
+  // The contrast block's stance, for the one shadow whose JOB is to be seen alone: D12 gives
+  // `shadow.chip` a meaning ("this is the chosen one"), so a value too faint to perceive makes the
+  // spec lie while every guard stays green — which happened: the rung shipped at .12 alpha / 3px
+  // of reach, and the issue #308 pairs measured its removal at a mean Δ6/255 over ~1% of pixels,
+  // invisible in place at every single-chip site. A floor over the tokens file, never a pinned
+  // selector value: sites keep naming var(--sh-chip), and only the token must stay strong.
+  //
+  // Both floors sit AT the value #338's rendered comparison chose — the quietest candidate that
+  // reads alone at chip size — so the rung can only be dialed back below perceptibility by moving
+  // a floor, a reviewed diff that re-earns itself with new pair evidence, never by a quiet token
+  // edit. Stronger is not gated here: how loud is too loud is a rendered judgement (JUDGE), like
+  // the upper bound of every floor in this file.
+  const CHIP_LIFT_ALPHA_FLOOR = 0.25;
+  // Reach: how far past the chip's edge the shadow can paint — y-offset + blur + spread. Reach is
+  // what turns darkness into a penumbra the eye reads as depth: the old geometry (reach 3) failed
+  // #338's loop both ways — still a whisper at .20, and at .28 a hard rule at the chip's foot
+  // rather than a lift — so alpha alone is not the floor.
+  const CHIP_LIFT_REACH_FLOOR = 4;
+
+  it('shadow.chip carries floor-clearing alpha and reach', () => {
+    // One layer, parsed whole and anchored: a value this floor cannot read — a second layer, a
+    // keyword colour, a spread-only lift — fails LOUD here rather than passing unparsed (the
+    // census stance: unknowable is a failure), because any reshape of the rung re-opens the
+    // rendered question the floor stands on. Each length is a bare 0 or an explicit px, the two
+    // spellings the ladder writes.
+    const LEN = String.raw`(0|-?[\d.]+px)`;
+    const m = new RegExp(
+      `^${LEN} ${LEN} ${LEN}(?: ${LEN})? rgba\\(\\d+,\\s*\\d+,\\s*\\d+,\\s*([\\d.]+)\\)$`,
+    ).exec(tokens.shadow.chip.$value);
+    expect(
+      m,
+      'shadow.chip is no longer one x/y/blur[/spread] rgba layer — re-earn the #338 floor over the new shape',
+    ).not.toBeNull();
+    // groups 2, 3 and 5 are non-optional in the pattern, so a match guarantees them
+    const y = parseFloat(m![2]!);
+    const blur = parseFloat(m![3]!);
+    const spread = parseFloat(m![4] ?? '0');
+    const alpha = parseFloat(m![5]!);
+    expect(
+      alpha,
+      'shadow.chip alpha below the D12 perceptibility floor — at chip size the lift stops reading (issue #338)',
+    ).toBeGreaterThanOrEqual(CHIP_LIFT_ALPHA_FLOOR);
+    expect(
+      y + blur + spread,
+      'shadow.chip reach (y-offset + blur + spread) below the D12 perceptibility floor — the lift reads as a hard rule, not depth (issue #338)',
+    ).toBeGreaterThanOrEqual(CHIP_LIFT_REACH_FLOOR);
   });
 });
 
