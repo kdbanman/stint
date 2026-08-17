@@ -52,6 +52,10 @@ behavior deterministically — the recording is that fact as a moving picture.
 | §12 R12 / §14 timeline-settings | [`timeline-window-settings.gif`][timeline-window-settings] | Change working hours / picker window mode in Settings → Timeline (valid edit persists, inverted pair rejected + reverts, Around-now enables); the configured window drives the default scroll (scroll, never clip). |
 | §09 R01 | [`09-r01.gif`][09-r01] | Reports custom range as two plain date fields driving the run output — the GUI's one range surface; then Entries, where the recipe asserts on camera that no preset segment and no date field exists at all (week-only, §12 R09) and steps the week to show the only range concept the view has. |
 | §05 R10 | [`05-r10.gif`][05-r10] | Multiline description typed in the 3-line scrollable field, rendered intact on reopen in the editor. (The CLI 60-char cap / CSV round-trip is transcript/GOLD evidence — no GIF.) |
+| §12 R25 | [`12-r25.gif`][12-r25] | The Settings Storage group at rest, agreeing with `tt paths`: each effective path with its ladder source — a config-set database, an env-set backup folder, the caption naming the config file — beside the REAL `tt paths` output, the actual CLI run over the same scratch config file, painted verbatim with identical rows (the agreement is asserted on camera, not framed). Ends on the env-set row's disabled Change…. Mirrors the `STORAGE_GROUP` judge scene. |
+| §12 R26 | [`12-r26.gif`][12-r26] | The guided database change end-to-end: Storage → Change… (the native OS picker resolved by the driver's canned pick) → the required Migrate/Start-fresh choice with the commit DISABLED as opened → the safety facts in place → the single arm-then-confirm naming mode + destination → the relaunch boundary (`app.relaunch()` is native; depicted as the dialog's relaunching state, then the Storage group re-read on the new location). The §20 R12 pipeline runs FOR REAL over scratch files at the confirm, and the closing panel is read back from disk: the committed config, the integrity-checked copy, and the old database still in place, untouched. Mirrors `STORAGE_CHANGE_CHOICE` / `STORAGE_CHANGE_ARMED`. |
+| §20 R12 | [`20-r12.gif`][20-r12] | The migrate refusal rendered INSIDE the dialog: a file already at the destination refuses with the shipping §20 R12 wording ("migrate never overwrites … nothing has changed"), the dialog stays open with the commit disarmed back to rest, and Cancel leaves the Storage row on the old, still-active location — config untouched. Mirrors `STORAGE_CHANGE_REFUSAL`. |
+| §20 R13 | [`20-r13.gif`][20-r13] | The backup-folder MOVE with the fresh-backup-first fact stated in the dialog, run for real over two real backups: after the confirm the pipeline writes a fresh backup into the NEW folder first, copies + verifies every original, commits the config, and only then deletes the originals — the closing panel lists the new folder (the fresh backup and both verified copies) and the now-empty old folder, read back from disk. Mirrors `STORAGE_CHANGE_ARMED`'s backup side. |
 
 ## Supplementary recordings — core rows & shell tours
 
@@ -159,10 +163,14 @@ evidence above:
 [12-r17]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/12-r17.gif
 [12-r22]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/12-r22.gif
 [12-r24]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/12-r24.gif
+[12-r25]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/12-r25.gif
+[12-r26]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/12-r26.gif
 [19-r03]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/19-r03.gif
 [19-r04]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/19-r04.gif
 [20-r04]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/20-r04.gif
 [20-r05]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/20-r05.gif
+[20-r12]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/20-r12.gif
+[20-r13]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/20-r13.gif
 [cross-view-freshness]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/cross-view-freshness.gif
 [d12]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/d12.gif
 [favorites-rail]: https://pub-110c939d8c384d6c9e201e5f888c1288.r2.dev/acceptance/evidence/recordings/favorites-rail.gif
