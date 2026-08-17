@@ -14,7 +14,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, STORAGE_PATHS, STORAGE_PICKED, STORAGE_EXISTS_REFUSAL, storageBrokenPaths, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -7096,6 +7096,339 @@ async function sceneRecoveryNotice(browser) {
   });
 }
 
+// STORAGE_GROUP — §12 R25 / §13: the Settings Storage group AT REST. The caption names the
+// config file's own effective path (the same file `tt paths` prints); the Database /
+// Backup-folder rows show the effective path + its ladder source off the getStoragePaths
+// mock (the STORAGE_PATHS fixture mirrors mockups/settings.html: a config-set database, an
+// env-overridden backup folder); the env row says so and disables Change…; Reset to
+// default… appears on the config-set row only; and nothing in the group writes at rest.
+async function sceneStorageGroup(browser) {
+  await withPage(browser, emptyState(), 'index.html', async (page) => {
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'storage-group.png'), fullPage: true });
+    const probe = await page.evaluate(() => {
+      const host = document.querySelector('#storage-panel');
+      const cap = host.querySelector('.storage-cap')?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+      const row = (kind) => host.querySelector(`[data-storage-row="${kind}"]`);
+      const db = row('db');
+      const bk = row('backupDir');
+      const text = (el, sel) => el?.querySelector(sel)?.textContent?.trim() ?? '';
+      return {
+        cap,
+        dbPath: text(db, '.storage-path'),
+        dbPill: text(db, '.storage-pill'),
+        dbChangeDisabled: !!db?.querySelector('[data-storage-change]')?.disabled,
+        dbHasReset: !!db?.querySelector('[data-storage-reset]'),
+        bkPath: text(bk, '.storage-path'),
+        bkPill: text(bk, '.storage-pill'),
+        bkChangeDisabled: !!bk?.querySelector('[data-storage-change]')?.disabled,
+        bkHasReset: !!bk?.querySelector('[data-storage-reset]'),
+        bkNote: bk?.querySelector('.set-k')?.textContent?.replace(/\s+/g, ' ') ?? '',
+        writes: (window.__STORAGE_CHANGES__ || []).length,
+      };
+    });
+    const captionNamesConfigFile =
+      probe.cap.includes(STORAGE_PATHS.configFile.path) &&
+      /config file/i.test(probe.cap) &&
+      /tt paths/.test(probe.cap);
+    const rowsShowPathAndSource =
+      probe.dbPath === STORAGE_PATHS.db.path &&
+      probe.dbPill === 'config file' &&
+      probe.bkPath === STORAGE_PATHS.backupDir.path &&
+      probe.bkPill === 'env · TT_BACKUP_DIR';
+    const envChangeDisabled =
+      probe.bkChangeDisabled &&
+      !probe.dbChangeDisabled &&
+      /TT_BACKUP_DIR/.test(probe.bkNote) &&
+      /clear the variable/.test(probe.bkNote);
+    const resetOnConfigRowOnly = probe.dbHasReset && !probe.bkHasReset && probe.writes === 0;
+    record(
+      'STORAGE_GROUP',
+      { captionNamesConfigFile, rowsShowPathAndSource, envChangeDisabled, resetOnConfigRowOnly },
+      `caption=${JSON.stringify(probe.cap)}; db row path=${JSON.stringify(probe.dbPath)} ` +
+        `pill=${JSON.stringify(probe.dbPill)} (Change… disabled=${probe.dbChangeDisabled}, ` +
+        `Reset=${probe.dbHasReset}); backup row path=${JSON.stringify(probe.bkPath)} ` +
+        `pill=${JSON.stringify(probe.bkPill)} (Change… disabled=${probe.bkChangeDisabled}, ` +
+        `Reset=${probe.bkHasReset}, note=${JSON.stringify(probe.bkNote.trim())}); ` +
+        `writes at rest=${probe.writes}`,
+      'storage-group.png',
+    );
+  });
+}
+
+// STORAGE_CHANGE_CHOICE — §12 R26: the change dialog as opened (NO pre-selection, the commit
+// disabled — the comprehension gate) and after the choice (the chosen card LIFTS as the D12
+// raised paper chip — selection ≠ accent — the safety facts stated in place, the commit
+// reachable). Driven through the row's real Change… → the mocked OS picker → the dialog.
+async function sceneStorageChangeChoice(browser) {
+  await withPage(browser, emptyState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+    await page.click('[data-storage-change="db"]');
+    await page.waitForSelector('.storage-dialog', { state: 'attached' });
+    await page.screenshot({ path: join(EVIDENCE, 'storage-change-open.png') });
+    const open = await page.evaluate(() => {
+      const d = document.querySelector('.storage-dialog');
+      const srcs = [...d.querySelectorAll('.sd-src')].map((s) => s.textContent.replace(/\s+/g, ' ').trim());
+      return {
+        role: d.getAttribute('role'),
+        modal: d.getAttribute('aria-modal'),
+        srcs,
+        chosen: d.querySelectorAll('.sd-opt.on').length,
+        optCount: d.querySelectorAll('.sd-opt').length,
+        commitDisabled: d.querySelector('.sd-commit').disabled,
+        commitLabel: d.querySelector('.sd-commit').textContent.trim(),
+        hint: d.querySelector('.sd-hint').textContent.trim(),
+        factsHidden: d.querySelector('.sd-facts').hidden,
+        cancelPresent: !!d.querySelector('.sd-cancel'),
+      };
+    });
+    await page.click('.sd-opt[data-mode="migrate"]');
+    await page.screenshot({ path: join(EVIDENCE, 'storage-change-choice.png') });
+    const chosen = await page.evaluate(() => {
+      const { rgbOf, visible } = window.__probe;
+      const d = document.querySelector('.storage-dialog');
+      const on = d.querySelector('.sd-opt.on');
+      const peer = d.querySelector('.sd-opt:not(.on)');
+      const csOn = getComputedStyle(on);
+      const csPeer = getComputedStyle(peer);
+      return {
+        onMode: on.dataset.mode,
+        onBg: csOn.backgroundColor,
+        onShadow: csOn.boxShadow,
+        peerBg: csPeer.backgroundColor,
+        peerShadow: csPeer.boxShadow,
+        paper: rgbOf('--paper'),
+        wash: rgbOf('--wash'),
+        accent: rgbOf('--accent'),
+        accentSolid: rgbOf('--accent-solid'),
+        commitDisabled: d.querySelector('.sd-commit').disabled,
+        factsVisible: visible(d.querySelector('.sd-facts')),
+        factsText: d.querySelector('.sd-facts').textContent.replace(/\s+/g, ' ').trim(),
+        writes: (window.__STORAGE_CHANGES__ || []).length,
+      };
+    });
+    const noPreselection =
+      open.role === 'dialog' &&
+      open.modal === 'true' &&
+      open.chosen === 0 &&
+      open.optCount === 2 &&
+      open.commitDisabled &&
+      open.factsHidden &&
+      /Choose Migrate or Start fresh/.test(open.hint) &&
+      open.cancelPresent;
+    const currentToNewShown =
+      open.srcs.length === 2 &&
+      open.srcs[0].includes('Current') &&
+      open.srcs[0].includes(STORAGE_PATHS.db.path) &&
+      open.srcs[0].includes('config file') &&
+      open.srcs[1].includes('New') &&
+      open.srcs[1].includes(STORAGE_PICKED) &&
+      /written to the config file/.test(open.srcs[1]);
+    const commitDisabledUntilChosen =
+      open.commitDisabled &&
+      open.commitLabel === 'Change and relaunch' &&
+      !chosen.commitDisabled &&
+      chosen.writes === 0;
+    const chosenLiftsD12 =
+      chosen.onMode === 'migrate' &&
+      chosen.onBg === chosen.paper &&
+      chosen.onShadow !== 'none' &&
+      chosen.peerBg === chosen.wash &&
+      chosen.peerShadow === 'none' &&
+      chosen.onBg !== chosen.accent &&
+      chosen.onBg !== chosen.accentSolid;
+    const factsInPlace =
+      chosen.factsVisible &&
+      /backup is written first/i.test(chosen.factsText) &&
+      /stays in place/i.test(chosen.factsText) &&
+      /integrity-checked/i.test(chosen.factsText);
+    record(
+      'STORAGE_CHANGE_CHOICE',
+      { noPreselection, currentToNewShown, commitDisabledUntilChosen, chosenLiftsD12, factsInPlace },
+      `as opened: chosen=${open.chosen}, commit disabled=${open.commitDisabled}, ` +
+        `hint=${JSON.stringify(open.hint)}, srcs=${JSON.stringify(open.srcs)}; ` +
+        `after Migrate: on bg=${chosen.onBg} (paper=${chosen.paper}) shadow≠none=${chosen.onShadow !== 'none'}, ` +
+        `peer bg=${chosen.peerBg} (wash=${chosen.wash}) flat=${chosen.peerShadow === 'none'}, ` +
+        `commit enabled=${!chosen.commitDisabled}, facts=${JSON.stringify(chosen.factsText)}, ` +
+        `writes=${chosen.writes}`,
+      'storage-change-choice.png',
+    );
+  });
+}
+
+// STORAGE_CHANGE_ARMED — §12 R26 / §12 R13: the single arm-then-confirm. The first commit
+// click only ARMS — the label swaps in place to a confirm NAMING the mode and the
+// destination, and NOTHING is written; re-choosing disarms; the explicit confirm fires the
+// pipeline exactly once (the mock records the payload main would hand core).
+async function sceneStorageChangeArmed(browser) {
+  await withPage(browser, emptyState(), 'index.html', async (page) => {
+    await noMotion(page);
+    await page.click('.nav-item[data-view="settings"]');
+    await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+    await page.click('[data-storage-change="db"]');
+    await page.waitForSelector('.storage-dialog', { state: 'attached' });
+    await page.click('.sd-opt[data-mode="migrate"]');
+    await page.click('.sd-commit');
+    await page.screenshot({ path: join(EVIDENCE, 'storage-change-armed.png') });
+    const armed = await page.evaluate(() => {
+      const d = document.querySelector('.storage-dialog');
+      return {
+        label: d.querySelector('.sd-commit').textContent.trim(),
+        writes: (window.__STORAGE_CHANGES__ || []).length,
+      };
+    });
+    // Re-choosing DISARMS (the choice is the comprehension gate — changing it must re-ask).
+    await page.click('.sd-opt[data-mode="start-fresh"]');
+    const rechoice = await page.evaluate(() => {
+      const d = document.querySelector('.storage-dialog');
+      return {
+        label: d.querySelector('.sd-commit').textContent.trim(),
+        disabled: d.querySelector('.sd-commit').disabled,
+        writes: (window.__STORAGE_CHANGES__ || []).length,
+      };
+    });
+    await page.click('.sd-commit'); // arm again, start-fresh wording
+    const armedFresh = await page.evaluate(
+      () => document.querySelector('.storage-dialog .sd-commit').textContent.trim(),
+    );
+    // The explicit confirm runs the pipeline — exactly once, with the armed payload.
+    await page.click('.sd-commit');
+    await page.waitForFunction(() => (window.__STORAGE_CHANGES__ || []).length > 0);
+    const confirmed = await page.evaluate(() => ({
+      changes: window.__STORAGE_CHANGES__,
+      hint: document.querySelector('.storage-dialog .sd-hint').textContent.trim(),
+    }));
+    const armNamesModeAndPath = armed.label === `Confirm: migrate to ${STORAGE_PICKED}`;
+    const nothingWrittenOnArm = armed.writes === 0 && rechoice.writes === 0;
+    const rechoiceDisarms =
+      rechoice.label === 'Change and relaunch' &&
+      !rechoice.disabled &&
+      armedFresh === `Confirm: start fresh at ${STORAGE_PICKED}`;
+    const confirmFiresOnce =
+      confirmed.changes.length === 1 &&
+      confirmed.changes[0].kind === 'db' &&
+      confirmed.changes[0].payload.newDbPath === STORAGE_PICKED &&
+      confirmed.changes[0].payload.mode === 'start-fresh' &&
+      /Relaunching/.test(confirmed.hint);
+    record(
+      'STORAGE_CHANGE_ARMED',
+      { armNamesModeAndPath, nothingWrittenOnArm, rechoiceDisarms, confirmFiresOnce },
+      `armed label=${JSON.stringify(armed.label)} with writes=${armed.writes}; ` +
+        `re-choice → label=${JSON.stringify(rechoice.label)} (disabled=${rechoice.disabled}, ` +
+        `writes=${rechoice.writes}); re-armed=${JSON.stringify(armedFresh)}; ` +
+        `confirm → ${JSON.stringify(confirmed.changes)} hint=${JSON.stringify(confirmed.hint)}`,
+      'storage-change-armed.png',
+    );
+  });
+}
+
+// STORAGE_CHANGE_REFUSAL — §12 R26 / §12 R21 / §20 R14: a refused change renders INSIDE the
+// dialog (the announced --danger block carrying the SHIPPING §20 R12 wording), the dialog
+// stays open with the config untouched and the old location still shown; and a SECOND page
+// over the broken-backup-directory fixture proves the §20 R14 error state on BOTH surfaces
+// backups speak from — the Storage row and the Backups section.
+async function sceneStorageChangeRefusal(browser) {
+  await withPage(
+    browser,
+    emptyState(),
+    'index.html',
+    async (page) => {
+      await noMotion(page);
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+      await page.click('[data-storage-change="db"]');
+      await page.waitForSelector('.storage-dialog', { state: 'attached' });
+      await page.click('.sd-opt[data-mode="migrate"]');
+      await page.click('.sd-commit'); // arm
+      await page.click('.sd-commit'); // confirm → the mocked pipeline refuses
+      await page.waitForSelector('.storage-dialog .sd-error:not([hidden])', { state: 'attached' });
+      await page.screenshot({ path: join(EVIDENCE, 'storage-change-refusal.png') });
+      const probe = await page.evaluate(() => {
+        const { visible } = window.__probe;
+        const d = document.querySelector('.storage-dialog');
+        const err = d.querySelector('.sd-error');
+        const row = document.querySelector('#storage-panel [data-storage-row="db"]');
+        return {
+          errVisible: visible(err),
+          errRole: err.getAttribute('role'),
+          errLive: err.getAttribute('aria-live'),
+          errText: err.textContent.trim(),
+          dialogOpen: !!document.querySelector('.storage-dialog'),
+          commitLabel: d.querySelector('.sd-commit').textContent.trim(),
+          commitEnabled: !d.querySelector('.sd-commit').disabled,
+          cancelPresent: !!d.querySelector('.sd-cancel'),
+          optionsPresent: d.querySelectorAll('.sd-opt').length === 2,
+          rowPath: row?.querySelector('.storage-path')?.textContent?.trim() ?? '',
+          attempts: (window.__STORAGE_CHANGES__ || []).length,
+        };
+      });
+      const refusalInDialog =
+        probe.errVisible &&
+        probe.errRole === 'status' &&
+        probe.errLive === 'polite' &&
+        probe.errText === STORAGE_EXISTS_REFUSAL;
+      const refusalReadsClean = readsClean(probe.errText);
+      const dialogStaysOpenOldActive =
+        probe.dialogOpen &&
+        probe.commitLabel === 'Change and relaunch' &&
+        probe.commitEnabled &&
+        probe.cancelPresent &&
+        probe.optionsPresent &&
+        probe.rowPath === STORAGE_PATHS.db.path &&
+        probe.attempts === 1;
+      // Second page — the §20 R14 broken-backup-directory error state on BOTH surfaces.
+      const broken = await withPage(
+        browser,
+        emptyState(),
+        'index.html',
+        async (bp) => {
+          await bp.click('.nav-item[data-view="settings"]');
+          await bp.waitForSelector('#storage-panel .backup-dir-error', { state: 'attached' });
+          await bp.screenshot({ path: join(EVIDENCE, 'storage-backup-dir-error.png'), fullPage: true });
+          return bp.evaluate(() => {
+            const { visible } = window.__probe;
+            const text = (el) => el?.textContent?.replace(/\s+/g, ' ').trim() ?? '';
+            const rowErr = document.querySelector('#storage-panel [data-storage-row="backupDir"] .backup-dir-error');
+            const backupsErr = document.querySelector('#backups-panel .backup-dir-error');
+            return {
+              rowErr: text(rowErr),
+              rowErrVisible: visible(rowErr),
+              rowErrRole: rowErr?.getAttribute('role') ?? null,
+              backupsErr: text(backupsErr),
+              backupsErrVisible: visible(backupsErr),
+              backupsErrRole: backupsErr?.getAttribute('role') ?? null,
+            };
+          });
+        },
+        { storagePaths: storageBrokenPaths() },
+      );
+      const namesDeadDir = (t) => t.includes('/mnt/nas/stint-backups') && /does not exist/.test(t);
+      const backupDirErrorBothSurfaces =
+        broken.rowErrVisible &&
+        broken.rowErrRole === 'status' &&
+        namesDeadDir(broken.rowErr) &&
+        broken.backupsErrVisible &&
+        broken.backupsErrRole === 'status' &&
+        namesDeadDir(broken.backupsErr);
+      record(
+        'STORAGE_CHANGE_REFUSAL',
+        { refusalInDialog, refusalReadsClean, dialogStaysOpenOldActive, backupDirErrorBothSurfaces },
+        `in-dialog refusal: visible=${probe.errVisible} role=${probe.errRole}/${probe.errLive}, ` +
+          `text=${JSON.stringify(probe.errText)}; dialog open=${probe.dialogOpen}, commit ` +
+          `disarmed to ${JSON.stringify(probe.commitLabel)} (enabled=${probe.commitEnabled}), ` +
+          `row still ${JSON.stringify(probe.rowPath)}, attempts=${probe.attempts}; ` +
+          `§20 R14 broken dir: storage row=${JSON.stringify(broken.rowErr)}, ` +
+          `backups section=${JSON.stringify(broken.backupsErr)}`,
+        'storage-change-refusal.png',
+      );
+    },
+    { storageChangeResult: { ok: false, message: STORAGE_EXISTS_REFUSAL } },
+  );
+}
+
 // PARITY_REACH — §17 R8: the rendered window surfaces an affordance for EVERY capability,
 // so nothing tt can do is unreachable from the GUI. Two parts in one item:
 //   (1) DETERMINISTIC sub-fact (machine-scored): the injected window.stint — the same
@@ -8092,6 +8425,10 @@ const SCENES = {
   SOFTWARE_UPDATE: { items: ['SOFTWARE_UPDATE'], captures: ['main-software-update.png', 'main-software-update-error.png', 'main-software-update-check-error.png'], run: sceneSoftwareUpdate },
   BACKUPS_SECTION: { items: ['BACKUPS_SECTION'], captures: ['main-backups.png', 'main-backups-empty.png'], run: sceneBackupsSection },
   RECOVERY_NOTICE: { items: ['RECOVERY_NOTICE'], captures: ['main-recovery.png'], run: sceneRecoveryNotice },
+  STORAGE_GROUP: { items: ['STORAGE_GROUP'], captures: ['storage-group.png'], run: sceneStorageGroup },
+  STORAGE_CHANGE_CHOICE: { items: ['STORAGE_CHANGE_CHOICE'], captures: ['storage-change-open.png', 'storage-change-choice.png'], run: sceneStorageChangeChoice },
+  STORAGE_CHANGE_ARMED: { items: ['STORAGE_CHANGE_ARMED'], captures: ['storage-change-armed.png'], run: sceneStorageChangeArmed },
+  STORAGE_CHANGE_REFUSAL: { items: ['STORAGE_CHANGE_REFUSAL'], captures: ['storage-change-refusal.png', 'storage-backup-dir-error.png'], run: sceneStorageChangeRefusal },
   PARITY_REACH: { items: ['PARITY_REACH'], captures: ['parity-timer.png', 'parity-entries.png', 'parity-clients.png', 'parity-reports.png', 'parity-settings.png'], run: sceneParityReach },
   FIELD_LABELS: { items: ['FIELD_LABELS'], captures: ['field-labels-timer.png', 'field-labels-entries.png', 'field-labels-reports.png'], run: sceneFieldLabels },
   FIELD_CHROME: { items: ['FIELD_CHROME'], captures: ['field-chrome-search-focus.png'], run: sceneFieldChrome },

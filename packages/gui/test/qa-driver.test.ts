@@ -38,7 +38,7 @@ const shippingDeps: IpcHandlerDeps = {
 };
 
 describe('QA driver bridge parity (process.html QA discovery)', () => {
-  const { handlers, updateHandlers } = createHandlers({}, {});
+  const { handlers, updateHandlers, storageHandlers } = createHandlers({}, {});
   const shipping = createIpcHandlers(shippingDeps);
 
   it('covers every IPC channel the renderer can invoke — no missing handler', () => {
@@ -63,6 +63,17 @@ describe('QA driver bridge parity (process.html QA discovery)', () => {
     const keys = Object.keys(updateHandlers);
     expect(keys.length).toBeGreaterThan(0);
     expect(keys.every((k) => k.startsWith('update:'))).toBe(true);
+    const channelSet = new Set<string>(CHANNELS);
+    expect(keys.some((k) => channelSet.has(k))).toBe(false);
+  });
+
+  it('keeps the storage write bridge off the parity-asserted channel set (architecture.html §08)', () => {
+    // §12 R26's write side rides storage:* OFF the matrix (its CLI counterpart is the
+    // documented §13 config-file procedure, not a verb) — the update:* precedent. The READ
+    // side (getStoragePaths) is an ordinary CHANNELS entry served by the shipping map above.
+    const keys = Object.keys(storageHandlers);
+    expect(keys.length).toBeGreaterThan(0);
+    expect(keys.every((k) => k.startsWith('storage:'))).toBe(true);
     const channelSet = new Set<string>(CHANNELS);
     expect(keys.some((k) => channelSet.has(k))).toBe(false);
   });

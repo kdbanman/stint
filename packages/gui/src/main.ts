@@ -28,15 +28,19 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
-  resolveDbPath,
+  DB_FILENAME,
+  assertDbPathUsable,
+  resolveStoragePaths,
   toUtc,
   formatDuration,
   initCheckinState,
   evaluateCheckin,
   LAST_SEEN_KEY,
   type EntryView,
+  type StoragePaths,
 } from '@stint/core';
-import { CHANNELS, type UpdateProgress } from './ipc.js';
+import { CHANNELS, type StorageChangeResult, type UpdateProgress } from './ipc.js';
+import { launchRefusal, storageChangeFailure } from './storageview.js';
 import { popoverWindowSize, POPOVER_FALLBACK } from './popoversize.js';
 import { createIpcHandlers } from './ipc-handlers.js';
 import { toggleTimer } from './toggle.js';
@@ -341,10 +345,12 @@ function createPopover(): void {
  * total over Channel, so the bind needs no non-null assertion; the payload crosses the process
  * boundary as `unknown`, so it is widened once here, at the wire.
  */
-function registerIpc(): void {
+function registerIpc(userDataDir: string): void {
   const handlers = createIpcHandlers({
     store,
     refreshAll,
+    // §12 R25 — the getStoragePaths read's DEFAULT rung (env/config outrank it).
+    userDataDir,
     showSaveDialog: (format, defaultPath) => {
       const options: Electron.SaveDialogSyncOptions = {
         title: format === 'json' ? 'Export entries as JSON' : 'Export entries as CSV',
@@ -490,12 +496,153 @@ function registerUpdateIpc(): void {
   });
 }
 
+/**
+ * §12 R26 — the storage-change IPC surface (the §20 R12/R13 pipelines' only driver;
+ * architecture.html §08). Registered OUTSIDE the parity-asserted CHANNELS loop and bridged
+ * separately in preload under `window.stint.storage`, the update:* precedent: the write
+ * side's CLI counterpart is deliberately not a verb but the documented §13 config-file
+ * procedure (quit, edit, relaunch), so it is not a parity-matrix channel. (The READ side —
+ * `getStoragePaths` — IS a parity channel, twinned with `tt paths`.)
+ *
+ * The two pickers are the OS half of the flow (§12 R26: a file location for the database, a
+ * directory for backups); the two change handlers run core's pipelines against the live
+ * store and return a StorageChangeResult — a typed refusal (StorageChangeError/ConfigError)
+ * becomes `{ ok: false, message }` for the dialog to render IN PLACE (§12 R21's inline
+ * grammar; the config untouched, the old location still active), while an unexpected error
+ * keeps rejecting over IPC. A success commits the config (core's §13 atomic write is the
+ * single commit point) and RELAUNCHES onto the new location — scheduled after the reply so
+ * the renderer's await resolves first.
+ */
+function registerStorageIpc(paths: StoragePaths, userDataDir: string): void {
+  const configFile = paths.configFile.path;
+  const defaultDbPath = join(userDataDir, DB_FILENAME);
+  const relaunch = () =>
+    setImmediate(() => {
+      app.relaunch();
+      app.quit();
+    });
+  const runChange = (change: () => { message: string }): StorageChangeResult => {
+    try {
+      const result = change();
+      relaunch();
+      return { ok: true, message: result.message };
+    } catch (err) {
+      const refusal = storageChangeFailure(err);
+      if (refusal !== null) return { ok: false, message: refusal };
+      throw err;
+    }
+  };
+
+  // The OS pickers. A save dialog is "choose a file location" (the file need not exist —
+  // first-run/adopt semantics live in the pipeline's gates, §20 R12); the backup picker is
+  // a directory chooser. Both resolve null on cancel — the renderer then opens no dialog.
+  ipcMain.handle('storage:pickDbPath', () => {
+    const options: Electron.SaveDialogSyncOptions = {
+      title: 'Choose the new database location',
+      defaultPath: DB_FILENAME,
+      buttonLabel: 'Choose',
+    };
+    const picked =
+      mainWindow && !mainWindow.isDestroyed()
+        ? dialog.showSaveDialogSync(mainWindow, options)
+        : dialog.showSaveDialogSync(options);
+    return picked ?? null;
+  });
+  ipcMain.handle('storage:pickBackupDir', () => {
+    const options: Electron.OpenDialogSyncOptions = {
+      title: 'Choose the new backup folder',
+      properties: ['openDirectory'],
+      buttonLabel: 'Choose',
+    };
+    const picked =
+      mainWindow && !mainWindow.isDestroyed()
+        ? dialog.showOpenDialogSync(mainWindow, options)
+        : dialog.showOpenDialogSync(options);
+    return picked?.[0] ?? null;
+  });
+
+  // §20 R12 — the database pipeline. defaultDbPath makes a change toward the default rung
+  // (the §12 R25 Reset-to-default flow) commit by DELETING the key (§13 reset semantics).
+  ipcMain.handle('storage:changeDb', (_e, payload) => {
+    const p = payload as { newDbPath: string; mode: 'migrate' | 'start-fresh' };
+    return runChange(() =>
+      store.changeDbLocation({
+        newDbPath: p.newDbPath,
+        mode: p.mode,
+        configFile,
+        defaultDbPath,
+      }),
+    );
+  });
+  // §20 R13 — the backup-directory pipeline (core detects the default rung itself:
+  // beside the database, committed by deleting the key).
+  ipcMain.handle('storage:changeBackupDir', (_e, payload) => {
+    const p = payload as { newBackupDir: string; mode: 'migrate' | 'start-fresh' };
+    return runChange(() =>
+      store.changeBackupDir({
+        newBackupDir: p.newBackupDir,
+        mode: p.mode,
+        configFile,
+      }),
+    );
+  });
+}
+
 // -------------------------------------------------------------------- lifecycle
 
 function init(): void {
-  const dbPath = resolveDbPath(process.env, app.getPath('userData'));
+  const userDataDir = app.getPath('userData');
+  // §20 R10/R11 — resolve the §13 ladders and gate the configured database path BEFORE
+  // anything opens. A config file that cannot be trusted (R10) or a configured path whose
+  // parent is dead (R11) refuses the launch loudly here — a native dialog naming the file
+  // and the error / the configured path AND the config file, offering Reset to default
+  // (delete the offending key — §13's reset semantics — then relaunch) or Quit. No guessed
+  // or fallback path is ever used (the phantom-empty-tracker failure). The decision logic
+  // is Electron-free (storageview.ts launchRefusal, GOLD-tested); only the dialog chrome
+  // lives here (the R05 convention — native, so JUDGE cannot drive it; the runbook's
+  // CHECK STORAGE CHANGE covers it on a real desktop).
+  let paths: StoragePaths;
   try {
-    store = Store.open({ path: dbPath });
+    paths = resolveStoragePaths(process.env, userDataDir);
+    assertDbPathUsable(paths);
+  } catch (err) {
+    const refusal = launchRefusal(err);
+    if (refusal) {
+      const choice = dialog.showMessageBoxSync({
+        type: 'error',
+        title: refusal.title,
+        message: refusal.title,
+        detail: refusal.detail,
+        buttons: ['Reset to default', 'Quit'],
+        defaultId: 1,
+        cancelId: 1,
+      });
+      if (choice === 0) {
+        try {
+          refusal.reset();
+          app.relaunch();
+          app.exit(0);
+        } catch {
+          // The reset itself failed (e.g. an unwritable config home) — quit loudly rather
+          // than loop; the message already told the user which file to fix by hand.
+          app.exit(1);
+        }
+        return;
+      }
+      app.exit(1);
+      return;
+    }
+    throw err;
+  }
+  const dbPath = paths.db.path;
+  try {
+    // Pass the resolved pair explicitly so the store opens exactly what the gate above
+    // approved (backup default rung = beside the effective database, §13).
+    store = Store.open({
+      path: dbPath,
+      backupDir:
+        paths.backupDir.source === 'default' ? dirname(dbPath) : paths.backupDir.path,
+    });
   } catch (err) {
     // §20 R09 — a database stamped by a NEWER Stint is refused before any write (nothing
     // beyond the database header is read); surface the actionable message (both versions +
@@ -531,8 +678,9 @@ function init(): void {
   if (lastSeen) store.reconcileGap(lastSeen, toUtc(new Date()));
   setLastSeen();
 
-  registerIpc();
+  registerIpc(userDataDir);
   registerUpdateIpc();
+  registerStorageIpc(paths, userDataDir);
 
   // Seeded idle; updateTray() below paints the real state (and every state change after).
   tray = new Tray(trayImage(false));

@@ -55,6 +55,8 @@ export interface DbLocationChange {
   newDbPath: string;
   /** The pre-change backup at the old home (fresh, or the byte-identical latest). */
   backup: BackupInfo;
+  /** True when the commit DELETED the `dbPath` key — the destination is the §13 default rung. */
+  committedDefault: boolean;
   /** The config file the change was committed to. */
   configFile: string;
   /** The surface-neutral success line — names the old file kept in place (§20 R12's done-when). */
@@ -195,6 +197,14 @@ export function changeDbLocation(
     backupDir: string;
     /** The §14 retention the pre-change backup prunes to. */
     retention: number;
+    /**
+     * §13 reset semantics — the caller's DEFAULT-rung database path (the GUI passes its
+     * `userDataDir`-derived default; core cannot compute it alone). When the destination
+     * IS this path, the commit DELETES the `dbPath` key instead of writing a resolved
+     * default into the file — the §12 R25 Reset-to-default flow's commit, and the same
+     * stance {@link changeBackupDir} already takes toward its own default rung.
+     */
+    defaultDbPath?: string;
     at?: Date;
   },
 ): DbLocationChange {
@@ -278,9 +288,18 @@ export function changeDbLocation(
 
   // Stage 4 — the atomic commit (§13). ConfigError from a config file that turned
   // untrusted mid-run propagates typed; either way a throw here leaves the file intact.
-  const config = readConfig(configFile);
-  config.dbPath = newDbPath;
-  writeConfig(configFile, config);
+  // Toward the caller-supplied default rung the commit DELETES the key — §13's reset
+  // semantics; a resolved default is never written into the file (changeBackupDir's
+  // committedDefault stance, which computes its own default from dirname(dbPath)).
+  const committedDefault =
+    opts.defaultDbPath !== undefined && resolve(newDbPath) === resolve(opts.defaultDbPath);
+  if (committedDefault) {
+    resetConfigKey(configFile, 'dbPath');
+  } else {
+    const config = readConfig(configFile);
+    config.dbPath = newDbPath;
+    writeConfig(configFile, config);
+  }
 
   const outcome: DbChangeOutcome =
     mode === 'migrate' ? 'migrated' : adopting ? 'adopted' : 'started-fresh';
@@ -295,6 +314,7 @@ export function changeDbLocation(
     oldDbPath,
     newDbPath,
     backup,
+    committedDefault,
     configFile,
     message: `${did}; the old database is kept in place, untouched, at ${oldDbPath}`,
   };

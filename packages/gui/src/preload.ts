@@ -44,4 +44,21 @@ api.update = {
   },
 };
 
+// §12 R26 — the storage-change bridge, registered EXPLICITLY under its own namespace
+// (window.stint.storage) rather than via the CHANNELS loop, so the WRITE side stays off the
+// parity-asserted channel set (architecture.html §08 — the update:* precedent): its CLI
+// counterpart is deliberately not a verb but the documented §13 config-file procedure (quit,
+// edit, relaunch). The READ side (`getStoragePaths`) IS a parity channel above, twinned with
+// `tt paths`. pickDbPath/pickBackupDir open the native OS picker (a file location for the
+// database, a directory for backups — §12 R26) and resolve to the chosen path or null on
+// cancel; changeDb/changeBackupDir run the §20 R12/R13 pipelines and resolve to a
+// StorageChangeResult — a refusal is a VALUE the dialog renders in place, and a success is
+// followed by main's app.relaunch().
+api.storage = {
+  pickDbPath: () => ipcRenderer.invoke('storage:pickDbPath'),
+  pickBackupDir: () => ipcRenderer.invoke('storage:pickBackupDir'),
+  changeDb: (payload?: unknown) => ipcRenderer.invoke('storage:changeDb', payload),
+  changeBackupDir: (payload?: unknown) => ipcRenderer.invoke('storage:changeBackupDir', payload),
+};
+
 contextBridge.exposeInMainWorld('stint', api);
