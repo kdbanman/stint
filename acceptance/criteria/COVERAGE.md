@@ -987,7 +987,16 @@ deletion must not move (`cli/test/gold/cli.test.ts`):
 prefix) and
 `a refused and a rejected restore both exit exactly 2 with a bare message` ; the
 rest of the GOLD suite holds the same line for every other command. Cross-noted
-with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below
+with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below.
+**`tt paths` (+ `--json`) — the storage-paths read side (§13)**: prints the
+three effective paths (database, backup directory, config file) each with its
+source rung through core's one resolver; read-only, opens no store, and there
+are deliberately NO path setters (the config file is the CLI's write
+interface). GOLD `GOLD: tt paths (§11, §13)` (`cli/test/gold/cli.test.ts` —
+`--json` validates against `schemas/paths.schema.json` , the rung per row, the
+human table, no database created; an untrusted config exits 2 naming the file,
+§20 R10); the full ladder + refusal proof lives in the §13 and §20 R10/R11/R14
+rows
 ### PRD §12
 `judge/` (renderer facts + screenshots), `gui/test/toggle.test.ts` (toggle
 decision), `gui/test/tray.test.ts` (tray click + menu), `judge-rubric.md` ,
@@ -2405,7 +2414,34 @@ contract — macOS + Linux only (§13)" pins `DB_FILENAME` = `timetracker.sqlite
 the env-driven Linux branch (`$XDG_DATA_HOME` else `~/.local/share/stint`) and
 the macOS suffix, and asserts `defaultDataDir` exposes **no win32 / %APPDATA%
 branch** (`APPDATA` is never consulted); `core/src/paths.ts` carries no win32
-path. Re-introducing a Windows path or changing the data-dir suffix fails
+path. Re-introducing a Windows path or changing the data-dir suffix fails.
+**The config file + the three ladders** — the §13 storage resolution: one config
+file (`core/src/config.ts` — read/validate, the atomic write-temp-then-rename
+primitive, reset = delete-the-key) and one shared resolver
+(`core/src/paths.ts` `resolveStoragePaths`) serving both surfaces: database =
+`TT_DB` → config `dbPath` → per-OS default; backup directory = `TT_BACKUP_DIR` →
+config `backupDir` → beside the resolved database; config file = `TT_CONFIG` →
+per-OS config home — each effective path carrying its source rung. **GOLD**
+`gold/contracts.test.ts` "GOLD: storage config file contract (§13, §20 R10)"
+(core validation ↔ `schemas/config.schema.json` agree on every valid/invalid
+fixture — `additionalProperties: false`, absolute-path strings; refusal messages
+name the file and the error; the atomic write round-trips, leaves no temp
+sibling, and refuses to produce an untrusted file; reset deletes the key and
+never writes a resolved default), "GOLD: storage ladders (§13) + broken-path
+refusal shapes (§20 R11)" (the full precedence table with sources; the
+beside-the-RESOLVED-database default rung — byte-compatible with the pre-ladder
+beside-the-DB behavior; an untrusted config refuses resolution even with every
+env rung occupied), and "GOLD: config-home path contract — macOS + Linux only
+(§13)" (the `%APPDATA%`-never-consulted census extended to the config resolver:
+`$XDG_CONFIG_HOME` else `~/.config/stint`, the macOS suffix, `TT_CONFIG` as the
+env rung); `cli/test/gold/cli.test.ts` "GOLD: tt paths (§11, §13)" pins the
+read side — `tt paths --json` against `schemas/paths.schema.json` with the rung
+per row, the human three-row table, no database created (read-only; no setter
+verbs — the config file is the CLI's write interface). **BDD**
+`features/storage_paths.feature` (run TWICE over @stint/core AND tt via
+`run.test.ts`) drives all three ladders through real environments
+(TT_CONFIG/TT_DB/TT_BACKUP_DIR) and real config files. Evidence: the
+`§13 / §17 R15` section of the drift-gated CLI transcript
 
 ### PRD §14
 `gold/contracts.test.ts` , `cli/test/gold/cli.test.ts` ,
@@ -3067,7 +3103,52 @@ GOLD `gui/test/schemaskew.test.ts` (a real future-stamped DB's refusal becomes
 an error box naming both versions, the remedy and the refused file; no other
 open failure is claimed; main performs the box then exits non-zero). CLI = stderr + exit 1 via `bin.ts`'s
 catch, GUI = native error dialog + exit 1 catching ONLY this error
-(`gui/src/main.ts`), R01/R03 refusals untouched.
+(`gui/src/main.ts`), R01/R03 refusals untouched. **R04 — the active backup
+directory**: `backup.ts` (`listBackups`/`backupDb`/`pruneBackups`/
+`quarantineAndRecover`/`restoreFromBackup`) and `Store.open` are
+directory-aware — retention, listing, restore, and corruption recovery operate
+only on the backup directory §13's ladder resolves (default: beside the
+database, byte-compatible with the pre-ladder behavior), filenames keeping the
+`<dbfilename>.bak-<stamp>` shape wherever the directory lives. Proven by BDD
+`features/storage_paths.feature` "The launch backup lands in the active backup
+directory" (run TWICE over core + tt: the backup appears in the redirected
+directory and NOT beside the database) alongside the §13 ladder GOLD. **R10 —
+config integrity at launch**: both surfaces resolve through core's
+`resolveStoragePaths`, which reads + validates the config file FIRST — an
+untrusted file (unparseable JSON, an unknown key, a relative path) throws the
+typed `ConfigError` naming the file and the error, unconditionally (no rung is
+guessed around a bad file even when env vars would cover every value); `tt`
+surfaces it as exit 2 + the bare message via `bin.ts`'s one mapper. Proven by
+BDD `features/storage_paths.feature` (the three untrusted-config refusal
+scenarios, run TWICE over core + tt: refused naming the config file, the
+unknown key named, and NO database file created anywhere in the sandbox) and
+GOLD `gold/contracts.test.ts` (the refusal message shapes + the schema/validator
+agreement) + `cli/test/gold/cli.test.ts` (`tt paths` on a bad config exits 2
+naming the file). The GUI's Reset-to-default / Quit dialog is authored for
+transition member 4 of #363. **R11 — broken database path at launch**:
+`assertDbPathUsable` (`core/src/paths.ts`) gates ONLY the config rung — an
+absent file with a live, writable parent passes (first-run create, exactly as
+TT_DB behaves); a missing/non-directory/unwritable parent throws the typed
+`StoragePathError` naming the configured path AND the config file, with NO
+auto-mkdir and never a fallback to the default; `Store.open` runs the gate
+whenever it resolves through the ladder. Proven by BDD
+`features/storage_paths.feature` ("live parent starts fresh there" /
+"missing parent refuses the launch" + the directory-was-not-created probe, run
+TWICE over core + tt) and GOLD `gold/contracts.test.ts` "broken-path refusal
+shapes (§20 R11)" (both names + the not-created stance in the message; the
+env/default rungs keep their existing semantics). The GUI dialog half is
+member 4. **R14 — missing backup directory surfaced, never silent**:
+`Store.open`'s launch backup stays best-effort (a dead directory never blocks
+the launch), `store.backupDirStatus()` is the probe both surfaces report from,
+`store.backupNow()` refuses with the directory named and never claims an
+unwritten backup, and `tt backup ls|now` exit 2 with the plain message
+(`cli/src/program.ts`). Proven by BDD `features/storage_paths.feature` ("A
+missing backup directory never blocks the launch but is reported plainly", run
+TWICE over core + tt: the database stays usable, both verbs name the dead
+directory, nothing is claimed, nothing appears on disk) and GOLD
+`cli/test/gold/cli.test.ts` (the exact `ls`/`now` messages + exit codes). The
+GUI error state (Settings Backups/Storage rows) is member 4. Evidence for
+R10/R11/R14: the `§13 / §17 R15` section of the drift-gated CLI transcript.
 
 ## §17 acceptance criteria → proof
 
@@ -3296,24 +3377,28 @@ R08/R09 (this row consumes those rows, it does not author them)
 
 ### §17 R15
 
-**Authored by the custom-storage-paths transition; the executable proof lands
-with its member backlog (the transition's [META] Orchestration parent names the
-members and their sequence).** Routed per acceptance.html §04/§05: **BDD** a
-storage-paths feature run TWICE over @stint/core AND tt — the env → config →
-default ladders (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides),
-the loud refusals for an untrusted config file and for a configured path whose
-parent is missing (no auto-mkdir, no silent fallback), the migrate /
-start-fresh / adopt flows, and backup-into-the-active-directory. **PROP**
-pipeline invariants — the old database byte-identical after any outcome, the
-config file untouched on any failure, no backup ever lost by a directory move.
-**GOLD** the config-file and paths read-side schema contracts plus the
-no-APPDATA path census extension (`packages/core/src/paths.ts`). **JUDGE** the
-Settings Storage group and change-dialog scenes over the driven renderer.
-**MANUAL** the runbook's CHECK STORAGE CHANGE procedure (the real OS picker,
-the native refusal dialog, and the relaunch — the parts with no headless host).
-Until those members land this criterion is specified but unproven; this section
-exists so the §17 roster and this catalogue stay equal in both directions
-(the #301 bind).
+**The resolution + refusal legs are proven; the change-pipeline and GUI legs
+land with the remaining members of the custom-storage-paths transition (parent
+#363).** Landed (member 1): **BDD** `features/storage_paths.feature`, run TWICE
+over @stint/core AND tt via `run.test.ts` — the env → config → default ladders
+(driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real config
+files), the loud refusals for an untrusted config file (§20 R10) and for a
+configured database path whose parent is missing (§20 R11 — no auto-mkdir, no
+silent fallback, nothing created), backup-into-the-active-directory (§20 R04)
+and the surfaced dead backup directory (§20 R14). **GOLD** the config-file and
+paths read-side schema contracts (`schemas/config.schema.json` +
+`schemas/paths.schema.json`, `additionalProperties: false`), the refusal message
+shapes, and the no-APPDATA census extended to the config resolver
+(`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` — `tt paths` ↔ the §13
+ladders through the ONE core resolver the Settings Storage group will read, so
+the two surfaces can never disagree). Evidence: the `§13 / §17 R15` transcript
+section. Pending (members 2–4 per the #363 parent): **BDD/PROP** the §20
+R12–R13 migrate / start-fresh / adopt pipelines and their invariants (old
+database byte-identical after any outcome, config untouched on any failure, no
+backup lost by a directory move); **JUDGE** the Settings Storage group and
+change-dialog scenes over the driven renderer; **MANUAL** the runbook's CHECK
+STORAGE CHANGE procedure (the real OS picker, the native refusal dialog, and
+the relaunch — the parts with no headless host).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 

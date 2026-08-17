@@ -8,9 +8,17 @@
  * path: it fails if any export column, ordering, escaping, or JSON field regresses.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir, platform } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
@@ -35,13 +43,23 @@ import {
   localDay,
   groupKeyLabel,
   defaultDataDir,
+  defaultConfigDir,
+  resolveConfigPath,
+  resolveStoragePaths,
+  assertDbPathUsable,
+  readConfig,
+  writeConfig,
+  resetConfigKey,
+  ConfigError,
+  StoragePathError,
   DB_FILENAME,
+  CONFIG_FILENAME,
   APP_VERSION,
   DEV_VERSION,
   VERSION_RE,
   isReleaseVersion,
 } from '@stint/core';
-import type { EntryView, Db } from '@stint/core';
+import type { EntryView, Db, StintConfig } from '@stint/core';
 
 const ajv = addFormats(new Ajv({ allErrors: true }));
 const schema = (name: string) =>
@@ -495,6 +513,255 @@ describe('GOLD: data-dir path contract — macOS + Linux only (§13)', () => {
     } as unknown as NodeJS.ProcessEnv);
     expect(dir).not.toContain('AppData');
     expect(dir.endsWith('stint')).toBe(true);
+  });
+});
+
+describe('GOLD: config-home path contract — macOS + Linux only (§13)', () => {
+  // The census the data-dir contract runs, extended to the CONFIG resolver: the config
+  // file's own ladder is TT_CONFIG → the per-OS config location, with no win32 branch.
+  it('CONFIG_FILENAME stays config.json', () => {
+    expect(CONFIG_FILENAME).toBe('config.json');
+  });
+
+  it('the Linux branch honours $XDG_CONFIG_HOME and ends in /stint', () => {
+    if (platform() === 'darwin') {
+      expect(defaultConfigDir({} as NodeJS.ProcessEnv)).toMatch(/Library\/Application Support\/stint$/);
+      return;
+    }
+    const dir = defaultConfigDir({ XDG_CONFIG_HOME: '/custom/cfg' } as unknown as NodeJS.ProcessEnv);
+    expect(dir).toBe('/custom/cfg/stint');
+  });
+
+  it('the Linux branch falls back to ~/.config/stint without XDG_CONFIG_HOME', () => {
+    if (platform() === 'darwin') return; // covered by the macOS suffix assertion above
+    const dir = defaultConfigDir({} as NodeJS.ProcessEnv);
+    expect(dir).toMatch(/\.config\/stint$/);
+  });
+
+  it('exposes no Windows branch — %APPDATA% is never consulted by the config resolver', () => {
+    if (platform() === 'win32') throw new Error('Windows is unsupported');
+    const resolved = resolveConfigPath({
+      APPDATA: 'C:\\\\Users\\\\x\\\\AppData\\\\Roaming',
+    } as unknown as NodeJS.ProcessEnv);
+    expect(resolved.path).not.toContain('AppData');
+    expect(resolved.path.endsWith(join('stint', 'config.json'))).toBe(true);
+    expect(resolved.source).toBe('default');
+  });
+
+  it('TT_CONFIG overrides the config file location with source env', () => {
+    const resolved = resolveConfigPath({ TT_CONFIG: '/elsewhere/config.json' } as NodeJS.ProcessEnv);
+    expect(resolved).toEqual({ path: '/elsewhere/config.json', source: 'env' });
+  });
+});
+
+describe('GOLD: storage config file contract (§13, §20 R10)', () => {
+  // The artefact IS the criterion: acceptance/criteria/schemas/config.schema.json
+  // (additionalProperties: false, absolute-path strings) and core's readConfig must agree
+  // on every fixture — a config the schema admits is read, a config the schema rejects is
+  // an untrusted file that refuses the launch. If validation and the published contract
+  // drift, one of these fixtures fails.
+  const validate = addFormats(new Ajv({ allErrors: true })).compile(schema('config.schema.json'));
+
+  const readOf = (dir: string, value: unknown): (() => StintConfig) => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify(value));
+    return () => readConfig(file);
+  };
+
+  it('schema and core validation agree on every fixture', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-'));
+    try {
+      const valid: unknown[] = [
+        {},
+        { dbPath: '/data/tt.sqlite' },
+        { backupDir: '/backups' },
+        { dbPath: '/data/tt.sqlite', backupDir: '/backups' },
+      ];
+      const invalid: unknown[] = [
+        { unknown: true },
+        { dbPath: 'relative/tt.sqlite' },
+        { dbPath: 42 },
+        { backupDir: '' },
+        ['/data/tt.sqlite'],
+        'just a string',
+      ];
+      for (const v of valid) {
+        expect(validate(v), `schema should admit ${JSON.stringify(v)}`).toBe(true);
+        expect(readOf(dir, v)()).toEqual(v);
+      }
+      for (const v of invalid) {
+        expect(validate(v), `schema should reject ${JSON.stringify(v)}`).toBe(false);
+        expect(readOf(dir, v)).toThrow(ConfigError);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('an absent file is an empty config — every path takes the next rung (§13)', () => {
+    expect(readConfig(join(tmpdir(), 'stint-gold-absent', 'config.json'))).toEqual({});
+  });
+
+  it('refusal messages name the file and the error (§20 R10)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-msg-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '{ nope');
+      expect(() => readConfig(file)).toThrow(new RegExp(`config file ${file}: is not valid JSON`));
+      writeFileSync(file, JSON.stringify({ mystery: '/x' }));
+      expect(() => readConfig(file)).toThrow(/unknown key "mystery" \(allowed keys: dbPath, backupDir\)/);
+      writeFileSync(file, JSON.stringify({ backupDir: 'rel/backups' }));
+      expect(() => readConfig(file)).toThrow(/backupDir must be an absolute path \(got "rel\/backups"\)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writeConfig is atomic write-temp-then-rename, round-trips, and never produces an untrusted file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-write-'));
+    const file = join(dir, 'nested', 'config.json');
+    try {
+      writeConfig(file, { dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      // No temp sibling left behind — the rename consumed it (the single commit point).
+      expect(readdirSync(dirname(file))).toEqual(['config.json']);
+      // Core can never produce a file its next launch would refuse (§20 R10): a relative
+      // path is rejected BEFORE anything is written, the target left untouched.
+      expect(() => writeConfig(file, { dbPath: 'relative/tt.sqlite' })).toThrow(ConfigError);
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reset deletes the key — a resolved default is never written into the file (§13)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-reset-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeConfig(file, { dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      resetConfigKey(file, 'backupDir');
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite' });
+      expect(readFileSync(file, 'utf8')).not.toContain('backupDir');
+      resetConfigKey(file, 'dbPath');
+      expect(readConfig(file)).toEqual({});
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('GOLD: storage ladders (§13) + broken-path refusal shapes (§20 R11)', () => {
+  // One shared resolver serves both surfaces (§13): env → config file → default, first
+  // rung wins, each effective path carrying its source. The fixtures below pin the whole
+  // precedence table and the beside-the-resolved-database default rung — byte-compatible
+  // with the pre-ladder beside-the-DB behavior.
+  const withConfig = (dir: string, config: StintConfig): string => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify(config));
+    return file;
+  };
+
+  it('env outranks config outranks default, and each row carries its rung', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-ladder-'));
+    try {
+      const cfg = withConfig(dir, { dbPath: '/conf/db.sqlite', backupDir: '/conf/backups' });
+      // All env rungs occupied — env wins everywhere.
+      const allEnv = resolveStoragePaths({
+        TT_CONFIG: cfg,
+        TT_DB: '/env/db.sqlite',
+        TT_BACKUP_DIR: '/env/backups',
+      } as NodeJS.ProcessEnv);
+      expect(allEnv.db).toEqual({ path: '/env/db.sqlite', source: 'env' });
+      expect(allEnv.backupDir).toEqual({ path: '/env/backups', source: 'env' });
+      expect(allEnv.configFile).toEqual({ path: cfg, source: 'env' });
+      // Env silent — the config rung takes both paths.
+      const conf = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      expect(conf.db).toEqual({ path: '/conf/db.sqlite', source: 'config' });
+      expect(conf.backupDir).toEqual({ path: '/conf/backups', source: 'config' });
+      // Config silent too — the defaults: per-OS data dir (or userDataDir) + beside-the-DB.
+      const empty = withConfig(dir, {});
+      const dflt = resolveStoragePaths({ TT_CONFIG: empty } as NodeJS.ProcessEnv, '/electron/userData');
+      expect(dflt.db).toEqual({ path: '/electron/userData/timetracker.sqlite', source: 'default' });
+      expect(dflt.backupDir).toEqual({ path: '/electron/userData', source: 'default' });
+      // The backup default follows the RESOLVED database — here the env rung's file.
+      const beside = resolveStoragePaths({
+        TT_CONFIG: empty,
+        TT_DB: '/env/deep/db.sqlite',
+      } as NodeJS.ProcessEnv);
+      expect(beside.backupDir).toEqual({ path: '/env/deep', source: 'default' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('an untrusted config refuses resolution even when env vars would cover every value (§20 R10)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-ladder-bad-'));
+    try {
+      const file = join(dir, 'config.json');
+      writeFileSync(file, '{ nope');
+      // Config integrity at launch is unconditional: no rung is guessed around a bad file.
+      expect(() =>
+        resolveStoragePaths({
+          TT_CONFIG: file,
+          TT_DB: '/env/db.sqlite',
+          TT_BACKUP_DIR: '/env/backups',
+        } as NodeJS.ProcessEnv),
+      ).toThrow(ConfigError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a config-set db path with a missing parent refuses, naming path + config file, creating nothing (§20 R11)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-r11-'));
+    try {
+      const dbPath = join(dir, 'gone', 'tt.sqlite');
+      const cfg = withConfig(dir, { dbPath });
+      const paths = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      let thrown: unknown;
+      try {
+        assertDbPathUsable(paths);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(StoragePathError);
+      const message = (thrown as StoragePathError).message;
+      // The done-when: BOTH names in the message, and the no-auto-mkdir stance stated.
+      expect(message).toContain(dbPath);
+      expect(message).toContain(cfg);
+      expect(message).toContain('not created');
+      expect(existsSync(join(dir, 'gone'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a config-set db path with a live parent, or an existing file, passes the gate (§20 R11 first-run/adopt)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-r11-live-'));
+    try {
+      mkdirSync(join(dir, 'data'));
+      const cfg = withConfig(dir, { dbPath: join(dir, 'data', 'tt.sqlite') });
+      const paths = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      expect(() => assertDbPathUsable(paths)).not.toThrow();
+      // An existing FILE at the configured path simply opens, parent state irrelevant.
+      writeFileSync(join(dir, 'data', 'tt.sqlite'), '');
+      expect(() => assertDbPathUsable(paths)).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the gate covers only the config rung — env/default keep their existing semantics (§20 R11)', () => {
+    // TT_DB keeps today's behavior (the caller's explicit choice; openDb creates the
+    // parent), and the per-OS default dir is Stint's own to create — only a CONFIG-set
+    // path refuses on a dead parent.
+    expect(() =>
+      assertDbPathUsable({
+        db: { path: '/nowhere/at/all/tt.sqlite', source: 'env' },
+        backupDir: { path: '/nowhere/at/all', source: 'default' },
+        configFile: { path: '/tmp/none.json', source: 'env' },
+      }),
+    ).not.toThrow();
   });
 });
 

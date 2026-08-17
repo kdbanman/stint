@@ -307,6 +307,64 @@ $ tt config ls --json
 
 Read-back: the three valid writes round-tripped; `working_hours_end` still reads `16:30` — the rejected write left it untouched.
 
+## §13 / §17 R15 — storage paths: one ladder on both surfaces, loud refusals
+
+The storage paths resolve through §13's ladders (env → config file → default, first rung wins) via ONE core resolver, so `tt paths` and the GUI Settings Storage group can never disagree. `tt paths` is read-only — there are deliberately no path setters; the config file is the CLI's write interface. An untrusted config file (§20 R10) or a configured database path with a dead parent (§20 R11) refuses the launch loudly, naming the file and the error — never a silent fallback; a missing backup directory never blocks the launch but is reported plainly wherever backups speak (§20 R14). This section runs in its own isolated sandbox; its absolute temp paths are redacted to `<storage>` so the transcript stays byte-reproducible (process.html R08), and the human `tt paths` table is skipped for the same reason (its column padding tracks the runner's temp-path length) — the JSON contract is the pinned artefact.
+
+```console
+$ tt paths --json
+{"database":{"path":"<storage>/env-db/tt.sqlite","source":"env"},"backup_directory":{"path":"<storage>/conf-backups","source":"config"},"config_file":{"path":"<storage>/config.json","source":"env"}}
+# exit 0
+```
+
+Each row carries its SOURCE: the database from the env rung (`TT_DB`), the backup directory from the config file's `backupDir`, the config file's own path from `TT_CONFIG`. No store was opened — `tt paths` created no database.
+
+```console
+$ tt paths
+config file <storage>/config.json: dbPath must be an absolute path (got "relative/tt.sqlite")
+# exit 2
+```
+
+A relative configured path is an untrusted file: even the read refuses, naming the file and the error (§20 R10).
+
+```console
+$ tt status
+config file <storage>/config.json: unknown key "extra" (allowed keys: dbPath, backupDir)
+# exit 2
+```
+
+An unknown key is an UNTRUSTED file: the launch is refused before anything opens — no guessed or fallback path is ever used (the phantom-empty-tracker guard).
+
+```console
+$ tt status
+cannot open database at <storage>/gone/tt.sqlite: its parent directory <storage>/gone does not exist (path set by config file <storage>/config.json); the directory is not created automatically — restore it or edit the config file
+# exit 2
+```
+
+A config-set database path with a missing parent refuses the launch, naming the configured path AND the config file that set it; the directory is NOT created (§20 R11).
+
+```console
+$ tt add storage demo --from 2026-06-24T09:00:00Z --to 2026-06-24T09:30:00Z
+added entry 1 · 00:30:00
+# exit 0
+```
+
+The launch itself proceeds — a dead backup directory never holds tracking hostage (§20 R14).
+
+```console
+$ tt backup ls
+backup directory <storage>/backups-gone does not exist — backups cannot be written or listed
+# exit 2
+```
+
+```console
+$ tt backup now
+backup directory <storage>/backups-gone does not exist — no backup was written
+# exit 2
+```
+
+Both backup verbs report the dead durability net plainly, and an unwritten backup is never reported as written (§20 R14).
+
 ## R9 — no network connections
 
 ```console

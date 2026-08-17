@@ -3,7 +3,14 @@
  * binds to the World interface, so it runs identically against @stint/core and tt.
  */
 import { expect } from 'vitest';
-import type { World, EntryRec, ExportRowRec, ListFilterReq, FavoriteRec } from './world.js';
+import type {
+  World,
+  EntryRec,
+  ExportRowRec,
+  ListFilterReq,
+  FavoriteRec,
+  StorageResolution,
+} from './world.js';
 import type { GroupBy } from '@stint/core';
 
 /** Scenario-scoped scratch shared across steps. */
@@ -47,6 +54,14 @@ export interface Ctx {
   integrityOpen?: { refused: boolean; wrote: boolean };
   /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
   restoreChosenCount?: number;
+  /** §13 — the result of the most recent `When the storage paths resolve …`. */
+  storageRes?: StorageResolution;
+  /** §20 R10/R11 — the result of the most recent storage launch attempt. */
+  storageLaunchRes?: { refused: boolean; message: string };
+  /** §20 R04/R14 — the result of the most recent backup listing under the sandbox env. */
+  storageList?: { refused: boolean; message: string; names: string[] };
+  /** §20 R14 — the result of the most recent forced backup under the sandbox env. */
+  storageNow?: { refused: boolean; message: string; claimed: boolean };
 }
 
 export interface StepDef {
@@ -1633,6 +1648,213 @@ export const steps: StepDef[] = [
     run: (w) => {
       w.relaunch();
       expect(w.status().running).toBe(false);
+    },
+  },
+
+  // ---- §13 / §20 R10/R11/R14 storage paths (config home, ladders, loud refusals) ----
+  // Surface-neutral over the World storage-sandbox capabilities: CoreWorld injects the
+  // sandbox env into core's resolveStoragePaths / Store.open; CliWorld spawns real `tt`
+  // processes under TT_CONFIG / TT_DB / TT_BACKUP_DIR. Run TWICE so the ladders and every
+  // refusal are proven identical on @stint/core and tt (§17 R8/R15).
+  { pattern: /^a storage sandbox$/, run: (w) => w.storageSandbox() },
+  {
+    pattern: /^the config file sets a custom database path$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('confDb') })),
+  },
+  {
+    pattern: /^the config file sets a custom backup directory$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ backupDir: w.storagePath('confBackups') })),
+  },
+  {
+    pattern: /^the config file sets a database path in a missing directory$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('missingDb') })),
+  },
+  {
+    pattern: /^the config file contains invalid JSON$/,
+    run: (w) => w.storageWriteConfig('{ this is not json'),
+  },
+  {
+    pattern: /^the config file carries an unknown key$/,
+    run: (w) =>
+      w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('confDb'), extra: true })),
+  },
+  {
+    pattern: /^the config file sets a relative database path$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: 'relative/tt.sqlite' })),
+  },
+  {
+    pattern: /^an empty backup directory set in the environment$/,
+    run: (w) => w.storageUseBackupDirEnv('live'),
+  },
+  {
+    pattern: /^a missing backup directory set in the environment$/,
+    run: (w) => w.storageUseBackupDirEnv('missing'),
+  },
+  {
+    pattern: /^the storage paths resolve with the database set in the environment$/,
+    run: (w, c) => {
+      c.storageRes = w.storageResolve({ dbEnv: true });
+    },
+  },
+  {
+    pattern: /^the storage paths resolve with the database and backup directory set in the environment$/,
+    run: (w, c) => {
+      w.storageUseBackupDirEnv('live');
+      c.storageRes = w.storageResolve({ dbEnv: true });
+    },
+  },
+  {
+    pattern: /^the storage paths resolve$/,
+    run: (w, c) => {
+      c.storageRes = w.storageResolve({ dbEnv: false });
+    },
+  },
+  {
+    pattern: /^the database path comes from the environment$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.db).toEqual({ path: w.storagePath('envDb'), source: 'env' });
+    },
+  },
+  {
+    pattern: /^the database path is the configured one with source "config"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.db).toEqual({ path: w.storagePath('confDb'), source: 'config' });
+    },
+  },
+  {
+    pattern: /^the backup directory is beside the database with source "default"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      // Beside the resolved database: the env-db file's own directory (§13, §20 R04).
+      const besideDb = w.storagePath('envDb').replace(/\/[^/]+$/, '');
+      expect(c.storageRes!.backupDir).toEqual({ path: besideDb, source: 'default' });
+    },
+  },
+  {
+    pattern: /^the backup directory is the configured one with source "config"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.backupDir).toEqual({
+        path: w.storagePath('confBackups'),
+        source: 'config',
+      });
+    },
+  },
+  {
+    pattern: /^the backup directory comes from the environment$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.backupDir).toEqual({ path: w.storagePath('backups'), source: 'env' });
+    },
+  },
+  {
+    pattern: /^the config file row names the sandbox config file with source "env"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.configFile).toEqual({ path: w.storagePath('config'), source: 'env' });
+    },
+  },
+  {
+    // §20 R10/R11 — the refusal attempts launch with the database env rung SILENT, so a
+    // fallback-to-default bug would have somewhere to go; the Then steps prove it didn't.
+    pattern: /^I attempt to launch$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+    },
+  },
+  {
+    pattern: /^I launch$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+      expect(c.storageLaunchRes.refused).toBe(false);
+    },
+  },
+  {
+    pattern: /^the launch is refused naming the config file$/,
+    run: (w, c) => {
+      expect(c.storageLaunchRes!.refused).toBe(true);
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('config'));
+    },
+  },
+  {
+    pattern: /^the refusal names the unknown key$/,
+    run: (_w, c) => expect(c.storageLaunchRes!.message).toContain('extra'),
+  },
+  {
+    // §20 R10/R11 — nothing was created anywhere in the sandbox: no database file, no
+    // WAL/SHM sidecar. (The refusal fires before any open, so the default path outside the
+    // sandbox is equally untouched — the phantom-empty-tracker guard.)
+    pattern: /^no database was created in the sandbox$/,
+    run: (w) => {
+      const created = w.storageFilesIn('sandbox').filter((f) => /\.sqlite/.test(f));
+      expect(created).toEqual([]);
+    },
+  },
+  {
+    pattern: /^a database file exists at the configured path$/,
+    run: (w) => expect(w.storageExists('confDb')).toBe(true),
+  },
+  {
+    pattern: /^the launch is refused naming the database path and the config file$/,
+    run: (w, c) => {
+      expect(c.storageLaunchRes!.refused).toBe(true);
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('missingDb'));
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('config'));
+    },
+  },
+  {
+    pattern: /^the missing directory was not created$/,
+    run: (w) => expect(w.storageExists('missingDbParent')).toBe(false),
+  },
+  {
+    pattern: /^a launched database with one closed entry$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: true });
+      expect(c.storageLaunchRes.refused).toBe(false);
+      w.storageAddEntry();
+    },
+  },
+  { pattern: /^I relaunch$/, run: (w) => w.storageRelaunch() },
+  {
+    pattern: /^the active backup directory holds a timestamped backup named after the database$/,
+    run: (w) => {
+      // The backup landed in the ACTIVE directory (§20 R04) — and NOT beside the database,
+      // which proves the ladder steered the write, not just that a write happened.
+      expect(w.storageFilesIn('backups').some((f) => f.startsWith('tt.sqlite.bak-'))).toBe(true);
+      expect(w.storageFilesIn('envDbDir').some((f) => f.includes('.bak-'))).toBe(false);
+    },
+  },
+  {
+    pattern: /^listing backups shows that backup$/,
+    run: (w, c) => {
+      c.storageList = w.storageListBackups();
+      expect(c.storageList.refused).toBe(false);
+      expect(c.storageList.names.some((n) => n.startsWith('tt.sqlite.bak-'))).toBe(true);
+    },
+  },
+  {
+    pattern: /^the database is still usable$/,
+    run: (w) => expect(w.storageDbUsable()).toBe(true),
+  },
+  {
+    pattern: /^listing backups reports the dead backup directory$/,
+    run: (w, c) => {
+      c.storageList = w.storageListBackups();
+      expect(c.storageList.refused).toBe(true);
+      expect(c.storageList.message).toContain(w.storagePath('missingBackups'));
+    },
+  },
+  {
+    pattern: /^forcing a backup reports the dead backup directory and no backup is claimed$/,
+    run: (w, c) => {
+      c.storageNow = w.storageBackupNow();
+      expect(c.storageNow.refused).toBe(true);
+      expect(c.storageNow.claimed).toBe(false);
+      expect(c.storageNow.message).toContain(w.storagePath('missingBackups'));
+      // §20 R14 — the never-reported-written half has a filesystem twin: nothing appeared.
+      expect(w.storageFilesIn('missingBackups')).toEqual([]);
     },
   },
 ];

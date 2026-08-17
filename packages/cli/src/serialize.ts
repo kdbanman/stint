@@ -18,6 +18,8 @@ import {
   type Project,
   type Tag,
   type EntryView,
+  type EffectivePath,
+  type StoragePaths,
 } from '@stint/core';
 
 export function statusJson(status: Status): unknown {
@@ -134,6 +136,21 @@ function backupJson(b: BackupInfo): unknown {
 /** §20 R04 — a list of backups (the `tt backup ls --json` array, newest-first). */
 export function backupListJson(backups: BackupInfo[]): unknown {
   return backups.map(backupJson);
+}
+
+/**
+ * §11/§13 — the snake_case scripting shape of `tt paths --json`, validated against
+ * acceptance/criteria/schemas/paths.schema.json: each effective storage path — database,
+ * backup directory, and the config file's own path — with the ladder rung that set it
+ * (`env` / `config` / `default`), exactly what the Settings Storage group shows (§12 R25).
+ */
+export function pathsJson(paths: StoragePaths): unknown {
+  const row = (p: EffectivePath): unknown => ({ path: p.path, source: p.source });
+  return {
+    database: row(paths.db),
+    backup_directory: row(paths.backupDir),
+    config_file: row(paths.configFile),
+  };
 }
 
 /** §07 — the client scripting shape (`tt client ls --json`, client.schema.json). */

@@ -22,6 +22,7 @@ import {
   toJsonEntries,
   detectOverlaps,
   groupKeyLabel,
+  resolveStoragePaths,
   SETTING_DESCRIPTORS,
   settingDescriptor,
   type EntryView,
@@ -49,6 +50,7 @@ import {
   reportDefListJson,
   favoriteListJson,
   backupListJson,
+  pathsJson,
   clientListJson,
   projectListJson,
   tagListJson,
@@ -1057,12 +1059,25 @@ export function buildProgram(deps: Deps): Command {
   // of "Last backup", "Back up now", and Restore…). Retention is the `backup_retention` setting,
   // changed via `tt config set backup_retention <N>` — no separate backup-config command.
   const backup = program.command('backup').description('Manage automatic backups (§20 R04/R05)');
+  // §20 R14 — a missing/unwritable backup directory never blocks the launch (the store
+  // opens fine), but the dead durability net is reported PLAINLY wherever backups speak:
+  // `ls` and `now` refuse with the directory and its problem rather than rendering an
+  // innocent "no backups" / claiming a backup that was never written.
+  const assertBackupDirAlive = (store: Store): void => {
+    const state = store.backupDirStatus();
+    if (!state.ok) {
+      throw new CliError(
+        `backup directory ${state.path} ${state.problem} — backups cannot be written or listed`,
+      );
+    }
+  };
   backup
     .command('ls')
-    .description('List the timestamped backups beside the database (newest first)')
+    .description('List the timestamped backups in the active backup directory (newest first)')
     .option('--json', 'machine-readable output')
     .action((opts) =>
       withStore((store) => {
+        assertBackupDirAlive(store);
         const backups = store.listBackups();
         if (opts.json) {
           io.out(JSON.stringify(backupListJson(backups)));
@@ -1190,6 +1205,36 @@ export function buildProgram(deps: Deps): Command {
         io.out(`set ${key} = ${value}`);
       }),
     );
+
+  // ----------------------------------------------------------------- paths
+  // §11/§13 — the read side of the storage paths: each effective path and the ladder rung
+  // that set it, through the SAME core resolver the launch uses, so this can never disagree
+  // with the Settings Storage group (§12 R25). Read-only by design — there are deliberately
+  // no path setters; the config file is the CLI's write interface (§13's documented
+  // procedure: quit, edit, relaunch). Does NOT open the store (display mutates nothing);
+  // an untrusted config file still refuses here, naming the file and the error (§20 R10),
+  // via the resolver's own read.
+  program
+    .command('paths')
+    .description('Print each effective storage path — database, backup directory, config file — and its source')
+    .option('--json', 'machine-readable output')
+    .action((opts) => {
+      const paths = resolveStoragePaths(process.env);
+      if (opts.json) {
+        io.out(JSON.stringify(pathsJson(paths)));
+        return;
+      }
+      io.out(
+        table(
+          ['PATH', 'VALUE', 'SOURCE'],
+          [
+            ['database', paths.db.path, paths.db.source],
+            ['backup directory', paths.backupDir.path, paths.backupDir.source],
+            ['config file', paths.configFile.path, paths.configFile.source],
+          ],
+        ),
+      );
+    });
 
   program.exitOverride();
   return program;

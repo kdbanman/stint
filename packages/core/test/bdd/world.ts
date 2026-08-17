@@ -6,6 +6,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import {
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   rmSync,
   openSync,
@@ -16,13 +18,16 @@ import {
   readFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
   StoreError,
+  ConfigError,
+  StoragePathError,
   joinClientProject,
   resolveRange,
+  resolveStoragePaths,
   openDb,
   RecoveryError,
   toCsv,
@@ -569,9 +574,129 @@ export interface World {
    * what `corruptDatabaseFile` wrote — it MUST be false, since R03 must not write to a corrupt file.
    */
   openCorruptDatabase(): { refused: boolean; wrote: boolean };
+
+  // ---- storage sandbox (§13 ladders, §20 R10/R11/R14, §17 R15) ----
+  //
+  // An isolated per-scenario home for the storage-paths feature: the scenario's config
+  // file (the TT_CONFIG target) plus fixed-role data directories, so the env → config →
+  // default ladders and every refusal are driven with real files and REAL environments.
+  // Surface-neutral: CoreWorld injects the env into core's resolveStoragePaths /
+  // Store.open; CliWorld spawns `tt` with TT_CONFIG / TT_DB / TT_BACKUP_DIR set.
+  /** Create the scenario's sandbox (fresh temp dir; the env-db parent exists, `missing*` roles never do). */
+  storageSandbox(): void;
+  /** A fixed-role path inside the sandbox, so steps and worlds agree on every location. */
+  storagePath(role: StorageRole): string;
+  /** Write raw contents to the sandbox config file (the TT_CONFIG target). */
+  storageWriteConfig(contents: string): void;
+  /** §13 — point TT_BACKUP_DIR at the sandbox `backups` dir (live, created empty) or a missing one, for every later op. */
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void;
+  /**
+   * §13 — resolve the three effective paths under the sandbox environment (CoreWorld:
+   * resolveStoragePaths; CliWorld: `tt paths --json`). An untrusted config file (§20 R10)
+   * reports as a refusal carrying the surface's message instead of rows.
+   */
+  storageResolve(o: { dbEnv: boolean }): StorageResolution;
+  /**
+   * §20 R10/R11 — attempt a real launch (open the store) under the sandbox environment and
+   * report whether it was REFUSED, with the surface's message (core: the thrown
+   * ConfigError/StoragePathError; tt: stderr of a non-zero `tt status`). A successful
+   * launch stays open for the later backup/list steps.
+   */
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string };
+  /** §20 R04 — close and re-open under the same sandbox env (the launch that snapshots a backup). */
+  storageRelaunch(): void;
+  /** Seed one closed entry through the launched surface (the data a backup must carry). */
+  storageAddEntry(): void;
+  /** §20 R14 — the launched database still answers a read (the launch was never blocked). */
+  storageDbUsable(): boolean;
+  /**
+   * §20 R04/R14 — list backups under the sandbox env. A dead backup directory reports as a
+   * refusal naming it plainly (core: backupDirStatus; tt: `tt backup ls` non-zero) rather
+   * than an innocent empty list.
+   */
+  storageListBackups(): { refused: boolean; message: string; names: string[] };
+  /** §20 R14 — force a backup; `claimed` is whether the surface reported one written. */
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean };
+  /** The file names inside a sandbox role directory ([] when the directory does not exist). */
+  storageFilesIn(role: StorageDirRole): string[];
+  /** Whether a sandbox role path exists on disk (the no-auto-mkdir / nothing-created probes). */
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean;
+}
+
+/** The fixed sandbox roles (one path mapping for both worlds and the steps — see storageRolePath). */
+export type StorageRole =
+  | 'config'
+  | 'envDb'
+  | 'confDb'
+  | 'missingDb'
+  | 'backups'
+  | 'confBackups'
+  | 'missingBackups';
+export type StorageDirRole = 'sandbox' | 'envDbDir' | 'confDbDir' | 'backups' | 'missingBackups';
+
+/** §13 — one resolved row (path + the ladder rung that set it), or the refusal instead. */
+export interface StoragePathRow {
+  path: string;
+  source: string;
+}
+export interface StorageResolution {
+  refused: boolean;
+  message: string;
+  db?: StoragePathRow;
+  backupDir?: StoragePathRow;
+  configFile?: StoragePathRow;
 }
 
 const label = joinClientProject;
+
+// ---- storage sandbox plumbing (§13, §20 R10/R11/R14) — shared by both worlds ----
+
+/**
+ * The fixed sandbox layout, one mapping for both worlds and the steps: the config file
+ * (the TT_CONFIG target), a database path per ladder rung (`env-db/` exists from the
+ * start, `conf-db/` is the live-parent config target, `gone/` is the §20 R11 missing
+ * parent and is never created), and a backup directory per rung (`backups` for the env
+ * rung, `conf-backups` for the config rung, `backups-gone` for the §20 R14 dead net).
+ */
+function storageRolePath(dir: string, role: StorageRole): string {
+  switch (role) {
+    case 'config':
+      return join(dir, 'config.json');
+    case 'envDb':
+      return join(dir, 'env-db', 'tt.sqlite');
+    case 'confDb':
+      return join(dir, 'conf-db', 'tt.sqlite');
+    case 'missingDb':
+      return join(dir, 'gone', 'tt.sqlite');
+    case 'backups':
+      return join(dir, 'backups');
+    case 'confBackups':
+      return join(dir, 'conf-backups');
+    case 'missingBackups':
+      return join(dir, 'backups-gone');
+  }
+}
+
+function storageDirRolePath(dir: string, role: StorageDirRole): string {
+  switch (role) {
+    case 'sandbox':
+      return dir;
+    case 'envDbDir':
+      return join(dir, 'env-db');
+    case 'confDbDir':
+      return join(dir, 'conf-db');
+    case 'backups':
+      return join(dir, 'backups');
+    case 'missingBackups':
+      return join(dir, 'backups-gone');
+  }
+}
+
+/** Recursive relative listing of a sandbox directory; [] when the directory does not exist. */
+function storageListFiles(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return (readdirSync(path, { recursive: true }) as string[]).map(String);
+}
 
 /**
  * A fixed clock so derived elapsed is deterministic. NOW_UTC is the same instant in core's
@@ -609,8 +734,14 @@ export class CoreWorld implements World {
   }
   dispose(): void {
     this.store?.close();
+    try {
+      this.sStore?.close();
+    } catch {
+      /* a refused storage launch may have left no live handle */
+    }
     if (this.dir) rmSync(this.dir, { recursive: true, force: true });
     if (this.integrityDir) rmSync(this.integrityDir, { recursive: true, force: true });
+    if (this.sDir) rmSync(this.sDir, { recursive: true, force: true });
   }
   ensureClientProject(client: string, project: string): void {
     const c = this.store.ensureClient(client);
@@ -1331,6 +1462,109 @@ export class CoreWorld implements World {
     const wrote = !after.equals(this.integrityBytes!);
     return { refused, wrote };
   }
+
+  // ---- storage sandbox (§13, §20 R10/R11/R14) ----
+  // CoreWorld drives core DIRECTLY under an injected environment: resolveStoragePaths for
+  // the read side, Store.open({ env }) for the launch — the same seam the surfaces use,
+  // with the sandbox's TT_CONFIG / TT_DB / TT_BACKUP_DIR standing in for the real ones.
+  private sDir?: string;
+  private sStore?: Store;
+  private sDbEnv = false;
+  private sBackupEnv?: 'live' | 'missing';
+
+  private storageEnv(dbEnv: boolean): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { TT_CONFIG: this.storagePath('config') };
+    if (dbEnv) env.TT_DB = this.storagePath('envDb');
+    if (this.sBackupEnv === 'live') env.TT_BACKUP_DIR = this.storagePath('backups');
+    if (this.sBackupEnv === 'missing') env.TT_BACKUP_DIR = this.storagePath('missingBackups');
+    return env;
+  }
+  storageSandbox(): void {
+    this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-'));
+    // The env-db and conf-db PARENTS exist from the start (the live-parent cases); the
+    // `gone/` and `backups-gone` roles are never created — that absence IS the scenario.
+    mkdirSync(join(this.sDir, 'env-db'));
+    mkdirSync(join(this.sDir, 'conf-db'));
+  }
+  storagePath(role: StorageRole): string {
+    return storageRolePath(this.sDir!, role);
+  }
+  storageWriteConfig(contents: string): void {
+    writeFileSync(this.storagePath('config'), contents);
+  }
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void {
+    this.sBackupEnv = kind;
+    if (kind === 'live') mkdirSync(this.storagePath('backups'), { recursive: true });
+  }
+  storageResolve(o: { dbEnv: boolean }): StorageResolution {
+    try {
+      const p = resolveStoragePaths(this.storageEnv(o.dbEnv));
+      return { refused: false, message: '', db: p.db, backupDir: p.backupDir, configFile: p.configFile };
+    } catch (err) {
+      // §20 R10 — the untrusted-config refusal; anything else is a real test failure.
+      if (err instanceof ConfigError) return { refused: true, message: err.message };
+      throw err;
+    }
+  }
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string } {
+    this.sDbEnv = o.dbEnv;
+    try {
+      this.sStore?.close();
+      this.sStore = Store.open({ env: this.storageEnv(o.dbEnv), clock: this.clock });
+      return { refused: false, message: '' };
+    } catch (err) {
+      this.sStore = undefined;
+      // §20 R10/R11 — the typed launch refusals; anything else is a real test failure.
+      if (err instanceof ConfigError || err instanceof StoragePathError) {
+        return { refused: true, message: err.message };
+      }
+      throw err;
+    }
+  }
+  storageRelaunch(): void {
+    this.sStore!.close();
+    this.sStore = Store.open({ env: this.storageEnv(this.sDbEnv), clock: this.clock });
+  }
+  storageAddEntry(): void {
+    this.sStore!.add({
+      description: 'seed',
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T10:30:00Z',
+    });
+  }
+  storageDbUsable(): boolean {
+    try {
+      this.sStore!.status();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  storageListBackups(): { refused: boolean; message: string; names: string[] } {
+    // §20 R14 — core's report of the dead net is backupDirStatus, the same value the GUI
+    // Backups section renders; a healthy directory lists normally.
+    const state = this.sStore!.backupDirStatus();
+    if (!state.ok) {
+      return { refused: true, message: `backup directory ${state.path} ${state.problem}`, names: [] };
+    }
+    return { refused: false, message: '', names: this.sStore!.listBackups().map((b) => b.name) };
+  }
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean } {
+    try {
+      const made = this.sStore!.backupNow();
+      return { refused: false, message: '', claimed: made !== null };
+    } catch (err) {
+      if (err instanceof StoreError) return { refused: true, message: err.message, claimed: false };
+      throw err;
+    }
+  }
+  storageFilesIn(role: StorageDirRole): string[] {
+    return storageListFiles(storageDirRolePath(this.sDir!, role));
+  }
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean {
+    if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
+    return existsSync(this.storagePath(role));
+  }
 }
 
 /**
@@ -1405,6 +1639,7 @@ export class CliWorld implements World {
   }
   dispose(): void {
     if (this.dir) rmSync(this.dir, { recursive: true, force: true });
+    if (this.sDir) rmSync(this.sDir, { recursive: true, force: true });
   }
   private tt(args: string[]): { out: string; err: string; code: number } {
     const res = spawnSync('node', [BIN, ...args], {
@@ -2111,5 +2346,105 @@ export class CliWorld implements World {
     const after = readFileSync(this.db);
     const wrote = !after.equals(this.integrityBytes!);
     return { refused, wrote };
+  }
+
+  // ---- storage sandbox (§13, §20 R10/R11/R14) ----
+  // CliWorld drives REAL `tt` processes under the sandbox environment — TT_CONFIG always,
+  // TT_DB / TT_BACKUP_DIR per the scenario — so the ladders, `tt paths --json`, and every
+  // refusal (non-zero exit + the message on stderr) are proven on the shipped surface.
+  private sDir?: string;
+  private sDbEnv = false;
+  private sBackupEnv?: 'live' | 'missing';
+
+  /** Spawn `tt` under the sandbox env. Keys set to undefined are DROPPED from the child env. */
+  private stt(args: string[], dbEnv: boolean): { out: string; err: string; code: number } {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TT_CONFIG: this.storagePath('config'),
+        TT_NOW: NOW_UTC,
+        NODE_NO_WARNINGS: '1',
+        TT_DB: dbEnv ? this.storagePath('envDb') : undefined,
+        TT_BACKUP_DIR:
+          this.sBackupEnv === 'live'
+            ? this.storagePath('backups')
+            : this.sBackupEnv === 'missing'
+              ? this.storagePath('missingBackups')
+              : undefined,
+      },
+    });
+    return { out: res.stdout ?? '', err: res.stderr ?? '', code: res.status ?? 0 };
+  }
+  storageSandbox(): void {
+    this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-cli-'));
+    mkdirSync(join(this.sDir, 'env-db'));
+    mkdirSync(join(this.sDir, 'conf-db'));
+  }
+  storagePath(role: StorageRole): string {
+    return storageRolePath(this.sDir!, role);
+  }
+  storageWriteConfig(contents: string): void {
+    writeFileSync(this.storagePath('config'), contents);
+  }
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void {
+    this.sBackupEnv = kind;
+    if (kind === 'live') mkdirSync(this.storagePath('backups'), { recursive: true });
+  }
+  storageResolve(o: { dbEnv: boolean }): StorageResolution {
+    const r = this.stt(['paths', '--json'], o.dbEnv);
+    if (r.code !== 0) return { refused: true, message: r.err };
+    const json = JSON.parse(r.out) as {
+      database: StoragePathRow;
+      backup_directory: StoragePathRow;
+      config_file: StoragePathRow;
+    };
+    return {
+      refused: false,
+      message: '',
+      db: json.database,
+      backupDir: json.backup_directory,
+      configFile: json.config_file,
+    };
+  }
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string } {
+    // §20 R10/R11 — `tt status` is the launch: it opens the store through the ladders; a
+    // refused launch exits non-zero with the message on stderr, and creates nothing.
+    this.sDbEnv = o.dbEnv;
+    const r = this.stt(['status'], o.dbEnv);
+    return { refused: r.code !== 0, message: r.err };
+  }
+  storageRelaunch(): void {
+    // tt is process-per-command: any command re-opens (launch backup + integrity gate).
+    this.stt(['status'], this.sDbEnv);
+  }
+  storageAddEntry(): void {
+    this.stt(
+      ['add', 'seed', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:30:00Z'],
+      this.sDbEnv,
+    );
+  }
+  storageDbUsable(): boolean {
+    return this.stt(['status'], this.sDbEnv).code === 0;
+  }
+  storageListBackups(): { refused: boolean; message: string; names: string[] } {
+    const r = this.stt(['backup', 'ls', '--json'], this.sDbEnv);
+    if (r.code !== 0) return { refused: true, message: r.err, names: [] };
+    return {
+      refused: false,
+      message: '',
+      names: (JSON.parse(r.out || '[]') as { name: string }[]).map((b) => b.name),
+    };
+  }
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean } {
+    const r = this.stt(['backup', 'now'], this.sDbEnv);
+    return { refused: r.code !== 0, message: r.err, claimed: /backed up to/.test(r.out) };
+  }
+  storageFilesIn(role: StorageDirRole): string[] {
+    return storageListFiles(storageDirRolePath(this.sDir!, role));
+  }
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean {
+    if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
+    return existsSync(this.storagePath(role));
   }
 }
