@@ -3180,7 +3180,12 @@ database, byte-compatible with the pre-ladder behavior), filenames keeping the
 `<dbfilename>.bak-<stamp>` shape wherever the directory lives. Proven by BDD
 `features/storage_paths.feature` "The launch backup lands in the active backup
 directory" (run TWICE over core + tt: the backup appears in the redirected
-directory and NOT beside the database) alongside the §13 ladder GOLD. **R10 —
+directory and NOT beside the database) alongside the §13 ladder GOLD, and by
+GOLD `gold/contracts.test.ts` "retention, restore, and recovery follow the
+ACTIVE backup directory (§20 R04/R05)" — retention prunes to N in the
+redirected directory and never beside the database, listing reads only the
+active set, and a corrupt open and an on-demand restore both resolve their
+backup there (the legs only a redirected directory can show). **R10 —
 config integrity at launch**: both surfaces resolve through core's
 `resolveStoragePaths`, which reads + validates the config file FIRST — an
 untrusted file (unparseable JSON, an unknown key, a relative path) throws the
@@ -3198,9 +3203,11 @@ convention) naming the file and the error, offering **Reset to default**
 (delete the offending key(s) — §13's reset semantics; an unparseable file, with
 no reachable keys, is set ASIDE to a timestamped `.invalid-*` sibling, never
 destroyed — then relaunch) or **Quit**; the decision logic is Electron-free
-(`gui/src/storageview.ts` `launchRefusal`/`resetUntrustedConfig`, GOLD
-`gui/test/storage.test.ts`), and the native chrome itself is the runbook's
-CHECK STORAGE CHANGE step 3 (no headless host). **R11 — broken database path at launch**:
+(`gui/src/storageview.ts` `launchRefusal`, GOLD `gui/test/storage.test.ts`; the
+untrusted-file repair itself is CORE's `resetUntrustedConfig` — which entries
+survive is config-shape knowledge, so it lives in `core/src/config.ts`,
+GOLD-pinned in `gold/contracts.test.ts`), and the native chrome itself is the
+runbook's CHECK STORAGE CHANGE step 4 (no headless host). **R11 — broken database path at launch**:
 `assertDbPathUsable` (`core/src/paths.ts`) gates ONLY the config rung — an
 absent file with a live, writable parent passes (first-run create, exactly as
 TT_DB behaves); a missing/non-directory/unwritable parent throws the typed

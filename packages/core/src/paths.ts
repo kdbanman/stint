@@ -62,6 +62,17 @@ export function defaultDataDir(env: NodeJS.ProcessEnv = process.env): string {
   return join(xdg, APP_DIRNAME);
 }
 
+/**
+ * §13 — the database ladder's DEFAULT rung: the SQLite file inside the caller's
+ * `userDataDir` (Electron `userData`) or the per-OS data dir. The ONE formula for that
+ * rung — {@link resolveStoragePaths} falls to it, and the GUI's Reset-to-default flow
+ * both displays it and hands it to the commit's delete-the-key comparison, so a second
+ * copy of the join would let the shown target and the committed one drift apart.
+ */
+export function defaultDbPath(env: NodeJS.ProcessEnv = process.env, userDataDir?: string): string {
+  return join(userDataDir ?? defaultDataDir(env), DB_FILENAME);
+}
+
 /** A set, non-blank env var — the shape of an occupied env rung. */
 function envRung(value: string | undefined): string | undefined {
   return value && value.trim() !== '' ? value : undefined;
@@ -95,7 +106,7 @@ export function resolveStoragePaths(
       ? { path: dbEnv, source: 'env' }
       : config.dbPath !== undefined
         ? { path: config.dbPath, source: 'config' }
-        : { path: join(userDataDir ?? defaultDataDir(env), DB_FILENAME), source: 'default' };
+        : { path: defaultDbPath(env, userDataDir), source: 'default' };
 
   const backupEnv = envRung(env.TT_BACKUP_DIR);
   const backupDir: EffectivePath =
@@ -139,18 +150,4 @@ export function assertDbPathUsable(paths: StoragePaths): void {
   } catch {
     refuse('is not writable');
   }
-}
-
-/**
- * Resolve the SQLite file path through the §13 ladder (the database row of
- * {@link resolveStoragePaths}). Reads the config file, so an untrusted config throws
- * ConfigError here (§20 R10).
- * @param userDataDir If provided (e.g. Electron `userData`), used for the DEFAULT rung —
- *   `TT_DB` and the config file's `dbPath` always outrank it so both surfaces agree.
- */
-export function resolveDbPath(
-  env: NodeJS.ProcessEnv = process.env,
-  userDataDir?: string,
-): string {
-  return resolveStoragePaths(env, userDataDir).db.path;
 }

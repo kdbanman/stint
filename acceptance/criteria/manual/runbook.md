@@ -437,7 +437,7 @@ release** artifact, with `tt` available in a terminal on the same database (find
 ## CHECK STORAGE CHANGE — guided move of the database and the backup folder (§12 R26, §20 R11–R13)
 
 **§05 residue row —** Storage change end-to-end — OS picker, the guided dialog, relaunch onto the new location (§12 R26, §20 R11–R13)
-**Claims —** §12 R26 · §20 R11/R12/R13 · §17 R15
+**Claims —** §12 R26 · §20 R10/R11/R12/R13 · §17 R15
 
 1. With real entries present, Settings → Storage → **Database** → Change…; pick a fresh
    location in the OS file picker; choose **Migrate**; **Change and relaunch** → confirm.
@@ -457,3 +457,10 @@ release** artifact, with `tt` available in a terminal on the same database (find
          database is created anywhere (no auto-mkdir, no silent fallback to the default).
    - [ ] The GUI dialog offers Reset to default / Quit; Reset deletes the key and a
          relaunch lands back on the default database, data intact.
+4. Quit. Make the config file **untrusted** (add an unknown key, then separately break the
+   JSON); launch the GUI each time, then run `tt status`.
+   - [ ] Both surfaces refuse loudly before anything opens, naming the config file and the
+         error; no database is created or opened anywhere (§20 R10).
+   - [ ] The GUI dialog offers Reset to default / Quit; Reset drops the offending key
+         (the broken-JSON file is set aside as a `config.json.invalid-*` sibling, its
+         bytes intact) and a relaunch opens normally, data intact.

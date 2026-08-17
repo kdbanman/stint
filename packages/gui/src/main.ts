@@ -30,6 +30,7 @@ import {
   Store,
   DB_FILENAME,
   assertDbPathUsable,
+  defaultDbPath,
   resolveStoragePaths,
   toUtc,
   formatDuration,
@@ -515,7 +516,9 @@ function registerUpdateIpc(): void {
  */
 function registerStorageIpc(paths: StoragePaths, userDataDir: string): void {
   const configFile = paths.configFile.path;
-  const defaultDbPath = join(userDataDir, DB_FILENAME);
+  // Core's ONE default-rung formula — the same call buildStoragePathsView shows the user
+  // as the Reset-to-default target, so the shown target and this commit comparator agree.
+  const defaultDb = defaultDbPath(process.env, userDataDir);
   const relaunch = () =>
     setImmediate(() => {
       app.relaunch();
@@ -570,7 +573,7 @@ function registerStorageIpc(paths: StoragePaths, userDataDir: string): void {
         newDbPath: p.newDbPath,
         mode: p.mode,
         configFile,
-        defaultDbPath,
+        defaultDbPath: defaultDb,
       }),
     );
   });
@@ -637,12 +640,9 @@ function init(): void {
   const dbPath = paths.db.path;
   try {
     // Pass the resolved pair explicitly so the store opens exactly what the gate above
-    // approved (backup default rung = beside the effective database, §13).
-    store = Store.open({
-      path: dbPath,
-      backupDir:
-        paths.backupDir.source === 'default' ? dirname(dbPath) : paths.backupDir.path,
-    });
+    // approved (the resolver already anchored the default backup rung beside this same
+    // effective database path, §13).
+    store = Store.open({ path: dbPath, backupDir: paths.backupDir.path });
   } catch (err) {
     // §20 R09 — a database stamped by a NEWER Stint is refused before any write (nothing
     // beyond the database header is read); surface the actionable message (both versions +

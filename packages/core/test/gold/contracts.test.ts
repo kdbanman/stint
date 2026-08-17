@@ -50,6 +50,7 @@ import {
   readConfig,
   writeConfig,
   resetConfigKey,
+  resetUntrustedConfig,
   ConfigError,
   StoragePathError,
   StorageChangeError,
@@ -649,6 +650,52 @@ describe('GOLD: storage config file contract (§13, §20 R10)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // §20 R10 — the untrusted-file repair behind the GUI dialog's Reset-to-default: delete
+  // the offending key(s), keep every valid one, never destroy the user's bytes. Lives in
+  // core because which entries survive is knowledge of the config file's shape.
+  it('resetUntrustedConfig drops exactly the offending entries and keeps every valid key', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-repair-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(
+        file,
+        JSON.stringify({ dbPath: join(dir, 'tt.sqlite'), backupDir: 'relative/dir', extra: 1 }),
+      );
+      resetUntrustedConfig(file);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ dbPath: join(dir, 'tt.sqlite') });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resetUntrustedConfig sets an unparseable file ASIDE to a timestamped .invalid-* sibling — bytes preserved, config absent (= fully reset, §13)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-aside-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '{ not json');
+      resetUntrustedConfig(file);
+      expect(existsSync(file)).toBe(false);
+      const aside = readdirSync(dir).filter((n) => n.startsWith('config.json.invalid-'));
+      expect(aside).toHaveLength(1);
+      expect(readFileSync(join(dir, aside[0]!), 'utf8')).toBe('{ not json');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resetUntrustedConfig sets a non-object file aside the same way (an array is not a config)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-aside2-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '["a"]');
+      resetUntrustedConfig(file);
+      expect(existsSync(file)).toBe(false);
+      expect(readdirSync(dir).some((n) => n.startsWith('config.json.invalid-'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('GOLD: storage ladders (§13) + broken-path refusal shapes (§20 R11)', () => {
@@ -926,6 +973,97 @@ describe('GOLD: database location change refusal shapes (§20 R12)', () => {
       expect(committed.backupDir).toBe(join(f.home, 'old'));
     } finally {
       f.dispose();
+    }
+  });
+});
+
+describe('GOLD: retention, restore, and recovery follow the ACTIVE backup directory (§20 R04/R05)', () => {
+  // §20 R04's done-when says retention prunes to N *there* — in the directory §13's ladder
+  // resolves — and R04/R05 route listing, on-demand restore, and corruption recovery
+  // through the same directory. The launch-backup-lands-there leg is BDD
+  // storage_paths.feature; these pin the legs only a REDIRECTED directory can show (the
+  // beside-the-DB suites cannot distinguish the old hardwired dirname(dbPath) from the
+  // ladder): pruning prunes there and never beside the database, and a corrupt open and an
+  // on-demand restore both find their backup there.
+  it('retention prunes in the redirected directory and never beside the database (§20 R04)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-activedir-'));
+    try {
+      mkdirSync(join(home, 'db'));
+      mkdirSync(join(home, 'bk'));
+      const dbPath = join(home, 'db', 'tt.sqlite');
+      const bk = join(home, 'bk');
+      // Strays beside the database — the pre-ladder location retention must now ignore.
+      writeFileSync(join(home, 'db', 'tt.sqlite.bak-20260601T090000Z'), 'stray one');
+      writeFileSync(join(home, 'db', 'tt.sqlite.bak-20260602T090000Z'), 'stray two');
+      // Old backups in the ACTIVE directory (stale bytes, ordered stamps).
+      for (let i = 1; i <= 4; i++) {
+        writeFileSync(join(bk, `tt.sqlite.bak-2026061${i}T090000Z`), `old ${i}`);
+      }
+      const store = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      try {
+        store.setSetting('backupRetention', 3);
+        store.add({
+          description: 'seed',
+          fromUtc: '2026-06-24T09:00:00Z',
+          toUtc: '2026-06-24T10:00:00Z',
+        });
+        const fresh = store.backupNow();
+        expect(fresh).not.toBeNull();
+        expect(dirname(fresh!.path)).toBe(bk);
+        // Pruned to 3 IN the active directory: the two oldest seeds are gone…
+        const kept = readdirSync(bk).filter((n) => n.startsWith('tt.sqlite.bak-'));
+        expect(kept).toHaveLength(3);
+        expect(kept).not.toContain('tt.sqlite.bak-20260611T090000Z');
+        expect(kept).not.toContain('tt.sqlite.bak-20260612T090000Z');
+        // …the beside-the-DB strays are not the active set: never pruned, never listed.
+        expect(readdirSync(join(home, 'db')).filter((n) => n.includes('.bak-'))).toHaveLength(2);
+        expect(store.listBackups().every((b) => dirname(b.path) === bk)).toBe(true);
+      } finally {
+        store.close();
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a corrupt open recovers from the redirected directory, and an on-demand restore finds its backup there (§20 R05)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-activedir-rec-'));
+    try {
+      mkdirSync(join(home, 'db'));
+      mkdirSync(join(home, 'bk'));
+      const dbPath = join(home, 'db', 'tt.sqlite');
+      const bk = join(home, 'bk');
+      // A real database with one entry, backed up into the ACTIVE directory, then closed.
+      const seeded = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      seeded.add({
+        description: 'survives',
+        fromUtc: '2026-06-24T09:00:00Z',
+        toUtc: '2026-06-24T10:00:00Z',
+      });
+      const backup = seeded.backupNow();
+      seeded.close();
+      expect(backup).not.toBeNull();
+      expect(dirname(backup!.path)).toBe(bk);
+      // Clobber the main file (no WAL/SHM survivors) — the §20 R03 corrupt-open shape.
+      writeFileSync(dbPath, 'this is not a sqlite database');
+      rmSync(`${dbPath}-wal`, { force: true });
+      rmSync(`${dbPath}-shm`, { force: true });
+      const reopened = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      try {
+        // Recovery consulted the redirected directory — beside the DB there is no backup.
+        const rec = reopened.lastRecovery();
+        expect(rec).not.toBeNull();
+        expect(rec!.recoveredFrom).toBe(backup!.name);
+        expect(rec!.quarantinedTo.startsWith(`${dbPath}.corrupted-`)).toBe(true);
+        expect(existsSync(rec!.quarantinedTo)).toBe(true);
+        expect(reopened.listEntries({}).map((e) => e.description)).toEqual(['survives']);
+        // The on-demand restore resolves its name in the same active directory.
+        expect(reopened.restoreFromBackup(backup!.name).recoveredFrom).toBe(backup!.name);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
     }
   });
 });

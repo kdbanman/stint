@@ -16,7 +16,7 @@
  * The §13 atomic `writeConfig` rename is the single commit point; everything before it is
  * additive and everything after it is the relaunch.
  */
-import { accessSync, constants, copyFileSync, existsSync, statSync } from 'node:fs';
+import { accessSync, constants, copyFileSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import {
@@ -86,22 +86,17 @@ function assertDestinationUsable(mode: DbChangeMode, oldDbPath: string, newDbPat
       newDbPath,
     );
   }
-  const parent = dirname(newDbPath);
-  const refuseParent = (why: string): never => {
-    throw new StorageChangeError(
-      `cannot use ${newDbPath}: its parent directory ${parent} ${why} — the directory is ` +
-        `not created automatically (restore it or pick another location); nothing has changed`,
-      newDbPath,
-    );
-  };
   // No auto-mkdir, same stance as §20 R11: a missing parent is the unmounted-volume /
   // moved-directory signature, and creating it would strand data on the wrong filesystem.
-  if (!existsSync(parent)) refuseParent('does not exist');
-  if (!statSync(parent).isDirectory()) refuseParent('is not a directory');
-  try {
-    accessSync(parent, constants.W_OK);
-  } catch {
-    refuseParent('is not writable');
+  // The probe is the same §20 R14 exists/is-a-directory/writable ladder backupDirState runs.
+  const parentState = backupDirState(dirname(newDbPath));
+  if (!parentState.ok) {
+    throw new StorageChangeError(
+      `cannot use ${newDbPath}: its parent directory ${parentState.path} ` +
+        `${parentState.problem} — the directory is not created automatically (restore it ` +
+        `or pick another location); nothing has changed`,
+      newDbPath,
+    );
   }
   if (mode === 'migrate' && existsSync(newDbPath)) {
     // The wording matches the §12 R26 dialog's refusal copy (mockups/storage-change.html).

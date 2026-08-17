@@ -136,3 +136,40 @@ export function resetConfigKey(file: string, key: ConfigKey): void {
   delete config[key];
   writeConfig(file, config);
 }
+
+/**
+ * §20 R10 reset — repair an UNTRUSTED config file by §13's reset semantics: delete the
+ * offending key(s), keep every valid one, commit through the atomic write. A file that
+ * cannot even be parsed (invalid JSON, unreadable, not an object) has no reachable keys,
+ * so it is set ASIDE to a timestamped `.invalid-*` sibling — the §13 absent-file state IS
+ * the fully-reset config, and the user's bytes survive for inspection (never destroyed).
+ * Lives HERE, not in a surface: which entries survive is knowledge of the config file's
+ * shape, and only this module holds that shape (the GUI's R10 dialog is the one caller).
+ */
+export function resetUntrustedConfig(file: string): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(file, 'utf8'));
+  } catch {
+    setAsideInvalid(file);
+    return;
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    setAsideInvalid(file);
+    return;
+  }
+  // Keep exactly the entries readConfig would accept; every offending one is the reset's
+  // delete-the-key. writeConfig re-validates, so this can never write an untrusted file.
+  const repaired: StintConfig = {};
+  for (const key of CONFIG_KEYS) {
+    const value = (parsed as Record<string, unknown>)[key];
+    if (typeof value === 'string' && isAbsolute(value)) repaired[key] = value;
+  }
+  writeConfig(file, repaired);
+}
+
+/** Move an unparseable config aside (never delete user bytes) so a relaunch starts reset. */
+function setAsideInvalid(file: string): void {
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+$/, 'Z');
+  renameSync(file, `${file}.invalid-${stamp}`);
+}
