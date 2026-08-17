@@ -57,9 +57,12 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { spawn, spawnSync } from 'node:child_process';
-import { availableParallelism, setPriority } from 'node:os';
+import { availableParallelism, setPriority, tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// The custom-storage-paths recipes (§12 R26 / §20 R13) run the REAL core pipelines over a
+// scratch tree so their on-camera "after" facts are read back from disk, never typed in.
+import { Store } from '../../core/dist/index.js';
 import {
   emptyState,
   runningState,
@@ -85,6 +88,8 @@ import {
   WINDOW,
   POPOVER,
   UPDATE_FIXTURE,
+  STORAGE_EXISTS_REFUSAL,
+  STORAGE_PATHS,
 } from './fixtures.mjs';
 // §12 R22 — the shipped popover auto-sizes to its rendered card; recordings apply the same clamp.
 import { popoverWindowSize } from '../dist/popoversize.js';
@@ -616,6 +621,125 @@ function installAddSplice(page, { id, overlapped = false, overlapMinutes = 0 }) 
     },
     { id, overlapped, overlapMinutes },
   );
+}
+
+// ------------------------------------------------------------------------------------------
+// Custom storage paths (§12 R25/R26, §20 R12/R13) — the transition's recording cluster.
+//
+// Three of these four scenes are anchored to REAL files: the window.stint mock still serves
+// the renderer (a recording page cannot reach Electron main), but its canned paths are a real
+// scratch tree on this host, the §12 R25 CLI beat runs the REAL `tt paths` binary over the
+// same config file the group displays, and the §12 R26 / §20 R13 "after" beats run core's
+// real changeDbLocation/changeBackupDir over that tree — so every path, byte count and backup
+// name the evidence panels paint is read back from disk after the pipeline, never typed into
+// the recipe. The two beats a headless host cannot show stay native and are depicted
+// honestly, the same way every judge STORAGE_* scene handles them: the OS picker resolves via
+// the driver's canned pick, and app.relaunch() is shown as the dialog's relaunching state,
+// then the boundary, then the Storage group re-read on the new resolution.
+//
+// The scratch roots are FIXED paths (not mkdtemp): the path is on camera, and a random
+// suffix would re-record every frame's text on every run. Each recipe resets its root first.
+const STORAGE_SCRATCH = join(tmpdir(), 'stint-recordings');
+const CLI_BIN = join(here, '..', '..', 'cli', 'dist', 'bin.js');
+
+const R25 = (() => {
+  const root = join(STORAGE_SCRATCH, '12-r25');
+  const db = join(root, 'tracking', 'timetracker.sqlite');
+  const backups = join(root, 'backups');
+  const config = join(root, 'config.json');
+  return {
+    root,
+    db,
+    backups,
+    config,
+    paths: {
+      db: { path: db, source: 'config' },
+      backupDir: { path: backups, source: 'env' },
+      configFile: { path: config, source: 'env' },
+      defaults: { dbPath: join(root, 'default', 'timetracker.sqlite'), backupDir: join(root, 'tracking') },
+      backupDirState: { ok: true, problem: null },
+    },
+  };
+})();
+
+const R26 = (() => {
+  const root = join(STORAGE_SCRATCH, '12-r26');
+  const oldDir = join(root, 'tracking');
+  const oldDb = join(oldDir, 'timetracker.sqlite');
+  const newDb = join(root, 'moved', 'timetracker.sqlite');
+  const config = join(root, 'config.json');
+  return {
+    root,
+    oldDir,
+    oldDb,
+    newDb,
+    config,
+    paths: {
+      db: { path: oldDb, source: 'config' },
+      backupDir: { path: oldDir, source: 'default' },
+      configFile: { path: config, source: 'env' },
+      defaults: { dbPath: join(root, 'default', 'timetracker.sqlite'), backupDir: oldDir },
+      backupDirState: { ok: true, problem: null },
+    },
+  };
+})();
+
+const R13 = (() => {
+  const root = join(STORAGE_SCRATCH, '20-r13');
+  const db = join(root, 'tracking', 'timetracker.sqlite');
+  const oldBk = join(root, 'backups-old');
+  const newBk = join(root, 'backups-new');
+  const config = join(root, 'config.json');
+  return {
+    root,
+    db,
+    oldBk,
+    newBk,
+    config,
+    paths: {
+      db: { path: db, source: 'config' },
+      backupDir: { path: oldBk, source: 'config' },
+      configFile: { path: config, source: 'env' },
+      defaults: { dbPath: join(root, 'default', 'timetracker.sqlite'), backupDir: join(root, 'tracking') },
+      backupDirState: { ok: true, problem: null },
+    },
+  };
+})();
+
+// The on-page evidence panel the storage recipes paint their read-back-from-disk facts into —
+// a monospace, terminal-toned card above the caption. Pure recording overlay in the spirit of
+// VISIBLE_CURSOR_INIT: injected per page behind its own id, never part of the renderer, and
+// under the cursor/caption layers so neither is obscured.
+function paintEvidencePanel(page, { title, lines }) {
+  return page.evaluate(
+    ({ title, lines }) => {
+      document.getElementById('__rec_panel__')?.remove();
+      const p = document.createElement('div');
+      p.id = '__rec_panel__';
+      // Top-right, so the Storage rows the panel corroborates (which sit low in the settings
+      // scroll) stay visible beside it rather than underneath it.
+      p.style.cssText =
+        'position:fixed;right:18px;top:18px;width:660px;max-width:72vw;z-index:2147483644;' +
+        'background:rgba(24,23,22,.95);color:#e8e4df;border-radius:10px;overflow:hidden;' +
+        'box-shadow:0 4px 18px rgba(0,0,0,.45);font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;';
+      const head = document.createElement('div');
+      head.textContent = title;
+      head.style.cssText =
+        'padding:6px 12px;background:rgba(255,255,255,.08);font:600 12px/1.4 system-ui,sans-serif;';
+      const body = document.createElement('pre');
+      body.textContent = lines.join('\n');
+      body.style.cssText = 'margin:0;padding:10px 12px;white-space:pre-wrap;word-break:break-all;';
+      p.append(head, body);
+      document.body.appendChild(p);
+    },
+    { title, lines },
+  );
+}
+
+// One caption helper for the cluster (the sibling recipes inline this; here the beats are
+// dense enough that the inline form would drown the drive scripts).
+function caption(page, text) {
+  return page.evaluate((t) => window.__recCaption && window.__recCaption(t), text);
 }
 
 /**
@@ -3281,6 +3405,391 @@ const RECIPES = {
       await page.waitForFunction(() => !!window.__RESTORED_BACKUP__);
       await page.waitForSelector('#backups-panel #recovery-notice', { state: 'detached' }).catch(() => {});
       await wait(page, 1400);
+    },
+  },
+
+  // §12 R25 — the Settings Storage group AT REST, agreeing with `tt paths`. The recipe builds
+  // a REAL scratch config tree on this host (a config-set database, an env-set backup folder),
+  // serves those same paths to the renderer through the getStoragePaths mock, and then runs the
+  // REAL `tt` binary — `tt paths` over TT_CONFIG/TT_BACKUP_DIR pointing at the same tree — and
+  // paints its verbatim stdout into the evidence panel beside the rendered group. The agreement
+  // is ASSERTED on the way past (row paths + source pills vs the CLI output), so a drifted
+  // resolver fails the recording instead of quietly re-recording a lie. The env-set row's
+  // disabled Change… (the env rung outranks anything the app could write) is the closing beat.
+  '§12 R25': {
+    page: 'index.html',
+    state: emptyState,
+    initOpts: { storagePaths: R25.paths },
+    drive: async (page) => {
+      // The real tree the mocked group and the real CLI both read: config file sets the
+      // database path, TT_BACKUP_DIR sets the backup folder — the §13 ladder, on disk.
+      rmSync(R25.root, { recursive: true, force: true });
+      mkdirSync(dirname(R25.db), { recursive: true });
+      mkdirSync(R25.backups, { recursive: true });
+      writeFileSync(R25.config, JSON.stringify({ dbPath: R25.db }, null, 2) + '\n');
+      const cli = spawnSync(process.execPath, [CLI_BIN, 'paths'], {
+        encoding: 'utf8',
+        env: { ...process.env, TT_CONFIG: R25.config, TT_BACKUP_DIR: R25.backups, TT_DB: '' },
+      });
+      if (cli.status !== 0) throw new Error(`tt paths failed (${cli.status}): ${cli.stderr}`);
+      const ttPaths = cli.stdout.trimEnd();
+      for (const p of [R25.db, R25.backups, R25.config]) {
+        if (!ttPaths.includes(p)) throw new Error(`tt paths output lacks ${p}:\n${ttPaths}`);
+      }
+
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+      await page.evaluate(() =>
+        document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+      );
+      await caption(page, 'Settings → Storage — each effective path and the ladder rung that set it (§12 R25)');
+      await wait(page, 1800);
+      await page.hover('#storage-panel [data-storage-row="db"]');
+      await wait(page, 700);
+      await page.hover('#storage-panel [data-storage-row="backupDir"]');
+      await wait(page, 700);
+
+      // The agreement, asserted rather than merely framed: the rendered rows carry exactly
+      // the paths + sources the real resolver just printed for the same tree.
+      const group = await page.evaluate(() => {
+        const t = (sel) => document.querySelector(sel)?.textContent?.trim() ?? '';
+        return {
+          dbPath: t('#storage-panel [data-storage-row="db"] .storage-path'),
+          dbPill: t('#storage-panel [data-storage-row="db"] .storage-pill'),
+          bkPath: t('#storage-panel [data-storage-row="backupDir"] .storage-path'),
+          bkPill: t('#storage-panel [data-storage-row="backupDir"] .storage-pill'),
+          cap: t('#storage-panel .storage-cap'),
+        };
+      });
+      if (
+        group.dbPath !== R25.db ||
+        group.dbPill !== 'config file' ||
+        group.bkPath !== R25.backups ||
+        group.bkPill !== 'env · TT_BACKUP_DIR' ||
+        !group.cap.includes(R25.config)
+      ) {
+        throw new Error(`the Storage group disagrees with the scratch tree: ${JSON.stringify(group)}`);
+      }
+      await paintEvidencePanel(page, {
+        title: 'tt paths — the real CLI, run over the same config file',
+        lines: ['$ tt paths', ttPaths],
+      });
+      await caption(page, 'The SAME rows from the same resolver: database (config file) · backup dir (env) · config file');
+      await wait(page, 2600);
+      await caption(page, 'The env-set row says so and disables Change… — the env rung outranks the file');
+      await page.hover('#storage-panel [data-storage-row="backupDir"] [data-storage-change]');
+      await wait(page, 2000);
+    },
+  },
+
+  // §12 R26 — the guided database change END-TO-END, §20 R12 run for real. The dialog beats
+  // are the renderer's own (the required choice with the commit DISABLED as opened, the safety
+  // facts in place, the single arm-then-confirm naming mode + destination), and after the
+  // on-camera confirm the recipe runs core's real changeDbLocation over the scratch tree the
+  // dialog named — same payload the confirm produced — then crosses the relaunch boundary
+  // (app.relaunch() is native; depicted as the dialog's relaunching state, the boundary, then
+  // the Storage group re-read) and paints the after facts READ BACK FROM DISK: the committed
+  // config, the integrity-checked copy, and the old file still in place, untouched.
+  '§12 R26': {
+    page: 'index.html',
+    state: emptyState,
+    initOpts: { storagePaths: R26.paths, storagePicked: R26.newDb },
+    drive: async (page) => {
+      // A real store with real entries at the OLD location, and the config file that names it.
+      rmSync(R26.root, { recursive: true, force: true });
+      mkdirSync(R26.oldDir, { recursive: true });
+      mkdirSync(dirname(R26.newDb), { recursive: true });
+      writeFileSync(R26.config, JSON.stringify({ dbPath: R26.oldDb }, null, 2) + '\n');
+      const store = Store.open({ path: R26.oldDb, backupDir: R26.oldDir });
+      try {
+        store.add({ fromUtc: '2026-06-24T09:00:00Z', toUtc: '2026-06-24T11:30:00Z', description: 'auth refactor' });
+        store.add({ fromUtc: '2026-06-25T13:00:00Z', toUtc: '2026-06-25T15:00:00Z', description: 'invoice prep' });
+
+        await page.click('.nav-item[data-view="settings"]');
+        await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+        await page.evaluate(() =>
+          document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+        );
+        await caption(page, 'Move the database — Storage → Change… (§12 R26)');
+        await wait(page, 1500);
+        await page.click('#storage-panel [data-storage-change="db"]');
+        await page.waitForSelector('.storage-dialog', { state: 'attached' });
+        await caption(page, 'The OS file picker is native chrome — the driver returns the picked destination');
+        await wait(page, 1300);
+
+        const opened = await page.evaluate(() => ({
+          chosen: document.querySelectorAll('.storage-dialog .sd-opt.on').length,
+          commitDisabled: document.querySelector('.storage-dialog .sd-commit')?.disabled,
+        }));
+        if (opened.chosen !== 0 || !opened.commitDisabled) {
+          throw new Error(`the dialog opened pre-chosen or committable: ${JSON.stringify(opened)}`);
+        }
+        await caption(page, 'The REQUIRED choice: no pre-selection — the commit stays disabled until one is made');
+        await wait(page, 2000);
+
+        await page.click('.storage-dialog .sd-opt[data-mode="migrate"]');
+        await caption(page, 'Migrate: backup first · the current file stays in place · the copy is integrity-checked');
+        await wait(page, 2200);
+
+        await page.click('.storage-dialog .sd-commit'); // arm — writes nothing
+        const armedLabel = await page.evaluate(() =>
+          document.querySelector('.storage-dialog .sd-commit')?.textContent?.trim(),
+        );
+        if (armedLabel !== `Confirm: migrate to ${R26.newDb}`) {
+          throw new Error(`armed label does not name mode+path: ${JSON.stringify(armedLabel)}`);
+        }
+        await caption(page, 'Arming writes NOTHING — the confirm names the mode and the destination');
+        await wait(page, 2200);
+
+        await page.click('.storage-dialog .sd-commit'); // confirm — the one commit
+        await page.waitForFunction(() =>
+          /Relaunching/.test(document.querySelector('.storage-dialog .sd-hint')?.textContent ?? ''),
+        );
+        const commits = await page.evaluate(() => window.__STORAGE_CHANGES__);
+        if (
+          commits.length !== 1 ||
+          commits[0].kind !== 'db' ||
+          commits[0].payload.mode !== 'migrate' ||
+          commits[0].payload.newDbPath !== R26.newDb
+        ) {
+          throw new Error(`the confirm did not fire exactly once with the armed payload: ${JSON.stringify(commits)}`);
+        }
+        await caption(page, 'Confirmed once — main runs the §20 R12 pipeline and relaunches (app.relaunch() is native)');
+        await wait(page, 2000);
+
+        // The REAL pipeline, with exactly the payload the on-camera confirm produced.
+        const change = store.changeDbLocation({ newDbPath: R26.newDb, mode: 'migrate', configFile: R26.config });
+        const committed = JSON.parse(readFileSync(R26.config, 'utf8'));
+        const oldBytes = statSync(R26.oldDb).size;
+        const newBytes = statSync(R26.newDb).size;
+        if (committed.dbPath !== R26.newDb || oldBytes === 0 || newBytes !== oldBytes) {
+          throw new Error(
+            `the real pipeline left the tree wrong: config=${JSON.stringify(committed)} old=${oldBytes} new=${newBytes}`,
+          );
+        }
+
+        // The relaunch boundary, then the Storage group re-read on the new resolution (the
+        // same getStoragePaths read a fresh launch performs, served the committed paths).
+        await caption(page, '— relaunch: the window is torn down; the fresh launch re-reads the config —');
+        await page.evaluate(() => document.querySelector('.storage-dialog-backdrop')?.remove());
+        await page.evaluate(
+          (paths) => {
+            window.stint.__STORAGE_PATHS__ = paths;
+          },
+          { ...R26.paths, db: { path: R26.newDb, source: 'config' } },
+        );
+        await page.click('.nav-item[data-view="timer"]');
+        await page.click('.nav-item[data-view="settings"]');
+        await page.waitForFunction(
+          (p) =>
+            document.querySelector('#storage-panel [data-storage-row="db"] .storage-path')?.textContent?.trim() === p,
+          R26.newDb,
+        );
+        await page.evaluate(() =>
+          document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+        );
+        await caption(page, 'After the relaunch: the Database row reads the new location, source “config file”');
+        await wait(page, 2000);
+        await paintEvidencePanel(page, {
+          title: 'on disk — the real §20 R12 pipeline, read back after the change',
+          lines: [
+            `config.json     dbPath = ${committed.dbPath}`,
+            `new database    ${R26.newDb}  (${newBytes} bytes, integrity-checked)`,
+            `old database    ${R26.oldDb}  (still on disk, ${oldBytes} bytes)`,
+            `pre-change bkp  ${change.backup.name}  (at the old home)`,
+          ],
+        });
+        await caption(page, 'The old file is kept in place, untouched — copy, never delete (§20 R12)');
+        await wait(page, 3000);
+      } finally {
+        store.close();
+      }
+    },
+  },
+
+  // §20 R12 — the migrate refusal, rendered INSIDE the dialog. The mocked pipeline returns the
+  // SHIPPING wording (STORAGE_EXISTS_REFUSAL — pinned by GOLD contracts.test.ts and injected
+  // exactly as the judge STORAGE_CHANGE_REFUSAL scene does): a file already at the destination
+  // means migrate refuses before anything is written. The recording dwells on the refusal
+  // grammar — the announced danger block, the dialog still open, the commit disarmed back to
+  // its resting label — and closes on the Storage row still showing the OLD path: the config
+  // untouched, the old location still active, nothing changed.
+  '§20 R12': {
+    page: 'index.html',
+    state: emptyState,
+    initOpts: { storageChangeResult: { ok: false, message: STORAGE_EXISTS_REFUSAL } },
+    drive: async (page) => {
+      await page.click('.nav-item[data-view="settings"]');
+      await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+      await page.evaluate(() =>
+        document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+      );
+      await caption(page, 'A file already sits at the picked destination — migrate must refuse (§20 R12)');
+      await wait(page, 1500);
+      await page.click('#storage-panel [data-storage-change="db"]');
+      await page.waitForSelector('.storage-dialog', { state: 'attached' });
+      await wait(page, 900);
+      await page.click('.storage-dialog .sd-opt[data-mode="migrate"]');
+      await wait(page, 1100);
+      await page.click('.storage-dialog .sd-commit'); // arm
+      await caption(page, 'Arm, then confirm — the pipeline gates run before anything is written');
+      await wait(page, 1500);
+      await page.click('.storage-dialog .sd-commit'); // confirm → the refusal
+      await page.waitForSelector('.storage-dialog .sd-error:not([hidden])', { state: 'attached' });
+
+      const probe = await page.evaluate(() => {
+        const d = document.querySelector('.storage-dialog');
+        return {
+          errText: d.querySelector('.sd-error').textContent.trim(),
+          commitLabel: d.querySelector('.sd-commit').textContent.trim(),
+          commitEnabled: !d.querySelector('.sd-commit').disabled,
+          rowPath: document
+            .querySelector('#storage-panel [data-storage-row="db"] .storage-path')
+            ?.textContent?.trim(),
+          attempts: (window.__STORAGE_CHANGES__ || []).length,
+        };
+      });
+      if (
+        probe.errText !== STORAGE_EXISTS_REFUSAL ||
+        probe.commitLabel !== 'Change and relaunch' ||
+        !probe.commitEnabled ||
+        probe.rowPath !== STORAGE_PATHS.db.path ||
+        probe.attempts !== 1
+      ) {
+        throw new Error(`the refusal state is wrong: ${JSON.stringify(probe)}`);
+      }
+      await caption(page, 'The refusal renders INSIDE the dialog — “nothing has changed”, and a way forward');
+      await wait(page, 3000);
+      await caption(page, 'The dialog stays open, the commit disarms — the config file is untouched');
+      await wait(page, 2400);
+
+      await page.click('.storage-dialog .sd-cancel');
+      await page.waitForSelector('.storage-dialog', { state: 'detached' });
+      await caption(page, 'Cancel — the Storage group still shows the old location, still active');
+      await page.hover('#storage-panel [data-storage-row="db"]');
+      await wait(page, 2200);
+    },
+  },
+
+  // §20 R13 — the backup-folder MOVE, run for real. Same shape as §12 R26: the dialog beats
+  // are the renderer's own (the Backup-folder row's Change…, the required choice whose migrate
+  // facts state the FRESH-BACKUP-FIRST guarantee in place, the arm naming mode + destination),
+  // and after the on-camera confirm the recipe runs core's real changeBackupDir over a scratch
+  // tree holding two real backups — fresh backup into the NEW folder first, per-file copy +
+  // verify, config commit, originals deleted only after every copy verified — then crosses the
+  // relaunch boundary and paints the after facts read back from disk: the new folder listing
+  // with the fresh backup and both verified copies, and the old folder empty.
+  '§20 R13': {
+    page: 'index.html',
+    state: emptyState,
+    initOpts: { storagePaths: R13.paths, storagePicked: R13.newBk },
+    drive: async (page) => {
+      // A real database and TWO real backups in the old folder (the launch backup, then an
+      // explicit backup after an edit — a second apart so the stamps differ).
+      rmSync(R13.root, { recursive: true, force: true });
+      mkdirSync(dirname(R13.db), { recursive: true });
+      mkdirSync(R13.oldBk, { recursive: true });
+      mkdirSync(R13.newBk, { recursive: true });
+      writeFileSync(R13.config, JSON.stringify({ dbPath: R13.db, backupDir: R13.oldBk }, null, 2) + '\n');
+      const store = Store.open({ path: R13.db, backupDir: R13.oldBk });
+      try {
+        store.add({ fromUtc: '2026-06-24T09:00:00Z', toUtc: '2026-06-24T11:30:00Z', description: 'auth refactor' });
+        await new Promise((r) => setTimeout(r, 1100));
+        store.backupNow();
+        const originals = readdirSync(R13.oldBk).sort();
+        if (originals.length !== 2) {
+          throw new Error(`expected 2 real backups in the old folder, found ${JSON.stringify(originals)}`);
+        }
+
+        await page.click('.nav-item[data-view="settings"]');
+        await page.waitForSelector('#storage-panel .storage-card', { state: 'attached' });
+        await page.evaluate(() =>
+          document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+        );
+        await caption(page, 'Move the backup folder — the §20 R13 verified move');
+        await wait(page, 1500);
+        await page.click('#storage-panel [data-storage-change="backupDir"]');
+        await page.waitForSelector('.storage-dialog', { state: 'attached' });
+        await wait(page, 1100);
+
+        await page.click('.storage-dialog .sd-opt[data-mode="migrate"]');
+        const facts = await page.evaluate(() =>
+          document.querySelector('.storage-dialog .sd-facts')?.textContent?.replace(/\s+/g, ' ').trim(),
+        );
+        if (!/fresh backup is written to the new folder first/i.test(facts ?? '')) {
+          throw new Error(`the migrate facts do not state fresh-backup-first: ${JSON.stringify(facts)}`);
+        }
+        await caption(page, 'The facts, in place: a FRESH BACKUP is written to the new folder FIRST');
+        await wait(page, 2400);
+        await caption(page, 'Moved and verified — a failed verify stops with BOTH sets intact');
+        await wait(page, 2000);
+
+        await page.click('.storage-dialog .sd-commit'); // arm
+        await caption(page, 'Armed in place — the confirm names the mode and the destination folder');
+        await wait(page, 2000);
+        await page.click('.storage-dialog .sd-commit'); // confirm
+        await page.waitForFunction(() =>
+          /Relaunching/.test(document.querySelector('.storage-dialog .sd-hint')?.textContent ?? ''),
+        );
+        await caption(page, 'Confirmed — main runs the §20 R13 pipeline and relaunches');
+        await wait(page, 1800);
+
+        // The REAL pipeline over the real backup set.
+        const change = store.changeBackupDir({ newBackupDir: R13.newBk, mode: 'migrate', configFile: R13.config });
+        const newList = readdirSync(R13.newBk).sort();
+        const oldList = readdirSync(R13.oldBk);
+        const committed = JSON.parse(readFileSync(R13.config, 'utf8'));
+        if (
+          change.outcome !== 'moved' ||
+          change.moved.length !== originals.length ||
+          oldList.length !== 0 ||
+          committed.backupDir !== R13.newBk ||
+          !newList.includes(change.freshBackup.name)
+        ) {
+          throw new Error(
+            `the real move left the tree wrong: new=${JSON.stringify(newList)} old=${JSON.stringify(oldList)} ` +
+              `config=${JSON.stringify(committed)}`,
+          );
+        }
+
+        // The relaunch boundary, then the group re-read on the new resolution.
+        await caption(page, '— relaunch: the window is torn down; the fresh launch re-reads the config —');
+        await page.evaluate(() => document.querySelector('.storage-dialog-backdrop')?.remove());
+        await page.evaluate(
+          (paths) => {
+            window.stint.__STORAGE_PATHS__ = paths;
+          },
+          { ...R13.paths, backupDir: { path: R13.newBk, source: 'config' } },
+        );
+        await page.click('.nav-item[data-view="timer"]');
+        await page.click('.nav-item[data-view="settings"]');
+        await page.waitForFunction(
+          (p) =>
+            document
+              .querySelector('#storage-panel [data-storage-row="backupDir"] .storage-path')
+              ?.textContent?.trim() === p,
+          R13.newBk,
+        );
+        await page.evaluate(() =>
+          document.querySelector('#storage-panel')?.scrollIntoView({ block: 'center' }),
+        );
+        await caption(page, 'After the relaunch: the Backup-folder row reads the new folder');
+        await wait(page, 1800);
+        await paintEvidencePanel(page, {
+          title: 'on disk — the real §20 R13 pipeline, read back after the change',
+          lines: [
+            `config.json    backupDir = ${committed.backupDir}`,
+            `new folder     ${R13.newBk}`,
+            `  fresh backup   ${change.freshBackup.name}  (written FIRST)`,
+            ...change.moved.map((m) => `  moved+verified ${m.name}`),
+            `old folder     ${R13.oldBk}  (empty — originals deleted only after every copy verified)`,
+          ],
+        });
+        await caption(page, 'Fresh backup first; every copy verified before an original was removed (§20 R13)');
+        await wait(page, 3200);
+      } finally {
+        store.close();
+      }
     },
   },
 
