@@ -19,6 +19,11 @@ import {
   type RecoveryResult,
 } from './backup.js';
 import {
+  changeDbLocation as changeDbLocationFs,
+  type DbChangeMode,
+  type DbLocationChange,
+} from './storagechange.js';
+import {
   systemClock,
   toUtc,
   secondsBetween,
@@ -328,6 +333,34 @@ export class Store {
       this.db = openDb(this.path);
       throw err;
     }
+  }
+
+  /**
+   * §20 R12 — change the database location (the §12 R26 guided flow's write side; the GUI
+   * is its only driver — architecture.html §08). Runs the core pipeline — gates →
+   * pre-change backup at the old home → (migrate) copy + verify → atomic config commit —
+   * against the live handle, and returns only after the commit. THIS store keeps running
+   * on the OLD path (still the active database, per R12's failure/relaunch contract); the
+   * caller relaunches to open the new location. Any refusal or failure throws with the
+   * config file untouched and nothing deleted anywhere.
+   */
+  changeDbLocation(opts: {
+    newDbPath: string;
+    mode: DbChangeMode;
+    /** The §13 config file the change commits `dbPath` into (the caller's resolved one). */
+    configFile: string;
+  }): DbLocationChange {
+    if (this.path === ':memory:') {
+      throw new StoreError('an in-memory store has no database location to change');
+    }
+    return changeDbLocationFs(this.db, {
+      oldDbPath: this.path,
+      newDbPath: opts.newDbPath,
+      mode: opts.mode,
+      configFile: opts.configFile,
+      backupDir: this.backupDir,
+      retention: this.settings().backupRetention,
+    });
   }
 
   private now(): Date {

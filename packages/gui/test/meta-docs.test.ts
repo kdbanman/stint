@@ -397,6 +397,8 @@ const NOT_JUDGE_ITEMS = new Set([
   'APP_VERSION',
   'DB_FILENAME',
   'DEV_VERSION',
+  // The §20 R12 pipeline's exclusive-create copy flag, cited by the §20 R12 row.
+  'COPYFILE_EXCL',
   'GH_TOKEN',
   'POPOVER_MAX',
   'SCHEMA_VERSION',

@@ -52,6 +52,7 @@ import {
   resetConfigKey,
   ConfigError,
   StoragePathError,
+  StorageChangeError,
   DB_FILENAME,
   CONFIG_FILENAME,
   APP_VERSION,
@@ -762,6 +763,143 @@ describe('GOLD: storage ladders (§13) + broken-path refusal shapes (§20 R11)',
         configFile: { path: '/tmp/none.json', source: 'env' },
       }),
     ).not.toThrow();
+  });
+});
+
+describe('GOLD: database location change refusal shapes (§20 R12)', () => {
+  // The §20 R12 pipeline's refusals are the loss-protection surface the GUI change dialog
+  // (§12 R26) renders verbatim — mockups/storage-change.html shows the migrate refusal —
+  // so the message shapes are pinned here: each names the destination, states WHY it
+  // stopped, and states that nothing became live. The invariants behind the words (old DB
+  // byte-identical, config untouched, gates decide liveness) are PROP
+  // core/test/prop/storage-change.test.ts; the flows are BDD features/storage_change.feature.
+  const NOW_AT = new Date('2026-06-24T12:00:00Z');
+
+  /** A file-backed store in its own temp home, plus the §20 R12 call plumbing. */
+  function changeFixture() {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-change-'));
+    const oldDbPath = join(home, 'old', 'tt.sqlite');
+    const store = Store.open({ path: oldDbPath, backupDir: join(home, 'old'), clock: () => NOW_AT });
+    const configFile = join(home, 'config.json');
+    mkdirSync(join(home, 'new-home'));
+    const newDbPath = join(home, 'new-home', 'tt.sqlite');
+    const change = (mode: 'migrate' | 'start-fresh', dest: string = newDbPath) =>
+      store.changeDbLocation({ newDbPath: dest, mode, configFile });
+    const dispose = () => {
+      store.close();
+      rmSync(home, { recursive: true, force: true });
+    };
+    return { home, oldDbPath, newDbPath, configFile, store, change, dispose };
+  }
+
+  const thrownBy = (fn: () => unknown): StorageChangeError => {
+    let thrown: unknown;
+    try {
+      fn();
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(StorageChangeError);
+    return thrown as StorageChangeError;
+  };
+
+  it('migrate refuses an existing destination file, naming it and the adopt alternative', () => {
+    const f = changeFixture();
+    try {
+      writeFileSync(f.newDbPath, 'already here');
+      const err = thrownBy(() => f.change('migrate'));
+      // The exact refusal grammar the §12 R26 dialog renders (mockups/storage-change.html).
+      expect(err.message).toBe(
+        `a file already exists at ${f.newDbPath} — migrate never overwrites; pick a ` +
+          `different location, or choose start fresh to adopt the existing file (it must ` +
+          `pass the integrity and version checks); nothing has changed`,
+      );
+      expect(err.destination).toBe(f.newDbPath);
+      // Nothing has changed, literally: destination bytes intact, config never written.
+      expect(readFileSync(f.newDbPath, 'utf8')).toBe('already here');
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('adoption refuses a file that fails the integrity check, naming it', () => {
+    const f = changeFixture();
+    try {
+      writeFileSync(f.newDbPath, 'opaque bytes that are not a database');
+      const err = thrownBy(() => f.change('start-fresh'));
+      expect(err.message).toContain(`cannot adopt ${f.newDbPath}`);
+      expect(err.message).toContain('failed the integrity check');
+      expect(err.message).toContain('the config file is untouched and the old database is still active');
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('adoption refuses a newer-schema database, naming both versions and the remedy (§20 R08/R09)', () => {
+    const f = changeFixture();
+    try {
+      const future = openDb(f.newDbPath);
+      future.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
+      future.close();
+      const err = thrownBy(() => f.change('start-fresh'));
+      expect(err.message).toBe(
+        `cannot adopt ${f.newDbPath}: its schema version ${SCHEMA_VERSION + 1} is newer ` +
+          `than this binary's supported version ${SCHEMA_VERSION} — run the newer binary ` +
+          `to use it; the config file is untouched and the old database is still active`,
+      );
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a destination in a missing directory refuses naming the parent, creating nothing', () => {
+    const f = changeFixture();
+    try {
+      const dest = join(f.home, 'gone', 'tt.sqlite');
+      const err = thrownBy(() => f.change('migrate', dest));
+      // The §20 R11 no-auto-mkdir stance, restated at the change gate.
+      expect(err.message).toContain(`its parent directory ${join(f.home, 'gone')} does not exist`);
+      expect(err.message).toContain('not created automatically');
+      expect(err.message).toContain('nothing has changed');
+      expect(existsSync(join(f.home, 'gone'))).toBe(false);
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a same-path change refuses — the destination is already the live database', () => {
+    const f = changeFixture();
+    try {
+      const err = thrownBy(() => f.change('migrate', f.oldDbPath));
+      expect(err.message).toBe(`${f.oldDbPath} is already the live database — nothing to change`);
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('the success message names the old file kept in place, untouched (the R12 done-when)', () => {
+    const f = changeFixture();
+    try {
+      const r = f.change('migrate');
+      expect(r.message).toBe(
+        `migrated the database to ${f.newDbPath}; the old database is kept in place, ` +
+          `untouched, at ${f.oldDbPath}`,
+      );
+      expect(r.outcome).toBe('migrated');
+      expect(r.oldDbPath).toBe(f.oldDbPath);
+      expect(r.newDbPath).toBe(f.newDbPath);
+      expect(r.configFile).toBe(f.configFile);
+      // The pre-change backup at the old home is part of the result contract.
+      expect(r.backup.name.startsWith('tt.sqlite.bak-')).toBe(true);
+      expect(dirname(r.backup.path)).toBe(join(f.home, 'old'));
+    } finally {
+      f.dispose();
+    }
   });
 });
 

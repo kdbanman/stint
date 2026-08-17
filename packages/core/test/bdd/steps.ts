@@ -62,6 +62,10 @@ export interface Ctx {
   storageList?: { refused: boolean; message: string; names: string[] };
   /** §20 R14 — the result of the most recent forced backup under the sandbox env. */
   storageNow?: { refused: boolean; message: string; claimed: boolean };
+  /** §20 R12 — the result of the most recent database-location change attempt. */
+  storageChangeRes?: { refused: boolean; message: string };
+  /** §20 R12 — the config file's raw text captured just before the change (the untouched probe). */
+  storageConfigBefore?: string;
 }
 
 export interface StepDef {
@@ -1856,6 +1860,163 @@ export const steps: StepDef[] = [
       // §20 R14 — the never-reported-written half has a filesystem twin: nothing appeared.
       expect(w.storageFilesIn('missingBackups')).toEqual([]);
     },
+  },
+
+  // ---- §20 R12 database location change (migrate / start fresh / adopt) — CORE-ONLY ----
+  // The pipeline's only driver is the GUI (§12 R26; no tt verb, architecture.html §08);
+  // the feature carrying these steps is tagged @core-only, so they bind CoreWorld only.
+  {
+    // Launched through the CONFIG rung (no TT_DB — the change commits `dbPath` into the
+    // config file, and an env override would outrank it on the proving relaunch).
+    pattern: /^a launched database with one closed entry at the configured path$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+      expect(c.storageLaunchRes.refused).toBe(false);
+      w.storageAddEntry();
+    },
+  },
+  {
+    pattern: /^a foreign file already at the new home$/,
+    run: (w) => w.storageSeedNewHome('foreign'),
+  },
+  {
+    pattern: /^a healthy database with two entries already at the new home$/,
+    run: (w) => w.storageSeedNewHome('healthy'),
+  },
+  {
+    pattern: /^a corrupt database file already at the new home$/,
+    run: (w) => w.storageSeedNewHome('corrupt'),
+  },
+  {
+    pattern: /^a database from a newer schema already at the new home$/,
+    run: (w) => w.storageSeedNewHome('future'),
+  },
+  {
+    pattern: /^the database location changes by (migrate|start fresh) to the new home$/,
+    run: (w, c, mode) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeDbLocation(
+        mode === 'start fresh' ? 'start-fresh' : 'migrate',
+        'newDb',
+      );
+    },
+  },
+  {
+    pattern: /^the database location changes by migrate to a missing directory$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeDbLocation('migrate', 'missingDb');
+    },
+  },
+  {
+    // §20 R12's done-when: the old file is kept in place, untouched, and NAMED in the
+    // success message.
+    pattern: /^the change succeeds naming the old database file$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('confDb'));
+      expect(c.storageChangeRes!.message).toContain('untouched');
+    },
+  },
+  {
+    pattern: /^the change reports the existing file was adopted$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('adopted');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('confDb'));
+    },
+  },
+  {
+    pattern: /^the config file points the database at the new home$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string };
+      expect(config.dbPath).toBe(w.storagePath('newDb'));
+    },
+  },
+  {
+    // The §13 cross-surface effect: the relaunch resolves the COMMITTED config through
+    // the same core ladder every surface uses, and finds the migrated data live there.
+    pattern: /^a relaunch opens the tracked entry at the new home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      expect(w.storageExists('newDb')).toBe(true);
+      expect(w.storageEntryCount()).toBe(1);
+    },
+  },
+  {
+    pattern: /^a relaunch opens an empty database at the new home$/,
+    run: (w) => {
+      // Start fresh commits WITHOUT creating the file; the relaunch's §20 R11 first-run
+      // semantics (absent file, live parent) create the fresh database at the new home.
+      w.storageRelaunch();
+      expect(w.storageExists('newDb')).toBe(true);
+      expect(w.storageEntryCount()).toBe(0);
+    },
+  },
+  {
+    pattern: /^a relaunch opens the two adopted entries at the new home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      expect(w.storageEntryCount()).toBe(2);
+    },
+  },
+  {
+    pattern: /^a relaunch still opens the tracked entry at the configured path$/,
+    run: (w) => {
+      // The refusal left the old path active: the relaunch resolves the unchanged config
+      // back to the configured database and the tracked entry is still there.
+      w.storageRelaunch();
+      expect(w.storageEntryCount()).toBe(1);
+    },
+  },
+  {
+    pattern: /^the old database file is still in place$/,
+    run: (w) => expect(w.storageExists('confDb')).toBe(true),
+  },
+  {
+    // Copy, never delete — and the pre-change backup is a TRUE copy: after the pipeline
+    // the old main file and the newest backup at the old home hold identical bytes.
+    pattern: /^the old database file is byte-identical to the pre-change backup$/,
+    run: (w) => expect(w.storageOldDbMatchesLatestBackup()).toBe(true),
+  },
+  {
+    pattern: /^the change is refused because migrate never overwrites$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('migrate never overwrites');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newDb'));
+    },
+  },
+  {
+    pattern: /^the change is refused naming the integrity failure$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('integrity');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newDb'));
+    },
+  },
+  {
+    pattern: /^the change is refused naming both schema versions$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      // The seeded future stamp and the refusal's newer-than framing (§20 R08/R09 gate).
+      expect(c.storageChangeRes!.message).toContain('schema version 99');
+      expect(c.storageChangeRes!.message).toContain('newer than');
+    },
+  },
+  {
+    pattern: /^the change is refused naming the missing parent$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      const parent = w.storagePath('missingDb').replace(/\/[^/]+$/, '');
+      expect(c.storageChangeRes!.message).toContain(parent);
+      expect(c.storageChangeRes!.message).toContain('does not exist');
+    },
+  },
+  {
+    // §20 R12 — any failure leaves the config file byte-for-byte as it was.
+    pattern: /^the config file is untouched$/,
+    run: (w, c) => expect(w.storageConfigText()).toBe(c.storageConfigBefore!),
   },
 ];
 

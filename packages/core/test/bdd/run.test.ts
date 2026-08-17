@@ -24,6 +24,13 @@ interface ParsedScenario {
 interface ParsedFeature {
   name: string;
   scenarios: ParsedScenario[];
+  /**
+   * `@core-only` — the feature runs over @stint/core and is skipped for the tt world.
+   * Reserved for the few capabilities whose only driver is the GUI (deliberately no tt
+   * verb — the §20 R12 storage-change pipeline; posture in architecture.html §08); every
+   * untagged feature keeps running TWICE, which is the §17 R8 parity proof.
+   */
+  coreOnly: boolean;
 }
 
 function parseFeature(text: string): ParsedFeature {
@@ -42,7 +49,11 @@ function parseFeature(text: string): ParsedFeature {
       });
     }
   }
-  return { name: feature.name, scenarios };
+  return {
+    name: feature.name,
+    scenarios,
+    coreOnly: feature.tags.some((t) => t.name === '@core-only'),
+  };
 }
 
 const features = readdirSync(featuresDir)
@@ -64,6 +75,7 @@ for (const factory of worldFactories) {
       }
     });
     for (const feature of features) {
+      if (feature.coreOnly && factory.name !== 'core') continue;
       describe(feature.name, () => {
         for (const scenario of feature.scenarios) {
           it(scenario.name, () => {

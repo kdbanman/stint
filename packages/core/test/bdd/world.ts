@@ -25,6 +25,7 @@ import {
   StoreError,
   ConfigError,
   StoragePathError,
+  StorageChangeError,
   joinClientProject,
   resolveRange,
   resolveStoragePaths,
@@ -620,7 +621,40 @@ export interface World {
   /** The file names inside a sandbox role directory ([] when the directory does not exist). */
   storageFilesIn(role: StorageDirRole): string[];
   /** Whether a sandbox role path exists on disk (the no-auto-mkdir / nothing-created probes). */
-  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean;
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb'): boolean;
+
+  // ---- §20 R12 database location change (CORE-ONLY) ----
+  //
+  // The migrate / start-fresh / adopt pipeline's only driver is the GUI (§12 R26) —
+  // there is deliberately no tt verb (the CLI's write interface is the config file plus
+  // the documented §13 procedure; posture in architecture.html §08). The feature carrying
+  // these steps is tagged @core-only and never runs over CliWorld, whose implementations
+  // below throw if ever reached.
+  /**
+   * §20 R12 — run the change pipeline from the launched store toward a sandbox role path,
+   * committing into the sandbox config file. Reports a refusal (the typed
+   * StorageChangeError) with its message rather than throwing.
+   */
+  storageChangeDbLocation(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newDb' | 'missingDb',
+  ): { refused: boolean; message: string };
+  /**
+   * §20 R12 — put a file at the `newDb` role before the change: `foreign` (opaque bytes —
+   * the migrate-never-overwrites case), `healthy` (a real database holding two closed
+   * entries — the adoptable case), `corrupt` (a real database with its header clobbered),
+   * or `future` (a real database stamped with a user_version beyond SCHEMA_VERSION).
+   */
+  storageSeedNewHome(kind: 'foreign' | 'healthy' | 'corrupt' | 'future'): void;
+  /** The sandbox config file's raw text ('' when absent) — the untouched-config probe. */
+  storageConfigText(): string;
+  /** The number of entries the launched store reads — which database is live, by content. */
+  storageEntryCount(): number;
+  /**
+   * §20 R12 — whether the old database file is byte-identical to the newest backup at the
+   * old home (the pre-change backup the pipeline wrote or reused).
+   */
+  storageOldDbMatchesLatestBackup(): boolean;
 }
 
 /** The fixed sandbox roles (one path mapping for both worlds and the steps — see storageRolePath). */
@@ -629,6 +663,7 @@ export type StorageRole =
   | 'envDb'
   | 'confDb'
   | 'missingDb'
+  | 'newDb'
   | 'backups'
   | 'confBackups'
   | 'missingBackups';
@@ -655,8 +690,9 @@ const label = joinClientProject;
  * The fixed sandbox layout, one mapping for both worlds and the steps: the config file
  * (the TT_CONFIG target), a database path per ladder rung (`env-db/` exists from the
  * start, `conf-db/` is the live-parent config target, `gone/` is the §20 R11 missing
- * parent and is never created), and a backup directory per rung (`backups` for the env
- * rung, `conf-backups` for the config rung, `backups-gone` for the §20 R14 dead net).
+ * parent and is never created), `new-home/` — the live §20 R12 change destination —
+ * and a backup directory per rung (`backups` for the env rung, `conf-backups` for the
+ * config rung, `backups-gone` for the §20 R14 dead net).
  */
 function storageRolePath(dir: string, role: StorageRole): string {
   switch (role) {
@@ -668,6 +704,8 @@ function storageRolePath(dir: string, role: StorageRole): string {
       return join(dir, 'conf-db', 'tt.sqlite');
     case 'missingDb':
       return join(dir, 'gone', 'tt.sqlite');
+    case 'newDb':
+      return join(dir, 'new-home', 'tt.sqlite');
     case 'backups':
       return join(dir, 'backups');
     case 'confBackups':
@@ -1481,10 +1519,12 @@ export class CoreWorld implements World {
   }
   storageSandbox(): void {
     this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-'));
-    // The env-db and conf-db PARENTS exist from the start (the live-parent cases); the
-    // `gone/` and `backups-gone` roles are never created — that absence IS the scenario.
+    // The env-db, conf-db, and new-home PARENTS exist from the start (the live-parent
+    // cases); the `gone/` and `backups-gone` roles are never created — that absence IS
+    // the scenario.
     mkdirSync(join(this.sDir, 'env-db'));
     mkdirSync(join(this.sDir, 'conf-db'));
+    mkdirSync(join(this.sDir, 'new-home'));
   }
   storagePath(role: StorageRole): string {
     return storageRolePath(this.sDir!, role);
@@ -1561,9 +1601,72 @@ export class CoreWorld implements World {
   storageFilesIn(role: StorageDirRole): string[] {
     return storageListFiles(storageDirRolePath(this.sDir!, role));
   }
-  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean {
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb'): boolean {
     if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
     return existsSync(this.storagePath(role));
+  }
+
+  // ---- §20 R12 database location change (core-only — the GUI is the pipeline's sole
+  // driver; the @core-only feature never reaches CliWorld) ----
+  storageChangeDbLocation(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newDb' | 'missingDb',
+  ): { refused: boolean; message: string } {
+    try {
+      const r = this.sStore!.changeDbLocation({
+        newDbPath: this.storagePath(dest),
+        mode,
+        configFile: this.storagePath('config'),
+      });
+      return { refused: false, message: r.message };
+    } catch (err) {
+      // §20 R12 — the typed pipeline refusal; anything else is a real test failure.
+      if (err instanceof StorageChangeError) return { refused: true, message: err.message };
+      throw err;
+    }
+  }
+  storageSeedNewHome(kind: 'foreign' | 'healthy' | 'corrupt' | 'future'): void {
+    const path = this.storagePath('newDb');
+    if (kind === 'foreign') {
+      // Any pre-existing bytes trip the migrate-never-overwrites gate; content irrelevant.
+      writeFileSync(path, 'someone else was here first\n');
+      return;
+    }
+    // The other kinds start from a REAL database so the adoption gates judge real headers.
+    const db = openDb(path);
+    if (kind === 'healthy') {
+      db.exec(`
+        INSERT INTO entry (description, start_utc, end_utc, billable) VALUES
+          ('adopted one', '2026-06-23T09:00:00Z', '2026-06-23T10:00:00Z', 1),
+          ('adopted two', '2026-06-23T11:00:00Z', '2026-06-23T12:30:00Z', 1);
+      `);
+    }
+    if (kind === 'future') db.exec('PRAGMA user_version = 99');
+    db.close();
+    if (kind === 'corrupt') {
+      // Clobber the 16-byte "SQLite format 3\0" magic — guaranteed-detectable damage.
+      const fd = openSync(path, 'r+');
+      try {
+        writeSync(fd, Buffer.from('xxxxxxxxxxxxxxxx'), 0, 16, 0);
+      } finally {
+        closeSync(fd);
+      }
+    }
+  }
+  storageConfigText(): string {
+    try {
+      return readFileSync(this.storagePath('config'), 'utf8');
+    } catch {
+      return '';
+    }
+  }
+  storageEntryCount(): number {
+    return this.sStore!.listEntries({}).length;
+  }
+  storageOldDbMatchesLatestBackup(): boolean {
+    const latest = this.sStore!.listBackups()[0];
+    if (!latest) return false;
+    return readFileSync(this.storagePath('confDb')).equals(readFileSync(latest.path));
   }
 }
 
@@ -2380,6 +2483,7 @@ export class CliWorld implements World {
     this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-cli-'));
     mkdirSync(join(this.sDir, 'env-db'));
     mkdirSync(join(this.sDir, 'conf-db'));
+    mkdirSync(join(this.sDir, 'new-home'));
   }
   storagePath(role: StorageRole): string {
     return storageRolePath(this.sDir!, role);
@@ -2443,8 +2547,34 @@ export class CliWorld implements World {
   storageFilesIn(role: StorageDirRole): string[] {
     return storageListFiles(storageDirRolePath(this.sDir!, role));
   }
-  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent'): boolean {
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb'): boolean {
     if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
     return existsSync(this.storagePath(role));
+  }
+
+  // ---- §20 R12 database location change — CORE-ONLY, unreachable here ----
+  // The pipeline has no tt surface (deliberate — architecture.html §08: the CLI's write
+  // interface is the config file itself), and the feature carrying these steps is tagged
+  // @core-only, so run.test.ts never routes it to CliWorld. These throw as a tripwire.
+  private coreOnly(): never {
+    throw new Error(
+      'core-only capability: the §20 R12 storage-change pipeline has no tt surface ' +
+        '(architecture.html §08) — the @core-only feature must not run over CliWorld',
+    );
+  }
+  storageChangeDbLocation(): { refused: boolean; message: string } {
+    return this.coreOnly();
+  }
+  storageSeedNewHome(): void {
+    this.coreOnly();
+  }
+  storageConfigText(): string {
+    return this.coreOnly();
+  }
+  storageEntryCount(): number {
+    return this.coreOnly();
+  }
+  storageOldDbMatchesLatestBackup(): boolean {
+    return this.coreOnly();
   }
 }
