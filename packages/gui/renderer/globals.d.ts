@@ -48,6 +48,17 @@ interface Window {
       reveal(): Promise<any>;
       onUpdateProgress(cb: (p: unknown) => void): () => void;
     };
+    /**
+     * §12 R26 — the storage-change bridge (gui/src/preload.ts), off the parity-asserted
+     * channel set like `update` (architecture.html §08). Optional so the judge/QA harness
+     * pages that inject a partial bridge typecheck; settings.js guards every use.
+     */
+    storage?: {
+      pickDbPath(): Promise<any>;
+      pickBackupDir(): Promise<any>;
+      changeDb(payload?: unknown): Promise<any>;
+      changeBackupDir(payload?: unknown): Promise<any>;
+    };
   };
   /**
    * app.js's shared inline affordances (issue #52), reached as `window.confirmInline` /

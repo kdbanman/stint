@@ -1722,7 +1722,11 @@ the panel builds — select, toggle, segment, hhmm, minutes, hotkey — persists
 exact key/value over `setSetting` , and the panel stays accent-disciplined), plus
 `HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
 field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
-(issue 135). The §12 R12 Settings view is thus fully covered.
+(issue 135). The R12 enumeration also names the **Storage** group (§12 R25 —
+file-backed paths, deliberately NOT settings rows: they live in the §13 config
+file, read before the database opens), rendered beside Backups by the same
+`settings.js` and covered by its own R25 row below. The §12 R12 Settings view
+is thus fully covered.
 **R13 Confirm destructive actions**
 (**`core`** — the in-window destructive-action confirmation is a §03
 loss-protection affordance, so it carries the `core` badge) (deleting an entry, or
@@ -1776,6 +1780,12 @@ scene additionally scores each gate as un-occluded — clear of both bands' rect
 hit-testing as itself across its face, every control inside it reachable — over a
 fixture whose first column carries an OVERLAPPING neighbour, so the gate's rank
 is held against real chrome rather than empty track.
+R13's scope also covers **committing a storage-location change** (§12 R26 —
+MODIFIED): its required Migrate/Start-fresh choice plus the single
+arm-then-confirm (`Change and relaunch` → `Confirm: migrate to <path>`) is this
+rule's shape for path changes, proven by JUDGE `STORAGE_CHANGE_CHOICE` /
+`STORAGE_CHANGE_ARMED` (arming writes nothing; only the explicit confirm runs
+the pipeline, exactly once) — the full routing in the R26 row below.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — the A11y dimension light/dark, system type and accent-on-primary do
@@ -2362,6 +2372,53 @@ and a picker click landing inside the week already shown moves nothing and
 asks nothing. **DOM-only, so its guard is a JUDGE row + a STATES.md row** — no
 BDD leg can see a prompt over a form's pending fields. AC: JUDGE
 `WEEK_MOVE_PROMPT` (`main-week-move-prompt.png`).
+
+**R25 Storage group (Settings) — display, a recorded §03 exclusion**: the
+file-backed Storage group beside Backups (`renderer/settings.js` `renderStorage`
+into `#storage-panel`, mockup `settings.html`): a card whose caption states the
+paths live in a config file — not the database — and names that file's own
+effective path; Database / Backup-folder rows each showing the effective path +
+its ladder source over the `getStoragePaths` IPC channel, which reads core's ONE
+`resolveStoragePaths` (`gui/src/storageview.ts` `buildStoragePathsView`) so the
+rows can never disagree with `tt paths` — the parity-matrix row
+`getStoragePaths ↔ paths` (GOLD `gui/test/parity.test.ts`; `paths` left the
+GUI-absent allow-set with it). An env-overridden row says so and disables
+Change… (the §07 disabled idiom); Reset to default… appears on config-set rows
+only and routes into the same R26 flow toward the default (committing by
+deleting the key, §13); a dead backup directory renders the row in the §20 R14
+error state. Nothing in the group writes without entering R26. AC: JUDGE
+`STORAGE_GROUP` (`storage-group.png`) + the `STORAGE_CHANGE_REFUSAL` §20 R14
+half (`storage-backup-dir-error.png`); GOLD `gui/test/storage.test.ts`
+(`buildStoragePathsView` ↔ `resolveStoragePaths` agreement, the default-rung
+targets, the probe).
+
+**R26 storage change flow (`core` — the destructive-action confirmation over
+the stored truth's relocation, §03)**: one guided flow per location
+(`renderer/settings.js` `openStorageDialog`, mockup `storage-change.html`): the
+OS picker (main's `storage:pickDbPath` / `storage:pickBackupDir` — a save
+dialog for the database's file location, a directory chooser for backups) →
+ONE `role=dialog` card showing current → new with the REQUIRED
+Migrate / Start-fresh choice — NO pre-selection, the commit disabled until one
+is chosen (the comprehension gate), the chosen card the D12 lifted chip — the
+per-surface safety facts stated in place (§20 R12 / R13), and a single §12 R13
+arm-then-confirm labeled to include the relaunch (`Change and relaunch` →
+`Confirm: migrate to <path>` / the start-fresh wording; arming writes nothing;
+a re-choice disarms). The confirm drives the `storage:*` IPC namespace — OFF
+the parity matrix per architecture.html §08 (the update:* precedent; CLI
+counterpart: the documented §13 config-file procedure; the matrix `$comment`
+records the exemption, GOLD `gui/test/qa-driver.test.ts` holds the driver's
+stubs to it) — where `main.ts` `registerStorageIpc` runs core's §20 R12/R13
+pipelines (`Store.changeDbLocation` with the GUI's `defaultDbPath` so a
+Reset-to-default commits by DELETING the key — GOLD
+`core/test/gold/contracts.test.ts` "toward the caller-supplied default rung" —
+/ `Store.changeBackupDir`), then `app.relaunch()`. A refusal is a VALUE
+(`storageChangeFailure` filters the typed `StorageChangeError`/`ConfigError`)
+rendered INSIDE the dialog in the announced danger block (§12 R21): dialog
+open, config untouched, old location active. AC: JUDGE `STORAGE_CHANGE_CHOICE`
+/ `STORAGE_CHANGE_ARMED` / `STORAGE_CHANGE_REFUSAL` (the four owner-signed
+scenes with `STORAGE_GROUP`); the pipelines' own §20 R12/R13 BDD/PROP/GOLD
+suites; MANUAL runbook `CHECK STORAGE CHANGE` (the real OS picker, the native
+launch-refusal dialog, the relaunch — no headless host).
 
 ### PRD §12 (UI states)
 
@@ -3124,8 +3181,15 @@ scenarios, run TWICE over core + tt: refused naming the config file, the
 unknown key named, and NO database file created anywhere in the sandbox) and
 GOLD `gold/contracts.test.ts` (the refusal message shapes + the schema/validator
 agreement) + `cli/test/gold/cli.test.ts` (`tt paths` on a bad config exits 2
-naming the file). The GUI's Reset-to-default / Quit dialog is authored for
-transition member 4 of #363. **R11 — broken database path at launch**:
+naming the file). The GUI resolves BEFORE anything opens (`gui/src/main.ts`
+`init`) and surfaces the typed `ConfigError` as a NATIVE dialog (the R05
+convention) naming the file and the error, offering **Reset to default**
+(delete the offending key(s) — §13's reset semantics; an unparseable file, with
+no reachable keys, is set ASIDE to a timestamped `.invalid-*` sibling, never
+destroyed — then relaunch) or **Quit**; the decision logic is Electron-free
+(`gui/src/storageview.ts` `launchRefusal`/`resetUntrustedConfig`, GOLD
+`gui/test/storage.test.ts`), and the native chrome itself is the runbook's
+CHECK STORAGE CHANGE step 3 (no headless host). **R11 — broken database path at launch**:
 `assertDbPathUsable` (`core/src/paths.ts`) gates ONLY the config rung — an
 absent file with a live, writable parent passes (first-run create, exactly as
 TT_DB behaves); a missing/non-directory/unwritable parent throws the typed
@@ -3136,8 +3200,15 @@ whenever it resolves through the ladder. Proven by BDD
 "missing parent refuses the launch" + the directory-was-not-created probe, run
 TWICE over core + tt) and GOLD `gold/contracts.test.ts` "broken-path refusal
 shapes (§20 R11)" (both names + the not-created stance in the message; the
-env/default rungs keep their existing semantics). The GUI dialog half is
-member 4. **R12 — database location change (migrate / start fresh / adopt)**:
+env/default rungs keep their existing semantics). The GUI half: `gui/src/main.ts`
+`init` runs `resolveStoragePaths` + `assertDbPathUsable` BEFORE `Store.open` and
+surfaces the typed `StoragePathError` as the same native R05-convention dialog as
+R10 — naming the configured path AND the config file, offering **Reset to
+default** (delete the `dbPath` key, relaunch) or **Quit** — via the Electron-free
+`launchRefusal` (GOLD `gui/test/storage.test.ts`: the plan names both, the reset
+deletes ONLY `dbPath`, every other error returns null so schema-skew and
+DbOpenError stay untouched); the native chrome is the runbook's CHECK STORAGE
+CHANGE step 3. **R12 — database location change (migrate / start fresh / adopt)**:
 the pipeline lives in `core/src/storagechange.ts` (`changeDbLocation`, driven by
 `Store.changeDbLocation` — the GUI §12 R26 flow's only entry; deliberately no
 `tt` verb, the posture in architecture.html §08) and can only ADD copies:
@@ -3167,9 +3238,14 @@ change refusal shapes (§20 R12)" (the exact migrate-never-overwrites wording th
 §12 R26 dialog renders — matching `mockups/storage-change.html` — the adoption
 integrity/version refusals naming both versions and the remedy, the
 missing-parent and same-path refusals, and the success-message done-when: the
-old file named, kept in place, untouched). The GUI driver (dialog + relaunch) is
-member 4; the real OS picker/relaunch residue is the runbook's CHECK STORAGE
-CHANGE procedure (a later member of #363). **R13 — backup directory change
+old file named, kept in place, untouched; plus the §13 reset-semantics commit —
+a change toward the caller-supplied `defaultDbPath` DELETES the key, the §12 R25
+Reset-to-default flow's commit). The GUI driver: `gui/src/main.ts`
+`registerStorageIpc` (`storage:changeDb` → `Store.changeDbLocation` with the
+`userData`-derived `defaultDbPath`, then `app.relaunch()`; a typed refusal
+becomes the `{ ok: false, message }` value the §12 R26 dialog renders in place —
+JUDGE `STORAGE_CHANGE_*`, the R26 row); the real OS picker/relaunch residue is
+the runbook's CHECK STORAGE CHANGE procedure. **R13 — backup directory change
 (verified move / start fresh)**: the pipeline lives in
 `core/src/storagechange.ts` (`changeBackupDir`, driven by
 `Store.changeBackupDir` — the GUI §12 R26 flow's only entry; no `tt` verb, the
@@ -3212,9 +3288,11 @@ the fresh backup's checkpointed database bytes are in the new directory
 whenever the move phase was reached and never on a gate refusal; the config is
 byte-untouched on any failure and committed — key set, or deleted toward the
 default rung — with unrelated keys preserved on success; all against a
-{mode × destination × fault}-derived outcome oracle). The GUI driver (dialog +
-relaunch) is member 4; the real OS picker/relaunch residue is the runbook's
-CHECK STORAGE CHANGE procedure (a later member of #363). **R14 — missing backup directory
+{mode × destination × fault}-derived outcome oracle). The GUI driver:
+`registerStorageIpc` (`storage:changeBackupDir` → `Store.changeBackupDir`, then
+`app.relaunch()`; refusals rendered in the dialog — the same seam as R12); the
+real OS picker/relaunch residue is the runbook's CHECK STORAGE
+CHANGE procedure. **R14 — missing backup directory
 surfaced, never silent**:
 `Store.open`'s launch backup stays best-effort (a dead directory never blocks
 the launch), `store.backupDirStatus()` is the probe both surfaces report from,
@@ -3225,7 +3303,13 @@ missing backup directory never blocks the launch but is reported plainly", run
 TWICE over core + tt: the database stays usable, both verbs name the dead
 directory, nothing is claimed, nothing appears on disk) and GOLD
 `cli/test/gold/cli.test.ts` (the exact `ls`/`now` messages + exit codes). The
-GUI error state (Settings Backups/Storage rows) is member 4. Evidence for
+GUI error state: the `getStoragePaths` channel carries the
+`store.backupDirStatus()` probe, and a not-ok probe renders the announced
+danger block naming the directory and the problem on BOTH surfaces backups
+speak from — the Settings Backups section AND the Storage group's Backup-folder
+row (`settings.js` `backupDirErrorHtml`) — proven by JUDGE
+`STORAGE_CHANGE_REFUSAL`'s `backupDirErrorBothSurfaces`
+(`storage-backup-dir-error.png`). Evidence for
 R10/R11/R14: the `§13 / §17 R15` section of the drift-gated CLI transcript.
 
 ## §17 acceptance criteria → proof
@@ -3492,10 +3576,21 @@ the committed config; `@core-only`, same posture as R12), **PROP**
 backup exists content-identical in exactly one of the old or new directory,
 verify-before-delete, both sets intact on an aborted move, the config
 byte-untouched on any failure) — the full routing in the §20 R13 row above.
-Pending (member 4 per the #363 parent): **JUDGE** the Settings Storage group
-and change-dialog scenes over the driven renderer; **MANUAL** the runbook's
-CHECK STORAGE CHANGE procedure (the real OS picker, the native refusal dialog,
-and the relaunch — the parts with no headless host).
+Landed (member 4): the GUI legs — the Settings Storage group (§12 R25) reading
+the SAME `resolveStoragePaths` over the `getStoragePaths` parity channel
+(`getStoragePaths ↔ paths` in `parity-matrix.json`; `paths` left
+`parity.test.ts`'s GUI-absent allow-set), the §12 R26 guided change dialog
+driving the §20 R12/R13 pipelines over the off-matrix `storage:*` namespace
+(the matrix `$comment` records the exemption), and the §20 R10/R11 native
+launch-refusal posture (Reset to default / Quit; decision logic GOLD
+`gui/test/storage.test.ts`). **JUDGE** `STORAGE_GROUP` /
+`STORAGE_CHANGE_CHOICE` / `STORAGE_CHANGE_ARMED` / `STORAGE_CHANGE_REFUSAL`
+(the required no-pre-selection choice, the arm-then-confirm naming mode +
+destination, the in-dialog refusal with the old location active, and the §20
+R14 two-surface error state). Pending: the member-7 recordings (§12 R26 is a
+core GUI requirement — captured LAST) and **MANUAL** the runbook's CHECK
+STORAGE CHANGE residue (the real OS picker, the native refusal dialog, and the
+relaunch — the parts with no headless host).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 

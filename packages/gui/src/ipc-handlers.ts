@@ -42,6 +42,7 @@ import {
 } from './reportview.js';
 import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from './favorites.js';
 import { listBackupViews } from './backupview.js';
+import { buildStoragePathsView } from './storageview.js';
 import { parseLocalInput } from './localtime.js';
 
 /** The OS-bound seam main.ts supplies; everything else the handlers need is imported above. */
@@ -60,6 +61,13 @@ export interface IpcHandlerDeps {
    * bind the new). globalShortcut is Electron, so main.ts owns the mechanics.
    */
   rebindGlobalHotkey: (previous: string, next: string) => void;
+  /**
+   * §12 R25 / §13 — Electron's `app.getPath('userData')`, the database's DEFAULT rung in the
+   * GUI (env and config always outrank it). Injected because only main can ask Electron;
+   * undefined (the QA driver, tests) falls back to core's per-OS default, exactly as
+   * resolveStoragePaths itself does.
+   */
+  userDataDir?: string;
 }
 
 /**
@@ -407,6 +415,13 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       refreshAll();
       return { recoveredFrom: r.recoveredFrom, quarantinedTo: r.quarantinedTo };
     },
+    // §12 R25 / §13 / §20 R14: the Storage group's read — the three effective paths + sources
+    // through core's ONE resolver (parity with `tt paths`; the two surfaces can never
+    // disagree), plus the default-rung targets and the live store's backup-directory probe
+    // (the Backups/Storage error state). Read-only — nothing in the group writes without
+    // entering the §12 R26 flow, which rides the separate storage:* namespace in main.ts.
+    getStoragePaths: () =>
+      buildStoragePathsView(process.env, deps.userDataDir, store.backupDirStatus()),
   };
 
   return handlers;

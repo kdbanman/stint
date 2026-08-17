@@ -897,6 +897,33 @@ describe('GOLD: database location change refusal shapes (§20 R12)', () => {
       // The pre-change backup at the old home is part of the result contract.
       expect(r.backup.name.startsWith('tt.sqlite.bak-')).toBe(true);
       expect(dirname(r.backup.path)).toBe(join(f.home, 'old'));
+      expect(r.committedDefault).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a change toward the caller-supplied default rung commits by DELETING the key (§13 reset semantics)', () => {
+    // The §12 R25 Reset-to-default flow: the GUI runs the same R26 pipeline toward the
+    // default location and the commit must DELETE `dbPath` — a resolved default is never
+    // written into the file — exactly as changeBackupDir already commits toward its own
+    // default rung. Unrelated keys survive the delete-key rewrite.
+    const f = changeFixture();
+    try {
+      writeFileSync(
+        f.configFile,
+        JSON.stringify({ dbPath: f.oldDbPath, backupDir: join(f.home, 'old') }),
+      );
+      const r = f.store.changeDbLocation({
+        newDbPath: f.newDbPath,
+        mode: 'migrate',
+        configFile: f.configFile,
+        defaultDbPath: f.newDbPath,
+      });
+      expect(r.committedDefault).toBe(true);
+      const committed = JSON.parse(readFileSync(f.configFile, 'utf8'));
+      expect('dbPath' in committed).toBe(false);
+      expect(committed.backupDir).toBe(join(f.home, 'old'));
     } finally {
       f.dispose();
     }

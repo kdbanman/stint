@@ -352,6 +352,8 @@ export class Store {
     mode: DbChangeMode;
     /** The §13 config file the change commits `dbPath` into (the caller's resolved one). */
     configFile: string;
+    /** The caller's default-rung database path — toward it the commit DELETES the key (§13). */
+    defaultDbPath?: string;
   }): DbLocationChange {
     if (this.path === ':memory:') {
       throw new StoreError('an in-memory store has no database location to change');
@@ -363,6 +365,7 @@ export class Store {
       configFile: opts.configFile,
       backupDir: this.backupDir,
       retention: this.settings().backupRetention,
+      ...(opts.defaultDbPath !== undefined ? { defaultDbPath: opts.defaultDbPath } : {}),
     });
   }
 

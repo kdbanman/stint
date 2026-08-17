@@ -92,13 +92,13 @@ const CANONICAL: Record<string, string> = {
  *                so there is no explicit "back up now" button; the user-facing capabilities the
  *                Settings → Backups section exposes are list (listBackups) and restore
  *                (restoreBackup). The force-a-backup verb is a tt convenience with no GUI twin.
- *  - `paths`   — the effective-storage-paths read (§13). Its GUI twin is the Settings
- *                Storage group (§12 R25) over a getStoragePaths channel, which lands with
- *                transition member 4 of #363; until that channel exists there is no row to
- *                map, so the read is listed GUI-absent. Member 4 replaces this entry with
- *                the parity row (architecture.html §08 — the read side IS a parity channel).
+ *
+ * `paths` is deliberately NOT here: its GUI twin is the Settings Storage group (§12 R25)
+ * over the getStoragePaths channel — the read side IS a parity channel (architecture.html
+ * §08), mapped by the matrix row. Only the WRITE side (the §12 R26 change flow) rides the
+ * storage:* namespace off the matrix, per the matrix's $comment.
  */
-const GUI_ABSENT_TT = new Set<string>(['status', 'sleep ls', 'backup now', 'paths']);
+const GUI_ABSENT_TT = new Set<string>(['status', 'sleep ls', 'backup now']);
 
 describe('parity matrix (§17 R8)', () => {
   const paths = allCommandPaths();

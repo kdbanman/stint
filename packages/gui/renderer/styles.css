@@ -2487,6 +2487,159 @@ body.popover { background: var(--paper); margin: 0; }
 .set-row.backup-restore-row { display: block; }
 .set-row.backup-restore-row .set-k { margin-bottom: 12px; }
 .set-ctrl-list { display: block; width: 100%; }
+
+/* ── §12 R25 (mockup settings.html .fbk): the file-backed Storage group — enclosed in a card
+   so it reads as a different kind of thing from the settings rows around it (config-file
+   paths, not DB rows). Existing grammar only: the .set-row layout, the neutral .pill, the
+   .set-update-btn button family. */
+.storage-card {
+  border: 1px solid var(--rule);
+  border-radius: var(--r2);
+  box-shadow: var(--sh-card);
+  background: var(--paper);
+  padding: 2px 16px 8px;
+  margin-top: 8px;
+}
+.storage-cap {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+.storage-code {
+  font-family: var(--num);
+  font-size: 11px;
+  background: var(--wash);
+  padding: 2px 4px;
+  border-radius: var(--r1);
+}
+/* The effective path is the row's small line — the numeric face, breakable anywhere so a
+   deep path never widens the settings column. */
+.storage-path {
+  font-family: var(--num);
+  font-size: 11px;
+  word-break: break-all;
+}
+/* The source pill rides the .pill base but sits in a flex row, not a client card — drop the
+   card context's auto margins and keep the label on one line (the mockup's single pill). */
+.storage-pill { margin: 0; white-space: nowrap; }
+
+/* §20 R14 — the dead-backup-directory error line (the Backups group AND the Storage row):
+   the --danger block palette of §12 R21's refusal grammar (never the --flag advisory — a
+   dead durability net is a failure, not an allowed-but-flagged state). */
+.backup-dir-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--danger);
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  border-radius: var(--r1);
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.backup-dir-error .ic { flex: none; margin-top: 2px; }
+
+/* ── §12 R26 (mockup storage-change.html): the storage change dialog — the merge-conflict
+   modal chrome (.editor on .editor-backdrop) carrying current → new, the REQUIRED
+   Migrate / Start-fresh choice (no pre-selection; the chosen card LIFTS as the raised
+   paper chip — design.html D12, selection ≠ accent — never turns accent), the safety
+   facts in place, the in-dialog refusal (the --danger triple, §12 R21), and the single
+   arm-then-confirm commit. */
+.storage-dialog .sd-sub { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.storage-dialog .sd-srcs { display: flex; gap: 8px; }
+.storage-dialog .sd-src {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--rule);
+  border-radius: var(--r1);
+  padding: 8px 12px;
+  background: var(--wash);
+}
+.storage-dialog .sd-lbl { font-size: 11px; color: var(--muted); }
+.storage-dialog .sd-path {
+  font-family: var(--num);
+  font-size: 12px;
+  margin-top: 4px;
+  word-break: break-all;
+}
+.storage-dialog .sd-d { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.storage-dialog .sd-arrow { display: flex; align-items: center; color: var(--muted); }
+.storage-dialog .sd-q { font-weight: 590; font-size: 13px; }
+.storage-dialog .sd-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.storage-dialog .sd-opt {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--r1);
+  padding: 8px 12px;
+  cursor: pointer;
+  background: var(--wash);
+  box-shadow: none;
+}
+.storage-dialog .sd-opt:hover:not(.on) { background: var(--hover); }
+/* D12: the chosen option is the raised paper chip; its peers stay sunken and flat. The radio
+   fills its dot with ink — the filled-vs-empty SHAPE says "chosen", never a colour (A05). */
+.storage-dialog .sd-opt.on { background: var(--paper); box-shadow: var(--sh-chip); }
+.storage-dialog .sd-opt .rad {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--rule-strong);
+  flex: none;
+  position: relative;
+  margin-top: 2px;
+}
+.storage-dialog .sd-opt.on .rad::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: var(--ink);
+}
+.storage-dialog .sd-opt .ot b { display: block; font-weight: 590; font-size: 12px; }
+.storage-dialog .sd-opt .ot span { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+.storage-dialog .sd-facts { border-top: 1px solid var(--rule); }
+.storage-dialog .sd-fact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 12px;
+}
+.storage-dialog .sd-fact .ic { width: 15px; height: 15px; flex: none; color: var(--run); }
+.storage-dialog .sd-fact b { color: var(--ink); font-weight: 590; }
+.storage-dialog .sd-error {
+  background: var(--danger-weak);
+  border: 1px solid var(--danger);
+  border-radius: var(--r1);
+  padding: 8px 12px;
+  color: var(--danger);
+  font-size: 12px;
+  word-break: break-word;
+}
+.storage-dialog .sd-hint { flex: 1; font-size: 11px; color: var(--muted); }
+/* The armed confirm carries the destination path in its label, so it must be allowed to wrap
+   inside the modal instead of overflowing it. */
+.storage-dialog .sd-commit {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  word-break: break-all;
+}
+/* design.html §07's disabled idiom on the dialog's commit — disabled until the required
+   Migrate / Start-fresh choice is made (§12 R26's comprehension gate), and while relaunching. */
+.storage-dialog .sd-commit:disabled {
+  color: var(--faint);
+  background: var(--wash);
+  border-color: var(--rule);
+  cursor: not-allowed;
+}
 .backup-list { display: flex; flex-direction: column; gap: 8px; }
 .backup-item {
   display: flex;

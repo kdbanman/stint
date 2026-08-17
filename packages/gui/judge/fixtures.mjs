@@ -1148,6 +1148,52 @@ const BACKUPS = [
 ];
 
 /**
+ * §12 R25 / §13 — the canned `getStoragePaths` view every scene's mock serves (the default
+ * `storagePaths` knob). Mirrors mockups/settings.html's Storage group exactly: a CONFIG-set
+ * database row (Change… enabled + Reset to default… present), an ENV-overridden backup
+ * folder (labeled `env · TT_BACKUP_DIR`, Change… disabled, no Reset), the caption naming
+ * the config file's own effective path, the default-rung targets the Reset flow aims at,
+ * and a healthy §20 R14 probe.
+ */
+export const STORAGE_PATHS = {
+  db: { path: '/home/kirby/tracking/timetracker.sqlite', source: 'config' },
+  backupDir: { path: '/mnt/nas/stint-backups', source: 'env' },
+  configFile: { path: '/home/kirby/.config/stint/config.json', source: 'default' },
+  defaults: {
+    dbPath: '/home/kirby/.local/share/stint/timetracker.sqlite',
+    backupDir: '/home/kirby/tracking',
+  },
+  backupDirState: { ok: true, problem: null },
+};
+
+/**
+ * §20 R14 — the broken-backup-directory variant: a CONFIG-set backup folder whose directory
+ * is gone. The STORAGE_CHANGE_REFUSAL scene's second page asserts BOTH surfaces §20 R14
+ * names render the error state — the Storage row and the Backups section — rather than an
+ * innocent empty list.
+ */
+export function storageBrokenPaths() {
+  return {
+    ...STORAGE_PATHS,
+    backupDir: { path: '/mnt/nas/stint-backups', source: 'config' },
+    backupDirState: { ok: false, problem: 'does not exist' },
+  };
+}
+
+/**
+ * §12 R26 — the destination the mocked OS picker returns (the `storagePicked` knob's
+ * default), and the §20 R12 migrate refusal the STORAGE_CHANGE_REFUSAL scene injects. The
+ * refusal is the SHIPPING wording pinned by GOLD `contracts.test.ts` "migrate refuses an
+ * existing destination file" — matching mockups/storage-change.html state 4 — so the scene
+ * scores what the user reads, not a fixture-local sentence.
+ */
+export const STORAGE_PICKED = '/home/kirby/moved/timetracker.sqlite';
+export const STORAGE_EXISTS_REFUSAL =
+  `a file already exists at ${STORAGE_PICKED} — migrate never overwrites; pick a ` +
+  `different location, or choose start fresh to adopt the existing file (it must ` +
+  `pass the integrity and version checks); nothing has changed`;
+
+/**
  * §20 R05 — the corruption-recovery fixture. Same Backups snapshot, but carrying a non-null
  * recoveryNotice (the DB was recovered from a backup on this launch): recoveredFrom names the
  * backup, quarantinedTo the `.corrupted` sibling the launch set aside. The RECOVERY_NOTICE scene
@@ -1663,7 +1709,7 @@ const SAVED_REPORTS = [
  * so the OVERLAP_BANNER scene can drive a real write and assert the inline banner
  * appears (§06 R4). Otherwise writes resolve to an empty-warnings ack.
  */
-export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false, emptyRefData = false, savedReports = SAVED_REPORTS, backups = BACKUPS } = {}) {
+export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false, emptyRefData = false, savedReports = SAVED_REPORTS, backups = BACKUPS, storagePaths = STORAGE_PATHS, storagePicked = STORAGE_PICKED, storageChangeResult = null } = {}) {
   return `
     window.__STATE__ = ${stateJson};
     // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
@@ -2082,6 +2128,13 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         window.__RESTORED_BACKUP__ = p;
         return Promise.resolve({ recoveredFrom: (p && p.name) || '', quarantinedTo: '/db/timetracker.sqlite.replaced-20260627T120000Z' });
       },
+      // §12 R25 / §13: the Settings Storage group's read — the three effective paths +
+      // sources + the §20 R14 probe (parity twin: tt paths). The storagePaths knob
+      // (default STORAGE_PATHS, mirroring mockups/settings.html) lets the refusal scene
+      // inject the broken-backup-directory variant. Present so window.stint exposes EVERY
+      // IPC channel — PARITY_REACH's deterministic sub-fact reads this surface.
+      __STORAGE_PATHS__: ${JSON.stringify(storagePaths)},
+      getStoragePaths: function () { return Promise.resolve(this.__STORAGE_PATHS__); },
       // §08 R3 / §12 R8: the report builder calls this on load and on every control
       // change. Records the request (so the harness can assert the billableFilter the
       // Billable toggle passes) and returns a deterministic Report keyed by that filter,
@@ -2290,5 +2343,30 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         },
       };
     }
+    // §12 R26 — the GUI-only storage-change bridge (window.stint.storage), mirroring the
+    // EXACT preload shape (pickDbPath / pickBackupDir / changeDb / changeBackupDir). Off
+    // the parity-asserted CHANNELS set like update (architecture.html §08 — the write
+    // side's CLI counterpart is the documented §13 config-file procedure, not a verb).
+    // Deterministic: the pickers resolve the canned destination (the storagePicked knob),
+    // and the two change calls RECORD their payload on window.__STORAGE_CHANGES__ (so the
+    // armed scene can prove arming writes NOTHING and the confirm fires EXACTLY ONCE)
+    // before resolving the storageChangeResult knob — null means the success value main
+    // returns just before relaunching; the refusal scene injects an { ok: false } value
+    // carrying the SHIPPING §20 R12 wording (STORAGE_EXISTS_REFUSAL).
+    window.__STORAGE_PICKED__ = ${JSON.stringify(storagePicked)};
+    window.__STORAGE_RESULT__ = ${storageChangeResult ? JSON.stringify(storageChangeResult) : 'null'};
+    window.__STORAGE_CHANGES__ = [];
+    window.stint.storage = {
+      pickDbPath: () => Promise.resolve(window.__STORAGE_PICKED__),
+      pickBackupDir: () => Promise.resolve(window.__STORAGE_PICKED__),
+      changeDb: (p) => {
+        window.__STORAGE_CHANGES__.push({ kind: 'db', payload: p });
+        return Promise.resolve(window.__STORAGE_RESULT__ || { ok: true, message: 'migrated the database to ' + ((p && p.newDbPath) || '') + '; the old database is kept in place, untouched' });
+      },
+      changeBackupDir: (p) => {
+        window.__STORAGE_CHANGES__.push({ kind: 'backupDir', payload: p });
+        return Promise.resolve(window.__STORAGE_RESULT__ || { ok: true, message: 'the backup directory is now ' + ((p && p.newBackupDir) || '') });
+      },
+    };
   `;
 }
