@@ -3137,7 +3137,40 @@ whenever it resolves through the ladder. Proven by BDD
 TWICE over core + tt) and GOLD `gold/contracts.test.ts` "broken-path refusal
 shapes (§20 R11)" (both names + the not-created stance in the message; the
 env/default rungs keep their existing semantics). The GUI dialog half is
-member 4. **R14 — missing backup directory surfaced, never silent**:
+member 4. **R12 — database location change (migrate / start fresh / adopt)**:
+the pipeline lives in `core/src/storagechange.ts` (`changeDbLocation`, driven by
+`Store.changeDbLocation` — the GUI §12 R26 flow's only entry; deliberately no
+`tt` verb, the posture in architecture.html §08) and can only ADD copies:
+read-only gates (same-path, dead destination parent with NO auto-mkdir, migrate
+refusing an existing destination file, the adoption gates — `quick_check` + the
+R08/R09 `user_version` ≤ `SCHEMA_VERSION` fence, version stamp read first) →
+pre-change backup at the OLD home (`backupDb`'s checkpoint-then-copy; a dead
+backup directory REFUSES here, unlike the best-effort launch backup) → migrate's
+`COPYFILE_EXCL` copy + `quick_check` verify of the copy → the §13 atomic
+`writeConfig` rename as the single commit point. The old file is always kept in
+place, untouched, and named in the success message; start fresh commits WITHOUT
+creating the file (the relaunch's R11 first-run semantics create it); every
+refusal throws the typed `StorageChangeError` with the config file untouched and
+nothing deleted anywhere — a partially-copied destination never becomes live.
+Proven by BDD `features/storage_change.feature` (migrate / start-fresh / adopt /
+the four refusal flows, each ending in a relaunch that resolves the committed —
+or untouched — config through the §13 ladder; tagged `@core-only` and run over
+@stint/core ONLY, the one deliberate exception to the run-TWICE rule), PROP
+`core/test/prop/storage-change.test.ts` (over generated {mode × destination
+state × seeded data}: the old database preserved after ANY outcome — byte-identical
+on refusal, byte-identical to the pre-change backup and row-identical on an
+independent reopen after success; the config file byte-for-byte untouched on any
+failure and atomically rewritten with unrelated keys preserved on success; the
+{mode × destination}-derived outcome oracle — a destination never becomes live
+without passing its gates), and GOLD `gold/contracts.test.ts` "database location
+change refusal shapes (§20 R12)" (the exact migrate-never-overwrites wording the
+§12 R26 dialog renders — matching `mockups/storage-change.html` — the adoption
+integrity/version refusals naming both versions and the remedy, the
+missing-parent and same-path refusals, and the success-message done-when: the
+old file named, kept in place, untouched). The GUI driver (dialog + relaunch) is
+member 4; the real OS picker/relaunch residue is the runbook's CHECK STORAGE
+CHANGE procedure (a later member of #363). **R14 — missing backup directory
+surfaced, never silent**:
 `Store.open`'s launch backup stays best-effort (a dead directory never blocks
 the launch), `store.backupDirStatus()` is the probe both surfaces report from,
 `store.backupNow()` refuses with the directory named and never claims an
@@ -3377,9 +3410,10 @@ R08/R09 (this row consumes those rows, it does not author them)
 
 ### §17 R15
 
-**The resolution + refusal legs are proven; the change-pipeline and GUI legs
-land with the remaining members of the custom-storage-paths transition (parent
-#363).** Landed (member 1): **BDD** `features/storage_paths.feature`, run TWICE
+**The resolution + refusal legs and the database change pipeline are proven;
+the backup-directory pipeline and GUI legs land with the remaining members of
+the custom-storage-paths transition (parent #363).** Landed (member 1): **BDD**
+`features/storage_paths.feature`, run TWICE
 over @stint/core AND tt via `run.test.ts` — the env → config → default ladders
 (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real config
 files), the loud refusals for an untrusted config file (§20 R10) and for a
@@ -3392,13 +3426,23 @@ shapes, and the no-APPDATA census extended to the config resolver
 (`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` — `tt paths` ↔ the §13
 ladders through the ONE core resolver the Settings Storage group will read, so
 the two surfaces can never disagree). Evidence: the `§13 / §17 R15` transcript
-section. Pending (members 2–4 per the #363 parent): **BDD/PROP** the §20
-R12–R13 migrate / start-fresh / adopt pipelines and their invariants (old
-database byte-identical after any outcome, config untouched on any failure, no
-backup lost by a directory move); **JUDGE** the Settings Storage group and
-change-dialog scenes over the driven renderer; **MANUAL** the runbook's CHECK
-STORAGE CHANGE procedure (the real OS picker, the native refusal dialog, and
-the relaunch — the parts with no headless host).
+section. Landed (member 2): the §20 R12 database-location-change pipeline —
+"migrates or starts fresh only after a pre-change backup, never deletes the old
+file" is this leg. **BDD** `features/storage_change.feature` (migrate /
+start-fresh / adopt / refusals, each proven through to a relaunch resolving the
+committed config; `@core-only` — the pipeline's sole driver is the GUI, no `tt`
+verb by design, architecture.html §08), **PROP**
+`core/test/prop/storage-change.test.ts` (old database byte-identical after any
+outcome, config untouched on any failure, a destination never live without
+passing its gates), **GOLD** the R12 refusal + success-message shapes
+(`gold/contracts.test.ts`) — the full routing in the §20 R12 row above.
+Pending (members 3–4 per the #363 parent): **BDD/PROP** the §20 R13
+backup-directory move pipeline and its invariants (no backup lost by a
+directory move, verify-before-delete, both sets intact on an aborted move);
+**JUDGE** the Settings Storage group and change-dialog scenes over the driven
+renderer; **MANUAL** the runbook's CHECK STORAGE CHANGE procedure (the real OS
+picker, the native refusal dialog, and the relaunch — the parts with no
+headless host).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 
