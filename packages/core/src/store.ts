@@ -19,9 +19,12 @@ import {
   type RecoveryResult,
 } from './backup.js';
 import {
+  changeBackupDir as changeBackupDirFs,
   changeDbLocation as changeDbLocationFs,
+  type BackupDirChange,
   type DbChangeMode,
   type DbLocationChange,
+  type StorageChangeMode,
 } from './storagechange.js';
 import {
   systemClock,
@@ -360,6 +363,34 @@ export class Store {
       configFile: opts.configFile,
       backupDir: this.backupDir,
       retention: this.settings().backupRetention,
+    });
+  }
+
+  /**
+   * §20 R13 — change the backup directory (the §12 R26 guided flow's backup-folder side;
+   * the GUI is its only driver — architecture.html §08). Runs the core pipeline — gates →
+   * fresh backup into the NEW directory → (migrate) per-file copy + verify → atomic
+   * config commit → delete the verified originals — against the live handle, and returns
+   * only after the commit. THIS store keeps running on the OLD directory; the caller
+   * relaunches onto the new resolution. Any refusal or abort throws with the config file
+   * untouched and every original backup still in place.
+   */
+  changeBackupDir(opts: {
+    newBackupDir: string;
+    mode: StorageChangeMode;
+    /** The §13 config file the change commits `backupDir` into (the caller's resolved one). */
+    configFile: string;
+  }): BackupDirChange {
+    if (this.path === ':memory:') {
+      throw new StoreError('an in-memory store has no backup directory to change');
+    }
+    return changeBackupDirFs(this.db, {
+      dbPath: this.path,
+      oldBackupDir: this.backupDir,
+      newBackupDir: opts.newBackupDir,
+      mode: opts.mode,
+      configFile: opts.configFile,
+      at: this.now(),
     });
   }
 

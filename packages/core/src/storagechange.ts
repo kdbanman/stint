@@ -1,14 +1,17 @@
 /**
- * Database location change — migrate / start fresh / adopt (PRD §20 R12, driving §12 R26).
+ * Storage location change — the database pipeline (PRD §20 R12) and the backup-directory
+ * pipeline (PRD §20 R13), both driving §12 R26.
  *
  * Relocating the database is a core pipeline that can only ADD copies: pre-change backup
  * at the old home → copy → verify → atomic config commit — and the old file is always
  * left in place, untouched (copy, never delete). Every refusal happens BEFORE anything is
  * written, and a failure at any later stage stops with the config file untouched and the
  * old path still active, so a partially-copied destination can never become live. The
- * caller (the GUI — §12 R26 is the pipeline's only driver; the CLI's write interface is
- * deliberately the config file itself, architecture.html §08) relaunches onto the new
- * location after a success.
+ * backup-directory pipeline is its move-shaped sibling: fresh backup into the NEW
+ * directory first, per-file copy → verify, originals deleted only after every copy
+ * verifies and the config commits. The caller (the GUI — §12 R26 is the pipelines' only
+ * driver; the CLI's write interface is deliberately the config file itself,
+ * architecture.html §08) relaunches onto the new location after a success.
  *
  * The §13 atomic `writeConfig` rename is the single commit point; everything before it is
  * additive and everything after it is the relaunch.
@@ -16,12 +19,25 @@
 import { accessSync, constants, copyFileSync, existsSync, statSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { backupDb, backupDirState, checkIntegrity, latestBackup, type BackupInfo } from './backup.js';
-import { readConfig, writeConfig } from './config.js';
+import {
+  backupCollisions,
+  backupDb,
+  backupDirState,
+  checkIntegrity,
+  copyBackupsVerified,
+  deleteBackupOriginals,
+  latestBackup,
+  listBackups,
+  type BackupInfo,
+} from './backup.js';
+import { readConfig, resetConfigKey, writeConfig } from './config.js';
 import { SCHEMA_VERSION, type Db } from './db.js';
 
-/** The §12 R26 choice: copy the data over, or start the destination on its own terms. */
-export type DbChangeMode = 'migrate' | 'start-fresh';
+/** The §12 R26 choice: carry the data over, or start the destination on its own terms. */
+export type StorageChangeMode = 'migrate' | 'start-fresh';
+
+/** The database pipeline's name for the same §12 R26 choice (§20 R12). */
+export type DbChangeMode = StorageChangeMode;
 
 /**
  * What actually happened: `start-fresh` splits into first-run semantics at an empty
@@ -281,5 +297,197 @@ export function changeDbLocation(
     backup,
     configFile,
     message: `${did}; the old database is kept in place, untouched, at ${oldDbPath}`,
+  };
+}
+
+/**
+ * What a §20 R13 backup-directory change did: `moved` (migrate — the verified move) or
+ * `started-fresh` (old backups stay put, untouched).
+ */
+export type BackupDirChangeOutcome = 'moved' | 'started-fresh';
+
+/** A completed §20 R13 change. The config is committed; the caller relaunches. */
+export interface BackupDirChange {
+  outcome: BackupDirChangeOutcome;
+  /** The old backup directory — still this process's active directory until the relaunch. */
+  oldBackupDir: string;
+  /** The destination the committed config now points at. */
+  newBackupDir: string;
+  /** The fresh backup written into the NEW directory first (or the byte-identical latest there). */
+  freshBackup: BackupInfo;
+  /** The verified copies at their new paths (empty for start-fresh). */
+  moved: BackupInfo[];
+  /** True when the commit DELETED the `backupDir` key — the destination is the §13 default rung. */
+  committedDefault: boolean;
+  /** The config file the change was committed to. */
+  configFile: string;
+  /** The surface-neutral success line — names what moved (or stayed put) and where. */
+  message: string;
+}
+
+/**
+ * §20 R13 — change the backup directory. Migrate is a MOVE that can never lose a backup;
+ * start fresh leaves old backups put. Runs against the LIVE handle of the database (the
+ * fresh backup checkpoints its WAL) and returns only after the config commit; the old
+ * directory stays this process's active one — the caller relaunches onto the new
+ * resolution. Retention deliberately never runs here: pruning a directory that is not yet
+ * (or no longer) active could destroy backups mid-change — it resumes with the next
+ * backup written in the active directory (§20 R04).
+ *
+ * Stages, in order (each stage's failure stops the pipeline with the config untouched):
+ *
+ *   1. Gates — read-only refusals: a same-directory no-op, a destination that is missing
+ *      (no auto-mkdir — the §20 R11 stance), not a directory, or not writable, and for
+ *      migrate an old directory whose originals could not be removed and any same-name
+ *      collision at the destination (migrate never overwrites).
+ *   2. Fresh backup of the current database into the NEW directory — the writability
+ *      probe and the backup-before-change in one step (§20 R13's done-when: it exists
+ *      there before anything else happens), in BOTH modes. `backupDb` checkpoints the
+ *      WAL and writes the timestamped copy, or keeps the byte-identical latest already
+ *      there. A failure refuses — the change proceeds only over a live durability net.
+ *   3. Migrate only: per original, copy → verify (size/hash) via `copyBackupsVerified`.
+ *      A copy or verify failure aborts with BOTH SETS INTACT: originals untouched, the
+ *      aborted run's own copies rolled back, the fresh backup kept.
+ *   4. Commit — the §13 atomic write. A destination equal to the default rung (beside
+ *      the database) commits by DELETING the `backupDir` key — §13's reset semantics; a
+ *      resolved default is never written into the file — otherwise `backupDir` is set.
+ *   5. Migrate only, after the commit: delete the originals. Every copy verified and the
+ *      new directory is committed, so each original is a redundant duplicate — a crash
+ *      or unlink failure here leaves extra copies, never a loss.
+ */
+export function changeBackupDir(
+  db: Db,
+  opts: {
+    /** The live database file (the fresh backup's source and the default-rung anchor). */
+    dbPath: string;
+    /** The ACTIVE backup directory the change moves away from (§13's ladder). */
+    oldBackupDir: string;
+    newBackupDir: string;
+    mode: StorageChangeMode;
+    /** The §13 config file the change commits `backupDir` into (or deletes it from). */
+    configFile: string;
+    at?: Date;
+    /** The per-file copy primitive (see {@link copyBackupsVerified} — fault-injectable). */
+    copyFile?: (src: string, dest: string) => void;
+  },
+): BackupDirChange {
+  const { dbPath, oldBackupDir, newBackupDir, mode, configFile } = opts;
+
+  // Stage 1 — the read-only gates.
+  if (resolve(newBackupDir) === resolve(oldBackupDir)) {
+    throw new StorageChangeError(
+      `${newBackupDir} is already the active backup directory — nothing to change`,
+      newBackupDir,
+    );
+  }
+  const destState = backupDirState(newBackupDir);
+  if (!destState.ok) {
+    // No auto-mkdir, the §20 R11 stance: a missing directory is the unmounted-volume /
+    // moved-directory signature, and creating it would strand backups on the wrong filesystem.
+    throw new StorageChangeError(
+      `cannot use ${newBackupDir}: it ${destState.problem} — the directory is not created ` +
+        `automatically (restore it or pick another location); nothing has changed`,
+      newBackupDir,
+    );
+  }
+  const originals = mode === 'migrate' ? listBackups(dbPath, oldBackupDir) : [];
+  if (originals.length > 0) {
+    try {
+      accessSync(oldBackupDir, constants.W_OK);
+    } catch {
+      throw new StorageChangeError(
+        `cannot move the existing backups out of ${oldBackupDir}: it is not writable — ` +
+          `nothing has changed`,
+        newBackupDir,
+      );
+    }
+    const collisions = backupCollisions(originals, newBackupDir);
+    if (collisions.length > 0) {
+      // The wording matches the §12 R26 dialog's refusal grammar (mockups/storage-change.html).
+      throw new StorageChangeError(
+        `a backup named ${collisions[0]} already exists in ${newBackupDir} — migrate never ` +
+          `overwrites; remove it or pick a different directory, or choose start fresh to ` +
+          `leave existing backups put; nothing has changed`,
+        newBackupDir,
+      );
+    }
+  }
+
+  // Stage 2 — the fresh backup into the NEW directory (both modes). Retention 0: this
+  // pipeline never prunes (see the function comment); a null backupDb means the latest
+  // backup already there is byte-identical to the checkpointed database, so it IS the
+  // fresh backup. Unlike the best-effort launch backup, a failure here STOPS the change.
+  let freshBackup: BackupInfo | null;
+  try {
+    freshBackup =
+      backupDb(dbPath, db, {
+        retention: 0,
+        backupDir: newBackupDir,
+        ...(opts.at !== undefined ? { at: opts.at } : {}),
+      }) ?? latestBackup(dbPath, newBackupDir);
+  } catch (err) {
+    throw new StorageChangeError(
+      `no fresh backup could be written to ${newBackupDir}: ${(err as Error).message} — ` +
+        `nothing has changed`,
+      newBackupDir,
+    );
+  }
+  if (freshBackup === null) {
+    // Unreachable while the database exists on disk; refuse rather than proceed unprobed.
+    throw new StorageChangeError(
+      `no fresh backup could be written to ${newBackupDir} — nothing has changed`,
+      newBackupDir,
+    );
+  }
+
+  // Stage 3 — migrate's verified copies, over the SAME listing the gates judged (the
+  // fresh backup already lives in the new directory and is never part of the move).
+  let moved: BackupInfo[] = [];
+  if (mode === 'migrate') {
+    try {
+      moved = copyBackupsVerified(originals, newBackupDir, opts.copyFile);
+    } catch (err) {
+      throw new StorageChangeError(
+        `the move to ${newBackupDir} was aborted: ${(err as Error).message}; both backup ` +
+          `sets are intact — every original backup stays in ${oldBackupDir} and the fresh ` +
+          `backup at ${newBackupDir} stays; the config file is untouched and ` +
+          `${oldBackupDir} is still the active backup directory`,
+        newBackupDir,
+      );
+    }
+  }
+
+  // Stage 4 — the atomic commit (§13). Toward the default rung (beside the database) the
+  // commit DELETES the key — reset semantics; a resolved default is never written.
+  const committedDefault = resolve(newBackupDir) === resolve(dirname(dbPath));
+  if (committedDefault) {
+    resetConfigKey(configFile, 'backupDir');
+  } else {
+    const config = readConfig(configFile);
+    config.backupDir = newBackupDir;
+    writeConfig(configFile, config);
+  }
+
+  // Stage 5 — post-commit, migrate deletes the (now redundant, verified) originals.
+  if (mode === 'migrate') deleteBackupOriginals(originals);
+
+  const did =
+    mode === 'migrate'
+      ? originals.length > 0
+        ? `moved ${originals.length} backup${originals.length === 1 ? '' : 's'} to ` +
+          `${newBackupDir} — every copy verified before the originals were removed from ` +
+          `${oldBackupDir}`
+        : `the backup directory is now ${newBackupDir} (no existing backups to move)`
+      : `starting fresh at ${newBackupDir}; existing backups stay put, untouched, in ` +
+        `${oldBackupDir}`;
+  return {
+    outcome: mode === 'migrate' ? 'moved' : 'started-fresh',
+    oldBackupDir,
+    newBackupDir,
+    freshBackup,
+    moved,
+    committedDefault,
+    configFile,
+    message: `${did}; a fresh backup of the database was written to ${newBackupDir} first`,
   };
 }

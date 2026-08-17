@@ -62,9 +62,9 @@ export interface Ctx {
   storageList?: { refused: boolean; message: string; names: string[] };
   /** §20 R14 — the result of the most recent forced backup under the sandbox env. */
   storageNow?: { refused: boolean; message: string; claimed: boolean };
-  /** §20 R12 — the result of the most recent database-location change attempt. */
+  /** §20 R12/R13 — the result of the most recent storage-location change attempt. */
   storageChangeRes?: { refused: boolean; message: string };
-  /** §20 R12 — the config file's raw text captured just before the change (the untouched probe). */
+  /** §20 R12/R13 — the config file's raw text captured just before the change (the untouched probe). */
   storageConfigBefore?: string;
 }
 
@@ -2014,9 +2014,165 @@ export const steps: StepDef[] = [
     },
   },
   {
-    // §20 R12 — any failure leaves the config file byte-for-byte as it was.
+    // §20 R12/R13 — any failure leaves the config file byte-for-byte as it was.
     pattern: /^the config file is untouched$/,
     run: (w, c) => expect(w.storageConfigText()).toBe(c.storageConfigBefore!),
+  },
+
+  // ---- §20 R13 backup directory change (verified move / start fresh) — CORE-ONLY ----
+  // Same posture as the §20 R12 steps above: the GUI is the pipeline's only driver, and
+  // the @core-only feature binds these to CoreWorld alone.
+  {
+    pattern: /^a configured backup directory holding existing backups$/,
+    run: (w) => w.storageSeedBackupDir(),
+  },
+  {
+    pattern: /^one of those backup names is already taken in the new backup home$/,
+    run: (w) => w.storageSeedBackupCollision(),
+  },
+  {
+    pattern: /^the backup directory changes by (migrate|start fresh) to the new backup home$/,
+    run: (w, c, mode) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir(
+        mode === 'start fresh' ? 'start-fresh' : 'migrate',
+        'newBackups',
+      );
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to the new backup home with a torn copy$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'newBackups', true);
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to the default location beside the database$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'default');
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to a missing backup directory$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'missingBackups');
+    },
+  },
+  {
+    pattern: /^the backup change succeeds naming the moved backups$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('moved');
+      expect(c.storageChangeRes!.message).toContain('verified');
+    },
+  },
+  {
+    pattern: /^the backup change succeeds leaving the old backups put$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('stay put, untouched');
+    },
+  },
+  {
+    pattern: /^the backup change is refused because migrate never overwrites$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('migrate never overwrites');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newBackups'));
+    },
+  },
+  {
+    pattern: /^the backup change is refused naming the failed verification$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('copy verification');
+      expect(c.storageChangeRes!.message).toContain('both backup sets are intact');
+    },
+  },
+  {
+    pattern: /^the backup change is refused naming the missing backup directory$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('missingBackups'));
+      expect(c.storageChangeRes!.message).toContain('does not exist');
+    },
+  },
+  {
+    pattern: /^every existing backup is in the new backup home, byte-identical$/,
+    run: (w) => expect(w.storageBackupsMatchSnapshot('newBackups')).toBe(true),
+  },
+  {
+    pattern: /^every existing backup is still in the old backup directory$/,
+    run: (w) => expect(w.storageBackupsMatchSnapshot('confBackups')).toBe(true),
+  },
+  {
+    // The delete half of the move ran: originals gone from the old directory (§20 R13 —
+    // only ever after every copy verified and the config committed).
+    pattern: /^the old backup directory holds no backups$/,
+    run: (w) => {
+      expect(w.storageFilesIn('confBackups').filter((f) => f.includes('.bak-'))).toEqual([]);
+    },
+  },
+  {
+    // The abort rolled the run's own copies back: no original NAME reached the new home
+    // (the fresh backup, not part of the pre-change set, stays).
+    pattern: /^none of the aborted copies remain in the new backup home$/,
+    run: (w) => {
+      const names = w.storageSnapshotNames();
+      const inNew = w.storageFilesIn('newBackups').filter((f) => names.includes(f));
+      expect(inNew).toEqual([]);
+    },
+  },
+  {
+    pattern: /^a fresh backup of the database is in the new backup home$/,
+    run: (w) => expect(w.storageFreshBackupIn()).toBe(true),
+  },
+  {
+    pattern: /^the config file points the backups at the new backup home$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string; backupDir?: string };
+      expect(config.backupDir).toBe(w.storagePath('newBackups'));
+      // The atomic rewrite preserved the unrelated key (§13).
+      expect(config.dbPath).toBe(w.storagePath('confDb'));
+    },
+  },
+  {
+    // §13 reset semantics — toward the default rung the commit DELETES the key; a
+    // resolved default is never written into the file.
+    pattern: /^the config file holds no backup directory key$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string; backupDir?: string };
+      expect(config.backupDir).toBeUndefined();
+      expect(config.dbPath).toBe(w.storagePath('confDb'));
+    },
+  },
+  {
+    pattern: /^the missing backup directory was not created$/,
+    run: (w) => expect(w.storageExists('missingBackups')).toBe(false),
+  },
+  {
+    // §20 R04 — listing follows the ACTIVE directory: the relaunch resolves the committed
+    // config and finds every moved backup there.
+    pattern: /^a relaunch lists the moved backups from the new backup home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      const list = w.storageListBackups();
+      expect(list.refused).toBe(false);
+      for (const name of w.storageSnapshotNames()) expect(list.names).toContain(name);
+    },
+  },
+  {
+    pattern: /^a relaunch resolves the backup directory beside the database with source "default"$/,
+    run: (w) => {
+      w.storageRelaunch();
+      const res = w.storageResolve({ dbEnv: false });
+      expect(res.refused).toBe(false);
+      const besideDb = w.storagePath('confDb').replace(/\/[^/]+$/, '');
+      expect(res.backupDir).toEqual({ path: besideDb, source: 'default' });
+    },
   },
 ];
 

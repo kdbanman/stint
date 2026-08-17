@@ -24,6 +24,9 @@ export type { Db } from './db.js';
 export {
   backupDb,
   backupDirState,
+  backupCollisions,
+  copyBackupsVerified,
+  deleteBackupOriginals,
   listBackups,
   latestBackup,
   pruneBackups,
@@ -34,5 +37,12 @@ export {
   RecoveryError,
 } from './backup.js';
 export type { BackupDirState, BackupInfo, RecoveryResult } from './backup.js';
-export { StorageChangeError } from './storagechange.js';
-export type { DbChangeMode, DbChangeOutcome, DbLocationChange } from './storagechange.js';
+export { StorageChangeError, changeBackupDir } from './storagechange.js';
+export type {
+  BackupDirChange,
+  BackupDirChangeOutcome,
+  DbChangeMode,
+  DbChangeOutcome,
+  DbLocationChange,
+  StorageChangeMode,
+} from './storagechange.js';

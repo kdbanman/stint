@@ -3169,7 +3169,52 @@ integrity/version refusals naming both versions and the remedy, the
 missing-parent and same-path refusals, and the success-message done-when: the
 old file named, kept in place, untouched). The GUI driver (dialog + relaunch) is
 member 4; the real OS picker/relaunch residue is the runbook's CHECK STORAGE
-CHANGE procedure (a later member of #363). **R14 — missing backup directory
+CHANGE procedure (a later member of #363). **R13 — backup directory change
+(verified move / start fresh)**: the pipeline lives in
+`core/src/storagechange.ts` (`changeBackupDir`, driven by
+`Store.changeBackupDir` — the GUI §12 R26 flow's only entry; no `tt` verb, the
+same posture as R12) over the move/verify/collision primitives in
+`core/src/backup.ts` (`backupCollisions`, `copyBackupsVerified` — per-file copy
+under `COPYFILE_EXCL` then a size + content-hash verify, an abort rolling back
+only the run's own unverified copies — and the post-commit
+`deleteBackupOriginals`). Order: read-only gates (same-directory; a dead
+destination — missing / not a directory / unwritable, with NO auto-mkdir, the
+§20 R11 stance; an old directory whose originals could not be removed; and any
+same-name collision, refusing even a byte-identical twin — migrate never
+overwrites) → a fresh backup of the current database into the NEW directory in
+BOTH modes (the writability probe and the backup-before-change in one step —
+the done-when's "before anything else happens") → migrate's per-file copy →
+verify → the §13 atomic commit, where a destination equal to the default rung
+(beside the database) commits by DELETING the `backupDir` key (§13 reset
+semantics — a resolved default is never written into the file) → only after
+every copy verified AND the config committed, the originals are deleted
+(best-effort: a failed unlink leaves an extra copy, never a loss, and never
+unwinds a committed change). A verify failure aborts with both sets intact —
+originals untouched, the run's own copies rolled back, the fresh backup kept —
+and every refusal throws the typed `StorageChangeError` with the config file
+byte-untouched and the old directory still active (the §16 mid-pipeline-failure
+row's backup half). The pipeline never prunes: retention resumes with the next
+backup written in the active directory, and retention/listing/restore/recovery
+follow the committed directory on relaunch, filenames keeping the
+`<dbfilename>.bak-<stamp>` shape wherever the directory lives (R04). Proven by
+BDD `features/storage_change.feature` (the seven §20 R13 scenarios: the
+verified move through to a relaunch listing the moved set from the new
+directory, fresh-backup-first, the same-name collision refusal, the torn-copy
+verify-abort with both sets intact and the aborted copies rolled back,
+start-fresh leaving old backups put, the commit-by-deleting-the-key change back
+to the default rung proven through a relaunch resolving `source: default`, and
+the missing-destination refusal with nothing created; `@core-only`, same
+posture as R12) and PROP `core/test/prop/storage-change.test.ts` ("the §20 R13
+backup move never loses a backup": over generated {mode × destination state ×
+backup set × injected copy/verify fault}, after ANY outcome every original
+backup exists, content-identical, in EXACTLY ONE of the old or new directory;
+the fresh backup's checkpointed database bytes are in the new directory
+whenever the move phase was reached and never on a gate refusal; the config is
+byte-untouched on any failure and committed — key set, or deleted toward the
+default rung — with unrelated keys preserved on success; all against a
+{mode × destination × fault}-derived outcome oracle). The GUI driver (dialog +
+relaunch) is member 4; the real OS picker/relaunch residue is the runbook's
+CHECK STORAGE CHANGE procedure (a later member of #363). **R14 — missing backup directory
 surfaced, never silent**:
 `Store.open`'s launch backup stays best-effort (a dead directory never blocks
 the launch), `store.backupDirStatus()` is the probe both surfaces report from,
@@ -3410,9 +3455,9 @@ R08/R09 (this row consumes those rows, it does not author them)
 
 ### §17 R15
 
-**The resolution + refusal legs and the database change pipeline are proven;
-the backup-directory pipeline and GUI legs land with the remaining members of
-the custom-storage-paths transition (parent #363).** Landed (member 1): **BDD**
+**The resolution + refusal legs and both §20 R12–R13 change pipelines are
+proven; the GUI legs land with the remaining member of the custom-storage-paths
+transition (parent #363).** Landed (member 1): **BDD**
 `features/storage_paths.feature`, run TWICE
 over @stint/core AND tt via `run.test.ts` — the env → config → default ladders
 (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real config
@@ -3436,13 +3481,21 @@ verb by design, architecture.html §08), **PROP**
 outcome, config untouched on any failure, a destination never live without
 passing its gates), **GOLD** the R12 refusal + success-message shapes
 (`gold/contracts.test.ts`) — the full routing in the §20 R12 row above.
-Pending (members 3–4 per the #363 parent): **BDD/PROP** the §20 R13
-backup-directory move pipeline and its invariants (no backup lost by a
-directory move, verify-before-delete, both sets intact on an aborted move);
-**JUDGE** the Settings Storage group and change-dialog scenes over the driven
-renderer; **MANUAL** the runbook's CHECK STORAGE CHANGE procedure (the real OS
-picker, the native refusal dialog, and the relaunch — the parts with no
-headless host).
+Landed (member 3): the §20 R13 backup-directory move pipeline — "moving the
+backup set can never lose a backup" is this leg. **BDD**
+`features/storage_change.feature` (the verified move, fresh-backup-first, the
+same-name collision refusal, the torn-copy verify-abort with both sets intact,
+start-fresh leaving old backups put, and the commit-by-deleting-the-key change
+back to the default rung — each success proven through to a relaunch resolving
+the committed config; `@core-only`, same posture as R12), **PROP**
+`core/test/prop/storage-change.test.ts` (after ANY outcome every original
+backup exists content-identical in exactly one of the old or new directory,
+verify-before-delete, both sets intact on an aborted move, the config
+byte-untouched on any failure) — the full routing in the §20 R13 row above.
+Pending (member 4 per the #363 parent): **JUDGE** the Settings Storage group
+and change-dialog scenes over the driven renderer; **MANUAL** the runbook's
+CHECK STORAGE CHANGE procedure (the real OS picker, the native refusal dialog,
+and the relaunch — the parts with no headless host).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 
