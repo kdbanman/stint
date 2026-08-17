@@ -2698,7 +2698,18 @@ and an unchanged-since-last-backup launch writes none; **corruption-recovery (§
 corrupted `timetracker.sqlite` is
 detected on open, never written to, quarantined to a `.corrupted` sibling,
 restored from the latest good backup, the user informed, and the pre-corruption
-data is intact afterward (zero data loss). The **entry-spans-local-midnight**
+data is intact afterward (zero data loss). The
+**storage-change-fails-mid-pipeline** row (§16 / §20 R12–R13 — a failure at
+copy, verify, or config write stops and reports with the config file untouched
+and the old location still active; nothing already written is destroyed — the
+pre-change backup stays, a partially-copied destination never becomes live) is
+pinned by BDD `features/storage_change.feature` (the refusal flows and the
+torn-copy verify-abort with both sets intact, each ending in a relaunch that
+resolves the untouched config), PROP
+`core/test/prop/storage-change.test.ts` (the config byte-untouched and the old
+data preserved after ANY failed outcome, injected copy/verify faults included),
+and GOLD `gold/contracts.test.ts` (the §20 R12 refusal shapes) — the full
+routing in the §20 R12/R13 rows. The **entry-spans-local-midnight**
 row (§16 / §12 R16 / issue #71 — a span crossing local midnight renders
 unflattened as one calendar segment per SHOWN day column it touches, all
 sharing the entry, grouped and totalled under its start day only, matching
@@ -3539,58 +3550,55 @@ R08/R09 (this row consumes those rows, it does not author them)
 
 ### §17 R15
 
-**The resolution + refusal legs and both §20 R12–R13 change pipelines are
-proven; the GUI legs land with the remaining member of the custom-storage-paths
-transition (parent #363).** Landed (member 1): **BDD**
-`features/storage_paths.feature`, run TWICE
-over @stint/core AND tt via `run.test.ts` — the env → config → default ladders
-(driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real config
-files), the loud refusals for an untrusted config file (§20 R10) and for a
-configured database path whose parent is missing (§20 R11 — no auto-mkdir, no
-silent fallback, nothing created), backup-into-the-active-directory (§20 R04)
-and the surfaced dead backup directory (§20 R14). **GOLD** the config-file and
-paths read-side schema contracts (`schemas/config.schema.json` +
-`schemas/paths.schema.json`, `additionalProperties: false`), the refusal message
-shapes, and the no-APPDATA census extended to the config resolver
-(`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` — `tt paths` ↔ the §13
-ladders through the ONE core resolver the Settings Storage group will read, so
-the two surfaces can never disagree). Evidence: the `§13 / §17 R15` transcript
-section. Landed (member 2): the §20 R12 database-location-change pipeline —
-"migrates or starts fresh only after a pre-change backup, never deletes the old
-file" is this leg. **BDD** `features/storage_change.feature` (migrate /
-start-fresh / adopt / refusals, each proven through to a relaunch resolving the
-committed config; `@core-only` — the pipeline's sole driver is the GUI, no `tt`
-verb by design, architecture.html §08), **PROP**
-`core/test/prop/storage-change.test.ts` (old database byte-identical after any
-outcome, config untouched on any failure, a destination never live without
-passing its gates), **GOLD** the R12 refusal + success-message shapes
-(`gold/contracts.test.ts`) — the full routing in the §20 R12 row above.
-Landed (member 3): the §20 R13 backup-directory move pipeline — "moving the
-backup set can never lose a backup" is this leg. **BDD**
-`features/storage_change.feature` (the verified move, fresh-backup-first, the
-same-name collision refusal, the torn-copy verify-abort with both sets intact,
+**Custom storage locations: one §13 ladder on both surfaces (`tt paths` ↔ the
+Settings Storage group), a guided change that backs up first and never deletes
+the old data, and loud refusals for a broken path or untrusted config — every
+leg proven headless; only the recordings and the runbook's live residue
+remain.** **BDD** `features/storage_paths.feature`, run TWICE over @stint/core
+AND tt via `run.test.ts` — the env → config → default ladders for all three
+paths (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real
+config files), the loud refusals for an untrusted config file (§20 R10) and
+for a configured database path whose parent is missing (§20 R11 — no
+auto-mkdir, no silent fallback, nothing created),
+backup-into-the-active-directory (§20 R04), and the surfaced dead backup
+directory (§20 R14); `features/storage_change.feature` (`@core-only` — the
+pipelines' sole driver is the GUI, no `tt` verb by design, architecture.html
+§08) — the §20 R12 database pipeline ("migrates or starts fresh only after a
+pre-change backup, never deletes the old file": migrate / start-fresh / adopt /
+the refusal flows) and the §20 R13 backup move ("moving the backup set can
+never lose a backup": the verified move, fresh-backup-first, the same-name
+collision refusal, the torn-copy verify-abort with both sets intact,
 start-fresh leaving old backups put, and the commit-by-deleting-the-key change
-back to the default rung — each success proven through to a relaunch resolving
-the committed config; `@core-only`, same posture as R12), **PROP**
-`core/test/prop/storage-change.test.ts` (after ANY outcome every original
-backup exists content-identical in exactly one of the old or new directory,
-verify-before-delete, both sets intact on an aborted move, the config
-byte-untouched on any failure) — the full routing in the §20 R13 row above.
-Landed (member 4): the GUI legs — the Settings Storage group (§12 R25) reading
-the SAME `resolveStoragePaths` over the `getStoragePaths` parity channel
-(`getStoragePaths ↔ paths` in `parity-matrix.json`; `paths` left
-`parity.test.ts`'s GUI-absent allow-set), the §12 R26 guided change dialog
-driving the §20 R12/R13 pipelines over the off-matrix `storage:*` namespace
-(the matrix `$comment` records the exemption), and the §20 R10/R11 native
-launch-refusal posture (Reset to default / Quit; decision logic GOLD
-`gui/test/storage.test.ts`). **JUDGE** `STORAGE_GROUP` /
-`STORAGE_CHANGE_CHOICE` / `STORAGE_CHANGE_ARMED` / `STORAGE_CHANGE_REFUSAL`
-(the required no-pre-selection choice, the arm-then-confirm naming mode +
-destination, the in-dialog refusal with the old location active, and the §20
-R14 two-surface error state). Pending: the member-7 recordings (§12 R26 is a
-core GUI requirement — captured LAST) and **MANUAL** the runbook's CHECK
-STORAGE CHANGE residue (the real OS picker, the native refusal dialog, and the
-relaunch — the parts with no headless host).
+back to the default rung), each success proven through to a relaunch resolving
+the committed config. **PROP** `core/test/prop/storage-change.test.ts` — the
+old database byte-identical after any outcome, the config byte-untouched on
+any failure, a destination never live without passing its gates; and after ANY
+backup-move outcome every original backup exists content-identical in exactly
+one of the old or new directory (verify-before-delete, both sets intact on an
+aborted move). **GOLD** the config-file and paths read-side schema contracts
+(`schemas/config.schema.json` + `schemas/paths.schema.json`,
+`additionalProperties: false`), the ladder table + refusal message shapes, the
+§20 R12 refusal + success-message shapes, and the no-APPDATA census extended
+to the config resolver (`gold/contracts.test.ts`); `cli/test/gold/cli.test.ts`
+— `tt paths` ↔ the §13 ladders through the ONE core resolver the Settings
+Storage group reads, so the two surfaces can never disagree (the
+`getStoragePaths ↔ paths` row in `parity-matrix.json`; `paths` left
+`parity.test.ts`'s GUI-absent allow-set); `gui/test/storage.test.ts` — the
+`buildStoragePathsView` ↔ `resolveStoragePaths` agreement behind the §12 R25
+group, and the §20 R10/R11 native launch-refusal decision logic (Reset to
+default / Quit). The §12 R26 dialog drives the pipelines over the off-matrix
+`storage:*` namespace (the matrix `$comment` records the exemption). **JUDGE**
+`STORAGE_GROUP` / `STORAGE_CHANGE_CHOICE` / `STORAGE_CHANGE_ARMED` /
+`STORAGE_CHANGE_REFUSAL` (the required no-pre-selection choice, the
+arm-then-confirm naming mode + destination, the in-dialog refusal with the old
+location active, and the §20 R14 two-surface error state). **MANUAL** the runbook's
+CHECK STORAGE CHANGE procedure — the real OS picker, the native refusal
+dialog, and the relaunch, the parts with no headless host (the JUDGE scenes
+and the §20 R12–R13 suites are its automated mirror, process.html §05).
+Evidence: the `§13 / §17 R15` transcript section + the judge report's four
+scored storage scenes; the full routing in the §13, §12 R25/R26, and §20
+R10–R14 rows above. Pending: the §03 core-requirement recordings for the §12
+R26 flow (captured LAST, with the rest of the recording set).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 
