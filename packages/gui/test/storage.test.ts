@@ -14,13 +14,15 @@
  *   2. launchRefusal — ConfigError (§20 R10) and StoragePathError (§20 R11) each become a
  *      dialog plan naming the file and the error / the configured path AND the config
  *      file, with a Reset-to-default action committing by §13's reset semantics (delete
- *      the offending key; an unparseable file — no reachable keys — is set ASIDE, never
- *      destroyed). Any other error returns null and stays as loud as before.
+ *      the offending key). The untrusted-file repair behind the R10 plan is core's
+ *      resetUntrustedConfig (config-shape knowledge lives in core — its behavior is
+ *      GOLD-pinned in core/test/gold/contracts.test.ts). Any other error returns null and
+ *      stays as loud as before.
  *   3. storageChangeFailure — the §12 R26 in-dialog refusal filter: only the typed
  *      StorageChangeError / ConfigError become the dialog's inline message.
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -30,12 +32,7 @@ import {
   StoragePathError,
   resolveStoragePaths,
 } from '@stint/core';
-import {
-  buildStoragePathsView,
-  launchRefusal,
-  resetUntrustedConfig,
-  storageChangeFailure,
-} from '../src/storageview.js';
+import { buildStoragePathsView, launchRefusal, storageChangeFailure } from '../src/storageview.js';
 
 const OK_DIR = { path: '/b', ok: true, problem: null } as const;
 
@@ -129,40 +126,6 @@ describe('launchRefusal (§20 R10/R11 — the native Reset-to-default / Quit dia
     expect(launchRefusal(new Error('boom'))).toBeNull();
     expect(launchRefusal(new StorageChangeError('refused', '/x'))).toBeNull();
     expect(launchRefusal(undefined)).toBeNull();
-  });
-});
-
-describe('resetUntrustedConfig (§20 R10 reset — delete the offending key, never the user bytes)', () => {
-  it('drops exactly the offending entries and keeps every valid key (unknown key / relative path)', () => {
-    const h = home();
-    const file = join(h, 'config.json');
-    writeFileSync(
-      file,
-      JSON.stringify({ dbPath: join(h, 'tt.sqlite'), backupDir: 'relative/dir', extra: 1 }),
-    );
-    resetUntrustedConfig(file);
-    const after = JSON.parse(readFileSync(file, 'utf8'));
-    expect(after).toEqual({ dbPath: join(h, 'tt.sqlite') });
-  });
-
-  it('sets an unparseable file ASIDE to a timestamped .invalid-* sibling — bytes preserved, config absent (= fully reset, §13)', () => {
-    const h = home();
-    const file = join(h, 'config.json');
-    writeFileSync(file, '{ not json');
-    resetUntrustedConfig(file);
-    expect(existsSync(file)).toBe(false);
-    const aside = readdirSync(h).filter((n) => n.startsWith('config.json.invalid-'));
-    expect(aside).toHaveLength(1);
-    expect(readFileSync(join(h, aside[0]!), 'utf8')).toBe('{ not json');
-  });
-
-  it('sets a non-object file aside the same way (an array is not a config)', () => {
-    const h = home();
-    const file = join(h, 'config.json');
-    writeFileSync(file, '["a"]');
-    resetUntrustedConfig(file);
-    expect(existsSync(file)).toBe(false);
-    expect(readdirSync(h).some((n) => n.startsWith('config.json.invalid-'))).toBe(true);
   });
 });
 

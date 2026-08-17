@@ -358,6 +358,10 @@ export class Store {
     if (this.path === ':memory:') {
       throw new StoreError('an in-memory store has no database location to change');
     }
+    // The pre-change backup's stamp is deliberately NOT this.clock: it lands in the OLD
+    // home's existing backup set and must sort newest there (it is the pipeline's proof
+    // artefact), which a pinned past clock could break; changeBackupDir pins its stamp
+    // because its fresh backup opens a NEW directory with no set to sort into.
     return changeDbLocationFs(this.db, {
       oldDbPath: this.path,
       newDbPath: opts.newDbPath,
