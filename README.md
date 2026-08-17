@@ -23,12 +23,23 @@ npm run build
 npm run tt -- status     # or: node packages/cli/dist/bin.js status
 ```
 
-Your data is one SQLite file: `$TT_DB` if set, otherwise the per-OS app-data
-directory (`~/.local/share/stint/timetracker.sqlite` on Linux,
-`~/Library/Application Support` on macOS, `%APPDATA%` on Windows). Both surfaces
-use the same path. Backup is copying the file. The app makes no network
-connection except the optional, user-initiated update check (§17 R9), which
-sends no data.
+Your data is one SQLite file, and where it lives is configurable. Each storage
+path resolves down a ladder — first rung wins. The database: `$TT_DB`, then the
+config file's `dbPath`, then the per-OS app-data default
+(`~/.local/share/stint/timetracker.sqlite` on Linux,
+`~/Library/Application Support/stint/…` on macOS). The backup directory:
+`$TT_BACKUP_DIR`, then config `backupDir`, then beside the database. The config
+file itself: `$TT_CONFIG`, then `~/.config/stint/config.json` on Linux or
+`~/Library/Application Support/stint/config.json` on macOS — a small JSON file
+holding at most two optional keys, `dbPath` and `backupDir`, absolute paths
+only. Both surfaces resolve through one shared core resolver, so they can never
+disagree; `tt paths` prints every effective path and the rung that set it. To
+change a path from a shell: quit Stint, edit the config file (or set the env
+var), relaunch — `tt paths` confirms. The GUI's guided equivalent (with
+migrate/start-fresh and a pre-change backup) lives in Settings → Storage.
+Backup is the automatic timestamped copies written into the backup directory on
+launch (plus copying files by hand). The app makes no network connection except
+the optional, user-initiated update check (§17 R9), which sends no data.
 
 ### The `tt` command line
 
@@ -42,6 +53,7 @@ tt report --week --by client --round 15
 tt export --month --csv -o june.csv
 tt sleep ls                     # entries the machine slept through (detected by the GUI app while it runs)
 tt sleep subtract 42            # exclude slept time (reversible)
+tt paths                        # each effective storage path + the source that set it (env / config / default)
 tt status --json                # --json on every read command, for scripting
 ```
 
