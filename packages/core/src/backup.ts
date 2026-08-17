@@ -1,6 +1,7 @@
 /**
- * Automatic backups, integrity checks, and corruption recovery (PRD §20 R03/R04/R05,
- * §17 R12). The CORE data-loss-protection layer.
+ * Automatic backups, integrity checks, corruption recovery, and the verified-move
+ * primitives behind a backup-directory change (PRD §20 R03/R04/R05/R13, §17 R12). The
+ * CORE data-loss-protection layer.
  *
  * A backup is a checkpointed plain copy of the SQLite main file, written into the
  * ACTIVE backup directory (§13's ladder — default: beside the database) as
@@ -283,6 +284,92 @@ export function quarantineAndRecover(
   }
   copyFileSync(latest.path, dbPath);
   return { recoveredFrom: latest.name, quarantinedTo };
+}
+
+/**
+ * §20 R13 — the same-name collisions a backup-directory move must refuse: the names among
+ * `backups` that already exist in `toDir`. Read-only — the refusal gate runs before
+ * anything is written, and a collision refuses even a byte-identical twin (migrate never
+ * overwrites; deciding "identical enough" is how overwrites sneak in).
+ */
+export function backupCollisions(backups: BackupInfo[], toDir: string): string[] {
+  return backups.filter((b) => existsSync(join(toDir, b.name))).map((b) => b.name);
+}
+
+/**
+ * §20 R13 — the copy half of a verified move: copy each of `backups` into `toDir`,
+ * verifying each copy (size, then content hash) before the next. Returns the verified
+ * copies at their new paths; the ORIGINALS ARE NEVER TOUCHED here — deleting them is a
+ * separate step ({@link deleteBackupOriginals}) the caller runs only after every copy
+ * verifies AND its commit point has passed.
+ *
+ * A copy or verify failure aborts with both sets intact: the originals untouched, and the
+ * aborted run's own copies removed again (they are unverified transient duplicates —
+ * every byte still lives in its original — so removing them is rollback, not loss;
+ * anything else in `toDir`, the §20 R13 fresh backup included, stays). Throws a plain
+ * Error naming the backup and why; the pipeline wraps it.
+ *
+ * `copyFile` is the per-file copy primitive (default: `copyFileSync` + `COPYFILE_EXCL`,
+ * so a same-name race loses to the exists gate). Injectable so the suites can force the
+ * torn-copy fault the verify step exists to catch — no filesystem produces one on cue.
+ */
+export function copyBackupsVerified(
+  backups: BackupInfo[],
+  toDir: string,
+  copyFile: (src: string, dest: string) => void = (src, dest) =>
+    copyFileSync(src, dest, constants.COPYFILE_EXCL),
+): BackupInfo[] {
+  const created: string[] = [];
+  const rollback = (): void => {
+    for (const path of created) {
+      try {
+        unlinkSync(path);
+      } catch {
+        /* best-effort: a copy that cannot be removed is a stray duplicate, never a loss */
+      }
+    }
+  };
+  const copies: BackupInfo[] = [];
+  for (const original of backups) {
+    const dest = join(toDir, original.name);
+    try {
+      copyFile(original.path, dest);
+      // A failed copy may still have left partial bytes at dest — roll those back too.
+      created.push(dest);
+    } catch (err) {
+      created.push(dest);
+      rollback();
+      throw new Error(`copying ${original.name} to ${toDir} failed: ${(err as Error).message}`);
+    }
+    const verified =
+      statSync(dest).size === statSync(original.path).size &&
+      fileHash(dest) === fileHash(original.path);
+    if (!verified) {
+      rollback();
+      throw new Error(
+        `${original.name} failed its copy verification — the copied bytes do not match the original`,
+      );
+    }
+    copies.push({ ...original, path: dest });
+  }
+  return copies;
+}
+
+/**
+ * §20 R13 — the delete half of a verified move. Only ever called after every copy
+ * verified and the config commit passed, so each original is by then a redundant
+ * duplicate of a verified copy in the new ACTIVE directory. Best-effort per file: a
+ * failed unlink leaves an extra copy behind, never a loss — and never unwinds a
+ * committed change.
+ */
+export function deleteBackupOriginals(backups: BackupInfo[]): void {
+  for (const original of backups) {
+    try {
+      unlinkSync(original.path);
+    } catch {
+      /* the verified copy is live; a surviving original is redundant, not a failure */
+    }
+  }
 }
 
 /**
