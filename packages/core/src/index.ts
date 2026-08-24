@@ -8,6 +8,7 @@
 export * from './types.js';
 export * from './time.js';
 export * from './paths.js';
+export * from './config.js';
 export * from './settings.js';
 export * from './report.js';
 export * from './savedreport.js';
@@ -22,6 +23,10 @@ export { SCHEMA_VERSION, openDb, assertOpenPragmas, DbOpenError, SchemaTooNewErr
 export type { Db } from './db.js';
 export {
   backupDb,
+  backupDirState,
+  backupCollisions,
+  copyBackupsVerified,
+  deleteBackupOriginals,
   listBackups,
   latestBackup,
   pruneBackups,
@@ -31,4 +36,13 @@ export {
   backupStamp,
   RecoveryError,
 } from './backup.js';
-export type { BackupInfo, RecoveryResult } from './backup.js';
+export type { BackupDirState, BackupInfo, RecoveryResult } from './backup.js';
+export { StorageChangeError, changeBackupDir } from './storagechange.js';
+export type {
+  BackupDirChange,
+  BackupDirChangeOutcome,
+  DbChangeMode,
+  DbChangeOutcome,
+  DbLocationChange,
+  StorageChangeMode,
+} from './storagechange.js';

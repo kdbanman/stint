@@ -987,7 +987,16 @@ deletion must not move (`cli/test/gold/cli.test.ts`):
 prefix) and
 `a refused and a rejected restore both exit exactly 2 with a bare message` ; the
 rest of the GOLD suite holds the same line for every other command. Cross-noted
-with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below
+with §14 (the settings rejections) and §20 R05 / §17 R12 (restore) below.
+**`tt paths` (+ `--json`) — the storage-paths read side (§13)**: prints the
+three effective paths (database, backup directory, config file) each with its
+source rung through core's one resolver; read-only, opens no store, and there
+are deliberately NO path setters (the config file is the CLI's write
+interface). GOLD `GOLD: tt paths (§11, §13)` (`cli/test/gold/cli.test.ts` —
+`--json` validates against `schemas/paths.schema.json` , the rung per row, the
+human table, no database created; an untrusted config exits 2 naming the file,
+§20 R10); the full ladder + refusal proof lives in the §13 and §20 R10/R11/R14
+rows
 ### PRD §12
 `judge/` (renderer facts + screenshots), `gui/test/toggle.test.ts` (toggle
 decision), `gui/test/tray.test.ts` (tray click + menu), `judge-rubric.md` ,
@@ -1713,7 +1722,11 @@ the panel builds — select, toggle, segment, hhmm, minutes, hotkey — persists
 exact key/value over `setSetting` , and the panel stays accent-disciplined), plus
 `HOTKEY_NO_TRAP` for the one control that captures raw keys — the global-hotkey
 field, whose swallow-the-key capture must still let Tab/Shift-Tab/Escape out
-(issue 135). The §12 R12 Settings view is thus fully covered.
+(issue 135). The R12 enumeration also names the **Storage** group (§12 R25 —
+file-backed paths, deliberately NOT settings rows: they live in the §13 config
+file, read before the database opens), rendered beside Backups by the same
+`settings.js` and covered by its own R25 row below. The §12 R12 Settings view
+is thus fully covered.
 **R13 Confirm destructive actions**
 (**`core`** — the in-window destructive-action confirmation is a §03
 loss-protection affordance, so it carries the `core` badge) (deleting an entry, or
@@ -1767,6 +1780,12 @@ scene additionally scores each gate as un-occluded — clear of both bands' rect
 hit-testing as itself across its face, every control inside it reachable — over a
 fixture whose first column carries an OVERLAPPING neighbour, so the gate's rank
 is held against real chrome rather than empty track.
+R13's scope also covers **committing a storage-location change** (§12 R26 —
+MODIFIED): its required Migrate/Start-fresh choice plus the single
+arm-then-confirm (`Change and relaunch` → `Confirm: migrate to <path>`) is this
+rule's shape for path changes, proven by JUDGE `STORAGE_CHANGE_CHOICE` /
+`STORAGE_CHANGE_ARMED` (arming writes nothing; only the explicit confirm runs
+the pipeline, exactly once) — the full routing in the R26 row below.
 The §12 R13 confirm gate is thus covered. **R14 keyboard/focus pass** (every
 control keyboard-reachable AND focus-visible; the window fully operable from the
 keyboard — the A11y dimension light/dark, system type and accent-on-primary do
@@ -2354,6 +2373,53 @@ asks nothing. **DOM-only, so its guard is a JUDGE row + a STATES.md row** — no
 BDD leg can see a prompt over a form's pending fields. AC: JUDGE
 `WEEK_MOVE_PROMPT` (`main-week-move-prompt.png`).
 
+**R25 Storage group (Settings) — display, a recorded §03 exclusion**: the
+file-backed Storage group beside Backups (`renderer/settings.js` `renderStorage`
+into `#storage-panel`, mockup `settings.html`): a card whose caption states the
+paths live in a config file — not the database — and names that file's own
+effective path; Database / Backup-folder rows each showing the effective path +
+its ladder source over the `getStoragePaths` IPC channel, which reads core's ONE
+`resolveStoragePaths` (`gui/src/storageview.ts` `buildStoragePathsView`) so the
+rows can never disagree with `tt paths` — the parity-matrix row
+`getStoragePaths ↔ paths` (GOLD `gui/test/parity.test.ts`; `paths` left the
+GUI-absent allow-set with it). An env-overridden row says so and disables
+Change… (the §07 disabled idiom); Reset to default… appears on config-set rows
+only and routes into the same R26 flow toward the default (committing by
+deleting the key, §13); a dead backup directory renders the row in the §20 R14
+error state. Nothing in the group writes without entering R26. AC: JUDGE
+`STORAGE_GROUP` (`storage-group.png`) + the `STORAGE_CHANGE_REFUSAL` §20 R14
+half (`storage-backup-dir-error.png`); GOLD `gui/test/storage.test.ts`
+(`buildStoragePathsView` ↔ `resolveStoragePaths` agreement, the default-rung
+targets, the probe).
+
+**R26 storage change flow (`core` — the destructive-action confirmation over
+the stored truth's relocation, §03)**: one guided flow per location
+(`renderer/settings.js` `openStorageDialog`, mockup `storage-change.html`): the
+OS picker (main's `storage:pickDbPath` / `storage:pickBackupDir` — a save
+dialog for the database's file location, a directory chooser for backups) →
+ONE `role=dialog` card showing current → new with the REQUIRED
+Migrate / Start-fresh choice — NO pre-selection, the commit disabled until one
+is chosen (the comprehension gate), the chosen card the D12 lifted chip — the
+per-surface safety facts stated in place (§20 R12 / R13), and a single §12 R13
+arm-then-confirm labeled to include the relaunch (`Change and relaunch` →
+`Confirm: migrate to <path>` / the start-fresh wording; arming writes nothing;
+a re-choice disarms). The confirm drives the `storage:*` IPC namespace — OFF
+the parity matrix per architecture.html §08 (the update:* precedent; CLI
+counterpart: the documented §13 config-file procedure; the matrix `$comment`
+records the exemption, GOLD `gui/test/qa-driver.test.ts` holds the driver's
+stubs to it) — where `main.ts` `registerStorageIpc` runs core's §20 R12/R13
+pipelines (`Store.changeDbLocation` with the GUI's `defaultDbPath` so a
+Reset-to-default commits by DELETING the key — GOLD
+`core/test/gold/contracts.test.ts` "toward the caller-supplied default rung" —
+/ `Store.changeBackupDir`), then `app.relaunch()`. A refusal is a VALUE
+(`storageChangeFailure` filters the typed `StorageChangeError`/`ConfigError`)
+rendered INSIDE the dialog in the announced danger block (§12 R21): dialog
+open, config untouched, old location active. AC: JUDGE `STORAGE_CHANGE_CHOICE`
+/ `STORAGE_CHANGE_ARMED` / `STORAGE_CHANGE_REFUSAL` (the four owner-signed
+scenes with `STORAGE_GROUP`); the pipelines' own §20 R12/R13 BDD/PROP/GOLD
+suites; MANUAL runbook `CHECK STORAGE CHANGE` (the real OS picker, the native
+launch-refusal dialog, the relaunch — no headless host).
+
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×
@@ -2405,7 +2471,34 @@ contract — macOS + Linux only (§13)" pins `DB_FILENAME` = `timetracker.sqlite
 the env-driven Linux branch (`$XDG_DATA_HOME` else `~/.local/share/stint`) and
 the macOS suffix, and asserts `defaultDataDir` exposes **no win32 / %APPDATA%
 branch** (`APPDATA` is never consulted); `core/src/paths.ts` carries no win32
-path. Re-introducing a Windows path or changing the data-dir suffix fails
+path. Re-introducing a Windows path or changing the data-dir suffix fails.
+**The config file + the three ladders** — the §13 storage resolution: one config
+file (`core/src/config.ts` — read/validate, the atomic write-temp-then-rename
+primitive, reset = delete-the-key) and one shared resolver
+(`core/src/paths.ts` `resolveStoragePaths`) serving both surfaces: database =
+`TT_DB` → config `dbPath` → per-OS default; backup directory = `TT_BACKUP_DIR` →
+config `backupDir` → beside the resolved database; config file = `TT_CONFIG` →
+per-OS config home — each effective path carrying its source rung. **GOLD**
+`gold/contracts.test.ts` "GOLD: storage config file contract (§13, §20 R10)"
+(core validation ↔ `schemas/config.schema.json` agree on every valid/invalid
+fixture — `additionalProperties: false`, absolute-path strings; refusal messages
+name the file and the error; the atomic write round-trips, leaves no temp
+sibling, and refuses to produce an untrusted file; reset deletes the key and
+never writes a resolved default), "GOLD: storage ladders (§13) + broken-path
+refusal shapes (§20 R11)" (the full precedence table with sources; the
+beside-the-RESOLVED-database default rung — byte-compatible with the pre-ladder
+beside-the-DB behavior; an untrusted config refuses resolution even with every
+env rung occupied), and "GOLD: config-home path contract — macOS + Linux only
+(§13)" (the `%APPDATA%`-never-consulted census extended to the config resolver:
+`$XDG_CONFIG_HOME` else `~/.config/stint`, the macOS suffix, `TT_CONFIG` as the
+env rung); `cli/test/gold/cli.test.ts` "GOLD: tt paths (§11, §13)" pins the
+read side — `tt paths --json` against `schemas/paths.schema.json` with the rung
+per row, the human three-row table, no database created (read-only; no setter
+verbs — the config file is the CLI's write interface). **BDD**
+`features/storage_paths.feature` (run TWICE over @stint/core AND tt via
+`run.test.ts`) drives all three ladders through real environments
+(TT_CONFIG/TT_DB/TT_BACKUP_DIR) and real config files. Evidence: the
+`§13 / §17 R15` section of the drift-gated CLI transcript
 
 ### PRD §14
 `gold/contracts.test.ts` , `cli/test/gold/cli.test.ts` ,
@@ -2605,7 +2698,18 @@ and an unchanged-since-last-backup launch writes none; **corruption-recovery (§
 corrupted `timetracker.sqlite` is
 detected on open, never written to, quarantined to a `.corrupted` sibling,
 restored from the latest good backup, the user informed, and the pre-corruption
-data is intact afterward (zero data loss). The **entry-spans-local-midnight**
+data is intact afterward (zero data loss). The
+**storage-change-fails-mid-pipeline** row (§16 / §20 R12–R13 — a failure at
+copy, verify, or config write stops and reports with the config file untouched
+and the old location still active; nothing already written is destroyed — the
+pre-change backup stays, a partially-copied destination never becomes live) is
+pinned by BDD `features/storage_change.feature` (the refusal flows and the
+torn-copy verify-abort with both sets intact, each ending in a relaunch that
+resolves the untouched config), PROP
+`core/test/prop/storage-change.test.ts` (the config byte-untouched and the old
+data preserved after ANY failed outcome, injected copy/verify faults included),
+and GOLD `gold/contracts.test.ts` (the §20 R12 refusal shapes) — the full
+routing in the §20 R12/R13 rows. The **entry-spans-local-midnight**
 row (§16 / §12 R16 / issue #71 — a span crossing local midnight renders
 unflattened as one calendar segment per SHOWN day column it touches, all
 sharing the entry, grouped and totalled under its start day only, matching
@@ -3067,7 +3171,164 @@ GOLD `gui/test/schemaskew.test.ts` (a real future-stamped DB's refusal becomes
 an error box naming both versions, the remedy and the refused file; no other
 open failure is claimed; main performs the box then exits non-zero). CLI = stderr + exit 1 via `bin.ts`'s
 catch, GUI = native error dialog + exit 1 catching ONLY this error
-(`gui/src/main.ts`), R01/R03 refusals untouched.
+(`gui/src/main.ts`), R01/R03 refusals untouched. **R04 — the active backup
+directory**: `backup.ts` (`listBackups`/`backupDb`/`pruneBackups`/
+`quarantineAndRecover`/`restoreFromBackup`) and `Store.open` are
+directory-aware — retention, listing, restore, and corruption recovery operate
+only on the backup directory §13's ladder resolves (default: beside the
+database, byte-compatible with the pre-ladder behavior), filenames keeping the
+`<dbfilename>.bak-<stamp>` shape wherever the directory lives. Proven by BDD
+`features/storage_paths.feature` "The launch backup lands in the active backup
+directory" (run TWICE over core + tt: the backup appears in the redirected
+directory and NOT beside the database) alongside the §13 ladder GOLD, and by
+GOLD `gold/contracts.test.ts` "retention, restore, and recovery follow the
+ACTIVE backup directory (§20 R04/R05)" — retention prunes to N in the
+redirected directory and never beside the database, listing reads only the
+active set, and a corrupt open and an on-demand restore both resolve their
+backup there (the legs only a redirected directory can show). **R10 —
+config integrity at launch**: both surfaces resolve through core's
+`resolveStoragePaths`, which reads + validates the config file FIRST — an
+untrusted file (unparseable JSON, an unknown key, a relative path) throws the
+typed `ConfigError` naming the file and the error, unconditionally (no rung is
+guessed around a bad file even when env vars would cover every value); `tt`
+surfaces it as exit 2 + the bare message via `bin.ts`'s one mapper. Proven by
+BDD `features/storage_paths.feature` (the three untrusted-config refusal
+scenarios, run TWICE over core + tt: refused naming the config file, the
+unknown key named, and NO database file created anywhere in the sandbox) and
+GOLD `gold/contracts.test.ts` (the refusal message shapes + the schema/validator
+agreement) + `cli/test/gold/cli.test.ts` (`tt paths` on a bad config exits 2
+naming the file). The GUI resolves BEFORE anything opens (`gui/src/main.ts`
+`init`) and surfaces the typed `ConfigError` as a NATIVE dialog (the R05
+convention) naming the file and the error, offering **Reset to default**
+(delete the offending key(s) — §13's reset semantics; an unparseable file, with
+no reachable keys, is set ASIDE to a timestamped `.invalid-*` sibling, never
+destroyed — then relaunch) or **Quit**; the decision logic is Electron-free
+(`gui/src/storageview.ts` `launchRefusal`, GOLD `gui/test/storage.test.ts`; the
+untrusted-file repair itself is CORE's `resetUntrustedConfig` — which entries
+survive is config-shape knowledge, so it lives in `core/src/config.ts`,
+GOLD-pinned in `gold/contracts.test.ts`), and the native chrome itself is the
+runbook's CHECK STORAGE CHANGE step 4 (no headless host). **R11 — broken database path at launch**:
+`assertDbPathUsable` (`core/src/paths.ts`) gates ONLY the config rung — an
+absent file with a live, writable parent passes (first-run create, exactly as
+TT_DB behaves); a missing/non-directory/unwritable parent throws the typed
+`StoragePathError` naming the configured path AND the config file, with NO
+auto-mkdir and never a fallback to the default; `Store.open` runs the gate
+whenever it resolves through the ladder. Proven by BDD
+`features/storage_paths.feature` ("live parent starts fresh there" /
+"missing parent refuses the launch" + the directory-was-not-created probe, run
+TWICE over core + tt) and GOLD `gold/contracts.test.ts` "broken-path refusal
+shapes (§20 R11)" (both names + the not-created stance in the message; the
+env/default rungs keep their existing semantics). The GUI half: `gui/src/main.ts`
+`init` runs `resolveStoragePaths` + `assertDbPathUsable` BEFORE `Store.open` and
+surfaces the typed `StoragePathError` as the same native R05-convention dialog as
+R10 — naming the configured path AND the config file, offering **Reset to
+default** (delete the `dbPath` key, relaunch) or **Quit** — via the Electron-free
+`launchRefusal` (GOLD `gui/test/storage.test.ts`: the plan names both, the reset
+deletes ONLY `dbPath`, every other error returns null so schema-skew and
+DbOpenError stay untouched); the native chrome is the runbook's CHECK STORAGE
+CHANGE step 3. **R12 — database location change (migrate / start fresh / adopt)**:
+the pipeline lives in `core/src/storagechange.ts` (`changeDbLocation`, driven by
+`Store.changeDbLocation` — the GUI §12 R26 flow's only entry; deliberately no
+`tt` verb, the posture in architecture.html §08) and can only ADD copies:
+read-only gates (same-path, dead destination parent with NO auto-mkdir, migrate
+refusing an existing destination file, the adoption gates — `quick_check` + the
+R08/R09 `user_version` ≤ `SCHEMA_VERSION` fence, version stamp read first) →
+pre-change backup at the OLD home (`backupDb`'s checkpoint-then-copy; a dead
+backup directory REFUSES here, unlike the best-effort launch backup) → migrate's
+`COPYFILE_EXCL` copy + `quick_check` verify of the copy → the §13 atomic
+`writeConfig` rename as the single commit point. The old file is always kept in
+place, untouched, and named in the success message; start fresh commits WITHOUT
+creating the file (the relaunch's R11 first-run semantics create it); every
+refusal throws the typed `StorageChangeError` with the config file untouched and
+nothing deleted anywhere — a partially-copied destination never becomes live.
+Proven by BDD `features/storage_change.feature` (migrate / start-fresh / adopt /
+the four refusal flows, each ending in a relaunch that resolves the committed —
+or untouched — config through the §13 ladder; tagged `@core-only` and run over
+@stint/core ONLY, the one deliberate exception to the run-TWICE rule), PROP
+`core/test/prop/storage-change.test.ts` (over generated {mode × destination
+state × seeded data}: the old database preserved after ANY outcome — byte-identical
+on refusal, byte-identical to the pre-change backup and row-identical on an
+independent reopen after success; the config file byte-for-byte untouched on any
+failure and atomically rewritten with unrelated keys preserved on success; the
+{mode × destination}-derived outcome oracle — a destination never becomes live
+without passing its gates), and GOLD `gold/contracts.test.ts` "database location
+change refusal shapes (§20 R12)" (the exact migrate-never-overwrites wording the
+§12 R26 dialog renders — matching `mockups/storage-change.html` — the adoption
+integrity/version refusals naming both versions and the remedy, the
+missing-parent and same-path refusals, and the success-message done-when: the
+old file named, kept in place, untouched; plus the §13 reset-semantics commit —
+a change toward the caller-supplied `defaultDbPath` DELETES the key, the §12 R25
+Reset-to-default flow's commit). The GUI driver: `gui/src/main.ts`
+`registerStorageIpc` (`storage:changeDb` → `Store.changeDbLocation` with the
+`userData`-derived `defaultDbPath`, then `app.relaunch()`; a typed refusal
+becomes the `{ ok: false, message }` value the §12 R26 dialog renders in place —
+JUDGE `STORAGE_CHANGE_*`, the R26 row); the real OS picker/relaunch residue is
+the runbook's CHECK STORAGE CHANGE procedure. **R13 — backup directory change
+(verified move / start fresh)**: the pipeline lives in
+`core/src/storagechange.ts` (`changeBackupDir`, driven by
+`Store.changeBackupDir` — the GUI §12 R26 flow's only entry; no `tt` verb, the
+same posture as R12) over the move/verify/collision primitives in
+`core/src/backup.ts` (`backupCollisions`, `copyBackupsVerified` — per-file copy
+under `COPYFILE_EXCL` then a size + content-hash verify, an abort rolling back
+only the run's own unverified copies — and the post-commit
+`deleteBackupOriginals`). Order: read-only gates (same-directory; a dead
+destination — missing / not a directory / unwritable, with NO auto-mkdir, the
+§20 R11 stance; an old directory whose originals could not be removed; and any
+same-name collision, refusing even a byte-identical twin — migrate never
+overwrites) → a fresh backup of the current database into the NEW directory in
+BOTH modes (the writability probe and the backup-before-change in one step —
+the done-when's "before anything else happens") → migrate's per-file copy →
+verify → the §13 atomic commit, where a destination equal to the default rung
+(beside the database) commits by DELETING the `backupDir` key (§13 reset
+semantics — a resolved default is never written into the file) → only after
+every copy verified AND the config committed, the originals are deleted
+(best-effort: a failed unlink leaves an extra copy, never a loss, and never
+unwinds a committed change). A verify failure aborts with both sets intact —
+originals untouched, the run's own copies rolled back, the fresh backup kept —
+and every refusal throws the typed `StorageChangeError` with the config file
+byte-untouched and the old directory still active (the §16 mid-pipeline-failure
+row's backup half). The pipeline never prunes: retention resumes with the next
+backup written in the active directory, and retention/listing/restore/recovery
+follow the committed directory on relaunch, filenames keeping the
+`<dbfilename>.bak-<stamp>` shape wherever the directory lives (R04). Proven by
+BDD `features/storage_change.feature` (the seven §20 R13 scenarios: the
+verified move through to a relaunch listing the moved set from the new
+directory, fresh-backup-first, the same-name collision refusal, the torn-copy
+verify-abort with both sets intact and the aborted copies rolled back,
+start-fresh leaving old backups put, the commit-by-deleting-the-key change back
+to the default rung proven through a relaunch resolving `source: default`, and
+the missing-destination refusal with nothing created; `@core-only`, same
+posture as R12) and PROP `core/test/prop/storage-change.test.ts` ("the §20 R13
+backup move never loses a backup": over generated {mode × destination state ×
+backup set × injected copy/verify fault}, after ANY outcome every original
+backup exists, content-identical, in EXACTLY ONE of the old or new directory;
+the fresh backup's checkpointed database bytes are in the new directory
+whenever the move phase was reached and never on a gate refusal; the config is
+byte-untouched on any failure and committed — key set, or deleted toward the
+default rung — with unrelated keys preserved on success; all against a
+{mode × destination × fault}-derived outcome oracle). The GUI driver:
+`registerStorageIpc` (`storage:changeBackupDir` → `Store.changeBackupDir`, then
+`app.relaunch()`; refusals rendered in the dialog — the same seam as R12); the
+real OS picker/relaunch residue is the runbook's CHECK STORAGE
+CHANGE procedure. **R14 — missing backup directory
+surfaced, never silent**:
+`Store.open`'s launch backup stays best-effort (a dead directory never blocks
+the launch), `store.backupDirStatus()` is the probe both surfaces report from,
+`store.backupNow()` refuses with the directory named and never claims an
+unwritten backup, and `tt backup ls|now` exit 2 with the plain message
+(`cli/src/program.ts`). Proven by BDD `features/storage_paths.feature` ("A
+missing backup directory never blocks the launch but is reported plainly", run
+TWICE over core + tt: the database stays usable, both verbs name the dead
+directory, nothing is claimed, nothing appears on disk) and GOLD
+`cli/test/gold/cli.test.ts` (the exact `ls`/`now` messages + exit codes). The
+GUI error state: the `getStoragePaths` channel carries the
+`store.backupDirStatus()` probe, and a not-ok probe renders the announced
+danger block naming the directory and the problem on BOTH surfaces backups
+speak from — the Settings Backups section AND the Storage group's Backup-folder
+row (`settings.js` `backupDirErrorHtml`) — proven by JUDGE
+`STORAGE_CHANGE_REFUSAL`'s `backupDirErrorBothSurfaces`
+(`storage-backup-dir-error.png`). Evidence for
+R10/R11/R14: the `§13 / §17 R15` section of the drift-gated CLI transcript.
 
 ## §17 acceptance criteria → proof
 
@@ -3293,6 +3554,58 @@ per-entity coverage in `features/favorites.feature` +
 both-surfaces claim — the `fav*`/`*Report` IPC channels ↔
 `tt fav …`/`tt report …` parity-matrix rows — is owned by §05 R09/R10 and §09
 R08/R09 (this row consumes those rows, it does not author them)
+
+### §17 R15
+
+**Custom storage locations: one §13 ladder on both surfaces (`tt paths` ↔ the
+Settings Storage group), a guided change that backs up first and never deletes
+the old data, and loud refusals for a broken path or untrusted config — every
+leg proven headless; only the recordings and the runbook's live residue
+remain.** **BDD** `features/storage_paths.feature`, run TWICE over @stint/core
+AND tt via `run.test.ts` — the env → config → default ladders for all three
+paths (driven through the TT_CONFIG / TT_DB / TT_BACKUP_DIR overrides and real
+config files), the loud refusals for an untrusted config file (§20 R10) and
+for a configured database path whose parent is missing (§20 R11 — no
+auto-mkdir, no silent fallback, nothing created),
+backup-into-the-active-directory (§20 R04), and the surfaced dead backup
+directory (§20 R14); `features/storage_change.feature` (`@core-only` — the
+pipelines' sole driver is the GUI, no `tt` verb by design, architecture.html
+§08) — the §20 R12 database pipeline ("migrates or starts fresh only after a
+pre-change backup, never deletes the old file": migrate / start-fresh / adopt /
+the refusal flows) and the §20 R13 backup move ("moving the backup set can
+never lose a backup": the verified move, fresh-backup-first, the same-name
+collision refusal, the torn-copy verify-abort with both sets intact,
+start-fresh leaving old backups put, and the commit-by-deleting-the-key change
+back to the default rung), each success proven through to a relaunch resolving
+the committed config. **PROP** `core/test/prop/storage-change.test.ts` — the
+old database byte-identical after any outcome, the config byte-untouched on
+any failure, a destination never live without passing its gates; and after ANY
+backup-move outcome every original backup exists content-identical in exactly
+one of the old or new directory (verify-before-delete, both sets intact on an
+aborted move). **GOLD** the config-file and paths read-side schema contracts
+(`schemas/config.schema.json` + `schemas/paths.schema.json`,
+`additionalProperties: false`), the ladder table + refusal message shapes, the
+§20 R12 refusal + success-message shapes, and the no-APPDATA census extended
+to the config resolver (`gold/contracts.test.ts`); `cli/test/gold/cli.test.ts`
+— `tt paths` ↔ the §13 ladders through the ONE core resolver the Settings
+Storage group reads, so the two surfaces can never disagree (the
+`getStoragePaths ↔ paths` row in `parity-matrix.json`; `paths` left
+`parity.test.ts`'s GUI-absent allow-set); `gui/test/storage.test.ts` — the
+`buildStoragePathsView` ↔ `resolveStoragePaths` agreement behind the §12 R25
+group, and the §20 R10/R11 native launch-refusal decision logic (Reset to
+default / Quit). The §12 R26 dialog drives the pipelines over the off-matrix
+`storage:*` namespace (the matrix `$comment` records the exemption). **JUDGE**
+`STORAGE_GROUP` / `STORAGE_CHANGE_CHOICE` / `STORAGE_CHANGE_ARMED` /
+`STORAGE_CHANGE_REFUSAL` (the required no-pre-selection choice, the
+arm-then-confirm naming mode + destination, the in-dialog refusal with the old
+location active, and the §20 R14 two-surface error state). **MANUAL** the runbook's
+CHECK STORAGE CHANGE procedure — the real OS picker, the native refusal
+dialog, and the relaunch, the parts with no headless host (the JUDGE scenes
+and the §20 R12–R13 suites are its automated mirror, process.html §05).
+Evidence: the `§13 / §17 R15` transcript section + the judge report's four
+scored storage scenes; the full routing in the §13, §12 R25/R26, and §20
+R10–R14 rows above. Pending: the §03 core-requirement recordings for the §12
+R26 flow (captured LAST, with the rest of the recording set).
 
 ## Residual risk we accept (verbatim from acceptance.html §11)
 

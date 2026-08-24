@@ -3,7 +3,14 @@
  * binds to the World interface, so it runs identically against @stint/core and tt.
  */
 import { expect } from 'vitest';
-import type { World, EntryRec, ExportRowRec, ListFilterReq, FavoriteRec } from './world.js';
+import type {
+  World,
+  EntryRec,
+  ExportRowRec,
+  ListFilterReq,
+  FavoriteRec,
+  StorageResolution,
+} from './world.js';
 import type { GroupBy } from '@stint/core';
 
 /** Scenario-scoped scratch shared across steps. */
@@ -47,6 +54,18 @@ export interface Ctx {
   integrityOpen?: { refused: boolean; wrote: boolean };
   /** §20 R05 — the entry count of the backup the most recent named restore reinstated. */
   restoreChosenCount?: number;
+  /** §13 — the result of the most recent `When the storage paths resolve …`. */
+  storageRes?: StorageResolution;
+  /** §20 R10/R11 — the result of the most recent storage launch attempt. */
+  storageLaunchRes?: { refused: boolean; message: string };
+  /** §20 R04/R14 — the result of the most recent backup listing under the sandbox env. */
+  storageList?: { refused: boolean; message: string; names: string[] };
+  /** §20 R14 — the result of the most recent forced backup under the sandbox env. */
+  storageNow?: { refused: boolean; message: string; claimed: boolean };
+  /** §20 R12/R13 — the result of the most recent storage-location change attempt. */
+  storageChangeRes?: { refused: boolean; message: string };
+  /** §20 R12/R13 — the config file's raw text captured just before the change (the untouched probe). */
+  storageConfigBefore?: string;
 }
 
 export interface StepDef {
@@ -1633,6 +1652,526 @@ export const steps: StepDef[] = [
     run: (w) => {
       w.relaunch();
       expect(w.status().running).toBe(false);
+    },
+  },
+
+  // ---- §13 / §20 R10/R11/R14 storage paths (config home, ladders, loud refusals) ----
+  // Surface-neutral over the World storage-sandbox capabilities: CoreWorld injects the
+  // sandbox env into core's resolveStoragePaths / Store.open; CliWorld spawns real `tt`
+  // processes under TT_CONFIG / TT_DB / TT_BACKUP_DIR. Run TWICE so the ladders and every
+  // refusal are proven identical on @stint/core and tt (§17 R8/R15).
+  { pattern: /^a storage sandbox$/, run: (w) => w.storageSandbox() },
+  {
+    pattern: /^the config file sets a custom database path$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('confDb') })),
+  },
+  {
+    pattern: /^the config file sets a custom backup directory$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ backupDir: w.storagePath('confBackups') })),
+  },
+  {
+    pattern: /^the config file sets a database path in a missing directory$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('missingDb') })),
+  },
+  {
+    pattern: /^the config file contains invalid JSON$/,
+    run: (w) => w.storageWriteConfig('{ this is not json'),
+  },
+  {
+    pattern: /^the config file carries an unknown key$/,
+    run: (w) =>
+      w.storageWriteConfig(JSON.stringify({ dbPath: w.storagePath('confDb'), extra: true })),
+  },
+  {
+    pattern: /^the config file sets a relative database path$/,
+    run: (w) => w.storageWriteConfig(JSON.stringify({ dbPath: 'relative/tt.sqlite' })),
+  },
+  {
+    pattern: /^an empty backup directory set in the environment$/,
+    run: (w) => w.storageUseBackupDirEnv('live'),
+  },
+  {
+    pattern: /^a missing backup directory set in the environment$/,
+    run: (w) => w.storageUseBackupDirEnv('missing'),
+  },
+  {
+    pattern: /^the storage paths resolve with the database set in the environment$/,
+    run: (w, c) => {
+      c.storageRes = w.storageResolve({ dbEnv: true });
+    },
+  },
+  {
+    pattern: /^the storage paths resolve with the database and backup directory set in the environment$/,
+    run: (w, c) => {
+      w.storageUseBackupDirEnv('live');
+      c.storageRes = w.storageResolve({ dbEnv: true });
+    },
+  },
+  {
+    pattern: /^the storage paths resolve$/,
+    run: (w, c) => {
+      c.storageRes = w.storageResolve({ dbEnv: false });
+    },
+  },
+  {
+    pattern: /^the database path comes from the environment$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.db).toEqual({ path: w.storagePath('envDb'), source: 'env' });
+    },
+  },
+  {
+    pattern: /^the database path is the configured one with source "config"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.db).toEqual({ path: w.storagePath('confDb'), source: 'config' });
+    },
+  },
+  {
+    pattern: /^the backup directory is beside the database with source "default"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      // Beside the resolved database: the env-db file's own directory (§13, §20 R04).
+      const besideDb = w.storagePath('envDb').replace(/\/[^/]+$/, '');
+      expect(c.storageRes!.backupDir).toEqual({ path: besideDb, source: 'default' });
+    },
+  },
+  {
+    pattern: /^the backup directory is the configured one with source "config"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.backupDir).toEqual({
+        path: w.storagePath('confBackups'),
+        source: 'config',
+      });
+    },
+  },
+  {
+    pattern: /^the backup directory comes from the environment$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.backupDir).toEqual({ path: w.storagePath('backups'), source: 'env' });
+    },
+  },
+  {
+    pattern: /^the config file row names the sandbox config file with source "env"$/,
+    run: (w, c) => {
+      expect(c.storageRes!.refused).toBe(false);
+      expect(c.storageRes!.configFile).toEqual({ path: w.storagePath('config'), source: 'env' });
+    },
+  },
+  {
+    // §20 R10/R11 — the refusal attempts launch with the database env rung SILENT, so a
+    // fallback-to-default bug would have somewhere to go; the Then steps prove it didn't.
+    pattern: /^I attempt to launch$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+    },
+  },
+  {
+    pattern: /^I launch$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+      expect(c.storageLaunchRes.refused).toBe(false);
+    },
+  },
+  {
+    pattern: /^the launch is refused naming the config file$/,
+    run: (w, c) => {
+      expect(c.storageLaunchRes!.refused).toBe(true);
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('config'));
+    },
+  },
+  {
+    pattern: /^the refusal names the unknown key$/,
+    run: (_w, c) => expect(c.storageLaunchRes!.message).toContain('extra'),
+  },
+  {
+    // §20 R10/R11 — nothing was created anywhere in the sandbox: no database file, no
+    // WAL/SHM sidecar. (The refusal fires before any open, so the default path outside the
+    // sandbox is equally untouched — the phantom-empty-tracker guard.)
+    pattern: /^no database was created in the sandbox$/,
+    run: (w) => {
+      const created = w.storageFilesIn('sandbox').filter((f) => /\.sqlite/.test(f));
+      expect(created).toEqual([]);
+    },
+  },
+  {
+    pattern: /^a database file exists at the configured path$/,
+    run: (w) => expect(w.storageExists('confDb')).toBe(true),
+  },
+  {
+    pattern: /^the launch is refused naming the database path and the config file$/,
+    run: (w, c) => {
+      expect(c.storageLaunchRes!.refused).toBe(true);
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('missingDb'));
+      expect(c.storageLaunchRes!.message).toContain(w.storagePath('config'));
+    },
+  },
+  {
+    pattern: /^the missing directory was not created$/,
+    run: (w) => expect(w.storageExists('missingDbParent')).toBe(false),
+  },
+  {
+    pattern: /^a launched database with one closed entry$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: true });
+      expect(c.storageLaunchRes.refused).toBe(false);
+      w.storageAddEntry();
+    },
+  },
+  { pattern: /^I relaunch$/, run: (w) => w.storageRelaunch() },
+  {
+    pattern: /^the active backup directory holds a timestamped backup named after the database$/,
+    run: (w) => {
+      // The backup landed in the ACTIVE directory (§20 R04) — and NOT beside the database,
+      // which proves the ladder steered the write, not just that a write happened.
+      expect(w.storageFilesIn('backups').some((f) => f.startsWith('tt.sqlite.bak-'))).toBe(true);
+      expect(w.storageFilesIn('envDbDir').some((f) => f.includes('.bak-'))).toBe(false);
+    },
+  },
+  {
+    pattern: /^listing backups shows that backup$/,
+    run: (w, c) => {
+      c.storageList = w.storageListBackups();
+      expect(c.storageList.refused).toBe(false);
+      expect(c.storageList.names.some((n) => n.startsWith('tt.sqlite.bak-'))).toBe(true);
+    },
+  },
+  {
+    pattern: /^the database is still usable$/,
+    run: (w) => expect(w.storageDbUsable()).toBe(true),
+  },
+  {
+    pattern: /^listing backups reports the dead backup directory$/,
+    run: (w, c) => {
+      c.storageList = w.storageListBackups();
+      expect(c.storageList.refused).toBe(true);
+      expect(c.storageList.message).toContain(w.storagePath('missingBackups'));
+    },
+  },
+  {
+    pattern: /^forcing a backup reports the dead backup directory and no backup is claimed$/,
+    run: (w, c) => {
+      c.storageNow = w.storageBackupNow();
+      expect(c.storageNow.refused).toBe(true);
+      expect(c.storageNow.claimed).toBe(false);
+      expect(c.storageNow.message).toContain(w.storagePath('missingBackups'));
+      // §20 R14 — the never-reported-written half has a filesystem twin: nothing appeared.
+      expect(w.storageFilesIn('missingBackups')).toEqual([]);
+    },
+  },
+
+  // ---- §20 R12 database location change (migrate / start fresh / adopt) — CORE-ONLY ----
+  // The pipeline's only driver is the GUI (§12 R26; no tt verb, architecture.html §08);
+  // the feature carrying these steps is tagged @core-only, so they bind CoreWorld only.
+  {
+    // Launched through the CONFIG rung (no TT_DB — the change commits `dbPath` into the
+    // config file, and an env override would outrank it on the proving relaunch).
+    pattern: /^a launched database with one closed entry at the configured path$/,
+    run: (w, c) => {
+      c.storageLaunchRes = w.storageLaunch({ dbEnv: false });
+      expect(c.storageLaunchRes.refused).toBe(false);
+      w.storageAddEntry();
+    },
+  },
+  {
+    pattern: /^a foreign file already at the new home$/,
+    run: (w) => w.storageSeedNewHome('foreign'),
+  },
+  {
+    pattern: /^a healthy database with two entries already at the new home$/,
+    run: (w) => w.storageSeedNewHome('healthy'),
+  },
+  {
+    pattern: /^a corrupt database file already at the new home$/,
+    run: (w) => w.storageSeedNewHome('corrupt'),
+  },
+  {
+    pattern: /^a database from a newer schema already at the new home$/,
+    run: (w) => w.storageSeedNewHome('future'),
+  },
+  {
+    pattern: /^the database location changes by (migrate|start fresh) to the new home$/,
+    run: (w, c, mode) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeDbLocation(
+        mode === 'start fresh' ? 'start-fresh' : 'migrate',
+        'newDb',
+      );
+    },
+  },
+  {
+    pattern: /^the database location changes by migrate to a missing directory$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeDbLocation('migrate', 'missingDb');
+    },
+  },
+  {
+    // §20 R12's done-when: the old file is kept in place, untouched, and NAMED in the
+    // success message.
+    pattern: /^the change succeeds naming the old database file$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('confDb'));
+      expect(c.storageChangeRes!.message).toContain('untouched');
+    },
+  },
+  {
+    pattern: /^the change reports the existing file was adopted$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('adopted');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('confDb'));
+    },
+  },
+  {
+    pattern: /^the config file points the database at the new home$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string };
+      expect(config.dbPath).toBe(w.storagePath('newDb'));
+    },
+  },
+  {
+    // The §13 cross-surface effect: the relaunch resolves the COMMITTED config through
+    // the same core ladder every surface uses, and finds the migrated data live there.
+    pattern: /^a relaunch opens the tracked entry at the new home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      expect(w.storageExists('newDb')).toBe(true);
+      expect(w.storageEntryCount()).toBe(1);
+    },
+  },
+  {
+    pattern: /^a relaunch opens an empty database at the new home$/,
+    run: (w) => {
+      // Start fresh commits WITHOUT creating the file; the relaunch's §20 R11 first-run
+      // semantics (absent file, live parent) create the fresh database at the new home.
+      w.storageRelaunch();
+      expect(w.storageExists('newDb')).toBe(true);
+      expect(w.storageEntryCount()).toBe(0);
+    },
+  },
+  {
+    pattern: /^a relaunch opens the two adopted entries at the new home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      expect(w.storageEntryCount()).toBe(2);
+    },
+  },
+  {
+    pattern: /^a relaunch still opens the tracked entry at the configured path$/,
+    run: (w) => {
+      // The refusal left the old path active: the relaunch resolves the unchanged config
+      // back to the configured database and the tracked entry is still there.
+      w.storageRelaunch();
+      expect(w.storageEntryCount()).toBe(1);
+    },
+  },
+  {
+    pattern: /^the old database file is still in place$/,
+    run: (w) => expect(w.storageExists('confDb')).toBe(true),
+  },
+  {
+    // Copy, never delete — and the pre-change backup is a TRUE copy: after the pipeline
+    // the old main file and the newest backup at the old home hold identical bytes.
+    pattern: /^the old database file is byte-identical to the pre-change backup$/,
+    run: (w) => expect(w.storageOldDbMatchesLatestBackup()).toBe(true),
+  },
+  {
+    pattern: /^the change is refused because migrate never overwrites$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('migrate never overwrites');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newDb'));
+    },
+  },
+  {
+    pattern: /^the change is refused naming the integrity failure$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('integrity');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newDb'));
+    },
+  },
+  {
+    pattern: /^the change is refused naming both schema versions$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      // The seeded future stamp and the refusal's newer-than framing (§20 R08/R09 gate).
+      expect(c.storageChangeRes!.message).toContain('schema version 99');
+      expect(c.storageChangeRes!.message).toContain('newer than');
+    },
+  },
+  {
+    pattern: /^the change is refused naming the missing parent$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      const parent = w.storagePath('missingDb').replace(/\/[^/]+$/, '');
+      expect(c.storageChangeRes!.message).toContain(parent);
+      expect(c.storageChangeRes!.message).toContain('does not exist');
+    },
+  },
+  {
+    // §20 R12/R13 — any failure leaves the config file byte-for-byte as it was.
+    pattern: /^the config file is untouched$/,
+    run: (w, c) => expect(w.storageConfigText()).toBe(c.storageConfigBefore!),
+  },
+
+  // ---- §20 R13 backup directory change (verified move / start fresh) — CORE-ONLY ----
+  // Same posture as the §20 R12 steps above: the GUI is the pipeline's only driver, and
+  // the @core-only feature binds these to CoreWorld alone.
+  {
+    pattern: /^a configured backup directory holding existing backups$/,
+    run: (w) => w.storageSeedBackupDir(),
+  },
+  {
+    pattern: /^one of those backup names is already taken in the new backup home$/,
+    run: (w) => w.storageSeedBackupCollision(),
+  },
+  {
+    pattern: /^the backup directory changes by (migrate|start fresh) to the new backup home$/,
+    run: (w, c, mode) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir(
+        mode === 'start fresh' ? 'start-fresh' : 'migrate',
+        'newBackups',
+      );
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to the new backup home with a torn copy$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'newBackups', true);
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to the default location beside the database$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'default');
+    },
+  },
+  {
+    pattern: /^the backup directory changes by migrate to a missing backup directory$/,
+    run: (w, c) => {
+      c.storageConfigBefore = w.storageConfigText();
+      c.storageChangeRes = w.storageChangeBackupDir('migrate', 'missingBackups');
+    },
+  },
+  {
+    pattern: /^the backup change succeeds naming the moved backups$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('moved');
+      expect(c.storageChangeRes!.message).toContain('verified');
+    },
+  },
+  {
+    pattern: /^the backup change succeeds leaving the old backups put$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(false);
+      expect(c.storageChangeRes!.message).toContain('stay put, untouched');
+    },
+  },
+  {
+    pattern: /^the backup change is refused because migrate never overwrites$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('migrate never overwrites');
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('newBackups'));
+    },
+  },
+  {
+    pattern: /^the backup change is refused naming the failed verification$/,
+    run: (_w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain('copy verification');
+      expect(c.storageChangeRes!.message).toContain('both backup sets are intact');
+    },
+  },
+  {
+    pattern: /^the backup change is refused naming the missing backup directory$/,
+    run: (w, c) => {
+      expect(c.storageChangeRes!.refused).toBe(true);
+      expect(c.storageChangeRes!.message).toContain(w.storagePath('missingBackups'));
+      expect(c.storageChangeRes!.message).toContain('does not exist');
+    },
+  },
+  {
+    pattern: /^every existing backup is in the new backup home, byte-identical$/,
+    run: (w) => expect(w.storageBackupsMatchSnapshot('newBackups')).toBe(true),
+  },
+  {
+    pattern: /^every existing backup is still in the old backup directory$/,
+    run: (w) => expect(w.storageBackupsMatchSnapshot('confBackups')).toBe(true),
+  },
+  {
+    // The delete half of the move ran: originals gone from the old directory (§20 R13 —
+    // only ever after every copy verified and the config committed).
+    pattern: /^the old backup directory holds no backups$/,
+    run: (w) => {
+      expect(w.storageFilesIn('confBackups').filter((f) => f.includes('.bak-'))).toEqual([]);
+    },
+  },
+  {
+    // The abort rolled the run's own copies back: no original NAME reached the new home
+    // (the fresh backup, not part of the pre-change set, stays).
+    pattern: /^none of the aborted copies remain in the new backup home$/,
+    run: (w) => {
+      const names = w.storageSnapshotNames();
+      const inNew = w.storageFilesIn('newBackups').filter((f) => names.includes(f));
+      expect(inNew).toEqual([]);
+    },
+  },
+  {
+    pattern: /^a fresh backup of the database is in the new backup home$/,
+    run: (w) => expect(w.storageFreshBackupIn()).toBe(true),
+  },
+  {
+    pattern: /^the config file points the backups at the new backup home$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string; backupDir?: string };
+      expect(config.backupDir).toBe(w.storagePath('newBackups'));
+      // The atomic rewrite preserved the unrelated key (§13).
+      expect(config.dbPath).toBe(w.storagePath('confDb'));
+    },
+  },
+  {
+    // §13 reset semantics — toward the default rung the commit DELETES the key; a
+    // resolved default is never written into the file.
+    pattern: /^the config file holds no backup directory key$/,
+    run: (w) => {
+      const config = JSON.parse(w.storageConfigText()) as { dbPath?: string; backupDir?: string };
+      expect(config.backupDir).toBeUndefined();
+      expect(config.dbPath).toBe(w.storagePath('confDb'));
+    },
+  },
+  {
+    pattern: /^the missing backup directory was not created$/,
+    run: (w) => expect(w.storageExists('missingBackups')).toBe(false),
+  },
+  {
+    // §20 R04 — listing follows the ACTIVE directory: the relaunch resolves the committed
+    // config and finds every moved backup there.
+    pattern: /^a relaunch lists the moved backups from the new backup home$/,
+    run: (w) => {
+      w.storageRelaunch();
+      const list = w.storageListBackups();
+      expect(list.refused).toBe(false);
+      for (const name of w.storageSnapshotNames()) expect(list.names).toContain(name);
+    },
+  },
+  {
+    pattern: /^a relaunch resolves the backup directory beside the database with source "default"$/,
+    run: (w) => {
+      w.storageRelaunch();
+      const res = w.storageResolve({ dbEnv: false });
+      expect(res.refused).toBe(false);
+      const besideDb = w.storagePath('confDb').replace(/\/[^/]+$/, '');
+      expect(res.backupDir).toEqual({ path: besideDb, source: 'default' });
     },
   },
 ];

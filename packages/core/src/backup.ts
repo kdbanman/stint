@@ -1,16 +1,24 @@
 /**
- * Automatic backups, integrity checks, and corruption recovery (PRD §20 R03/R04/R05,
- * §17 R12). The CORE data-loss-protection layer.
+ * Automatic backups, integrity checks, corruption recovery, and the verified-move
+ * primitives behind a backup-directory change (PRD §20 R03/R04/R05/R13, §17 R12). The
+ * CORE data-loss-protection layer.
  *
- * A backup is a checkpointed plain copy of the SQLite main file, written beside it as
- * `<dbPath>.bak-<YYYYMMDDTHHMMSSZ>`. Backups are files, not a table: they must survive
- * even a corrupt main file, so they live on the filesystem next to the WAL/SHM siblings.
+ * A backup is a checkpointed plain copy of the SQLite main file, written into the
+ * ACTIVE backup directory (§13's ladder — default: beside the database) as
+ * `<dbfilename>.bak-<YYYYMMDDTHHMMSSZ>` — the filename keeps that shape wherever the
+ * directory lives (§20 R04). Backups are files, not a table: they must survive even a
+ * corrupt main file, and recovery must find them BEFORE the database opens (§20 R05),
+ * which is why the directory resolves through the config file, never a settings row.
+ * Every function takes the directory as an optional trailing parameter defaulting to
+ * beside-the-DB, so the default rung stays byte-compatible with the pre-ladder behavior.
  *
  * Everything here is pure `node:fs` over the local filesystem — NO network, ever
  * (PRD §17 R9). All copies are checkpoint-then-`copyFileSync`, so a backup is a single,
  * self-contained file with no dependent WAL.
  */
 import {
+  accessSync,
+  constants,
   copyFileSync,
   existsSync,
   readdirSync,
@@ -23,7 +31,7 @@ import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import type { Db } from './db.js';
 
-/** One backup file beside the database, newest-first when listed. */
+/** One backup file in the active backup directory, newest-first when listed. */
 export interface BackupInfo {
   /** The backup file's base name (e.g. `timetracker.sqlite.bak-20260627T101500Z`). */
   name: string;
@@ -72,12 +80,38 @@ function stampToIso(name: string): string | null {
 }
 
 /**
- * All backups beside `dbPath`, newest-first. Sorted by the timestamp encoded in the name
- * (stable, since the name's UTC stamp is the truth of when the snapshot was taken), with the
- * file mtime as a tiebreaker for same-second names.
+ * §20 R14 — whether the backup directory can actually receive a backup, as a value: the
+ * directory plus the problem (or null when healthy). A dead durability net must be
+ * surfaced everywhere backups speak — `tt backup ls|now`, the Settings Backups section —
+ * never silently rendered as "no backups". Core states the fact; each surface phrases it.
  */
-export function listBackups(dbPath: string): BackupInfo[] {
-  const dir = dirname(dbPath);
+export interface BackupDirState {
+  path: string;
+  ok: boolean;
+  /** The plain problem ("does not exist" / "is not a directory" / "is not writable"), or null when ok. */
+  problem: string | null;
+}
+
+/** §20 R14 — probe the active backup directory (exists, is a directory, is writable). */
+export function backupDirState(dir: string): BackupDirState {
+  if (!existsSync(dir)) return { path: dir, ok: false, problem: 'does not exist' };
+  if (!statSync(dir).isDirectory()) return { path: dir, ok: false, problem: 'is not a directory' };
+  try {
+    accessSync(dir, constants.W_OK);
+  } catch {
+    return { path: dir, ok: false, problem: 'is not writable' };
+  }
+  return { path: dir, ok: true, problem: null };
+}
+
+/**
+ * All backups of `dbPath` in the active backup directory (default: beside the DB),
+ * newest-first. Sorted by the timestamp encoded in the name (stable, since the name's UTC
+ * stamp is the truth of when the snapshot was taken), with the file mtime as a tiebreaker
+ * for same-second names.
+ */
+export function listBackups(dbPath: string, backupDir: string = dirname(dbPath)): BackupInfo[] {
+  const dir = backupDir;
   const prefix = basename(dbPath) + BAK_INFIX;
   let names: string[];
   try {
@@ -111,9 +145,9 @@ export function listBackups(dbPath: string): BackupInfo[] {
   return out.sort((a, b) => (b.name < a.name ? -1 : b.name > a.name ? 1 : 0));
 }
 
-/** The newest backup beside `dbPath`, or null when none exist. */
-export function latestBackup(dbPath: string): BackupInfo | null {
-  return listBackups(dbPath)[0] ?? null;
+/** The newest backup in the active backup directory, or null when none exist. */
+export function latestBackup(dbPath: string, backupDir: string = dirname(dbPath)): BackupInfo | null {
+  return listBackups(dbPath, backupDir)[0] ?? null;
 }
 
 /**
@@ -147,11 +181,12 @@ function fileHash(path: string): string {
 }
 
 /**
- * §20 R04 — write a fresh timestamped backup beside the DB IF its content changed since the
- * latest existing backup; otherwise no-op (so an idempotent relaunch never piles up identical
- * copies). Always checkpoints the WAL first (`wal_checkpoint(TRUNCATE)`) so the main file is
- * self-contained before it is copied. After a write, prunes the oldest so at most `retention`
- * remain (0 ⇒ no pruning). Returns the new BackupInfo, or null when unchanged.
+ * §20 R04 — write a fresh timestamped backup into the active backup directory IF the DB
+ * content changed since the latest existing backup; otherwise no-op (so an idempotent
+ * relaunch never piles up identical copies). Always checkpoints the WAL first
+ * (`wal_checkpoint(TRUNCATE)`) so the main file is self-contained before it is copied.
+ * After a write, prunes the oldest so at most `retention` remain (0 ⇒ no pruning).
+ * Returns the new BackupInfo, or null when unchanged.
  *
  * "Changed" is judged by a content HASH of the checkpointed main file, not its size: under WAL
  * the main file can stay the same size across edits (pages are rewritten in place / via the WAL
@@ -161,9 +196,10 @@ function fileHash(path: string): string {
 export function backupDb(
   dbPath: string,
   db: Db,
-  opts: { retention?: number; at?: Date } = {},
+  opts: { retention?: number; at?: Date; backupDir?: string } = {},
 ): BackupInfo | null {
   if (dbPath === ':memory:') return null;
+  const backupDir = opts.backupDir ?? dirname(dbPath);
   // Fold the WAL back into the main file so the copy is a complete, dependency-free snapshot.
   try {
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
@@ -171,16 +207,16 @@ export function backupDb(
     /* a fresh/empty WAL or a non-WAL handle is fine — the main file is still copyable */
   }
   if (!existsSync(dbPath)) return null;
-  const latest = latestBackup(dbPath);
+  const latest = latestBackup(dbPath, backupDir);
   // Idempotent relaunch: if the newest backup is byte-for-byte identical to the current main
   // file, the DB has not changed since it was taken — skip the duplicate copy.
   if (latest && fileHash(dbPath) === fileHash(latest.path)) return null;
 
   const name = `${basename(dbPath)}${BAK_INFIX}${backupStamp(opts.at ?? new Date())}`;
-  const path = join(dirname(dbPath), name);
+  const path = join(backupDir, name);
   copyFileSync(dbPath, path);
 
-  pruneBackups(dbPath, opts.retention ?? 5);
+  pruneBackups(dbPath, opts.retention ?? 5, backupDir);
   const st = statSync(path);
   return {
     name,
@@ -190,10 +226,14 @@ export function backupDb(
   };
 }
 
-/** Keep at most `retention` newest backups beside `dbPath`; delete the rest. 0 ⇒ keep all. */
-export function pruneBackups(dbPath: string, retention: number): void {
+/** Keep at most `retention` newest backups in the active directory; delete the rest. 0 ⇒ keep all. */
+export function pruneBackups(
+  dbPath: string,
+  retention: number,
+  backupDir: string = dirname(dbPath),
+): void {
   if (retention <= 0) return;
-  const all = listBackups(dbPath); // newest-first
+  const all = listBackups(dbPath, backupDir); // newest-first
   for (const old of all.slice(retention)) {
     try {
       unlinkSync(old.path);
@@ -204,16 +244,21 @@ export function pruneBackups(dbPath: string, retention: number): void {
 }
 
 /**
- * §20 R05 — quarantine a corrupt main file and restore from the latest good backup, never
- * silently losing data. Moves the corrupt main file (and any WAL/SHM siblings) aside to
+ * §20 R05 — quarantine a corrupt main file and restore from the latest good backup in the
+ * ACTIVE backup directory (§13 — resolved before the database opens), never silently losing
+ * data. Moves the corrupt main file (and any WAL/SHM siblings) aside to
  * `<dbPath>.corrupted-<ts>` and copies the newest backup into `<dbPath>`. Throws RecoveryError
  * — WITHOUT quarantining — when there is no backup to restore from, so the caller can surface
  * the failure rather than start fresh on an empty database.
  *
  * The DB handle MUST be closed before calling this (the file is renamed/replaced on disk).
  */
-export function quarantineAndRecover(dbPath: string, at: Date = new Date()): RecoveryResult {
-  const latest = latestBackup(dbPath);
+export function quarantineAndRecover(
+  dbPath: string,
+  at: Date = new Date(),
+  backupDir: string = dirname(dbPath),
+): RecoveryResult {
+  const latest = latestBackup(dbPath, backupDir);
   if (!latest) {
     // No good copy: leave the corrupt file in place (do not destroy it) and signal up.
     throw new RecoveryError(
@@ -242,6 +287,92 @@ export function quarantineAndRecover(dbPath: string, at: Date = new Date()): Rec
 }
 
 /**
+ * §20 R13 — the same-name collisions a backup-directory move must refuse: the names among
+ * `backups` that already exist in `toDir`. Read-only — the refusal gate runs before
+ * anything is written, and a collision refuses even a byte-identical twin (migrate never
+ * overwrites; deciding "identical enough" is how overwrites sneak in).
+ */
+export function backupCollisions(backups: BackupInfo[], toDir: string): string[] {
+  return backups.filter((b) => existsSync(join(toDir, b.name))).map((b) => b.name);
+}
+
+/**
+ * §20 R13 — the copy half of a verified move: copy each of `backups` into `toDir`,
+ * verifying each copy (size, then content hash) before the next. Returns the verified
+ * copies at their new paths; the ORIGINALS ARE NEVER TOUCHED here — deleting them is a
+ * separate step ({@link deleteBackupOriginals}) the caller runs only after every copy
+ * verifies AND its commit point has passed.
+ *
+ * A copy or verify failure aborts with both sets intact: the originals untouched, and the
+ * aborted run's own copies removed again (they are unverified transient duplicates —
+ * every byte still lives in its original — so removing them is rollback, not loss;
+ * anything else in `toDir`, the §20 R13 fresh backup included, stays). Throws a plain
+ * Error naming the backup and why; the pipeline wraps it.
+ *
+ * `copyFile` is the per-file copy primitive (default: `copyFileSync` + `COPYFILE_EXCL`,
+ * so a same-name race loses to the exists gate). Injectable so the suites can force the
+ * torn-copy fault the verify step exists to catch — no filesystem produces one on cue.
+ */
+export function copyBackupsVerified(
+  backups: BackupInfo[],
+  toDir: string,
+  copyFile: (src: string, dest: string) => void = (src, dest) =>
+    copyFileSync(src, dest, constants.COPYFILE_EXCL),
+): BackupInfo[] {
+  const created: string[] = [];
+  const rollback = (): void => {
+    for (const path of created) {
+      try {
+        unlinkSync(path);
+      } catch {
+        /* best-effort: a copy that cannot be removed is a stray duplicate, never a loss */
+      }
+    }
+  };
+  const copies: BackupInfo[] = [];
+  for (const original of backups) {
+    const dest = join(toDir, original.name);
+    try {
+      copyFile(original.path, dest);
+      // A failed copy may still have left partial bytes at dest — roll those back too.
+      created.push(dest);
+    } catch (err) {
+      created.push(dest);
+      rollback();
+      throw new Error(`copying ${original.name} to ${toDir} failed: ${(err as Error).message}`);
+    }
+    const verified =
+      statSync(dest).size === statSync(original.path).size &&
+      fileHash(dest) === fileHash(original.path);
+    if (!verified) {
+      rollback();
+      throw new Error(
+        `${original.name} failed its copy verification — the copied bytes do not match the original`,
+      );
+    }
+    copies.push({ ...original, path: dest });
+  }
+  return copies;
+}
+
+/**
+ * §20 R13 — the delete half of a verified move. Only ever called after every copy
+ * verified and the config commit passed, so each original is by then a redundant
+ * duplicate of a verified copy in the new ACTIVE directory. Best-effort per file: a
+ * failed unlink leaves an extra copy behind, never a loss — and never unwinds a
+ * committed change.
+ */
+export function deleteBackupOriginals(backups: BackupInfo[]): void {
+  for (const original of backups) {
+    try {
+      unlinkSync(original.path);
+    } catch {
+      /* the verified copy is live; a surviving original is redundant, not a failure */
+    }
+  }
+}
+
+/**
  * §20 R05 / §17 R12 — restore the database from a named backup on demand (the GUI Restore…
  * button and `tt backup restore <name>`). Quarantines the CURRENT main file (and its WAL/SHM
  * siblings) to a `.replaced-<ts>` sibling first — so the live data is never destroyed, only
@@ -252,9 +383,10 @@ export function restoreFromBackup(
   dbPath: string,
   backupName: string,
   at: Date = new Date(),
+  backupDir: string = dirname(dbPath),
 ): RecoveryResult {
-  const chosen = listBackups(dbPath).find((b) => b.name === backupName);
-  if (!chosen) throw new RecoveryError(`no backup named "${backupName}" beside ${dbPath}`);
+  const chosen = listBackups(dbPath, backupDir).find((b) => b.name === backupName);
+  if (!chosen) throw new RecoveryError(`no backup named "${backupName}" in ${backupDir}`);
   const stamp = backupStamp(at);
   const quarantinedTo = `${dbPath}.replaced-${stamp}`;
   if (existsSync(dbPath)) {

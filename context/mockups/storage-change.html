@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stint — Storage change (mockup)</title>
+<style>
+/* STINT-TOKENS start — generated from context/design.tokens.json; do not edit by hand */
+:root{
+  --paper:#fdfdfc;--sidebar:#f9f9f8;--wash:#f1f0ef;--hover:#e9e8e6;--canvas:#e2e1de;
+  --rule:#dad9d6;--rule-strong:#bcbbb5;--faint:#8d8d86;--muted:#63635e;--ink:#21201c;
+  --accent:#e54d2e;--accent-solid:#d13415;--accent-ink:#d13415;--accent-weak:#feebe7;
+  --on-accent:#fdfdfc;
+  --run:#2a7e3b;--run-dot:#46a758;--run-weak:#e9f6e9;
+  --flag:#4f3422;--flag-bg:#fff7c2;--flag-line:#f3d673;
+  --danger:#ce2c31;--danger-weak:#feebec;
+  --r1:8px;--r2:12px;--r3:16px;
+  --ring:0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+  --sh-chip:0 1px 3px rgba(74,52,24,.25);
+  --sh-card:0 4px 16px rgba(74,52,24,.07), 0 1px 2px rgba(74,52,24,.05);
+  --sh-raise:0 8px 24px rgba(74,52,24,.10), 0 1px 3px rgba(74,52,24,.06);
+  --sh-pop:0 16px 44px rgba(60,42,18,.20), 0 2px 6px rgba(60,42,18,.10);
+  --sh-modal:0 28px 70px rgba(50,34,14,.30), 0 3px 10px rgba(50,34,14,.14);
+  --sh-win:0 30px 80px rgba(50,34,14,.22);
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI Variable","Segoe UI","Helvetica Neue",system-ui,sans-serif;
+  --num:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+}
+/* STINT-TOKENS end */
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--canvas);color:var(--ink);font-family:var(--sans);font-size:13px;line-height:1.5;-webkit-font-smoothing:antialiased;padding:32px 16px 56px}
+  .tnum{font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .ic{width:16px;height:16px;display:inline-block;flex:none;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;vertical-align:-2px}
+  .lede{max-width:560px;margin:0 auto 4px;font-size:18px;font-weight:640;letter-spacing:-.01em}
+  .sub{max-width:560px;margin:0 auto 24px;font-size:12px;color:var(--muted)}
+  .sub code{font-family:var(--num);font-size:11px;background:var(--wash);padding:2px 4px;border-radius:var(--r1)}
+  /* state captions between renders — the edit-entry.html precedent */
+  .cap{max-width:560px;margin:36px auto 12px;font-size:12px;color:var(--muted)}
+  .cap b{color:var(--ink);font-weight:590}
+  /* the dialog card (merge-conflict.html's modal grammar) */
+  .modal{width:520px;max-width:100%;margin:0 auto;background:var(--paper);border-radius:var(--r3);box-shadow:var(--sh-modal);overflow:hidden}
+  .m-head{padding:20px 24px 16px;border-bottom:1px solid var(--rule)}
+  .m-head h3{margin:0;font-size:17px;font-weight:640}
+  .m-head p{margin:4px 0 0;color:var(--muted);font-size:12px}
+  .m-body{padding:16px 24px}
+  /* current → new (the merge-conflict .srcs grammar over paths) */
+  .srcs{display:flex;gap:8px;margin-bottom:12px}
+  .src{flex:1;border:1px solid var(--rule);border-radius:var(--r1);padding:8px 12px;background:var(--wash);min-width:0}
+  .src .lbl{font-size:11px;color:var(--muted)}
+  .src .p{font-family:var(--num);font-size:12px;margin-top:4px;word-break:break-all}
+  .src .d{font-size:11px;color:var(--muted);margin-top:2px}
+  .arrow{display:flex;align-items:center;color:var(--muted)}
+  /* the required choice — no pre-selection; chosen lifts, never turns accent (D12) */
+  .q{font-weight:590;margin:2px 0 8px}
+  .opts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .opt{display:flex;align-items:flex-start;gap:8px;border:1px solid var(--rule-strong);border-radius:var(--r1);padding:8px 12px;cursor:pointer;background:var(--wash)}
+  .opt:hover:not(.on){background:var(--hover)}
+  .opt.on{background:var(--paper);box-shadow:var(--sh-chip)}
+  .rad{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--rule-strong);flex:none;position:relative;margin-top:2px}
+  .opt.on .rad::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--ink)}
+  .opt .ot b{font-weight:590;font-size:12px;display:block}
+  .opt .ot span{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+  /* the safety facts, stated in place (§12 R26) */
+  .facts{margin-top:12px;border-top:1px solid var(--rule)}
+  .fact{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--rule);color:var(--muted);font-size:12px}
+  .fact .ic{width:15px;height:15px;color:var(--run)}
+  .fact b{color:var(--ink);font-weight:590}
+  /* an in-dialog refusal — the --danger block triple (design.html D15, §12 R21) */
+  .err{margin-top:12px;background:var(--danger-weak);border:1px solid color-mix(in srgb, var(--danger) 35%, transparent);border-radius:var(--r1);padding:8px 12px;color:var(--danger);font-size:12px}
+  .err code{font-family:var(--num);font-size:11px;word-break:break-all}
+  .m-foot{display:flex;align-items:center;gap:8px;padding:16px 24px;border-top:1px solid var(--rule);background:var(--wash)}
+  .m-foot .hint{flex:1;font-size:11px;color:var(--muted)}
+  .btn{font:inherit;font-weight:590;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 16px;border-radius:var(--r1);border:1px solid var(--rule-strong);background:var(--paper);color:var(--ink);cursor:pointer;white-space:nowrap}
+  .btn:hover{background:var(--hover)}
+  .btn.primary{background:var(--accent-solid);border-color:var(--accent-solid);color:var(--on-accent)}
+  .btn.primary:hover{background:color-mix(in srgb, var(--accent-solid) 88%, black)}
+  /* the commit is unreachable until a choice is made — the disabled idiom (design.html §07) */
+  .btn:disabled,.btn.primary:disabled{color:var(--faint);background:var(--wash);border-color:var(--rule);cursor:not-allowed}
+  .btn .p{font-family:var(--num);font-size:12px;font-weight:590}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.2 4.2L19 7"/></symbol>
+</defs></svg>
+
+<div class="lede">The storage change dialog</div>
+<div class="sub">§12 R26, state by state — reached from the Settings <b>Storage</b> group's Change… (see <code>settings.html</code>) after the OS picker. One dialog: current path → new path, the <b>required</b> Migrate / Start-fresh choice, the safety facts in place, and a single arm-then-confirm commit that names the relaunch. The pipelines behind it are §20 R12 (database) and §20 R13 (backup folder); refusals surface inside the dialog and the config file is untouched until the commit.</div>
+
+<!-- ───────── state 1: as opened — no pre-selection, commit disabled ───────── -->
+<div class="cap"><b>As opened.</b> Neither choice is pre-selected and the commit is disabled — the required choice is the comprehension gate (§12 R26). Cancel is always live.</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc1-h">
+  <div class="m-head"><h3 id="sc1-h">Change database location</h3><p>Stint relaunches onto the new location when you confirm.</p></div>
+  <div class="m-body">
+    <div class="srcs">
+      <div class="src"><div class="lbl">Current</div><div class="p">~/.local/share/stint/timetracker.sqlite</div><div class="d">default</div></div>
+      <div class="arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+      <div class="src"><div class="lbl">New</div><div class="p">/home/kirby/tracking/timetracker.sqlite</div><div class="d">will be written to the config file</div></div>
+    </div>
+    <div class="q">How should the new location start?</div>
+    <div class="opts">
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Migrate</b><span>Copy your data to the new location</span></span></label>
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Start fresh</b><span>A new, empty database — or adopt a file already there</span></span></label>
+    </div>
+  </div>
+  <div class="m-foot"><span class="hint">Choose Migrate or Start fresh to continue</span><button class="btn">Cancel</button><button class="btn primary" disabled>Change and relaunch</button></div>
+</div>
+
+<!-- ───────── state 2: choice made — the chosen option lifts (D12); safety facts in place ───────── -->
+<div class="cap"><b>Choice made.</b> Migrate lifts as the raised paper chip — selection ≠ accent (design.html D12) — the safety facts are stated in place, and the commit becomes reachable.</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc2-h">
+  <div class="m-head"><h3 id="sc2-h">Change database location</h3><p>Stint relaunches onto the new location when you confirm.</p></div>
+  <div class="m-body">
+    <div class="srcs">
+      <div class="src"><div class="lbl">Current</div><div class="p">~/.local/share/stint/timetracker.sqlite</div><div class="d">default</div></div>
+      <div class="arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+      <div class="src"><div class="lbl">New</div><div class="p">/home/kirby/tracking/timetracker.sqlite</div><div class="d">will be written to the config file</div></div>
+    </div>
+    <div class="q">How should the new location start?</div>
+    <div class="opts">
+      <label class="opt on"><span class="rad"></span><span class="ot"><b>Migrate</b><span>Copy your data to the new location</span></span></label>
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Start fresh</b><span>A new, empty database — or adopt a file already there</span></span></label>
+    </div>
+    <div class="facts">
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>A <b>backup is written first</b>, at the current location</span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>The current file <b>stays in place</b> — copy, never delete</span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>The copy is <b>integrity-checked</b> before anything changes</span></div>
+    </div>
+  </div>
+  <div class="m-foot"><span class="hint"></span><button class="btn">Cancel</button><button class="btn primary">Change and relaunch</button></div>
+</div>
+
+<!-- ───────── state 3: armed — the single arm-then-confirm (§12 R13) names mode + destination ───────── -->
+<div class="cap"><b>Armed.</b> The commit swaps in place into the confirm — one arm-then-confirm (§12 R13), naming the mode and the destination. A second click runs the pipeline, commits the config, and relaunches.</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc3-h">
+  <div class="m-head"><h3 id="sc3-h">Change database location</h3><p>Stint relaunches onto the new location when you confirm.</p></div>
+  <div class="m-body">
+    <div class="srcs">
+      <div class="src"><div class="lbl">Current</div><div class="p">~/.local/share/stint/timetracker.sqlite</div><div class="d">default</div></div>
+      <div class="arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+      <div class="src"><div class="lbl">New</div><div class="p">/home/kirby/tracking/timetracker.sqlite</div><div class="d">will be written to the config file</div></div>
+    </div>
+    <div class="q">How should the new location start?</div>
+    <div class="opts">
+      <label class="opt on"><span class="rad"></span><span class="ot"><b>Migrate</b><span>Copy your data to the new location</span></span></label>
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Start fresh</b><span>A new, empty database — or adopt a file already there</span></span></label>
+    </div>
+    <div class="facts">
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>A <b>backup is written first</b>, at the current location</span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>The current file <b>stays in place</b> — copy, never delete</span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>The copy is <b>integrity-checked</b> before anything changes</span></div>
+    </div>
+  </div>
+  <div class="m-foot"><span class="hint"></span><button class="btn">Cancel</button><button class="btn primary"><span class="p">Confirm: migrate to /home/kirby/tracking/timetracker.sqlite</span></button></div>
+</div>
+
+<!-- ───────── state 4: refused in place — §12 R21's inline grammar, the --danger triple ───────── -->
+<div class="cap"><b>Refused in place.</b> Migrate never overwrites (§20 R12): an existing destination file stops the pipeline; the reason renders inside the dialog in the danger block palette (§12 R21), the dialog stays open, the config untouched, the old location still active.</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc4-h">
+  <div class="m-head"><h3 id="sc4-h">Change database location</h3><p>Stint relaunches onto the new location when you confirm.</p></div>
+  <div class="m-body">
+    <div class="srcs">
+      <div class="src"><div class="lbl">Current</div><div class="p">~/.local/share/stint/timetracker.sqlite</div><div class="d">default</div></div>
+      <div class="arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+      <div class="src"><div class="lbl">New</div><div class="p">/home/kirby/tracking/timetracker.sqlite</div><div class="d">will be written to the config file</div></div>
+    </div>
+    <div class="q">How should the new location start?</div>
+    <div class="opts">
+      <label class="opt on"><span class="rad"></span><span class="ot"><b>Migrate</b><span>Copy your data to the new location</span></span></label>
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Start fresh</b><span>A new, empty database — or adopt a file already there</span></span></label>
+    </div>
+    <div class="err" role="status" aria-live="polite">A file already exists at <code>/home/kirby/tracking/timetracker.sqlite</code> — migrate never overwrites. Pick a different location, or choose Start fresh to adopt the existing file (it must pass the integrity and version checks). Nothing has changed.</div>
+  </div>
+  <div class="m-foot"><span class="hint"></span><button class="btn">Cancel</button><button class="btn primary">Change and relaunch</button></div>
+</div>
+
+<!-- ───────── state 5: the backup-folder variant — move semantics (§20 R13) ───────── -->
+<div class="cap"><b>The backup folder variant.</b> Same dialog, move semantics (§20 R13): a fresh backup lands in the new folder first, existing backups are moved and verified, and a failed verify aborts with both sets intact.</div>
+<div class="modal" role="dialog" aria-modal="true" aria-labelledby="sc5-h">
+  <div class="m-head"><h3 id="sc5-h">Change backup folder</h3><p>Stint relaunches onto the new folder when you confirm.</p></div>
+  <div class="m-body">
+    <div class="srcs">
+      <div class="src"><div class="lbl">Current</div><div class="p">~/.local/share/stint</div><div class="d">default — beside the database</div></div>
+      <div class="arrow"><svg class="ic"><use href="#i-arrow"/></svg></div>
+      <div class="src"><div class="lbl">New</div><div class="p">/home/kirby/tracking/backups</div><div class="d">will be written to the config file</div></div>
+    </div>
+    <div class="q">How should the new folder start?</div>
+    <div class="opts">
+      <label class="opt on"><span class="rad"></span><span class="ot"><b>Migrate</b><span>Move existing backups to the new folder</span></span></label>
+      <label class="opt"><span class="rad"></span><span class="ot"><b>Start fresh</b><span>The new folder starts empty; old backups stay put</span></span></label>
+    </div>
+    <div class="facts">
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>A <b>fresh backup is written to the new folder first</b></span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>Backups are <b>moved and verified</b> — a failed verify stops with both sets intact</span></div>
+      <div class="fact"><svg class="ic"><use href="#i-check"/></svg><span>Originals are deleted <b>only after every copy verifies</b></span></div>
+    </div>
+  </div>
+  <div class="m-foot"><span class="hint"></span><button class="btn">Cancel</button><button class="btn primary">Change and relaunch</button></div>
+</div>
+
+</body>
+</html>

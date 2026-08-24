@@ -433,3 +433,34 @@ release** artifact, with `tt` available in a terminal on the same database (find
 > residual **live** end-to-end — a clean install of a stamped release, a real GitHub download, the OS-level
 > replacement + Gatekeeper, and the relaunch across a running timer — awaits a real desktop operator's
 > screen recording on the evidence bucket under `acceptance/evidence/recordings/` (see `acceptance/evidence/recordings/README.md`).
+
+## CHECK STORAGE CHANGE — guided move of the database and the backup folder (§12 R26, §20 R11–R13)
+
+**§05 residue row —** Storage change end-to-end — OS picker, the guided dialog, relaunch onto the new location (§12 R26, §20 R11–R13)
+**Claims —** §12 R26 · §20 R10/R11/R12/R13 · §17 R15
+
+1. With real entries present, Settings → Storage → **Database** → Change…; pick a fresh
+   location in the OS file picker; choose **Migrate**; **Change and relaunch** → confirm.
+   - [ ] The commit stays disabled until Migrate / Start fresh is chosen; the armed
+         confirm names the mode and the destination path.
+   - [ ] The app relaunches onto the new location with every entry intact (`tt list`
+         totals match pre-change).
+   - [ ] The old file is still at the old location, untouched, and the success message
+         names it; `tt paths` shows the database path with source `config`.
+2. Settings → Storage → **Backup folder** → Change… to a new directory; choose **Migrate**.
+   - [ ] A fresh backup dated now exists in the new directory before anything else moves.
+   - [ ] Every prior backup was moved and verified; `tt backup ls` lists them from the new
+         directory only, and the old directory holds none.
+3. Quit. Edit the config file's `dbPath` to a path under a **missing parent directory**;
+   launch the GUI, then run `tt status`.
+   - [ ] Both surfaces refuse loudly, naming the configured path AND the config file; no
+         database is created anywhere (no auto-mkdir, no silent fallback to the default).
+   - [ ] The GUI dialog offers Reset to default / Quit; Reset deletes the key and a
+         relaunch lands back on the default database, data intact.
+4. Quit. Make the config file **untrusted** (add an unknown key, then separately break the
+   JSON); launch the GUI each time, then run `tt status`.
+   - [ ] Both surfaces refuse loudly before anything opens, naming the config file and the
+         error; no database is created or opened anywhere (§20 R10).
+   - [ ] The GUI dialog offers Reset to default / Quit; Reset drops the offending key
+         (the broken-JSON file is set aside as a `config.json.invalid-*` sibling, its
+         bytes intact) and a relaunch opens normally, data intact.

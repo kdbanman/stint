@@ -311,7 +311,7 @@ describe('GOLD — every MANUAL badge in acceptance.html §04/§05 resolves to a
 
   it('parsed both tables and the live procedures (nothing is silently empty)', () => {
     expect(rows.filter((r) => r.table === '§04').length).toBeGreaterThan(30);
-    expect(rows.filter((r) => r.table === '§05').length).toBe(14);
+    expect(rows.filter((r) => r.table === '§05').length).toBe(15);
     expect(manualRows.length).toBeGreaterThan(4);
     expect(liveClaims.size).toBeGreaterThan(10);
   });
@@ -363,7 +363,7 @@ describe('GOLD — every §17 criterion has a COVERAGE.md section (#301)', () =>
     .sort((a, b) => a - b);
 
   it('read both homes (neither the §05 roster nor the COVERAGE catalogue is silently empty)', () => {
-    expect(rosterIds.length).toBe(14);
+    expect(rosterIds.length).toBe(15);
     expect(catalogueIds.length).toBeGreaterThan(10);
   });
 
@@ -397,12 +397,18 @@ const NOT_JUDGE_ITEMS = new Set([
   'APP_VERSION',
   'DB_FILENAME',
   'DEV_VERSION',
+  // The §20 R12 pipeline's exclusive-create copy flag, cited by the §20 R12 row.
+  'COPYFILE_EXCL',
   'GH_TOKEN',
   'POPOVER_MAX',
   'SCHEMA_VERSION',
   'SETTING_DESCRIPTORS',
   'STINT_BUILD_N',
   'STINT_VERSION',
+  // The §13 storage-ladder env vars (the TT_DB pattern), cited by the §13/§20 rows.
+  'TT_BACKUP_DIR',
+  'TT_CONFIG',
+  'TT_DB',
   'UPDATE_CHECK_FAILED',
   'VERSION_RE',
   // NAV_SHELL's two named sub-facts. They live inside that row's prose, not as rows of their

@@ -162,12 +162,12 @@ const semantic = (name: string): string => {
 };
 
 describe('design token parity (design.html D02)', () => {
-  it('the emitter produces a non-trivial block over all eleven mockups (guard-the-guard)', () => {
+  it('the emitter produces a non-trivial block over all twelve mockups (guard-the-guard)', () => {
     // ≥20 custom-property declarations and the full mockup census — an emitter refactor that
     // silently dropped a token family, or a mockup landing without markers, trips here.
     const declarations = generatedBlock.match(/--[a-z0-9-]+:/g) ?? [];
     expect(declarations.length).toBeGreaterThanOrEqual(20);
-    expect(mockupNames.length).toBe(11);
+    expect(mockupNames.length).toBe(12);
   });
 
   it('every mockup and styles.css carries exactly the generated block between its markers', () => {
@@ -372,6 +372,9 @@ describe('faint is never readable text (design.html D04/D16)', () => {
     '.report-field:disabled',
     '.set-field:disabled',
     '.set-update-btn:disabled',
+    // §12 R26 — the storage dialog's commit, disabled until the required Migrate/Start-fresh
+    // choice is made (the comprehension gate) and while the app relaunches.
+    '.storage-dialog .sd-commit:disabled',
   ];
 
   // The one `:disabled` rule that is NOT an idiom site: Chromium's UA sheet ships
@@ -1224,6 +1227,10 @@ describe('the radius trio (design.html D08/D14 — issue 153)', () => {
     '.editor.conflict-prompt .mc-opt.on .rad::after',
     '.rad',
     '.opt.on .rad::after',
+    // The storage change dialog's Migrate / Start-fresh radio pair (§12 R26) — the same
+    // radio entailment, mockup storage-change.html's .opt .rad grammar.
+    '.storage-dialog .sd-opt .rad',
+    '.storage-dialog .sd-opt.on .rad::after',
     // The switch KNOB. A knob is round; the TRACK it slides in is not, and that track was one of
     // this issue's five populations.
     '.set-toggle i',
@@ -1578,6 +1585,7 @@ describe('the chip lift means chosen (design.html D12 — issue #255)', () => {
     '.seg .seg-btn.on', // the chosen segment (the idiom D12 names)
     '.presets .preset.on', // the active date-range preset
     '.editor.conflict-prompt .mc-opt.on', // the chosen merge-conflict option
+    '.storage-dialog .sd-opt.on', // the chosen Migrate/Start-fresh mode (§12 R26's required choice)
     '.stp-d.stp-sel', // the picked day in the interval picker
     '.ev .ck:checked', // the ticked calendar checkbox — the control that MAKES a selection
   ]);

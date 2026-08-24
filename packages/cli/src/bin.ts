@@ -5,7 +5,7 @@
  * default; TT_NOW (ISO) pins the clock for reproducible runs and the golden suite.
  */
 import { CommanderError } from 'commander';
-import { Store, StoreError, TimeParseError } from '@stint/core';
+import { ConfigError, StoragePathError, Store, StoreError, TimeParseError } from '@stint/core';
 import { buildProgram, CliError, type Io } from './program.js';
 
 // node:sqlite is a stability-experimental module; silence only that warning so
@@ -53,7 +53,16 @@ export async function run(argv: string[], io: Io): Promise<number> {
       io.err(err.message);
       return err.exitCode;
     }
-    if (err instanceof StoreError || err instanceof TimeParseError) {
+    // §20 R10/R11 — a launch refusal (untrusted config file, broken configured database
+    // path) exits non-zero with the core message, which already names the file/path and
+    // the error; nothing was opened or written. Mapped here like every other error type
+    // (one mapper, engineering.html §04).
+    if (
+      err instanceof StoreError ||
+      err instanceof TimeParseError ||
+      err instanceof ConfigError ||
+      err instanceof StoragePathError
+    ) {
       io.err(err.message);
       return 2;
     }

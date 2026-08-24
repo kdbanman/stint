@@ -8,9 +8,17 @@
  * path: it fails if any export column, ordering, escaping, or JSON field regresses.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir, platform } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Ajv } from 'ajv';
 import addFormatsImport from 'ajv-formats';
@@ -35,13 +43,25 @@ import {
   localDay,
   groupKeyLabel,
   defaultDataDir,
+  defaultConfigDir,
+  resolveConfigPath,
+  resolveStoragePaths,
+  assertDbPathUsable,
+  readConfig,
+  writeConfig,
+  resetConfigKey,
+  resetUntrustedConfig,
+  ConfigError,
+  StoragePathError,
+  StorageChangeError,
   DB_FILENAME,
+  CONFIG_FILENAME,
   APP_VERSION,
   DEV_VERSION,
   VERSION_RE,
   isReleaseVersion,
 } from '@stint/core';
-import type { EntryView, Db } from '@stint/core';
+import type { EntryView, Db, StintConfig } from '@stint/core';
 
 const ajv = addFormats(new Ajv({ allErrors: true }));
 const schema = (name: string) =>
@@ -495,6 +515,556 @@ describe('GOLD: data-dir path contract — macOS + Linux only (§13)', () => {
     } as unknown as NodeJS.ProcessEnv);
     expect(dir).not.toContain('AppData');
     expect(dir.endsWith('stint')).toBe(true);
+  });
+});
+
+describe('GOLD: config-home path contract — macOS + Linux only (§13)', () => {
+  // The census the data-dir contract runs, extended to the CONFIG resolver: the config
+  // file's own ladder is TT_CONFIG → the per-OS config location, with no win32 branch.
+  it('CONFIG_FILENAME stays config.json', () => {
+    expect(CONFIG_FILENAME).toBe('config.json');
+  });
+
+  it('the Linux branch honours $XDG_CONFIG_HOME and ends in /stint', () => {
+    if (platform() === 'darwin') {
+      expect(defaultConfigDir({} as NodeJS.ProcessEnv)).toMatch(/Library\/Application Support\/stint$/);
+      return;
+    }
+    const dir = defaultConfigDir({ XDG_CONFIG_HOME: '/custom/cfg' } as unknown as NodeJS.ProcessEnv);
+    expect(dir).toBe('/custom/cfg/stint');
+  });
+
+  it('the Linux branch falls back to ~/.config/stint without XDG_CONFIG_HOME', () => {
+    if (platform() === 'darwin') return; // covered by the macOS suffix assertion above
+    const dir = defaultConfigDir({} as NodeJS.ProcessEnv);
+    expect(dir).toMatch(/\.config\/stint$/);
+  });
+
+  it('exposes no Windows branch — %APPDATA% is never consulted by the config resolver', () => {
+    if (platform() === 'win32') throw new Error('Windows is unsupported');
+    const resolved = resolveConfigPath({
+      APPDATA: 'C:\\\\Users\\\\x\\\\AppData\\\\Roaming',
+    } as unknown as NodeJS.ProcessEnv);
+    expect(resolved.path).not.toContain('AppData');
+    expect(resolved.path.endsWith(join('stint', 'config.json'))).toBe(true);
+    expect(resolved.source).toBe('default');
+  });
+
+  it('TT_CONFIG overrides the config file location with source env', () => {
+    const resolved = resolveConfigPath({ TT_CONFIG: '/elsewhere/config.json' } as NodeJS.ProcessEnv);
+    expect(resolved).toEqual({ path: '/elsewhere/config.json', source: 'env' });
+  });
+});
+
+describe('GOLD: storage config file contract (§13, §20 R10)', () => {
+  // The artefact IS the criterion: acceptance/criteria/schemas/config.schema.json
+  // (additionalProperties: false, absolute-path strings) and core's readConfig must agree
+  // on every fixture — a config the schema admits is read, a config the schema rejects is
+  // an untrusted file that refuses the launch. If validation and the published contract
+  // drift, one of these fixtures fails.
+  const validate = addFormats(new Ajv({ allErrors: true })).compile(schema('config.schema.json'));
+
+  const readOf = (dir: string, value: unknown): (() => StintConfig) => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify(value));
+    return () => readConfig(file);
+  };
+
+  it('schema and core validation agree on every fixture', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-'));
+    try {
+      const valid: unknown[] = [
+        {},
+        { dbPath: '/data/tt.sqlite' },
+        { backupDir: '/backups' },
+        { dbPath: '/data/tt.sqlite', backupDir: '/backups' },
+      ];
+      const invalid: unknown[] = [
+        { unknown: true },
+        { dbPath: 'relative/tt.sqlite' },
+        { dbPath: 42 },
+        { backupDir: '' },
+        ['/data/tt.sqlite'],
+        'just a string',
+      ];
+      for (const v of valid) {
+        expect(validate(v), `schema should admit ${JSON.stringify(v)}`).toBe(true);
+        expect(readOf(dir, v)()).toEqual(v);
+      }
+      for (const v of invalid) {
+        expect(validate(v), `schema should reject ${JSON.stringify(v)}`).toBe(false);
+        expect(readOf(dir, v)).toThrow(ConfigError);
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('an absent file is an empty config — every path takes the next rung (§13)', () => {
+    expect(readConfig(join(tmpdir(), 'stint-gold-absent', 'config.json'))).toEqual({});
+  });
+
+  it('refusal messages name the file and the error (§20 R10)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-msg-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '{ nope');
+      expect(() => readConfig(file)).toThrow(new RegExp(`config file ${file}: is not valid JSON`));
+      writeFileSync(file, JSON.stringify({ mystery: '/x' }));
+      expect(() => readConfig(file)).toThrow(/unknown key "mystery" \(allowed keys: dbPath, backupDir\)/);
+      writeFileSync(file, JSON.stringify({ backupDir: 'rel/backups' }));
+      expect(() => readConfig(file)).toThrow(/backupDir must be an absolute path \(got "rel\/backups"\)/);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('writeConfig is atomic write-temp-then-rename, round-trips, and never produces an untrusted file', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-write-'));
+    const file = join(dir, 'nested', 'config.json');
+    try {
+      writeConfig(file, { dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      // No temp sibling left behind — the rename consumed it (the single commit point).
+      expect(readdirSync(dirname(file))).toEqual(['config.json']);
+      // Core can never produce a file its next launch would refuse (§20 R10): a relative
+      // path is rejected BEFORE anything is written, the target left untouched.
+      expect(() => writeConfig(file, { dbPath: 'relative/tt.sqlite' })).toThrow(ConfigError);
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('reset deletes the key — a resolved default is never written into the file (§13)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-reset-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeConfig(file, { dbPath: '/data/tt.sqlite', backupDir: '/backups' });
+      resetConfigKey(file, 'backupDir');
+      expect(readConfig(file)).toEqual({ dbPath: '/data/tt.sqlite' });
+      expect(readFileSync(file, 'utf8')).not.toContain('backupDir');
+      resetConfigKey(file, 'dbPath');
+      expect(readConfig(file)).toEqual({});
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  // §20 R10 — the untrusted-file repair behind the GUI dialog's Reset-to-default: delete
+  // the offending key(s), keep every valid one, never destroy the user's bytes. Lives in
+  // core because which entries survive is knowledge of the config file's shape.
+  it('resetUntrustedConfig drops exactly the offending entries and keeps every valid key', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-repair-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(
+        file,
+        JSON.stringify({ dbPath: join(dir, 'tt.sqlite'), backupDir: 'relative/dir', extra: 1 }),
+      );
+      resetUntrustedConfig(file);
+      expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ dbPath: join(dir, 'tt.sqlite') });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resetUntrustedConfig sets an unparseable file ASIDE to a timestamped .invalid-* sibling — bytes preserved, config absent (= fully reset, §13)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-aside-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '{ not json');
+      resetUntrustedConfig(file);
+      expect(existsSync(file)).toBe(false);
+      const aside = readdirSync(dir).filter((n) => n.startsWith('config.json.invalid-'));
+      expect(aside).toHaveLength(1);
+      expect(readFileSync(join(dir, aside[0]!), 'utf8')).toBe('{ not json');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('resetUntrustedConfig sets a non-object file aside the same way (an array is not a config)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-config-aside2-'));
+    const file = join(dir, 'config.json');
+    try {
+      writeFileSync(file, '["a"]');
+      resetUntrustedConfig(file);
+      expect(existsSync(file)).toBe(false);
+      expect(readdirSync(dir).some((n) => n.startsWith('config.json.invalid-'))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('GOLD: storage ladders (§13) + broken-path refusal shapes (§20 R11)', () => {
+  // One shared resolver serves both surfaces (§13): env → config file → default, first
+  // rung wins, each effective path carrying its source. The fixtures below pin the whole
+  // precedence table and the beside-the-resolved-database default rung — byte-compatible
+  // with the pre-ladder beside-the-DB behavior.
+  const withConfig = (dir: string, config: StintConfig): string => {
+    const file = join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify(config));
+    return file;
+  };
+
+  it('env outranks config outranks default, and each row carries its rung', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-ladder-'));
+    try {
+      const cfg = withConfig(dir, { dbPath: '/conf/db.sqlite', backupDir: '/conf/backups' });
+      // All env rungs occupied — env wins everywhere.
+      const allEnv = resolveStoragePaths({
+        TT_CONFIG: cfg,
+        TT_DB: '/env/db.sqlite',
+        TT_BACKUP_DIR: '/env/backups',
+      } as NodeJS.ProcessEnv);
+      expect(allEnv.db).toEqual({ path: '/env/db.sqlite', source: 'env' });
+      expect(allEnv.backupDir).toEqual({ path: '/env/backups', source: 'env' });
+      expect(allEnv.configFile).toEqual({ path: cfg, source: 'env' });
+      // Env silent — the config rung takes both paths.
+      const conf = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      expect(conf.db).toEqual({ path: '/conf/db.sqlite', source: 'config' });
+      expect(conf.backupDir).toEqual({ path: '/conf/backups', source: 'config' });
+      // Config silent too — the defaults: per-OS data dir (or userDataDir) + beside-the-DB.
+      const empty = withConfig(dir, {});
+      const dflt = resolveStoragePaths({ TT_CONFIG: empty } as NodeJS.ProcessEnv, '/electron/userData');
+      expect(dflt.db).toEqual({ path: '/electron/userData/timetracker.sqlite', source: 'default' });
+      expect(dflt.backupDir).toEqual({ path: '/electron/userData', source: 'default' });
+      // The backup default follows the RESOLVED database — here the env rung's file.
+      const beside = resolveStoragePaths({
+        TT_CONFIG: empty,
+        TT_DB: '/env/deep/db.sqlite',
+      } as NodeJS.ProcessEnv);
+      expect(beside.backupDir).toEqual({ path: '/env/deep', source: 'default' });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('an untrusted config refuses resolution even when env vars would cover every value (§20 R10)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-ladder-bad-'));
+    try {
+      const file = join(dir, 'config.json');
+      writeFileSync(file, '{ nope');
+      // Config integrity at launch is unconditional: no rung is guessed around a bad file.
+      expect(() =>
+        resolveStoragePaths({
+          TT_CONFIG: file,
+          TT_DB: '/env/db.sqlite',
+          TT_BACKUP_DIR: '/env/backups',
+        } as NodeJS.ProcessEnv),
+      ).toThrow(ConfigError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a config-set db path with a missing parent refuses, naming path + config file, creating nothing (§20 R11)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-r11-'));
+    try {
+      const dbPath = join(dir, 'gone', 'tt.sqlite');
+      const cfg = withConfig(dir, { dbPath });
+      const paths = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      let thrown: unknown;
+      try {
+        assertDbPathUsable(paths);
+      } catch (err) {
+        thrown = err;
+      }
+      expect(thrown).toBeInstanceOf(StoragePathError);
+      const message = (thrown as StoragePathError).message;
+      // The done-when: BOTH names in the message, and the no-auto-mkdir stance stated.
+      expect(message).toContain(dbPath);
+      expect(message).toContain(cfg);
+      expect(message).toContain('not created');
+      expect(existsSync(join(dir, 'gone'))).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('a config-set db path with a live parent, or an existing file, passes the gate (§20 R11 first-run/adopt)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'stint-gold-r11-live-'));
+    try {
+      mkdirSync(join(dir, 'data'));
+      const cfg = withConfig(dir, { dbPath: join(dir, 'data', 'tt.sqlite') });
+      const paths = resolveStoragePaths({ TT_CONFIG: cfg } as NodeJS.ProcessEnv);
+      expect(() => assertDbPathUsable(paths)).not.toThrow();
+      // An existing FILE at the configured path simply opens, parent state irrelevant.
+      writeFileSync(join(dir, 'data', 'tt.sqlite'), '');
+      expect(() => assertDbPathUsable(paths)).not.toThrow();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('the gate covers only the config rung — env/default keep their existing semantics (§20 R11)', () => {
+    // TT_DB keeps today's behavior (the caller's explicit choice; openDb creates the
+    // parent), and the per-OS default dir is Stint's own to create — only a CONFIG-set
+    // path refuses on a dead parent.
+    expect(() =>
+      assertDbPathUsable({
+        db: { path: '/nowhere/at/all/tt.sqlite', source: 'env' },
+        backupDir: { path: '/nowhere/at/all', source: 'default' },
+        configFile: { path: '/tmp/none.json', source: 'env' },
+      }),
+    ).not.toThrow();
+  });
+});
+
+describe('GOLD: database location change refusal shapes (§20 R12)', () => {
+  // The §20 R12 pipeline's refusals are the loss-protection surface the GUI change dialog
+  // (§12 R26) renders verbatim — mockups/storage-change.html shows the migrate refusal —
+  // so the message shapes are pinned here: each names the destination, states WHY it
+  // stopped, and states that nothing became live. The invariants behind the words (old DB
+  // byte-identical, config untouched, gates decide liveness) are PROP
+  // core/test/prop/storage-change.test.ts; the flows are BDD features/storage_change.feature.
+  const NOW_AT = new Date('2026-06-24T12:00:00Z');
+
+  /** A file-backed store in its own temp home, plus the §20 R12 call plumbing. */
+  function changeFixture() {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-change-'));
+    const oldDbPath = join(home, 'old', 'tt.sqlite');
+    const store = Store.open({ path: oldDbPath, backupDir: join(home, 'old'), clock: () => NOW_AT });
+    const configFile = join(home, 'config.json');
+    mkdirSync(join(home, 'new-home'));
+    const newDbPath = join(home, 'new-home', 'tt.sqlite');
+    const change = (mode: 'migrate' | 'start-fresh', dest: string = newDbPath) =>
+      store.changeDbLocation({ newDbPath: dest, mode, configFile });
+    const dispose = () => {
+      store.close();
+      rmSync(home, { recursive: true, force: true });
+    };
+    return { home, oldDbPath, newDbPath, configFile, store, change, dispose };
+  }
+
+  const thrownBy = (fn: () => unknown): StorageChangeError => {
+    let thrown: unknown;
+    try {
+      fn();
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(StorageChangeError);
+    return thrown as StorageChangeError;
+  };
+
+  it('migrate refuses an existing destination file, naming it and the adopt alternative', () => {
+    const f = changeFixture();
+    try {
+      writeFileSync(f.newDbPath, 'already here');
+      const err = thrownBy(() => f.change('migrate'));
+      // The exact refusal grammar the §12 R26 dialog renders (mockups/storage-change.html).
+      expect(err.message).toBe(
+        `a file already exists at ${f.newDbPath} — migrate never overwrites; pick a ` +
+          `different location, or choose start fresh to adopt the existing file (it must ` +
+          `pass the integrity and version checks); nothing has changed`,
+      );
+      expect(err.destination).toBe(f.newDbPath);
+      // Nothing has changed, literally: destination bytes intact, config never written.
+      expect(readFileSync(f.newDbPath, 'utf8')).toBe('already here');
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('adoption refuses a file that fails the integrity check, naming it', () => {
+    const f = changeFixture();
+    try {
+      writeFileSync(f.newDbPath, 'opaque bytes that are not a database');
+      const err = thrownBy(() => f.change('start-fresh'));
+      expect(err.message).toContain(`cannot adopt ${f.newDbPath}`);
+      expect(err.message).toContain('failed the integrity check');
+      expect(err.message).toContain('the config file is untouched and the old database is still active');
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('adoption refuses a newer-schema database, naming both versions and the remedy (§20 R08/R09)', () => {
+    const f = changeFixture();
+    try {
+      const future = openDb(f.newDbPath);
+      future.exec(`PRAGMA user_version = ${SCHEMA_VERSION + 1}`);
+      future.close();
+      const err = thrownBy(() => f.change('start-fresh'));
+      expect(err.message).toBe(
+        `cannot adopt ${f.newDbPath}: its schema version ${SCHEMA_VERSION + 1} is newer ` +
+          `than this binary's supported version ${SCHEMA_VERSION} — run the newer binary ` +
+          `to use it; the config file is untouched and the old database is still active`,
+      );
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a destination in a missing directory refuses naming the parent, creating nothing', () => {
+    const f = changeFixture();
+    try {
+      const dest = join(f.home, 'gone', 'tt.sqlite');
+      const err = thrownBy(() => f.change('migrate', dest));
+      // The §20 R11 no-auto-mkdir stance, restated at the change gate.
+      expect(err.message).toContain(`its parent directory ${join(f.home, 'gone')} does not exist`);
+      expect(err.message).toContain('not created automatically');
+      expect(err.message).toContain('nothing has changed');
+      expect(existsSync(join(f.home, 'gone'))).toBe(false);
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a same-path change refuses — the destination is already the live database', () => {
+    const f = changeFixture();
+    try {
+      const err = thrownBy(() => f.change('migrate', f.oldDbPath));
+      expect(err.message).toBe(`${f.oldDbPath} is already the live database — nothing to change`);
+      expect(existsSync(f.configFile)).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('the success message names the old file kept in place, untouched (the R12 done-when)', () => {
+    const f = changeFixture();
+    try {
+      const r = f.change('migrate');
+      expect(r.message).toBe(
+        `migrated the database to ${f.newDbPath}; the old database is kept in place, ` +
+          `untouched, at ${f.oldDbPath}`,
+      );
+      expect(r.outcome).toBe('migrated');
+      expect(r.oldDbPath).toBe(f.oldDbPath);
+      expect(r.newDbPath).toBe(f.newDbPath);
+      expect(r.configFile).toBe(f.configFile);
+      // The pre-change backup at the old home is part of the result contract.
+      expect(r.backup.name.startsWith('tt.sqlite.bak-')).toBe(true);
+      expect(dirname(r.backup.path)).toBe(join(f.home, 'old'));
+      expect(r.committedDefault).toBe(false);
+    } finally {
+      f.dispose();
+    }
+  });
+
+  it('a change toward the caller-supplied default rung commits by DELETING the key (§13 reset semantics)', () => {
+    // The §12 R25 Reset-to-default flow: the GUI runs the same R26 pipeline toward the
+    // default location and the commit must DELETE `dbPath` — a resolved default is never
+    // written into the file — exactly as changeBackupDir already commits toward its own
+    // default rung. Unrelated keys survive the delete-key rewrite.
+    const f = changeFixture();
+    try {
+      writeFileSync(
+        f.configFile,
+        JSON.stringify({ dbPath: f.oldDbPath, backupDir: join(f.home, 'old') }),
+      );
+      const r = f.store.changeDbLocation({
+        newDbPath: f.newDbPath,
+        mode: 'migrate',
+        configFile: f.configFile,
+        defaultDbPath: f.newDbPath,
+      });
+      expect(r.committedDefault).toBe(true);
+      const committed = JSON.parse(readFileSync(f.configFile, 'utf8'));
+      expect('dbPath' in committed).toBe(false);
+      expect(committed.backupDir).toBe(join(f.home, 'old'));
+    } finally {
+      f.dispose();
+    }
+  });
+});
+
+describe('GOLD: retention, restore, and recovery follow the ACTIVE backup directory (§20 R04/R05)', () => {
+  // §20 R04's done-when says retention prunes to N *there* — in the directory §13's ladder
+  // resolves — and R04/R05 route listing, on-demand restore, and corruption recovery
+  // through the same directory. The launch-backup-lands-there leg is BDD
+  // storage_paths.feature; these pin the legs only a REDIRECTED directory can show (the
+  // beside-the-DB suites cannot distinguish the old hardwired dirname(dbPath) from the
+  // ladder): pruning prunes there and never beside the database, and a corrupt open and an
+  // on-demand restore both find their backup there.
+  it('retention prunes in the redirected directory and never beside the database (§20 R04)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-activedir-'));
+    try {
+      mkdirSync(join(home, 'db'));
+      mkdirSync(join(home, 'bk'));
+      const dbPath = join(home, 'db', 'tt.sqlite');
+      const bk = join(home, 'bk');
+      // Strays beside the database — the pre-ladder location retention must now ignore.
+      writeFileSync(join(home, 'db', 'tt.sqlite.bak-20260601T090000Z'), 'stray one');
+      writeFileSync(join(home, 'db', 'tt.sqlite.bak-20260602T090000Z'), 'stray two');
+      // Old backups in the ACTIVE directory (stale bytes, ordered stamps).
+      for (let i = 1; i <= 4; i++) {
+        writeFileSync(join(bk, `tt.sqlite.bak-2026061${i}T090000Z`), `old ${i}`);
+      }
+      const store = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      try {
+        store.setSetting('backupRetention', 3);
+        store.add({
+          description: 'seed',
+          fromUtc: '2026-06-24T09:00:00Z',
+          toUtc: '2026-06-24T10:00:00Z',
+        });
+        const fresh = store.backupNow();
+        expect(fresh).not.toBeNull();
+        expect(dirname(fresh!.path)).toBe(bk);
+        // Pruned to 3 IN the active directory: the two oldest seeds are gone…
+        const kept = readdirSync(bk).filter((n) => n.startsWith('tt.sqlite.bak-'));
+        expect(kept).toHaveLength(3);
+        expect(kept).not.toContain('tt.sqlite.bak-20260611T090000Z');
+        expect(kept).not.toContain('tt.sqlite.bak-20260612T090000Z');
+        // …the beside-the-DB strays are not the active set: never pruned, never listed.
+        expect(readdirSync(join(home, 'db')).filter((n) => n.includes('.bak-'))).toHaveLength(2);
+        expect(store.listBackups().every((b) => dirname(b.path) === bk)).toBe(true);
+      } finally {
+        store.close();
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  it('a corrupt open recovers from the redirected directory, and an on-demand restore finds its backup there (§20 R05)', () => {
+    const home = mkdtempSync(join(tmpdir(), 'stint-gold-activedir-rec-'));
+    try {
+      mkdirSync(join(home, 'db'));
+      mkdirSync(join(home, 'bk'));
+      const dbPath = join(home, 'db', 'tt.sqlite');
+      const bk = join(home, 'bk');
+      // A real database with one entry, backed up into the ACTIVE directory, then closed.
+      const seeded = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      seeded.add({
+        description: 'survives',
+        fromUtc: '2026-06-24T09:00:00Z',
+        toUtc: '2026-06-24T10:00:00Z',
+      });
+      const backup = seeded.backupNow();
+      seeded.close();
+      expect(backup).not.toBeNull();
+      expect(dirname(backup!.path)).toBe(bk);
+      // Clobber the main file (no WAL/SHM survivors) — the §20 R03 corrupt-open shape.
+      writeFileSync(dbPath, 'this is not a sqlite database');
+      rmSync(`${dbPath}-wal`, { force: true });
+      rmSync(`${dbPath}-shm`, { force: true });
+      const reopened = Store.open({ path: dbPath, backupDir: bk, clock: () => NOW });
+      try {
+        // Recovery consulted the redirected directory — beside the DB there is no backup.
+        const rec = reopened.lastRecovery();
+        expect(rec).not.toBeNull();
+        expect(rec!.recoveredFrom).toBe(backup!.name);
+        expect(rec!.quarantinedTo.startsWith(`${dbPath}.corrupted-`)).toBe(true);
+        expect(existsSync(rec!.quarantinedTo)).toBe(true);
+        expect(reopened.listEntries({}).map((e) => e.description)).toEqual(['survives']);
+        // The on-demand restore resolves its name in the same active directory.
+        expect(reopened.restoreFromBackup(backup!.name).recoveredFrom).toBe(backup!.name);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });
 

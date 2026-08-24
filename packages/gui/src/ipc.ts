@@ -98,6 +98,15 @@ export const CHANNELS = [
   // the current file and re-points the store at the chosen backup, then refreshes all windows.
   'listBackups',
   'restoreBackup',
+  // §12 R25 / §13: the Settings Storage group's read side — the three effective storage paths
+  // (database, backup directory, config file), each with the ladder rung that set it, through
+  // core's ONE resolveStoragePaths, so the rows can never disagree with `tt paths` (its parity
+  // twin). Also carries the §20 R14 backup-directory probe (the Backups/Storage error state)
+  // and the default-rung paths the Reset-to-default flow targets. READ ONLY — the write side
+  // (the §12 R26 change flow) rides the separate storage:* namespace OFF the parity matrix
+  // (architecture.html §08 — its CLI counterpart is the documented config-file procedure, not
+  // a verb), the update:* precedent.
+  'getStoragePaths',
 ] as const;
 
 export type Channel = (typeof CHANNELS)[number];
@@ -437,6 +446,42 @@ export interface RestoreResult {
   quarantinedTo: string;
 }
 
+/** §13 — one effective storage path + the ladder rung that set it (mirrors core's EffectivePath). */
+export interface EffectivePathView {
+  path: string;
+  source: 'env' | 'config' | 'default';
+}
+
+/**
+ * §12 R25 / §13 / §20 R14 — what `getStoragePaths` returns: the renderer-safe projection the
+ * Settings Storage group paints (no core import in the page). `db`/`backupDir`/`configFile`
+ * are the SAME three effective paths + sources `tt paths` prints (core's one resolver serves
+ * both, so they can never disagree); `defaults` names the ladder's default-rung locations the
+ * §12 R25 Reset-to-default flow targets (the database default is the GUI's `userData`-derived
+ * path; the backup default is beside the effective database); `backupDirState` is the §20 R14
+ * probe — a dead backup directory renders the Storage row and the Backups section in the error
+ * state rather than hiding the failure.
+ */
+export interface StoragePathsView {
+  db: EffectivePathView;
+  backupDir: EffectivePathView;
+  configFile: EffectivePathView;
+  defaults: { dbPath: string; backupDir: string };
+  backupDirState: { ok: boolean; problem: string | null };
+}
+
+/**
+ * §12 R26 — what a `storage:changeDb` / `storage:changeBackupDir` call resolves to. A REFUSAL
+ * is a value, not a rejection: core's StorageChangeError messages are written for in-dialog
+ * rendering (§12 R21's inline grammar), so main catches the typed refusal and returns its
+ * message as `{ ok: false }` — the dialog stays open, the config untouched, the old location
+ * active. `{ ok: true }` means the pipeline ran and the config committed; main relaunches the
+ * app right after resolving, so the renderer at most paints the success message briefly.
+ */
+export type StorageChangeResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string };
+
 /**
  * The per-channel payload/result contract — one entry per CHANNELS name. `payload` is what
  * the renderer sends (`void` for the parameterless reads/toggles); `result` is what main
@@ -494,6 +539,7 @@ export interface IpcContract {
   setSetting: { payload: SetSettingPayload; result: void };
   listBackups: { payload: void; result: BackupInfoView[] };
   restoreBackup: { payload: { name: string }; result: RestoreResult };
+  getStoragePaths: { payload: void; result: StoragePathsView };
 }
 
 // Compile-time exhaustiveness, both directions: a CHANNELS name missing from IpcContract

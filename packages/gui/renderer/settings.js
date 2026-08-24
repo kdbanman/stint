@@ -497,7 +497,23 @@
   // The retention picker's offered values (mirrors the mockup's last 3 / last 5 / last 10).
   const RETENTION_OPTIONS = [[3, 'last 3'], [5, 'last 5'], [10, 'last 10']];
 
-  function backupsHtml(state, backups) {
+  // §20 R14 — the dead-durability-net error line the Backups group paints when the active
+  // backup directory cannot receive a backup (missing / not a directory / unwritable). The
+  // danger block palette (§12 R21's refusal grammar, never the --flag advisory), announced,
+  // naming the directory and the problem in core's own plain words — the same state the
+  // Storage group's Backup-folder row renders, so the failure hides nowhere backups speak.
+  function backupDirErrorHtml(dirState) {
+    if (!dirState || dirState.ok) return '';
+    return (
+      `<div class="backup-dir-error" role="status" aria-live="polite">` +
+      `<svg class="ic" aria-hidden="true"><use href="#i-info" /></svg> ` +
+      `Backup directory <span class="storage-path">${esc(dirState.path)}</span> ${esc(dirState.problem)} — ` +
+      `backups cannot be written until it is restored or changed.` +
+      `</div>`
+    );
+  }
+
+  function backupsHtml(state, backups, storagePaths) {
     const settings = (state && state.settings) || {};
     const retention = settings.backupRetention || 5;
     const last = state && state.lastBackupUtc;
@@ -530,9 +546,17 @@
     } else {
       listHtml = `<span class="set-empty">No backups to restore from yet.</span>`;
     }
+    const dirError = storagePaths
+      ? backupDirErrorHtml({
+          path: storagePaths.backupDir.path,
+          ok: storagePaths.backupDirState.ok,
+          problem: storagePaths.backupDirState.problem,
+        })
+      : '';
     return (
       recoveryBannerHtml(state && state.recoveryNotice) +
       `<div class="set-grp">Backups</div>` +
+      dirError +
       `<div class="set-row"><div class="set-k">Last backup</div>` +
       `<div class="set-ctrl">${lastLine}</div></div>` +
       `<div class="set-row"><div class="set-k">Keep<small>Older automatic backups are pruned.</small></div>` +
@@ -546,7 +570,9 @@
   // Render the Backups group into its own host and wire its actions. The restore list is read
   // over window.stint.listBackups() (parity with `tt backup ls`); the retention picker persists
   // over setSetting; each Restore… goes through the destructive-action confirm gate (§12 R13).
-  async function renderBackups(state) {
+  // `storagePaths` (the getStoragePaths snapshot, or null) carries the §20 R14 probe for the
+  // dead-backup-directory error line.
+  async function renderBackups(state, storagePaths) {
     const host = document.getElementById('backups-panel');
     if (!host) return;
     let backups = [];
@@ -555,7 +581,7 @@
     } catch {
       backups = [];
     }
-    host.innerHTML = backupsHtml(state, backups);
+    host.innerHTML = backupsHtml(state, backups, storagePaths);
     // Retention picker → persist over the existing setSetting channel (numeric cast), then reload.
     const sel = host.querySelector('select.set-field[data-key="backupRetention"]');
     if (sel) {
@@ -579,6 +605,322 @@
             await render();
           },
         });
+      });
+    }
+  }
+
+  // ------------------------------------------------------------------ Storage (§12 R25/R26)
+  //
+  // The file-backed Storage group (context/mockups/settings.html) and the guided change
+  // dialog (context/mockups/storage-change.html). The group is DISPLAY AND ROUTING ONLY
+  // (§12 R25): the caption states the paths live in a config file — not the database — and
+  // names that file's own effective path; the Database / Backup-folder rows show the
+  // effective path + its ladder source (env / config file / default) off the SAME core
+  // resolver `tt paths` prints from (the getStoragePaths channel); an env-overridden row
+  // says so and disables Change… (the env rung outranks anything the app could write);
+  // Reset to default… appears on config-set rows only and runs the same R26 flow toward
+  // the default, committing by DELETING the key (§13). Nothing in the group writes without
+  // entering the R26 dialog, whose commit is the storage:* bridge (main runs the §20
+  // R12/R13 pipeline, commits the config atomically, and relaunches).
+
+  /** The env var that outranks a row (the ladder's top rung, §13) — named on the row. */
+  const STORAGE_ENV_VARS = { db: 'TT_DB', backupDir: 'TT_BACKUP_DIR' };
+
+  function sourcePill(source, kind) {
+    if (source === 'env') return `env · ${STORAGE_ENV_VARS[kind]}`;
+    if (source === 'config') return 'config file';
+    return 'default';
+  }
+
+  function storageRowHtml(kind, label, eff, dirError) {
+    const envSet = eff.source === 'env';
+    const configSet = eff.source === 'config';
+    const envNote = envSet
+      ? `<small>Set by <code class="storage-code">${esc(STORAGE_ENV_VARS[kind])}</code> — clear the variable to change it here</small>`
+      : '';
+    const reset = configSet
+      ? ` <button type="button" class="ghost storage-reset" data-storage-reset="${kind}">Reset to default…</button>`
+      : '';
+    return (
+      `<div class="set-row storage-row" data-storage-row="${kind}">` +
+      `<div class="set-k">${esc(label)}` +
+      `<small class="storage-path">${esc(eff.path)}</small>` +
+      envNote +
+      (dirError || '') +
+      `</div>` +
+      `<div class="set-ctrl"><span class="pill storage-pill">${esc(sourcePill(eff.source, kind))}</span>` +
+      `<button type="button" class="set-update-btn storage-change" data-storage-change="${kind}"${envSet ? ' disabled' : ''}>Change…</button>` +
+      reset +
+      `</div></div>`
+    );
+  }
+
+  function storageHtml(paths) {
+    const backupDirError = paths.backupDirState.ok
+      ? ''
+      : backupDirErrorHtml({
+          path: paths.backupDir.path,
+          ok: false,
+          problem: paths.backupDirState.problem,
+        });
+    return (
+      `<div class="set-grp">Storage</div>` +
+      `<div class="storage-card">` +
+      // §12 R25 — the caption: file-backed, naming the config file's OWN effective path
+      // (the same file `tt paths` prints) so these read as a different kind of thing from
+      // the settings rows around them.
+      `<div class="storage-cap">Stored in a config file — not in your database: ` +
+      `<code class="storage-code">${esc(paths.configFile.path)}</code>. ` +
+      `Environment variables override the file; <code class="storage-code">tt paths</code> ` +
+      `prints these same paths and sources.</div>` +
+      storageRowHtml('db', 'Database', paths.db, '') +
+      storageRowHtml('backupDir', 'Backup folder', paths.backupDir, backupDirError) +
+      `</div>`
+    );
+  }
+
+  // The §12 R26 dialog's per-surface copy: title/subtitle, the required-choice question,
+  // the two option cards, and the safety facts stated in place (§20 R12 for the database,
+  // §20 R13 for the backup folder) — per mode, so start-fresh never claims a move.
+  const STORAGE_DIALOG_COPY = {
+    db: {
+      title: 'Change database location',
+      sub: 'Stint relaunches onto the new location when you confirm.',
+      q: 'How should the new location start?',
+      opts: {
+        migrate: ['Migrate', 'Copy your data to the new location'],
+        'start-fresh': ['Start fresh', 'A new, empty database — or adopt a file already there'],
+      },
+      facts: {
+        migrate: [
+          'A <b>backup is written first</b>, at the current location',
+          'The current file <b>stays in place</b> — copy, never delete',
+          'The copy is <b>integrity-checked</b> before anything changes',
+        ],
+        'start-fresh': [
+          'A <b>backup is written first</b>, at the current location',
+          'The current file <b>stays in place</b>, untouched',
+          'A file already at the new location is <b>adopted only if it passes the integrity and version checks</b>',
+        ],
+      },
+      confirmVerb: { migrate: 'migrate to', 'start-fresh': 'start fresh at' },
+    },
+    backupDir: {
+      title: 'Change backup folder',
+      sub: 'Stint relaunches onto the new folder when you confirm.',
+      q: 'How should the new folder start?',
+      opts: {
+        migrate: ['Migrate', 'Move existing backups to the new folder'],
+        'start-fresh': ['Start fresh', 'The new folder starts empty; old backups stay put'],
+      },
+      facts: {
+        migrate: [
+          'A <b>fresh backup is written to the new folder first</b>',
+          'Backups are <b>moved and verified</b> — a failed verify stops with both sets intact',
+          'Originals are deleted <b>only after every copy verifies</b>',
+        ],
+        'start-fresh': [
+          'A <b>fresh backup is written to the new folder first</b>',
+          'Existing backups <b>stay put, untouched</b>, in the current folder',
+        ],
+      },
+      confirmVerb: { migrate: 'migrate to', 'start-fresh': 'start fresh at' },
+    },
+  };
+
+  function closeStorageDialog() {
+    const backdrop = document.querySelector('.storage-dialog-backdrop');
+    if (backdrop) backdrop.remove();
+  }
+
+  /**
+   * §12 R26 — the ONE guided change dialog (mockups/storage-change.html), for both surfaces
+   * and for the Reset-to-default flow (`toDefault`). Current path → new path, the REQUIRED
+   * Migrate / Start-fresh choice — no pre-selection, the commit disabled until one is
+   * chosen (the comprehension gate) — the safety facts in place once chosen, and a single
+   * §12 R13 arm-then-confirm commit labeled to include the relaunch: "Change and relaunch",
+   * arming in place to "Confirm: migrate to <path>". A refusal renders INSIDE the dialog
+   * (§12 R21's inline grammar — the danger block, announced): the dialog stays open, the
+   * config untouched, the old location still active.
+   */
+  function openStorageDialog(kind, eff, newPath, toDefault) {
+    closeStorageDialog();
+    const copy = STORAGE_DIALOG_COPY[kind];
+    const currentSource =
+      kind === 'backupDir' && eff.source === 'default'
+        ? 'default — beside the database'
+        : sourcePill(eff.source, kind);
+    const newNote = toDefault
+      ? 'commits by deleting the config key — the default location'
+      : 'will be written to the config file';
+    const backdrop = document.createElement('div');
+    backdrop.className = 'editor-backdrop storage-dialog-backdrop';
+    const dialog = document.createElement('div');
+    dialog.className = 'editor storage-dialog';
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-labelledby', 'sd-title');
+    const optHtml = (mode) =>
+      `<label class="sd-opt" data-mode="${mode}"><span class="rad"></span>` +
+      `<span class="ot"><b>${esc(copy.opts[mode][0])}</b><span>${esc(copy.opts[mode][1])}</span></span></label>`;
+    dialog.innerHTML =
+      `<div class="ed-head"><div><h3 class="ed-title" id="sd-title">${esc(copy.title)}</h3>` +
+      `<p class="sd-sub">${esc(copy.sub)}</p></div></div>` +
+      `<div class="ed-body sd-body">` +
+      `<div class="sd-srcs">` +
+      `<div class="sd-src"><div class="sd-lbl">Current</div><div class="sd-path">${esc(eff.path)}</div>` +
+      `<div class="sd-d">${esc(currentSource)}</div></div>` +
+      `<div class="sd-arrow"><svg class="ic" aria-hidden="true"><use href="#i-arrow" /></svg></div>` +
+      `<div class="sd-src"><div class="sd-lbl">New</div><div class="sd-path">${esc(newPath)}</div>` +
+      `<div class="sd-d">${esc(newNote)}</div></div>` +
+      `</div>` +
+      `<div class="sd-q">${esc(copy.q)}</div>` +
+      `<div class="sd-opts">${optHtml('migrate')}${optHtml('start-fresh')}</div>` +
+      `<div class="sd-facts" hidden></div>` +
+      `<div class="sd-error" role="status" aria-live="polite" hidden></div>` +
+      `</div>` +
+      `<div class="ed-foot sd-foot"><span class="sd-hint">Choose Migrate or Start fresh to continue</span>` +
+      `<button type="button" class="sd-cancel">Cancel</button>` +
+      `<button type="button" class="primary sd-commit" disabled>Change and relaunch</button></div>`;
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+
+    // The dialog's whole state machine: the required choice (null until the user picks —
+    // no pre-selection) and the arm step. Any input disarms and clears a shown refusal.
+    let mode = null;
+    let armed = false;
+    const commit = dialog.querySelector('.sd-commit');
+    const hint = dialog.querySelector('.sd-hint');
+    const facts = dialog.querySelector('.sd-facts');
+    const errRegion = dialog.querySelector('.sd-error');
+
+    function paint() {
+      for (const opt of dialog.querySelectorAll('.sd-opt')) {
+        opt.classList.toggle('on', opt.dataset.mode === mode);
+      }
+      if (mode) {
+        facts.hidden = false;
+        facts.innerHTML = copy.facts[mode]
+          .map(
+            (f) =>
+              `<div class="sd-fact"><svg class="ic" aria-hidden="true"><use href="#i-check" /></svg><span>${f}</span></div>`,
+          )
+          .join('');
+        hint.textContent = '';
+        commit.disabled = false;
+      } else {
+        facts.hidden = true;
+        hint.textContent = 'Choose Migrate or Start fresh to continue';
+        commit.disabled = true;
+      }
+      // §12 R13/R26 — the single arm-then-confirm, labeled to include the relaunch; the
+      // armed label names the MODE and the DESTINATION. Arming writes nothing.
+      commit.textContent =
+        armed && mode ? `Confirm: ${copy.confirmVerb[mode]} ${newPath}` : 'Change and relaunch';
+    }
+
+    function showRefusal(message) {
+      errRegion.hidden = false;
+      errRegion.textContent = message;
+      armed = false;
+      paint();
+    }
+
+    for (const opt of dialog.querySelectorAll('.sd-opt')) {
+      opt.addEventListener('click', () => {
+        mode = opt.dataset.mode;
+        armed = false;
+        errRegion.hidden = true;
+        errRegion.textContent = '';
+        paint();
+      });
+    }
+    dialog.querySelector('.sd-cancel').addEventListener('click', closeStorageDialog);
+    commit.addEventListener('click', async () => {
+      if (!mode) return;
+      if (!armed) {
+        // First click only ARMS — nothing is written; the label swaps in place to the
+        // worded confirm (mode + destination).
+        armed = true;
+        paint();
+        return;
+      }
+      const bridge = window.stint && window.stint.storage;
+      if (!bridge) return;
+      commit.disabled = true;
+      let result;
+      try {
+        result =
+          kind === 'db'
+            ? await bridge.changeDb({ newDbPath: newPath, mode })
+            : await bridge.changeBackupDir({ newBackupDir: newPath, mode });
+      } catch (err) {
+        // An unexpected rejection (not a typed refusal) still surfaces in place, stripped
+        // to its kernel (issue 138) — never a silent no-op, never a transport string.
+        showRefusal(window.SU.errMessage(err));
+        return;
+      }
+      if (result && result.ok) {
+        // The pipeline ran and the config committed; main relaunches. Say so while it does.
+        armed = false;
+        errRegion.hidden = true;
+        hint.textContent = 'Relaunching onto the new location…';
+        commit.disabled = true;
+        commit.textContent = 'Change and relaunch';
+        return;
+      }
+      // §12 R26 — a refusal renders INSIDE the dialog: it stays open, the config is
+      // untouched, the old location still active. Core's message is written for exactly
+      // this region (§12 R21's inline grammar).
+      showRefusal((result && result.message) || 'The change was refused. Nothing has changed.');
+    });
+    paint();
+  }
+
+  async function fetchStoragePaths() {
+    try {
+      if (window.stint && window.stint.getStoragePaths) {
+        return await window.stint.getStoragePaths();
+      }
+    } catch {
+      /* a harness page without the channel simply renders no Storage group */
+    }
+    return null;
+  }
+
+  // Render the Storage group into its own host and wire the two launchers. Change… opens
+  // the OS picker first (a file location for the database, a directory for backups — over
+  // the storage bridge, since the renderer cannot show native chrome), then the R26 dialog;
+  // a canceled picker opens nothing. Reset to default… skips the picker: the destination IS
+  // the default rung (shown in the dialog), and the commit deletes the key (§13).
+  function renderStorage(paths) {
+    const host = document.getElementById('storage-panel');
+    if (!host) return;
+    if (!paths) {
+      host.innerHTML = '';
+      return;
+    }
+    host.innerHTML = storageHtml(paths);
+    for (const btn of host.querySelectorAll('[data-storage-change]')) {
+      btn.addEventListener('click', async () => {
+        const kind = btn.dataset.storageChange;
+        const bridge = window.stint && window.stint.storage;
+        if (!bridge) return;
+        let picked = null;
+        try {
+          picked = kind === 'db' ? await bridge.pickDbPath() : await bridge.pickBackupDir();
+        } catch {
+          picked = null;
+        }
+        if (!picked) return; // canceled at the OS picker — nothing opens, nothing changes
+        openStorageDialog(kind, paths[kind], picked, false);
+      });
+    }
+    for (const btn of host.querySelectorAll('[data-storage-reset]')) {
+      btn.addEventListener('click', () => {
+        const kind = btn.dataset.storageReset;
+        const target = kind === 'db' ? paths.defaults.dbPath : paths.defaults.backupDir;
+        openStorageDialog(kind, paths[kind], target, true);
       });
     }
   }
@@ -713,10 +1055,16 @@
     // wiring the Check-now action. The snapshot appVersion is the fallback when the bridge
     // is unavailable (e.g. a renderer harness without preload).
     void renderSoftwareUpdate(state && state.appVersion);
+    // §12 R25 / §20 R14 — one getStoragePaths snapshot per render, threaded to BOTH surfaces
+    // that speak for the backup directory (the Backups error line and the Storage group), so
+    // the two can never disagree about the same probe.
+    const storagePaths = await fetchStoragePaths();
     // §20 R04/R05 — the Backups group + recovery banner render into their own host (after the
     // Software Update group), off the SAME snapshot: the restore list / "Last backup" status /
     // retention picker (R04) and the one-shot corruption-recovery notice (R05).
-    void renderBackups(state);
+    void renderBackups(state, storagePaths);
+    // §12 R25 — the file-backed Storage group (display + routing into the R26 dialog only).
+    renderStorage(storagePaths);
   }
 
   // The Settings nav-item routes via app.js (which only toggles the section hidden); render

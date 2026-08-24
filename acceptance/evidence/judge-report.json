@@ -557,7 +557,7 @@
         "editOk": true,
         "popOk": true
       },
-      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":614,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
+      "justification": "week@1040={\"count\":5,\"minWidth\":152,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":1} week@1920={\"count\":5,\"minWidth\":328,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":0} → true; weekend-on@1040={\"count\":7,\"minWidth\":108,\"spread\":1,\"hScroll\":false,\"truncatedDescs\":9} → true; add-form@minimum={\"scrollY\":0,\"saveInViewport\":true,\"saveBottom\":613,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; edit-form={\"saveInViewport\":true,\"fieldsInColumn\":true,\"noHOverflow\":true} → true; popover={\"cardInside\":true,\"toggleInside\":true,\"openInside\":true,\"noOverflow\":true,\"window\":{\"w\":332,\"h\":275}} → true",
       "screenshot": "calendar-wide.png"
     },
     {
@@ -725,13 +725,62 @@
       "screenshot": "main-recovery.png"
     },
     {
+      "item": "STORAGE_GROUP",
+      "pass": true,
+      "facts": {
+        "captionNamesConfigFile": true,
+        "rowsShowPathAndSource": true,
+        "envChangeDisabled": true,
+        "resetOnConfigRowOnly": true
+      },
+      "justification": "caption=\"Stored in a config file — not in your database: /home/kirby/.config/stint/config.json. Environment variables override the file; tt paths prints these same paths and sources.\"; db row path=\"/home/kirby/tracking/timetracker.sqlite\" pill=\"config file\" (Change… disabled=false, Reset=true); backup row path=\"/mnt/nas/stint-backups\" pill=\"env · TT_BACKUP_DIR\" (Change… disabled=true, Reset=false, note=\"Backup folder/mnt/nas/stint-backupsSet by TT_BACKUP_DIR — clear the variable to change it here\"); writes at rest=0",
+      "screenshot": "storage-group.png"
+    },
+    {
+      "item": "STORAGE_CHANGE_CHOICE",
+      "pass": true,
+      "facts": {
+        "noPreselection": true,
+        "currentToNewShown": true,
+        "commitDisabledUntilChosen": true,
+        "chosenLiftsD12": true,
+        "factsInPlace": true
+      },
+      "justification": "as opened: chosen=0, commit disabled=true, hint=\"Choose Migrate or Start fresh to continue\", srcs=[\"Current/home/kirby/tracking/timetracker.sqliteconfig file\",\"New/home/kirby/moved/timetracker.sqlitewill be written to the config file\"]; after Migrate: on bg=rgb(253, 253, 252) (paper=rgb(253, 253, 252)) shadow≠none=true, peer bg=rgb(241, 240, 239) (wash=rgb(241, 240, 239)) flat=true, commit enabled=true, facts=\"A backup is written first, at the current locationThe current file stays in place — copy, never deleteThe copy is integrity-checked before anything changes\", writes=0",
+      "screenshot": "storage-change-choice.png"
+    },
+    {
+      "item": "STORAGE_CHANGE_ARMED",
+      "pass": true,
+      "facts": {
+        "armNamesModeAndPath": true,
+        "nothingWrittenOnArm": true,
+        "rechoiceDisarms": true,
+        "confirmFiresOnce": true
+      },
+      "justification": "armed label=\"Confirm: migrate to /home/kirby/moved/timetracker.sqlite\" with writes=0; re-choice → label=\"Change and relaunch\" (disabled=false, writes=0); re-armed=\"Confirm: start fresh at /home/kirby/moved/timetracker.sqlite\"; confirm → [{\"kind\":\"db\",\"payload\":{\"newDbPath\":\"/home/kirby/moved/timetracker.sqlite\",\"mode\":\"start-fresh\"}}] hint=\"Relaunching onto the new location…\"",
+      "screenshot": "storage-change-armed.png"
+    },
+    {
+      "item": "STORAGE_CHANGE_REFUSAL",
+      "pass": true,
+      "facts": {
+        "refusalInDialog": true,
+        "refusalReadsClean": true,
+        "dialogStaysOpenOldActive": true,
+        "backupDirErrorBothSurfaces": true
+      },
+      "justification": "in-dialog refusal: visible=true role=status/polite, text=\"a file already exists at /home/kirby/moved/timetracker.sqlite — migrate never overwrites; pick a different location, or choose start fresh to adopt the existing file (it must pass the integrity and version checks); nothing has changed\"; dialog open=true, commit disarmed to \"Change and relaunch\" (enabled=true), row still \"/home/kirby/tracking/timetracker.sqlite\", attempts=1; §20 R14 broken dir: storage row=\"Backup directory /mnt/nas/stint-backups does not exist — backups cannot be written until it is restored or changed.\", backups section=\"Backup directory /mnt/nas/stint-backups does not exist — backups cannot be written until it is restored or changed.\"",
+      "screenshot": "storage-change-refusal.png"
+    },
+    {
       "item": "PARITY_REACH",
       "pass": true,
       "facts": {
         "everyChannelPresent": true,
         "allRouted": true
       },
-      "justification": "window.stint exposes 45/45 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
+      "justification": "window.stint exposes 46/46 channels (missing=[none]); nav reaches all five views (timer:shown, entries:shown, clients:shown, reports:shown, settings:shown)",
       "screenshot": "parity-settings.png"
     },
     {
@@ -742,7 +791,7 @@
         "everyFieldNamed": true,
         "noPlaceholderOnly": true
       },
-      "justification": "D13 sweep over 151 visible focusable controls, 32 of them fields (timer (start details)=15, entries (toolbar + unified form)=60, clients=21, reports (builder + custom range)=34, settings=21): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[select.set-field → 'Rounding increment'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
+      "justification": "D13 sweep over 154 visible focusable controls, 32 of them fields (timer (start details)=15, entries (toolbar + unified form)=60, clients=21, reports (builder + custom range)=34, settings=24): no accessible name at all (every control, D13 + D16)=[none]; field named but not by a visible element (placeholder / aria-label only)=[none]; row-heading idiom (visible name in the row heading, aria-label the programmatic half)=[select.set-field → 'Rounding increment'; select.set-field → 'Around'; input.set-field set-min tnum → 'Fine snapDrag resolution with the fine-snap toggle on · 1–30 min, at most the coarse value'; input.set-field set-min tnum → 'Coarse snapDefault drag resolution · 1–30 min'; select.set-field → 'First check-in'; select.set-field → 'Check-in interval'; select.set-field → 'Date & number format'; select.set-field → 'Time zoneDisplay, time entry, and day grouping use this zone'; select.set-field → 'KeepOlder automatic backups are pruned.']",
       "screenshot": "field-labels-timer.png"
     },
     {
@@ -769,7 +818,7 @@
         "startGripMet": true,
         "startGripHit24": true
       },
-      "justification": "A03 sweep over 315 visible targets across 12 surfaces (entries=23, timer=20, clients=26, reports=14, settings=26, entries (unified form, create)=32, entries (unified editor)=52, timer (start details)=20, reports (builder)=39, entries (short blocks)=40, timer (running, start-only picker)=21, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]; duration-true exemption (design.html §07, issue #224 — sub-floor calendar blocks whose height encodes a sub-24-minute span; must be non-empty)=[entries (short blocks):div.ev entry[data-id=\"201\"] 138.8x18 (10m — height is duration)]; focused 18px short block: corner checkbox beyond-box=true hit-testable=true, ops chip beyond-box=true hit-testable=true; running picker's .stp-grip, measured by name (issue #247 — no role reaches it): 32x6 bar riding a 40x24 centred hit pad (effective 40x24), centred-box edges hit-test=true",
+      "justification": "A03 sweep over 318 visible targets across 12 surfaces (entries=23, timer=20, clients=26, reports=14, settings=29, entries (unified form, create)=32, entries (unified editor)=52, timer (start details)=20, reports (builder)=39, entries (short blocks)=40, timer (running, start-only picker)=21, popover=2): under 24×24 with less than 24px of clearance=[none]; swept but absent (the tag remover, the select checkbox, a picker day cell)=[none]; spacing-exception (undersized, ≥24px clear of every other target)=[none]; duration-true exemption (design.html §07, issue #224 — sub-floor calendar blocks whose height encodes a sub-24-minute span; must be non-empty)=[entries (short blocks):div.ev entry[data-id=\"201\"] 138.8x18 (10m — height is duration)]; focused 18px short block: corner checkbox beyond-box=true hit-testable=true, ops chip beyond-box=true hit-testable=true; running picker's .stp-grip, measured by name (issue #247 — no role reaches it): 32x6 bar riding a 40x24 centred hit pad (effective 40x24), centred-box edges hit-test=true",
       "screenshot": "main-target-size.png"
     },
     {

@@ -79,7 +79,18 @@ export function createHandlers(store, deps = {}) {
     'update:reveal': () => ({ steps: [], artifactPath: null }),
   };
 
-  return { handlers, updateHandlers };
+  // window.stint.storage — the §12 R26 write side, likewise off the parity-asserted set
+  // (architecture.html §08). No native picker or relaunch host in a sweep: the pickers
+  // answer "canceled" (so the change dialog simply never opens) and a change that somehow
+  // fires refuses in the dialog's own value shape, mutating nothing.
+  const storageHandlers = {
+    'storage:pickDbPath': () => null,
+    'storage:pickBackupDir': () => null,
+    'storage:changeDb': () => ({ ok: false, message: 'storage change is stubbed in the QA driver (no relaunch host); nothing has changed' }),
+    'storage:changeBackupDir': () => ({ ok: false, message: 'storage change is stubbed in the QA driver (no relaunch host); nothing has changed' }),
+  };
+
+  return { handlers, updateHandlers, storageHandlers };
 }
 
 // ------------------------------------------------------------------ sweep loop
@@ -98,12 +109,12 @@ async function main() {
 
   const store = Store.open({ path: join(dirs.home, 'stint.db') });
   const pages = new Set();
-  const { handlers, updateHandlers } = createHandlers(store, {
+  const { handlers, updateHandlers, storageHandlers } = createHandlers(store, {
     exportsDir: dirs.exports,
     // main.ts refreshAll → broadcast('changed') to every window.
     refresh: () => { for (const p of pages) p.evaluate(() => window.__emitChanged && window.__emitChanged()).catch(() => {}); },
   });
-  const all = { ...handlers, ...updateHandlers };
+  const all = { ...handlers, ...updateHandlers, ...storageHandlers };
 
   const launch = () =>
     chromium.launch({
@@ -143,6 +154,10 @@ async function main() {
         getVersion: call('update:getVersion'), check: call('update:check'),
         download: call('update:download'), reveal: call('update:reveal'),
         onUpdateProgress: () => () => {},
+      };
+      api.storage = {
+        pickDbPath: call('storage:pickDbPath'), pickBackupDir: call('storage:pickBackupDir'),
+        changeDb: call('storage:changeDb'), changeBackupDir: call('storage:changeBackupDir'),
       };
       window.stint = api;
     })()`);

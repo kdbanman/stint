@@ -320,7 +320,12 @@ export function assertOpenPragmas(db: Db, path: string, busyTimeoutMs: number): 
  */
 export function openDb(
   path: string,
-  opts: { busyTimeoutMs?: number; onRecovered?: (r: RecoveryResult) => void } = {},
+  opts: {
+    busyTimeoutMs?: number;
+    onRecovered?: (r: RecoveryResult) => void;
+    /** §20 R04/R05 — the ACTIVE backup directory recovery restores from (default: beside the DB). */
+    backupDir?: string;
+  } = {},
 ): Db {
   if (path !== ':memory:') {
     mkdirSync(dirname(path), { recursive: true });
@@ -378,7 +383,9 @@ export function openDb(
   }
   if (corrupt) {
     closeQuietly(db);
-    const recovery = quarantineAndRecover(path); // throws RecoveryError if no backup
+    // Restores from the ACTIVE backup directory (§13's ladder) — resolved before the
+    // database opened, which is why the directory lives in the config file (§20 R05).
+    const recovery = quarantineAndRecover(path, new Date(), opts.backupDir ?? dirname(path)); // throws RecoveryError if no backup
     db = new DatabaseSync(path); // reopen the restored file
     try {
       assertOpenPragmas(db, path, busyTimeoutMs);

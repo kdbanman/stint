@@ -6,6 +6,10 @@
  */
 import { spawnSync } from 'node:child_process';
 import {
+  appendFileSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
   mkdtempSync,
   rmSync,
   openSync,
@@ -16,13 +20,18 @@ import {
   readFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   Store,
   StoreError,
+  ConfigError,
+  StoragePathError,
+  StorageChangeError,
+  changeBackupDir,
   joinClientProject,
   resolveRange,
+  resolveStoragePaths,
   openDb,
   RecoveryError,
   toCsv,
@@ -569,9 +578,212 @@ export interface World {
    * what `corruptDatabaseFile` wrote — it MUST be false, since R03 must not write to a corrupt file.
    */
   openCorruptDatabase(): { refused: boolean; wrote: boolean };
+
+  // ---- storage sandbox (§13 ladders, §20 R10/R11/R14, §17 R15) ----
+  //
+  // An isolated per-scenario home for the storage-paths feature: the scenario's config
+  // file (the TT_CONFIG target) plus fixed-role data directories, so the env → config →
+  // default ladders and every refusal are driven with real files and REAL environments.
+  // Surface-neutral: CoreWorld injects the env into core's resolveStoragePaths /
+  // Store.open; CliWorld spawns `tt` with TT_CONFIG / TT_DB / TT_BACKUP_DIR set.
+  /** Create the scenario's sandbox (fresh temp dir; the env-db parent exists, `missing*` roles never do). */
+  storageSandbox(): void;
+  /** A fixed-role path inside the sandbox, so steps and worlds agree on every location. */
+  storagePath(role: StorageRole): string;
+  /** Write raw contents to the sandbox config file (the TT_CONFIG target). */
+  storageWriteConfig(contents: string): void;
+  /** §13 — point TT_BACKUP_DIR at the sandbox `backups` dir (live, created empty) or a missing one, for every later op. */
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void;
+  /**
+   * §13 — resolve the three effective paths under the sandbox environment (CoreWorld:
+   * resolveStoragePaths; CliWorld: `tt paths --json`). An untrusted config file (§20 R10)
+   * reports as a refusal carrying the surface's message instead of rows.
+   */
+  storageResolve(o: { dbEnv: boolean }): StorageResolution;
+  /**
+   * §20 R10/R11 — attempt a real launch (open the store) under the sandbox environment and
+   * report whether it was REFUSED, with the surface's message (core: the thrown
+   * ConfigError/StoragePathError; tt: stderr of a non-zero `tt status`). A successful
+   * launch stays open for the later backup/list steps.
+   */
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string };
+  /** §20 R04 — close and re-open under the same sandbox env (the launch that snapshots a backup). */
+  storageRelaunch(): void;
+  /** Seed one closed entry through the launched surface (the data a backup must carry). */
+  storageAddEntry(): void;
+  /** §20 R14 — the launched database still answers a read (the launch was never blocked). */
+  storageDbUsable(): boolean;
+  /**
+   * §20 R04/R14 — list backups under the sandbox env. A dead backup directory reports as a
+   * refusal naming it plainly (core: backupDirStatus; tt: `tt backup ls` non-zero) rather
+   * than an innocent empty list.
+   */
+  storageListBackups(): { refused: boolean; message: string; names: string[] };
+  /** §20 R14 — force a backup; `claimed` is whether the surface reported one written. */
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean };
+  /** The file names inside a sandbox role directory ([] when the directory does not exist). */
+  storageFilesIn(role: StorageDirRole): string[];
+  /** Whether a sandbox role path exists on disk (the no-auto-mkdir / nothing-created probes). */
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb' | 'missingBackups'): boolean;
+
+  // ---- §20 R12 database location change (CORE-ONLY) ----
+  //
+  // The migrate / start-fresh / adopt pipeline's only driver is the GUI (§12 R26) —
+  // there is deliberately no tt verb (the CLI's write interface is the config file plus
+  // the documented §13 procedure; posture in architecture.html §08). The feature carrying
+  // these steps is tagged @core-only and never runs over CliWorld, whose implementations
+  // below throw if ever reached.
+  /**
+   * §20 R12 — run the change pipeline from the launched store toward a sandbox role path,
+   * committing into the sandbox config file. Reports a refusal (the typed
+   * StorageChangeError) with its message rather than throwing.
+   */
+  storageChangeDbLocation(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newDb' | 'missingDb',
+  ): { refused: boolean; message: string };
+  /**
+   * §20 R12 — put a file at the `newDb` role before the change: `foreign` (opaque bytes —
+   * the migrate-never-overwrites case), `healthy` (a real database holding two closed
+   * entries — the adoptable case), `corrupt` (a real database with its header clobbered),
+   * or `future` (a real database stamped with a user_version beyond SCHEMA_VERSION).
+   */
+  storageSeedNewHome(kind: 'foreign' | 'healthy' | 'corrupt' | 'future'): void;
+  /** The sandbox config file's raw text ('' when absent) — the untouched-config probe. */
+  storageConfigText(): string;
+  /** The number of entries the launched store reads — which database is live, by content. */
+  storageEntryCount(): number;
+  /**
+   * §20 R12 — whether the old database file is byte-identical to the newest backup at the
+   * old home (the pre-change backup the pipeline wrote or reused).
+   */
+  storageOldDbMatchesLatestBackup(): boolean;
+
+  // ---- §20 R13 backup directory change (CORE-ONLY, like §20 R12 above) ----
+  /**
+   * §20 R13 — make a custom backup directory ACTIVE with backups in it: seed two
+   * distinctly-stamped backup files in `confBackups`, point the config file's `backupDir`
+   * there, and relaunch (which adds the real launch backup beside them).
+   */
+  storageSeedBackupDir(): void;
+  /** §20 R13 — pre-place one seeded backup NAME (different bytes) at the new backup home. */
+  storageSeedBackupCollision(): void;
+  /**
+   * §20 R13 — run the backup-directory pipeline from the launched store, committing into
+   * the sandbox config file, after snapshotting the pre-change backup set (name → bytes —
+   * the no-backup-ever-lost probes below compare against it). `tornCopy` injects the
+   * torn-copy fault the verify step exists to catch. Reports a refusal (the typed
+   * StorageChangeError) with its message rather than throwing.
+   */
+  storageChangeBackupDir(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newBackups' | 'missingBackups' | 'default',
+    tornCopy?: boolean,
+  ): { refused: boolean; message: string };
+  /** §20 R13 — whether EVERY pre-change backup exists byte-identical in the given directory. */
+  storageBackupsMatchSnapshot(where: 'confBackups' | 'newBackups'): boolean;
+  /** The pre-change backup names captured by the most recent storageChangeBackupDir. */
+  storageSnapshotNames(): string[];
+  /**
+   * §20 R13 — whether exactly one backup NOT in the pre-change set is in the new backup
+   * home, holding the database's checkpointed bytes (the fresh backup-before-change).
+   */
+  storageFreshBackupIn(): boolean;
+}
+
+/** The fixed sandbox roles (one path mapping for both worlds and the steps — see storageRolePath). */
+export type StorageRole =
+  | 'config'
+  | 'envDb'
+  | 'confDb'
+  | 'missingDb'
+  | 'newDb'
+  | 'backups'
+  | 'confBackups'
+  | 'newBackups'
+  | 'missingBackups';
+export type StorageDirRole =
+  | 'sandbox'
+  | 'envDbDir'
+  | 'confDbDir'
+  | 'backups'
+  | 'confBackups'
+  | 'newBackups'
+  | 'missingBackups';
+
+/** §13 — one resolved row (path + the ladder rung that set it), or the refusal instead. */
+export interface StoragePathRow {
+  path: string;
+  source: string;
+}
+export interface StorageResolution {
+  refused: boolean;
+  message: string;
+  db?: StoragePathRow;
+  backupDir?: StoragePathRow;
+  configFile?: StoragePathRow;
 }
 
 const label = joinClientProject;
+
+// ---- storage sandbox plumbing (§13, §20 R10/R11/R14) — shared by both worlds ----
+
+/**
+ * The fixed sandbox layout, one mapping for both worlds and the steps: the config file
+ * (the TT_CONFIG target), a database path per ladder rung (`env-db/` exists from the
+ * start, `conf-db/` is the live-parent config target, `gone/` is the §20 R11 missing
+ * parent and is never created), `new-home/` — the live §20 R12 change destination —
+ * and a backup directory per rung (`backups` for the env rung, `conf-backups` for the
+ * config rung, `new-backups` — the live §20 R13 change destination — and `backups-gone`
+ * for the §20 R14 dead net / the R13 missing destination).
+ */
+function storageRolePath(dir: string, role: StorageRole): string {
+  switch (role) {
+    case 'config':
+      return join(dir, 'config.json');
+    case 'envDb':
+      return join(dir, 'env-db', 'tt.sqlite');
+    case 'confDb':
+      return join(dir, 'conf-db', 'tt.sqlite');
+    case 'missingDb':
+      return join(dir, 'gone', 'tt.sqlite');
+    case 'newDb':
+      return join(dir, 'new-home', 'tt.sqlite');
+    case 'backups':
+      return join(dir, 'backups');
+    case 'confBackups':
+      return join(dir, 'conf-backups');
+    case 'newBackups':
+      return join(dir, 'new-backups');
+    case 'missingBackups':
+      return join(dir, 'backups-gone');
+  }
+}
+
+function storageDirRolePath(dir: string, role: StorageDirRole): string {
+  switch (role) {
+    case 'sandbox':
+      return dir;
+    case 'envDbDir':
+      return join(dir, 'env-db');
+    case 'confDbDir':
+      return join(dir, 'conf-db');
+    case 'backups':
+      return join(dir, 'backups');
+    case 'confBackups':
+      return join(dir, 'conf-backups');
+    case 'newBackups':
+      return join(dir, 'new-backups');
+    case 'missingBackups':
+      return join(dir, 'backups-gone');
+  }
+}
+
+/** Recursive relative listing of a sandbox directory; [] when the directory does not exist. */
+function storageListFiles(path: string): string[] {
+  if (!existsSync(path)) return [];
+  return (readdirSync(path, { recursive: true }) as string[]).map(String);
+}
 
 /**
  * A fixed clock so derived elapsed is deterministic. NOW_UTC is the same instant in core's
@@ -609,8 +821,14 @@ export class CoreWorld implements World {
   }
   dispose(): void {
     this.store?.close();
+    try {
+      this.sStore?.close();
+    } catch {
+      /* a refused storage launch may have left no live handle */
+    }
     if (this.dir) rmSync(this.dir, { recursive: true, force: true });
     if (this.integrityDir) rmSync(this.integrityDir, { recursive: true, force: true });
+    if (this.sDir) rmSync(this.sDir, { recursive: true, force: true });
   }
   ensureClientProject(client: string, project: string): void {
     const c = this.store.ensureClient(client);
@@ -1331,6 +1549,281 @@ export class CoreWorld implements World {
     const wrote = !after.equals(this.integrityBytes!);
     return { refused, wrote };
   }
+
+  // ---- storage sandbox (§13, §20 R10/R11/R14) ----
+  // CoreWorld drives core DIRECTLY under an injected environment: resolveStoragePaths for
+  // the read side, Store.open({ env }) for the launch — the same seam the surfaces use,
+  // with the sandbox's TT_CONFIG / TT_DB / TT_BACKUP_DIR standing in for the real ones.
+  private sDir?: string;
+  private sStore?: Store;
+  private sDbEnv = false;
+  private sBackupEnv?: 'live' | 'missing';
+
+  private storageEnv(dbEnv: boolean): NodeJS.ProcessEnv {
+    const env: NodeJS.ProcessEnv = { TT_CONFIG: this.storagePath('config') };
+    if (dbEnv) env.TT_DB = this.storagePath('envDb');
+    if (this.sBackupEnv === 'live') env.TT_BACKUP_DIR = this.storagePath('backups');
+    if (this.sBackupEnv === 'missing') env.TT_BACKUP_DIR = this.storagePath('missingBackups');
+    return env;
+  }
+  storageSandbox(): void {
+    this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-'));
+    // The env-db, conf-db, new-home, and new-backups roles exist from the start (the
+    // live-destination cases); the `gone/` and `backups-gone` roles are never created —
+    // that absence IS the scenario.
+    mkdirSync(join(this.sDir, 'env-db'));
+    mkdirSync(join(this.sDir, 'conf-db'));
+    mkdirSync(join(this.sDir, 'new-home'));
+    mkdirSync(join(this.sDir, 'new-backups'));
+  }
+  storagePath(role: StorageRole): string {
+    return storageRolePath(this.sDir!, role);
+  }
+  storageWriteConfig(contents: string): void {
+    writeFileSync(this.storagePath('config'), contents);
+  }
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void {
+    this.sBackupEnv = kind;
+    if (kind === 'live') mkdirSync(this.storagePath('backups'), { recursive: true });
+  }
+  storageResolve(o: { dbEnv: boolean }): StorageResolution {
+    try {
+      const p = resolveStoragePaths(this.storageEnv(o.dbEnv));
+      return { refused: false, message: '', db: p.db, backupDir: p.backupDir, configFile: p.configFile };
+    } catch (err) {
+      // §20 R10 — the untrusted-config refusal; anything else is a real test failure.
+      if (err instanceof ConfigError) return { refused: true, message: err.message };
+      throw err;
+    }
+  }
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string } {
+    this.sDbEnv = o.dbEnv;
+    try {
+      this.sStore?.close();
+      this.sStore = Store.open({ env: this.storageEnv(o.dbEnv), clock: this.clock });
+      return { refused: false, message: '' };
+    } catch (err) {
+      this.sStore = undefined;
+      // §20 R10/R11 — the typed launch refusals; anything else is a real test failure.
+      if (err instanceof ConfigError || err instanceof StoragePathError) {
+        return { refused: true, message: err.message };
+      }
+      throw err;
+    }
+  }
+  storageRelaunch(): void {
+    this.sStore!.close();
+    this.sStore = Store.open({ env: this.storageEnv(this.sDbEnv), clock: this.clock });
+  }
+  storageAddEntry(): void {
+    this.sStore!.add({
+      description: 'seed',
+      fromUtc: '2026-06-24T09:00:00Z',
+      toUtc: '2026-06-24T10:30:00Z',
+    });
+  }
+  storageDbUsable(): boolean {
+    try {
+      this.sStore!.status();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  storageListBackups(): { refused: boolean; message: string; names: string[] } {
+    // §20 R14 — core's report of the dead net is backupDirStatus, the same value the GUI
+    // Backups section renders; a healthy directory lists normally.
+    const state = this.sStore!.backupDirStatus();
+    if (!state.ok) {
+      return { refused: true, message: `backup directory ${state.path} ${state.problem}`, names: [] };
+    }
+    return { refused: false, message: '', names: this.sStore!.listBackups().map((b) => b.name) };
+  }
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean } {
+    try {
+      const made = this.sStore!.backupNow();
+      return { refused: false, message: '', claimed: made !== null };
+    } catch (err) {
+      if (err instanceof StoreError) return { refused: true, message: err.message, claimed: false };
+      throw err;
+    }
+  }
+  storageFilesIn(role: StorageDirRole): string[] {
+    return storageListFiles(storageDirRolePath(this.sDir!, role));
+  }
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb' | 'missingBackups'): boolean {
+    if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
+    return existsSync(this.storagePath(role));
+  }
+
+  // ---- §20 R12 database location change (core-only — the GUI is the pipeline's sole
+  // driver; the @core-only feature never reaches CliWorld) ----
+  storageChangeDbLocation(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newDb' | 'missingDb',
+  ): { refused: boolean; message: string } {
+    try {
+      const r = this.sStore!.changeDbLocation({
+        newDbPath: this.storagePath(dest),
+        mode,
+        configFile: this.storagePath('config'),
+      });
+      return { refused: false, message: r.message };
+    } catch (err) {
+      // §20 R12 — the typed pipeline refusal; anything else is a real test failure.
+      if (err instanceof StorageChangeError) return { refused: true, message: err.message };
+      throw err;
+    }
+  }
+  storageSeedNewHome(kind: 'foreign' | 'healthy' | 'corrupt' | 'future'): void {
+    const path = this.storagePath('newDb');
+    if (kind === 'foreign') {
+      // Any pre-existing bytes trip the migrate-never-overwrites gate; content irrelevant.
+      writeFileSync(path, 'someone else was here first\n');
+      return;
+    }
+    // The other kinds start from a REAL database so the adoption gates judge real headers.
+    const db = openDb(path);
+    if (kind === 'healthy') {
+      db.exec(`
+        INSERT INTO entry (description, start_utc, end_utc, billable) VALUES
+          ('adopted one', '2026-06-23T09:00:00Z', '2026-06-23T10:00:00Z', 1),
+          ('adopted two', '2026-06-23T11:00:00Z', '2026-06-23T12:30:00Z', 1);
+      `);
+    }
+    if (kind === 'future') db.exec('PRAGMA user_version = 99');
+    db.close();
+    if (kind === 'corrupt') {
+      // Clobber the 16-byte "SQLite format 3\0" magic — guaranteed-detectable damage.
+      const fd = openSync(path, 'r+');
+      try {
+        writeSync(fd, Buffer.from('xxxxxxxxxxxxxxxx'), 0, 16, 0);
+      } finally {
+        closeSync(fd);
+      }
+    }
+  }
+  storageConfigText(): string {
+    try {
+      return readFileSync(this.storagePath('config'), 'utf8');
+    } catch {
+      return '';
+    }
+  }
+  storageEntryCount(): number {
+    return this.sStore!.listEntries({}).length;
+  }
+  storageOldDbMatchesLatestBackup(): boolean {
+    const latest = this.sStore!.listBackups()[0];
+    if (!latest) return false;
+    return readFileSync(this.storagePath('confDb')).equals(readFileSync(latest.path));
+  }
+
+  // ---- §20 R13 backup directory change (core-only, same posture as §20 R12 above) ----
+  /** The pre-change backup set (name → bytes) captured by storageChangeBackupDir. */
+  private sBackupSnapshot?: Map<string, Buffer>;
+
+  private storageBackupNamesIn(dir: string): string[] {
+    if (!existsSync(dir)) return [];
+    return readdirSync(dir).filter((n) => n.startsWith('tt.sqlite.bak-'));
+  }
+  storageSeedBackupDir(): void {
+    const dir = this.storagePath('confBackups');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'tt.sqlite.bak-20260620T090000Z'), 'seeded backup one\n');
+    writeFileSync(join(dir, 'tt.sqlite.bak-20260621T090000Z'), 'seeded backup two\n');
+    // The Background's launch ran on the DEFAULT rung, leaving a launch backup beside the
+    // database whose real-time stamp can equal the one the coming relaunch writes — a
+    // same-name collision when a scenario migrates back to the default location. The
+    // fixture is "backups live in the configured directory only", so clear the strays.
+    const besideDb = dirname(this.storagePath('confDb'));
+    for (const stray of this.storageBackupNamesIn(besideDb)) {
+      rmSync(join(besideDb, stray));
+    }
+    this.storageWriteConfig(
+      JSON.stringify({ dbPath: this.storagePath('confDb'), backupDir: dir }),
+    );
+    // The relaunch makes the directory ACTIVE (§13) and adds the real launch backup.
+    this.storageRelaunch();
+  }
+  storageSeedBackupCollision(): void {
+    writeFileSync(
+      join(this.storagePath('newBackups'), 'tt.sqlite.bak-20260620T090000Z'),
+      'someone else was here first\n',
+    );
+  }
+  storageChangeBackupDir(
+    mode: 'migrate' | 'start-fresh',
+    dest: 'newBackups' | 'missingBackups' | 'default',
+    tornCopy = false,
+  ): { refused: boolean; message: string } {
+    const oldBackupDir = this.storagePath('confBackups');
+    const newBackupDir =
+      dest === 'default' ? dirname(this.storagePath('confDb')) : this.storagePath(dest);
+    this.sBackupSnapshot = new Map(
+      this.storageBackupNamesIn(oldBackupDir).map((n) => [
+        n,
+        readFileSync(join(oldBackupDir, n)),
+      ]),
+    );
+    try {
+      if (tornCopy) {
+        // The fault needs the fs pipeline's injectable copy primitive, which the Store
+        // API deliberately does not expose; close-run-reopen around it, the same shape
+        // as Store.restoreFromBackup.
+        this.sStore!.close();
+        const db = openDb(this.storagePath('confDb'));
+        try {
+          const r = changeBackupDir(db, {
+            dbPath: this.storagePath('confDb'),
+            oldBackupDir,
+            newBackupDir,
+            mode,
+            configFile: this.storagePath('config'),
+            at: NOW,
+            copyFile: (src, dst) => {
+              copyFileSync(src, dst);
+              appendFileSync(dst, 'torn');
+            },
+          });
+          return { refused: false, message: r.message };
+        } finally {
+          db.close();
+          this.sStore = Store.open({ env: this.storageEnv(this.sDbEnv), clock: this.clock });
+        }
+      }
+      const r = this.sStore!.changeBackupDir({
+        newBackupDir,
+        mode,
+        configFile: this.storagePath('config'),
+      });
+      return { refused: false, message: r.message };
+    } catch (err) {
+      // §20 R13 — the typed pipeline refusal; anything else is a real test failure.
+      if (err instanceof StorageChangeError) return { refused: true, message: err.message };
+      throw err;
+    }
+  }
+  storageBackupsMatchSnapshot(where: 'confBackups' | 'newBackups'): boolean {
+    const dir = this.storagePath(where);
+    return [...this.sBackupSnapshot!].every(
+      ([name, bytes]) =>
+        existsSync(join(dir, name)) && readFileSync(join(dir, name)).equals(bytes),
+    );
+  }
+  storageSnapshotNames(): string[] {
+    return [...this.sBackupSnapshot!.keys()];
+  }
+  storageFreshBackupIn(): boolean {
+    const dir = this.storagePath('newBackups');
+    const fresh = this.storageBackupNamesIn(dir).filter((n) => !this.sBackupSnapshot!.has(n));
+    if (fresh.length !== 1) return false;
+    // A true backup-before-change: byte-identical to the newest pre-change backup, which
+    // is itself the checkpointed database (the store made it at launch and nothing wrote
+    // since) — proving the fresh file is a real copy of the data, not just a new name.
+    const newestOld = [...this.sBackupSnapshot!.keys()].sort().reverse()[0]!;
+    return readFileSync(join(dir, fresh[0]!)).equals(this.sBackupSnapshot!.get(newestOld)!);
+  }
 }
 
 /**
@@ -1405,6 +1898,7 @@ export class CliWorld implements World {
   }
   dispose(): void {
     if (this.dir) rmSync(this.dir, { recursive: true, force: true });
+    if (this.sDir) rmSync(this.sDir, { recursive: true, force: true });
   }
   private tt(args: string[]): { out: string; err: string; code: number } {
     const res = spawnSync('node', [BIN, ...args], {
@@ -2111,5 +2605,151 @@ export class CliWorld implements World {
     const after = readFileSync(this.db);
     const wrote = !after.equals(this.integrityBytes!);
     return { refused, wrote };
+  }
+
+  // ---- storage sandbox (§13, §20 R10/R11/R14) ----
+  // CliWorld drives REAL `tt` processes under the sandbox environment — TT_CONFIG always,
+  // TT_DB / TT_BACKUP_DIR per the scenario — so the ladders, `tt paths --json`, and every
+  // refusal (non-zero exit + the message on stderr) are proven on the shipped surface.
+  private sDir?: string;
+  private sDbEnv = false;
+  private sBackupEnv?: 'live' | 'missing';
+
+  /** Spawn `tt` under the sandbox env. Keys set to undefined are DROPPED from the child env. */
+  private stt(args: string[], dbEnv: boolean): { out: string; err: string; code: number } {
+    const res = spawnSync('node', [BIN, ...args], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TT_CONFIG: this.storagePath('config'),
+        TT_NOW: NOW_UTC,
+        NODE_NO_WARNINGS: '1',
+        TT_DB: dbEnv ? this.storagePath('envDb') : undefined,
+        TT_BACKUP_DIR:
+          this.sBackupEnv === 'live'
+            ? this.storagePath('backups')
+            : this.sBackupEnv === 'missing'
+              ? this.storagePath('missingBackups')
+              : undefined,
+      },
+    });
+    return { out: res.stdout ?? '', err: res.stderr ?? '', code: res.status ?? 0 };
+  }
+  storageSandbox(): void {
+    this.sDir = mkdtempSync(join(tmpdir(), 'stint-bdd-storage-cli-'));
+    mkdirSync(join(this.sDir, 'env-db'));
+    mkdirSync(join(this.sDir, 'conf-db'));
+    mkdirSync(join(this.sDir, 'new-home'));
+    mkdirSync(join(this.sDir, 'new-backups'));
+  }
+  storagePath(role: StorageRole): string {
+    return storageRolePath(this.sDir!, role);
+  }
+  storageWriteConfig(contents: string): void {
+    writeFileSync(this.storagePath('config'), contents);
+  }
+  storageUseBackupDirEnv(kind: 'live' | 'missing'): void {
+    this.sBackupEnv = kind;
+    if (kind === 'live') mkdirSync(this.storagePath('backups'), { recursive: true });
+  }
+  storageResolve(o: { dbEnv: boolean }): StorageResolution {
+    const r = this.stt(['paths', '--json'], o.dbEnv);
+    if (r.code !== 0) return { refused: true, message: r.err };
+    const json = JSON.parse(r.out) as {
+      database: StoragePathRow;
+      backup_directory: StoragePathRow;
+      config_file: StoragePathRow;
+    };
+    return {
+      refused: false,
+      message: '',
+      db: json.database,
+      backupDir: json.backup_directory,
+      configFile: json.config_file,
+    };
+  }
+  storageLaunch(o: { dbEnv: boolean }): { refused: boolean; message: string } {
+    // §20 R10/R11 — `tt status` is the launch: it opens the store through the ladders; a
+    // refused launch exits non-zero with the message on stderr, and creates nothing.
+    this.sDbEnv = o.dbEnv;
+    const r = this.stt(['status'], o.dbEnv);
+    return { refused: r.code !== 0, message: r.err };
+  }
+  storageRelaunch(): void {
+    // tt is process-per-command: any command re-opens (launch backup + integrity gate).
+    this.stt(['status'], this.sDbEnv);
+  }
+  storageAddEntry(): void {
+    this.stt(
+      ['add', 'seed', '--from', '2026-06-24T09:00:00Z', '--to', '2026-06-24T10:30:00Z'],
+      this.sDbEnv,
+    );
+  }
+  storageDbUsable(): boolean {
+    return this.stt(['status'], this.sDbEnv).code === 0;
+  }
+  storageListBackups(): { refused: boolean; message: string; names: string[] } {
+    const r = this.stt(['backup', 'ls', '--json'], this.sDbEnv);
+    if (r.code !== 0) return { refused: true, message: r.err, names: [] };
+    return {
+      refused: false,
+      message: '',
+      names: (JSON.parse(r.out || '[]') as { name: string }[]).map((b) => b.name),
+    };
+  }
+  storageBackupNow(): { refused: boolean; message: string; claimed: boolean } {
+    const r = this.stt(['backup', 'now'], this.sDbEnv);
+    return { refused: r.code !== 0, message: r.err, claimed: /backed up to/.test(r.out) };
+  }
+  storageFilesIn(role: StorageDirRole): string[] {
+    return storageListFiles(storageDirRolePath(this.sDir!, role));
+  }
+  storageExists(role: 'confDb' | 'missingDb' | 'missingDbParent' | 'newDb' | 'missingBackups'): boolean {
+    if (role === 'missingDbParent') return existsSync(dirname(this.storagePath('missingDb')));
+    return existsSync(this.storagePath(role));
+  }
+
+  // ---- §20 R12/R13 storage location change — CORE-ONLY, unreachable here ----
+  // The pipelines have no tt surface (deliberate — architecture.html §08: the CLI's write
+  // interface is the config file itself), and the feature carrying these steps is tagged
+  // @core-only, so run.test.ts never routes it to CliWorld. These throw as a tripwire.
+  private coreOnly(): never {
+    throw new Error(
+      'core-only capability: the §20 R12/R13 storage-change pipelines have no tt surface ' +
+        '(architecture.html §08) — the @core-only feature must not run over CliWorld',
+    );
+  }
+  storageChangeDbLocation(): { refused: boolean; message: string } {
+    return this.coreOnly();
+  }
+  storageSeedNewHome(): void {
+    this.coreOnly();
+  }
+  storageConfigText(): string {
+    return this.coreOnly();
+  }
+  storageEntryCount(): number {
+    return this.coreOnly();
+  }
+  storageOldDbMatchesLatestBackup(): boolean {
+    return this.coreOnly();
+  }
+  storageSeedBackupDir(): void {
+    this.coreOnly();
+  }
+  storageSeedBackupCollision(): void {
+    this.coreOnly();
+  }
+  storageChangeBackupDir(): { refused: boolean; message: string } {
+    return this.coreOnly();
+  }
+  storageBackupsMatchSnapshot(): boolean {
+    return this.coreOnly();
+  }
+  storageSnapshotNames(): string[] {
+    return this.coreOnly();
+  }
+  storageFreshBackupIn(): boolean {
+    return this.coreOnly();
   }
 }
