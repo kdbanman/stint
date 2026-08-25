@@ -1089,10 +1089,9 @@ function renderTimerCard(running) {
     $('timer-flags').innerHTML = '';
   }
   $('timer-stop').hidden = !running;
-  // §05 R09: the Pin-as-favorite control on the running card (captures the open entry's
-  // template via window.stint.pinFavorite, parity with `tt fav add`). Shown only while running.
-  const pin = $('timer-pin');
-  if (pin) pin.hidden = !running;
+  // §05 R09 / issue #353: the view's ONE Pin-as-favorite affordance is the favorites-rail
+  // header's #fav-pin (it captures the open entry's template while running) — the running
+  // card carries no second Pin, so Stop is the card's whole action set while running.
   renderLiveEdit(running);
 }
 
@@ -2670,10 +2669,6 @@ $('toggle').addEventListener('click', async () => {
   const leProject = $('le-project');
   if (leTags) leTags.addEventListener('click', openRunningEditor);
   if (leProject) leProject.addEventListener('click', openRunningEditor);
-  // §05 R09: the running card's Pin-as-favorite — captures the open entry's template
-  // (fromEntryId='open') via window.stint.pinFavorite (parity with `tt fav add`).
-  const timerPin = $('timer-pin');
-  if (timerPin) timerPin.addEventListener('click', () => void pinAsFavorite());
 }
 
 // §12 R4: the Active-Timer card's primary Stop reuses the same `toggle` write the Timer-view
@@ -3786,8 +3781,12 @@ function openPinForm(btn) {
         form.querySelector('input').focus();
         return;
       }
-      form.replaceWith(btn);
+      // §12 R21 (issue #353): pin FIRST, restore the Pin control only on success. A refused
+      // pin (a duplicate name — §13 UNIQUE COLLATE NOCASE) rethrows into inlineRenameForm's
+      // catch, which paints the reason in the form's announced warning region and keeps the
+      // form open — never a silent no-op.
       await pinAsFavorite(name);
+      form.replaceWith(btn);
     },
     { onCancel: () => form.replaceWith(btn), commitLabel: 'Pin' },
   );
@@ -3820,11 +3819,10 @@ async function pinAsFavorite(name) {
       billable: $('start-bill') ? $('start-bill').checked : undefined,
     };
   }
-  try {
-    await window.stint.pinFavorite(payload);
-  } catch {
-    /* a duplicate name is rejected in core; leave the rail as-is */
-  }
+  // §12 R21 (issue #353): a refusal (core rejects a duplicate name) propagates to the caller
+  // — the pin form's submit handler surfaces the reason inline — instead of being swallowed
+  // here as a silent no-op. The rail repaints only once the pin actually landed.
+  await window.stint.pinFavorite(payload);
   await renderFavorites();
 }
 
