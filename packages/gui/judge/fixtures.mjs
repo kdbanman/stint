@@ -2274,6 +2274,14 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       listFavorites: function () { return Promise.resolve(this.__FAVORITES__.map((f) => ({ ...f }))); },
       pinFavorite: function (p) {
         window.__PINNED__ = p;
+        // §05 R09 last bullet / §13 (issue #353): core rejects a duplicate name (case-insensitive,
+        // UNIQUE COLLATE NOCASE) rather than silently overwriting. Reject in Electron's wrapped
+        // shape (issue #138) so the FAVORITES_RAIL refused-pin probe drives the renderer's real
+        // R21 surfacing — the reason inline, the form open — never a swallowed rejection.
+        const name = String((p && p.name) || '');
+        if (this.__FAVORITES__.some((f) => f.name.toLowerCase() === name.toLowerCase())) {
+          return window.__IPC_REJECT__('pinFavorite', 'a favorite named "' + name + '" already exists');
+        }
         const fav = { id: 90 + this.__FAVORITES__.length, description: null, clientId: null, projectId: null, billable: true, tags: [], ...p };
         this.__FAVORITES__.push(fav);
         return Promise.resolve({ ...fav });

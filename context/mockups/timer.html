@@ -66,8 +66,6 @@
      surfaced on the Timer view, beside the card controls (the "Stop appears dead" surface, #61). */
   .msg{font-size:12px;border-radius:var(--r1);padding:8px 12px;border:1px solid;margin-top:12px}
   .msg.err{color:var(--danger);background:var(--danger-weak);border-color:var(--danger)}
-  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:var(--r1);border:0;background:none;color:var(--muted);cursor:pointer}
-  .iconbtn:hover{background:var(--hover);color:var(--ink)}
   /* segmented */
   .seg{display:inline-flex;background:var(--wash);border:1px solid var(--rule);border-radius:var(--r1);padding:4px;gap:4px}
   .seg button{font:inherit;font-size:12px;border:0;background:none;color:var(--muted);height:26px;padding:0 12px;border-radius:var(--r1);cursor:pointer;white-space:nowrap}
@@ -124,10 +122,14 @@
   /* the favorites rail is the only surface beside the runner while a timer runs — the start
      panel (one-tap Start + details form) belongs to the idle state alone (§12 R05, issue #51).
      The rail itself is NOT a card: D09 forbids nesting cards and tinting a sub-region, so the
-     rail is a bare column on the view surface and each favorite is the card (the shipped
-     .favorites / .fav-card pair). */
-  .favrail{max-width:460px}
-  .fav{display:flex;align-items:center;gap:12px;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r2);padding:12px 12px;margin-bottom:12px;box-shadow:var(--sh-card)}
+     rail is a bare region on the view surface and each favorite is the card (the shipped
+     .favorites / .fav-card pair). The header carries the view's ONE Pin-as-favorite affordance
+     (issue #353); the cards sit in an equal-width auto-fill grid — one shared width, a partial
+     last row keeping it, fewer columns as the window narrows (design.html D07, issue #354). */
+  .favhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .favhead .ph{margin:0}
+  .favgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+  .fav{display:flex;align-items:center;gap:12px;min-width:0;border:1px solid var(--rule);background:var(--paper);border-radius:var(--r2);padding:12px 12px;box-shadow:var(--sh-card)}
   .fav .star{color:var(--muted)}.fav .star .ic{width:15px;height:15px}
   .fav .fi{flex:1;min-width:0}
   .fav .fn{font-size:13px;font-weight:590;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -226,9 +228,10 @@
             <div class="d">Drafting proposals</div>
             <div class="m">Globex Corp · Q3 Strategy</div>
           </div>
+          <!-- §12 R05 / issue #353: Stop is the running card's whole action set — the view's one
+               Pin-as-favorite affordance is the favorites rail header's, below. -->
           <div class="r-act">
             <button class="btn primary"><svg class="ic"><use href="#i-stop"/></svg> Stop</button>
-            <button class="iconbtn" title="Save as favorite"><svg class="ic"><use href="#i-star"/></svg></button>
           </div>
         </div>
         <!-- §12 R21: a Stop the core refuses (e.g. a stop time before the entry started, #61) is
@@ -269,24 +272,32 @@
            start affordance appears beside the runner card. The favorites rail stays: a
            one-click Resume is §05 R09's own verb (core inherits the atomic stop-then-start). -->
       <div class="favrail">
-        <h3 class="ph">Favorites</h3>
-        <div class="fav">
-          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-          <div class="fi"><div class="fn">Standup</div><div class="fm">Globex · Q3 Strategy · non-billable</div></div>
-          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+        <!-- the ONE Pin-as-favorite affordance on the view (issue #353): while a timer runs it
+             captures the running entry's template; while idle, the Start form's fields. It swaps
+             into an inline name field on click (Electron's renderer has no window.prompt). -->
+        <div class="favhead">
+          <h3 class="ph">Favorites</h3>
+          <button class="btn sm"><svg class="ic"><use href="#i-star"/></svg> Pin</button>
         </div>
-        <div class="fav">
-          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-          <div class="fi"><div class="fn">Deep work · Alpha</div><div class="fm">Globex · Project Alpha · billable</div></div>
-          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
-        </div>
-        <div class="fav">
-          <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
-          <div class="fi"><div class="fn">Admin / email</div><div class="fm">No client · billable · #admin</div></div>
-          <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
-          <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+        <div class="favgrid">
+          <div class="fav">
+            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+            <div class="fi"><div class="fn">Standup</div><div class="fm">Globex · Q3 Strategy · non-billable</div></div>
+            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+          </div>
+          <div class="fav">
+            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+            <div class="fi"><div class="fn">Deep work · Alpha</div><div class="fm">Globex · Project Alpha · billable</div></div>
+            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+          </div>
+          <div class="fav">
+            <span class="star"><svg class="ic"><use href="#i-star"/></svg></span>
+            <div class="fi"><div class="fn">Admin / email</div><div class="fm">No client · billable · #admin</div></div>
+            <button class="btn sm"><svg class="ic"><use href="#i-play"/></svg> Resume</button>
+            <span class="kebab"><svg class="ic"><use href="#i-dots"/></svg></span>
+          </div>
         </div>
         <div class="favfoot">Resume starts a fresh timer from the favorite — the running one stops first, atomically.</div>
       </div>

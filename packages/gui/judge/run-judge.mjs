@@ -1124,7 +1124,15 @@ async function sceneFutureStartGuard(browser) {
 // (typed + committed on Enter; Electron's renderer does not implement window.prompt, so a
 // prompt-based flow would silently no-op in the packaged app, issue #52), the unpin through the
 // kebab's Unpin action — so every kebab verb is machine-scored end to end, not merely present
-// (STATES.md Timer × edge). Drive the real renderer twice (seeded + empty).
+// (STATES.md Timer × edge). Issue #353 hardened the pin half: the view carries EXACTLY ONE
+// Pin-as-favorite affordance (counting visible Pin-labeled buttons, not "at least one" — the
+// weak guard that let a second, dead Pin ride invisibly), a pin LANDS from BOTH states (running
+// → the open row's template; idle → the Start form's fields), and a REFUSED pin (duplicate
+// name) surfaces its reason inline with the form open (§12 R21) — never a silent no-op. Issue
+// #354 added the layout half: the rail is an equal-width grid, scored RELATIVELY (every card
+// the same width as its siblings, wrapping into columns) — never as an absolute pixel pin
+// (process.html R11); composition itself is judged against mockups/timer.html by rendered
+// comparison. Drive the real renderer twice (seeded + empty/idle).
 async function sceneFavoritesRail(browser) {
   await withPage(browser, timerViewFavoritesState(), 'index.html', async (page) => {
     await page.click('.nav-item[data-view="timer"]');
@@ -1139,7 +1147,10 @@ async function sceneFavoritesRail(browser) {
         names: cards.map((c) => c.querySelector('.fav-name')?.textContent?.trim()),
         hasResume: cards.every((c) => !!c.querySelector('[data-act="fav-resume"]')),
         hasKebab: cards.every((c) => !!c.querySelector('[data-act="fav-menu"]')),
-        hasPin: !!document.querySelector('#fav-pin') || !!document.querySelector('#timer-pin'),
+        // Issue #353: COUNT the view's visible Pin-labeled buttons — any selector, any home —
+        // so a duplicate affordance fails the fact instead of hiding behind "a Pin exists".
+        pinAffordances: [...document.querySelectorAll('.view[data-view="timer"] button')]
+          .filter((b) => !b.hidden && b.textContent.trim() === 'Pin').length,
         emptyHidden: !!document.querySelector('#fav-empty')?.hidden,
         callableChannels: favChannels.filter((ch) => typeof api[ch] === 'function'),
       };
@@ -1157,6 +1168,13 @@ async function sceneFavoritesRail(browser) {
     const pinned = await page.evaluate(() => ({
       payload: window.__PINNED__ ?? null,
       names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+      // Issue #354: each card's rendered box, for the RELATIVE equal-width/wrap facts below.
+      // Four cards guarantee a wrapped row at the 1040px window, so the fact also covers the
+      // partial last row keeping the shared width (design.html D07).
+      rects: [...document.querySelectorAll('#fav-rail .fav-card')].map((c) => {
+        const r = c.getBoundingClientRect();
+        return { w: r.width, top: r.top };
+      }),
     }));
 
     await page.click('.fav-card:has-text("Invoice prep") [data-act="fav-menu"]');
@@ -1181,6 +1199,29 @@ async function sceneFavoritesRail(browser) {
       names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
     }));
 
+    // Issue #353 / §12 R21: drive a pin core REFUSES — 'Standup' collides with a seeded name,
+    // so the mock rejects in Electron's wrapped shape (issue #138) — and assert the renderer
+    // surfaces the refusal: the inline form STAYS OPEN with the reason alone in its announced
+    // warning region, and the rail is unchanged. Pre-#353 this rejection was swallowed
+    // (`catch {}`) and every refused pin read as "the app is broken".
+    await page.click('#fav-pin');
+    await page.waitForSelector('.fav-pin-form .rename-input');
+    await page.fill('.fav-pin-form .rename-input', 'Standup');
+    await page.press('.fav-pin-form .rename-input', 'Enter');
+    await page.waitForSelector('.fav-pin-form .rename-warning:not([hidden])');
+    const refused = await page.evaluate(() => {
+      const warn = document.querySelector('.fav-pin-form .rename-warning');
+      const rect = warn?.getBoundingClientRect();
+      return {
+        formOpen: !!document.querySelector('.fav-pin-form .rename-input'),
+        shown: !!warn && !warn.hidden && (rect?.width ?? 0) > 0 && (rect?.height ?? 0) > 0,
+        announced: warn?.getAttribute('role') === 'status' && warn?.hasAttribute('aria-live'),
+        message: warn?.textContent.trim() ?? '',
+        rows: document.querySelectorAll('#fav-rail .fav-card').length,
+      };
+    });
+    await page.screenshot({ path: join(EVIDENCE, 'timer-favorites-pin-refused.png') });
+
     const empty = await withPage(
       browser,
       timerViewEmptyFavoritesState(),
@@ -1189,10 +1230,23 @@ async function sceneFavoritesRail(browser) {
         await ep.click('.nav-item[data-view="timer"]');
         await ep.waitForSelector('[data-view="timer"]:not([hidden]) #fav-empty');
         await ep.screenshot({ path: join(EVIDENCE, 'timer-favorites-empty.png') });
-        return ep.evaluate(() => {
+        const state = await ep.evaluate(() => {
           const el = document.querySelector('#fav-empty');
           return { shown: !!el && !el.hidden, text: el?.textContent?.trim() ?? '' };
         });
+        // Issue #353: the pin must LAND from the IDLE state too — the same rail-header Pin,
+        // now capturing the Start form's fields (no open row, so no fromEntryId) — proving
+        // the one affordance covers both states the removed card Pin was presumed to serve.
+        await ep.click('#fav-pin');
+        await ep.waitForSelector('.fav-pin-form .rename-input');
+        await ep.fill('.fav-pin-form .rename-input', 'Fresh pin');
+        await ep.press('.fav-pin-form .rename-input', 'Enter');
+        await ep.waitForFunction(() => document.querySelectorAll('#fav-rail .fav-card').length === 1);
+        const idlePin = await ep.evaluate(() => ({
+          payload: window.__PINNED__ ?? null,
+          names: [...document.querySelectorAll('.fav-card .fav-name')].map((n) => n.textContent.trim()),
+        }));
+        return { ...state, idlePin };
       },
       { favorites: [] },
     );
@@ -1203,8 +1257,10 @@ async function sceneFavoritesRail(browser) {
       probe.names.includes('Deep work') &&
       probe.hasResume &&
       probe.hasKebab &&
-      probe.hasPin &&
       probe.emptyHidden;
+    // Issue #353: exactly one — a second Pin control (the dead running-card star) fails this,
+    // where the old "a Pin exists" boolean could not see it.
+    const onePinAffordance = probe.pinAffordances === 1;
     const channelsCallable = probe.callableChannels.length === 5;
     const resumeFires =
       Array.isArray(resumed) && resumed.length === 1 && resumed[0] && resumed[0].name === 'Standup';
@@ -1213,6 +1269,17 @@ async function sceneFavoritesRail(browser) {
       pinned.payload.name === 'Invoice prep' &&
       pinned.payload.fromEntryId === 'open' &&
       pinned.names.includes('Invoice prep');
+    // Issue #354 / design.html D07: every card shares ONE rendered width (relative equality,
+    // ±1px for sub-pixel track rounding — no absolute pixel pinned) and the rail wraps as a
+    // grid: a multi-card first row, the wrapped remainder (the partial last row) at the same
+    // shared width.
+    const widths = pinned.rects.map((r) => r.w);
+    const tops = [...new Set(pinned.rects.map((r) => Math.round(r.top)))];
+    const cardsShareWidth =
+      pinned.rects.length === 4 &&
+      widths.every((w) => Math.abs(w - widths[0]) <= 1) &&
+      tops.length >= 2 &&
+      pinned.rects.filter((r) => Math.round(r.top) === Math.min(...tops)).length >= 2;
     const renameLands =
       !!renamed.payload &&
       renamed.payload.name === 'Client invoicing' &&
@@ -1226,13 +1293,42 @@ async function sceneFavoritesRail(browser) {
       unpinned.payload.ref === 93 &&
       unpinned.names.length === 3 &&
       !unpinned.names.includes('Client invoicing');
+    // Issue #353 / §12 R21: the refused duplicate pin reads its reason ALONE (the Electron
+    // wrapper + class name stripped, issue #138) in the announced region, the form open, the
+    // rail unchanged.
+    const refusedPinSurfaces =
+      refused.formOpen &&
+      refused.shown &&
+      refused.announced &&
+      refused.message === 'a favorite named "Standup" already exists' &&
+      refused.rows === 3;
     const emptyInstructs = empty.shown && /pin/i.test(empty.text) && /tt fav/i.test(empty.text);
+    // Issue #353: the idle pin captured the Start form's fields — a template payload with the
+    // typed name and NO fromEntryId (there is no open row) — and its chip landed in the rail.
+    const idlePinLands =
+      !!empty.idlePin.payload &&
+      empty.idlePin.payload.name === 'Fresh pin' &&
+      !('fromEntryId' in empty.idlePin.payload) &&
+      empty.idlePin.names.includes('Fresh pin');
     record(
       'FAVORITES_RAIL',
-      { railSeeded, channelsCallable, resumeFires, pinLands, renameLands, unpinLands, emptyInstructs },
+      {
+        railSeeded,
+        onePinAffordance,
+        channelsCallable,
+        resumeFires,
+        pinLands,
+        cardsShareWidth,
+        renameLands,
+        unpinLands,
+        refusedPinSurfaces,
+        emptyInstructs,
+        idlePinLands,
+      },
       `rail ${JSON.stringify(probe)}; resume fired ${JSON.stringify(resumed)}; ` +
         `inline pin ${JSON.stringify(pinned)}; inline rename ${JSON.stringify(renamed)}; ` +
-        `kebab unpin ${JSON.stringify(unpinned)}; empty ${JSON.stringify(empty)}`,
+        `kebab unpin ${JSON.stringify(unpinned)}; refused pin ${JSON.stringify(refused)}; ` +
+        `empty+idle pin ${JSON.stringify(empty)}`,
       'timer-favorites.png',
     );
   });
@@ -8380,7 +8476,7 @@ const SCENES = {
   CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], captures: ['timer-cross-view.png'], run: sceneCrossViewFreshness },
   TIMER_VIEW: { items: ['TIMER_VIEW'], captures: ['timer-view-full.png', 'timer-card-attr-vs-flag.png'], run: sceneTimerView },
   FUTURE_START_GUARD: { items: ['FUTURE_START_GUARD'], captures: ['timer-future-start-reject.png'], run: sceneFutureStartGuard },
-  FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], captures: ['timer-favorites.png', 'timer-favorites-empty.png'], run: sceneFavoritesRail },
+  FAVORITES_RAIL: { items: ['FAVORITES_RAIL'], captures: ['timer-favorites.png', 'timer-favorites-pin-refused.png', 'timer-favorites-empty.png'], run: sceneFavoritesRail },
   ACCENT_DISCIPLINE: { items: ['ACCENT_DISCIPLINE', 'ACCENT_SOLID_BUDGET'], captures: ['main-running.png'], run: sceneAccentDiscipline },
   PRIMARY_HANDOFF: { items: ['PRIMARY_HANDOFF'], captures: ['primary-handoff-timer.png', 'primary-handoff-reports.png'], run: scenePrimaryHandoff },
   CLICKABILITY: { items: ['CLICKABILITY'], captures: ['main-clickability.png'], run: sceneClickability },

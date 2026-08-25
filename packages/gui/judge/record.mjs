@@ -3880,7 +3880,8 @@ const RECIPES = {
   //      live count-up (#timer-clock), the running state (#timer-state), the description
   //      (#timer-desc → 'auth refactor') + client/project label (#timer-meta → 'Client A / API')
   //      + flags (#timer-flags), and the primary action Stop (#timer-stop) — with NO Switch
-  //      control (Switch is removed, issue #34). Advancing the clock again makes the count-up tick.
+  //      control (Switch is removed, issue #34) and NO card Pin (the favorites-rail header's
+  //      is the view's one pin affordance, issue #353). Advancing the clock makes the count-up tick.
   //   3) Route back to Entries (via the nav rail) so the recording ENDS showing the same running
   //      timer still represented as the compact strip — demonstrating the panel lives in Timer
   //      while Entries keeps the strip, the two staying in sync off one snapshot.
@@ -3911,15 +3912,17 @@ const RECIPES = {
         () => document.querySelector('#timer-desc')?.textContent?.trim() === 'auth refactor',
       );
       await page.waitForSelector('#timer-stop:not([hidden])');
-      await page.waitForSelector('#timer-pin:not([hidden])');
+      // Issue #353: the running card carries NO second Pin — the one Pin-as-favorite
+      // affordance is the favorites-rail header's #fav-pin.
+      await page.waitForFunction(() => !document.querySelector('#timer-pin'));
       await page.waitForFunction(() => !document.querySelector('#timer-switch'));
       await wait(page, 700);
       for (let i = 4; i <= 6; i++) {
         await page.clock.pauseAt(new Date(Date.parse(JUDGE_NOW) + i * 1000));
         await wait(page, 350);
       }
-      for (const sel of ['#timer-stop', '#timer-pin']) {
-        const box = await page.locator(sel).first().boundingBox();
+      {
+        const box = await page.locator('#timer-stop').first().boundingBox();
         if (box) {
           await page.mouse.move(
             Math.round(box.x + box.width / 2),
