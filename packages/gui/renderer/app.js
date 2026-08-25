@@ -3281,6 +3281,30 @@ let clientsRenderGen = 0;
 // --archived`) and partition the result into the active rows and the archived, Restore-able rows.
 let showArchived = false;
 
+// §12 R27 — the weights beside each name: two quiet muted numerals per row, all-time then
+// this month (the window order the section caption names). Reference information, never a
+// signal — muted ink, no accent, no pill (design.html D04 / §12 R19 accent discipline).
+// The seconds/counts arrive over the referenceWeights IPC — core's report sums, the same
+// grouped totals `tt report --by client|tag` prints (§09 R02) — and the hours spelling is
+// core's formatHours via the bundled SU.fmtHours: the renderer re-derives no window, no
+// sum, and no format. A window with no time (clients/projects) or no entries (tags)
+// renders a muted em-dash, never an explicit zero — and a record absent from the weights
+// read (no entries ever, e.g. one just created) dashes both windows.
+function weightsHtml(w, kind) {
+  const hours = (v, win) =>
+    v > 0
+      ? `<span class="w" title="${win}">${fmtHours(v)}</span>`
+      : `<span class="w" title="${win}">—</span>`;
+  const count = (v, win) => `<span class="w" title="${win}">${v > 0 ? v : '—'}</span>`;
+  const cell = kind === 'entries' ? count : hours;
+  return (
+    `<span class="weights">` +
+    cell(w ? (kind === 'entries' ? w.allTimeCount : w.allTimeSeconds) : 0, 'all time') +
+    cell(w ? (kind === 'entries' ? w.monthCount : w.monthSeconds) : 0, 'this month') +
+    `</span>`
+  );
+}
+
 async function renderClients() {
   const host = $('clients-list');
   if (!host) return;
@@ -3288,6 +3312,12 @@ async function renderClients() {
   const frag = document.createDocumentFragment();
   const clients = await window.stint.listClients({ includeArchived: showArchived });
   if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+  // §12 R27: one weights read per render — core's sums for every client/project at once —
+  // matched to the listed rows by name (core's report groups by resolved name, §09 R02;
+  // the renderer matches names it already has and resolves nothing).
+  const weights = await window.stint.referenceWeights();
+  if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
+  const clientWeights = new Map(weights.clients.map((w) => [w.name, w]));
   const active = clients.filter((c) => !c.archived);
   const archived = clients.filter((c) => c.archived);
   if (clients.length === 0) {
@@ -3303,11 +3333,12 @@ async function renderClients() {
       // Restore button); off, only its active projects show. One IPC read per client either way.
       const projects = await window.stint.listProjects({ clientId: c.id, includeArchived: showArchived });
       if (gen !== clientsRenderGen) return; // a newer run superseded this one — drop the work
-      frag.appendChild(clientRow(c, projects));
+      frag.appendChild(clientRow(c, projects, clientWeights.get(c.name)));
     }
     // §12 R13: archived clients render LAST as quiet Restore cards (mockup: the ".arch" card with
     // an "archived" pill and a Restore button), reversing the hide. Only present when showArchived.
-    for (const c of archived) frag.appendChild(archivedClientRow(c));
+    // §12 R27: an archived client keeps its weights — it carries history by definition.
+    for (const c of archived) frag.appendChild(archivedClientRow(c, clientWeights.get(c.name)));
   }
   if (gen !== clientsRenderGen) return; // superseded after the last await — never paint stale rows
   host.innerHTML = '';
@@ -3328,6 +3359,10 @@ async function renderTags() {
   const gen = ++tagsRenderGen;
   const tags = await window.stint.listTags({ includeArchived: showArchived });
   if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
+  // §12 R27: the per-tag entry counts, matched by name like the client weights above.
+  const weights = await window.stint.referenceWeights();
+  if (gen !== tagsRenderGen) return; // superseded by a newer run — never paint stale rows (issue #66)
+  const tagWeights = new Map(weights.tags.map((w) => [w.name, w]));
   host.innerHTML = '';
   if (tags.length === 0) {
     const empty = document.createElement('div');
@@ -3339,16 +3374,17 @@ async function renderTags() {
     return;
   }
   // Active tags first, then (when showArchived) the archived tags as Restore rows.
-  for (const t of tags.filter((t) => !t.archived)) host.appendChild(tagRow(t));
-  for (const t of tags.filter((t) => t.archived)) host.appendChild(archivedTagRow(t));
+  for (const t of tags.filter((t) => !t.archived)) host.appendChild(tagRow(t, tagWeights.get(t.name)));
+  for (const t of tags.filter((t) => t.archived)) host.appendChild(archivedTagRow(t, tagWeights.get(t.name)));
 }
 
-function tagRow(t) {
+function tagRow(t, w) {
   const row = document.createElement('div');
   row.className = 'tag-row';
   row.dataset.id = String(t.id);
   row.innerHTML =
     `<span class="tag-row-name">${escapeHtml(t.name)}</span>` +
+    weightsHtml(w, 'entries') +
     `<span class="tag-row-actions">` +
     `<button class="iconbtn" type="button" data-act="rename-tag" aria-label="Rename tag"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="archive-tag" aria-label="Archive tag"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
@@ -3367,13 +3403,14 @@ function tagRow(t) {
 
 // §12 R13 — an archived tag rendered as a quiet Restore row (shown only when "show archived" is
 // on). Restore reverses the hide over the same restoreTag IPC `tt tag restore` drives.
-function archivedTagRow(t) {
+function archivedTagRow(t, w) {
   const row = document.createElement('div');
   row.className = 'tag-row archived';
   row.dataset.id = String(t.id);
   row.innerHTML =
     `<span class="tag-row-name">${escapeHtml(t.name)}</span>` +
     `<span class="pill">archived</span>` +
+    weightsHtml(w, 'entries') +
     `<span class="tag-row-actions">` +
     `<button class="small ghost" type="button" data-act="restore-tag"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
     `</span>`;
@@ -3395,7 +3432,7 @@ function openTagRename(row, t) {
   form.querySelector('input').focus();
 }
 
-function clientRow(c, projects) {
+function clientRow(c, projects, w) {
   const wrap = document.createElement('div');
   wrap.className = 'client';
   wrap.dataset.id = String(c.id);
@@ -3404,6 +3441,7 @@ function clientRow(c, projects) {
   head.className = 'client-head';
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
+    weightsHtml(w, 'hours') +
     `<span class="client-actions">` +
     `<button class="iconbtn" type="button" data-act="rename-client" aria-label="Rename client"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="archive-client" aria-label="Archive client"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
@@ -3413,8 +3451,11 @@ function clientRow(c, projects) {
   const list = document.createElement('div');
   list.className = 'project-list';
   // Active projects first; then (when showArchived) the client's archived projects as Restore rows.
-  for (const p of projects.filter((p) => !p.archived)) list.appendChild(projectRow(p));
-  for (const p of projects.filter((p) => p.archived)) list.appendChild(archivedProjectRow(p));
+  // §12 R27: each project's weights come off ITS client's nested project lines (project names are
+  // unique per client, §07 — the nesting is what keeps same-named projects of different clients apart).
+  const projectWeight = (p) => (w ? w.projects.find((x) => x.name === p.name) : undefined);
+  for (const p of projects.filter((p) => !p.archived)) list.appendChild(projectRow(p, projectWeight(p)));
+  for (const p of projects.filter((p) => p.archived)) list.appendChild(archivedProjectRow(p, projectWeight(p)));
   // §07: the Add-project affordance sits at the foot of the client's own project list, in line
   // with the projects — so it reads as "create a project here", under this client. Its "+"
   // icon reads muted like every icon-only affordance (design.html D16 — accent only when the
@@ -3440,12 +3481,13 @@ function clientRow(c, projects) {
   return wrap;
 }
 
-function projectRow(p) {
+function projectRow(p, w) {
   const row = document.createElement('div');
   row.className = 'project';
   row.dataset.id = String(p.id);
   row.innerHTML =
     `<span class="project-name">${escapeHtml(p.name)}</span>` +
+    weightsHtml(w, 'hours') +
     `<span class="project-actions">` +
     `<button class="iconbtn" type="button" data-act="rename-project" aria-label="Rename project"><svg class="ic" aria-hidden="true"><use href="#i-edit" /></svg></button>` +
     `<button class="iconbtn" type="button" data-act="archive-project" aria-label="Archive project"><svg class="ic" aria-hidden="true"><use href="#i-archive" /></svg></button>` +
@@ -3463,7 +3505,7 @@ function projectRow(p) {
 // §12 R13 — an archived client rendered as a quiet Restore card (mockup: ".arch" card, "archived"
 // pill, Restore button). Restore reverses the hide over the restoreClient IPC `tt client restore`
 // drives; a restored client returns to every picker/filter. Shown only when "show archived" is on.
-function archivedClientRow(c) {
+function archivedClientRow(c, w) {
   const wrap = document.createElement('div');
   wrap.className = 'client archived';
   wrap.dataset.id = String(c.id);
@@ -3472,6 +3514,7 @@ function archivedClientRow(c) {
   head.innerHTML =
     `<span class="client-name">${escapeHtml(c.name)}</span>` +
     `<span class="pill">archived</span>` +
+    weightsHtml(w, 'hours') +
     `<span class="client-actions">` +
     `<button class="small ghost" type="button" data-act="restore-client"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
     `</span>`;
@@ -3486,13 +3529,14 @@ function archivedClientRow(c) {
 // §12 R13 — an archived project rendered as a Restore row, nested under its (active) client. Core
 // refuses restoring a project whose client is still archived, but such a project is never shown
 // here (an archived client renders as a card with no project list), so this path always succeeds.
-function archivedProjectRow(p) {
+function archivedProjectRow(p, w) {
   const row = document.createElement('div');
   row.className = 'project archived';
   row.dataset.id = String(p.id);
   row.innerHTML =
     `<span class="project-name">${escapeHtml(p.name)}</span>` +
     `<span class="pill">archived</span>` +
+    weightsHtml(w, 'hours') +
     `<span class="project-actions">` +
     `<button class="small ghost" type="button" data-act="restore-project"><svg class="ic" aria-hidden="true"><use href="#i-restore" /></svg>Restore</button>` +
     `</span>`;

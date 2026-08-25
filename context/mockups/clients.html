@@ -108,8 +108,15 @@
   .cl-row:hover{background:var(--wash)}
   .cl-row .nm{font-weight:590;font-size:13px}
   .cl-row.client .nm{font-size:13px;font-weight:640}
-  .cl-row .acts{margin-left:auto;display:flex;gap:4px;align-items:center}
+  .cl-row .acts{display:flex;gap:4px;align-items:center}
   .cl-row .count{color:var(--muted);font-size:11px;margin-left:2px}
+  /* §12 R27 — the weights beside each name: two right-aligned columns of quiet muted
+     numerals (all-time · this month, the order the section caption names). Reference
+     information, never a signal; the em-dash empty cell keeps the numeric face so the
+     columns align. The auto margin pins the pair against the row's action icons. */
+  .weights{display:inline-flex;gap:4px;margin-left:auto;color:var(--muted);flex:none}
+  .weights .w{min-width:58px;text-align:right;font-size:12px;font-family:var(--num);font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .weights-cap{font-size:12px;color:var(--muted);margin-left:12px;margin-right:auto}
   .proj{position:relative;margin-left:16px;padding-left:16px;border-left:2px solid var(--rule-strong)}
   .proj .cl-row{padding:8px 12px}
   .proj .cl-row .nm{font-weight:450;color:var(--ink)}
@@ -122,7 +129,7 @@
   .tg-row{display:flex;align-items:center;gap:12px;padding:8px 12px;border-radius:var(--r1)}
   .tg-row:hover{background:var(--wash)}
   .tg-row + .tg-row{border-top:1px solid var(--rule)}
-  .tg-row .acts{margin-left:auto;display:flex;gap:4px;align-items:center}
+  .tg-row .acts{display:flex;gap:4px;align-items:center}
 </style>
 </head>
 <body>
@@ -177,13 +184,14 @@
       </div>
 
       <div>
-        <div class="sec-h"><h3>Clients &amp; projects</h3></div>
+        <div class="sec-h"><h3>Clients &amp; projects</h3><span class="weights-cap">all time · this month</span></div>
         <div class="clist">
 
           <div class="card cl">
             <div class="cl-row client">
               <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Acme</span><span class="count">2 projects</span>
+              <span class="weights"><span class="w" title="all time">16.50h</span><span class="w" title="this month">4.50h</span></span>
               <span class="acts">
                 <button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button>
                 <button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button>
@@ -191,9 +199,11 @@
             </div>
             <div class="proj">
               <div class="cl-row"><span class="nm">API</span>
+                <span class="weights"><span class="w" title="all time">12.50h</span><span class="w" title="this month">2.50h</span></span>
                 <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
               </div>
               <div class="cl-row"><span class="nm">Web</span>
+                <span class="weights"><span class="w" title="all time">4.00h</span><span class="w" title="this month">2.00h</span></span>
                 <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
               </div>
               <button class="proj-add"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
@@ -204,6 +214,8 @@
             <div class="cl-row client">
               <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Globex</span><span class="count">1 project</span>
+              <!-- §12 R27: a window with no time is a muted em-dash, never an explicit zero. -->
+              <span class="weights"><span class="w" title="all time">2.00h</span><span class="w" title="this month">—</span></span>
               <span class="acts">
                 <button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button>
                 <button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button>
@@ -211,6 +223,7 @@
             </div>
             <div class="proj">
               <div class="cl-row"><span class="nm">Onboarding</span>
+                <span class="weights"><span class="w" title="all time">2.00h</span><span class="w" title="this month">—</span></span>
                 <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
               </div>
               <button class="proj-add"><svg class="ic"><use href="#i-plus"/></svg> Add project</button>
@@ -221,6 +234,8 @@
             <div class="cl-row client">
               <svg class="ic" style="color:var(--muted)"><use href="#i-users"/></svg>
               <span class="nm">Initech</span><span class="pill">archived</span>
+              <!-- §12 R27: an archived record keeps its weights — it carries history by definition. -->
+              <span class="weights"><span class="w" title="all time">8.25h</span><span class="w" title="this month">—</span></span>
               <span class="acts">
                 <button class="btn sm ghost"><svg class="ic"><use href="#i-restore"/></svg> Restore</button>
               </span>
@@ -231,18 +246,24 @@
       </div>
 
       <div>
-        <div class="sec-h"><h3>Tags</h3><button class="btn sm"><svg class="ic"><use href="#i-plus"/></svg> Add tag</button></div>
+        <div class="sec-h"><h3>Tags</h3><span class="weights-cap">entries · all time · this month</span><button class="btn sm"><svg class="ic"><use href="#i-plus"/></svg> Add tag</button></div>
         <div class="card taglist">
+          <!-- §12 R27: tag weights are plain integer ENTRY COUNTS (no hours suffix); a
+               window with no entries is the same muted em-dash. -->
           <div class="tg-row"><span class="tag">deep</span>
+            <span class="weights"><span class="w" title="all time">12</span><span class="w" title="this month">3</span></span>
             <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
           </div>
           <div class="tg-row"><span class="tag">urgent</span>
+            <span class="weights"><span class="w" title="all time">5</span><span class="w" title="this month">—</span></span>
             <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
           </div>
           <div class="tg-row"><span class="tag">admin</span>
+            <span class="weights"><span class="w" title="all time">—</span><span class="w" title="this month">—</span></span>
             <span class="acts"><button class="iconbtn" title="Rename"><svg class="ic"><use href="#i-edit"/></svg></button><button class="iconbtn" title="Archive"><svg class="ic"><use href="#i-archive"/></svg></button></span>
           </div>
           <div class="tg-row arch"><span class="tag">legacy</span><span class="pill">archived</span>
+            <span class="weights"><span class="w" title="all time">9</span><span class="w" title="this month">—</span></span>
             <span class="acts"><button class="btn sm ghost"><svg class="ic"><use href="#i-restore"/></svg> Restore</button></span>
           </div>
         </div>

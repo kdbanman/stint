@@ -289,6 +289,9 @@
           <section id="clients" class="view clients" data-view="clients" hidden>
             <div class="clients-head vhead">
               <h2 class="clients-title vtitle">Clients</h2>
+              <!-- §12 R27: names the two weight windows once, in row order — the per-row
+                   numerals below stay bare (muted reference figures, never a signal). -->
+              <span class="weights-cap">all time · this month</span>
               <span class="clients-head-actions">
                 <!-- §12 R13: reveal archived records (with Restore) — parity with `tt … ls --archived`. -->
                 <button id="show-archived" type="button" class="small ghost" aria-pressed="false">Show archived</button>
@@ -301,6 +304,8 @@
 
             <div class="tags-head vhead">
               <h2 class="clients-title vtitle">Tags</h2>
+              <!-- §12 R27: tags weigh by ENTRY COUNT, so this caption names the unit too. -->
+              <span class="weights-cap">entries · all time · this month</span>
               <!-- design.html D11: Add tag is NEUTRAL (mock clients.html `.btn sm`) — the
                    Clients view's one accent-solid primary is its standing + Add client. -->
               <button id="add-tag" type="button" class="small"><svg class="ic" aria-hidden="true"><use href="#i-plus" /></svg>Add tag</button>

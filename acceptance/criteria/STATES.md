@@ -89,6 +89,8 @@ waiver with a reason; a new view or state added without a row here is a coverage
 | **Ideal** — unreferenced archive (direct) | Archive commits with no confirm step | JUDGE `CLIENTS_VIEW` (Globex path) — `main-clients.png` | |
 | **Edge** — archived restore list | "Show archived" toggle reveals archived rows with `.pill` + Restore | JUDGE `RESTORE_ARCHIVED` — `main-clients-archived.png` | |
 | **Ideal** — tags strip | Active tags with rename/archive in place | JUDGE `TAG_CHIPS` — `main-tags.png`; BDD "Tag lifecycle by hand" | |
+| **Ideal** — weights beside each name (§12 R27) | Two muted numerals per row (all-time · this month): core-formatted hours on clients/projects, entry counts on tags; the section captions name the window order | JUDGE `CLIENTS_VIEW` (`weightsBindCoreSums`) — `main-clients.png`; GOLD `gui/test/weights.test.ts` (the sums) | |
+| **Empty (per window)** — em-dash weights (§12 R27) | A window with no time / no entries renders "—", never an explicit zero (Globex month, the entryless Ops, urgent month; a just-created record dashes both) | JUDGE `CLIENTS_VIEW` (`emptyWindowDashes`) — `main-clients.png` | |
 | **Empty** — "No clients yet" | Instruct copy, mentions `tt client add` (`app.js` `renderClients`' empty branch) | JUDGE `CLIENTS_VIEW` (empty-reference-data page) — `main-clients-empty.png` | |
 | **Empty** — "No tags yet" | Instruct copy, mentions `tt tag add` (`app.js` `renderTags`' empty branch) | JUDGE `CLIENTS_VIEW` (empty-reference-data page) — `main-clients-empty.png` | |
 
