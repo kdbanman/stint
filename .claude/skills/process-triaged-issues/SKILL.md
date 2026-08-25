@@ -65,7 +65,10 @@ For the issues labeled `needs new requirement or AC` — and for every
 the grill **once across the whole batch**:
 
 - One tight cluster of related questions at a time; stop and wait for
-  answers. Never a flat questionnaire.
+  answers. Never a flat questionnaire, never `AskUserQuestion`. Always
+  deliver the interview as an `author-grill-assist-doc` artifact
+  (`context/process.html` §03) — it carries the context the owner needs
+  to answer and assembles their response for the session.
 - Every question carries a recommended answer and a one-line rationale.
 - Consult the codebase, don't ask what code can answer (schema, CLI command
   table, renderer, mockups).
@@ -79,7 +82,10 @@ the grill **once across the whole batch**:
   consequences, which mockup depicts the change, and where the ACs land.
 - Triage-time decisions are givens; the interview goes one level deeper — the
   threshold behind a decided confirm, the canonical glossary term, comparator
-  edge cases, CLI flag shapes.
+  edge cases, CLI flag shapes. This is the boundary with triage's grill:
+  triage settled *what kind* of fix; this interview settles its exact
+  expression. A question whose answer the triage comment already carries is
+  a re-grill — cut it.
 
 End with a written per-issue synthesis (decisions, spec deltas, AC homes) and
 get sign-off. **Do not delegate until it is signed off.**
@@ -208,8 +214,9 @@ Do not end the run while any unit lacks an open PR:
 - [ ] The batch's `[META] Orchestration` handoff read (or worked out), and
       carried into Step 3 — including any base branch it names.
 - [ ] One batched grill held for every `needs new requirement or AC` and
-      `Triaged: transition required` issue; written synthesis signed off before any
-      delegation.
+      `Triaged: transition required` issue, delivered as an
+      `author-grill-assist-doc` artifact; written synthesis signed off before
+      any delegation.
 - [ ] Units partitioned; any multi-issue unit justified by a shared
       requirement or files, and its PR names every issue; any multi-PR unit
       justified by its triage comment.
