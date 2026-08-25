@@ -14,14 +14,19 @@ Feature: Saved reports
     And a client "Acme" with project "API"
     And a client "Globex" with project "Ops"
 
+  Scenario: Saving a report lists it by name
+    # PRD §09 R08 — a saved definition persists under its name and shows up in the list
+    # (`tt report ls` / the GUI Reports view's saved list).
+    When I save a report "Weekly" for this week grouped by client over billable time
+    Then the saved report list includes "Weekly"
+
   Scenario: A saved report's run total matches an equivalent ad-hoc report
     # The saved relative "this-week" spec re-resolves through core's resolveRange on run; the
     # last-week entry falls outside it. The run total must equal an ad-hoc this-week report
     # over the same window — proving the saved and ad-hoc range resolution cannot diverge.
     Given a closed entry "review" for "Acme" this week lasting 1 hour
     And a closed entry "ops sync" for "Globex" last week lasting 2 hours
-    When I save a report "Weekly" for this week grouped by client over billable time
-    Then the saved report list includes "Weekly"
+    And I save a report "Weekly" for this week grouped by client over billable time
     When I run the saved report "Weekly"
     Then the saved report run totals 1 billable hour
     And the saved report run total equals an ad-hoc this week report grouped by client over billable time
@@ -84,8 +89,7 @@ Feature: Saved reports
     # proving the CONTRACT holds identically on @stint/core (store.saveReport throws) and tt
     # (`tt report save` exits non-zero), and that the refused save adds nothing.
     Given a closed entry "review" for "Acme" this week lasting 1 hour
-    When I save a report "Weekly" for this week grouped by client over billable time
-    Then the saved report list includes "Weekly"
+    And I save a report "Weekly" for this week grouped by client over billable time
     When saving a report "weekly" for last week grouped by project over all time is rejected
     Then the saved report list includes "Weekly"
     And the saved report list does not include "weekly"
@@ -105,27 +109,34 @@ Feature: Saved reports
     # original definition is left untouched. Proven on both surfaces (store.editReport throws /
     # `tt report edit --range` exits non-zero).
     Given a closed entry "review" for "Acme" this week lasting 1 hour
-    When I save a report "Weekly" for this week grouped by client over billable time
-    Then the saved report list includes "Weekly"
+    And I save a report "Weekly" for this week grouped by client over billable time
     When amending the saved report "Weekly" range to the custom range 2026-07-15T00:00:00Z to 2026-07-01T00:00:00Z is rejected
     Then the saved report list includes "Weekly"
 
   Scenario: A saved report with a same-day (from == to) custom range is accepted
     # PRD §09 R01 — the report range rule is from ≤ to (NOT the entries' strict <): a same-day
-    # window where From EQUALS To is a legitimate request, so it SAVES and RUNS (here over an
-    # empty window, totalling 0h) rather than being rejected. This is the ≤-for-reports vs
-    # <-for-entries asymmetry made concrete. Both surfaces (store.saveReport / `tt report save`).
+    # window where From EQUALS To is a legitimate request, so it SAVES rather than being
+    # rejected. This is the ≤-for-reports vs <-for-entries asymmetry made concrete. Both
+    # surfaces (store.saveReport / `tt report save`).
     When I save a report "SameDay" for the custom range 2026-06-24T00:00:00Z to 2026-06-24T00:00:00Z grouped by client over billable time
     Then the saved report list includes "SameDay"
+
+  Scenario: A same-day custom range saved report runs over its empty window
+    # PRD §09 R01 — the accepted from == to definition also RUNS, resolving to an empty
+    # window totalling zero instead of erroring. Both surfaces (store.runReport / `tt report run`).
+    Given I save a report "SameDay" for the custom range 2026-06-24T00:00:00Z to 2026-06-24T00:00:00Z grouped by client over billable time
     When I run the saved report "SameDay"
     Then the saved report run totals 0 billable hours
 
-  Scenario: Renaming then deleting a saved report removes it from the list
+  Scenario: Renaming a saved report keeps it listed under the new name only
     Given a closed entry "review" for "Acme" this week lasting 1 hour
-    When I save a report "Draft" for this week grouped by client over billable time
-    Then the saved report list includes "Draft"
+    And I save a report "Draft" for this week grouped by client over billable time
     When I rename the saved report "Draft" to "Final"
     Then the saved report list includes "Final"
     And the saved report list does not include "Draft"
+
+  Scenario: Deleting a saved report removes it from the list
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    And I save a report "Final" for this week grouped by client over billable time
     When I delete the saved report "Final"
     Then the saved report list does not include "Final"

@@ -30,34 +30,54 @@ Feature: GUI ↔ tt parity (§17 R8)
     When I edit the entry "draft spec" description to "final spec"
     Then the entry "final spec" is for "Acme / API"
 
-  # §07 / §12 R11 — the Clients view's client lifecycle: create, rename, archive. Reaches the
-  # addClient / renameClient / archiveClient IPC channels, parity with `tt client add/rename/archive`.
-  Scenario: Creating, renaming then archiving a client runs identically on both surfaces
+  # §07 / §12 R11 — the Clients view's client lifecycle. Reaches the addClient IPC channel,
+  # parity with `tt client add`.
+  Scenario: Creating a client runs identically on both surfaces
     When I add a client "Acme Corp"
     Then client "Acme Corp" is in the active client list
+
+  # §07 / §12 R11 — reaches the renameClient IPC channel, parity with `tt client rename`.
+  Scenario: Renaming a client runs identically on both surfaces
+    Given I add a client "Acme Corp"
     When I rename client "Acme Corp" to "Acme Inc"
     Then client "Acme Inc" is in the active client list
     And client "Acme Corp" is not in the active client list
-    When I archive client "Acme Inc"
-    Then client "Acme Inc" is not in the active client list
 
-  # §07 / §12 R11 — the Clients view's per-project lifecycle: create under a client, rename,
-  # archive. Reaches the addProject / renameProject / archiveProject IPC channels, parity with
-  # `tt project add/rename/archive`.
-  Scenario: Creating, renaming then archiving a project runs identically on both surfaces
+  # §07 / §12 R11 — reaches the archiveClient IPC channel, parity with `tt client archive`.
+  Scenario: Archiving a client runs identically on both surfaces
+    Given I add a client "Acme Corp"
+    When I archive client "Acme Corp"
+    Then client "Acme Corp" is not in the active client list
+
+  # §07 / §12 R11 — the Clients view's per-project lifecycle. Reaches the addProject IPC
+  # channel, parity with `tt project add`.
+  Scenario: Creating a project runs identically on both surfaces
     Given I add a client "Globex"
     When I add a project "Platform" for client "Globex"
     Then project "Platform" is in the active project list
+
+  # §07 / §12 R11 — reaches the renameProject IPC channel, parity with `tt project rename`.
+  Scenario: Renaming a project runs identically on both surfaces
+    Given I add a client "Globex"
+    And I add a project "Platform" for client "Globex"
     When I rename project "Platform" to "Core Platform"
     Then project "Core Platform" is in the active project list
     And project "Platform" is not in the active project list
-    When I archive project "Core Platform"
-    Then project "Core Platform" is not in the active project list
+
+  # §07 / §12 R11 — reaches the archiveProject IPC channel, parity with `tt project archive`.
+  Scenario: Archiving a project runs identically on both surfaces
+    Given I add a client "Globex"
+    And I add a project "Platform" for client "Globex"
+    When I archive project "Platform"
+    Then project "Platform" is not in the active project list
 
   # §12 R12 / §14 — the Settings view's edit + read-back over the SAME config capability `tt
   # config set` / `tt config ls` use. A chosen value persists and reads back on both surfaces.
-  Scenario: Changing a setting and reading it back behaves identically on both surfaces
+  Scenario: Changing the week start and reading it back behaves identically on both surfaces
     When I set week start to "sunday"
     Then the configured week start is "sunday"
+
+  # §12 R12 / §14 — the second settings example: a numeric setting round-trips the same way.
+  Scenario: Changing the rounding increment and reading it back behaves identically on both surfaces
     When I set rounding increment to "30"
     Then the configured rounding increment is "30"

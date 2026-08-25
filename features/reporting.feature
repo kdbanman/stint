@@ -124,7 +124,7 @@ Feature: Report grouping (group by client / project / day / week / month / tag)
   # (`tt report run <name> --csv|--json`) — is proven in features/saved_reports.feature,
   # where an off-filter row inside the range tells them apart; the UNSCOPED whole-record
   # export (no-flag `tt export` / the GUI "Export All Data") is the next scenario.
-  Scenario: CSV and JSON export the raw entries for the range with the same shape
+  Scenario: CSV exports the raw entries for the range
     Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours
     When I export the range 2026-06-22T00:00:00Z to 2026-06-29T00:00:00Z as csv
@@ -132,6 +132,10 @@ Feature: Report grouping (group by client / project / day / week / month / tag)
     And the export has a row "build" for "Acme" of 7200 seconds
     And the export has a row "ops sync" for "Globex" of 10800 seconds
     And every exported row carries its billable flag
+
+  Scenario: JSON exports the raw entries for the range with the same shape as CSV
+    Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
+    And a closed entry "ops sync" for "Globex" / "Ops" tagged "meeting" this week on day 2 lasting 3 hours
     When I export the range 2026-06-22T00:00:00Z to 2026-06-29T00:00:00Z as json
     Then the export has 2 rows
     And the export has a row "build" for "Acme" of 7200 seconds
@@ -145,7 +149,7 @@ Feature: Report grouping (group by client / project / day / week / month / tag)
   # TWICE over the World exportAllRows capability — @stint/core (unbounded listEntries →
   # toCsv/toJsonEntries) and tt (`tt export --csv|--json`, no range flag) — so a silently
   # reintroduced default window fails on both surfaces (§17 R8).
-  Scenario: Exporting everything covers the whole record, not an implicit window
+  Scenario: Exporting everything as CSV covers the whole record, not an implicit window
     Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
     And a closed non-billable entry "filing" for "Acme" last week lasting 3 hours
     And a closed entry "january audit" for "Globex" on local day 2026-01-05 at 09:00 lasting 60 minutes
@@ -155,6 +159,11 @@ Feature: Report grouping (group by client / project / day / week / month / tag)
     And the export has a row "filing" for "Acme" of 10800 seconds
     And the export has a row "january audit" for "Globex" of 3600 seconds
     And every exported row carries its billable flag
+
+  Scenario: Exporting everything as JSON covers the whole record, not an implicit window
+    Given a closed entry "build" for "Acme" / "API" tagged "deep" this week on day 1 lasting 2 hours
+    And a closed non-billable entry "filing" for "Acme" last week lasting 3 hours
+    And a closed entry "january audit" for "Globex" on local day 2026-01-05 at 09:00 lasting 60 minutes
     When I export everything as json
     Then the export has 3 rows
     And the export has a row "january audit" for "Globex" of 3600 seconds
