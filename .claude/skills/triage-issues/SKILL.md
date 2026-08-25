@@ -117,6 +117,13 @@ bind-vs-retract, which alerting channel, which of the alternatives the issue
 left open. The grilling confirmed the problem exists; this decides what "fixed"
 means.
 
+Stop at the kind. The fix's exact expression — spec text deltas, thresholds,
+comparator edge cases, AC homes — belongs to the orchestrator's deeper
+interview (`process-triaged-issues` Step 2), which runs once across the whole
+triaged backlog with sequencing in hand. Grilling it here decides design
+before the routing verdict exists and grills the owner twice on the same
+ground.
+
 Two situations need the **owner**, not a guess: a finding ambiguous between
 categories (an adjacent principle exists but doesn't quite reach the behavior),
 and a finding whose correct behavior is itself unspecified — if fixing it means
