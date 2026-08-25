@@ -91,6 +91,15 @@ export const CHANNELS = [
   'renameTag',
   'archiveTag',
   'restoreTag',
+  // §12 R27: the Clients view's weights — per-client/per-project summed hours and per-tag
+  // entry counts, each over TWO windows (all-time; this month, core's month preset). The
+  // figures are core's report sums (the grouped totals behind `tt report --by client|tag`,
+  // §09 R02), aggregated in gui/src/weights.ts and read here as raw seconds/counts; the
+  // renderer formats them through core's bundled formatHours (SU.fmtHours) and derives
+  // no window and no sum of its own. Read-only. Parity is capability-level: the same
+  // figures are `tt report`'s for the same selection (no `tt client ls --totals` flag —
+  // recorded at triage of issue #355).
+  'referenceWeights',
   'setSetting',
   // §20 R04–R05 / §17 R12: automatic backups + restore — the Settings → Backups section. CRUD
   // over the SAME @stint/core Store the tt `backup ls|restore` verbs drive, so backups/recovery
@@ -471,6 +480,35 @@ export interface StoragePathsView {
 }
 
 /**
+ * §12 R27 — what `referenceWeights` returns: the Clients view's weights, renderer-safe.
+ * Clients and projects carry summed seconds (billable and non-billable entries alike —
+ * `tt report --all`'s figure) per window; tags carry entry counts. Each list holds only
+ * names that carry entries in at least one window — a name absent here (or a window at 0)
+ * is the §12 R27 muted em-dash. Names, not ids: core's report groups by resolved name
+ * (§09 R02), and the renderer only MATCHES them against the names listClients/listProjects/
+ * listTags already delivered — it resolves nothing.
+ */
+export interface ReferenceWeightsView {
+  clients: ClientWeightView[];
+  tags: TagWeightView[];
+}
+
+/** §12 R27 — one client's two-window summed seconds, with its projects' pairs nested. */
+export interface ClientWeightView {
+  name: string;
+  allTimeSeconds: number;
+  monthSeconds: number;
+  projects: { name: string; allTimeSeconds: number; monthSeconds: number }[];
+}
+
+/** §12 R27 — one tag's two-window entry counts. */
+export interface TagWeightView {
+  name: string;
+  allTimeCount: number;
+  monthCount: number;
+}
+
+/**
  * §12 R26 — what a `storage:changeDb` / `storage:changeBackupDir` call resolves to. A REFUSAL
  * is a value, not a rejection: core's StorageChangeError messages are written for in-dialog
  * rendering (§12 R21's inline grammar), so main catches the typed refusal and returns its
@@ -536,6 +574,7 @@ export interface IpcContract {
   renameTag: { payload: { id: number; name: string }; result: void };
   archiveTag: { payload: { id: number }; result: void };
   restoreTag: { payload: { id: number }; result: void };
+  referenceWeights: { payload: void; result: ReferenceWeightsView };
   setSetting: { payload: SetSettingPayload; result: void };
   listBackups: { payload: void; result: BackupInfoView[] };
   restoreBackup: { payload: { name: string }; result: RestoreResult };

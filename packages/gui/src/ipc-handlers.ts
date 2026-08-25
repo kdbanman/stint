@@ -41,6 +41,7 @@ import {
   savedReportPatchFromView,
 } from './reportview.js';
 import { pinFavoriteFromView, listFavoriteViews, favoriteToView } from './favorites.js';
+import { buildReferenceWeights } from './weights.js';
 import { listBackupViews } from './backupview.js';
 import { buildStoragePathsView } from './storageview.js';
 import { parseLocalInput } from './localtime.js';
@@ -388,6 +389,9 @@ export function createIpcHandlers(deps: IpcHandlerDeps): IpcHandlers {
       store.restoreTag(payload.id);
       refreshAll();
     },
+    // §12 R27: the Clients view's weights — core's report sums over the two windows
+    // (all-time; core's month preset), aggregated in weights.ts. Read-only, no refresh.
+    referenceWeights: () => buildReferenceWeights(store, new Date()),
     setSetting: (payload) => {
       // §12 R11: the Settings view (and the report view's rounding controls) persist any §14 setting
       // over this one channel — parity with `tt config set`. A global-hotkey edit must take effect

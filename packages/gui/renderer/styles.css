@@ -1360,6 +1360,24 @@ button.danger:hover { background: var(--danger-weak); }
 .client-name { font-size: 13px; font-weight: 590; color: var(--ink); }
 .client-actions, .project-actions { display: inline-flex; gap: 8px; }
 
+/* §12 R27 — the weights beside each name: two right-aligned columns of quiet muted
+   numerals (all-time, then this month — the order the head caption names), reference
+   information only (design.html D04 — muted, no accent, no pill). The em-dash empty
+   cell keeps the numeric face so the columns stay aligned. margin-left:auto pins the
+   pair against the row's action icons; on an archived row it sits after the pill's own
+   auto margin, so the two gaps merge and the columns still land in the same place. */
+.weights { display: inline-flex; gap: 4px; margin-left: auto; color: var(--muted); flex: none; }
+.weights .w {
+  font-family: var(--num);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  min-width: 58px;
+  text-align: right;
+}
+/* The one caption naming the two windows, beside each section title (label once, not
+   per row); margin-right:auto keeps it clustered with the title in the space-between head. */
+.weights-cap { font-size: 12px; color: var(--muted); margin-left: 12px; margin-right: auto; }
+
 .project-list {
   display: flex;
   flex-direction: column;
