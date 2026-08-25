@@ -1,0 +1,47 @@
+# Close finished [META] Orchestration handoffs (process.html §06: a handoff is
+# "closed when the batch is through"). A handoff's members are its sub-issues;
+# when every sub-issue is closed the batch is through and the handoff is
+# scaffolding to close. A handoff with ZERO sub-issues is left alone — it is
+# fresh, filed before its members were attached — so the sweep can never eat a
+# handoff whose batch hasn't been recorded yet.
+name: close-finished-metas
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch: {}
+permissions:
+  issues: write
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const metas = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', labels: '[META] Orchestration', per_page: 100,
+            });
+            for (const issue of metas) {
+              const subs = await github.paginate('GET /repos/{owner}/{repo}/issues/{issue_number}/sub_issues', {
+                owner, repo, issue_number: issue.number, per_page: 100,
+              });
+              if (subs.length === 0) {
+                core.info(`#${issue.number}: zero sub-issues — fresh handoff, leaving open`);
+                continue;
+              }
+              const open = subs.filter((s) => s.state !== 'closed');
+              if (open.length > 0) {
+                core.info(`#${issue.number}: ${open.length}/${subs.length} sub-issues still open`);
+                continue;
+              }
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `All ${subs.length} member sub-issues are closed — the batch is through; closing this handoff (process.html §06, close-finished-metas workflow).`,
+              });
+              await github.rest.issues.update({
+                owner, repo, issue_number: issue.number,
+                state: 'closed', state_reason: 'completed',
+              });
+              core.notice(`closed handoff #${issue.number} (${subs.length} members all closed)`);
+            }
