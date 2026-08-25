@@ -2679,12 +2679,17 @@ body.popover { background: var(--paper); margin: 0; }
   color: var(--ink);
   padding: 8px 12px;
 }
-.fav-rail { display: flex; flex-wrap: wrap; gap: 12px; }
+/* design.html D07 (issue #354): an equal-width auto-fill grid — every favorite card shares
+   one track width (last row included; trailing space stays empty), and the rail reflows to
+   fewer columns (eventually one) as the window narrows. Shrink-to-fit siblings of differing
+   widths read as a ragged, unfinished edge. */
+.fav-rail { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 .fav-card {
   position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0; /* a grid item's auto min-width would defeat the .fi ellipsis */
   border: 1px solid var(--rule);
   border-radius: var(--r2);
   padding: 12px 12px;

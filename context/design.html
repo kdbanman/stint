@@ -191,7 +191,10 @@
     <p><span class="rid">D07</span><strong>Spacing grid.</strong> Every padding, gap, and margin is a
     multiple of 4px, with 2px permitted as the sub-4 half-step (legal: 2, 4, 8, 12, 16…). Component
     intrinsic heights are free (a 34px button is legal; its 11px side padding is not — that's 12px).
-    Alignment comes from the grid, not from per-view pixel nudging.</p>
+    Alignment comes from the grid, not from per-view pixel nudging. Cards wrapped side by side in a
+    rail share one width — an equal-width grid that reflows to fewer columns as the window narrows,
+    a partial last row keeping the shared width with its trailing space empty — never shrink-to-fit
+    siblings of differing widths, whose ragged edge reads unfinished.</p>
     <p><span class="rid">D08</span><strong>Radius trio.</strong> 8px controls · 12px cards · 16px
     window &amp; overlays. No fourth radius. Recorded exemption: a functional mark whose control
     radius would exceed half its own box — the calendar corner checkbox and the progress-bar
