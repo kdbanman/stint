@@ -2428,6 +2428,29 @@ scenes with `STORAGE_GROUP`); the pipelines' own §20 R12/R13 BDD/PROP/GOLD
 suites; MANUAL runbook `CHECK STORAGE CHANGE` (the real OS picker, the native
 launch-refusal dialog, the relaunch — no headless host).
 
+**R27 Clients-view weights** (every listed client/project/tag carries two
+figures — all-time and this month: summed hours for clients/projects in core's
+decimal spelling, plain integer entry counts for tags; a window with no time /
+no entries is a muted em-dash, never a zero; the numbers are core's report sums
+read over IPC, nothing recomputed or re-formatted in the renderer): the
+aggregation is `gui/src/weights.ts` `buildReferenceWeights` — two
+`store.report` reads per grouping (all-time sentinel bounds; core's
+`resolveRange('month')` in the configured zone), `billableFilter 'all'`,
+rounding off, merged per name — served over the `referenceWeights` IPC channel
+(`gui/src/ipc.ts` / `ipc-handlers.ts`; parity row `referenceWeights` → `tt
+report` — capability-level, the recorded no-new-flag decision from the issue
+#355 triage) and painted by `gui/renderer/app.js` `weightsHtml` as muted
+`.weights .w` numerals through the bundled `SU.fmtHours` (core's `formatHours`
++ the view's `h`), the em-dash on a zero window, the window order named once
+per section caption. **GOLD** `gui/test/weights.test.ts` (literal sums over a
+real in-memory store: the month boundary excludes last month, billable and
+non-billable count alike, all-time reaches years back, the placeholder buckets
+never surface). **JUDGE** `CLIENTS_VIEW` weight facts (`weightsBindCoreSums` —
+each displayed figure equals core's `formatHours` over the fixture's raw
+seconds, or the fixture entry count; `emptyWindowDashes` — the em-dash on every
+empty window), `main-clients.png`. Mockup `mockups/clients.html` illustrates
+(§18).
+
 ### PRD §12 (UI states)
 
 `acceptance/criteria/STATES.md` — the UI state inventory: a per-surface ×

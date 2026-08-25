@@ -718,6 +718,40 @@ const PROJECTS = {
   ],
 };
 
+// §12 R27 — the Clients view's weights fixture (the referenceWeights mock's canned answer):
+// per-client/per-project summed SECONDS and per-tag entry counts over the two windows,
+// all-time then this month. Seconds, not pre-formatted strings, exactly like the shipping
+// channel — the renderer must format them through core's bundled formatHours (SU.fmtHours),
+// and the CLIENTS_VIEW scene binds each displayed figure to core's formatHours over THESE
+// values (imported in run-judge.mjs), so a renderer-local re-format that drifts from core's
+// spelling fails the scene. Deliberate empty-window cases: Globex carries no this-month
+// time, Ops carries no time at all (absent from the list), and 'urgent' has no this-month
+// entries — each must render the §12 R27 muted em-dash, never an explicit zero.
+export const WEIGHTS = {
+  clients: [
+    {
+      name: 'Acme',
+      allTimeSeconds: 59400, // 16.50h
+      monthSeconds: 16200, // 4.50h
+      projects: [
+        { name: 'API', allTimeSeconds: 45000, monthSeconds: 9000 }, // 12.50h · 2.50h
+        { name: 'Web', allTimeSeconds: 14400, monthSeconds: 7200 }, // 4.00h · 2.00h
+      ],
+    },
+    {
+      name: 'Globex',
+      allTimeSeconds: 7200, // 2.00h
+      monthSeconds: 0, // — (the em-dash empty-window case)
+      // Ops is deliberately ABSENT: a project with no entries in either window dashes both.
+      projects: [{ name: 'Onboarding', allTimeSeconds: 7200, monthSeconds: 0 }],
+    },
+  ],
+  tags: [
+    { name: 'deep', allTimeCount: 12, monthCount: 3 },
+    { name: 'urgent', allTimeCount: 5, monthCount: 0 }, // — this month
+  ],
+};
+
 export function clientsState() {
   return emptyState();
 }
@@ -2013,6 +2047,11 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       // sub-fact (every channel has a window.stint method) reads this surface.
       __TAGS__: ${JSON.stringify(emptyRefData ? [] : [{ id: 1, name: 'deep', archived: false }, { id: 2, name: 'urgent', archived: false }])},
       listTags: function (p) { return Promise.resolve((p && p.includeArchived) ? this.__TAGS__.concat(this.__ARCHIVED_STORE__.tags) : this.__TAGS__); },
+      // §12 R27: the Clients view's weights — the canned two-window sums (seconds/counts,
+      // never pre-formatted strings, like the shipping channel). Stateless: a record the
+      // scene creates mid-run (Initech, Mobile, billing) is simply absent, which the
+      // renderer must paint as the em-dash pair. emptyRefData empties it with the rest.
+      referenceWeights: function () { return Promise.resolve(${JSON.stringify(emptyRefData ? { clients: [], tags: [] } : WEIGHTS)}); },
       addTag: function (p) { window.__ADDED_TAG__ = p; const t = { id: 97, name: (p && p.name) || '', archived: false }; this.__TAGS__.push(t); this.__FIRE_CHANGED__(); return Promise.resolve(t); },
       renameTag: function (p) { if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('renameTag', 'a tag named that already exists'); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },

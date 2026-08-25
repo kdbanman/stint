@@ -14,7 +14,11 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
-import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, STORAGE_PATHS, STORAGE_PICKED, STORAGE_EXISTS_REFUSAL, storageBrokenPaths, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+import { emptyState, runningState, startFormState, addFormState, editingState, unifiedFormState, multilineDescState, splittableState, edgeColumnState, mergeConflictState, mergeAgreeState, mergeGapState, overlapWriteState, clientsState, WEIGHTS, taggedState, listState, liveState, entriesCalendarState, shortEntriesCalendarState, denseCalendarState, savedReportsState, settingsState, timelineWindowState, timelineAroundState, timelineConsumerState, softwareUpdateState, backupsState, recoveryState, UPDATE_FIXTURE, UPDATE_CHECK_FAILED, timerViewRunningState, timerViewSleptRunningState, timerViewFavoritesState, timerViewEmptyFavoritesState, snapGridState, snapPickerState, STORAGE_PATHS, STORAGE_PICKED, STORAGE_EXISTS_REFUSAL, storageBrokenPaths, initScript, JUDGE_NOW, WINDOW, POPOVER } from './fixtures.mjs';
+// §12 R27 — core's decimal-hours spelling, imported so the CLIENTS_VIEW weight facts bind
+// each DISPLAYED figure to core's formatHours over the fixture's raw seconds: a renderer
+// that re-formats locally (or paints the seconds any other way) fails here, not in review.
+import { formatHours } from '@stint/core';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -3885,6 +3889,34 @@ async function sceneClientsView(browser) {
         unnamedIconButtons,
       };
     });
+    // §12 R27 — the weights beside each name, read off the initial paint: per-row
+    // { text, title } pairs for every .weights cell the facts below score. The page hands
+    // back raw strings only; the EXPECTED values are computed node-side from the fixture's
+    // seconds through core's formatHours, so the binding runs display → core, never
+    // display → a re-typed literal that could drift with the fixture.
+    // renderClients awaits renderTags last, so the tag rows land after the projects the
+    // opening waitForSelector saw — wait for a tag row before reading the tag weights.
+    await page.waitForSelector('#tags-list .tag-row[data-id="1"]', { state: 'attached' });
+    const weights = await page.evaluate(() => {
+      const cells = (sel) =>
+        [...document.querySelectorAll(sel + ' .weights .w')].map((el) => ({
+          text: (el.textContent || '').trim(),
+          title: el.getAttribute('title'),
+        }));
+      return {
+        acme: cells('#clients .client[data-id="1"] .client-head'),
+        api: cells('#clients .client[data-id="1"] .project[data-id="11"]'),
+        web: cells('#clients .client[data-id="1"] .project[data-id="12"]'),
+        globex: cells('#clients .client[data-id="2"] .client-head'),
+        onboarding: cells('#clients .client[data-id="2"] .project[data-id="21"]'),
+        ops: cells('#clients .client[data-id="2"] .project[data-id="22"]'),
+        deep: cells('#tags-list .tag-row[data-id="1"]'),
+        urgent: cells('#tags-list .tag-row[data-id="2"]'),
+        captions: [...document.querySelectorAll('#clients .weights-cap')].map((el) =>
+          (el.textContent || '').replace(/\s+/g, ' ').trim(),
+        ),
+      };
+    });
     await page.click('#add-client-btn');
     await page.waitForSelector('#clients-list .client-add input[placeholder="New client"]');
     await page.fill('#clients-list .client-add .client-add-input', 'Initech');
@@ -4114,20 +4146,57 @@ async function sceneClientsView(browser) {
     // blind (a selector rename, a view that never routed) finds nothing to disorder and would
     // otherwise pass vacuously.
     const focusOrderReads = focusOrder.stopCount >= 15 && focusOrder.backwards.length === 0;
+    // §12 R27 — the weight facts. Every displayed figure must equal CORE'S formatHours over
+    // the fixture's raw seconds (clients/projects, the `h` suffix riding core's bare number)
+    // or the fixture's plain integer count (tags), in window order all-time → this month
+    // (each cell titled with its window; the two section captions name the order once).
+    const wf = (s) => formatHours(s) + 'h';
+    const pairIs = (cells, all, month) =>
+      cells.length === 2 &&
+      cells[0].title === 'all time' &&
+      cells[1].title === 'this month' &&
+      cells[0].text === all &&
+      cells[1].text === month;
+    const [acmeW, globexW] = WEIGHTS.clients;
+    const [apiW, webW] = acmeW.projects;
+    const [onboardingW] = globexW.projects;
+    const [deepW, urgentW] = WEIGHTS.tags;
+    const weightsBindCoreSums =
+      pairIs(weights.acme, wf(acmeW.allTimeSeconds), wf(acmeW.monthSeconds)) &&
+      pairIs(weights.api, wf(apiW.allTimeSeconds), wf(apiW.monthSeconds)) &&
+      pairIs(weights.web, wf(webW.allTimeSeconds), wf(webW.monthSeconds)) &&
+      weights.globex[0]?.text === wf(globexW.allTimeSeconds) &&
+      weights.onboarding[0]?.text === wf(onboardingW.allTimeSeconds) &&
+      pairIs(weights.deep, String(deepW.allTimeCount), String(deepW.monthCount)) &&
+      weights.urgent[0]?.text === String(urgentW.allTimeCount) &&
+      weights.captions.length === 2 &&
+      weights.captions[0] === 'all time · this month' &&
+      weights.captions[1] === 'entries · all time · this month';
+    // §12 R27 — a window with no time / no entries is a MUTED EM-DASH, never an explicit
+    // zero: Globex's month, the entryless Ops project (both windows), and urgent's month.
+    const emptyWindowDashes =
+      weights.globex[1]?.text === '—' &&
+      weights.ops.length === 2 &&
+      weights.ops.every((c) => c.text === '—') &&
+      weights.urgent[1]?.text === '—';
     // Accent discipline (D16 — the whole view chrome is monochrome; icons take accent only
     // when their item is active) is judged visually against the mock, not gated on a
     // computed-style scan (issue #25) — the offender list is kept in the justification as
     // captured evidence only. The D16 accessible-name fact IS machine-gated above.
     record(
       'CLIENTS_VIEW',
-      { viewSeeded, createsLand, noRaceOnMutate, emptyInstructs, focusOrderReads },
+      { viewSeeded, createsLand, noRaceOnMutate, emptyInstructs, focusOrderReads, weightsBindCoreSums, emptyWindowDashes },
       `clients listed with nested projects, rename/archive in place: ${JSON.stringify(probe)}; ` +
         `create flows driven — Add client/Add project/Add tag each opened its inline field, ` +
         `committed over the IPC, and landed in the active list: ${JSON.stringify(created)}; ` +
         `rename/archive writes render each record exactly once (issue #66, no duplicate data-id): ${JSON.stringify(norace)}; ` +
         `empty reference data instructs (No clients yet / No tags yet): ${JSON.stringify(refEmpty)}; ` +
         `the Tab-walk over the archived-inclusive view advances in reading order, measured against ` +
-        `the view's own box so a scroll cannot fake a backwards step (issue 161): ${JSON.stringify(focusOrder)}`,
+        `the view's own box so a scroll cannot fake a backwards step (issue 161): ${JSON.stringify(focusOrder)}; ` +
+        `§12 R27 weights — each displayed figure equals core's formatHours over the fixture seconds ` +
+        `(clients/projects) or the fixture entry count (tags), all-time then this month, with the ` +
+        `muted em-dash on every empty window (Globex month, the entryless Ops both windows, urgent month): ` +
+        `${JSON.stringify(weights)}`,
       'main-clients.png',
     );
   });
