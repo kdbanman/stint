@@ -1,0 +1,12 @@
+# When-group allowlist — engineering.html §08, enforced by scripts/check-when-groups.mjs (#356).
+# One line per enrolled scenario: file :: scenario name :: justification.
+# Enrollment is only for scenarios that PASS §08's deletion test: delete every
+# When→Then pair after the first — if the scenario's name no longer makes its
+# claim, the pairs are one composition claim and the scenario may live here.
+reference_data.feature :: Archiving then restoring a client round-trips it back to the active list :: the claim IS archive-then-restore; the first pair alone is only "archiving hides"
+reference_data.feature :: Archiving then restoring a project round-trips it back to the active list :: the claim IS archive-then-restore; the first pair alone is only "archiving hides"
+reference_data.feature :: Archiving then restoring a tag round-trips it back to the active list :: the claim IS archive-then-restore; the first pair alone is only "archiving hides"
+overlap_and_editing.feature :: Split then merge restores the original span :: the claim IS the split-then-merge round-trip; the first pair alone is only "split yields two entries"
+saved_reports.feature :: Editing a saved report's range re-resolves it on the next run :: the claim IS the total changing across the edit; the before-run pins that resolution is live, not cached
+saved_reports.feature :: Editing a saved report's group-by regroups the same total :: the claim IS total invariance across the regroup; "is unchanged" compares the two runs
+saved_reports.feature :: A saved report's two export scopes differ — the filtered export drops an off-filter row the raw keeps :: the claim IS the contrast between the two scopes over the same data; either export alone shows no difference
