@@ -1,0 +1,18 @@
+{
+  "$comment": "checkJs over the JUDGE harness's fixture data + its in-page rules entry (issue #358, the tsconfig.renderer.json precedent). fixtures.mjs carries the canned LIST_ENTRIES rows annotated against gui/src ipc.ts's EntryRowView — this program is what makes that annotation a gate, so a contract field rename/addition fails typecheck instead of drifting past the fixture (how issue #84's clientName/projectName went missing there). rules.ts is the esbuild browser-bundle entry (scripts/build-renderer.mjs JUDGE_RULES_OPTIONS) that hands core's matchesQuery/groupEntries/resolveRange to the injected page as window.__CORE__. lib carries DOM (rules.ts speaks window) and types carries node (fixtures.mjs reads the bundle off disk).",
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "allowJs": true,
+    "checkJs": true,
+    "strict": false,
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"]
+  },
+  "references": [{ "path": "./tsconfig.main.json" }, { "path": "../core" }],
+  "files": ["judge/rules.ts", "judge/fixtures.mjs"]
+}
