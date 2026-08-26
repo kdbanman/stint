@@ -379,6 +379,66 @@ describe('GOLD — every §17 criterion has a COVERAGE.md section (#301)', () =>
 });
 
 /**
+ * GOLD — COVERAGE.md's residual-risk block is verbatim from acceptance.html §14 (issue #351).
+ *
+ * The block's own heading promises "verbatim from acceptance.html", and nothing enforced it:
+ * the copy diverged item-by-item (and its "§11" pointer went stale when the list moved to §14)
+ * until COVERAGE.md asserted the OPPOSITE of the spec — "the Electron binary is not fetchable
+ * in this environment" while acceptance.html claimed electronApp.evaluate() coverage. A
+ * duplicated fact drifts (PRD §04 authoring, "one home per fact"); this block is the one
+ * COVERAGE copy deliberately kept as a copy, so it gets the bind-two-homes treatment instead:
+ * both lists are reduced to their plain text — the HTML side stripped of tags and entities,
+ * the markdown side of `**`/`*` emphasis and backticks, whitespace collapsed — and must be
+ * EQUAL, item for item, in order. Formatting is free; the words are not.
+ */
+const plainOfHtml = (s: string): string =>
+  s
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const plainOfMd = (s: string): string => s.replace(/[*`]/g, '').replace(/\s+/g, ' ').trim();
+
+/** acceptance.html §14's "Residual risk we accept" list, one plain-text string per <li>. */
+const residualHtmlItems = ((): string[] => {
+  const list = /<h3>Residual risk we accept<\/h3>\s*<ul class="d">([\s\S]*?)<\/ul>/.exec(acceptance)?.[1] ?? '';
+  return [...list.matchAll(/<li>([\s\S]*?)<\/li>/g)].map((m) => plainOfHtml(m[1] ?? ''));
+})();
+
+/** COVERAGE.md's residual block, one plain-text string per `- ` bullet (continuations joined). */
+const residualMdItems = ((): string[] => {
+  const block =
+    /^## Residual risk we accept \(verbatim from acceptance\.html §14\)\n([\s\S]*?)(?=\n## )/m.exec(coverage)?.[1] ?? '';
+  const items: string[] = [];
+  for (const line of block.split('\n')) {
+    if (line.startsWith('- ')) items.push(line.slice(2));
+    else if (line.trim() && items.length) items[items.length - 1] += ' ' + line.trim();
+  }
+  return items.map(plainOfMd);
+})();
+
+describe('GOLD — COVERAGE.md residual-risk block is verbatim from acceptance.html §14 (#351)', () => {
+  it('read both homes (neither list is silently empty)', () => {
+    expect(residualHtmlItems.length).toBeGreaterThan(4);
+    expect(residualMdItems.length).toBeGreaterThan(4);
+  });
+
+  it('the stale §11 pointer stays gone', () => {
+    expect(coverage).not.toContain('(verbatim from acceptance.html §11)');
+  });
+
+  it('the block equals the §14 list, item for item, in order', () => {
+    expect(residualMdItems).toEqual(residualHtmlItems);
+  });
+});
+
+/**
  * GOLD — every JUDGE item COVERAGE.md cites is a real rubric row (issue #167).
  *
  * The path check above only guards citations that LOOK like files. A criterion whose proof is a

@@ -3638,31 +3638,41 @@ scored storage scenes; the full routing in the §13, §12 R25/R26, and §20
 R10–R14 rows above. Pending: the §03 core-requirement recordings for the §12
 R26 flow (captured LAST, with the rest of the recording set).
 
-## Residual risk we accept (verbatim from acceptance.html §11)
+## Residual risk we accept (verbatim from acceptance.html §14)
 
-- **Sleep reconciliation is wall-clock-approximate.** Gap-sourced spans bound the
-  dead time but can't tell true sleep from app-closed time, so they are flagged for
-  review and never auto-applied. Verified on real hardware before release.
-- **Tray and global hotkey aren't exercised end-to-end in CI.** JUDGE drives the
-  renderer windows in headless Chromium, which has no system-tray host, can't deliver
-  an OS-global hotkey, and (here) can't run the Electron main process at all — the
-  Electron binary is not fetchable in this environment. So `globalShortcut`
-  registration, the tray icon's live count-up, and a real hotkey press are confirmed
-  under MANUAL, not asserted via `electronApp.evaluate()`. The *decision* the hotkey
-  and tray click both invoke — stop / resume / start — is pure (`src/toggle.ts`) and
-  is unit-tested in CI (`gui/test/toggle.test.ts`), so only the OS wiring, not the
-  behaviour, rests on MANUAL.
-- **JUDGE's subjective line is captured, not machine-scored.** `DESKTOP_FEEL` is
-  recorded as unscored (`pass: null`) — the harness produces the screenshots and a
-  human/LLM scores them against `judge-rubric.md`; it is never auto-passed. The
-  deterministic facts (empty-state copy, count-up, accent discipline scanned across
-  all chrome, flags-in-context) are machine-checked and gate CI.
-- **Long-form cadence is sampled, not exhaustive.** The real 60-then-30 schedule is
-  verified in a long-running pass; day-to-day regression uses a compressed cadence.
-- **"Near-instantly" is a soft bound.** File-watch propagation is checked against a
-  generous latency budget, observed not guaranteed under arbitrary load.
-- **JUDGE is advisory on look-and-feel.** Scored by rubric and spot-checked; it gates
-  presentation but never a billable number.
+- **Sleep reconciliation is wall-clock-approximate.** A sleep missed while the app
+  was closed is reconstructed from the wall-clock gap (`source=gap`), which bounds
+  the dead time but can't tell true sleep from app-closed time — so gap-sourced
+  spans are flagged for review and never auto-applied. Verified on real hardware
+  before release, not per commit.
+- **Install & update are MANUAL by nature.** The single installer, the in-app guided
+  update, and publish-on-merge run on real macOS/Linux machines and against the live
+  GitHub Releases backend; the CI-fast pieces are the GOLD build-matrix guard and
+  version-stamp pattern. A real Gatekeeper-approval flow is supervised, not scripted
+  end-to-end.
+- **Corruption recovery is sampled, not exhaustive.** Backup/retention algebra is
+  PROP-covered and the detect-then-restore flow is BDD-covered against genuinely
+  corrupt fixtures, but the space of *real* corruption modes is open-ended; coverage
+  samples the modes we can produce.
+- **Tray and global hotkey aren't exercised end-to-end in CI.** Headless `xvfb-run`
+  hosts the Electron main process but no system tray, and can't deliver an OS-global
+  hotkey — so JUDGE asserts the wiring in the live main process via
+  `electronApp.evaluate()` (a single tray click opens the popover only, the context
+  menu is Quit-only, `globalShortcut` registration — the `TRAY_HOTKEY_WIRING`
+  scene), while the tray icon's on-screen rendering, its live count-up, and a real
+  hotkey press are confirmed under MANUAL.
+- **JUDGE is advisory on look-and-feel.** "Feels like a quiet desktop app," the
+  clickability convention, and the picker's feel are scored by rubric and
+  spot-checked by a human; they gate presentation but never a billable number.
+- **Recordings demonstrate, they don't prove.** The screen recordings (§12) are PR
+  evidence, not a gate; the gate is always the executable AC. A recording that looks
+  right over a stubbed or skipped AC does not pass the sufficiency review.
+- **The storage-change relaunch is supervised.** The §20 R12–R13 pipelines, the
+  atomic config commit, and old-file preservation are PROP/BDD/GOLD-covered
+  headless, and the §12 R26 dialog states are JUDGE scenes over a driven renderer —
+  but the real OS file picker, the native broken-path dialog, and the
+  `app.relaunch()` handoff need a real desktop, so the end-to-end change is a MANUAL
+  runbook procedure with those scenes as its headless mirror.
 
 ## Recently added requirement clauses
 
