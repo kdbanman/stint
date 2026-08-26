@@ -2,8 +2,7 @@
 name: author-grill-assist-doc
 description: >-
   Author a grill assist artifact — a visual, educational HTML digest that
-  contextualizes a batch of decision questions. Use when the user can't answer
-  a question without a deeper level of understanding.
+  contextualizes a batch of decision questions. Use when grilling.
 ---
 
 # Author a grill assist doc
