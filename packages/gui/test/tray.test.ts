@@ -1,9 +1,12 @@
 /**
- * Tray behavior source-guard (PRD §12 R01 / G8). The tray itself has no host under
- * headless Chromium (the JUDGE harness drives renderer windows only), so the tray's
- * click wiring and its context-menu contents are frozen here by reading the compiled
- * main-process source as text — the same static-guard pattern renderer-static.test.ts
- * uses for assertions a headless renderer cannot drive.
+ * Tray behavior source-guard (PRD §12 R01 / G8). The tray's click wiring and its
+ * context-menu contents are frozen here by reading the main-process source as text —
+ * the same static-guard pattern renderer-static.test.ts uses. Since issue #351 this is
+ * the fast layered guard UNDER the live check: the JUDGE `TRAY_HOTKEY_WIRING` scene
+ * launches the real Electron main process and asserts the same wiring by emitting
+ * `'click'` on the live tray; this file catches the drift at `npm test` speed with no
+ * Electron binary needed, and pins source-level facts (which function is wired) the
+ * live scene observes only by effect.
  *
  * The decision this freezes: a single LEFT-click opens the compact popover (the SOLE
  * surface for Stop / Start + Open Stint); the old 3-item Start/Stop + Open

@@ -62,6 +62,19 @@
       "screenshot": "popover-tray-surface.png"
     },
     {
+      "item": "TRAY_HOTKEY_WIRING",
+      "pass": true,
+      "facts": {
+        "singleClickShowsPopover": true,
+        "popoverOnly": true,
+        "secondClickHides": true,
+        "contextMenuQuitOnly": true,
+        "hotkeyRegistered": true
+      },
+      "justification": "live Electron main process: popover hidden at launch=true, tray 'click' showed it (windows 2→2, programmatic menu popups=0), second 'click' hid it; menus ever set=[[{\"role\":\"quit\",\"label\":\"Quit\"}],[{\"role\":\"quit\",\"label\":\"Quit\"}]]; globalShortcut.isRegistered('CommandOrControl+Alt+T')=true",
+      "screenshot": "electron-tray-popover.png"
+    },
+    {
       "item": "POPOVER_REJECT",
       "pass": true,
       "facts": {

@@ -196,6 +196,13 @@ jobs:
       - run: npm ci
       - name: Install Chromium for Playwright
         run: npx playwright install --with-deps chromium
+      # Issue #351 — the TRAY_HOTKEY_WIRING scene launches the REAL Electron main process
+      # (playwright-core `_electron`), so this job needs Electron's binary, not just Chromium.
+      # `npm ci` normally fetches it via electron's postinstall; this idempotent re-run is the
+      # backstop for an install that skipped scripts. If the binary is still absent at judge
+      # time the harness FAILS the scene loudly (run-judge.mjs resolveElectron) — never skips.
+      - name: Install Electron binary (main-process scenes)
+        run: node node_modules/electron/install.js
       - name: Run JUDGE harness (xvfb)
         run: xvfb-run -a npm run judge
       # R08 — the regenerated judge report's SCORED CONTRACT (item + pass + facts per scene

@@ -6,11 +6,17 @@
  * ACCENT discipline as a whole) are scored by an LLM/human over the screenshots;
  * this harness produces that evidence and gates on the crisp PASS/FAIL claims.
  *
- * Renderer windows run headless via the pre-installed Chromium. The tray icon's own
- * count-up and a real global-hotkey press have no host here and stay under MANUAL.
+ * Renderer windows run headless via the pre-installed Chromium. Main-process facts —
+ * the tray's single-click→popover wiring, the Quit-only context menu, globalShortcut
+ * registration — are asserted in the REAL Electron main process via `electronApp.evaluate()`
+ * (the TRAY_HOTKEY_WIRING scene, issue #351): playwright-core's `_electron` launches the
+ * built app under xvfb. What still has no host here is the OS itself — the tray icon's
+ * on-screen rendering/count-up and a real global-hotkey press stay under MANUAL.
  */
-import { chromium } from 'playwright-core';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { chromium, _electron } from 'playwright-core';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveChromium } from '../../../scripts/resolve-chromium.mjs';
@@ -18,7 +24,7 @@ import { emptyState, runningState, startFormState, addFormState, editingState, u
 // §12 R27 — core's decimal-hours spelling, imported so the CLIENTS_VIEW weight facts bind
 // each DISPLAYED figure to core's formatHours over the fixture's raw seconds: a renderer
 // that re-formats locally (or paints the seconds any other way) fails here, not in review.
-import { formatHours } from '@stint/core';
+import { formatHours, DEFAULT_SETTINGS } from '@stint/core';
 // §17 R8 — the IPC channel set the GUI is an equal surface over. Imported from the built
 // main bundle so the PARITY_REACH deterministic sub-fact (every channel has a window.stint
 // method) checks the SAME list the preload bridge exposes and parity.test.ts asserts against
@@ -480,7 +486,8 @@ async function sceneTrayCountup(browser) {
 }
 
 // TRAY_POPOVER_SURFACE — §12 R01 / G8: the compact popover is the SOLE tray action
-// surface. The tray's own click/right-click has no host headless — confirmed under MANUAL.
+// surface. The tray's own click/right-click WIRING is asserted live in the Electron main
+// process (TRAY_HOTKEY_WIRING below); this scene proves the popover carries every action.
 async function sceneTrayPopoverSurface(browser) {
   await withPage(browser, runningState(), 'popover.html', async (page) => {
     const runningProbe = await page.evaluate(() => {
@@ -529,6 +536,140 @@ async function sceneTrayPopoverSurface(browser) {
       'popover-tray-surface.png',
     );
   });
+}
+
+/**
+ * The Electron binary the TRAY_HOTKEY_WIRING scene launches, resolved LOUDLY (issue #351).
+ * An absent binary throws — naming the fix — and the run fails; it never skips the scene.
+ * A silently-skipped main-process scene is exactly the false green #351 exists to kill
+ * (engineering.html's test-integrity rule): the report would keep scoring wiring facts
+ * nothing checked. npm's postinstall normally fetches the binary; an install that skipped
+ * scripts leaves the package without `dist/`, which `node node_modules/electron/install.js`
+ * repairs idempotently (ci.yml's judge job runs it as a backstop).
+ */
+function resolveElectron() {
+  const require_ = createRequire(import.meta.url);
+  let pkg;
+  try {
+    pkg = dirname(require_.resolve('electron/package.json'));
+  } catch {
+    throw new Error(
+      'TRAY_HOTKEY_WIRING needs the electron package (a @stint/gui devDependency) — run `npm install`',
+    );
+  }
+  // path.txt names the platform executable inside dist/ (electron's own install contract).
+  const pathTxt = join(pkg, 'path.txt');
+  const exe = existsSync(pathTxt) ? join(pkg, 'dist', readFileSync(pathTxt, 'utf8').trim()) : null;
+  if (!exe || !existsSync(exe)) {
+    throw new Error(
+      'TRAY_HOTKEY_WIRING needs the Electron binary and it is not installed — ' +
+        'run `node node_modules/electron/install.js` (the postinstall step an ' +
+        'install --ignore-scripts skipped), then re-run the judge. The scene fails ' +
+        'loudly rather than skipping: a skipped main-process scene is a false green (issue #351).',
+    );
+  }
+  return exe;
+}
+
+// TRAY_HOTKEY_WIRING — §12 R01/R02 (issue #351): the tray + hotkey OS wiring, asserted in
+// the LIVE Electron main process rather than by regexing main.ts (tray.test.ts stays as the
+// layered source guard). playwright-core's `_electron` launches the real built app through
+// judge/electron-main.mjs — a wrapper that patches Tray.prototype to expose the live tray
+// instance and every context menu the app sets (see that file's header for why) — against a
+// throwaway TT_DB/TT_BACKUP_DIR/TT_CONFIG scratch tree, so the run touches no real data.
+// Boundary (acceptance.html §14): evaluate() asserts MAIN-PROCESS STATE — the click
+// handler's effect on the popover window, the menus built, globalShortcut registration.
+// The OS's half — the tray icon rendered on a real panel, its title count-up, a physical
+// hotkey press reaching the app — has no host under xvfb and stays MANUAL (the runbook's
+// tray/hotkey procedure).
+async function sceneTrayHotkeyWiring() {
+  const scratch = mkdtempSync(join(tmpdir(), 'stint-judge-electron-'));
+  mkdirSync(join(scratch, 'data'), { recursive: true });
+  const app = await _electron.launch({
+    executablePath: resolveElectron(),
+    args: ['--no-sandbox', join(here, 'electron-main.mjs')],
+    env: {
+      ...process.env,
+      // The §13 env rungs point the whole run at the scratch tree (fresh DB ⇒
+      // DEFAULT_SETTINGS, so the registered accelerator below is core's default).
+      TT_DB: join(scratch, 'data', 'stint.db'),
+      TT_BACKUP_DIR: join(scratch, 'data', 'backups'),
+      TT_CONFIG: join(scratch, 'config.json'),
+    },
+  });
+  try {
+    // Anything observed over evaluate() is asynchronous to the app's own init/handlers, so
+    // every fact below polls to its expected state instead of sleeping a guessed interval.
+    const until = async (probe) => {
+      for (let i = 0; i < 100; i++) {
+        if (await probe()) return true;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return false;
+    };
+    // init() ran once the probe holds a tray (setContextMenu is init-time).
+    await until(() => app.evaluate(() => !!globalThis.__stintJudgeTray?.tray));
+
+    const popoverState = () =>
+      app.evaluate(({ BrowserWindow }) => {
+        const wins = BrowserWindow.getAllWindows();
+        const pop = wins.find((w) => w.webContents.getURL().endsWith('popover.html'));
+        return { count: wins.length, popoverVisible: !!pop && pop.isVisible() };
+      });
+
+    const before = await popoverState();
+    const hiddenAtLaunch = before.popoverVisible === false;
+
+    // The single left-click, emitted on the LIVE tray instance — the real 'click' handler
+    // (main.ts: togglePopover) runs; under xvfb no OS tray exists to click physically.
+    await app.evaluate(() => globalThis.__stintJudgeTray.tray.emit('click'));
+    const singleClickShowsPopover = hiddenAtLaunch && (await until(async () => (await popoverState()).popoverVisible));
+
+    // The popover window is a real BrowserWindow page — capture it as the scene's evidence.
+    const popPage = (await app.windows()).find((p) => p.url().endsWith('popover.html'));
+    if (popPage) {
+      await popPage.screenshot({ path: join(EVIDENCE, 'electron-tray-popover.png') });
+      captured.push('electron-tray-popover.png');
+    }
+    const afterClick = await popoverState();
+    // "Popover ONLY": the click created no window and popped no menu programmatically.
+    const noMenuPopup = (await app.evaluate(() => globalThis.__stintJudgeTray.popups)) === 0;
+    const popoverOnly = noMenuPopup && afterClick.count === before.count;
+
+    // The second click hides — togglePopover is a toggle, not a stack of popovers.
+    await app.evaluate(() => globalThis.__stintJudgeTray.tray.emit('click'));
+    const secondClickHides = await until(async () => !(await popoverState()).popoverVisible);
+
+    // Right-click rebuilds the context menu (main.ts wires it so); every menu the app has
+    // EVER set — init's and this one — must be the minimal Quit-only menu (§12 R01 / G8).
+    await app.evaluate(() => globalThis.__stintJudgeTray.tray.emit('right-click'));
+    const menus = await app.evaluate(() =>
+      globalThis.__stintJudgeTray.menus.map((m) => m.items.map((it) => ({ role: it.role, label: it.label }))),
+    );
+    const contextMenuQuitOnly =
+      menus.length >= 2 && menus.every((items) => items.length === 1 && items[0].role === 'quit');
+
+    // §12 R02 — the global hotkey is REGISTERED in the live main process, asked of the same
+    // globalShortcut module that would receive a physical press. Fresh DB ⇒ core's default
+    // accelerator (imported, not hand-copied). The press itself stays MANUAL.
+    const hotkeyRegistered = await app.evaluate(
+      ({ globalShortcut }, accelerator) => globalShortcut.isRegistered(accelerator),
+      DEFAULT_SETTINGS.globalHotkey,
+    );
+
+    record(
+      'TRAY_HOTKEY_WIRING',
+      { singleClickShowsPopover, popoverOnly, secondClickHides, contextMenuQuitOnly, hotkeyRegistered },
+      `live Electron main process: popover hidden at launch=${hiddenAtLaunch}, tray 'click' showed it ` +
+        `(windows ${before.count}→${afterClick.count}, programmatic menu popups=${noMenuPopup ? 0 : 'nonzero'}), ` +
+        `second 'click' hid it; menus ever set=${JSON.stringify(menus)}; ` +
+        `globalShortcut.isRegistered('${DEFAULT_SETTINGS.globalHotkey}')=${hotkeyRegistered}`,
+      'electron-tray-popover.png',
+    );
+  } finally {
+    await app.close();
+    rmSync(scratch, { recursive: true, force: true });
+  }
 }
 
 // POPOVER_REJECT — §12 R21 / §12 R01 (STATES.md Popover × error): a REFUSED Stop/Start from
@@ -8540,6 +8681,7 @@ const SCENES = {
   KEYBOARD_FOCUS: { items: ['KEYBOARD_FOCUS'], captures: ['main-focus.png'], run: sceneKeyboardFocus },
   TRAY_COUNTUP: { items: ['TRAY_COUNTUP'], captures: ['popover-running-1.png', 'popover-running-2.png'], run: sceneTrayCountup },
   TRAY_POPOVER_SURFACE: { items: ['TRAY_POPOVER_SURFACE'], captures: ['popover-tray-surface.png', 'popover-running.png'], run: sceneTrayPopoverSurface },
+  TRAY_HOTKEY_WIRING: { items: ['TRAY_HOTKEY_WIRING'], captures: ['electron-tray-popover.png'], run: sceneTrayHotkeyWiring },
   POPOVER_REJECT: { items: ['POPOVER_REJECT'], captures: ['popover-reject.png'], run: scenePopoverReject },
   IN_WINDOW_TIMER: { items: ['IN_WINDOW_TIMER'], captures: ['main-timer.png', 'timer-view.png', 'main-timer-idle.png'], run: sceneInWindowTimer },
   CROSS_VIEW_FRESHNESS: { items: ['CROSS_VIEW_FRESHNESS'], captures: ['timer-cross-view.png'], run: sceneCrossViewFreshness },
