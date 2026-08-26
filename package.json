@@ -23,7 +23,7 @@
     "test:prop": "vitest run packages/core/test/prop",
     "test:gold": "vitest run packages/core/test/gold packages/cli/test/gold",
     "test:bdd": "vitest run packages/core/test/bdd",
-    "typecheck": "tsc -p tsconfig.json && tsc --build packages/gui/tsconfig.renderer.json packages/gui/tsconfig.popover.json",
+    "typecheck": "tsc -p tsconfig.json && tsc --build packages/gui/tsconfig.renderer.json packages/gui/tsconfig.popover.json packages/gui/tsconfig.judge.json",
     "lint": "eslint .",
     "evidence": "node scripts/generate-evidence.mjs",
     "tokens": "node scripts/gen-tokens.mjs",

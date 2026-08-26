@@ -15,6 +15,28 @@ export { UPDATE_CHECK_FAILED };
 // settings block core no longer serves. Core is electron-free, so plain node reads it (the
 // same route the vitest suites take).
 import { DEFAULT_SETTINGS } from '@stint/core';
+import { readFileSync } from 'node:fs';
+
+// Issue #358 — core's list rules, delivered INTO THE PAGE. The initScript's listEntries /
+// search mocks fake only the Electron transport; the rules inside them (matchesQuery,
+// groupEntries, resolveRange) are core's real exports, reached as `window.__CORE__` via the
+// esbuild browser bundle judge/rules.ts -> judge/dist/rules.js (scripts/build-renderer.mjs,
+// the su.ts -> dist/su.js precedent — `npm run build`, which prejudge/prerecord both run,
+// produces it). Read lazily and cached, so importing this module never requires a build —
+// only actually injecting a page does.
+let rulesBundleText = null;
+function rulesBundle() {
+  if (rulesBundleText === null) {
+    try {
+      rulesBundleText = readFileSync(new URL('./dist/rules.js', import.meta.url), 'utf8');
+    } catch {
+      throw new Error(
+        'judge/dist/rules.js is missing — run `npm run build` (scripts/build-renderer.mjs) to bundle core\'s list rules for the judge page',
+      );
+    }
+  }
+  return rulesBundleText;
+}
 
 // A pinned wall clock so the captured evidence is byte-for-byte reproducible: the
 // harness installs this as the page clock, the running fixture starts a fixed
@@ -772,21 +794,31 @@ export function clientsState() {
 // The multi-week shape (all-time 8.00h vs the 5.00h week) predates #264's retirement of
 // the toolbar's range-total chip; it still earns its keep by making every narrowing move
 // a visibly different event count.
+//
+// Issue #358 — the rows speak PRODUCTION's row contract: gui/src/ipc.ts EntryRowView
+// (issue #84's separate clientName/projectName riding beside the joined clientLabel), plus
+// the clientId/projectId the mock's store-side id filtering needs — production narrows by
+// id inside store.listEntries, BEFORE the row projection, so the ids exist upstream of
+// EntryRowView there. checkJs (tsconfig.judge.json) pins the shape to the real interface:
+// a field renamed or added in the contract fails here instead of drifting silently, which
+// is exactly how the #84 fields went missing the first time.
+/** @type {(import('../dist/ipc.js').EntryRowView & { clientId: number, projectId: number })[]} */
 const LIST_ENTRIES = [
-  { id: 1, description: 'auth refactor', clientLabel: 'Acme / API', client: 'Acme', project: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
-  { id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-24T11:00:00Z', endUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['ci'] },
-  { id: 3, description: 'standup', clientLabel: 'Acme / Web', client: 'Acme', project: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-23T09:00:00Z', endUtc: '2026-06-23T09:30:00Z', billableSeconds: 1800, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: ['meeting', 'deep'] },
-  { id: 4, description: 'refactor tests', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T14:30:00Z', billableSeconds: 5400, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 5400, tags: ['ci'] },
-  { id: 5, description: 'refactor planning', clientLabel: 'Acme / API', client: 'Acme', project: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-17T09:00:00Z', endUtc: '2026-06-17T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
-  { id: 6, description: 'may retro', clientLabel: 'Globex / Ops', client: 'Globex', project: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-05-20T10:00:00Z', endUtc: '2026-05-20T11:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['meeting'] },
-  { id: 7, description: 'team lunch', clientLabel: 'Acme / Web', client: 'Acme', project: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-24T12:00:00Z', endUtc: '2026-06-24T13:00:00Z', billableSeconds: 3600, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
+  { id: 1, description: 'auth refactor', clientLabel: 'Acme / API', clientName: 'Acme', projectName: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-24T09:00:00Z', endUtc: '2026-06-24T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
+  { id: 2, description: 'deploy pipeline', clientLabel: 'Globex / Ops', clientName: 'Globex', projectName: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-24T11:00:00Z', endUtc: '2026-06-24T12:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['ci'] },
+  { id: 3, description: 'standup', clientLabel: 'Acme / Web', clientName: 'Acme', projectName: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-23T09:00:00Z', endUtc: '2026-06-23T09:30:00Z', billableSeconds: 1800, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 1800, tags: ['meeting', 'deep'] },
+  { id: 4, description: 'refactor tests', clientLabel: 'Globex / Ops', clientName: 'Globex', projectName: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-06-23T13:00:00Z', endUtc: '2026-06-23T14:30:00Z', billableSeconds: 5400, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 5400, tags: ['ci'] },
+  { id: 5, description: 'refactor planning', clientLabel: 'Acme / API', clientName: 'Acme', projectName: 'API', clientId: 1, projectId: 11, startUtc: '2026-06-17T09:00:00Z', endUtc: '2026-06-17T11:00:00Z', billableSeconds: 7200, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 7200, tags: ['deep'] },
+  { id: 6, description: 'may retro', clientLabel: 'Globex / Ops', clientName: 'Globex', projectName: 'Ops', clientId: 2, projectId: 22, startUtc: '2026-05-20T10:00:00Z', endUtc: '2026-05-20T11:00:00Z', billableSeconds: 3600, billable: true, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: ['meeting'] },
+  { id: 7, description: 'team lunch', clientLabel: 'Acme / Web', clientName: 'Acme', projectName: 'Web', clientId: 1, projectId: 12, startUtc: '2026-06-24T12:00:00Z', endUtc: '2026-06-24T13:00:00Z', billableSeconds: 3600, billable: false, overlapped: false, overlapMinutes: 0, overlapRelation: null, sleptThrough: false, excludedSeconds: 0, rawSeconds: 3600, tags: [] },
 ];
 
 /**
  * §12 R9 — the Entries-view list fixture. The status/timer card is idle (the scene drives
  * the entries section only); the day-grouped `days` mirror the LIST_ENTRIES set so the
- * default getState paint matches, and the initScript's listEntries mock applies the same
- * matchesQuery/group logic core does, so the headless renderer behaves like production.
+ * default getState paint matches, and the initScript's listEntries mock consumes core's
+ * real matchesQuery/groupEntries (issue #358), so the headless renderer behaves like
+ * production.
  */
 export function listState() {
   const byDay = {};
@@ -1745,6 +1777,11 @@ const SAVED_REPORTS = [
  */
 export function initScript(stateJson, { overlap = false, rounding = false, summary = false, favorites = FAVORITES, update = null, startStopsOpen = false, toggleStarts = false, rejectWrites = false, futureStartGuard = false, emptyRefData = false, savedReports = SAVED_REPORTS, backups = BACKUPS, storagePaths = STORAGE_PATHS, storagePicked = STORAGE_PICKED, storageChangeResult = null } = {}) {
   return `
+    // Issue #358 — core's real list rules, bundled for the page (judge/rules.ts ->
+    // judge/dist/rules.js): installs window.__CORE__ = { matchesQuery, groupEntries,
+    // resolveRange } for the mocks below. The mock keeps faking only the TRANSPORT
+    // (window.stint stands in for Electron IPC); the rules inside it are core's.
+    ${rulesBundle()}
     window.__STATE__ = ${stateJson};
     // §12 R21 (WRITE_REJECTION_FEEDBACK) — when set, the write mocks REJECT like a strict core
     // (the strict-listEntries precedent, issue #55): add/edit/split/toggle/rename each reject with
@@ -1819,10 +1856,10 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       __ONCHANGE__: [],
       onChange: function (cb) { this.__ONCHANGE__.push(cb); return () => { this.__ONCHANGE__ = this.__ONCHANGE__.filter((f) => f !== cb); }; },
       __FIRE_CHANGED__: function () { for (const f of this.__ONCHANGE__.slice()) { try { f(); } catch { /* one listener throwing must not stop the rest (ipcRenderer parity) */ } } },
-      // §12 R9: the Entries-view control bar's read-only query. The mock applies the SAME
-      // narrowing core does — range (preset OR plain-date pair), billable, client/project
-      // ids, tag, matchesQuery search — and the same grouping (day DESC, others ASC; tags
-      // fan out), over the canned LIST_ENTRIES set, so the headless renderer narrows /
+      // §12 R9: the Entries-view control bar's read-only query. The narrowing and grouping
+      // are CORE'S OWN rules (issue #358: resolveRange for the preset window, matchesQuery
+      // for the search, groupEntries for the bucketing — all via the in-page window.__CORE__
+      // bundle), applied over the canned LIST_ENTRIES set, so the headless renderer narrows /
       // regroups exactly as production. Issue #55: it is also STRICT exactly where core
       // is — 'by' is REQUIRED (ListEntriesQuery), so a query without it REJECTS like
       // production instead of papering over the dropped key (which is how the dead-toolbar
@@ -1842,22 +1879,18 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
           ));
         }
         let rows = this.__LIST_ENTRIES__.slice();
-        // A named preset resolves to its local-day window, pinned to the JUDGE clock
-        // (Wed 2026-06-24, weekStart monday) — the mock stand-in for core's resolveRange,
-        // so the toolbar's range chips genuinely narrow the multi-week fixture.
+        const listSettings = (window.__STATE__ && window.__STATE__.settings) || {};
+        // A named preset resolves through CORE's resolveRange (issue #358 — the in-page
+        // window.__CORE__ bundle, no hand-copied window table), under the snapshot's
+        // settings and the pinned JUDGE clock (Wed 2026-06-24), exactly as main's
+        // listEntries handler resolves it — so the toolbar's range chips narrow the
+        // multi-week fixture by the same half-open UTC window production would.
         if (q.preset) {
-          const windows = {
-            'today': ['2026-06-24', '2026-06-24'],
-            'week': ['2026-06-22', '2026-06-28'],
-            'last-week': ['2026-06-15', '2026-06-21'],
-            'month': ['2026-06-01', '2026-06-30'],
-            'last-month': ['2026-05-01', '2026-05-31'],
-          };
-          const w = windows[q.preset];
-          if (w) rows = rows.filter((e) => {
-            const day = e.startUtc.slice(0, 10);
-            return day >= w[0] && day <= w[1];
-          });
+          const w = window.__CORE__.resolveRange(
+            q.preset, listSettings.weekStart, new Date(window.__JUDGE_NOW__), listSettings.timeZone,
+          );
+          rows = rows.filter((e) =>
+            Date.parse(e.startUtc) >= Date.parse(w.fromUtc) && Date.parse(e.startUtc) < Date.parse(w.toUtc));
         }
         // §09 R01 (G3): a custom range arrives as a PAIR OF PLAIN DATES (fromDate/toDate,
         // the raw YYYY-MM-DD strings of the two toolbar date fields — never a derived
@@ -1875,31 +1908,21 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
         if (q.clientId !== undefined && q.clientId !== null) rows = rows.filter((e) => e.clientId === q.clientId);
         if (q.projectId !== undefined && q.projectId !== null) rows = rows.filter((e) => e.projectId === q.projectId);
         if (q.tag) rows = rows.filter((e) => (e.tags || []).includes(q.tag));
-        if (q.search) {
-          const needle = String(q.search).trim().toLowerCase();
-          rows = rows.filter((e) => {
-            const hay = [e.description, e.client, e.project, ...(e.tags || [])];
-            return hay.some((h) => h != null && String(h).toLowerCase().includes(needle));
-          });
-        }
-        const keysOf = (e) => {
-          if (q.by === 'day') return [e.startUtc.slice(0, 10)];
-          if (q.by === 'client') return [e.client || '(no client)'];
-          if (q.by === 'project') return [e.project || '(no project)'];
-          return (e.tags && e.tags.length) ? e.tags : ['(untagged)'];
-        };
-        const map = new Map();
-        for (const e of rows) for (const k of keysOf(e)) {
-          if (!map.has(k)) map.set(k, []);
-          map.get(k).push(e);
-        }
-        let keys = [...map.keys()].sort((a, b) => a.localeCompare(b));
-        if (q.by === 'day') keys.reverse();
-        const groups = keys.map((key) => ({
-          key,
-          billableSeconds: map.get(key).reduce((s, e) => s + e.billableSeconds, 0),
-          entries: map.get(key).map((e) => ({ ...e })),
-        }));
+        // §09 R7 (issue #358): the ONE free-text match rule is core's matchesQuery, over the
+        // rows' real clientName/projectName fields — the #84 contract the mock's phantom
+        // client/project spellings had drifted from. Never a hand copy of the haystack.
+        if (q.search) rows = rows.filter((e) => window.__CORE__.matchesQuery(e, String(q.search)));
+        // The bucketing AND its order are core's groupEntries (issue #358): day DESC,
+        // client/project/tag ASC, tags fanned out, untagged/unset placeholder keys — none of
+        // it re-spelled here. The per-group billableSeconds reduce mirrors the production
+        // handler's own line (ipc-handlers.ts listEntries), which sums after core groups.
+        const groups = window.__CORE__
+          .groupEntries(rows, q.by, listSettings.timeZone, listSettings.weekStart)
+          .map((g) => ({
+            key: g.key,
+            billableSeconds: g.entries.reduce((s, e) => s + e.billableSeconds, 0),
+            entries: g.entries.map((e) => ({ ...e })),
+          }));
         return Promise.resolve({ groups, rangeFromUtc: '2026-06-22T00:00:00.000Z', rangeToUtc: '2026-06-29T00:00:00.000Z' });
       },
       toggle: () => {
@@ -2056,20 +2079,19 @@ export function initScript(stateJson, { overlap = false, rounding = false, summa
       renameTag: function (p) { if (window.__REJECT_WRITES__) return window.__IPC_REJECT__('renameTag', 'a tag named that already exists'); window.__RENAMED_TAG__ = p; const t = this.__TAGS__.find((x) => x.id === (p && p.id)); if (t && p && p.name) t.name = p.name; this.__FIRE_CHANGED__(); return Promise.resolve(); },
       archiveTag: function (p) { window.__ARCHIVED_TAG__ = p; this.__TAGS__ = this.__TAGS__.filter((x) => x.id !== (p && p.id)); this.__FIRE_CHANGED__(); return Promise.resolve(); },
       // §09 R7: the free-text search the search box drives (parity with tt list --search).
-      // Returns the same UiState the renderer paints from, narrowed to matching rows — the
-      // mock applies the SAME case-insensitive substring match over description/client/project/
-      // tag the listEntries mock and core's filter use, so a search scene narrows like production.
-      search: function (q) {
-        window.__SEARCH_REQ__ = q;
-        const needle = String(q || '').trim().toLowerCase();
+      // Takes production's { query } payload (ipc.ts: search) and returns the same UiState
+      // the renderer paints from, narrowed to matching rows. The match rule is CORE's
+      // matchesQuery (issue #358) over the rows' real clientName/projectName fields — the
+      // old copy here matched the JOINED clientLabel, which core never searches (#84: a
+      // query spanning the " / " join must not match).
+      search: function (p) {
+        window.__SEARCH_REQ__ = p;
+        const query = String((p && p.query) || '');
         const base = window.__STATE__;
-        if (!needle) return Promise.resolve(base);
+        if (!query.trim()) return Promise.resolve(base);
         const days = (base.days || []).map((d) => ({
           day: d.day,
-          entries: d.entries.filter((e) => {
-            const hay = [e.description, e.clientLabel, ...(e.tags || [])];
-            return hay.some((h) => h != null && String(h).toLowerCase().includes(needle));
-          }),
+          entries: d.entries.filter((e) => window.__CORE__.matchesQuery(e, query)),
         })).filter((d) => d.entries.length > 0);
         return Promise.resolve({ ...base, days });
       },

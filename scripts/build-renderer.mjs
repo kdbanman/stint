@@ -43,9 +43,30 @@ export async function buildRendererBundle({ write = true } = {}) {
   return build({ ...BUNDLE_OPTIONS, write });
 }
 
+/**
+ * The JUDGE harness's in-page core-rules bundle (issue #358) — the same su.ts road for the
+ * apparatus: `packages/gui/judge/rules.ts` imports core's matchesQuery / groupEntries /
+ * resolveRange and exposes them as `window.__CORE__`, so the injected window.stint mock
+ * (judge/fixtures.mjs initScript) consumes core's REAL list rules instead of re-spelling
+ * them. Output lands under judge/dist — apparatus, never shipped: the electron-builder
+ * `files:` glob packages `renderer/**` but nothing under `judge/`.
+ */
+export const JUDGE_RULES_OPTIONS = {
+  ...BUNDLE_OPTIONS,
+  entryPoints: [join(ROOT, 'packages', 'gui', 'judge', 'rules.ts')],
+  outfile: join(ROOT, 'packages', 'gui', 'judge', 'dist', 'rules.js'),
+};
+
+/** Build the judge rules bundle; write:false for an in-memory build. */
+export async function buildJudgeRulesBundle({ write = true } = {}) {
+  return build({ ...JUDGE_RULES_OPTIONS, write });
+}
+
 const invokedDirectly =
   process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
 if (invokedDirectly) {
   await buildRendererBundle();
   console.log('renderer bundle written: packages/gui/renderer/dist/su.js');
+  await buildJudgeRulesBundle();
+  console.log('judge rules bundle written: packages/gui/judge/dist/rules.js');
 }
