@@ -1162,8 +1162,10 @@ the `data-view="timer"` section; `gui/renderer/app.js` (`renderLiveEdit()` seeds
 it from the running entry without clobbering a focused field; `liveEditPatch()`
 mirrors `timerview.ts` and `commitLiveEdit()` debounces a
 `window.stint.edit({id, patch})` whose patch carries the start-time/attributes
-but never `endUtc` ) keeps the row open and the timer running, and the running
-card also exposes a Pin-as-favorite (`#timer-pin`→`pinFavorite`). JUDGE
+but never `endUtc` ) keeps the row open and the timer running; the view's ONE
+Pin-as-favorite affordance is the favorites-rail header's (`#fav-pin`
+→`pinFavorite` — the open row's template while running, the Start form's fields
+while idle; issue #353). JUDGE
 `TIMER_VIEW` (`packages/gui/judge/`, `timer-view-full.png` — routing to the
 Timer view, the live clock reads 01:24:07 and advances +3s while the start is
 edited (never resets), the strip is present with a raw-text `#le-start` (not
@@ -1175,11 +1177,17 @@ up advances `#le-start` LIVE on the 5-min snap; and the debounced committed edit
 fires a patch object with no `endUtc` key carrying the amended `startUtc` , plus
 a **desc-only sub-probe**: typing into `#le-desc` alone commits a patch carrying
 `description` and NO `startUtc` /`endUtc` key (issue #68)) and `FAVORITES_RAIL`
-(`timer-favorites.png` + `timer-favorites-empty.png` — one row per
-`FavoriteView` with one-click Resume firing `startFavorite({name})` exactly
-once, the Pin/kebab (rename/unpin) affordances, all five favorite channels
-callable on `window.stint` , and the instructive empty state mentioning `tt fav`
-) are the primary AC. The favorites rail's reachability is the parity twin of
+(`timer-favorites.png` + `timer-favorites-pin-refused.png` +
+`timer-favorites-empty.png` — one row per `FavoriteView` with one-click Resume
+firing `startFavorite({name})` exactly once, **exactly one** Pin affordance on
+the view (the rail header's, issue #353) landing a pin from **both** the running
+(open-row template) and idle (Start-form fields, no `fromEntryId` ) states, a
+refused duplicate-name pin surfaced inline per §12 R21 (reason alone, announced,
+form open) instead of the pre-#353 swallowed rejection, the kebab (rename/unpin)
+affordances, the equal-width card grid (every card one shared width across a
+wrapped multi-column rail, scored relatively — issue #354, design.html D07), all
+five favorite channels callable on `window.stint` , and the instructive empty
+state mentioning `tt fav` ) are the primary AC. The favorites rail's reachability is the parity twin of
 the `tt fav` family (`listFavorites`→`fav ls`, `pinFavorite` →`fav add`,
 `renameFavorite` →`fav rename`, `unpinFavorite` →`fav rm`, `startFavorite` →`fav
 start` in `parity-matrix.json` , asserted by `gui/test/parity.test.ts` ; the
