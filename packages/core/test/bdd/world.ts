@@ -841,6 +841,21 @@ export class CoreWorld implements World {
     // Use core's single name-resolution rule (no surface-specific re-derivation).
     return this.store.resolveClientProjectByName(o);
   }
+  /**
+   * The refusal seam, core side: run the SAME store call the happy path runs and report
+   * whether it threw. Core's actions are transactional, so a throw means nothing persisted —
+   * which is why the caught error IS the rejection every attempt* scenario asserts. The 14
+   * attempt* methods stay named on the World so the steps read declaratively; only this
+   * try/catch, spelled once, sits behind them (CliWorld's `attempt` is its exit-code twin).
+   */
+  private attempt(op: () => void): { rejected: boolean } {
+    try {
+      op();
+      return { rejected: false };
+    } catch {
+      return { rejected: true };
+    }
+  }
   start(o: {
     desc: string | null;
     client?: string;
@@ -861,13 +876,10 @@ export class CoreWorld implements World {
   attemptStart(o: { desc: string | null; client?: string; project?: string; atIso: string }): {
     rejected: boolean;
   } {
-    try {
+    return this.attempt(() => {
       const { clientId, projectId } = this.ids(o);
       this.store.start({ description: o.desc, clientId, projectId, atUtc: o.atIso });
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    });
   }
   stop(atIso: string): void {
     this.store.stop({ atUtc: atIso });
@@ -918,12 +930,7 @@ export class CoreWorld implements World {
     });
   }
   attemptEditStart(id: number, startIso: string): { rejected: boolean } {
-    try {
-      this.store.edit(id, { startUtc: startIso });
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.store.edit(id, { startUtc: startIso }));
   }
   remove(id: number): void {
     this.store.remove(id);
@@ -1022,12 +1029,7 @@ export class CoreWorld implements World {
     this.store.restoreTag(t.id);
   }
   attemptRestoreProject(name: string): { rejected: boolean } {
-    try {
-      this.restoreProject(name);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.restoreProject(name));
   }
   addTag(name: string): void {
     this.store.addTag(name);
@@ -1046,59 +1048,25 @@ export class CoreWorld implements World {
     return this.store.listTags().map((t) => t.name);
   }
   attemptAddClient(name: string): { rejected: boolean } {
-    try {
-      this.store.addClient(name);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.store.addClient(name));
   }
   attemptAddProject(name: string, client: string): { rejected: boolean } {
-    try {
+    return this.attempt(() => {
       const c = this.store.ensureClient(client);
       this.store.addProject(name, c.id);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    });
   }
   attemptAddTag(name: string): { rejected: boolean } {
-    try {
-      this.store.addTag(name);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.store.addTag(name));
   }
   attemptRenameClient(name: string, to: string): { rejected: boolean } {
-    try {
-      const c = this.store.findClientByName(name);
-      if (!c) throw new Error(`no client "${name}"`);
-      this.store.renameClient(c.id, to);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.renameClient(name, to));
   }
   attemptRenameProject(name: string, to: string): { rejected: boolean } {
-    try {
-      const p = this.store.findProjectByName(name);
-      if (!p) throw new Error(`no project "${name}"`);
-      this.store.renameProject(p.id, to);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.renameProject(name, to));
   }
   attemptRenameTag(name: string, to: string): { rejected: boolean } {
-    try {
-      const t = this.store.findTagByName(name);
-      if (!t) throw new Error(`no tag "${name}"`);
-      this.store.renameTag(t.id, to);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.renameTag(name, to));
   }
   setConfig(key: string, value: string): void {
     // §12 R11/§14: drive the SAME descriptor-based parse the CLI's `config set` uses, so the
@@ -1118,12 +1086,7 @@ export class CoreWorld implements World {
     // §14 — the same descriptor parse + store.setSetting the happy path uses; a parse miss
     // or a validation throw (including the cross-field start<end pair) IS the rejection,
     // and nothing was stored.
-    try {
-      this.setConfig(key, value);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.setConfig(key, value));
   }
   renderedStart(desc: string): string {
     // §04 R06: core's ONE formatting path over the store's own settings — the same call the
@@ -1305,12 +1268,7 @@ export class CoreWorld implements World {
   }): { rejected: boolean } {
     // §13 — the SAME saveReport the happy path uses; core's assertNameFree throw on a duplicate
     // (UNIQUE COLLATE NOCASE) IS the rejection, and the transaction rolls back so nothing persists.
-    try {
-      this.saveReport(o);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.saveReport(o));
   }
   saveReportRange(o: {
     name: string;
@@ -1338,22 +1296,14 @@ export class CoreWorld implements World {
   }): { rejected: boolean } {
     // §09 R01/R08 — the SAME saveReport the happy path uses; core's from ≤ to guard throws on
     // an inverted window and the transaction rolls back, so nothing persists.
-    try {
-      this.saveReportRange(o);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.saveReportRange(o));
   }
   attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
-    try {
+    return this.attempt(() =>
       this.store.editReport(name, {
         rangeSpec: { kind: 'absolute', fromUtc: o.fromUtc, toUtc: o.toUtc },
-      });
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+      }),
+    );
   }
   listReportNames(): string[] {
     return this.store.listReports().map((d) => d.name);
@@ -1432,12 +1382,7 @@ export class CoreWorld implements World {
     return { id: this.store.startFromFavorite(name).value.id };
   }
   attemptStartFromFavorite(name: string): { rejected: boolean } {
-    try {
-      this.store.startFromFavorite(name);
-      return { rejected: false };
-    } catch {
-      return { rejected: true };
-    }
+    return this.attempt(() => this.store.startFromFavorite(name));
   }
   running(): { description: string | null; clientLabel: string | null; billable: boolean; tags: string[] } | null {
     const open = this.store.openEntry();
@@ -1907,6 +1852,16 @@ export class CliWorld implements World {
     });
     return { out: res.stdout ?? '', err: res.stderr ?? '', code: res.status ?? 0 };
   }
+  /**
+   * The refusal seam, CLI side: run the SAME `tt` invocation the happy path runs and report
+   * whether it exited non-zero. A refused command prints the core diagnostic on stderr and
+   * stores nothing, so that non-zero exit is this surface's rejection signal — the exit-code
+   * twin of CoreWorld's catch. The 14 attempt* methods stay named on the World; only this
+   * one-line mapping, spelled once, sits behind them.
+   */
+  private attempt(args: string[]): { rejected: boolean } {
+    return { rejected: this.tt(args).code !== 0 };
+  }
   ensureClientProject(client: string, project: string): void {
     this.tt(['client', 'add', client]);
     this.tt(['project', 'add', project, '--client', client]);
@@ -1938,8 +1893,7 @@ export class CliWorld implements World {
     if (o.client) args.push('--client', o.client);
     if (o.project) args.push('--project', o.project);
     args.push('--at', o.atIso);
-    const r = this.tt(args);
-    return { rejected: r.code !== 0 };
+    return this.attempt(args);
   }
   stop(atIso: string): void {
     this.tt(['stop', '--at', atIso]);
@@ -1990,8 +1944,7 @@ export class CliWorld implements World {
     // §05 R06 / §16 (#61): `tt edit --from <future>` on the running row exits non-zero with the
     // StoreError on stderr and stores nothing — that non-zero exit is the surface's rejection
     // signal (the twin of CoreWorld catching the throw).
-    const r = this.tt(['edit', String(id), '--from', startIso]);
-    return { rejected: r.code !== 0 };
+    return this.attempt(['edit', String(id), '--from', startIso]);
   }
   remove(id: number): void {
     // §06 R1: `tt rm` refuses without confirmation (proven at GOLD); pass --force to delete,
@@ -2090,7 +2043,7 @@ export class CliWorld implements World {
   }
   attemptRestoreProject(name: string): { rejected: boolean } {
     // §12 R13 edge — `tt project restore` exits non-zero when the owning client is still archived.
-    return { rejected: this.tt(['project', 'restore', name]).code !== 0 };
+    return this.attempt(['project', 'restore', name]);
   }
   addTag(name: string): void {
     this.tt(['tag', 'add', name]);
@@ -2107,22 +2060,22 @@ export class CliWorld implements World {
   }
   attemptAddClient(name: string): { rejected: boolean } {
     // §07 R03 (#64) — `tt client add` exits non-zero on a duplicate; that IS the rejection.
-    return { rejected: this.tt(['client', 'add', name]).code !== 0 };
+    return this.attempt(['client', 'add', name]);
   }
   attemptAddProject(name: string, client: string): { rejected: boolean } {
-    return { rejected: this.tt(['project', 'add', name, '--client', client]).code !== 0 };
+    return this.attempt(['project', 'add', name, '--client', client]);
   }
   attemptAddTag(name: string): { rejected: boolean } {
-    return { rejected: this.tt(['tag', 'add', name]).code !== 0 };
+    return this.attempt(['tag', 'add', name]);
   }
   attemptRenameClient(name: string, to: string): { rejected: boolean } {
-    return { rejected: this.tt(['client', 'rename', name, to]).code !== 0 };
+    return this.attempt(['client', 'rename', name, to]);
   }
   attemptRenameProject(name: string, to: string): { rejected: boolean } {
-    return { rejected: this.tt(['project', 'rename', name, to]).code !== 0 };
+    return this.attempt(['project', 'rename', name, to]);
   }
   attemptRenameTag(name: string, to: string): { rejected: boolean } {
-    return { rejected: this.tt(['tag', 'rename', name, to]).code !== 0 };
+    return this.attempt(['tag', 'rename', name, to]);
   }
   setConfig(key: string, value: string): void {
     // §12 R11/§14: the GUI Settings view's edit, reached from tt via `config set <snake>` —
@@ -2140,8 +2093,7 @@ export class CliWorld implements World {
   attemptSetConfig(key: string, value: string): { rejected: boolean } {
     // §14 — an invalid `tt config set` exits non-zero with a diagnostic on stderr and
     // stores nothing; that non-zero exit is the surface's rejection signal.
-    const r = this.tt(['config', 'set', key, value]);
-    return { rejected: r.code !== 0 };
+    return this.attempt(['config', 'set', key, value]);
   }
   renderedStart(desc: string): string {
     // §04 R06: read the START cell off the HUMAN `tt list` table — the recorded behavior
@@ -2339,8 +2291,7 @@ export class CliWorld implements World {
     const args = ['report', 'save', o.name, PRESET_FLAG[o.preset], '--by', o.by];
     if (o.billableFilter === 'all') args.push('--all');
     else if (o.billableFilter === 'non-billable') args.push('--non-billable');
-    const r = this.tt(args);
-    return { rejected: r.code !== 0 };
+    return this.attempt(args);
   }
   saveReportRange(o: {
     name: string;
@@ -2368,12 +2319,10 @@ export class CliWorld implements World {
     const args = ['report', 'save', o.name, '--range', o.fromUtc, o.toUtc, '--by', o.by];
     if (o.billableFilter === 'all') args.push('--all');
     else if (o.billableFilter === 'non-billable') args.push('--non-billable');
-    const r = this.tt(args);
-    return { rejected: r.code !== 0 };
+    return this.attempt(args);
   }
   attemptEditReportRange(name: string, o: { fromUtc: string; toUtc: string }): { rejected: boolean } {
-    const r = this.tt(['report', 'edit', name, '--range', o.fromUtc, o.toUtc]);
-    return { rejected: r.code !== 0 };
+    return this.attempt(['report', 'edit', name, '--range', o.fromUtc, o.toUtc]);
   }
   listReportNames(): string[] {
     const r = this.tt(['report', 'ls', '--json']);
@@ -2487,8 +2436,7 @@ export class CliWorld implements World {
   }
   attemptStartFromFavorite(name: string): { rejected: boolean } {
     // §05 R10: an unknown favorite fails cleanly — non-zero exit, nothing started.
-    const r = this.tt(['fav', 'start', name]);
-    return { rejected: r.code !== 0 };
+    return this.attempt(['fav', 'start', name]);
   }
   running(): { description: string | null; clientLabel: string | null; billable: boolean; tags: string[] } | null {
     const s = JSON.parse(this.tt(['status', '--json']).out) as {
