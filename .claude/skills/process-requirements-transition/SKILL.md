@@ -108,7 +108,11 @@ every orchestrator batch uses (process.html §06).
      retired by DELETED members; ensure `README.md`, `CLAUDE.md`,
      `COVERAGE.md`, and the parity matrix reference only the new state (no
      change narrative — timeless docs); open the single integration PR from
-     the transition branch to `main` and close the parent.
+     the transition branch to `main` and close the parent. The integration
+     PR body carries `Closes #<anchor>` for the anchor issue that demanded
+     the transition, so delivery closes the anchor on merge — the parent
+     tracks the work-list; the anchor tracks the ask, and both must end
+     closed.
 
 A transition needing a stage this tail lacks extends this skill — never a
 per-change fork.

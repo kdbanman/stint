@@ -204,7 +204,12 @@ it just can't be fire-and-forget.
    a copy-pasteable prompt giving the batch's **sequencing, batching and
    dependency** — what lands first, which issues share a load-bearing file,
    what is blocked on what. Only what the per-issue comments cannot carry, never
-   a restated category or fix direction (§04).
+   a restated category or fix direction (§04). **Attach every member issue as a
+   sub-issue of the handoff** (one mechanism with a transition's work-list, §03):
+   the `close-finished-metas` workflow closes a handoff once all its sub-issues
+   are closed, and leaves a handoff with zero sub-issues alone — so a handoff
+   without its members attached never self-closes, and one with them attached
+   never dangles.
 6. **Report and route.** Summarize: issue → category → route table, the owner
    decisions made, which issues are now `Triaged: ready for execution` backlog and which go where
    instead. **Do not open PRs or fix anything.**
@@ -228,5 +233,5 @@ it just can't be fire-and-forget.
 - [ ] One comment per issue, house style; labels applied with originals
       preserved.
 - [ ] A `[META] Orchestration` handoff issue filed: sequencing, batching,
-      dependency.
+      dependency — with every member attached as a sub-issue.
 - [ ] Final report tables the routing; no code touched, no PR opened.
