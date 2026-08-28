@@ -42,16 +42,14 @@ Feature: Favorites (pinned timer templates)
     And the favorite "API deep work" is billable
 
   Scenario: Renaming a favorite changes its name and the old name no longer resolves
-    When I pin a favorite "Draft" for "Acme" / "API" tagged "deep"
-    Then the favorites list includes "Draft"
+    Given I pin a favorite "Draft" for "Acme" / "API" tagged "deep"
     When I rename the favorite "Draft" to "Final"
     And I view the favorites
     Then the favorites list includes "Final"
     And the favorites list does not include "Draft"
 
   Scenario: Unpinning a favorite removes it from the list
-    When I pin a favorite "Temp" for "Acme" / "API" tagged "deep"
-    Then the favorites list includes "Temp"
+    Given I pin a favorite "Temp" for "Acme" / "API" tagged "deep"
     When I unpin the favorite "Temp"
     And I view the favorites
     Then the favorites list does not include "Temp"

@@ -64,6 +64,11 @@ jobs:
       # screenshots are not byte-reproducible across the Chromium/font stack (uploaded, not gated).
       - name: Evidence drift gate — CLI transcript (R08)
         run: git diff --exit-code -- acceptance/evidence/cli-transcript.md
+      # When-group census (engineering.html §08, #356). Fails the PR on any scenario with
+      # more than one When group that is not enrolled in features/when-groups.allowlist —
+      # the corpus cannot re-teach behavior bundling one PR at a time.
+      - name: When-group census — one behavior per scenario (§08)
+        run: node scripts/check-when-groups.mjs
       # SLOC + documentation census. Fails the PR if a file escapes categorization or the
       # sums stop reconciling; the report ships as a build artifact, never committed
       # (process.html R10).

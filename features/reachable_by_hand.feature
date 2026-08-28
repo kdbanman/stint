@@ -70,22 +70,28 @@ Feature: Every capability reachable by hand
     Then there is one entry from 09:00 to 11:00
     And the merged entry is for "Acme / Billing"
 
-  Scenario: Browse, search and filter the entries week grid by hand (the Entries view)
+  Scenario: Browse the entries week grid by hand (the Entries view)
     # §12 R16 / §12 R09 / §11 — the Entries view content is a week-only calendar grid the
-    # freelancer browses, searches and filters from the window; there is NO grouping here (it left
-    # for Reports, G11). The grid's day headers present per-day billable totals (the range-total
-    # chip is retired, #264 / §12 R09), and the toolbar's search/filter narrow which entries the
-    # grid lays out live. GUI: the week grid over `getState`/`listEntries` IPC; tt: `tt list
-    # --search`. (The grid's on-screen affordances — hover Delete/Split/Edit, click-opens-editor,
+    # freelancer browses from the window; there is NO grouping here (it left for Reports, G11).
+    # The grid's day headers present per-day billable totals (the range-total chip is retired,
+    # #264 / §12 R09). GUI: the week grid over `getState`/`listEntries` IPC; tt: `tt list`.
+    # (The grid's on-screen affordances — hover Delete/Split/Edit, click-opens-editor,
     # corner-checkbox merge, + / drag-to-create, edge drags — reach the add/edit/split/merge
-    # capabilities covered by the scenarios above; this asserts the read/narrow set
-    # behind the view is whole and identical on both surfaces.)
+    # capabilities covered by the scenarios above; this asserts the read set behind the view
+    # is whole and identical on both surfaces.)
     Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
     And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
     When I list entries this week
     Then the entry list is exactly "auth refactor,deploy pipeline"
     And the day "2026-06-24" has a billable total of 2 hours
     And the range billable total is 3 hours
+
+  Scenario: Search the entries week grid by hand (the Entries view)
+    # §12 R16 / §11 — the toolbar's search narrows which entries the grid lays out live.
+    # GUI: the week grid over `listEntries` IPC; tt: `tt list --search`.
+    Given a closed entry "auth refactor" for "Acme" / "Billing" tagged "deep" this week on day 1 lasting 2 hours
+    And a closed entry "deploy pipeline" for "Globex" / "Ops" tagged "ci" this week on day 2 lasting 1 hour
+    And I list entries this week
     When I search the entry list for "auth"
     Then the entry list is exactly "auth refactor"
     And the entry list does not show "deploy pipeline"
@@ -110,36 +116,54 @@ Feature: Every capability reachable by hand
     And the export has a row "build" for "Acme" of 7200 seconds
     And every exported row carries its billable flag
 
-  Scenario: Create reference data by hand (the Clients view's Add)
-    # §12 R11 — create a client, a project under it, and a tag from the window. GUI: Clients
-    # view → `addClient` / `addProject` / `addTag` IPC; tt: `tt client add` / `tt project add`
-    # / `tt tag add`.
+  Scenario: Create a client by hand (the Clients view's Add)
+    # §12 R11 — create a client from the window. GUI: Clients view → `addClient` IPC; tt:
+    # `tt client add`.
     When I add a client "Acme Corp"
     Then client "Acme Corp" is in the active client list
+
+  Scenario: Create a project by hand (the Clients view's Add)
+    # §12 R11 — create a project under a client from the window. GUI: Clients view →
+    # `addProject` IPC; tt: `tt project add`.
+    Given I add a client "Acme Corp"
     When I add a project "Platform" for client "Acme Corp"
     Then project "Platform" is in the active project list
+
+  Scenario: Create a tag by hand (the Clients view's Tags strip)
+    # §12 R11 — create a tag from the window. GUI: Tags strip → `addTag` IPC; tt: `tt tag add`.
     When I add a tag "billing"
     Then tag "billing" is in the active tag list
 
-  Scenario: Rename and archive reference data by hand (the Clients view)
-    # §12 R11 — rename + archive a client/project/tag from the window; archived records drop
-    # out of the active picker lists but keep their history. GUI: Clients view →
-    # `renameClient`/`archiveClient`/`renameProject`/`archiveProject`/`renameTag`/`archiveTag`;
-    # tt: the `tt client`/`tt project`/`tt tag` rename/archive subcommands.
+  Scenario: Rename reference data by hand (the Clients view)
+    # §12 R11 — rename a client from the window; labels are resolved, not copied, so the new
+    # name flows onto its entries. GUI: Clients view → `renameClient` IPC (the
+    # `renameProject`/`renameTag` twins ride the same view); tt: `tt client rename`.
     Given a client "Acme Corp" with project "Platform"
     And a closed entry "spec" for "Acme Corp" / "Platform" from 09:00 to 10:00
     When I rename client "Acme Corp" to "Acme Global"
     Then the entry "spec" is for "Acme Global / Platform"
+
+  Scenario: Archive reference data by hand (the Clients view)
+    # §12 R11 — archive a project from the window; archived records drop out of the active
+    # picker lists but keep their history. GUI: Clients view → `archiveProject` IPC (the
+    # `archiveClient`/`archiveTag` twins ride the same view); tt: `tt project archive`.
+    Given a client "Acme Corp" with project "Platform"
+    And a closed entry "spec" for "Acme Corp" / "Platform" from 09:00 to 10:00
     When I archive project "Platform"
     Then project "Platform" is not in the active project list
-    And the entry "spec" is for "Acme Global / Platform"
+    And the entry "spec" is for "Acme Corp / Platform"
 
-  Scenario: Tag lifecycle by hand (the Clients view's Tags strip)
-    # §12 R11 — create → rename → archive a tag end to end from the window. GUI: Tags strip →
-    # `addTag`/`renameTag`/`archiveTag`; tt: `tt tag add/rename/archive`.
+  Scenario: Rename a tag by hand (the Clients view's Tags strip)
+    # §12 R11 — rename a tag from the window. GUI: Tags strip → `renameTag` IPC; tt:
+    # `tt tag rename`.
     Given I add a tag "draft"
     When I rename tag "draft" to "drafts"
     Then tag "drafts" is in the active tag list
+
+  Scenario: Archive a tag by hand (the Clients view's Tags strip)
+    # §12 R11 — archive a tag from the window. GUI: Tags strip → `archiveTag` IPC; tt:
+    # `tt tag archive`.
+    Given I add a tag "drafts"
     When I archive tag "drafts"
     Then tag "drafts" is not in the active tag list
 

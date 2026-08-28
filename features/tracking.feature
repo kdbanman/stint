@@ -130,13 +130,19 @@ Feature: Tracking and backfill
   # (§14). Runs TWICE (CoreWorld store.edit throws / CliWorld `tt edit --from <future>` exits
   # non-zero), proving the guard is identical on both surfaces. Crucially there is no wedge: after
   # the refusal the open row is byte-for-byte unchanged, so Stop still closes it into a valid span.
-  Scenario: A future start on the running entry is rejected and never wedges Stop
+  Scenario: A future start on the running entry is rejected
     Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
     When I attempt to edit the open entry start to a future time
     Then the future-start edit is rejected
     And exactly one entry is open
     And the open entry starts at 09:00
     And the open entry has no end
+
+  Scenario: Stop still closes the running entry after a refused future start
+    # The no-wedge half of the #61 guard: after the refusal the open row is byte-for-byte
+    # unchanged, so Stop's 'stop ≥ start' rule still holds and the entry closes cleanly.
+    Given I start an entry "auth refactor" for "Client A" / "API" at 09:00
+    And I attempt to edit the open entry start to a future time
     When I stop at 10:00
     Then the entry "auth refactor" is closed with end 10:00
 

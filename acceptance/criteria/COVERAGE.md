@@ -234,7 +234,8 @@ its end still empty).
 to a future instant: a start after `now` freezes the derived count-up and would
 brick Stop, so core `store.edit` refuses it (rejected rather than stored,
 §14/§16). Cross-surface anchor: BDD `features/tracking.feature` "A future start
-on the running entry is rejected and never wedges Stop" (start 09:00 → attempt
+on the running entry is rejected" + "Stop still closes the running entry after
+a refused future start" (start 09:00 → attempt
 to edit the open start to a future time → rejected on BOTH surfaces via
 `attemptEditStart` [CoreWorld `store.edit` throws / CliWorld
 `tt edit --from <future>` exits non-zero], the open row unchanged and still
@@ -672,11 +673,12 @@ export (§09 R06)" proves the CLI surface is byte-identical to core, and pins
 the no-flag default: `tt export` alone is the WHOLE RECORD — every entry ever,
 a months-old row included — while the range flags still narrow), proven by
 GOLD (`gold/contracts.test.ts`, `cli/test/gold/cli.test.ts` , `schemas/*` ), by
-surface-neutral BDD (`features/reporting.feature` "CSV and JSON export the raw
-entries for the range with the same shape" — run TWICE over core `toCsv`
+surface-neutral BDD (`features/reporting.feature` "CSV exports the raw entries
+for the range" + "JSON exports the raw entries for the range with the same
+shape as CSV" — each run TWICE over core `toCsv`
 /`toJsonEntries` + `tt export --range … --csv|--json` via the World `exportRows`
 capability, so the GUI export bytes reach nothing tt cannot — and "Exporting
-everything covers the whole record, not an implicit window" — the UNSCOPED
+everything as CSV/JSON covers the whole record, not an implicit window" — the UNSCOPED
 export keeps billable, non-billable, and long-past entries, run TWICE via the
 World `exportAllRows` capability over core's unbounded `listEntries` and
 no-flag `tt export` ), and reused verbatim by `tt export` . The GUI Reports
@@ -763,10 +765,11 @@ saved-report capabilities: CoreWorld
 `tt report save|ls|run|edit|rename|rm` ). The **from ≤ to ordering rule** (§09
 R01/R08 — an inverted absolute range only ever resolves to an empty window, so
 it is rejected rather than stored, the guarantee §14 gives working hours) adds
-three `features/saved_reports.feature` scenarios: an inverted custom range
+four `features/saved_reports.feature` scenarios: an inverted custom range
 (`from > to`) is rejected and stores nothing; an `editReport` amendment into an
 inverted range is likewise refused, leaving the definition untouched; and a
-same-day `from == to` custom range is accepted and runs (the **≤** boundary,
+same-day `from == to` custom range is accepted, and runs over its empty window
+(the **≤** boundary,
 deliberately unlike the entry rule's strict **<**) — each run TWICE (CoreWorld
 `store.saveReport/editReport` throw, CliWorld `tt report save|edit --range` exit
 non-zero). The core rule lives in `core/src/savedreport.ts`
@@ -1670,8 +1673,8 @@ project`/the `tt tag add/rename/archive/ls` command group
 `resolveEntityRef` + `emitList` ). Proven surface-neutral on core AND tt by
 `features/reference_data.feature` (create a client / a project / a tag and
 assert active-list membership; archive a project hides it from the active
-project list but the past entry keeps its label; create → rename → archive a tag
-runs the full lifecycle, asserting active-tag-list membership at each step — run
+project list but the past entry keeps its label; rename and archive a tag
+each assert active-tag-list membership under their own scenario — run
 TWICE via the World `addClient`
 /`addProject`/`renameProject`/`archiveProject`/`activeProjectNames`/`addTag`/`renameTag`/`archiveTag`/`activeTagNames`
 methods: CoreWorld calls the Store directly, CliWorld shells
@@ -2728,8 +2731,9 @@ negative/garbage elapsed, §20 R06) is the PROP monotonic-time guard. The
 **user-types-a-future-start-on-the-running-entry** row and the
 **Start-backdated-before-the-running-entry** row (issue #61 — both rejected
 rather than stored, §05 R06/R01 / §03) are pinned by BDD
-`features/tracking.feature` ("A future start on the running entry is rejected
-and never wedges Stop" + "Starting a new entry backdated before the running one
+`features/tracking.feature` ("A future start on the running entry is rejected"
++ "Stop still closes the running entry after a refused future start" +
+"Starting a new entry backdated before the running one
 is refused", each run TWICE over core + tt), PROP `prop/editing.test.ts` +
 `prop/invariants.test.ts` (the span-validity law), and headless JUDGE
 `FUTURE_START_GUARD` (the refusal surfaced on the Timer view with no wedge) The
@@ -3399,8 +3403,9 @@ the non-terminal user is whole). **Primary BDD**
 `features/reachable_by_hand.feature` (run TWICE over @stint/core AND tt via
 `run.test.ts`): one surface-neutral scenario per by-hand capability —
 start-with-attributes, manual backfill, edit, split, merge, entries
-search+group, report builder, range export, reference-data create +
-rename/archive, the full tag lifecycle, and a setting change — proving the
+browse + search, report builder, range export, reference-data create /
+rename / archive (client, project, and tag each under its own scenario),
+and a setting change — proving the
 capability set behind the GUI's buttons is real and behaves identically on both
 surfaces (the BDD parity backbone; composed entirely from the existing
 surface-neutral steps the per-capability features already exercise, so the
@@ -3542,11 +3547,11 @@ CHECK plus the per-part headless pins.
 
 **Primary BDD** `features/parity_favorites_saved_reports.feature` (run TWICE
 over @stint/core AND tt via `run.test.ts`): one surface-neutral scenario per
-entity's FULL lifecycle — favorite pin → list → rename → unpin,
+lifecycle step of each entity — favorite pin, rename, unpin,
 resume-from-favorite (the open entry inherits
-description/client/project/billable), saved report save → list → show → edit →
+description/client/project/billable), saved report save, show, edit,
 delete, and run-a-saved-report (its grouped totals equal the equivalent ad-hoc
-report over the same data) — so each entity is proven fully reachable and
+report over the same data) — so each entity's full lifecycle is proven reachable and
 identical on BOTH surfaces (it would fail if either entity were reachable on
 only one surface or behaved differently across them). Reinforced by the deep
 per-entity coverage in `features/favorites.feature` +

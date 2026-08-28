@@ -86,14 +86,6 @@ Feature: Reference-data management
     When I restore tag "billing"
     Then tag "billing" is in the active tag list
 
-  Scenario: Create then rename then archive a tag runs the full lifecycle
-    # PRD §12 R11 — the whole tag lifecycle the Tags strip exposes, end to end.
-    Given I add a tag "draft"
-    When I rename tag "draft" to "drafts"
-    Then tag "drafts" is in the active tag list
-    When I archive tag "drafts"
-    Then tag "drafts" is not in the active tag list
-
   # PRD §07 R03 (#64) — reference-data names are unique and resolved case-insensitively;
   # adding or renaming onto an existing name is rejected. Without this, renaming one client
   # onto another's name was accepted, and a by-client report then merged the two into one

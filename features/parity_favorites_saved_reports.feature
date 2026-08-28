@@ -32,13 +32,10 @@ Feature: Parity for favorites & saved reports (§17 R14)
     And a client "Acme" with project "API"
     And a client "Globex" with project "Ops"
 
-  Scenario: Favorite full lifecycle by hand — pin, list, rename, unpin
-    # §05 R09 — the whole pinned-template lifecycle, reachable on both surfaces. GUI: the
-    # Timer view's favorites rail → pinFavorite / listFavorites / renameFavorite /
-    # unpinFavorite IPC; tt: `tt fav add` / `tt fav ls` / `tt fav rename` / `tt fav rm`.
-    # Passing on BOTH worlds proves a favorite can be created, listed, renamed, and unpinned
-    # identically from the GUI and from tt — it would fail if the favorite were reachable on
-    # only one surface or its captured template differed across them.
+  Scenario: Pin a favorite by hand — the captured template is listed
+    # §05 R09 — pin + list, reachable on both surfaces. GUI: the Timer view's favorites rail →
+    # pinFavorite / listFavorites IPC; tt: `tt fav add` / `tt fav ls`. It would fail if pinning
+    # were reachable on only one surface or the captured template differed across them.
     When I start an entry "standup" for "Acme" / "API" at 09:00
     And I mark the open entry billable
     And I pin a favorite "Standup" from the running entry
@@ -46,10 +43,20 @@ Feature: Parity for favorites & saved reports (§17 R14)
     Then the favorites list includes "Standup"
     And the favorite "Standup" is for "Acme / API"
     And the favorite "Standup" is billable
+
+  Scenario: Rename a favorite by hand — the old name no longer resolves
+    # §05 R09 — rename, reachable on both surfaces. GUI: the rail's rename → renameFavorite
+    # IPC; tt: `tt fav rename`. It would fail if rename were reachable on only one surface.
+    Given I pin a favorite "Standup" for "Acme" / "API" tagged "meeting"
     When I rename the favorite "Standup" to "Daily standup"
     And I view the favorites
     Then the favorites list includes "Daily standup"
     And the favorites list does not include "Standup"
+
+  Scenario: Unpin a favorite by hand — it leaves the list
+    # §05 R09 — unpin, reachable on both surfaces. GUI: the rail's unpin → unpinFavorite IPC;
+    # tt: `tt fav rm`. It would fail if unpin were reachable on only one surface.
+    Given I pin a favorite "Daily standup" for "Acme" / "API" tagged "meeting"
     When I unpin the favorite "Daily standup"
     And I view the favorites
     Then the favorites list does not include "Daily standup"
@@ -69,26 +76,40 @@ Feature: Parity for favorites & saved reports (§17 R14)
     And the running timer has tag "deep"
     And the favorites list includes "API deep work"
 
-  Scenario: Saved report full lifecycle by hand — save, list, show, edit, delete
-    # §09 R08 — the whole saved-definition lifecycle, reachable on both surfaces. GUI: the
-    # Reports view → saveReport / listReports / showReport / editReport / removeReport IPC;
-    # tt: `tt report save` / `tt report ls` / `tt report show` / `tt report edit` / `tt report
-    # rm`. "Show" is observed through the run: a saved definition resolves to exactly the
-    # fields it was saved with, so running it and matching an ad-hoc report over those same
-    # fields proves the stored {range-spec, group-by, filter} are intact and identical on both
-    # surfaces. Editing the range re-resolves it on the next run. It would fail if saved
-    # reports were tt-only / GUI-only or resolved differently across surfaces.
-    Given a closed entry "review" for "Acme" this week lasting 1 hour
-    And a closed entry "ops sync" for "Globex" last week lasting 2 hours
+  Scenario: Save a report by hand — the definition is listed
+    # §09 R08 — save + list, reachable on both surfaces. GUI: the Reports view → saveReport /
+    # listReports IPC; tt: `tt report save` / `tt report ls`. It would fail if saving were
+    # reachable on only one surface.
     When I save a report "Weekly" for this week grouped by client over billable time
     Then the saved report list includes "Weekly"
+
+  Scenario: Show a saved report by hand — the stored definition resolves intact
+    # §09 R08 — "show" is observed through the run: a saved definition resolves to exactly the
+    # fields it was saved with, so running it and matching an ad-hoc report over those same
+    # fields proves the stored {range-spec, group-by, filter} are intact and identical on both
+    # surfaces. GUI: showReport IPC; tt: `tt report show`.
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    And a closed entry "ops sync" for "Globex" last week lasting 2 hours
+    And I save a report "Weekly" for this week grouped by client over billable time
     When I run the saved report "Weekly"
     Then the saved report run totals 1 billable hour
     And the saved report run total equals an ad-hoc this week report grouped by client over billable time
+
+  Scenario: Edit a saved report's range by hand — the next run re-resolves it
+    # §09 R08 — edit, reachable on both surfaces. GUI: editReport IPC; tt: `tt report edit`.
+    # Editing the range re-resolves it on the next run; it would fail if edit were reachable
+    # on only one surface or resolved differently across them.
+    Given a closed entry "review" for "Acme" this week lasting 1 hour
+    And a closed entry "ops sync" for "Globex" last week lasting 2 hours
+    And I save a report "Weekly" for this week grouped by client over billable time
     When I change the saved report "Weekly" range to last week
     And I run the saved report "Weekly"
     Then the saved report run totals 2 billable hours
     And the saved report run total equals an ad-hoc last week report grouped by client over billable time
+
+  Scenario: Delete a saved report by hand — it leaves the list
+    # §09 R08 — delete, reachable on both surfaces. GUI: removeReport IPC; tt: `tt report rm`.
+    Given I save a report "Weekly" for this week grouped by client over billable time
     When I delete the saved report "Weekly"
     Then the saved report list does not include "Weekly"
 

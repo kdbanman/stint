@@ -136,16 +136,23 @@ Feature: Overlap, split and merge
     And there is still an entry "scratch"
     And there are exactly 2 entries
 
-  Scenario: Subtracting slept time trims billable and is reversible
-    # PRD §12 R10 / §05 R08 — the unified editor's reversible sleep control: subtracting a slept
-    # entry's recorded sleep span excludes it from the billable duration (in the GUI the raw
-    # duration reads struck through beside the trimmed billable), and subtracting again restores it.
-    # Surface-neutral over core store.subtractSleep and `tt sleep subtract` (run TWICE); the
-    # struck-raw rendering + the reversible control are JUDGE evidence on the GUI editor. Regresses
-    # if subtract does not trim billable, or is not reversible, on either surface.
+  Scenario: Subtracting slept time trims the billable duration
+    # PRD §12 R10 / §05 R08 — the unified editor's sleep control: subtracting a slept entry's
+    # recorded sleep span excludes it from the billable duration (in the GUI the raw duration
+    # reads struck through beside the trimmed billable). Surface-neutral over core
+    # store.subtractSleep and `tt sleep subtract` (run TWICE); the struck-raw rendering is
+    # JUDGE evidence on the GUI editor. Regresses if subtract does not trim billable on
+    # either surface.
     Given a slept entry "deep work" of raw 4 hours with a recorded 1 hour sleep span
     When I subtract the slept time from "deep work"
     Then the entry "deep work" has a billable duration of 180 minutes
+
+  Scenario: Subtracting the slept time again restores the billable duration
+    # PRD §12 R10 / §05 R08 — the sleep control is reversible: a second subtract on an
+    # already-trimmed entry restores the raw duration. The reversible control is JUDGE
+    # evidence on the GUI editor. Regresses if subtract is not reversible on either surface.
+    Given a slept entry "deep work" of raw 4 hours with a recorded 1 hour sleep span
+    And I subtract the slept time from "deep work"
     When I subtract the slept time from "deep work"
     Then the entry "deep work" has a billable duration of 240 minutes
 
