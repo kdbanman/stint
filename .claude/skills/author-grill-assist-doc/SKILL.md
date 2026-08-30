@@ -77,3 +77,4 @@ sequencing — what lands first and why, drawn if it helps.
 - These artifacts are static: no runtime AI, no external requests. Anything
   the reader will want to ask must already be anticipated in the FAQs — that
   is what the FAQs are for.
+- Style should be a clean, readable engineering document.
